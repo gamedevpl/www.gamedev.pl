@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { generateGame, type GeneratedGame, type GenerateGameApiError } from './api';
 import { fetchCatalog, type CatalogEntry } from './catalog';
@@ -10,6 +10,7 @@ import { ArcadeCatalog } from './ArcadeCatalog';
 import { PixelIcon } from './PixelIcon';
 import { SubmissionStatusView } from './SubmissionStatusView';
 import { parseHashRoute, statusHash, playHash } from './router';
+import { useGamePlayer } from './gamePlayer';
 import { submitSpec, type SubmissionApiError } from './submissionApi';
 import { getSavedSpecs, saveSpec, type SavedSpec } from './mySpecs';
 import { useAuth } from './AuthContext';
@@ -41,6 +42,12 @@ export function App() {
 
   // Stage content
   const [stageContent, setStageContent] = useState<StageContent | null>(null);
+
+  // Single-player game player: the iframe ref + a bridge that lifts the game's
+  // title/description/sound into the theater header (see gamePlayer.ts).
+  const gameFrameRef = useRef<HTMLIFrameElement | null>(null);
+  const isSinglePlayer = stageContent?.type === 'catalog' || stageContent?.type === 'generated';
+  const player = useGamePlayer(gameFrameRef, isSinglePlayer);
 
   // Greenfield submission state
   const [submissionStatus, setSubmissionStatus] = useState<'idle' | 'loading'>('idle');
@@ -334,8 +341,16 @@ export function App() {
                           {t('catalog.playingBadge', { defaultValue: 'Playing' })}
                         </span>
                         <h2 className="theater-title">{stageContent.game.title}</h2>
+                        {player.meta?.desc && <span className="theater-desc">{player.meta.desc}</span>}
                       </div>
                       <div className="game-theater-actions">
+                        <button
+                          className="secondary-btn sound-btn"
+                          onClick={player.toggleSound}
+                          aria-pressed={player.muted}
+                        >
+                          {player.muted ? t('player.soundOff') : t('player.soundOn')}
+                        </button>
                         <button className="secondary-btn exit-btn" onClick={() => navigateHash('#/')}>
                           <PixelIcon name="close" size={12} />{' '}
                           {t('catalog.exitPlayer', { defaultValue: 'Exit Player' })}
@@ -347,6 +362,8 @@ export function App() {
                         key={stageContent.game.slug}
                         slug={stageContent.game.slug}
                         title={stageContent.game.title}
+                        frameRef={gameFrameRef}
+                        embed
                       />
                     </div>
                   </>
@@ -365,6 +382,13 @@ export function App() {
                         )}
                       </div>
                       <div className="game-theater-actions">
+                        <button
+                          className="secondary-btn sound-btn"
+                          onClick={player.toggleSound}
+                          aria-pressed={player.muted}
+                        >
+                          {player.muted ? t('player.soundOff') : t('player.soundOn')}
+                        </button>
                         <button className="secondary-btn exit-btn" onClick={() => setStageContent(null)}>
                           <PixelIcon name="close" size={12} />{' '}
                           {t('catalog.exitPlayer', { defaultValue: 'Exit Player' })}
@@ -376,6 +400,8 @@ export function App() {
                         key={stageContent.game.html}
                         title={stageContent.game.title}
                         html={stageContent.game.html}
+                        frameRef={gameFrameRef}
+                        embed
                       />
                     </div>
                   </>

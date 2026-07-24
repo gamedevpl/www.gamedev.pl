@@ -53,6 +53,10 @@
     "emptyStage": "Twoja wygenerowana lub wybrana gra pojawi się tutaj.",
     "generatedFrom": "Wygenerowano z Twojego pomysłu: \"{{prompt}}\""
   },
+  "player": {
+    "soundOn": "Dźwięk: Wł.",
+    "soundOff": "Dźwięk: Wył."
+  },
   "catalog": {
     "title": "Gry",
     "subtitle": "Odkrywaj i graj w gry open source stworzone przez agenty AI.",

@@ -53,6 +53,10 @@
     "emptyStage": "Your generated or selected game will appear here.",
     "generatedFrom": "Generated from your idea: \"{{prompt}}\""
   },
+  "player": {
+    "soundOn": "Sound: On",
+    "soundOff": "Sound: Off"
+  },
   "catalog": {
     "title": "Games",
     "subtitle": "Discover and play open source games built by AI agents.",

@@ -1420,6 +1420,8 @@ body.player-open {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .theater-badge {
@@ -1438,6 +1440,8 @@ body.player-open {
   font-size: 1.2rem;
   font-weight: 700;
   color: #fff;
+  white-space: nowrap;
+  flex: none;
 }
 
 .theater-controls {
@@ -1445,10 +1449,28 @@ body.player-open {
   font-size: 0.85rem;
 }
 
+/* The game's description, lifted out of the iframe into the header. Truncates so a
+   long sentence doesn't push the Sound/Exit controls off the row. */
+.theater-desc {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .game-theater-actions {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex: none;
+}
+
+/* Fixed width so toggling On/Off doesn't jiggle the layout. */
+.sound-btn {
+  min-width: 112px;
+  justify-content: center;
 }
 
 .game-viewport-container {

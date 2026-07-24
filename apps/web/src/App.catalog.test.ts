@@ -102,7 +102,11 @@ describe('catalog playback', () => {
     const iframe = container.querySelector('iframe[title="Sky Dodge"]');
     expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts');
     // The game document comes from our API and runs via srcDoc — no external origin.
-    expect(iframe?.getAttribute('srcdoc')).toBe('<canvas>sky</canvas>');
+    // In the player it's wrapped with the embed bridge (hides in-game chrome and
+    // relays sound to the header), so the original document is contained, not exact.
+    const srcdoc = iframe?.getAttribute('srcdoc') ?? '';
+    expect(srcdoc).toContain('<canvas>sky</canvas>');
+    expect(srcdoc).toContain('gdpl-player');
 
     await act(async () => {
       root.unmount();
