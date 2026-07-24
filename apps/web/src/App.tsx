@@ -86,12 +86,26 @@ export function App() {
   // 'catalog' stage here and leave those untouched.
   useEffect(() => {
     if (route.view === 'play') {
-      if (stageContent?.type === 'catalog' && stageContent.game.slug === route.slug) return;
       const entry = catalogEntries.find((game) => game.slug === route.slug);
-      // Wait for the catalog to load if it hasn't yet — this effect re-runs when
-      // catalogEntries arrives and opens the game then.
-      if (!entry) return;
-      setStageContent({ type: 'catalog', game: entry });
+      if (stageContent?.type === 'catalog' && stageContent.game.slug === route.slug) {
+        if (entry && stageContent.game !== entry) {
+          setStageContent({ type: 'catalog', game: entry });
+        }
+        return;
+      }
+      const initialGame: CatalogEntry = entry ?? {
+        slug: route.slug,
+        title: route.slug
+          .split('-')
+          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(' '),
+        genre: '',
+        controls: '',
+        status: 'published',
+        media: null,
+        multiplayer: null,
+      };
+      setStageContent({ type: 'catalog', game: initialGame });
       document.getElementById('stage')?.scrollIntoView?.({ behavior: 'smooth' });
     } else if (stageContent?.type === 'catalog') {
       // Route moved off this game (Exit, back button, home) — close the player.

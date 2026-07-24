@@ -176,4 +176,48 @@ describe('catalog playback', () => {
       root.unmount();
     });
   });
+
+  it('opens game theater for direct play hash routes even before catalog is loaded', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/me')) {
+        return new Response(JSON.stringify({ user: { uid: 'g:test', tier: 'standard' } }));
+      }
+      if (url.endsWith('/api/health')) {
+        return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: false }));
+      }
+      if (url.endsWith('/api/catalog')) {
+        return new Response(JSON.stringify([]));
+      }
+      if (url.endsWith('/api/games/football-3d-lite')) {
+        return new Response(
+          JSON.stringify({ slug: 'football-3d-lite', title: 'Football 3D Lite', html: '<canvas>football</canvas>' }),
+        );
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    window.location.hash = '#/play/football-3d-lite';
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(AuthProvider, null, createElement(App)));
+      await flushEffects();
+      await flushEffects();
+      await flushEffects();
+      await flushEffects();
+    });
+
+    const iframe = container.querySelector('iframe');
+    expect(iframe).not.toBeNull();
+    const srcdoc = iframe?.getAttribute('srcdoc') ?? '';
+    expect(srcdoc).toContain('<canvas>football</canvas>');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

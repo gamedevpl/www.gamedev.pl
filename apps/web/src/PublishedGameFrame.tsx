@@ -19,15 +19,20 @@ export function PublishedGameFrame({ slug, title, frameRef, embed }: PublishedGa
   const { t } = useTranslation();
   const [html, setHtml] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  const [gameTitle, setGameTitle] = useState<string>(title);
 
   useEffect(() => {
     let cancelled = false;
     setHtml(null);
     setFailed(false);
+    setGameTitle(title);
 
     fetchPublishedGame(slug)
       .then((game) => {
-        if (!cancelled) setHtml(game.html);
+        if (!cancelled) {
+          setHtml(game.html);
+          if (game.title) setGameTitle(game.title);
+        }
       })
       .catch(() => {
         if (!cancelled) setFailed(true);
@@ -36,7 +41,7 @@ export function PublishedGameFrame({ slug, title, frameRef, embed }: PublishedGa
     return () => {
       cancelled = true;
     };
-  }, [slug]);
+  }, [slug, title]);
 
   if (failed) {
     return <p className="error">{t('catalog.gameLoadError')}</p>;
@@ -44,5 +49,5 @@ export function PublishedGameFrame({ slug, title, frameRef, embed }: PublishedGa
   if (html === null) {
     return <p className="catalog-state">{t('catalog.gameLoading')}</p>;
   }
-  return <GameFrame title={title} html={html} frameRef={frameRef} embed={embed} />;
+  return <GameFrame title={gameTitle} html={html} frameRef={frameRef} embed={embed} />;
 }

@@ -165,6 +165,71 @@ describe('emitSubmissionNotification', () => {
   });
 });
 
+describe('emitSubmissionNotification push fan-out', () => {
+  let store: InMemoryStore;
+  beforeEach(async () => {
+    store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:1', locale: 'en' });
+    await store.savePushSubscription('g:1', {
+      endpoint: 'https://push.example/one',
+      keys: { p256dh: 'p', auth: 'a' },
+    });
+  });
+
+  const event = {
+    uid: 'g:1',
+    type: 'submission.published' as const,
+    issueNumber: 42,
+    gameTitle: 'Sky Dodge',
+    statusToken: 'tok',
+    slug: 'sky-dodge',
+  };
+
+  it('pushes to each subscription with a rendered payload deep-linking to the game', async () => {
+    const sent: Array<{ endpoint: string; payload: { title: string; body: string; url: string; tag: string } }> = [];
+    const pusher = {
+      name: 'test',
+      async send(
+        subscription: { endpoint: string },
+        payload: { title: string; body: string; url: string; tag: string },
+      ) {
+        sent.push({ endpoint: subscription.endpoint, payload });
+        return { outcome: 'sent' as const };
+      },
+    };
+    await emitSubmissionNotification({ store, pusher, appBaseUrl: 'https://www.gamedev.pl' }, event);
+    expect(sent).toHaveLength(1);
+    expect(sent[0].payload.url).toBe('https://www.gamedev.pl/#/play/sky-dodge');
+    expect(sent[0].payload.tag).toBe('sub-42-published');
+    expect(sent[0].payload.body).toContain('Sky Dodge');
+  });
+
+  it('prunes a subscription the push service reports gone (404/410)', async () => {
+    const pusher = {
+      name: 'test',
+      async send() {
+        return { outcome: 'gone' as const };
+      },
+    };
+    await emitSubmissionNotification({ store, pusher }, event);
+    expect(await store.listPushSubscriptions('g:1')).toHaveLength(0);
+  });
+
+  it('does not re-push when the notification already existed (idempotent emit)', async () => {
+    let calls = 0;
+    const pusher = {
+      name: 'test',
+      async send() {
+        calls += 1;
+        return { outcome: 'sent' as const };
+      },
+    };
+    await emitSubmissionNotification({ store, pusher }, event);
+    await emitSubmissionNotification({ store, pusher }, event);
+    expect(calls).toBe(1);
+  });
+});
+
 describe('statusToEvent', () => {
   it('maps notify-worthy statuses and ignores the rest', () => {
     expect(statusToEvent('building')).toBe('submission.building');

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { Firestore } from '@google-cloud/firestore';
 import type { SubmissionStatus } from './submission-status.js';
 
@@ -60,6 +61,15 @@ export interface StoredNotification {
   link: string;
 }
 
+// A browser Web Push subscription (docs/notifications-plan.md M2), stored verbatim
+// as the client serialized it. Keyed by a hash of the endpoint so re-subscribing
+// the same browser overwrites rather than duplicates.
+export interface PushSubscriptionRecord {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+  createdAt: string;
+}
+
 export type WaitlistStatus = 'pending' | 'approved' | 'rejected';
 
 export interface WaitlistEntry {
@@ -106,6 +116,19 @@ export interface Store {
   markNotificationsRead(uid: string, ids: string[] | 'all'): Promise<void>;
   /** Stamp emailedAt after a successful send so retries don't re-send. */
   markNotificationEmailed(uid: string, id: string, at?: string): Promise<void>;
+  /** Upsert a browser push subscription (idempotent by endpoint). */
+  savePushSubscription(uid: string, subscription: Omit<PushSubscriptionRecord, 'createdAt'>): Promise<void>;
+  /** All push subscriptions for a user — the push fan-out sends to each. */
+  listPushSubscriptions(uid: string): Promise<PushSubscriptionRecord[]>;
+  /** Remove a subscription (client unsubscribe, or pruning a dead endpoint). */
+  deletePushSubscription(uid: string, endpoint: string): Promise<void>;
+}
+
+// Stable doc id for a subscription: a hash of its endpoint URL. Endpoints are long
+// and contain characters illegal in Firestore doc ids, and hashing gives idempotent
+// re-subscribes for free.
+export function pushSubscriptionId(endpoint: string): string {
+  return createHash('sha256').update(endpoint).digest('hex');
 }
 
 export class InMemoryStore implements Store {
@@ -115,6 +138,8 @@ export class InMemoryStore implements Store {
   private waitlist = new Map<string, WaitlistEntry>();
   // uid -> (notificationId -> notification)
   private notifications = new Map<string, Map<string, StoredNotification>>();
+  // uid -> (endpoint-hash -> subscription)
+  private pushSubs = new Map<string, Map<string, PushSubscriptionRecord>>();
 
   async getUser(uid: string): Promise<User | null> {
     const user = this.users.get(uid);
@@ -311,6 +336,25 @@ export class InMemoryStore implements Store {
     const forUser = this.notifications.get(uid);
     const n = forUser?.get(id);
     if (n) forUser!.set(id, { ...n, emailedAt: at ?? new Date().toISOString() });
+  }
+
+  async savePushSubscription(uid: string, subscription: Omit<PushSubscriptionRecord, 'createdAt'>): Promise<void> {
+    const forUser = this.pushSubs.get(uid) ?? new Map<string, PushSubscriptionRecord>();
+    forUser.set(pushSubscriptionId(subscription.endpoint), {
+      endpoint: subscription.endpoint,
+      keys: { ...subscription.keys },
+      createdAt: new Date().toISOString(),
+    });
+    this.pushSubs.set(uid, forUser);
+  }
+
+  async listPushSubscriptions(uid: string): Promise<PushSubscriptionRecord[]> {
+    const forUser = this.pushSubs.get(uid);
+    return forUser ? Array.from(forUser.values()).map((s) => ({ ...s, keys: { ...s.keys } })) : [];
+  }
+
+  async deletePushSubscription(uid: string, endpoint: string): Promise<void> {
+    this.pushSubs.get(uid)?.delete(pushSubscriptionId(endpoint));
   }
 
   // Test/inspection only — not part of the Store interface. Production code never
@@ -558,5 +602,27 @@ export class FirestoreStore implements Store {
 
   async markNotificationEmailed(uid: string, id: string, at?: string): Promise<void> {
     await this.notificationRef(uid, id).set({ emailedAt: at ?? new Date().toISOString() }, { merge: true });
+  }
+
+  private pushSubRef(uid: string, endpoint: string) {
+    return this.db.collection('users').doc(uid).collection('pushSubscriptions').doc(pushSubscriptionId(endpoint));
+  }
+
+  async savePushSubscription(uid: string, subscription: Omit<PushSubscriptionRecord, 'createdAt'>): Promise<void> {
+    const record: PushSubscriptionRecord = {
+      endpoint: subscription.endpoint,
+      keys: { p256dh: subscription.keys.p256dh, auth: subscription.keys.auth },
+      createdAt: new Date().toISOString(),
+    };
+    await this.pushSubRef(uid, subscription.endpoint).set(record);
+  }
+
+  async listPushSubscriptions(uid: string): Promise<PushSubscriptionRecord[]> {
+    const snap = await this.db.collection('users').doc(uid).collection('pushSubscriptions').get();
+    return snap.docs.map((d) => d.data() as PushSubscriptionRecord);
+  }
+
+  async deletePushSubscription(uid: string, endpoint: string): Promise<void> {
+    await this.pushSubRef(uid, endpoint).delete();
   }
 }

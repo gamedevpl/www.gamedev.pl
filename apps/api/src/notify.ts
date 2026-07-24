@@ -5,8 +5,9 @@
 // here alongside the unsubscribe path, which is why the store already carries the
 // emailedAt column.
 
-import { normalizeLocale, submissionNotificationMessage } from './email-templates.js';
+import { normalizeLocale, submissionNotificationMessage, submissionPushContent } from './email-templates.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
+import { createPusherFromEnv, type Pusher } from './pusher.js';
 import type { NotificationType, StoredNotification, SubmissionRecord, Store } from './store.js';
 import type { SubmissionPublishedResponse, SubmissionStatus, SubmissionStatusResponse } from './submission-status.js';
 import { mintUnsubscribeToken } from './unsubscribe-token.js';
@@ -36,6 +37,8 @@ export interface EmitDeps {
   now?: () => number;
   /** When set (with unsubscribeSecret), notifications also fan out to email. */
   mailer?: Mailer;
+  /** When set, notifications also fan out to the user's Web Push subscriptions. */
+  pusher?: Pusher;
   /** Absolute origin used to build email links, e.g. https://www.gamedev.pl */
   appBaseUrl?: string;
   /** Secret for signing the one-click unsubscribe token. */
@@ -77,6 +80,42 @@ async function maybeSendEmail(deps: EmitDeps, uid: string, notification: StoredN
     await deps.store.markNotificationEmailed(uid, notification.id);
   } catch (err) {
     deps.logError?.(err, 'notification email send failed');
+  }
+}
+
+/**
+ * Best-effort Web Push fan-out to every browser the user opted in on. Skips
+ * silently when push isn't configured. Dead subscriptions (404/410) are pruned so
+ * the list self-heals; transient errors are ignored (the next event retries).
+ * Never throws. Unlike email there's no per-notification "sent" flag — push is
+ * cheap and ephemeral, and re-emits are idempotent (same `tag` coalesces).
+ */
+async function maybePush(deps: EmitDeps, uid: string, notification: StoredNotification): Promise<void> {
+  const pusher = deps.pusher ?? createPusherFromEnv();
+  if (!pusher) return;
+
+  try {
+    const [user, subscriptions] = await Promise.all([deps.store.getUser(uid), deps.store.listPushSubscriptions(uid)]);
+    if (subscriptions.length === 0) return;
+
+    const appBaseUrl = deps.appBaseUrl ?? process.env.APP_BASE_URL?.trim() ?? 'https://www.gamedev.pl';
+    const { title, body } = submissionPushContent(
+      normalizeLocale(user?.locale),
+      notification.type,
+      notification.params.title ?? '',
+    );
+    const payload = { title, body, url: `${appBaseUrl}/${notification.link}`, tag: notification.id };
+
+    await Promise.all(
+      subscriptions.map(async (sub) => {
+        const result = await pusher.send({ endpoint: sub.endpoint, keys: sub.keys }, payload);
+        if (result.outcome === 'gone') {
+          await deps.store.deletePushSubscription(uid, sub.endpoint).catch(() => {});
+        }
+      }),
+    );
+  } catch (err) {
+    deps.logError?.(err, 'notification push send failed');
   }
 }
 
@@ -122,6 +161,13 @@ export async function emitSubmissionNotification(
   // Fan out to email (best effort, idempotent via emailedAt). Runs on a fresh
   // notification and also retries one whose earlier send failed (emailedAt null).
   await maybeSendEmail(deps, event.uid, notification);
+
+  // Fan out to Web Push (best effort). Only on a freshly created notification —
+  // push is a transient "ping", so re-emitting an already-delivered one would just
+  // re-ping every device; the in-app + email records already cover durability.
+  if (created) {
+    await maybePush(deps, event.uid, notification);
+  }
 
   return { created };
 }

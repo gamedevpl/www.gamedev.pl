@@ -145,6 +145,20 @@ const unsubscribeLine: Record<Locale, string> = {
   pl: 'Otrzymujesz tę wiadomość, ponieważ zgłosiłeś grę na gamedev.pl. Wypisz się:',
 };
 
+/**
+ * Short push-notification copy for a submission event. Reuses the same bilingual
+ * strings as the email so the two channels stay consistent — the OS notification
+ * shows `title` (the subject line) and `body` (the game title + lead).
+ */
+export function submissionPushContent(
+  locale: Locale,
+  type: NotificationType,
+  title: string,
+): { title: string; body: string } {
+  const copy = notificationCopy[type][locale];
+  return { title: copy.subject, body: `“${title}” ${copy.lead}` };
+}
+
 export function submissionNotificationMessage(
   to: string,
   locale: Locale,

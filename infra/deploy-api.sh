@@ -53,6 +53,10 @@ MAIL_FROM="${MAIL_FROM:-}"
 INVITE_URL="${INVITE_URL:-}"
 NOTIFY_SWEEP_AUDIENCE="${NOTIFY_SWEEP_AUDIENCE:-}"
 NOTIFY_SWEEP_SA="${NOTIFY_SWEEP_SA:-}"
+# Web Push (docs/notifications-plan.md M2). Public key is public by design (env var);
+# the private key is a Secret Manager secret wired in below. Push is off without them.
+VAPID_PUBLIC_KEY="${VAPID_PUBLIC_KEY:-}"
+VAPID_SUBJECT="${VAPID_SUBJECT:-}"
 
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/app:$(date +%Y%m%d-%H%M%S)"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -96,6 +100,13 @@ if gcloud secrets describe resend-api-key --project "$PROJECT_ID" >/dev/null 2>&
   echo "==> resend-api-key found; outbound email enabled."
 fi
 
+# VAPID private key for Web Push. Public key travels as an env var (public by
+# design); only this private key is a secret. Push degrades to off when absent.
+if gcloud secrets describe vapid-private-key --project "$PROJECT_ID" >/dev/null 2>&1; then
+  SECRET_MAPPINGS+=("VAPID_PRIVATE_KEY=vapid-private-key:latest")
+  echo "==> vapid-private-key found; Web Push enabled."
+fi
+
 SECRET_FLAGS=()
 if [ ${#SECRET_MAPPINGS[@]} -gt 0 ]; then
   joined=$(IFS=,; echo "${SECRET_MAPPINGS[*]}")
@@ -128,6 +139,12 @@ if [ -n "$NOTIFY_SWEEP_AUDIENCE" ]; then
 fi
 if [ -n "$NOTIFY_SWEEP_SA" ]; then
   ENV_VARS="${ENV_VARS}|NOTIFY_SWEEP_SA=${NOTIFY_SWEEP_SA}"
+fi
+if [ -n "$VAPID_PUBLIC_KEY" ]; then
+  ENV_VARS="${ENV_VARS}|VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}"
+fi
+if [ -n "$VAPID_SUBJECT" ]; then
+  ENV_VARS="${ENV_VARS}|VAPID_SUBJECT=${VAPID_SUBJECT}"
 fi
 
 echo "==> Deploying to Cloud Run (scale-to-zero)"

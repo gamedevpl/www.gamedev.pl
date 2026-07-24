@@ -3,6 +3,11 @@
     "aria": "Powiadomienia",
     "title": "Powiadomienia",
     "empty": "Nic tu jeszcze nie ma.",
+    "push": {
+      "enable": "Włącz powiadomienia push",
+      "on": "Powiadomienia push włączone",
+      "blocked": "Powiadomienia push są zablokowane w ustawieniach przeglądarki."
+    },
     "submission": {
       "published": {
         "title": "Twoja gra jest już dostępna!",

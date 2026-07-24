@@ -3,6 +3,11 @@
     "aria": "Notifications",
     "title": "Notifications",
     "empty": "Nothing yet.",
+    "push": {
+      "enable": "Enable push notifications",
+      "on": "Push notifications on",
+      "blocked": "Push is blocked in your browser settings."
+    },
     "submission": {
       "published": {
         "title": "Your game is live!",

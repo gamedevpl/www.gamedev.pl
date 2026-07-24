@@ -13,6 +13,7 @@ import { createDefaultContentChecker, type ContentChecker } from './moderation.j
 import { registerEmailRoutes } from './email-routes.js';
 import { registerMultiplayerRoutes, type MultiplayerRoutesOptions } from './mp.js';
 import { registerNotificationRoutes } from './notifications.js';
+import { registerPushRoutes } from './push-routes.js';
 import { registerRefineRoute, type SpecRefiner } from './refine.js';
 import { InMemoryStore, type Store } from './store.js';
 import { registerSubmissionRoutes, type SubmissionRoutesOptions } from './submissions.js';
@@ -112,6 +113,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   await registerNotificationRoutes(app, { store });
+
+  await registerPushRoutes(app, { store, vapidPublicKey: process.env.VAPID_PUBLIC_KEY?.trim() });
 
   await registerEmailRoutes(app, { store, unsubscribeSecret: options.sessionSecret });
 

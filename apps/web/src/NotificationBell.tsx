@@ -7,6 +7,7 @@ import {
   type AppNotification,
   type NotificationType,
 } from './notificationsApi';
+import { pushUiState, subscribeToPush, unsubscribeFromPush, type PushUiState } from './pushApi';
 import './NotificationBell.css';
 
 const POLL_MS = 60_000;
@@ -25,6 +26,8 @@ export function NotificationBell() {
   const { user } = useAuth();
   const [items, setItems] = useState<AppNotification[]>([]);
   const [open, setOpen] = useState(false);
+  const [push, setPush] = useState<PushUiState>({ show: false, subscribed: false, permission: 'default' });
+  const [pushBusy, setPushBusy] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const unread = items.filter((n) => n.readAt === null).length;
@@ -49,6 +52,36 @@ export function NotificationBell() {
     }, POLL_MS);
     return () => window.clearInterval(id);
   }, [user, refresh]);
+
+  // Resolve push opt-in state once the user is known (browser support + whether the
+  // server has push configured + whether this browser is already subscribed).
+  useEffect(() => {
+    if (!user) return;
+    let alive = true;
+    void pushUiState().then((state) => {
+      if (alive) setPush(state);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [user]);
+
+  const togglePush = useCallback(async () => {
+    setPushBusy(true);
+    try {
+      if (push.subscribed) {
+        await unsubscribeFromPush();
+      } else {
+        await subscribeToPush();
+      }
+      setPush(await pushUiState());
+    } catch {
+      // Surface nothing intrusive — re-read state so the toggle reflects reality.
+      setPush(await pushUiState());
+    } finally {
+      setPushBusy(false);
+    }
+  }, [push.subscribed]);
 
   // Close on outside click / Escape.
   useEffect(() => {
@@ -117,6 +150,29 @@ export function NotificationBell() {
                 </li>
               ))}
             </ul>
+          )}
+
+          {push.show && (
+            <div className="notif-push">
+              {push.permission === 'denied' ? (
+                <span className="notif-push-hint">
+                  {t('notifications.push.blocked', {
+                    defaultValue: 'Push is blocked in your browser settings.',
+                  })}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className={push.subscribed ? 'notif-push-toggle is-on' : 'notif-push-toggle'}
+                  onClick={() => void togglePush()}
+                  disabled={pushBusy}
+                >
+                  {push.subscribed
+                    ? t('notifications.push.on', { defaultValue: 'Push notifications on' })
+                    : t('notifications.push.enable', { defaultValue: 'Enable push notifications' })}
+                </button>
+              )}
+            </div>
           )}
         </div>
       )}
