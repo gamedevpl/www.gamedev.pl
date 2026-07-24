@@ -8,6 +8,7 @@ import {
   type GitHubClient,
   type LinkedPullRequest,
 } from './github-client.js';
+import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { notifyOnTransition } from './notify.js';
 import { type Store } from './store.js';
@@ -44,6 +45,7 @@ export interface SubmissionRoutesOptions {
   store?: Store;
   dailySubmissionQuota?: number;
   contentChecker?: ContentChecker;
+  internalAuthVerifier?: InternalAuthVerifier;
 }
 
 function checkUserAccess(request: FastifyRequest, reply: FastifyReply): boolean {
@@ -87,6 +89,7 @@ export async function registerSubmissionRoutes(
   const now = options.now ?? Date.now;
   const store = options.store;
   const dailySubmissionQuota = options.dailySubmissionQuota ?? 5;
+  const internalAuthVerifier = options.internalAuthVerifier ?? createInternalAuthVerifierFromEnv();
 
   const contentChecker = options.contentChecker ?? createDefaultContentChecker();
 
@@ -142,6 +145,14 @@ export async function registerSubmissionRoutes(
   async function getPublishedCatalogEntry(client: GitHubClient, slug: string): Promise<CatalogGameEntry | null> {
     const entries = await getCatalogEntries(client);
     return entries.find((entry) => entry.slug === slug && entry.status === 'published') ?? null;
+  }
+
+  // Single source of GitHub-state → status derivation, shared by the on-demand
+  // status route and the notification sweep so they never diverge.
+  async function deriveSubmissionStatus(client: GitHubClient, issueNumber: number): Promise<SubmissionStatusResponse> {
+    const issue = await client.getIssueState(issueNumber);
+    const linkedPr = await client.findLinkedPR(issueNumber);
+    return deriveStatus(issue.state, linkedPr, (slug) => isSlugPublished(client, slug));
   }
 
   app.post('/api/submissions', async (request, reply) => {
@@ -254,9 +265,7 @@ export async function registerSubmissionRoutes(
     }
 
     try {
-      const issue = await githubClient.getIssueState(issueNumber);
-      const linkedPr = await githubClient.findLinkedPR(issueNumber);
-      const status = await deriveStatus(issue.state, linkedPr, (slug) => isSlugPublished(githubClient, slug));
+      const status = await deriveSubmissionStatus(githubClient, issueNumber);
       statusCache.set(issueNumber, { value: status, expiresAt: currentTime + 60_000 });
 
       // Opportunistic detection (docs/notifications-plan.md N1): a poll that
@@ -280,6 +289,35 @@ export async function registerSubmissionRoutes(
       request.log.error({ err: error }, 'failed to resolve submission status');
       return reply.status(502).send({ error: 'failed to load submission status' });
     }
+  });
+
+  // The notification sweep (docs/notifications-plan.md N1): the closed-tab backstop
+  // for the opportunistic poll-path detection above. Cloud Scheduler POSTs here with
+  // an OIDC token; we derive the current status of every still-active submission and
+  // emit on transition, reusing the exact same derivation + idempotent emit. No
+  // session — the wall exempts /api/internal and the handler verifies OIDC itself.
+  app.post('/api/internal/notify-sweep', async (request, reply) => {
+    if (!(await internalAuthVerifier.verify(request.headers.authorization))) {
+      return reply.status(401).send({ error: 'unauthorized' });
+    }
+    if (!githubClient || !submissionTokenSecret || !store) {
+      return reply.status(503).send({ error: 'submissions are not configured' });
+    }
+
+    const active = await store.listActiveSubmissions();
+    let emitted = 0;
+    for (const record of active) {
+      try {
+        const status = await deriveSubmissionStatus(githubClient, record.issueNumber);
+        const statusToken = mintToken(record.issueNumber, submissionTokenSecret);
+        const result = await notifyOnTransition({ store }, record, status, statusToken);
+        if (result.emitted) emitted += 1;
+      } catch (sweepError) {
+        // One bad submission (deleted issue, GitHub hiccup) must not abort the sweep.
+        request.log.error({ err: sweepError, issueNumber: record.issueNumber }, 'sweep item failed');
+      }
+    }
+    return reply.send({ scanned: active.length, emitted });
   });
 
   // Play the in-progress game straight from its (unmerged) PR branch. This runs the

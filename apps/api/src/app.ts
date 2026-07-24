@@ -143,6 +143,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     if (!request.url.startsWith('/api/')) return; // static shell always passes through
     if (request.url === '/api/health' || request.url.startsWith('/api/auth')) return;
     if (request.url.startsWith('/api/waitlist')) return;
+    // Internal endpoints (the Cloud Scheduler notification sweep) authenticate via
+    // an OIDC token in the handler, not a session — the wall would 401 them first.
+    if (request.url.startsWith('/api/internal/')) return;
     // The controller websocket is the one door anonymous guests may reach: a phone
     // that scanned a QR has no session and never will. It is useless without a
     // room token (verified in the first frame, not here), and the room it opens
