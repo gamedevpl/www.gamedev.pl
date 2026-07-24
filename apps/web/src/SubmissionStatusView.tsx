@@ -11,7 +11,7 @@ import {
   type SubmissionPreview,
   type SubmissionStatus,
 } from './submissionApi';
-import { statusHash } from './router';
+import { draftHash, playHash, statusHash } from './router';
 import { formatDuration, formatRelativeTime } from './relativeTime';
 
 const TERMINAL_STATUSES = new Set<SubmissionStatus['status']>(['published', 'needs_changes']);
@@ -209,6 +209,16 @@ export function SubmissionStatusView({
 
   const publishedGameTitle = submittedTitle ?? status?.slug ?? t('statusView.publishedGameTitle');
 
+  // The link to hand to someone else. Deliberately *not* the tracking URL: that one
+  // carries the status token, which grants change requests and spends the creator's
+  // quota. A slug link is watch-only, and survives the game being published.
+  const shareUrl = useMemo(() => {
+    const slug = status?.slug ?? status?.preview?.slug;
+    if (!slug) return null;
+    const hash = status?.status === 'published' ? playHash(slug) : draftHash(slug);
+    return new URL(hash, window.location.href).toString();
+  }, [status?.slug, status?.preview?.slug, status?.status]);
+
   // Auto-load the live preview as soon as one is available, and silently refresh it
   // whenever the agent pushes a new commit (headSha changes) — no click required.
   useEffect(() => {
@@ -292,6 +302,7 @@ export function SubmissionStatusView({
             {currentTrackingUrl}
           </a>
         </p>
+        {shareUrl ? <ShareLink url={shareUrl} /> : null}
 
         {loading ? (
           <p className="catalog-state">{t('statusView.loading')}</p>
@@ -342,15 +353,18 @@ export function SubmissionStatusView({
               </p>
             ) : null}
 
-            {status.progress ? (
-              <BuildProgressPanel progress={status.progress} pendingRevisions={pendingRevisions} />
-            ) : null}
-
+            {/* Order matters: "played it — want changes?" follows straight on from the
+                play card, so the ask lands while the game is still in mind. The build
+                log is reference material and sits underneath. */}
             {(preview || status.status === 'needs_changes') && status.status !== 'published' ? (
               <FeedbackPanel
                 token={token}
                 onSent={(text) => setPendingRevisions((current) => [...current, { text, at: Date.now() }])}
               />
+            ) : null}
+
+            {status.progress ? (
+              <BuildProgressPanel progress={status.progress} pendingRevisions={pendingRevisions} />
             ) : null}
 
             {previewError && !preview ? <p className="error">{previewError}</p> : null}
@@ -380,6 +394,36 @@ export function SubmissionStatusView({
         />
       ) : null}
     </>
+  );
+}
+
+/** Watch-only link to the game, with one-tap copy (the point is to send it to someone). */
+function ShareLink({ url }: { url: string }) {
+  const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // No clipboard permission (or no clipboard API) — the link is right there to
+      // select by hand, so this needs no error state.
+    }
+  };
+
+  return (
+    <p className="status-note status-share">
+      {t('statusView.shareLink')}{' '}
+      <a className="inline-link" href={url}>
+        {url}
+      </a>
+      <button type="button" className="status-share-copy" onClick={() => void copy()}>
+        <PixelIcon name={copied ? 'check' : 'globe'} size={12} />{' '}
+        {copied ? t('statusView.shareCopied') : t('statusView.shareCopy')}
+      </button>
+    </p>
   );
 }
 

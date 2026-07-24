@@ -7,6 +7,7 @@ import { NavHeader } from './NavHeader';
 import { HeroPromptSection } from './HeroPromptSection';
 import { ArcadeCatalog } from './ArcadeCatalog';
 import { MyGamesRail } from './MyGamesRail';
+import { DraftView } from './DraftView';
 import { PixelIcon } from './PixelIcon';
 import { SubmissionStatusView } from './SubmissionStatusView';
 import { CreatorQA, type QAQuestion } from './CreatorQA';
@@ -369,7 +370,9 @@ export function App() {
       <NavHeader activeSpecsCount={savedSpecs.length} onNavigate={handleNavigateSection} />
 
       <main className="content">
-        {route.view === 'status' ? (
+        {route.view === 'draft' ? (
+          <DraftView slug={route.slug} onExit={() => navigateHash('#/')} />
+        ) : route.view === 'status' ? (
           <SubmissionStatusView
             token={route.token}
             submittedTitle={savedSpecs.find((spec) => spec.token === route.token)?.title}

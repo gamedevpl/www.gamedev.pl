@@ -163,6 +163,12 @@
     "play": "Play",
     "open": "Open"
   },
+  "draft": {
+    "title": "A game in the making",
+    "loading": "Loading the latest build…",
+    "notFound": "This game isn't available yet. It may still be starting up, or it has already been published.",
+    "error": "We couldn't load this game right now. Please try again in a moment."
+  },
   "statusView": {
     "title": "Your game is in the works",
     "loading": "Finding your game…",
@@ -231,7 +237,10 @@
       }
     },
     "elapsed": "In progress for {{duration}}",
-    "live": "Live"
+    "live": "Live",
+    "shareLink": "Share this game (watch only):",
+    "shareCopy": "Copy",
+    "shareCopied": "Copied!"
   },
   "suggestions": {
     "dodge": "Dodge the falling rocks",

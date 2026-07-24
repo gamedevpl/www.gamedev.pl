@@ -113,6 +113,20 @@ export async function getSubmissionPreview(token: string): Promise<SubmissionPre
 }
 
 /**
+ * The read-only, shareable form of a draft: addressed by slug like a published game,
+ * with no status token involved — so a shared link can't send change requests.
+ */
+export async function getDraftBySlug(slug: string): Promise<SubmissionPreview> {
+  const response = await fetch(`${API_BASE}/api/drafts/${encodeURIComponent(slug)}`, { credentials: 'include' });
+
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+
+  return (await response.json()) as SubmissionPreview;
+}
+
+/**
  * Relays post-play "here's what to change" feedback to the build agent. The API
  * posts it as a comment on the agent's open PR (or the issue) so it iterates.
  */

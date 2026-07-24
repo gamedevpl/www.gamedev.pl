@@ -402,6 +402,12 @@ export async function registerSubmissionRoutes(
         try {
           const record = await store.getSubmission(issueNumber);
           if (record) {
+            // Learn the game's slug here (the only place we see it regularly) so an
+            // in-progress game becomes addressable by slug, like a published one.
+            const slug = status.slug ?? status.preview?.slug;
+            if (slug && record.slug !== slug) {
+              await store.setSubmissionSlug(issueNumber, slug);
+            }
             await notifyOnTransition(buildNotifyDeps(), record, status, token);
           }
         } catch (notifyError) {
@@ -544,39 +550,19 @@ export async function registerSubmissionRoutes(
     return reply.send({ scanned: active.length, emitted });
   });
 
-  // Play the in-progress game straight from its (unmerged) PR branch. This runs the
-  // same trust model as any generated game: the assembled document is served into a
-  // sandboxed, opaque-origin iframe on the client, so the human merge is a curation
-  // gate, not the safety boundary. A preview is only reachable by the token holder for
-  // that specific submission, and only resolves the PR cross-linked to their issue.
-  app.get('/api/submissions/:token/preview', async (request, reply) => {
-    if (!githubClient || !submissionTokenSecret) {
-      return reply.status(503).send({ error: 'submissions are not configured' });
-    }
-
-    if (!checkUserAccess(request, reply)) {
-      return;
-    }
-
-    const token = z.string().parse((request.params as { token?: string }).token);
-    const currentTime = now();
-    if (isRateLimited(previewsByIp, request.ip, currentTime, maxPreviewsPerWindow, previewRateLimitWindowMs)) {
-      return reply.status(429).send({ error: 'too many preview requests, please try again later' });
-    }
-
-    let issueNumber: number;
-    try {
-      issueNumber = verifyToken(token, submissionTokenSecret);
-    } catch (error) {
-      if (error instanceof InvalidTokenError) {
-        return reply.status(400).send({ error: 'invalid submission token' });
-      }
-      throw error;
-    }
-
+  /**
+   * Assembles the in-progress game on a submission's open PR branch and sends it.
+   * Shared by the token route (the creator's own preview) and the slug route (a
+   * read-only share link) so both resolve the exact same document.
+   */
+  async function replyWithDraft(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    issueNumber: number,
+  ): Promise<FastifyReply> {
     let linkedPr: LinkedPullRequest | null;
     try {
-      linkedPr = await githubClient.findLinkedPR(issueNumber);
+      linkedPr = await githubClient!.findLinkedPR(issueNumber);
     } catch (error) {
       request.log.error({ err: error }, 'failed to resolve submission for preview');
       return reply.status(502).send({ error: 'failed to load preview' });
@@ -593,7 +579,7 @@ export async function registerSubmissionRoutes(
 
     let sources: Awaited<ReturnType<GitHubClient['getGameSources']>>;
     try {
-      sources = await githubClient.getGameSources(linkedPr.headRefName, slug);
+      sources = await githubClient!.getGameSources(linkedPr.headRefName, slug);
     } catch (error) {
       request.log.error({ err: error }, 'failed to fetch preview sources');
       return reply.status(502).send({ error: 'failed to load preview' });
@@ -627,6 +613,76 @@ export async function registerSubmissionRoutes(
       }
       throw error;
     }
+  }
+
+  // Play the in-progress game straight from its (unmerged) PR branch. This runs the
+  // same trust model as any generated game: the assembled document is served into a
+  // sandboxed, opaque-origin iframe on the client, so the human merge is a curation
+  // gate, not the safety boundary. A preview is only reachable by the token holder for
+  // that specific submission, and only resolves the PR cross-linked to their issue.
+  app.get('/api/submissions/:token/preview', async (request, reply) => {
+    if (!githubClient || !submissionTokenSecret) {
+      return reply.status(503).send({ error: 'submissions are not configured' });
+    }
+
+    if (!checkUserAccess(request, reply)) {
+      return;
+    }
+
+    const token = z.string().parse((request.params as { token?: string }).token);
+    const currentTime = now();
+    if (isRateLimited(previewsByIp, request.ip, currentTime, maxPreviewsPerWindow, previewRateLimitWindowMs)) {
+      return reply.status(429).send({ error: 'too many preview requests, please try again later' });
+    }
+
+    let issueNumber: number;
+    try {
+      issueNumber = verifyToken(token, submissionTokenSecret);
+    } catch (error) {
+      if (error instanceof InvalidTokenError) {
+        return reply.status(400).send({ error: 'invalid submission token' });
+      }
+      throw error;
+    }
+
+    return replyWithDraft(request, reply, issueNumber);
+  });
+
+  /**
+   * A shareable link to an in-progress game: `#/draft/<slug>` resolves the same way a
+   * published game's `#/play/<slug>` does. Read-only by construction — it carries no
+   * status token, so a friend can watch the game take shape but cannot send change
+   * requests or spend the creator's quota. The slug is learned from status polls and
+   * stored on the submission, so this needs no PR search.
+   */
+  app.get('/api/drafts/:slug', async (request, reply) => {
+    if (!githubClient) {
+      return reply.status(503).send({ error: 'submissions are not configured' });
+    }
+    if (!checkUserAccess(request, reply)) {
+      return;
+    }
+    if (!store) {
+      return reply.status(503).send({ error: 'submissions are not configured' });
+    }
+
+    const parsedParams = z
+      .object({ slug: z.string().regex(/^[a-z0-9][a-z0-9-]*$/) })
+      .safeParse(request.params as { slug?: string });
+    if (!parsedParams.success) {
+      return reply.status(404).send({ error: 'draft not found' });
+    }
+
+    if (isRateLimited(previewsByIp, request.ip, now(), maxPreviewsPerWindow, previewRateLimitWindowMs)) {
+      return reply.status(429).send({ error: 'too many preview requests, please try again later' });
+    }
+
+    const record = await store.getSubmissionBySlug(parsedParams.data.slug);
+    if (!record) {
+      return reply.status(404).send({ error: 'draft not found' });
+    }
+
+    return replyWithDraft(request, reply, record.issueNumber);
   });
 
   // The public game catalog, derived from SPEC.md frontmatter on the games repo's

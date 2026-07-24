@@ -1190,3 +1190,72 @@ describe('GET /api/submissions/mine', () => {
     await app.close();
   });
 });
+
+describe('GET /api/drafts/:slug (shareable, read-only)', () => {
+  const openPrWithGame: LinkedPullRequest = {
+    number: 30,
+    state: 'OPEN',
+    merged: false,
+    isDraft: true,
+    titleHasWip: false,
+    headRefName: 'copilot/foo',
+    headRefOid: 'sha-1',
+    changedFiles: ['games/space-runner/index.html'],
+  };
+
+  const sources: GameSources = {
+    indexHtml: '<div id="game"></div>',
+    gameJs: 'console.log("game")',
+    styleCss: 'body { margin: 0 }',
+    title: 'Space Runner',
+  };
+
+  it('serves the draft for a slug a status poll has claimed', async () => {
+    const { githubClient } = createGithubClientStub({
+      issueState: 'open',
+      linkedPr: openPrWithGame,
+      gameSources: sources,
+    });
+    const store = new InMemoryStore();
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
+    await store.createSubmission(123, 'g:test-user', 'Space Runner');
+
+    // The slug is unknown until a status poll observes it…
+    const before = await app.inject({ method: 'GET', url: '/api/drafts/space-runner', headers: authHeaders });
+    expect(before.statusCode).toBe(404);
+
+    await app.inject({ method: 'GET', url: `/api/submissions/${mintToken(123, secret)}` });
+
+    // …after which the game is addressable by slug, like a published one.
+    const after = await app.inject({ method: 'GET', url: '/api/drafts/space-runner', headers: authHeaders });
+    expect(after.statusCode).toBe(200);
+    expect(after.json()).toMatchObject({ slug: 'space-runner', title: 'Space Runner' });
+    expect(after.json().html).toContain('console.log("game")');
+    // Unreviewed code stays network-locked, exactly as through the token route.
+    expect(after.json().html).toContain("default-src 'none'");
+
+    await app.close();
+  });
+
+  it('404s an unknown slug and rejects a malformed one', async () => {
+    const { githubClient } = createGithubClientStub({ linkedPr: openPrWithGame, gameSources: sources });
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret });
+
+    expect((await app.inject({ method: 'GET', url: '/api/drafts/nope', headers: authHeaders })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'GET', url: '/api/drafts/..%2Fsecret', headers: authHeaders })).statusCode).toBe(
+      404,
+    );
+
+    await app.close();
+  });
+
+  it('requires a session', async () => {
+    const { githubClient } = createGithubClientStub({ linkedPr: openPrWithGame });
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
+
+    const res = await app.inject({ method: 'GET', url: '/api/drafts/space-runner' });
+    expect(res.statusCode).toBe(401);
+
+    await app.close();
+  });
+});

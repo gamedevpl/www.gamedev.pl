@@ -22,6 +22,12 @@ export interface SubmissionRecord {
   createdAt: string;
   title: string;
   /**
+   * Game directory on the agent's branch, learned the first time a status poll sees
+   * one. It is what makes an in-progress game addressable by slug (like a published
+   * game) instead of only by its capability-granting status token.
+   */
+  slug?: string;
+  /**
    * The status we last emitted a notification for. Drives transition detection
    * (only notify when the mapped event changes) and lets the sweep stop scanning
    * a submission once it reaches a terminal, already-notified state.
@@ -89,6 +95,13 @@ export interface Store {
   createSubmission(issueNumber: number, ownerUid: string, title: string): Promise<SubmissionRecord>;
   getSubmission(issueNumber: number): Promise<SubmissionRecord | null>;
   setSubmissionNotifiedStatus(issueNumber: number, status: SubmissionStatus): Promise<void>;
+  /** Records the game directory a submission is building, once it is known. */
+  setSubmissionSlug(issueNumber: number, slug: string): Promise<void>;
+  /**
+   * Resolves a slug back to its submission — the lookup behind shareable draft
+   * links. Returns null for a slug no submission has claimed.
+   */
+  getSubmissionBySlug(slug: string): Promise<SubmissionRecord | null>;
   /**
    * Submissions the sweep should still check: those not yet in a terminal,
    * already-notified state (published / needs_changes recorded as last-notified).
@@ -199,6 +212,16 @@ export class InMemoryStore implements Store {
   async setSubmissionNotifiedStatus(issueNumber: number, status: SubmissionStatus): Promise<void> {
     const sub = this.submissions.get(issueNumber);
     if (sub) this.submissions.set(issueNumber, { ...sub, lastNotifiedStatus: status });
+  }
+
+  async setSubmissionSlug(issueNumber: number, slug: string): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (sub) this.submissions.set(issueNumber, { ...sub, slug });
+  }
+
+  async getSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {
+    const match = Array.from(this.submissions.values()).find((s) => s.slug === slug);
+    return match ? { ...match } : null;
   }
 
   async listActiveSubmissions(): Promise<SubmissionRecord[]> {
@@ -463,6 +486,19 @@ export class FirestoreStore implements Store {
       .collection('submissions')
       .doc(String(issueNumber))
       .set({ lastNotifiedStatus: status }, { merge: true });
+  }
+
+  async setSubmissionSlug(issueNumber: number, slug: string): Promise<void> {
+    await this.db.collection('submissions').doc(String(issueNumber)).set({ slug }, { merge: true });
+  }
+
+  async getSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {
+    // Equality-only query — no composite index needed. A slug is unique per game
+    // directory, but if two submissions ever raced onto one, the newest wins.
+    const snap = await this.db.collection('submissions').where('slug', '==', slug).get();
+    const records = snap.docs.map((d) => d.data() as SubmissionRecord);
+    records.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return records[0] ?? null;
   }
 
   async listActiveSubmissions(): Promise<SubmissionRecord[]> {

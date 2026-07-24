@@ -163,6 +163,12 @@
     "play": "Zagraj",
     "open": "Otwórz"
   },
+  "draft": {
+    "title": "Gra w budowie",
+    "loading": "Wczytujemy najnowszą wersję…",
+    "notFound": "Ta gra nie jest jeszcze dostępna. Może dopiero powstaje albo została już opublikowana.",
+    "error": "Nie udało się teraz wczytać tej gry. Spróbuj ponownie za chwilę."
+  },
   "statusView": {
     "title": "Twoja gra powstaje",
     "loading": "Szukamy Twojej gry…",
@@ -231,7 +237,10 @@
       }
     },
     "elapsed": "Trwa od {{duration}}",
-    "live": "Na żywo"
+    "live": "Na żywo",
+    "shareLink": "Podziel się tą grą (tylko do oglądania):",
+    "shareCopy": "Kopiuj",
+    "shareCopied": "Skopiowano!"
   },
   "suggestions": {
     "dodge": "Unikaj spadających skał",

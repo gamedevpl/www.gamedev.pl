@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseHashRoute, playHash, statusHash } from './router';
+import { draftHash, parseHashRoute, playHash, statusHash } from './router';
 
 describe('parseHashRoute', () => {
   it('maps empty and root hashes to home', () => {
@@ -26,6 +26,12 @@ describe('parseHashRoute', () => {
     expect(parseHashRoute('#/play/')).toEqual({ view: 'home' });
   });
 
+  it('parses a draft route with a valid slug, and rejects malformed ones', () => {
+    expect(parseHashRoute('#/draft/space-runner')).toEqual({ view: 'draft', slug: 'space-runner' });
+    expect(parseHashRoute('#/draft/..%2Fadmin')).toEqual({ view: 'home' });
+    expect(parseHashRoute('#/draft/')).toEqual({ view: 'home' });
+  });
+
   it('parses a join route', () => {
     expect(parseHashRoute('#/join/ABC123/tok_en-1')).toEqual({ view: 'join', code: 'ABC123', token: 'tok_en-1' });
   });
@@ -39,6 +45,11 @@ describe('hash builders', () => {
   it('round-trips a play slug', () => {
     expect(playHash('kotek-w-cyrku')).toBe('#/play/kotek-w-cyrku');
     expect(parseHashRoute(playHash('space-dash'))).toEqual({ view: 'play', slug: 'space-dash' });
+  });
+
+  it('round-trips a draft slug', () => {
+    expect(draftHash('space-runner')).toBe('#/draft/space-runner');
+    expect(parseHashRoute(draftHash('space-runner'))).toEqual({ view: 'draft', slug: 'space-runner' });
   });
 
   it('encodes status tokens', () => {

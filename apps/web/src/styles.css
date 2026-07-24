@@ -2192,6 +2192,32 @@ body.player-open {
   color: var(--turquoise);
 }
 
+/* Watch-only share link (no status token in it) shown under the tracking link. */
+.status-share {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-share-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-card);
+  color: var(--text);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.status-share-copy:hover {
+  border-color: var(--turquoise);
+}
+
 /* MY GAMES RAIL — the home-page answer to "where did my game go?" */
 .my-games-list {
   list-style: none;

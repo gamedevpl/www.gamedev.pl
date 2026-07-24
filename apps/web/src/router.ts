@@ -6,6 +6,10 @@ export type AppRoute =
   // catalog. Only published games are permalinkable — generated/party stages are
   // ephemeral and stay off the route.
   | { view: 'play'; slug: string }
+  // An in-progress game, addressed exactly like a published one. This is the
+  // shareable form of a build: it carries no status token, so it grants watching
+  // rights only — no change requests, no quota spend.
+  | { view: 'draft'; slug: string }
   // A phone that scanned a lobby QR. Both the room code and its join token live
   // in the fragment, so the credential never reaches the server in a request line
   // (see docs/multiplayer-plan.md §4.3).
@@ -35,6 +39,14 @@ export function parseHashRoute(hash: string): AppRoute {
     }
   }
 
+  const draftMatch = normalizedHash.match(/^\/draft\/([^/]+)$/);
+  if (draftMatch?.[1]) {
+    const slug = decodeURIComponent(draftMatch[1]);
+    if (SLUG_PATTERN.test(slug)) {
+      return { view: 'draft', slug };
+    }
+  }
+
   const joinMatch = normalizedHash.match(/^\/join\/([A-Z0-9]{6})\/([A-Za-z0-9_-]+)$/);
   if (joinMatch?.[1] && joinMatch[2]) {
     return { view: 'join', code: joinMatch[1], token: joinMatch[2] };
@@ -49,4 +61,8 @@ export function statusHash(token: string): string {
 
 export function playHash(slug: string): string {
   return `#/play/${encodeURIComponent(slug)}`;
+}
+
+export function draftHash(slug: string): string {
+  return `#/draft/${encodeURIComponent(slug)}`;
 }
