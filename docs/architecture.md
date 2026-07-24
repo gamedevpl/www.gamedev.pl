@@ -111,7 +111,7 @@ flowchart TD
 
 1. **The Games Repository**:
    - A dedicated public/private monorepo owned by the organization.
-   - Houses a folder per game containing its spec (`SPEC.md` with metadata frontmatter and free-form design text) and implementation (`index.html`, `game.js`, `style.css`).
+   - Houses a folder per game containing its spec (`SPEC.md` with metadata frontmatter and free-form design text) and implementation (`index.html`, `game.ts`, `style.css`).
    - Coding agents (such as GitHub Copilot or Claude Code) work on this repo autonomously, treating `SPEC.md` as the source of truth to implement games and fix bugs.
 
 2. **Publish Pipeline**:

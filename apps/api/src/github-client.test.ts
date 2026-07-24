@@ -196,7 +196,7 @@ describe('getGameSources', () => {
   it('bundles selected GameKit modules, audio assets, and shared shell styles before the game', async () => {
     const files = new Map<string, string | Uint8Array>([
       ['games/coin-catcher/index.html', '<canvas id="game"></canvas>'],
-      ['games/coin-catcher/game.js', 'GameKit.mount(game);'],
+      ['games/coin-catcher/game.ts', 'const game: { update(): void } = { update() {} }; GameKit.mount(game);'],
       ['games/coin-catcher/style.css', '.game { color: gold; }'],
       ['games/coin-catcher/SPEC.md', specMd({ title: 'Coin Catcher' })],
       [
@@ -204,9 +204,9 @@ describe('getGameSources', () => {
         JSON.stringify({ engine: { modules: ['input', 'audio'] }, audio: { sounds: ['ui-toggle', 'coin'] } }),
       ],
       ['shared/game-shell.css', '.shell { display: grid; }'],
-      ['shared/modules/core.js', 'window.GameKit = { mount() {} };'],
-      ['shared/modules/input.js', 'GameKit.createInput = function () {};'],
-      ['shared/modules/audio.js', 'GameKit.createAudio = function () {};'],
+      ['shared/modules/core.ts', 'const version: number = 1; window.GameKit = { mount() {} };'],
+      ['shared/modules/input.ts', 'GameKit.createInput = function (): void {};'],
+      ['shared/modules/audio.ts', 'GameKit.createAudio = function (): void {};'],
       ['shared/audio/assets/ui-toggle.wav', new Uint8Array([1, 2])],
       ['shared/audio/assets/coin.wav', new Uint8Array([3, 4])],
     ]);
@@ -234,5 +234,8 @@ describe('getGameSources', () => {
     expect(sources?.gameJs.indexOf('Object.freeze(window.GameKit)')).toBeLessThan(
       sources?.gameJs.indexOf('GameKit.mount(game)') ?? 0,
     );
+    expect(sources?.gameJs).not.toContain(': number');
+    expect(sources?.gameJs).not.toContain('): void');
+    expect(() => new Function(sources?.gameJs ?? '')).not.toThrow();
   });
 });

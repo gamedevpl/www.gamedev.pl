@@ -18,6 +18,7 @@
     "@fastify/websocket": "^11.3.0",
     "@gamedevpl/game-generator": "*",
     "@google-cloud/firestore": "^8.7.0",
+    "esbuild": "0.25.12",
     "fastify": "^5.10.0",
     "google-auth-library": "^10.9.0",
     "zod": "^3.23.8"

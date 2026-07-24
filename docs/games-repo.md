@@ -16,7 +16,7 @@ games/
     GAME.json        ← shared-engine module selection
     CAPTURE.json     ← deterministic play, assertion, and capture scenario
     index.html
-    game.js
+    game.ts
     style.css
     media/
       opening.png
@@ -31,6 +31,9 @@ games/
     validate.yml            ← every game builds and loads
     publish.yml             ← publish bundles for gamedev.pl to serve
 ```
+
+The games repository contains TypeScript executable sources only. Its build tooling and this
+app's GitHub client transpile those sources into dependency-free JavaScript before browser delivery.
 
 **Coding agents maintain that repo.** GitHub Copilot works on it autonomously — fixing
 problems, and bringing each game into line with its current spec. Claude Code / Codex / agy

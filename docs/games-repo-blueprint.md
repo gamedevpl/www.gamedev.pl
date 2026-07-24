@@ -12,7 +12,7 @@ games/
   dodge-the-falling-rocks/
     SPEC.md            ← source of truth
     index.html
-    game.js
+    game.ts
     style.css
   collect-the-coins/
   fly-through-asteroids/
@@ -95,7 +95,7 @@ Agents work far better against a mechanical contract than against prose. A game 
 | --- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------- |
 | 1   | `SPEC.md` exists; frontmatter parses; required fields present                                  | The spec is the contract                        |
 | 2   | `slug` equals the directory name                                                               | Keeps catalog links honest                      |
-| 3   | `index.html`, `game.js`, `style.css` all exist and are non-empty                               | Fixed shape the tools rely on                   |
+| 3   | `index.html`, `game.ts`, `style.css` all exist and are non-empty                               | Fixed shape the tools rely on                   |
 | 4   | Bundle assembles and is **under 200 KB** total                                                 | It's inlined into an iframe; keep it lean       |
 | 5   | **No credential-shaped strings**                                                               | Reuse the scanner already written in `apps/api` |
 | 6   | No `<script src=…>`, `<link href=…>`, `@import`, or `fetch`/`XMLHttpRequest` to remote origins | Games must be self-contained and offline        |

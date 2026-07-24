@@ -1,3 +1,5 @@
+import { transform } from 'esbuild';
+
 interface CreateIssueInput {
   title: string;
   body: string;
@@ -40,7 +42,7 @@ export interface GameSources {
   title: string | null;
 }
 
-// Canonical order must match the games repo's tools/lib/assemble.mjs — the two
+// Canonical order must match the games repo's tools/lib/assemble.ts — the two
 // lists are independent copies and a mismatch silently breaks bundling.
 const GAME_KIT_MODULES = ['input', 'collision', 'drawing', 'effects', 'audio', 'party'] as const;
 
@@ -371,34 +373,35 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         return null;
       }
 
-      const [indexHtml, gameJs, styleCss, specMd, manifestSource, gameShellCss, coreJs] = await Promise.all([
+      const [indexHtml, gameTs, styleCss, specMd, manifestSource, gameShellCss, coreTs] = await Promise.all([
         readRawFile(`games/${slug}/index.html`, ref),
-        readRawFile(`games/${slug}/game.js`, ref),
+        readRawFile(`games/${slug}/game.ts`, ref),
         readRawFile(`games/${slug}/style.css`, ref),
         readRawFile(`games/${slug}/SPEC.md`, ref),
         readRawFile(`games/${slug}/GAME.json`, ref),
         readRawFile('shared/game-shell.css', ref),
-        readRawFile('shared/modules/core.js', ref),
+        readRawFile('shared/modules/core.ts', ref),
       ]);
 
       if (
         indexHtml === null ||
-        gameJs === null ||
+        gameTs === null ||
         styleCss === null ||
         manifestSource === null ||
         gameShellCss === null ||
-        coreJs === null
+        coreTs === null
       ) {
         return null;
       }
 
       const manifest = parseGameManifest(manifestSource);
       const moduleSources = await Promise.all(
-        manifest.modules.map((moduleName) => readRawFile(`shared/modules/${moduleName}.js`, ref)),
+        manifest.modules.map((moduleName) => readRawFile(`shared/modules/${moduleName}.ts`, ref)),
       );
       if (moduleSources.some((source) => source === null)) {
         return null;
       }
+      const availableModuleSources = moduleSources.filter((source): source is string => source !== null);
 
       const audioAssets = await Promise.all(
         manifest.sounds.map(async (soundName) => {
@@ -415,7 +418,19 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         assetEntries.length > 0
           ? `window.__GAME_AUDIO_ASSETS__ = Object.freeze(${JSON.stringify(Object.fromEntries(assetEntries))});\n`
           : '';
-      const bundledJs = `${assetsJs}${[coreJs, ...moduleSources].join('\n')}
+      const transpiledSources = await Promise.all(
+        [coreTs, ...availableModuleSources, gameTs].map(async (source) => {
+          const result = await transform(source, {
+            loader: 'ts',
+            target: 'es2022',
+            format: 'iife',
+            legalComments: 'inline',
+          });
+          return result.code;
+        }),
+      );
+      const gameJs = transpiledSources.pop() ?? '';
+      const bundledJs = `${assetsJs}${transpiledSources.join('\n')}
 Object.freeze(window.GameKit);
 ${gameJs}`;
       const bundledCss = `${gameShellCss}\n${styleCss}`;
