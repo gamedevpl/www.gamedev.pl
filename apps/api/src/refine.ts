@@ -1,7 +1,8 @@
-import { GoogleAuth } from 'google-auth-library';
+import type { GenAIClient } from 'genaicode';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { checkUserAccess } from './auth.js';
+import { createVertexClient, type VertexGenerationConfig } from './genai.js';
 import type { ContentChecker } from './moderation.js';
 import type { Store } from './store.js';
 
@@ -37,21 +38,53 @@ export interface VertexSpecRefinerOptions {
   model?: string;
   timeoutMs?: number;
   refinerFetcher?: (params: RefineParams) => Promise<RefineResponse>;
+  // Lower-level seam than `refinerFetcher` — see VertexCheckerOptions.client.
+  client?: GenAIClient;
 }
 
+const RefineResultSchema = z.object({
+  questions: z
+    .array(
+      z.object({
+        id: z.string().optional(),
+        question: z.string().optional(),
+        options: z.array(z.object({ label: z.string(), detail: z.string().optional() })).optional(),
+        allowFreeText: z.boolean().optional(),
+      }),
+    )
+    .optional(),
+});
+
 export class VertexSpecRefiner implements SpecRefiner {
-  private projectId: string;
-  private region: string;
-  private model: string;
+  private options: VertexSpecRefinerOptions;
   private timeoutMs: number;
   private refinerFetcher?: (params: RefineParams) => Promise<RefineResponse>;
+  // Lazy for the same reason as VertexChecker: building one must not touch GCP.
+  private client?: GenAIClient;
 
   constructor(options: VertexSpecRefinerOptions = {}) {
-    this.projectId = options.projectId ?? process.env.VERTEX_PROJECT_ID ?? process.env.PROJECT_ID ?? 'gamedevpl';
-    this.region = options.region ?? process.env.VERTEX_REGION ?? 'europe-west1';
-    this.model = options.model ?? process.env.VERTEX_MODEL ?? 'gemini-1.5-flash-8b';
+    this.options = options;
     this.timeoutMs = options.timeoutMs ?? 5000;
     this.refinerFetcher = options.refinerFetcher;
+  }
+
+  private getClient(): GenAIClient {
+    this.client ??=
+      this.options.client ??
+      createVertexClient({
+        projectId: this.options.projectId,
+        // Was europe-west1/gemini-1.5-flash-8b, which Vertex 404s — that model is
+        // retired in that region, so refinement fail-open'd to zero questions on
+        // every request. Same global endpoint + model as moderation now: verified
+        // against real Vertex, and it keeps VERTEX_REGION/VERTEX_MODEL (shared by
+        // both call sites) meaningful instead of only valid for one of them.
+        region: this.options.region,
+        defaultRegion: 'global',
+        model: this.options.model,
+        defaultModel: 'gemini-3.6-flash',
+        generationConfig: { responseMimeType: 'application/json' } as VertexGenerationConfig,
+      });
+    return this.client;
   }
 
   async refine(params: RefineParams): Promise<RefineResponse> {
@@ -59,15 +92,7 @@ export class VertexSpecRefiner implements SpecRefiner {
       return this.refinerFetcher(params);
     }
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
-
     try {
-      const auth = new GoogleAuth({ scopes: 'https://www.googleapis.com/auth/cloud-platform' });
-      const client = await auth.getClient();
-
-      const url = `https://${this.region}-aiplatform.googleapis.com/v1/projects/${this.projectId}/locations/${this.region}/publishers/google/models/${this.model}:generateContent`;
-
       const promptText = `You are a helpful game design assistant for gamedev.pl.
 Analyze the following game title and concept specification.
 Identify up to 4 underspecified or missing gameplay/design dimensions (such as visual style, controls, difficulty/pacing, or win/lose conditions) that would help a coding agent build a better game.
@@ -96,43 +121,16 @@ Game Concept:
 ${params.concept}
 """`;
 
-      const requestBody = {
-        contents: [
-          {
-            role: 'user',
-            parts: [{ text: promptText }],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.2,
-          responseMimeType: 'application/json',
-        },
-      };
-
-      const res = await client.request<{
-        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-      }>({
-        url,
-        method: 'POST',
-        data: requestBody,
-        signal: controller.signal,
-      });
-
-      const responseText = res.data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!responseText) {
-        throw new Error('Empty response from Vertex AI');
-      }
-
-      const parsed = JSON.parse(responseText.trim()) as RefineResponse;
-      if (!Array.isArray(parsed.questions)) {
-        return { questions: [] };
-      }
+      const parsed = await this.getClient()(promptText)
+        .temperature(0.2)
+        .signal(AbortSignal.timeout(this.timeoutMs))
+        .json((value) => RefineResultSchema.parse(value));
 
       return {
-        questions: parsed.questions.slice(0, 4).map((q, idx) => ({
+        questions: (parsed.questions ?? []).slice(0, 4).map((q, idx) => ({
           id: q.id ?? `q_${idx}`,
           question: q.question ?? '',
-          options: Array.isArray(q.options) ? q.options.map((o) => ({ label: o.label, detail: o.detail })) : [],
+          options: q.options?.map((o) => ({ label: o.label, detail: o.detail })) ?? [],
           allowFreeText: q.allowFreeText !== false,
         })),
       };
@@ -142,8 +140,6 @@ ${params.concept}
         console.warn('Vertex AI spec refinement failed/timed out, failing open:', err);
       }
       return { questions: [] };
-    } finally {
-      clearTimeout(timer);
     }
   }
 }

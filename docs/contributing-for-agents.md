@@ -93,6 +93,12 @@ instruction file for agents on this branch, follow that pattern (concise, projec
 actionable). This repo is developed with [Genaicode](https://github.com/gtanczyk/genaicode);
 see `genaicode.config.ts` (its `lintCommand` is `npm run type-check && npm run lint`).
 
+**Two different things share the name.** `genaicode.config.ts` configures the legacy **1.x
+coding agent** (`npx genaicode@1`). **GenAIcode 2.x is a backend LLM toolkit**, not an agent,
+and is a runtime dependency of `@gamedevpl/api`: every Vertex AI call goes through
+[`apps/api/src/genai.ts`](../apps/api/src/genai.ts). Add LLM call sites there rather than
+hand-rolling `GoogleAuth` + REST against `*-aiplatform.googleapis.com`.
+
 ## Removed approaches
 
 If you encounter imports of `@gamedevpl/engine` or `@gamedevpl/llm-provider`, those belong to a

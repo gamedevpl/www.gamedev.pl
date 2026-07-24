@@ -1,9 +1,11 @@
 import type { FastifyInstance } from 'fastify';
+import { genaicode } from 'genaicode';
+import type { GenerationRequest } from 'genaicode';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { PatternChecker } from './moderation.js';
-import { StubSpecRefiner } from './refine.js';
+import { StubSpecRefiner, VertexSpecRefiner } from './refine.js';
 import { InMemoryStore } from './store.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
@@ -124,5 +126,59 @@ describe('POST /api/submissions/refine', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ questions: [] });
     await testApp.close();
+  });
+});
+
+describe('VertexSpecRefiner over a genaicode client', () => {
+  function stubClient(responseText: string, capture?: (request: GenerationRequest) => void) {
+    return genaicode({
+      name: 'stub',
+      async generate(request) {
+        capture?.(request);
+        return { parts: [{ type: 'text' as const, text: responseText }] };
+      },
+    });
+  }
+
+  it('normalizes questions and caps them at four', async () => {
+    let seen: GenerationRequest | undefined;
+    const questions = Array.from({ length: 6 }, (_, i) => ({
+      id: `q${i}`,
+      question: `Question ${i}?`,
+      options: [{ label: 'A', detail: 'first' }],
+    }));
+    const refiner = new VertexSpecRefiner({
+      client: stubClient(JSON.stringify({ questions }), (req) => (seen = req)),
+    });
+
+    const result = await refiner.refine({ title: 'Carrot Farm', concept: 'Grow carrots', locale: 'pl' });
+
+    expect(result.questions).toHaveLength(4);
+    expect(result.questions[0]).toEqual({
+      id: 'q0',
+      question: 'Question 0?',
+      options: [{ label: 'A', detail: 'first' }],
+      allowFreeText: true,
+    });
+    expect(seen?.temperature).toBe(0.2);
+    expect(seen?.prompt[0]?.text).toContain('Carrot Farm');
+    expect(seen?.prompt[0]?.text).toContain('(pl)');
+  });
+
+  it('fills defaults for partial question objects', async () => {
+    const refiner = new VertexSpecRefiner({
+      client: stubClient('{"questions": [{"allowFreeText": false}]}'),
+    });
+
+    const result = await refiner.refine({ title: 'Game', concept: 'Concept' });
+
+    expect(result.questions).toEqual([{ id: 'q_0', question: '', options: [], allowFreeText: false }]);
+  });
+
+  it('fails open on a malformed or non-conforming response', async () => {
+    for (const body of ['not json at all', '', '{"questions": "nope"}']) {
+      const refiner = new VertexSpecRefiner({ client: stubClient(body) });
+      expect(await refiner.refine({ title: 'Game', concept: 'Concept' })).toEqual({ questions: [] });
+    }
   });
 });

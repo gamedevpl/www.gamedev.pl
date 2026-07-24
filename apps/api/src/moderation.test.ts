@@ -1,5 +1,19 @@
+import { genaicode } from 'genaicode';
+import type { GenerationRequest, ModelProvider } from 'genaicode';
 import { describe, expect, it } from 'vitest';
 import { moderateFields, moderateText, VertexChecker } from './moderation.js';
+
+// Stub provider: exercises the real genaicode request/response path (prompt
+// assembly, JSON parsing, schema validation) with no GCP calls.
+function stubProvider(responseText: string, capture?: (request: GenerationRequest) => void): ModelProvider {
+  return {
+    name: 'stub',
+    async generate(request) {
+      capture?.(request);
+      return { parts: [{ type: 'text', text: responseText }] };
+    },
+  };
+}
 
 describe('moderateText', () => {
   it('allows clean, ordinary game prompts', () => {
@@ -126,5 +140,59 @@ describe('VertexChecker', () => {
 
     const verdict = await checker.check('A completely clean game concept');
     expect(verdict).toEqual({ allowed: false, category: 'other' });
+  });
+});
+
+describe('VertexChecker over a genaicode client', () => {
+  it('sends the concept at temperature 0 and accepts an allowed verdict', async () => {
+    let seen: GenerationRequest | undefined;
+    const checker = new VertexChecker({
+      client: genaicode(stubProvider('{"allowed": true, "category": null}', (req) => (seen = req))),
+    });
+
+    expect(await checker.check('A cozy farming game where you grow carrots')).toEqual({ allowed: true });
+    expect(seen?.temperature).toBe(0);
+    expect(seen?.signal).toBeInstanceOf(AbortSignal);
+    expect(seen?.prompt[0]?.text).toContain('A cozy farming game where you grow carrots');
+  });
+
+  it('maps a rejected verdict to its category', async () => {
+    const checker = new VertexChecker({
+      client: genaicode(stubProvider('{"allowed": false, "category": "injection"}')),
+    });
+
+    expect(await checker.check('A completely clean game concept')).toEqual({
+      allowed: false,
+      category: 'injection',
+    });
+  });
+
+  it('unwraps a fenced JSON response', async () => {
+    const checker = new VertexChecker({
+      client: genaicode(stubProvider('```json\n{"allowed": true}\n```')),
+    });
+
+    expect(await checker.check('A completely clean game concept')).toEqual({ allowed: true });
+  });
+
+  it('fails closed on a malformed or non-conforming response', async () => {
+    for (const body of ['not json at all', '', '{"allowed": "yes"}', '{}']) {
+      const checker = new VertexChecker({ client: genaicode(stubProvider(body)) });
+      expect(await checker.check('A completely clean game concept')).toEqual({
+        allowed: false,
+        category: 'other',
+      });
+    }
+  });
+
+  it('coerces an unknown reject category to "other"', async () => {
+    const checker = new VertexChecker({
+      client: genaicode(stubProvider('{"allowed": false, "category": "wobble"}')),
+    });
+
+    expect(await checker.check('A completely clean game concept')).toEqual({
+      allowed: false,
+      category: 'other',
+    });
   });
 });
