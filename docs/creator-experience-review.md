@@ -62,7 +62,7 @@ at the flow from more than one angle. This is the review; the first batch of fix
 
 ## Suggested order
 
-Owner agreed with this order on 2026-07-24; 1–4 and 6 have since shipped.
+Owner agreed with this order on 2026-07-24; all six have since shipped.
 
 1. ✅ **Read-only share link** — in-progress games get slug permalinks (`#/draft/<slug>`) resolved
    like published ones, served by `GET /api/drafts/:slug`. No status token, so no change requests
@@ -74,9 +74,11 @@ Owner agreed with this order on 2026-07-24; 1–4 and 6 have since shipped.
 4. ✅ **Agent-authored progress line** — `games/<slug>/PROGRESS.md` on the agent's branch, top line
    shown as "Agent says: …". Contract in [agent-progress-notes.md](./agent-progress-notes.md);
    still to do: land it as a skill in the games repo so agents actually keep the journal.
-5. ⏳ **Retry / abandon** actions on a build, and visible quota. Needs decisions: abandoning means
-   closing the issue (and what happens to an open PR), and quota display needs a read-only quota
-   endpoint the store doesn't expose yet.
+5. ✅ **Retry / abandon** actions on a build, and visible quota. Owner's calls: abandoning closes
+   the issue **and** the open PR and does **not** refund the quota; retry **prefills** the prompt
+   box rather than resubmitting. `abandoned` is a status of its own (a closed issue would
+   otherwise derive as `needs_changes`), the stop control arms before it fires, and
+   `GET /api/me/quota` backs a "N of 5 games left today" line next to the build button.
 6. ✅ **Accessibility** — theater is a focus-managed dialog with Escape, polite live regions on
    status copy and the agent note, `aria-current` on the timeline, `datetime` on feed timestamps.
 
