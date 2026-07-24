@@ -172,26 +172,58 @@ exists.
 
 ## What you need to change on GitHub
 
-The Copilot coding agent runs behind an egress firewall, so none of this works until:
+The Copilot coding agent runs behind an egress firewall, so **the shipped channel stays dark until**:
 
 1. **Settings → Copilot → coding agent → custom allowlist**: add `www.gamedev.pl`.
-2. Optional, only if we move the token out of the issue body: **Settings → Environments →
-   `copilot`** for a shared secret.
 
-Worth a probe build before committing to the design: have the agent `curl` the endpoint once and
-report what it gets. If egress cannot be opened, the fallback is a GitHub-native channel (a bot
-comment stream on the PR, written through the API rather than through commits) — slower and
-noisier, but off the git critical path.
+Nothing else is required — the build token rides in the issue body, so no secret has to be placed
+in the agent's environment. Until the allowlist entry exists, the agent's calls fail and it falls
+back to committing `PROGRESS.md`, exactly as the skill instructs. If egress turns out not to be
+openable at all, the fallback design is a GitHub-native channel (a bot comment stream on the PR,
+written through the API rather than through commits) — slower and noisier, but still off the git
+critical path.
 
 ## Phasing
 
-1. **P1 — the channel.** `POST /api/agent/:token/progress`, Firestore event log, `locale` on the
-   record, structured events rendered in the status feed, `pending` messages in the response.
-   Games-repo CLI + rewritten `report-build-progress` skill. `PROGRESS.md` demoted to fallback.
+1. ✅ **P1 — the channel.** Shipped; see below.
 2. **P2 — live build push + screenshots.** The two things that make the wait watchable.
 3. **P3 — MCP server + SSE.** Behavioural reliability for the agent, sub-second for the browser.
 
 P1 is the one that fixes all three complaints. P2 is the one creators will talk about.
+
+## What P1 shipped
+
+Endpoints (`agent-channel.ts`), all authenticated by `Authorization: Bearer <build token>` — the
+token carries the issue number, so nothing is addressed in the URL:
+
+| Route                             | Purpose                                              |
+| --------------------------------- | ---------------------------------------------------- |
+| `POST /api/agent/build/progress`  | Record an event; reply carries `pending` + `control` |
+| `GET /api/agent/build/inbox`      | Read the creator's messages without posting          |
+| `POST /api/agent/build/inbox/ack` | Mark messages handled                                |
+
+Decisions worth remembering:
+
+- **Reading is not acknowledging.** An agent that reads a change request and then crashes must not
+  lose it, so delivery is at-least-once and `ack` is a separate call.
+- **A rejected report still answers with the inbox.** Rate-limited or capped calls return 200 with
+  `accepted: false` and a `rejected` reason rather than an error — dropping the creator's message
+  because the agent was chatty would be the worst of both.
+- **Events hang off the status response, not off `progress`.** Every `progress` field needs an open
+  PR; the minutes before the first PR exists are exactly when the page had nothing to show. A
+  `queued` build now streams updates.
+- **Events bypass the 60s status cache** with a 5s cache of their own, invalidated on append. The
+  GitHub-derived part of a status is worth a minute; an agent's live update is worth seconds.
+- **Caps:** 240 events/hour and 500 events/build, 300 chars each, sanitized as untrusted text.
+
+The creator's language is captured at submission (`SubmissionRecord.locale`), written into the
+issue, and returned in every `control` block, so the agent writes its sentence in that language and
+no model is asked to translate it afterwards.
+
+Verified end-to-end against a locally booted API driving the real games-repo CLI: report → the
+creator's pending message came back in the same reply → ack → a second report with a `--done/--total`
+fraction → the status endpoint served both events in Polish while the build was still `queued` →
+abandon → the CLI was told to stop and exited 2.
 
 ## Open questions
 

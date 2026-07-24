@@ -37,6 +37,50 @@ export interface CreatorRevision {
 // submissions.ts) because both the writer and this reader need it.
 export const CREATOR_FEEDBACK_MARKER = '<!-- gamedevpl:creator-feedback -->';
 
+/**
+ * The steps a game build actually moves through, as a closed set. This is the whole
+ * i18n answer for progress reporting: the enum carries the *meaning* and is rendered
+ * from our own translated copy, so a Polish creator reads correct Polish even when
+ * the agent wrote its sentence in English and machine translation is off or failing.
+ * The free-text sentence alongside it carries only flavour.
+ */
+export const BUILD_STEPS = [
+  'planning',
+  'art',
+  'mechanics',
+  'audio',
+  'balancing',
+  'fixing',
+  'testing',
+  'polishing',
+] as const;
+export type BuildStep = (typeof BUILD_STEPS)[number];
+
+/** What kind of moment this is — drives the icon and how loudly the UI says it. */
+export const BUILD_EVENT_KINDS = ['step', 'milestone', 'asking', 'blocked', 'done'] as const;
+export type BuildEventKind = (typeof BUILD_EVENT_KINDS)[number];
+
+/**
+ * One update pushed by the agent over the build channel, rather than inferred from
+ * a commit it may not have pushed yet (docs/agent-live-channel-plan.md).
+ *
+ * `text` is agent-authored, prompt-influenced text: sanitized on the way in, escaped
+ * on render. `textLocalized` is the same sentence already written in the creator's
+ * language — when the agent supplies it we skip machine translation entirely.
+ */
+export interface BuildEvent {
+  id: string;
+  kind: BuildEventKind;
+  step?: BuildStep;
+  text: string;
+  textLocalized?: string;
+  /** Which language `textLocalized` is in. Without it, the field is unusable. */
+  locale?: string;
+  /** The agent's own count of where it is, when it knows. Drives a real progress bar. */
+  progress?: { done: number; total: number };
+  createdAt: string;
+}
+
 export interface BuildProgress {
   /**
    * Head commit SHA of the PR. Changes each time the agent pushes, so the client
@@ -97,6 +141,12 @@ export interface SubmissionStatusResponseBase {
    * agent-authored text influenced by the creator prompt — render escaped only.
    */
   progress?: BuildProgress;
+  /**
+   * Updates the agent pushed over the build channel, newest first. Deliberately
+   * OUTSIDE `progress`: those fields all require an open PR, and the minutes before
+   * the first PR exists are exactly when the creator is staring at an empty page.
+   */
+  events?: BuildEvent[];
 }
 
 export interface SubmissionPublishedResponse extends SubmissionStatusResponseBase {

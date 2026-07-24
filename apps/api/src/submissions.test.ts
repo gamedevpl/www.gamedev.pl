@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { mintAgentToken } from './agent-token.js';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
@@ -46,6 +47,7 @@ function createGithubClientStub(params: {
   const getGameMedia = vi.fn(async () => params.gameMedia ?? null);
   const getCatalog = vi.fn(async () => params.catalog ?? []);
   const createIssueComment = vi.fn(async () => ({ id: 1 }));
+  const updateIssueBody = vi.fn(async () => {});
   const closeIssue = vi.fn(async () => {});
   const closePullRequest = vi.fn(async () => {});
   const getProgressNotes = vi.fn(async () => params.progressNotes ?? null);
@@ -54,6 +56,7 @@ function createGithubClientStub(params: {
     getIssueState,
     findLinkedPR,
     createIssueComment,
+    updateIssueBody,
     closeIssue,
     closePullRequest,
     getGameSources,
@@ -67,6 +70,7 @@ function createGithubClientStub(params: {
     getIssueState,
     findLinkedPR,
     createIssueComment,
+    updateIssueBody,
     closeIssue,
     closePullRequest,
     getGameSources,
@@ -238,7 +242,7 @@ describe('submission routes', () => {
   });
 
   it('creates an issue, sanitizes user text, and returns token + status URL', async () => {
-    const { githubClient, createIssue } = createGithubClientStub({ issueNumber: 77 });
+    const { githubClient, createIssue, updateIssueBody } = createGithubClientStub({ issueNumber: 77 });
     const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret });
 
     const response = await app.inject({
@@ -278,10 +282,38 @@ describe('submission routes', () => {
         '```',
       ].join('\n'),
     );
-    // The creator watches the PR checklist and commit log live, so the agent is told
-    // how to report progress.
-    expect(issue.body).toContain('## Progress reporting');
-    expect(issue.body).toContain('- [ ]');
+    // The build channel is added in a second write: its token is derived from the
+    // issue number, which does not exist until GitHub has assigned one.
+    expect(updateIssueBody).toHaveBeenCalledTimes(1);
+    const [updatedNumber, updatedBody] = updateIssueBody.mock.calls[0]! as unknown as [number, string];
+    expect(updatedNumber).toBe(77);
+    expect(updatedBody).toContain('## Build channel (report progress here)');
+    expect(updatedBody).toContain(mintAgentToken(77, secret));
+    // The agent must never be handed the token that can spend quota or stop the build.
+    expect(updatedBody).not.toContain(mintToken(77, secret));
+    // The original spec survives the rewrite.
+    expect(updatedBody).toContain('This is a sufficiently long concept with markup and details.');
+
+    await app.close();
+  });
+
+  it('tells the agent which language to report progress in', async () => {
+    const { githubClient, updateIssueBody } = createGithubClientStub({ issueNumber: 91 });
+    const store = new InMemoryStore();
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: { ...authHeaders, 'accept-language': 'pl-PL,pl;q=0.9' },
+      payload: { title: 'Kosmiczna gra', concept: 'A sufficiently long concept about a spaceship and its crew.' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const [, updatedBody] = updateIssueBody.mock.calls[0]! as unknown as [number, string];
+    expect(updatedBody).toContain('reads the site in **pl**');
+    // And it is recorded, so the channel can tell the agent the same thing later.
+    expect((await store.getSubmission(91))?.locale).toBe('pl');
 
     await app.close();
   });

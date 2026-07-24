@@ -178,6 +178,12 @@ export interface GitHubClient {
    */
   createIssueComment(issueOrPrNumber: number, body: string): Promise<{ id: number }>;
   /**
+   * Rewrites an issue body. Used once, right after creation, to add the build-channel
+   * credentials — they are derived from the issue number, which GitHub only assigns
+   * when the issue already exists.
+   */
+  updateIssueBody(issueNumber: number, body: string): Promise<void>;
+  /**
    * Closes an issue (a creator abandoning their build) or an open pull request.
    * The REST issues endpoint covers both — a PR is an issue for state purposes —
    * but PRs are closed through the pulls endpoint so GitHub records it as such.
@@ -453,6 +459,13 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         { method: 'POST', body: JSON.stringify({ body }) },
       );
       return { id: result.id };
+    },
+
+    async updateIssueBody(issueNumber, body) {
+      await requestJson(`https://api.github.com/repos/${repo}/issues/${issueNumber}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ body }),
+      });
     },
 
     async closeIssue(issueNumber) {

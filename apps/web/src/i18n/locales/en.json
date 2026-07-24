@@ -211,7 +211,17 @@
       "quietHint": "The agent has been quiet for a while. Bigger games take longer — you can close this page, we'll notify you.",
       "yourRequest": "Your request",
       "yourRequestSending": "Your request · sending",
-      "agentSays": "Agent says"
+      "agentSays": "Agent says",
+      "steps": {
+        "planning": "Planning",
+        "art": "Drawing",
+        "mechanics": "Building",
+        "audio": "Sound",
+        "balancing": "Balancing",
+        "fixing": "Fixing",
+        "testing": "Testing",
+        "polishing": "Polishing"
+      }
     },
     "states": {
       "queued": {

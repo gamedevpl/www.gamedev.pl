@@ -8,7 +8,10 @@ import {
   getSubmissionPreview,
   getSubmissionStatus,
   submitFeedback,
+  type BuildEvent,
+  type BuildEventKind,
   type BuildProgress,
+  type BuildStep,
   type SubmissionApiError,
   type SubmissionPreview,
   type SubmissionStatus,
@@ -391,9 +394,11 @@ export function SubmissionStatusView({
               />
             ) : null}
 
-            {status.progress ? (
-              <BuildProgressPanel progress={status.progress} pendingRevisions={pendingRevisions} />
-            ) : null}
+            <BuildProgressPanel
+              progress={status.progress}
+              events={status.events ?? []}
+              pendingRevisions={pendingRevisions}
+            />
 
             {previewError && !preview ? <p className="error">{previewError}</p> : null}
 
@@ -670,21 +675,44 @@ function FeedbackPanel({ token, onSent }: { token: string; onSent: (text: string
 const QUIET_BUILD_MS = 15 * 60_000;
 
 type ActivityEntry = {
-  kind: 'commit' | 'revision';
+  kind: 'commit' | 'revision' | 'event';
   text: string;
   at: number;
   /** Sent from this tab but not yet echoed back by the API. */
   pending?: boolean;
+  /** For agent events: the step it reported, rendered from our own translations. */
+  step?: BuildStep;
+  eventKind?: BuildEventKind;
 };
 
-function buildActivityFeed(progress: BuildProgress, pendingRevisions: PendingRevision[]): ActivityEntry[] {
+/** Icon per feed entry. Agent events say what kind of moment they are. */
+const EVENT_ICONS: Record<BuildEventKind, PixelIconName> = {
+  step: 'wrench',
+  milestone: 'star',
+  asking: 'pencil',
+  blocked: 'bolt',
+  done: 'check',
+};
+
+function buildActivityFeed(
+  progress: BuildProgress | undefined,
+  events: BuildEvent[],
+  pendingRevisions: PendingRevision[],
+): ActivityEntry[] {
   const entries: ActivityEntry[] = [
-    ...progress.commits.map((commit) => ({
+    ...events.map((event) => ({
+      kind: 'event' as const,
+      text: event.text,
+      at: Date.parse(event.createdAt),
+      step: event.step,
+      eventKind: event.kind,
+    })),
+    ...(progress?.commits ?? []).map((commit) => ({
       kind: 'commit' as const,
       text: commit.message,
       at: Date.parse(commit.committedDate),
     })),
-    ...(progress.revisions ?? []).map((revision) => ({
+    ...(progress?.revisions ?? []).map((revision) => ({
       kind: 'revision' as const,
       text: revision.text,
       at: Date.parse(revision.createdAt),
@@ -692,7 +720,7 @@ function buildActivityFeed(progress: BuildProgress, pendingRevisions: PendingRev
   ];
 
   // A revision the API has already echoed back must not appear twice.
-  const known = new Set((progress.revisions ?? []).map((revision) => revision.text));
+  const known = new Set((progress?.revisions ?? []).map((revision) => revision.text));
   for (const pending of pendingRevisions) {
     if (!known.has(pending.text)) {
       entries.push({ kind: 'revision', text: pending.text, at: pending.at, pending: true });
@@ -705,23 +733,33 @@ function buildActivityFeed(progress: BuildProgress, pendingRevisions: PendingRev
 
 function BuildProgressPanel({
   progress,
+  events,
   pendingRevisions,
 }: {
-  progress: BuildProgress;
+  progress?: BuildProgress;
+  events: BuildEvent[];
   pendingRevisions: PendingRevision[];
 }) {
   const { t, i18n } = useTranslation();
-  const activity = buildActivityFeed(progress, pendingRevisions);
+  const activity = buildActivityFeed(progress, events, pendingRevisions);
+  const checklist = progress?.checklist ?? [];
+  // The agent's own latest word, in order of directness: an event it pushed over the
+  // build channel, then the journal it committed, then nothing.
+  const latestEvent = events[0];
+  const headline = latestEvent?.text ?? progress?.note;
 
-  if (progress.checklist.length === 0 && activity.length === 0 && !progress.note) {
+  if (checklist.length === 0 && activity.length === 0 && !headline) {
     return null;
   }
 
-  const doneCount = progress.checklist.filter((item) => item.checked).length;
-  const donePercent = progress.checklist.length === 0 ? 0 : (doneCount / progress.checklist.length) * 100;
+  // A count the agent reported beats one we infer from ticked checkboxes.
+  const reportedProgress = events.find((event) => event.progress)?.progress;
+  const doneCount = reportedProgress?.done ?? checklist.filter((item) => item.checked).length;
+  const totalCount = reportedProgress?.total ?? checklist.length;
+  const donePercent = totalCount === 0 ? 0 : (doneCount / totalCount) * 100;
   // What the agent says it is doing beats what we infer from its checklist — fall
   // back to the first unfinished task only when it has written nothing.
-  const currentStep = progress.note ? undefined : progress.checklist.find((item) => !item.checked);
+  const currentStep = headline ? undefined : checklist.find((item) => !item.checked);
   const lastUpdate = activity[0];
   // A long gap between pushes is normal, but silence with no explanation reads as
   // "it's broken" — say so plainly instead of letting the creator guess.
@@ -729,19 +767,23 @@ function BuildProgressPanel({
 
   return (
     <div className="build-progress">
-      {progress.note ? (
+      {headline ? (
         <p className="build-progress-note" aria-live="polite">
-          <span className="build-progress-note-label">{t('statusView.progress.agentSays')}</span>
-          <span className="build-progress-note-text">{progress.note}</span>
+          <span className="build-progress-note-label">
+            {latestEvent?.step
+              ? t(`statusView.progress.steps.${latestEvent.step}`)
+              : t('statusView.progress.agentSays')}
+          </span>
+          <span className="build-progress-note-text">{headline}</span>
         </p>
       ) : null}
 
-      {progress.checklist.length > 0 ? (
+      {totalCount > 0 ? (
         <div className="build-progress-checklist">
           <div className="build-progress-heading-row">
             <h3 className="build-progress-heading">{t('statusView.progress.checklistTitle')}</h3>
             <span className="build-progress-count">
-              {t('statusView.progress.checklistCount', { done: doneCount, total: progress.checklist.length })}
+              {t('statusView.progress.checklistCount', { done: doneCount, total: totalCount })}
             </span>
           </div>
           <div
@@ -749,7 +791,7 @@ function BuildProgressPanel({
             role="progressbar"
             aria-valuenow={doneCount}
             aria-valuemin={0}
-            aria-valuemax={progress.checklist.length}
+            aria-valuemax={totalCount}
           >
             <div className="build-progress-bar-fill" style={{ width: `${donePercent}%` }} />
           </div>
@@ -760,7 +802,7 @@ function BuildProgressPanel({
             </p>
           ) : null}
           <ul>
-            {progress.checklist.map((item, index) => (
+            {checklist.map((item, index) => (
               <li key={index} className={item.checked ? 'checklist-done' : 'checklist-pending'}>
                 <span aria-hidden="true">
                   <PixelIcon name={item.checked ? 'check' : 'checkbox'} size={12} />
@@ -792,7 +834,16 @@ function BuildProgressPanel({
                 className={`build-activity-item build-activity-${entry.kind}${index === 0 ? ' build-progress-commit-latest' : ''}`}
               >
                 <span className="build-activity-icon" aria-hidden="true">
-                  <PixelIcon name={entry.kind === 'revision' ? 'pencil' : 'wrench'} size={12} />
+                  <PixelIcon
+                    name={
+                      entry.kind === 'revision'
+                        ? 'pencil'
+                        : entry.kind === 'event'
+                          ? EVENT_ICONS[entry.eventKind ?? 'step']
+                          : 'wrench'
+                    }
+                    size={12}
+                  />
                 </span>
                 <span className="build-activity-body">
                   {entry.kind === 'revision' ? (
@@ -801,6 +852,10 @@ function BuildProgressPanel({
                         ? t('statusView.progress.yourRequestSending')
                         : t('statusView.progress.yourRequest')}
                     </span>
+                  ) : entry.step ? (
+                    // The step is a closed set, so it is real translated copy rather
+                    // than a machine translation of whatever the agent happened to write.
+                    <span className="build-activity-label">{t(`statusView.progress.steps.${entry.step}`)}</span>
                   ) : null}
                   <span className="build-activity-text">{entry.text}</span>
                 </span>

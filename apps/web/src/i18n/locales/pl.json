@@ -211,7 +211,17 @@
       "quietHint": "Agent od dłuższej chwili nic nie zmienił. Większe gry powstają dłużej — możesz zamknąć tę stronę, damy Ci znać.",
       "yourRequest": "Twoja uwaga",
       "yourRequestSending": "Twoja uwaga · wysyłanie",
-      "agentSays": "Agent pisze"
+      "agentSays": "Agent pisze",
+      "steps": {
+        "planning": "Planowanie",
+        "art": "Rysowanie",
+        "mechanics": "Budowanie",
+        "audio": "Dźwięk",
+        "balancing": "Balansowanie",
+        "fixing": "Poprawki",
+        "testing": "Testowanie",
+        "polishing": "Szlifowanie"
+      }
     },
     "states": {
       "queued": {

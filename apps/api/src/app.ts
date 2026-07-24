@@ -166,6 +166,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // Internal endpoints (the Cloud Scheduler notification sweep) authenticate via
     // an OIDC token in the handler, not a session — the wall would 401 them first.
     if (request.url.startsWith('/api/internal/')) return;
+    // The build channel: the coding agent runs inside GitHub's sandbox and has no
+    // session and never will. It authenticates with a per-build token verified in
+    // the handler, scoped to talking about the one build it was handed.
+    if (request.url.startsWith('/api/agent/')) return;
     // The controller websocket is the one door anonymous guests may reach: a phone
     // that scanned a QR has no session and never will. It is useless without a
     // room token (verified in the first frame, not here), and the room it opens

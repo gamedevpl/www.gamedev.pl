@@ -1,6 +1,6 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { Firestore } from '@google-cloud/firestore';
-import type { SubmissionStatus } from './submission-status.js';
+import type { BuildEvent, SubmissionStatus } from './submission-status.js';
 
 export interface User {
   uid: string;
@@ -45,6 +45,26 @@ export interface SubmissionRecord {
    * a submission once it reaches a terminal, already-notified state.
    */
   lastNotifiedStatus?: SubmissionStatus;
+  /**
+   * The language the creator submitted in. Told to the agent over the build channel
+   * so it can write its progress updates in that language directly — which beats
+   * machine-translating them afterwards, and costs us nothing.
+   */
+  locale?: string;
+}
+
+/**
+ * A change request from the creator, queued for the agent to collect over the build
+ * channel (docs/agent-live-channel-plan.md §4). The PR comment remains the durable
+ * record and the thing that *wakes* a stopped agent; this queue is the fast path for
+ * one that is already working.
+ */
+export interface CreatorMessage {
+  id: string;
+  text: string;
+  createdAt: string;
+  /** Set once an agent has collected it. Undelivered messages are re-served. */
+  deliveredAt?: string | null;
 }
 
 export interface UsageCounters {
@@ -113,6 +133,23 @@ export interface Store {
   setSubmissionPublishedAt(issueNumber: number, at: string): Promise<void>;
   /** Marks a submission abandoned by its creator. */
   setSubmissionAbandoned(issueNumber: number, at: string): Promise<void>;
+  /** Records the creator's language, so the agent can report progress in it. */
+  setSubmissionLocale(issueNumber: number, locale: string): Promise<void>;
+  /** Appends an agent progress event. Returns it with its assigned id and timestamp. */
+  appendBuildEvent(
+    issueNumber: number,
+    event: Omit<BuildEvent, 'id' | 'createdAt'> & { createdAt?: string },
+  ): Promise<BuildEvent>;
+  /** Agent progress events for a build, newest first. */
+  listBuildEvents(issueNumber: number, opts?: { limit?: number }): Promise<BuildEvent[]>;
+  /** How many events a build has recorded — the cap that bounds a runaway agent. */
+  countBuildEvents(issueNumber: number): Promise<number>;
+  /** Queues a creator change request for the agent to collect. */
+  appendCreatorMessage(issueNumber: number, text: string): Promise<CreatorMessage>;
+  /** Undelivered creator messages, oldest first — the agent's inbox. */
+  listPendingCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]>;
+  /** Marks messages collected, so the agent is not handed the same request twice. */
+  markCreatorMessagesDelivered(issueNumber: number, ids: string[]): Promise<void>;
   /** Today's usage counters for a user, without incrementing anything. */
   getUsage(uid: string, dateStr: string): Promise<UsageCounters>;
   /** Most recently published submissions, newest first — the build-time sample. */
@@ -177,9 +214,16 @@ function emptyUsageCounters(): UsageCounters {
   return { submissions: 0, previews: 0, mocks: 0, refines: 0, feedback: 0 };
 }
 
+/** Newest first, with the id as a stable tie-break for same-millisecond events. */
+function byNewestFirst(a: { createdAt: string; id: string }, b: { createdAt: string; id: string }): number {
+  return b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id);
+}
+
 export class InMemoryStore implements Store {
   private users = new Map<string, User>();
   private submissions = new Map<number, SubmissionRecord>();
+  private buildEvents = new Map<number, BuildEvent[]>();
+  private creatorMessages = new Map<number, CreatorMessage[]>();
   private usage = new Map<string, UsageCounters>();
   private waitlist = new Map<string, WaitlistEntry>();
   // uid -> (notificationId -> notification)
@@ -257,6 +301,67 @@ export class InMemoryStore implements Store {
   async setSubmissionAbandoned(issueNumber: number, at: string): Promise<void> {
     const sub = this.submissions.get(issueNumber);
     if (sub) this.submissions.set(issueNumber, { ...sub, abandonedAt: at });
+  }
+
+  async setSubmissionLocale(issueNumber: number, locale: string): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (sub) this.submissions.set(issueNumber, { ...sub, locale });
+  }
+
+  async appendBuildEvent(
+    issueNumber: number,
+    event: Omit<BuildEvent, 'id' | 'createdAt'> & { createdAt?: string },
+  ): Promise<BuildEvent> {
+    const record: BuildEvent = { ...event, id: randomUUID(), createdAt: event.createdAt ?? new Date().toISOString() };
+    const existing = this.buildEvents.get(issueNumber) ?? [];
+    existing.push(record);
+    this.buildEvents.set(issueNumber, existing);
+    return { ...record };
+  }
+
+  async listBuildEvents(issueNumber: number, opts?: { limit?: number }): Promise<BuildEvent[]> {
+    return [...(this.buildEvents.get(issueNumber) ?? [])]
+      .sort(byNewestFirst)
+      .slice(0, opts?.limit ?? 20)
+      .map((event) => ({ ...event }));
+  }
+
+  async countBuildEvents(issueNumber: number): Promise<number> {
+    return this.buildEvents.get(issueNumber)?.length ?? 0;
+  }
+
+  async appendCreatorMessage(issueNumber: number, text: string): Promise<CreatorMessage> {
+    const record: CreatorMessage = {
+      id: randomUUID(),
+      text,
+      createdAt: new Date().toISOString(),
+      deliveredAt: null,
+    };
+    const existing = this.creatorMessages.get(issueNumber) ?? [];
+    existing.push(record);
+    this.creatorMessages.set(issueNumber, existing);
+    return { ...record };
+  }
+
+  async listPendingCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
+    return (this.creatorMessages.get(issueNumber) ?? [])
+      .filter((message) => !message.deliveredAt)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
+      .slice(0, opts?.limit ?? 10)
+      .map((message) => ({ ...message }));
+  }
+
+  async markCreatorMessagesDelivered(issueNumber: number, ids: string[]): Promise<void> {
+    const existing = this.creatorMessages.get(issueNumber);
+    if (!existing || ids.length === 0) return;
+    const at = new Date().toISOString();
+    const targets = new Set(ids);
+    this.creatorMessages.set(
+      issueNumber,
+      existing.map((message) =>
+        targets.has(message.id) && !message.deliveredAt ? { ...message, deliveredAt: at } : message,
+      ),
+    );
   }
 
   async getUsage(uid: string, dateStr: string): Promise<UsageCounters> {
@@ -551,6 +656,72 @@ export class FirestoreStore implements Store {
 
   async setSubmissionAbandoned(issueNumber: number, at: string): Promise<void> {
     await this.db.collection('submissions').doc(String(issueNumber)).set({ abandonedAt: at }, { merge: true });
+  }
+
+  async setSubmissionLocale(issueNumber: number, locale: string): Promise<void> {
+    await this.db.collection('submissions').doc(String(issueNumber)).set({ locale }, { merge: true });
+  }
+
+  private eventsCollection(issueNumber: number) {
+    return this.db.collection('submissions').doc(String(issueNumber)).collection('events');
+  }
+
+  private messagesCollection(issueNumber: number) {
+    return this.db.collection('submissions').doc(String(issueNumber)).collection('messages');
+  }
+
+  async appendBuildEvent(
+    issueNumber: number,
+    event: Omit<BuildEvent, 'id' | 'createdAt'> & { createdAt?: string },
+  ): Promise<BuildEvent> {
+    const record: BuildEvent = { ...event, id: randomUUID(), createdAt: event.createdAt ?? new Date().toISOString() };
+    // Firestore rejects undefined values; optional fields are simply absent instead.
+    const document = Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined));
+    await this.eventsCollection(issueNumber).doc(record.id).set(document);
+    return record;
+  }
+
+  async listBuildEvents(issueNumber: number, opts?: { limit?: number }): Promise<BuildEvent[]> {
+    const snap = await this.eventsCollection(issueNumber)
+      .orderBy('createdAt', 'desc')
+      .limit(opts?.limit ?? 20)
+      .get();
+    return snap.docs.map((doc) => doc.data() as BuildEvent).sort(byNewestFirst);
+  }
+
+  async countBuildEvents(issueNumber: number): Promise<number> {
+    const snap = await this.eventsCollection(issueNumber).count().get();
+    return snap.data().count;
+  }
+
+  async appendCreatorMessage(issueNumber: number, text: string): Promise<CreatorMessage> {
+    const record: CreatorMessage = {
+      id: randomUUID(),
+      text,
+      createdAt: new Date().toISOString(),
+      deliveredAt: null,
+    };
+    await this.messagesCollection(issueNumber).doc(record.id).set(record);
+    return record;
+  }
+
+  async listPendingCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
+    // Equality on deliveredAt plus an ordered range would need a composite index;
+    // the message count per build is tiny, so order and filter here instead.
+    const snap = await this.messagesCollection(issueNumber).where('deliveredAt', '==', null).get();
+    return snap.docs
+      .map((doc) => doc.data() as CreatorMessage)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
+      .slice(0, opts?.limit ?? 10);
+  }
+
+  async markCreatorMessagesDelivered(issueNumber: number, ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+    const at = new Date().toISOString();
+    const collection = this.messagesCollection(issueNumber);
+    const batch = this.db.batch();
+    ids.forEach((id) => batch.set(collection.doc(id), { deliveredAt: at }, { merge: true }));
+    await batch.commit();
   }
 
   async getUsage(uid: string, dateStr: string): Promise<UsageCounters> {

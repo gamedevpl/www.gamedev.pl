@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import type { GameProject } from '@gamedevpl/game-generator';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { registerAgentChannelRoutes, type AgentChannelOptions } from './agent-channel.js';
+import { mintAgentToken } from './agent-token.js';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import {
   createGitHubClient,
@@ -20,6 +22,7 @@ import {
   extractSlugFromChangedFiles,
   parseProgressNote,
   sanitizeCreatorText,
+  type BuildEvent,
   type SubmissionStatusResponse,
 } from './submission-status.js';
 import { InvalidTokenError, mintToken, verifyToken } from './submission-token.js';
@@ -33,6 +36,8 @@ const CreateSubmissionRequestSchema = z.object({
     .min(30, 'concept must be at least 30 characters')
     .max(4000, 'concept must be at most 4000 characters'),
   displayName: z.string().trim().max(40, 'display name must be at most 40 characters').optional(),
+  /** The language the creator is using, so the agent can report progress in it. */
+  locale: z.string().trim().max(10).optional(),
 });
 
 // Re-exported for callers (and tests) that knew it here; it now lives with the status
@@ -72,6 +77,8 @@ export interface SubmissionRoutesOptions {
   unsubscribeSecret?: string;
   /** Localizes the agent's English build log; defaults to createTranslatorFromEnv(). */
   translator?: Translator;
+  /** Caps and seams for the agent build channel; see registerAgentChannelRoutes. */
+  agentChannel?: Pick<AgentChannelOptions, 'maxEventsPerBuild' | 'maxEventsPerWindow'>;
 }
 
 function checkUserAccess(request: FastifyRequest, reply: FastifyReply): boolean {
@@ -161,6 +168,52 @@ export async function registerSubmissionRoutes(
 
   const contentChecker = options.contentChecker ?? createDefaultContentChecker();
 
+  /**
+   * The build-channel briefing appended to every submission issue. This is the only
+   * place the agent learns the channel exists, so it carries the credential, the
+   * vocabulary, and — most importantly — the reason: someone is watching this build
+   * happen, and until now they watched it through a transport that made the agent
+   * choose between reporting and working.
+   */
+  function buildChannelSection(agentToken: string, locale: string): string {
+    return [
+      '## Build channel (report progress here)',
+      '',
+      'A person is watching this build on www.gamedev.pl right now, often for an hour or more.',
+      'Post an update whenever you start something, finish something, or get stuck. It is one',
+      'HTTP call — no commit, no push, no CI — and it shows up on their screen within seconds.',
+      '',
+      '```bash',
+      `npm run progress -- --step mechanics "Getting the squad moving and shooting."`,
+      '```',
+      '',
+      'The command reads `GAMEDEVPL_BUILD_TOKEN` and `GAMEDEVPL_API` from the environment:',
+      '',
+      '```bash',
+      `export GAMEDEVPL_API=${notifyAppBaseUrl}`,
+      `export GAMEDEVPL_BUILD_TOKEN=${agentToken}`,
+      '```',
+      '',
+      '- `--step` is one of: `planning`, `art`, `mechanics`, `audio`, `balancing`, `fixing`,',
+      '  `testing`, `polishing`. It is shown in the creator’s own language, so use it.',
+      '- The message is one plain sentence about the *game*, in the words a player would use.',
+      `- The creator reads the site in **${locale}**. Write the sentence in that language with`,
+      '  `--lang`, and we skip machine translation entirely:',
+      `  \`npm run progress -- --step art --lang ${locale} "..."\`.`,
+      '- Use `--kind blocked` when you are stuck and `--kind done` when the game is playable.',
+      '',
+      '**The reply carries their answers.** Every call returns any change requests the creator',
+      'has sent, plus a `stop` flag if they abandoned the build — check it, and stop working when',
+      'it is set. `npm run progress -- --check` reads the inbox without posting anything.',
+      '',
+      'If the channel is unreachable, fall back to committing a `games/<slug>/PROGRESS.md`',
+      'journal (newest line first) — the site reads that too, just far more slowly.',
+      '',
+      'This token is scoped to this build and can only post progress about it. It cannot read',
+      'or change anything else.',
+    ].join('\n');
+  }
+
   // Published games live on the games repo's default branch.
   const publishedRef = process.env.GAMES_PUBLISHED_REF ?? 'main';
 
@@ -179,6 +232,70 @@ export async function registerSubmissionRoutes(
   // languages must not share an entry.
   const statusCache = new Map<string, CachedStatus>();
   const translator = options.translator ?? createTranslatorFromEnv();
+
+  // Agent progress events are read on every poll but change rarely, so they get a
+  // short cache of their own rather than riding the 60s status cache — the entire
+  // point of the build channel is that an update reaches the creator in seconds.
+  // Appending an event drops the entry outright; the TTL only covers the case where
+  // the event landed on a different Cloud Run instance than the one being polled.
+  const eventsCacheTtlMs = 5_000;
+  const maxEventsShown = 20;
+  const eventsCache = new Map<number, { expiresAt: number; value: BuildEvent[] }>();
+
+  async function loadBuildEvents(issueNumber: number): Promise<BuildEvent[]> {
+    if (!store) return [];
+    const currentTime = now();
+    const cached = eventsCache.get(issueNumber);
+    if (cached && cached.expiresAt > currentTime) {
+      return cached.value;
+    }
+    const value = await store.listBuildEvents(issueNumber, { limit: maxEventsShown });
+    eventsCache.set(issueNumber, { value, expiresAt: currentTime + eventsCacheTtlMs });
+    return value;
+  }
+
+  /**
+   * Resolves each event to one sentence in the reader's language. An agent that wrote
+   * the sentence in the creator's language already (the common case — we tell it which
+   * one in the issue) needs no model call at all; the rest fall back to translation,
+   * which is why a shared draft link still reads correctly in a third language.
+   */
+  async function localizeEvents(events: BuildEvent[], locale: string): Promise<BuildEvent[]> {
+    if (events.length === 0) return events;
+
+    const needsTranslation = events.filter(
+      (event) => !(event.locale === locale && event.textLocalized) && locale !== 'en',
+    );
+    const translated =
+      needsTranslation.length > 0
+        ? await translator.translate(
+            needsTranslation.map((e) => e.text),
+            locale,
+          )
+        : [];
+    const byId = new Map(needsTranslation.map((event, index) => [event.id, translated[index] ?? event.text]));
+
+    return events.map((event) => {
+      const text =
+        event.locale === locale && event.textLocalized ? event.textLocalized : (byId.get(event.id) ?? event.text);
+      // The wire carries one resolved sentence — the client never has to pick, and
+      // never sees a language it didn't ask for.
+      const resolved: BuildEvent = { ...event, text };
+      delete resolved.textLocalized;
+      delete resolved.locale;
+      return resolved;
+    });
+  }
+
+  /** Attaches the agent's own updates to a status response, in the reader's language. */
+  async function attachBuildEvents(
+    status: SubmissionStatusResponse,
+    issueNumber: number,
+    locale: string,
+  ): Promise<SubmissionStatusResponse> {
+    const events = await loadBuildEvents(issueNumber);
+    return events.length === 0 ? status : { ...status, events: await localizeEvents(events, locale) };
+  }
 
   // Previews are heavier (several GitHub reads + assembly) and never cached — a
   // fresh preview must reflect the branch's latest commit — so cap them per IP.
@@ -322,6 +439,9 @@ export async function registerSubmissionRoutes(
       }
     }
 
+    // Falls back to the browser's own preference, so a creator who never touched the
+    // language switcher still gets progress updates written in their language.
+    const creatorLocale = normalizeLocale(parsed.data.locale ?? request.headers['accept-language']?.split(',')[0]);
     const sanitizedTitle = sanitizeCreatorText(parsed.data.title, { singleLine: true });
     const sanitizedConcept = sanitizeCreatorText(parsed.data.concept, { singleLine: false });
     const sanitizedDisplayName = parsed.data.displayName
@@ -344,31 +464,6 @@ export async function registerSubmissionRoutes(
       '```text',
       sanitizedConcept,
       '```',
-      '',
-      // The creator watches this build live on www.gamedev.pl: the PR checklist and
-      // commit subjects ARE the progress UI. Slow, code-flavoured updates are the
-      // top complaint about the wait, so ask for the cadence and wording we need.
-      '## Progress reporting',
-      '',
-      'The creator watches this build in real time on www.gamedev.pl — your PR body checklist and',
-      'your commit subjects are the only thing they see. So:',
-      '',
-      '- Open the pull request as a draft early, before the game is playable.',
-      '- Put a task checklist (`- [ ]` / `- [x]`) in the PR body and tick items off as you finish them.',
-      '- Commit in small steps rather than one big push, so the log keeps moving.',
-      '- Write commit subjects in plain language about the game, not the code',
-      '  (“add a boost pad on lap two”, not “refactor track module”).',
-      '- Keep a `games/<slug>/PROGRESS.md` journal: a newest-first list where the top line',
-      '  says, in one plain sentence, what you are working on right now. Commit it as soon',
-      '  as you start each step — that line is shown to the creator verbatim, so it is the',
-      '  fastest way to tell them what is happening.',
-      '',
-      '  ```markdown',
-      '  # Progress',
-      '',
-      '  - Adding grenades to the soldiers.',
-      '  - Made the squad move faster.',
-      '  ```',
     ].join('\n');
 
     try {
@@ -380,6 +475,19 @@ export async function registerSubmissionRoutes(
 
       if (store) {
         await store.createSubmission(issue.number, request.user!.uid, sanitizedTitle);
+        await store.setSubmissionLocale(issue.number, creatorLocale);
+      }
+
+      // The build channel's credentials are derived from the issue number, so they
+      // can only be written once the issue exists. Best effort: a failure here costs
+      // live progress reporting, not the build, so it must not fail the submission.
+      try {
+        await githubClient.updateIssueBody(
+          issue.number,
+          `${issueBody}\n\n${buildChannelSection(mintAgentToken(issue.number, submissionTokenSecret), creatorLocale)}`,
+        );
+      } catch (channelError) {
+        request.log.error({ err: channelError, issueNumber: issue.number }, 'failed to attach build channel');
       }
 
       const token = mintToken(issue.number, submissionTokenSecret);
@@ -603,7 +711,9 @@ export async function registerSubmissionRoutes(
     const cacheKey = `${issueNumber}:${locale}`;
     const cached = statusCache.get(cacheKey);
     if (cached && cached.expiresAt > currentTime) {
-      return reply.send(cached.value);
+      // Events are attached outside the cache: the GitHub-derived part of a status
+      // is worth a minute, but an agent's live update is worth seconds.
+      return reply.send(await attachBuildEvents(cached.value, issueNumber, locale));
     }
 
     // An abandoned build is terminal and self-declared: answer from the record
@@ -644,7 +754,7 @@ export async function registerSubmissionRoutes(
         }
       }
 
-      return reply.send(status);
+      return reply.send(await attachBuildEvents(status, issueNumber, locale));
     } catch (error) {
       request.log.error({ err: error }, 'failed to resolve submission status');
       return reply.status(502).send({ error: 'failed to load submission status' });
@@ -743,11 +853,25 @@ export async function registerSubmissionRoutes(
 
     try {
       await githubClient.createIssueComment(target, commentBody);
-      return reply.send({ ok: true, target: target === issueNumber ? 'issue' : 'pull_request' });
     } catch (error) {
       request.log.error({ err: error }, 'failed to post feedback comment');
       return reply.status(502).send({ error: 'failed to send feedback' });
     }
+
+    // Queue the same request on the build channel. The comment above is the durable
+    // record and the only thing that can *wake* an agent whose session has ended;
+    // this queue is how an agent that is already working hears about it in seconds
+    // instead of whenever it next happens to read the PR. Best effort: the creator's
+    // request is already safely on GitHub, so a queue failure must not report failure.
+    if (store) {
+      try {
+        await store.appendCreatorMessage(issueNumber, sanitizedFeedback);
+      } catch (queueError) {
+        request.log.error({ err: queueError }, 'failed to queue feedback for the agent');
+      }
+    }
+
+    return reply.send({ ok: true, target: target === issueNumber ? 'issue' : 'pull_request' });
   });
 
   // The notification sweep (docs/notifications-plan.md N1): the closed-tab backstop
@@ -1056,5 +1180,15 @@ export async function registerSubmissionRoutes(
       request.log.error({ err: error }, 'failed to serve game');
       return reply.status(502).send({ error: 'failed to load game' });
     }
+  });
+
+  // The agent's side of the wire. Registered here rather than in app.ts so it shares
+  // the store, the token secret, and the event cache it has to invalidate.
+  await registerAgentChannelRoutes(app, {
+    ...options.agentChannel,
+    store,
+    agentTokenSecret: submissionTokenSecret,
+    now,
+    onEvent: (issueNumber) => eventsCache.delete(issueNumber),
   });
 }

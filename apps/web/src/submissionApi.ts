@@ -40,6 +40,26 @@ export type MySubmission = {
   lastKnownStatus: SubmissionState | null;
 };
 
+/** The build steps an agent can report. Rendered from our own translated copy. */
+export type BuildStep = 'planning' | 'art' | 'mechanics' | 'audio' | 'balancing' | 'fixing' | 'testing' | 'polishing';
+
+export type BuildEventKind = 'step' | 'milestone' | 'asking' | 'blocked' | 'done';
+
+/**
+ * An update the agent pushed over the build channel. Unlike a commit subject, this
+ * is the agent saying what it is doing *now*, and it arrives without waiting for a
+ * push. `text` is already resolved to the reader's language by the API.
+ */
+export type BuildEvent = {
+  id: string;
+  kind: BuildEventKind;
+  step?: BuildStep;
+  /** Untrusted, agent-authored text — render escaped. */
+  text: string;
+  progress?: { done: number; total: number };
+  createdAt: string;
+};
+
 export type SubmissionStatus = {
   status: SubmissionState;
   slug?: string;
@@ -47,6 +67,12 @@ export type SubmissionStatus = {
   preview?: { slug: string };
   /** Present while an unmerged PR is open: live build signals mined from the PR. */
   progress?: BuildProgress;
+  /**
+   * Agent updates from the build channel, newest first. Deliberately independent of
+   * `progress`: these start arriving before a PR exists, which is precisely the
+   * stretch where the page used to have nothing at all to show.
+   */
+  events?: BuildEvent[];
 };
 
 export type SubmissionPreview = {
@@ -73,6 +99,8 @@ export async function submitSpec(input: {
   title: string;
   concept: string;
   displayName?: string;
+  /** Told to the agent, so it writes its progress updates in this language. */
+  locale?: string;
 }): Promise<{ token: string; statusUrl: string }> {
   const response = await fetch(`${API_BASE}/api/submissions`, {
     method: 'POST',

@@ -280,6 +280,9 @@ export function App() {
         title,
         concept,
         displayName: displayName || undefined,
+        // The agent is told this, so its progress updates arrive already written in
+        // the creator's language rather than machine-translated afterwards.
+        locale: i18n.language,
       });
 
       // Save to localStorage

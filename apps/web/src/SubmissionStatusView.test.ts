@@ -71,6 +71,54 @@ describe('SubmissionStatusView', () => {
     });
   });
 
+  it('shows agent channel updates while the build is still queued, with translated step labels', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    // No PR yet — so no `progress` at all. This is exactly the stretch where the
+    // page used to have nothing to show, and where creators gave up.
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'queued',
+      events: [
+        {
+          id: 'e2',
+          kind: 'step',
+          step: 'art',
+          text: 'Rysuję żołnierzy.',
+          createdAt: new Date(Date.now() - 30_000).toISOString(),
+        },
+        {
+          id: 'e1',
+          kind: 'step',
+          step: 'planning',
+          text: 'Planuję misje.',
+          createdAt: new Date(Date.now() - 120_000).toISOString(),
+        },
+      ],
+    });
+    await i18n.changeLanguage('pl');
+    window.location.hash = '#/status/events-token';
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'events-token' }));
+      await flushEffects();
+    });
+
+    // The newest update is the headline; both appear in the feed.
+    expect(container.textContent).toContain('Rysuję żołnierzy.');
+    expect(container.textContent).toContain('Planuję misje.');
+    // The step comes from our own Polish copy, not from machine translation.
+    expect(container.textContent).toContain('Rysowanie');
+    expect(container.textContent).toContain('Planowanie');
+
+    await act(async () => {
+      root.unmount();
+    });
+    await i18n.changeLanguage('en');
+  });
+
   it('shows the submitted prompt and a ticking elapsed timer while the build is running', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({ status: 'building' });
