@@ -12,6 +12,8 @@
 #     | gcloud secrets create submission-token-secret --data-file=- --replication-policy=automatic
 #   openssl rand -hex 32 \
 #     | gcloud secrets create session-secret --data-file=- --replication-policy=automatic
+#   printf '%s' "<Resend API key: re_...>" \
+#     | gcloud secrets create resend-api-key --data-file=- --replication-policy=automatic
 # (To rotate later: `gcloud secrets versions add <name> --data-file=-`.)
 # The API boots without these; submission/auth routes return 503 until configured,
 # so browsing/playing works on a secret-less first deploy.
@@ -22,6 +24,8 @@
 #   PRIVATE_BETA=true          (gate all data reads behind a session + allowlist)
 #   BETA_ALLOWED_UIDS=...      (comma-separated g:<sub> values)
 #   BETA_ALLOWED_EMAILS=...    (comma-separated verified email addresses)
+#   MAIL_FROM=...              (RFC 5322 sender; defaults to noreply@mail.gamedev.pl)
+#   INVITE_URL=...             (where invitees land; defaults to https://www.gamedev.pl)
 #
 # Then run:
 #   PROJECT_ID=my-proj ./infra/deploy-api.sh
@@ -43,6 +47,8 @@ CANONICAL_HOST="${CANONICAL_HOST:-www.gamedev.pl}"
 PRIVATE_BETA="${PRIVATE_BETA:-true}"
 BETA_ALLOWED_UIDS="${BETA_ALLOWED_UIDS:-}"
 BETA_ALLOWED_EMAILS="${BETA_ALLOWED_EMAILS:-}"
+MAIL_FROM="${MAIL_FROM:-}"
+INVITE_URL="${INVITE_URL:-}"
 
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/app:$(date +%Y%m%d-%H%M%S)"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -78,6 +84,14 @@ if gcloud secrets describe session-secret --project "$PROJECT_ID" >/dev/null 2>&
   echo "==> session-secret found; session authentication enabled."
 fi
 
+# Resend API key for outbound email (beta invites now; notifications later). The
+# mailer degrades to a no-op console logger when absent, so email is simply off
+# until this secret exists — deploys stay green either way.
+if gcloud secrets describe resend-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
+  SECRET_MAPPINGS+=("RESEND_API_KEY=resend-api-key:latest")
+  echo "==> resend-api-key found; outbound email enabled."
+fi
+
 SECRET_FLAGS=()
 if [ ${#SECRET_MAPPINGS[@]} -gt 0 ]; then
   joined=$(IFS=,; echo "${SECRET_MAPPINGS[*]}")
@@ -98,6 +112,12 @@ if [ -n "$BETA_ALLOWED_UIDS" ]; then
 fi
 if [ -n "$BETA_ALLOWED_EMAILS" ]; then
   ENV_VARS="${ENV_VARS}|BETA_ALLOWED_EMAILS=${BETA_ALLOWED_EMAILS}"
+fi
+if [ -n "$MAIL_FROM" ]; then
+  ENV_VARS="${ENV_VARS}|MAIL_FROM=${MAIL_FROM}"
+fi
+if [ -n "$INVITE_URL" ]; then
+  ENV_VARS="${ENV_VARS}|INVITE_URL=${INVITE_URL}"
 fi
 
 echo "==> Deploying to Cloud Run (scale-to-zero)"

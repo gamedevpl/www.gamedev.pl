@@ -76,6 +76,13 @@ jobs:
             SECRET_MAPPINGS+=("SESSION_SECRET=session-secret:latest")
           fi
 
+          # Resend API key for outbound email (beta invites, notifications). The
+          # mailer degrades to a no-op without it, so email is simply off until
+          # the secret exists — the deploy stays green either way.
+          if gcloud secrets describe resend-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
+            SECRET_MAPPINGS+=("RESEND_API_KEY=resend-api-key:latest")
+          fi
+
           SECRET_FLAGS=()
           if [ ${#SECRET_MAPPINGS[@]} -gt 0 ]; then
             joined=$(IFS=,; echo "${SECRET_MAPPINGS[*]}")
