@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext';
 import {
-  clearReadNotifications,
+  clearNotifications,
   fetchNotifications,
   markNotificationsRead,
   type AppNotification,
@@ -67,19 +67,29 @@ export function NotificationBell() {
     };
   }, [user]);
 
-  // "Clear" deletes read notifications. Opening the panel already marks all read,
-  // but await it here so nothing currently shown survives the delete; a brand-new
-  // unread one that arrives meanwhile is intentionally kept.
-  const clearRead = useCallback(async () => {
+  // "Clear all" removes the whole list; the per-item × removes one. Both update
+  // optimistically, then a refresh reconciles with the server.
+  const clearAll = useCallback(async () => {
     setItems([]);
     try {
-      await markNotificationsRead('all');
-      await clearReadNotifications();
+      await clearNotifications('all');
     } catch {
-      // Best-effort — refresh reconciles with the server either way.
+      // Best-effort — refresh reconciles either way.
     }
     void refresh();
   }, [refresh]);
+
+  const dismissOne = useCallback(
+    async (id: string) => {
+      setItems((prev) => prev.filter((n) => n.id !== id));
+      try {
+        await clearNotifications([id]);
+      } catch {
+        void refresh();
+      }
+    },
+    [refresh],
+  );
 
   const togglePush = useCallback(async () => {
     setPushBusy(true);
@@ -150,8 +160,8 @@ export function NotificationBell() {
           <div className="notif-panel-head">
             <span>{t('notifications.title', { defaultValue: 'Notifications' })}</span>
             {items.length > 0 && (
-              <button type="button" className="notif-clear" onClick={() => void clearRead()}>
-                {t('notifications.clear', { defaultValue: 'Clear' })}
+              <button type="button" className="notif-clear" onClick={() => void clearAll()}>
+                {t('notifications.clearAll', { defaultValue: 'Clear all' })}
               </button>
             )}
           </div>
@@ -169,6 +179,14 @@ export function NotificationBell() {
                       {t(n.bodyKey, { ...n.params, defaultValue: FALLBACK[n.type]?.body ?? '' })}
                     </span>
                   </a>
+                  <button
+                    type="button"
+                    className="notif-dismiss"
+                    aria-label={t('notifications.dismiss', { defaultValue: 'Dismiss' })}
+                    onClick={() => void dismissOne(n.id)}
+                  >
+                    ×
+                  </button>
                 </li>
               ))}
             </ul>

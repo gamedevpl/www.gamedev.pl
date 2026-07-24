@@ -3,7 +3,8 @@
     "aria": "Notifications",
     "title": "Notifications",
     "empty": "Nothing yet.",
-    "clear": "Clear",
+    "clearAll": "Clear all",
+    "dismiss": "Dismiss",
     "push": {
       "enable": "Enable push notifications",
       "on": "Push notifications on",

@@ -46,13 +46,17 @@ export async function registerNotificationRoutes(
     return reply.send({ ok: true });
   });
 
-  // Clear (delete) the caller's read notifications — the bell's "Clear" action.
-  // Unread ones are kept so a just-arrived notification isn't lost.
+  // Delete notifications — a single one (`{ ids: [id] }`, the per-item dismiss) or
+  // the whole list (`{ all: true }`, the header "Clear all").
   app.post('/api/notifications/clear', async (request, reply) => {
     if (!request.user) {
       return reply.status(401).send({ error: 'authentication required' });
     }
-    await store.deleteReadNotifications(request.user.uid);
+    const parsed = MarkReadSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
+    }
+    await store.deleteNotifications(request.user.uid, parsed.data.all ? 'all' : parsed.data.ids!);
     return reply.send({ ok: true });
   });
 }

@@ -133,8 +133,8 @@ export interface Store {
   ): Promise<{ created: boolean; notification: StoredNotification }>;
   listNotifications(uid: string, opts?: { limit?: number }): Promise<StoredNotification[]>;
   markNotificationsRead(uid: string, ids: string[] | 'all'): Promise<void>;
-  /** Delete all read notifications for a user (the bell's "Clear"); unread survive. */
-  deleteReadNotifications(uid: string): Promise<void>;
+  /** Delete notifications by id, or all of them ('all') — the bell's dismiss/clear. */
+  deleteNotifications(uid: string, ids: string[] | 'all'): Promise<void>;
   /** Stamp emailedAt after a successful send so retries don't re-send. */
   markNotificationEmailed(uid: string, id: string, at?: string): Promise<void>;
   /** Upsert a browser push subscription (idempotent by endpoint). */
@@ -371,12 +371,14 @@ export class InMemoryStore implements Store {
     }
   }
 
-  async deleteReadNotifications(uid: string): Promise<void> {
+  async deleteNotifications(uid: string, ids: string[] | 'all'): Promise<void> {
     const forUser = this.notifications.get(uid);
     if (!forUser) return;
-    for (const [id, n] of forUser) {
-      if (n.readAt !== null) forUser.delete(id);
+    if (ids === 'all') {
+      forUser.clear();
+      return;
     }
+    for (const id of ids) forUser.delete(id);
   }
 
   async markNotificationEmailed(uid: string, id: string, at?: string): Promise<void> {
@@ -670,20 +672,20 @@ export class FirestoreStore implements Store {
     await batch.commit();
   }
 
-  async deleteReadNotifications(uid: string): Promise<void> {
-    // Small per-user collection: fetch and filter in code rather than lean on a
-    // `!= null` query (which excludes docs missing the field and can need an index).
+  async deleteNotifications(uid: string, ids: string[] | 'all'): Promise<void> {
     const col = this.db.collection('users').doc(uid).collection('notifications');
-    const snap = await col.get();
+    if (ids === 'all') {
+      const snap = await col.get();
+      if (snap.empty) return;
+      const batch = this.db.batch();
+      snap.docs.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+      return;
+    }
+    if (ids.length === 0) return;
     const batch = this.db.batch();
-    let count = 0;
-    snap.docs.forEach((d) => {
-      if ((d.data() as StoredNotification).readAt != null) {
-        batch.delete(d.ref);
-        count += 1;
-      }
-    });
-    if (count > 0) await batch.commit();
+    ids.forEach((id) => batch.delete(col.doc(id)));
+    await batch.commit();
   }
 
   async markNotificationEmailed(uid: string, id: string, at?: string): Promise<void> {

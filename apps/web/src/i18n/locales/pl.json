@@ -3,7 +3,8 @@
     "aria": "Powiadomienia",
     "title": "Powiadomienia",
     "empty": "Nic tu jeszcze nie ma.",
-    "clear": "Wyczyść",
+    "clearAll": "Wyczyść wszystko",
+    "dismiss": "Odrzuć",
     "push": {
       "enable": "Włącz powiadomienia push",
       "on": "Powiadomienia push włączone",
