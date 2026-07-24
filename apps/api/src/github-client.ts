@@ -230,6 +230,55 @@ function parseRepo(repo: string): { owner: string; name: string } {
   return { owner, name };
 }
 
+// A single catalog render or game-source assembly fans out into a dozen-plus
+// `Promise.all`'d contents-API calls (see getCatalog/getGameSources below); several
+// of those in flight at once from concurrent polls is what tripped GitHub's
+// secondary rate limit (403s across every route sharing this token) and surfaced
+// as a 502 storm to visitors. Capping concurrency and backing off on a rate-limit
+// response turns that into slower-but-working instead of a cascading outage.
+const MAX_CONCURRENT_GITHUB_REQUESTS = 6;
+const MAX_RATE_LIMIT_RETRIES = 3;
+const RETRY_BASE_DELAY_MS = 300;
+// A GitHub-supplied Retry-After longer than this would just eat the request's own
+// timeout budget — better to fail fast than hold the connection open pointlessly.
+const MAX_RETRY_AFTER_MS = 4000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** FIFO counting semaphore bounding how many GitHub requests are in flight at once. */
+function createRequestGate(limit: number) {
+  let active = 0;
+  const waiters: Array<() => void> = [];
+  return {
+    async acquire(): Promise<void> {
+      if (active < limit) {
+        active += 1;
+        return;
+      }
+      await new Promise<void>((resolve) => waiters.push(resolve));
+      active += 1;
+    },
+    release(): void {
+      active -= 1;
+      waiters.shift()?.();
+    },
+  };
+}
+
+/**
+ * True for responses that indicate GitHub's rate limiting rather than a real,
+ * permanent failure — a primary-limit 403 carries `x-ratelimit-remaining: 0`, a
+ * secondary-limit 403 carries `Retry-After`, and 429 is always a limit. A bare 403
+ * with neither header is a genuine permission problem and must not be retried.
+ */
+function isRateLimitResponse(response: Response): boolean {
+  if (response.status === 429) return true;
+  if (response.status !== 403) return false;
+  return response.headers.get('retry-after') !== null || response.headers.get('x-ratelimit-remaining') === '0';
+}
+
 export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
   const { token, repo } = options;
   // Whether this token may read `statusCheckRollup`. Assumed yes, flipped off for the
@@ -237,11 +286,34 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
   let checksFieldUsable = true;
   const fetchImpl = options.fetchImpl ?? fetch;
   const { owner, name } = parseRepo(repo);
+  const requestGate = createRequestGate(MAX_CONCURRENT_GITHUB_REQUESTS);
+
+  /** Queues behind the concurrency gate and retries a rate-limited response with backoff. */
+  async function githubFetch(url: string, init: RequestInit): Promise<Response> {
+    await requestGate.acquire();
+    try {
+      for (let attempt = 0; ; attempt += 1) {
+        const response = await fetchImpl(url, init);
+        if (!isRateLimitResponse(response) || attempt >= MAX_RATE_LIMIT_RETRIES) {
+          return response;
+        }
+        const retryAfterHeader = Number(response.headers.get('retry-after'));
+        const retryAfterMs = Number.isFinite(retryAfterHeader) && retryAfterHeader > 0 ? retryAfterHeader * 1000 : NaN;
+        const delayMs = Number.isFinite(retryAfterMs) ? retryAfterMs : RETRY_BASE_DELAY_MS * 2 ** attempt;
+        if (delayMs > MAX_RETRY_AFTER_MS) {
+          return response;
+        }
+        await sleep(delayMs + Math.random() * 100);
+      }
+    } finally {
+      requestGate.release();
+    }
+  }
 
   /** Reads a file's raw bytes from the contents API; null when it doesn't exist on `ref`. */
   async function readRawFile(path: string, ref: string): Promise<string | null> {
     const url = `https://api.github.com/repos/${repo}/contents/${path}?ref=${encodeURIComponent(ref)}`;
-    const response = await fetchImpl(url, {
+    const response = await githubFetch(url, {
       headers: {
         // Ask for the raw file bytes rather than the base64 JSON envelope.
         Accept: 'application/vnd.github.raw',
@@ -259,7 +331,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
 
   async function readRawBytes(path: string, ref: string): Promise<Uint8Array | null> {
     const url = `https://api.github.com/repos/${repo}/contents/${path}?ref=${encodeURIComponent(ref)}`;
-    const response = await fetchImpl(url, {
+    const response = await githubFetch(url, {
       headers: {
         Accept: 'application/vnd.github.raw',
         Authorization: ['Bearer', token].join(' '),
@@ -275,7 +347,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
   }
 
   async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
-    const response = await fetchImpl(url, {
+    const response = await githubFetch(url, {
       ...init,
       headers: {
         Accept: 'application/vnd.github+json',
