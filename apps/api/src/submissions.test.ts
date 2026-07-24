@@ -922,8 +922,50 @@ describe('published game media route', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toBe('image/png');
-    expect(res.headers['cache-control']).toContain('max-age=300');
+    expect(res.headers['cache-control']).toContain('max-age=86400');
+    expect(res.headers['etag']).toBeDefined();
     expect(getGameMedia).toHaveBeenCalledWith('main', 'foo', 'opening.png');
+
+    await app.close();
+  });
+
+  it('serves a repeat request from cache without calling GitHub again', async () => {
+    const { githubClient, getGameMedia } = createGithubClientStub({
+      catalog: [catalogEntry('foo', { media })],
+      gameMedia: new Uint8Array([137, 80, 78, 71]),
+    });
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
+
+    const first = await app.inject({ method: 'GET', url: '/api/games/foo/media/opening.png' });
+    const second = await app.inject({ method: 'GET', url: '/api/games/foo/media/opening.png' });
+
+    expect(first.statusCode).toBe(200);
+    expect(second.statusCode).toBe(200);
+    expect(second.rawPayload).toEqual(first.rawPayload);
+    // The whole point of the cache: the second render costs no GitHub budget.
+    expect(getGameMedia).toHaveBeenCalledTimes(1);
+
+    await app.close();
+  });
+
+  it('answers a matching If-None-Match with 304 and no body', async () => {
+    const { githubClient } = createGithubClientStub({
+      catalog: [catalogEntry('foo', { media })],
+      gameMedia: new Uint8Array([137, 80, 78, 71]),
+    });
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
+
+    const first = await app.inject({ method: 'GET', url: '/api/games/foo/media/opening.png' });
+    const etag = first.headers['etag'] as string;
+
+    const revalidated = await app.inject({
+      method: 'GET',
+      url: '/api/games/foo/media/opening.png',
+      headers: { 'if-none-match': etag },
+    });
+
+    expect(revalidated.statusCode).toBe(304);
+    expect(revalidated.rawPayload.length).toBe(0);
 
     await app.close();
   });

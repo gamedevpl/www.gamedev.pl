@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { GameProject } from '@gamedevpl/game-generator';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -103,6 +104,31 @@ function isRateLimited(
   return false;
 }
 
+/**
+ * Gallery media is immutable for as long as a game isn't republished, so it is
+ * worth a long browser TTL. The ETag is what keeps that honest: once the TTL
+ * lapses the browser revalidates and we answer 304 with no body (and, because
+ * the entry is already cached server-side, no GitHub call either).
+ */
+function sendMedia(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  entry: { etag: string; contentType: string; body: Buffer },
+): FastifyReply {
+  reply.header('ETag', entry.etag).header('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+
+  // A conditional request may carry a list, and "*" matches anything we hold.
+  const ifNoneMatch = request.headers['if-none-match'];
+  if (ifNoneMatch) {
+    const candidates = ifNoneMatch.split(',').map((value) => value.trim().replace(/^W\//, ''));
+    if (candidates.includes(entry.etag) || candidates.includes('*')) {
+      return reply.status(304).send();
+    }
+  }
+
+  return reply.type(entry.contentType).send(entry.body);
+}
+
 export async function registerSubmissionRoutes(
   app: FastifyInstance,
   options: SubmissionRoutesOptions = {},
@@ -183,6 +209,16 @@ export async function registerSubmissionRoutes(
   // a game bundle, so gallery media gets its own, more generous bucket.
   const maxMediaPerWindow = 400;
   const mediaByIp = new Map<string, number[]>();
+
+  // Gallery media was the one GitHub-backed read with no cache at all, so every
+  // card on every catalog render hit the contents API — the highest-volume, least
+  // dynamic consumer of the token budget shared with submission status polls.
+  // The whole corpus is a few MB (tens of KB per asset), so it lives in memory
+  // comfortably. Entries are keyed by slug/filename and carry a content ETag so
+  // repeat visitors revalidate into a 304 instead of re-downloading.
+  const mediaTtlMs = 60 * 60_000;
+  const maxCachedMediaEntries = 400;
+  const mediaCache = new Map<string, { expiresAt: number; etag: string; contentType: string; body: Buffer }>();
 
   async function getCatalogEntries(client: GitHubClient, forceFresh = false): Promise<CatalogGameEntry[]> {
     const currentTime = now();
@@ -919,6 +955,14 @@ export async function registerSubmissionRoutes(
       return reply.status(429).send({ error: 'too many game requests, please try again later' });
     }
 
+    // Serving from cache still respects the allowlist below on the first fetch;
+    // a cached entry can only exist for a filename that already passed it.
+    const cacheKey = `${parsedParams.data.slug}/${parsedParams.data.filename}`;
+    const cachedMedia = mediaCache.get(cacheKey);
+    if (cachedMedia && cachedMedia.expiresAt > currentTime) {
+      return sendMedia(request, reply, cachedMedia);
+    }
+
     try {
       const entry = await getPublishedCatalogEntry(githubClient, parsedParams.data.slug);
       const allowedFiles = new Set([
@@ -934,10 +978,22 @@ export async function registerSubmissionRoutes(
         return reply.status(404).send({ error: 'media not found' });
       }
 
-      reply
-        .type(parsedParams.data.filename.endsWith('.png') ? 'image/png' : 'video/mp4')
-        .header('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600');
-      return reply.send(Buffer.from(media));
+      const body = Buffer.from(media);
+      const cacheEntry = {
+        expiresAt: currentTime + mediaTtlMs,
+        etag: `"${createHash('sha256').update(body).digest('base64url').slice(0, 27)}"`,
+        contentType: parsedParams.data.filename.endsWith('.png') ? 'image/png' : 'video/mp4',
+        body,
+      };
+      // Bounded so a growing catalog can't wander into the container's memory
+      // limit; insertion order makes the oldest key the first one out.
+      if (mediaCache.size >= maxCachedMediaEntries) {
+        const oldestKey = mediaCache.keys().next().value;
+        if (oldestKey !== undefined) mediaCache.delete(oldestKey);
+      }
+      mediaCache.set(cacheKey, cacheEntry);
+
+      return sendMedia(request, reply, cacheEntry);
     } catch (error) {
       request.log.error({ err: error }, 'failed to serve game media');
       return reply.status(502).send({ error: 'failed to load game media' });

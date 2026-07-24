@@ -122,7 +122,19 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   await registerEmailRoutes(app, { store, unsubscribeSecret: options.sessionSecret });
 
-  app.get('/api/health', async () => ({ status: 'ok', provider: generator.name, privateBeta }));
+  app.get('/api/health', async (request) => ({
+    status: 'ok',
+    provider: generator.name,
+    privateBeta,
+    // TEMPORARY (remove once trustProxy is pinned): reveals how many hops sit in
+    // front of this container so the trustProxy setting can be a hop count rather
+    // than `true` (which takes the leftmost, client-spoofable X-Forwarded-For entry).
+    proxyDebug: {
+      xff: request.headers['x-forwarded-for'] ?? null,
+      resolvedIp: request.ip,
+      socketIp: request.socket.remoteAddress ?? null,
+    },
+  }));
 
   app.get('/api/version', async () => ({ name: 'gamedev-pl', version: '0.0.0' }));
 
