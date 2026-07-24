@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { InMemoryStore } from './store.js';
 import { ConsoleMailer, type EmailMessage, type Mailer } from './mailer.js';
 import { emitSubmissionNotification, notifyOnTransition, statusToEvent, type EmitDeps } from './notify.js';
@@ -272,8 +272,25 @@ describe('emitSubmissionNotification email fan-out', () => {
   });
 
   it('does not send when no mailer/secret is configured (in-app only)', async () => {
+    vi.stubEnv('RESEND_API_KEY', '');
     await emitSubmissionNotification({ store }, event);
     expect(await store.listNotifications('g:owner')).toHaveLength(1);
+    vi.unstubAllEnvs();
+  });
+
+  it('falls back to the env mailer when deps omit one (RESEND_API_KEY set)', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify({ id: 'resend-1' }), { status: 200 }));
+    vi.stubEnv('RESEND_API_KEY', 'key_abc');
+    vi.stubEnv('SESSION_SECRET', 'sess');
+
+    await emitSubmissionNotification({ store }, event);
+
+    expect(fetchSpy).toHaveBeenCalledWith('https://api.resend.com/emails', expect.anything());
+    expect((await store.listNotifications('g:owner'))[0].emailedAt).not.toBeNull();
+    vi.unstubAllEnvs();
+    fetchSpy.mockRestore();
   });
 
   it('leaves emailedAt null and does not throw when the send fails (retryable)', async () => {

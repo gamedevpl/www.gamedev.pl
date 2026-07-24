@@ -6,7 +6,7 @@
 // emailedAt column.
 
 import { normalizeLocale, submissionNotificationMessage } from './email-templates.js';
-import type { Mailer } from './mailer.js';
+import { createMailerFromEnv, type Mailer } from './mailer.js';
 import type { NotificationType, StoredNotification, SubmissionRecord, Store } from './store.js';
 import type { SubmissionPublishedResponse, SubmissionStatus, SubmissionStatusResponse } from './submission-status.js';
 import { mintUnsubscribeToken } from './unsubscribe-token.js';
@@ -50,22 +50,30 @@ export interface EmitDeps {
  * A send failure leaves emailedAt null so the next sweep retries. Never throws.
  */
 async function maybeSendEmail(deps: EmitDeps, uid: string, notification: StoredNotification): Promise<void> {
-  if (!deps.mailer || !deps.unsubscribeSecret) return;
   if (notification.emailedAt) return;
+
+  // Explicit deps win (tests inject them). Otherwise fall back to env config so
+  // the default call sites send email in prod with no extra wiring: a real mailer
+  // only when RESEND_API_KEY is set (no false "sent" via the console fake), and
+  // the unsubscribe secret from SESSION_SECRET.
+  const mailer = deps.mailer ?? (process.env.RESEND_API_KEY ? createMailerFromEnv() : undefined);
+  const unsubscribeSecret = deps.unsubscribeSecret ?? process.env.SESSION_SECRET;
+  if (!mailer || !unsubscribeSecret) return;
+
   try {
     const user = await deps.store.getUser(uid);
     if (!user?.email || user.emailUnsubscribedAt) return;
 
-    const appBaseUrl = deps.appBaseUrl ?? 'https://www.gamedev.pl';
+    const appBaseUrl = deps.appBaseUrl ?? process.env.APP_BASE_URL?.trim() ?? 'https://www.gamedev.pl';
     const actionUrl = `${appBaseUrl}/${notification.link}`;
-    const unsubscribeUrl = `${appBaseUrl}/api/email/unsubscribe?token=${mintUnsubscribeToken(uid, deps.unsubscribeSecret)}`;
+    const unsubscribeUrl = `${appBaseUrl}/api/email/unsubscribe?token=${mintUnsubscribeToken(uid, unsubscribeSecret)}`;
     const message = submissionNotificationMessage(user.email, normalizeLocale(user.locale), notification.type, {
       title: notification.params.title ?? '',
       actionUrl,
       unsubscribeUrl,
     });
 
-    await deps.mailer.send(message);
+    await mailer.send(message);
     await deps.store.markNotificationEmailed(uid, notification.id);
   } catch (err) {
     deps.logError?.(err, 'notification email send failed');
