@@ -1,8 +1,12 @@
 # Agent progress notes
 
+> **Superseded as the primary route** by [agent-live-channel-plan.md](./agent-live-channel-plan.md).
+> Agents now report over the build channel (`/api/agent/build/progress`) — one HTTP call, no commit,
+> no CI, visible in seconds. The journal described below is still read, and is still the documented
+> fallback for when the channel is unreachable, so this contract remains live. It is no longer what
+> an agent should reach for first.
+>
 > **Audience:** the coding agent building a game in `gamedevpl/www.gamedev.pl-games`.
-> Drop this into that repo (as a skill, or a section of its `AGENTS.md` /
-> `.github/copilot-instructions.md`) — the web app reads the file it describes.
 
 ## Why
 
