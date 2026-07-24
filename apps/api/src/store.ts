@@ -28,6 +28,12 @@ export interface SubmissionRecord {
    */
   slug?: string;
   /**
+   * When we first observed the game published. Together with createdAt it is the
+   * only record of how long a build actually took, which is what lets the status
+   * page answer "how long will this take?" with a real number instead of a shrug.
+   */
+  publishedAt?: string;
+  /**
    * The status we last emitted a notification for. Drives transition detection
    * (only notify when the mapped event changes) and lets the sweep stop scanning
    * a submission once it reaches a terminal, already-notified state.
@@ -97,6 +103,10 @@ export interface Store {
   setSubmissionNotifiedStatus(issueNumber: number, status: SubmissionStatus): Promise<void>;
   /** Records the game directory a submission is building, once it is known. */
   setSubmissionSlug(issueNumber: number, slug: string): Promise<void>;
+  /** Stamps the moment a submission was first seen published (for build-time stats). */
+  setSubmissionPublishedAt(issueNumber: number, at: string): Promise<void>;
+  /** Most recently published submissions, newest first — the build-time sample. */
+  listRecentlyPublished(limit: number): Promise<SubmissionRecord[]>;
   /**
    * Resolves a slug back to its submission — the lookup behind shareable draft
    * links. Returns null for a slug no submission has claimed.
@@ -222,6 +232,19 @@ export class InMemoryStore implements Store {
   async getSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {
     const match = Array.from(this.submissions.values()).find((s) => s.slug === slug);
     return match ? { ...match } : null;
+  }
+
+  async setSubmissionPublishedAt(issueNumber: number, at: string): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (sub && !sub.publishedAt) this.submissions.set(issueNumber, { ...sub, publishedAt: at });
+  }
+
+  async listRecentlyPublished(limit: number): Promise<SubmissionRecord[]> {
+    return Array.from(this.submissions.values())
+      .filter((s) => s.publishedAt)
+      .sort((a, b) => (b.publishedAt ?? '').localeCompare(a.publishedAt ?? ''))
+      .slice(0, limit)
+      .map((s) => ({ ...s }));
   }
 
   async listActiveSubmissions(): Promise<SubmissionRecord[]> {
@@ -492,6 +515,21 @@ export class FirestoreStore implements Store {
 
   async setSubmissionSlug(issueNumber: number, slug: string): Promise<void> {
     await this.db.collection('submissions').doc(String(issueNumber)).set({ slug }, { merge: true });
+  }
+
+  async setSubmissionPublishedAt(issueNumber: number, at: string): Promise<void> {
+    const ref = this.db.collection('submissions').doc(String(issueNumber));
+    const snap = await ref.get();
+    // First observation wins: a later re-derivation must not move the timestamp.
+    if ((snap.data() as SubmissionRecord | undefined)?.publishedAt) return;
+    await ref.set({ publishedAt: at }, { merge: true });
+  }
+
+  async listRecentlyPublished(limit: number): Promise<SubmissionRecord[]> {
+    // orderBy on a single field uses Firestore's automatic index, and documents
+    // without publishedAt are excluded by definition — exactly the sample we want.
+    const snap = await this.db.collection('submissions').orderBy('publishedAt', 'desc').limit(limit).get();
+    return snap.docs.map((d) => d.data() as SubmissionRecord);
   }
 
   async getSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {

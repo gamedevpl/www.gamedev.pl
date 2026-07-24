@@ -40,6 +40,11 @@ export interface BuildProgress {
   checklist: ChecklistItem[];
   /** The creator's own change requests on this build, oldest→newest. */
   revisions: CreatorRevision[];
+  /**
+   * CI rollup on the head commit. 'FAILURE' is the one signal that distinguishes a
+   * build in trouble from a build that is merely slow, so the UI can say which.
+   */
+  checks?: 'SUCCESS' | 'FAILURE' | 'PENDING' | null;
 }
 
 export interface SubmissionStatusResponseBase {
@@ -155,6 +160,7 @@ function buildProgress(linkedPr: LinkedPullRequest): BuildProgress | undefined {
     commits,
     checklist: parseChecklist(linkedPr.body),
     revisions: parseCreatorRevisions(linkedPr.comments),
+    checks: linkedPr.checksState ?? null,
   };
 }
 

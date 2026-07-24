@@ -200,5 +200,11 @@ export async function notifyOnTransition(
     slug: status.status === 'published' ? (status as SubmissionPublishedResponse).slug : undefined,
   });
   await deps.store.setSubmissionNotifiedStatus(submission.issueNumber, status.status);
+  // Stamp the finish line the first time we see it, so build times can be measured
+  // (and shown to the next creator as a real expectation instead of a guess).
+  if (status.status === 'published') {
+    const at = deps.now ? new Date(deps.now()).toISOString() : new Date().toISOString();
+    await deps.store.setSubmissionPublishedAt(submission.issueNumber, at);
+  }
   return { emitted: true };
 }

@@ -336,6 +336,45 @@ export async function registerSubmissionRoutes(
   // what frees a creator from having to save the tracking link. Tokens are re-minted
   // from the issue number, so a fresh device recovers full access to its own games.
   // Deliberately GitHub-free: it must stay fast enough to render on the home page.
+  // How long a build actually takes, measured from the last few published games.
+  // "In the queue" with no expectation is where creators give up, and a real median
+  // beats invented copy. Cached in memory — it moves on the scale of hours.
+  const buildStatsTtlMs = 10 * 60_000;
+  const buildStatsSampleSize = 25;
+  // A build that "took" more than this was almost certainly abandoned and resumed;
+  // including it would poison the median.
+  const maxPlausibleBuildMs = 12 * 3600_000;
+  let buildStatsCache: { expiresAt: number; value: { medianMinutes: number | null; sampleSize: number } } | null = null;
+
+  app.get('/api/submissions/stats', async (request, reply) => {
+    if (!checkUserAccess(request, reply)) {
+      return;
+    }
+
+    const currentTime = now();
+    if (buildStatsCache && buildStatsCache.expiresAt > currentTime) {
+      return reply.send(buildStatsCache.value);
+    }
+
+    if (!store) {
+      return reply.send({ medianMinutes: null, sampleSize: 0 });
+    }
+
+    const published = await store.listRecentlyPublished(buildStatsSampleSize);
+    const durations = published
+      .map((record) => Date.parse(record.publishedAt ?? '') - Date.parse(record.createdAt))
+      .filter((ms) => Number.isFinite(ms) && ms > 0 && ms < maxPlausibleBuildMs)
+      .sort((a, b) => a - b);
+
+    const median = durations.length === 0 ? null : durations[Math.floor(durations.length / 2)]!;
+    const value = {
+      medianMinutes: median === null ? null : Math.max(1, Math.round(median / 60_000)),
+      sampleSize: durations.length,
+    };
+    buildStatsCache = { value, expiresAt: currentTime + buildStatsTtlMs };
+    return reply.send(value);
+  });
+
   app.get('/api/submissions/mine', async (request, reply) => {
     if (!submissionTokenSecret) {
       return reply.status(503).send({ error: 'submissions are not configured' });

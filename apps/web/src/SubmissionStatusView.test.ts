@@ -2,10 +2,10 @@
 
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n';
 import { ACTIVE_POLL_MS, SubmissionStatusView } from './SubmissionStatusView';
-import { getSubmissionPreview, getSubmissionStatus, submitFeedback } from './submissionApi';
+import { getBuildStats, getSubmissionPreview, getSubmissionStatus, submitFeedback } from './submissionApi';
 
 vi.mock('./submissionApi', async () => {
   const actual = await vi.importActual<typeof import('./submissionApi')>('./submissionApi');
@@ -14,12 +14,14 @@ vi.mock('./submissionApi', async () => {
     getSubmissionStatus: vi.fn(),
     getSubmissionPreview: vi.fn(),
     submitFeedback: vi.fn(),
+    getBuildStats: vi.fn(),
   };
 });
 
 const mockedGetSubmissionStatus = vi.mocked(getSubmissionStatus);
 const mockedGetSubmissionPreview = vi.mocked(getSubmissionPreview);
 const mockedSubmitFeedback = vi.mocked(submitFeedback);
+const mockedGetBuildStats = vi.mocked(getBuildStats);
 
 async function flushEffects() {
   await Promise.resolve();
@@ -27,6 +29,11 @@ async function flushEffects() {
 }
 
 describe('SubmissionStatusView', () => {
+  beforeEach(() => {
+    // Default: no build-time sample yet, so the fallback copy shows.
+    mockedGetBuildStats.mockResolvedValue({ medianMinutes: null, sampleSize: 0 });
+  });
+
   afterEach(() => {
     document.body.innerHTML = '';
     localStorage.clear();
@@ -392,6 +399,71 @@ describe('SubmissionStatusView', () => {
     expect(entries[0]).toContain('Speed up the car');
     expect(entries[1]).toContain('Make the car faster please.');
     expect(container.querySelectorAll('.build-activity-revision')).toHaveLength(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+});
+
+describe('SubmissionStatusView expectations & failures', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+    localStorage.clear();
+    window.location.hash = '#/';
+    vi.clearAllMocks();
+  });
+
+  it('sets a build-time expectation from real medians, and flags an overrun', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    mockedGetSubmissionStatus.mockResolvedValue({ status: 'queued' });
+    mockedGetBuildStats.mockResolvedValue({ medianMinutes: 30, sampleSize: 8 });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'eta-token', submittedAt: Date.now() - 5 * 60_000 }));
+      await flushEffects();
+      await flushEffects();
+    });
+    expect(container.textContent).toContain('usually take about 30 min');
+
+    // Past the median, the copy stops pretending it's on schedule.
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'eta-token', submittedAt: Date.now() - 90 * 60_000 }));
+      await flushEffects();
+      await flushEffects();
+    });
+    expect(container.textContent).toContain('taking longer than the usual 30 min');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('says so when CI is failing on the build', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    mockedGetBuildStats.mockResolvedValue({ medianMinutes: null, sampleSize: 0 });
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      progress: { headSha: 'sha-1', commits: [], checklist: [], checks: 'FAILURE' },
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'failing-token' }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.status-warning')?.textContent).toContain('Automatic checks are failing');
 
     await act(async () => {
       root.unmount();

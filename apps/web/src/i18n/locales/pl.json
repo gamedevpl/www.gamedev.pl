@@ -241,7 +241,14 @@
     "live": "Na żywo",
     "shareLink": "Podziel się tą grą (tylko do oglądania):",
     "shareCopy": "Kopiuj",
-    "shareCopied": "Skopiowano!"
+    "shareCopied": "Skopiowano!",
+    "checksFailed": "Automatyczne testy tej wersji nie przechodzą. Agent zwykle to zauważa i poprawia — nie musisz nic robić.",
+    "tryAgain": "Spróbuj z tym pomysłem jeszcze raz",
+    "eta": {
+      "unknown": "Większość gier jest gotowa w niecałą godzinę.",
+      "typical": "Takie gry powstają zwykle około {{minutes}} min.",
+      "overrun": "Ta powstaje dłużej niż typowe {{minutes}} min. Większe pomysły tak mają — możesz zamknąć tę stronę, damy Ci znać."
+    }
   },
   "suggestions": {
     "dodge": "Unikaj spadających skał",

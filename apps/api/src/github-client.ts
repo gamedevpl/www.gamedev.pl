@@ -45,6 +45,12 @@ export interface LinkedPullRequest {
    * show them back — otherwise a creator has no record that their revision landed.
    */
   comments?: PullRequestComment[];
+  /**
+   * Rollup of CI on the head commit. The only signal we have that a build is in
+   * trouble rather than merely slow, so the status page can say so instead of
+   * showing a silent, stalled log.
+   */
+  checksState?: 'SUCCESS' | 'FAILURE' | 'PENDING' | null;
 }
 
 /** A game's sources, assembled with its selected shared engine modules. */
@@ -379,7 +385,13 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
                     headRefOid: string;
                     files: { nodes: Array<{ path: string }> };
                     commits: {
-                      nodes: Array<{ commit: { messageHeadline: string; committedDate: string } }>;
+                      nodes: Array<{
+                        commit: {
+                          messageHeadline: string;
+                          committedDate: string;
+                          statusCheckRollup?: { state: string } | null;
+                        };
+                      }>;
                     };
                     comments: {
                       nodes: Array<{ body: string; createdAt: string }>;
@@ -421,6 +433,9 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
                                 commit {
                                   messageHeadline
                                   committedDate
+                                  statusCheckRollup {
+                                    state
+                                  }
                                 }
                               }
                             }
@@ -472,6 +487,13 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
           message: node.commit.messageHeadline,
           committedDate: node.commit.committedDate,
         })),
+        // Rollup of the head commit only — that's the run that reflects the code a
+        // creator is about to play. Anything other than the three states we act on
+        // (e.g. EXPECTED, ERROR) is treated as "no signal".
+        checksState: (() => {
+          const state = pullRequestNode.commits.nodes.at(-1)?.commit.statusCheckRollup?.state;
+          return state === 'SUCCESS' || state === 'FAILURE' || state === 'PENDING' ? state : null;
+        })(),
         comments: (pullRequestNode.comments?.nodes ?? []).map((node) => ({
           body: node.body ?? '',
           createdAt: node.createdAt,

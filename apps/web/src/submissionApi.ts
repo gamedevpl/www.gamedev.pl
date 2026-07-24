@@ -9,6 +9,8 @@ export type BuildProgress = {
   commits: Array<{ message: string; committedDate: string }>;
   /** The agent's task checklist parsed from the PR body. Untrusted text. */
   checklist: Array<{ text: string; checked: boolean }>;
+  /** CI rollup on the head commit — 'FAILURE' means in trouble, not just slow. */
+  checks?: 'SUCCESS' | 'FAILURE' | 'PENDING' | null;
   /**
    * The creator's own change requests on this build, oldest→newest. Read back off
    * the PR so the status page can show a creator what they already asked for.
@@ -110,6 +112,21 @@ export async function getSubmissionPreview(token: string): Promise<SubmissionPre
   }
 
   return (await response.json()) as SubmissionPreview;
+}
+
+/**
+ * How long recent builds actually took. Used to turn "your game is in the queue"
+ * into an expectation the creator can plan around. Null median = not enough data
+ * yet; the UI falls back to a range.
+ */
+export async function getBuildStats(): Promise<{ medianMinutes: number | null; sampleSize: number }> {
+  const response = await fetch(`${API_BASE}/api/submissions/stats`, { credentials: 'include' });
+
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+
+  return (await response.json()) as { medianMinutes: number | null; sampleSize: number };
 }
 
 /**
