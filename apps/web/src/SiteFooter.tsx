@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import { bugReportUrl, REPO_URL } from './github';
-import { CONTACT_EMAIL, OPERATOR_ADDRESS, OPERATOR_LEGAL_NAME, OPERATOR_TAX_ID } from './legal/operator';
+import { bugReportUrl, ISSUES_URL, REPO_URL } from './github';
+import { OPERATOR_ADDRESS, OPERATOR_LEGAL_NAME, OPERATOR_TAX_ID } from './legal/operator';
 import { legalPath } from './router';
 import { currentVisitId } from './visitTelemetry';
 
@@ -12,8 +12,10 @@ import { currentVisitId } from './visitTelemetry';
  * renders on every route including the closed-beta splash, because an anonymous
  * visitor is exactly the person these disclosures are written for.
  *
- * `OPERATOR_ADDRESS` and `OPERATOR_TAX_ID` render only when set — see the note in
- * legal/operator.ts about publishing a home address.
+ * The electronic contact address lives in the legal documents (linked below), not as
+ * a second prominent line under the brand — Contact in the nav opens the GitHub
+ * issue tracker instead. `OPERATOR_ADDRESS` and `OPERATOR_TAX_ID` render only when
+ * set — see the note in legal/operator.ts about publishing a home address.
  */
 export function SiteFooter() {
   const { t } = useTranslation();
@@ -30,16 +32,15 @@ export function SiteFooter() {
           <p className="site-footer__brand">{OPERATOR_LEGAL_NAME}</p>
           {OPERATOR_ADDRESS && <p className="site-footer__operator">{OPERATOR_ADDRESS}</p>}
           {OPERATOR_TAX_ID && <p className="site-footer__operator">NIP: {OPERATOR_TAX_ID}</p>}
-          <p className="site-footer__operator">
-            <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
-          </p>
         </div>
 
         <nav className="site-footer__links" aria-label={t('footer.legalNav')}>
           <a href={legalPath('terms')}>{t('legal.terms')}</a>
           <a href={legalPath('privacy')}>{t('legal.privacy')}</a>
           <a href={legalPath('terms', 'zglaszanie')}>{t('footer.reportIllegal')}</a>
-          <a href={`mailto:${CONTACT_EMAIL}`}>{t('footer.contact')}</a>
+          <a href={ISSUES_URL} target="_blank" rel="noreferrer noopener">
+            {t('footer.contact')}
+          </a>
         </nav>
       </div>
 
