@@ -78,11 +78,25 @@ export async function getSubmissionPreview(token: string): Promise<SubmissionPre
   return (await response.json()) as SubmissionPreview;
 }
 
-export async function refineSpec(input: {
-  title: string;
-  concept: string;
-  locale?: string;
-}): Promise<{
+/**
+ * Relays post-play "here's what to change" feedback to the build agent. The API
+ * posts it as a comment on the agent's open PR (or the issue) so it iterates.
+ */
+export async function submitFeedback(token: string, feedback: string): Promise<{ ok: boolean; target: string }> {
+  const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/feedback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ feedback }),
+  });
+
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+
+  return (await response.json()) as { ok: boolean; target: string };
+}
+
+export async function refineSpec(input: { title: string; concept: string; locale?: string }): Promise<{
   questions: Array<{
     id: string;
     question: string;

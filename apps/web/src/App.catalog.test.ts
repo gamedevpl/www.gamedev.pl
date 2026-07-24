@@ -112,4 +112,68 @@ describe('catalog playback', () => {
       root.unmount();
     });
   });
+
+  it('re-fetches catalog when navigating back to home route', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    let catalogCalls = 0;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/me')) {
+        return new Response(JSON.stringify({ user: { uid: 'g:test', tier: 'standard' } }));
+      }
+      if (url.endsWith('/api/health')) {
+        return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: false }));
+      }
+      if (url.endsWith('/api/catalog')) {
+        catalogCalls++;
+        return new Response(
+          JSON.stringify([
+            {
+              slug: catalogCalls === 1 ? 'game-one' : 'game-two',
+              title: catalogCalls === 1 ? 'Game One' : 'Game Two',
+              genre: 'Arcade',
+              controls: 'Arrow keys',
+              status: 'published',
+              media: null,
+              multiplayer: null,
+            },
+          ]),
+        );
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    window.location.hash = '#/';
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(AuthProvider, null, createElement(App)));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    const initialCalls = catalogCalls;
+    expect(initialCalls).toBeGreaterThan(0);
+
+    await act(async () => {
+      window.location.hash = '#/status/some-token';
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+      await flushEffects();
+    });
+
+    await act(async () => {
+      window.location.hash = '#/';
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(catalogCalls).toBe(initialCalls + 1);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

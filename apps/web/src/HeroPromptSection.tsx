@@ -13,7 +13,9 @@ type HeroPromptSectionProps = {
   onSubmitSpec: (title: string, concept: string) => void;
   mockStatus: 'idle' | 'loading' | 'error';
   mockError: string | null;
-  onGenerateMock: (prompt: string) => void;
+  // Kept for the demo generator; the primary Build action no longer auto-fires a
+  // throwaway mock — clarifying questions (the QA gate) run before any generation.
+  onGenerateMock?: (prompt: string) => void;
 };
 
 export type VisualAttachment = {
@@ -106,7 +108,6 @@ export function HeroPromptSection({
   onSubmitSpec,
   mockStatus,
   mockError,
-  onGenerateMock,
 }: HeroPromptSectionProps) {
   const { t } = useTranslation();
   const [promptText, setPromptText] = useState(initialPrompt);
@@ -257,7 +258,6 @@ export function HeroPromptSection({
         : `Game idea with attached visuals: ${attachSummary}`;
     }
 
-    onGenerateMock(finalPrompt);
     const autoTitle = trimmed.slice(0, 40).trim() || 'My Visual AI Game';
     onSubmitSpec(autoTitle, finalPrompt);
   };

@@ -2,16 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { generateGame, type GeneratedGame, type GenerateGameApiError } from './api';
 import { fetchCatalog, type CatalogEntry } from './catalog';
-import { GameFrame } from './GameFrame';
-import { PublishedGameFrame } from './PublishedGameFrame';
+import { GameTheater } from './GameTheater';
 import { NavHeader } from './NavHeader';
 import { HeroPromptSection } from './HeroPromptSection';
 import { ArcadeCatalog } from './ArcadeCatalog';
 import { PixelIcon } from './PixelIcon';
 import { SubmissionStatusView } from './SubmissionStatusView';
+import { CreatorQA, type QAQuestion } from './CreatorQA';
 import { parseHashRoute, statusHash, playHash } from './router';
-import { useGamePlayer } from './gamePlayer';
-import { submitSpec, type SubmissionApiError } from './submissionApi';
+import { submitSpec, refineSpec, type SubmissionApiError } from './submissionApi';
 import { getSavedSpecs, saveSpec, type SavedSpec } from './mySpecs';
 import { useAuth } from './AuthContext';
 import { AuthModal } from './AuthModal';
@@ -27,7 +26,7 @@ type StageContent =
   | { type: 'party'; game: CatalogEntry; session: PartySession };
 
 export function App() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user, loading: authLoading, privateBeta } = useAuth();
   const [route, setRoute] = useState(() => parseHashRoute(window.location.hash));
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -43,15 +42,16 @@ export function App() {
   // Stage content
   const [stageContent, setStageContent] = useState<StageContent | null>(null);
 
-  // Single-player game player: the iframe ref + a bridge that lifts the game's
-  // title/description/sound into the theater header (see gamePlayer.ts).
-  const gameFrameRef = useRef<HTMLIFrameElement | null>(null);
-  const isSinglePlayer = stageContent?.type === 'catalog' || stageContent?.type === 'generated';
-  const player = useGamePlayer(gameFrameRef, isSinglePlayer);
-
   // Greenfield submission state
   const [submissionStatus, setSubmissionStatus] = useState<'idle' | 'loading'>('idle');
   const [submissionError, setSubmissionError] = useState<string | null>(null);
+
+  // Clarifying-questions gate: a submission runs the spec refiner first, and when
+  // it returns questions the creator must answer them before generation proceeds.
+  // pendingSpec holds the spec awaiting those answers.
+  const [qaQuestions, setQaQuestions] = useState<QAQuestion[]>([]);
+  const [pendingSpec, setPendingSpec] = useState<{ title: string; concept: string; displayName: string } | null>(null);
+  const qaRef = useRef<HTMLDivElement | null>(null);
 
   // Demo generator state
   const [mockStatus, setMockStatus] = useState<'idle' | 'loading' | 'error'>('idle');
@@ -118,6 +118,7 @@ export function App() {
     // would just 401. Don't fetch (and don't render an error) until signed in.
     // Outside private beta, catalog reads stay public (owner decision).
     if (privateBeta && !user) return;
+    if (route.view !== 'home' && route.view !== 'play') return;
 
     let cancelled = false;
 
@@ -138,7 +139,14 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [user, privateBeta]);
+  }, [user, privateBeta, route.view]);
+
+  // Bring the clarifying-questions panel into view when the refiner returns some.
+  useEffect(() => {
+    if (qaQuestions.length > 0) {
+      qaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    }
+  }, [qaQuestions]);
 
   const handleNavigateSection = (sectionId: string) => {
     if (sectionId === 'studio-active') {
@@ -184,6 +192,9 @@ export function App() {
     }
   }
 
+  // The generation gate: before spending a submission we run the spec refiner. If it
+  // returns clarifying questions, generation pauses on the QA panel until they're
+  // answered; a clean spec (or a refiner error — fail-open) submits straight through.
   async function handleSubmitSpec(title: string, concept: string, displayName: string = '') {
     if (!user) {
       setIsAuthModalOpen(true);
@@ -198,17 +209,41 @@ export function App() {
     setSubmissionError(null);
 
     try {
-      const response = await submitSpec({
+      const { questions } = await refineSpec({
         title: trimmedTitle,
         concept: trimmedConcept,
-        displayName: displayName.trim() || undefined,
+        locale: i18n.language,
+      });
+      if (questions.length > 0) {
+        setPendingSpec({ title: trimmedTitle, concept: trimmedConcept, displayName: displayName.trim() });
+        setQaQuestions(questions);
+        setSubmissionStatus('idle');
+        return;
+      }
+    } catch {
+      // Fail-open: a refiner outage must never block creation — submit as-is.
+    }
+
+    await submitRefinedSpec(trimmedTitle, trimmedConcept, displayName.trim());
+  }
+
+  // Actually creates the submission (after the QA gate) and jumps to its status page.
+  async function submitRefinedSpec(title: string, concept: string, displayName: string) {
+    setSubmissionStatus('loading');
+    setSubmissionError(null);
+
+    try {
+      const response = await submitSpec({
+        title,
+        concept,
+        displayName: displayName || undefined,
       });
 
       // Save to localStorage
       const updatedSpecs = saveSpec({
         token: response.token,
-        title: trimmedTitle,
-        concept: trimmedConcept,
+        title,
+        concept,
         createdAt: Date.now(),
       });
       setSavedSpecs(updatedSpecs);
@@ -231,6 +266,18 @@ export function App() {
       setSubmissionStatus('idle');
     }
   }
+
+  const handleQaComplete = (finalConcept: string) => {
+    const spec = pendingSpec;
+    setQaQuestions([]);
+    setPendingSpec(null);
+    if (spec) void submitRefinedSpec(spec.title, finalConcept, spec.displayName);
+  };
+
+  const handleQaCancel = () => {
+    setQaQuestions([]);
+    setPendingSpec(null);
+  };
 
   function navigateHash(hash: string) {
     // Update the URL (the source of truth) and the route synchronously. The
@@ -305,108 +352,66 @@ export function App() {
               />
             </div>
 
-            {stageContent && (
+            {qaQuestions.length > 0 && pendingSpec && (
+              <div ref={qaRef}>
+                <CreatorQA
+                  questions={qaQuestions}
+                  initialConcept={pendingSpec.concept}
+                  onSubmitWithConcept={handleQaComplete}
+                  onCancel={handleQaCancel}
+                />
+              </div>
+            )}
+
+            {stageContent?.type === 'party' && (
               <section id="stage" className="panel stage is-playing-full-viewport">
-                {stageContent.type === 'party' ? (
-                  <>
-                    <div className="game-theater-bar">
-                      <div className="game-theater-meta">
-                        <span className="theater-badge">
-                          <PixelIcon name="phone" size={13} /> {t('party.badge')}
-                        </span>
-                        <h2 className="theater-title">{stageContent.game.title}</h2>
-                      </div>
-                      <div className="game-theater-actions">
-                        <button className="secondary-btn exit-btn" onClick={() => setStageContent(null)}>
-                          <PixelIcon name="close" size={12} />{' '}
-                          {t('catalog.exitPlayer', { defaultValue: 'Exit Player' })}
-                        </button>
-                      </div>
-                    </div>
-                    <div className="game-viewport-container">
-                      <PartyStage
-                        key={stageContent.session.code}
-                        game={stageContent.game}
-                        session={stageContent.session}
-                        onExit={() => setStageContent(null)}
-                      />
-                    </div>
-                  </>
-                ) : stageContent.type === 'catalog' ? (
-                  <>
-                    <div className="game-theater-bar">
-                      <div className="game-theater-meta">
-                        <span className="theater-badge">
-                          <PixelIcon name="gamepad" size={14} />{' '}
-                          {t('catalog.playingBadge', { defaultValue: 'Playing' })}
-                        </span>
-                        <h2 className="theater-title">{stageContent.game.title}</h2>
-                        {player.meta?.desc && <span className="theater-desc">{player.meta.desc}</span>}
-                      </div>
-                      <div className="game-theater-actions">
-                        <button
-                          className="secondary-btn sound-btn"
-                          onClick={player.toggleSound}
-                          aria-pressed={player.muted}
-                        >
-                          {player.muted ? t('player.soundOff') : t('player.soundOn')}
-                        </button>
-                        <button className="secondary-btn exit-btn" onClick={() => navigateHash('#/')}>
-                          <PixelIcon name="close" size={12} />{' '}
-                          {t('catalog.exitPlayer', { defaultValue: 'Exit Player' })}
-                        </button>
-                      </div>
-                    </div>
-                    <div className="game-viewport-container">
-                      <PublishedGameFrame
-                        key={stageContent.game.slug}
-                        slug={stageContent.game.slug}
-                        title={stageContent.game.title}
-                        frameRef={gameFrameRef}
-                        embed
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="game-theater-bar">
-                      <div className="game-theater-meta">
-                        <span className="theater-badge">
-                          <PixelIcon name="rocket" size={13} /> AI Generated Game
-                        </span>
-                        <h2 className="theater-title">{stageContent.game.title}</h2>
-                        {stageContent.prompt && (
-                          <span className="theater-controls">
-                            {t('home.generatedFrom', { prompt: stageContent.prompt })}
-                          </span>
-                        )}
-                      </div>
-                      <div className="game-theater-actions">
-                        <button
-                          className="secondary-btn sound-btn"
-                          onClick={player.toggleSound}
-                          aria-pressed={player.muted}
-                        >
-                          {player.muted ? t('player.soundOff') : t('player.soundOn')}
-                        </button>
-                        <button className="secondary-btn exit-btn" onClick={() => setStageContent(null)}>
-                          <PixelIcon name="close" size={12} />{' '}
-                          {t('catalog.exitPlayer', { defaultValue: 'Exit Player' })}
-                        </button>
-                      </div>
-                    </div>
-                    <div className="game-viewport-container">
-                      <GameFrame
-                        key={stageContent.game.html}
-                        title={stageContent.game.title}
-                        html={stageContent.game.html}
-                        frameRef={gameFrameRef}
-                        embed
-                      />
-                    </div>
-                  </>
-                )}
+                <div className="game-theater-bar">
+                  <div className="game-theater-meta">
+                    <span className="theater-badge">
+                      <PixelIcon name="phone" size={13} /> {t('party.badge')}
+                    </span>
+                    <h2 className="theater-title">{stageContent.game.title}</h2>
+                  </div>
+                  <div className="game-theater-actions">
+                    <button className="secondary-btn exit-btn" onClick={() => setStageContent(null)}>
+                      <PixelIcon name="close" size={12} /> {t('catalog.exitPlayer', { defaultValue: 'Exit Player' })}
+                    </button>
+                  </div>
+                </div>
+                <div className="game-viewport-container">
+                  <PartyStage
+                    key={stageContent.session.code}
+                    game={stageContent.game}
+                    session={stageContent.session}
+                    onExit={() => setStageContent(null)}
+                  />
+                </div>
               </section>
+            )}
+
+            {stageContent?.type === 'catalog' && (
+              <GameTheater
+                key={stageContent.game.slug}
+                title={stageContent.game.title}
+                badge={{ icon: 'gamepad', label: t('catalog.playingBadge', { defaultValue: 'Playing' }) }}
+                source={{ slug: stageContent.game.slug }}
+                onExit={() => navigateHash('#/')}
+              />
+            )}
+
+            {stageContent?.type === 'generated' && (
+              <GameTheater
+                key={stageContent.game.html}
+                title={stageContent.game.title}
+                badge={{ icon: 'rocket', label: 'AI Generated Game' }}
+                source={{ html: stageContent.game.html }}
+                onExit={() => setStageContent(null)}
+                meta={
+                  stageContent.prompt ? (
+                    <span className="theater-controls">{t('home.generatedFrom', { prompt: stageContent.prompt })}</span>
+                  ) : undefined
+                }
+              />
             )}
 
             {partyError && <p className="error party-error">{partyError}</p>}

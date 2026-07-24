@@ -149,6 +149,13 @@ export interface GitHubClient {
   getIssueState(issueNumber: number): Promise<{ state: 'open' | 'closed' }>;
   findLinkedPR(issueNumber: number): Promise<LinkedPullRequest | null>;
   /**
+   * Posts a comment on an issue or pull request. GitHub's REST comments endpoint is
+   * shared — a PR's conversation is addressed by its number as an "issue" — so one
+   * method covers both. Used to relay creator feedback so the coding agent iterates
+   * on its open PR.
+   */
+  createIssueComment(issueOrPrNumber: number, body: string): Promise<{ id: number }>;
+  /**
    * Reads a game's source files from a branch (typically an unmerged PR head).
    * Returns null if the game directory or a required file is missing on that ref.
    */
@@ -258,6 +265,14 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         `https://api.github.com/repos/${repo}/issues/${issueNumber}`,
       );
       return { state: result.state };
+    },
+
+    async createIssueComment(issueOrPrNumber, body) {
+      const result = await requestJson<{ id: number }>(
+        `https://api.github.com/repos/${repo}/issues/${issueOrPrNumber}/comments`,
+        { method: 'POST', body: JSON.stringify({ body }) },
+      );
+      return { id: result.id };
     },
 
     async findLinkedPR(issueNumber) {

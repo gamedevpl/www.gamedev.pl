@@ -50,6 +50,27 @@ export function embedGameHtml(html: string): string {
   return html.includes('</body>') ? html.replace('</body>', `${inject}</body>`) : html + inject;
 }
 
+/** en/pl are the only locales games ship strings for; anything else maps to en. */
+export function toGameLocale(lang: string | undefined | null): 'en' | 'pl' {
+  return lang?.toLowerCase().startsWith('pl') ? 'pl' : 'en';
+}
+
+/**
+ * Rewrites the assembled game document's `<html lang="…">` so the game's own i18n
+ * (games repo `shared/modules/core.ts` → resolveLocale, which reads
+ * `document.documentElement.lang`) follows the app's selected language instead of
+ * the sandboxed iframe's `navigator.language`. Without this, toggling the app to
+ * Polish had no effect inside the game. A no-op when the fragment has no `<html>`
+ * tag (e.g. test snippets), and it can only ever set en/pl.
+ */
+export function withGameLocale(html: string, lang: string | undefined | null): string {
+  const locale = toGameLocale(lang);
+  if (/<html\b[^>]*\slang\s*=/i.test(html)) {
+    return html.replace(/(<html\b[^>]*?\slang\s*=\s*)("[^"]*"|'[^']*')/i, `$1"${locale}"`);
+  }
+  return html.replace(/<html\b/i, `<html lang="${locale}"`);
+}
+
 export type GamePlayerMeta = { title: string; desc: string };
 
 /**

@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { GameFrame } from './GameFrame';
-import { PublishedGameFrame } from './PublishedGameFrame';
+import { GameTheater } from './GameTheater';
 import { PixelIcon, type PixelIconName } from './PixelIcon';
 import {
   getSubmissionPreview,
   getSubmissionStatus,
+  submitFeedback,
   type BuildProgress,
   type SubmissionApiError,
   type SubmissionPreview,
@@ -121,11 +121,16 @@ export function SubmissionStatusView({
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isInvalidToken, setIsInvalidToken] = useState(false);
-  const [showGame, setShowGame] = useState(false);
   const [preview, setPreview] = useState<SubmissionPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewRefreshing, setPreviewRefreshing] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+
+  // Which game (if any) is open in the full-viewport theater. The draft's HTML is
+  // snapshotted at launch (`launchedHtml`) so a background refresh doesn't reload
+  // the game out from under the player mid-session — reopening picks up the latest.
+  const [playing, setPlaying] = useState<'draft' | 'published' | null>(null);
+  const [launchedHtml, setLaunchedHtml] = useState<string | null>(null);
 
   // Tracks the PR head SHA the currently-displayed preview was built from, so we
   // only re-fetch (and reload the iframe) when the agent has actually pushed new
@@ -146,7 +151,8 @@ export function SubmissionStatusView({
     setLoading(true);
     setErrorMessage(null);
     setIsInvalidToken(false);
-    setShowGame(false);
+    setPlaying(null);
+    setLaunchedHtml(null);
     setPreview(null);
     setPreviewLoading(false);
     setPreviewRefreshing(false);
@@ -248,6 +254,23 @@ export function SubmissionStatusView({
 
   const previewTitle = preview?.title ?? submittedTitle ?? status?.preview?.slug ?? t('statusView.previewGameTitle');
 
+  // Lock page scroll while the theater overlay is open (matches the home player).
+  useEffect(() => {
+    if (!playing) return;
+    document.body.classList.add('player-open');
+    return () => document.body.classList.remove('player-open');
+  }, [playing]);
+
+  const openDraft = () => {
+    if (!preview) return;
+    setLaunchedHtml(preview.html);
+    setPlaying('draft');
+  };
+  const closeTheater = () => {
+    setPlaying(null);
+    setLaunchedHtml(null);
+  };
+
   return (
     <>
       <section className="panel status-panel">
@@ -292,15 +315,42 @@ export function SubmissionStatusView({
             <p className="status-description">{t(`statusView.states.${status.status}.description`)}</p>
 
             {status.status === 'published' && status.slug ? (
-              <div className="status-actions">
-                <button className="primary-btn" onClick={() => setShowGame(true)}>
-                  {t('statusView.play')}
-                </button>
-                {status.slug && <p className="status-slug">{t('statusView.slug', { slug: status.slug })}</p>}
-              </div>
+              <PlayCard
+                badgeClass="is-live"
+                badge={
+                  <>
+                    <span className="live-dot" aria-hidden="true" /> {t('statusView.states.published.label')}
+                  </>
+                }
+                title={publishedGameTitle}
+                subtitle={t('statusView.slug', { slug: status.slug })}
+                cta={t('statusView.play')}
+                onPlay={() => setPlaying('published')}
+              />
+            ) : preview ? (
+              <PlayCard
+                badge={
+                  <>
+                    <span className="live-dot" aria-hidden="true" />{' '}
+                    {previewRefreshing ? t('statusView.previewUpdating') : t('statusView.previewBadge')}
+                  </>
+                }
+                title={previewTitle}
+                subtitle={t('statusView.draftHint')}
+                cta={t('statusView.playDraft')}
+                onPlay={openDraft}
+              />
+            ) : previewLoading ? (
+              <p className="status-preview-pending">
+                <span className="status-preview-spinner" aria-hidden="true" /> {t('statusView.previewLoading')}
+              </p>
             ) : null}
 
             {status.progress ? <BuildProgressPanel progress={status.progress} /> : null}
+
+            {(preview || status.status === 'needs_changes') && status.status !== 'published' ? (
+              <FeedbackPanel token={token} />
+            ) : null}
 
             {previewError && !preview ? <p className="error">{previewError}</p> : null}
 
@@ -311,35 +361,130 @@ export function SubmissionStatusView({
         ) : null}
       </section>
 
-      {showGame && status?.status === 'published' && status.slug ? (
-        <section className="panel stage">
-          <div className="game-meta">
-            <h2>{publishedGameTitle}</h2>
-            <p>{t('statusView.slug', { slug: status.slug })}</p>
-          </div>
-          <PublishedGameFrame slug={status.slug} title={publishedGameTitle} />
-        </section>
+      {playing === 'published' && status?.status === 'published' && status.slug ? (
+        <GameTheater
+          title={publishedGameTitle}
+          badge={{ icon: 'gamepad', label: t('catalog.playingBadge', { defaultValue: 'Playing' }) }}
+          source={{ slug: status.slug }}
+          onExit={closeTheater}
+        />
       ) : null}
 
-      {previewLoading && !preview ? (
-        <section className="panel stage">
-          <p className="catalog-state">{t('statusView.previewLoading')}</p>
-        </section>
-      ) : null}
-
-      {preview ? (
-        <section className="panel stage">
-          <div className="game-meta">
-            <h2>{previewTitle}</h2>
-            <p className="status-preview-badge">
-              <span className="live-dot" aria-hidden="true" />
-              {previewRefreshing ? t('statusView.previewUpdating') : t('statusView.previewBadge')}
-            </p>
-          </div>
-          <GameFrame title={previewTitle} html={preview.html} />
-        </section>
+      {playing === 'draft' && launchedHtml != null ? (
+        <GameTheater
+          title={previewTitle}
+          badge={{ icon: 'wrench', label: t('statusView.draftBadge') }}
+          source={{ html: launchedHtml }}
+          onExit={closeTheater}
+        />
       ) : null}
     </>
+  );
+}
+
+/**
+ * The "your game is playable" call-to-action inside the status panel. Clicking the
+ * CTA opens the game in the full-viewport theater — so the status page itself never
+ * embeds a live iframe inline (which would trap page scroll and duplicate the game's
+ * own chrome). Used for both the work-in-progress draft and the published game.
+ */
+function PlayCard({
+  badge,
+  badgeClass,
+  title,
+  subtitle,
+  cta,
+  onPlay,
+}: {
+  badge: ReactNode;
+  badgeClass?: string;
+  title: string;
+  subtitle?: string;
+  cta: string;
+  onPlay: () => void;
+}) {
+  return (
+    <div className="status-play-card">
+      <div className="status-play-card-info">
+        <span className={badgeClass ? `status-play-badge ${badgeClass}` : 'status-play-badge'}>{badge}</span>
+        <h3 className="status-play-card-title">{title}</h3>
+        {subtitle ? <p className="status-play-card-sub">{subtitle}</p> : null}
+      </div>
+      <button className="primary-btn status-play-cta" onClick={onPlay}>
+        <PixelIcon name="play" size={13} /> {cta}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Post-play revision loop: the creator played the draft and can describe what to
+ * change. The feedback is relayed to the build agent (POST .../feedback), which
+ * comments it onto the open PR so the agent iterates. Shown while the game is still
+ * in progress (or needs changes) — a published game can't be revised here.
+ */
+function FeedbackPanel({ token }: { token: string }) {
+  const { t } = useTranslation();
+  const [text, setText] = useState('');
+  const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle');
+  const [error, setError] = useState<string | null>(null);
+
+  const trimmed = text.trim();
+
+  const send = async () => {
+    if (trimmed.length < 10) return;
+    setState('sending');
+    setError(null);
+    try {
+      await submitFeedback(token, trimmed);
+      setState('sent');
+      setText('');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '';
+      if (message === 'content_rejected') {
+        setError(t('errors.contentRejected.other'));
+      } else if (message.includes('quota')) {
+        setError(t('statusView.feedback.quota'));
+      } else if (message.includes('published')) {
+        setError(t('statusView.feedback.published'));
+      } else {
+        setError(t('statusView.feedback.error'));
+      }
+      setState('idle');
+    }
+  };
+
+  return (
+    <div className="status-feedback">
+      <h3 className="status-feedback-title">{t('statusView.feedback.title')}</h3>
+      <p className="status-feedback-hint">{t('statusView.feedback.hint')}</p>
+      <textarea
+        className="status-feedback-input"
+        value={text}
+        onChange={(event) => {
+          setText(event.target.value);
+          if (state === 'sent') setState('idle');
+        }}
+        placeholder={t('statusView.feedback.placeholder')}
+        rows={3}
+        maxLength={2000}
+      />
+      <div className="status-feedback-actions">
+        <button
+          className="primary-btn"
+          onClick={() => void send()}
+          disabled={state === 'sending' || trimmed.length < 10}
+        >
+          {state === 'sending' ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
+        </button>
+        {state === 'sent' ? (
+          <span className="status-feedback-sent">
+            <PixelIcon name="check" size={13} /> {t('statusView.feedback.sent')}
+          </span>
+        ) : null}
+      </div>
+      {error ? <p className="error">{error}</p> : null}
+    </div>
   );
 }
 

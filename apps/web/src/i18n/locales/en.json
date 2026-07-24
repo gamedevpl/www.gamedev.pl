@@ -145,8 +145,22 @@
     "previewBadge": "Playable right now — work in progress",
     "previewUpdating": "New code just landed — reloading…",
     "previewGameTitle": "Work-in-progress build",
+    "draftBadge": "Draft",
+    "playDraft": "Play the draft",
+    "draftHint": "A work-in-progress build. Reopen it any time to pick up the agent's latest changes.",
     "previewNotReady": "No playable build yet. The agent is still laying down code — this page updates itself the moment there is something to play.",
     "previewError": "We couldn't load the preview right now. Please try again in a moment.",
+    "feedback": {
+      "title": "Want changes?",
+      "hint": "Played it and something's off? Tell the agent what to change and it'll revise your game.",
+      "placeholder": "e.g. make the car faster, add a second track, use brighter colours…",
+      "submit": "Send feedback",
+      "sending": "Sending…",
+      "sent": "Sent! The agent will revise your game — watch the build log above.",
+      "error": "We couldn't send that right now. Please try again in a moment.",
+      "quota": "You've sent a lot of feedback today — please try again tomorrow.",
+      "published": "This game is already published. Submit a new idea to make another version."
+    },
     "progress": {
       "checklistTitle": "What the agent is doing",
       "commitsTitle": "Build log",

@@ -1745,6 +1745,171 @@ body.player-open {
   }
 }
 
+/* Playable call-to-action. Launches the game in the full-viewport theater — the
+   status page never embeds a live iframe inline, so it always scrolls freely and
+   the game's own title/description chrome is never duplicated here. */
+.status-play-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin: 20px 0 24px;
+  padding: 22px 24px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 228, 172, 0.28);
+  background:
+    radial-gradient(130% 150% at 100% 0%, rgba(56, 189, 248, 0.1), transparent 55%),
+    linear-gradient(135deg, rgba(0, 228, 172, 0.1), rgba(28, 36, 44, 0.35));
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+
+.status-play-card-info {
+  min-width: 0;
+  flex: 1 1 260px;
+}
+
+.status-play-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 3px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--accent-blue);
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.status-play-badge.is-live {
+  color: var(--turquoise);
+  background: rgba(0, 228, 172, 0.12);
+  border-color: rgba(0, 228, 172, 0.3);
+}
+
+.status-play-badge.is-live .live-dot {
+  background: var(--turquoise);
+}
+
+.status-play-card-title {
+  margin: 12px 0 4px;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.3px;
+  overflow-wrap: anywhere;
+}
+
+.status-play-card-sub {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  max-width: 52ch;
+}
+
+.status-play-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  padding: 13px 26px;
+  font-size: 1.02rem;
+}
+
+/* Shown before the agent has produced a first playable build. */
+.status-preview-pending {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 20px 0 24px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  border: 1px dashed var(--panel-border);
+  background: rgba(13, 17, 21, 0.4);
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.status-preview-spinner {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid rgba(148, 163, 184, 0.25);
+  border-top-color: var(--turquoise);
+  animation: status-spin 0.8s linear infinite;
+}
+
+@keyframes status-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Post-play revision loop: tell the agent what to change after trying the draft. */
+.status-feedback {
+  margin: 20px 0 24px;
+  padding: 18px 20px;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-card);
+}
+
+.status-feedback-title {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.status-feedback-hint {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  max-width: 60ch;
+}
+
+.status-feedback-input {
+  width: 100%;
+  resize: vertical;
+  min-height: 72px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.status-feedback-input:focus {
+  outline: none;
+  border-color: var(--turquoise);
+}
+
+.status-feedback-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.status-feedback-sent {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--turquoise);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
 /* MOBILE RESPONSIVENESS */
 @media (max-width: 768px) {
   .app-header {
@@ -1845,6 +2010,11 @@ body.player-open {
   .status-timeline-label {
     font-size: 0.6rem;
     max-width: 60px;
+  }
+
+  .status-play-cta {
+    width: 100%;
+    justify-content: center;
   }
 }
 

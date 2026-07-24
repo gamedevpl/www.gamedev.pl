@@ -1,5 +1,6 @@
 import { useEffect, useRef, type MutableRefObject } from 'react';
-import { embedGameHtml } from './gamePlayer';
+import i18n from './i18n';
+import { embedGameHtml, withGameLocale } from './gamePlayer';
 
 type GameFrameSource = { title: string; html: string; src?: never } | { title: string; src: string; html?: never };
 
@@ -24,7 +25,15 @@ type GameFrameProps = GameFrameSource & {
 export function GameFrame(props: GameFrameProps) {
   const localRef = useRef<HTMLIFrameElement>(null);
   const iframeRef = props.frameRef ?? localRef;
-  const srcDoc = props.html != null && props.embed ? embedGameHtml(props.html) : props.html;
+  // Localize the game to the app's current language (rewrites <html lang>), then —
+  // only in the app's player — inject the chrome-hiding bridge. Locale applies to
+  // every game regardless of embed; the bridge is player-only. `i18n.language` is
+  // read at render, and hosts re-render on language change so this stays current.
+  let srcDoc = props.html ?? undefined;
+  if (srcDoc != null) {
+    srcDoc = withGameLocale(srcDoc, i18n.language);
+    if (props.embed) srcDoc = embedGameHtml(srcDoc);
+  }
 
   useEffect(() => {
     // Automatically focus the iframe so arrow keys / WASD controls work immediately

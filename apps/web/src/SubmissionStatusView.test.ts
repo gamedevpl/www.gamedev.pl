@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n';
 import { ACTIVE_POLL_MS, SubmissionStatusView } from './SubmissionStatusView';
-import { getSubmissionPreview, getSubmissionStatus } from './submissionApi';
+import { getSubmissionPreview, getSubmissionStatus, submitFeedback } from './submissionApi';
 
 vi.mock('./submissionApi', async () => {
   const actual = await vi.importActual<typeof import('./submissionApi')>('./submissionApi');
@@ -13,11 +13,13 @@ vi.mock('./submissionApi', async () => {
     ...actual,
     getSubmissionStatus: vi.fn(),
     getSubmissionPreview: vi.fn(),
+    submitFeedback: vi.fn(),
   };
 });
 
 const mockedGetSubmissionStatus = vi.mocked(getSubmissionStatus);
 const mockedGetSubmissionPreview = vi.mocked(getSubmissionPreview);
+const mockedSubmitFeedback = vi.mocked(submitFeedback);
 
 async function flushEffects() {
   await Promise.resolve();
@@ -134,8 +136,11 @@ describe('SubmissionStatusView', () => {
 
     expect(container.textContent).toContain('Live!');
 
-    const playButton = container.querySelector('button');
-    expect(playButton?.textContent).toBe('Play your game');
+    // The status page never embeds the game inline — it launches the full-viewport
+    // theater on click (no scroll trap, no duplicated in-game chrome).
+    const playButton = container.querySelector<HTMLButtonElement>('.status-play-cta');
+    expect(playButton?.textContent).toContain('Play your game');
+    expect(container.querySelector('iframe')).toBeNull();
 
     await act(async () => {
       playButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -146,7 +151,11 @@ describe('SubmissionStatusView', () => {
     expect(fetchSpy).toHaveBeenCalledWith('/api/games/sky-dodge');
     const iframe = container.querySelector('iframe[title="Sky Dodge"]');
     expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts');
-    expect(iframe?.getAttribute('srcdoc')).toBe('<canvas>published</canvas>');
+    // Runs via srcDoc (no external origin), wrapped with the embed bridge in the
+    // player — so the original document is contained, not exact.
+    const srcdoc = iframe?.getAttribute('srcdoc') ?? '';
+    expect(srcdoc).toContain('<canvas>published</canvas>');
+    expect(srcdoc).toContain('gdpl-player');
 
     fetchSpy.mockRestore();
 
@@ -191,10 +200,22 @@ describe('SubmissionStatusView', () => {
     expect(container.textContent).toContain('Add collision detection');
     expect(container.textContent).toContain('Scaffold the game');
 
-    // No manual "preview" button click required — it loads on its own once available.
+    // The preview auto-loads once available (no manual "preview" click), surfacing a
+    // "play the draft" card — but nothing is embedded inline until the user launches it.
     expect(mockedGetSubmissionPreview).toHaveBeenCalledWith('building-token');
+    expect(container.textContent).toContain('Space Runner');
+    const playDraft = container.querySelector<HTMLButtonElement>('.status-play-cta');
+    expect(playDraft?.textContent).toContain('Play the draft');
+    expect(container.querySelector('iframe')).toBeNull();
+
+    // Launching opens the game in the full-viewport theater.
+    await act(async () => {
+      playDraft?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
     const iframe = container.querySelector('iframe[title="Space Runner"]');
     expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts');
+    expect(iframe?.getAttribute('srcdoc') ?? '').toContain('gdpl-player');
 
     await act(async () => {
       root.unmount();
@@ -230,7 +251,8 @@ describe('SubmissionStatusView', () => {
       });
 
       expect(mockedGetSubmissionPreview).toHaveBeenCalledTimes(1);
-      expect(container.querySelector('iframe')?.getAttribute('srcdoc')).toBe('<canvas>sha-1</canvas>');
+      // Nothing is embedded inline — the draft plays in the theater on demand.
+      expect(container.querySelector('iframe')).toBeNull();
 
       // A status poll fires (still headSha "sha-1") — must NOT re-fetch the preview.
       await act(async () => {
@@ -249,7 +271,15 @@ describe('SubmissionStatusView', () => {
       });
 
       expect(mockedGetSubmissionPreview).toHaveBeenCalledTimes(2);
-      expect(container.querySelector('iframe')?.getAttribute('srcdoc')).toBe('<canvas>sha-2</canvas>');
+
+      // Launching the draft now plays the newest build (sha-2), snapshotted at click.
+      await act(async () => {
+        container
+          .querySelector<HTMLButtonElement>('.status-play-cta')
+          ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushEffects();
+      });
+      expect(container.querySelector('iframe')?.getAttribute('srcdoc') ?? '').toContain('<canvas>sha-2</canvas>');
 
       await act(async () => {
         root.unmount();
@@ -257,5 +287,66 @@ describe('SubmissionStatusView', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('relays post-play feedback to the build agent', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      preview: { slug: 'space-runner' },
+      progress: { headSha: 'sha-1', commits: [], checklist: [] },
+    });
+    mockedGetSubmissionPreview.mockResolvedValue({
+      slug: 'space-runner',
+      title: 'Space Runner',
+      html: '<canvas></canvas>',
+    });
+    mockedSubmitFeedback.mockResolvedValue({ ok: true, target: 'pull_request' });
+    await i18n.changeLanguage('en');
+    window.location.hash = '#/status/feedback-token';
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'feedback-token' }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    // The feedback panel is offered once a draft is playable.
+    const textarea = container.querySelector<HTMLTextAreaElement>('.status-feedback-input');
+    expect(textarea).not.toBeNull();
+    const sendButton = container.querySelector<HTMLButtonElement>('.status-feedback .primary-btn');
+    // Empty / too-short feedback keeps the button disabled.
+    expect(sendButton?.disabled).toBe(true);
+
+    await act(async () => {
+      if (textarea) {
+        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+        setter?.call(textarea, 'Please make the car faster and add a boost pad.');
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      await flushEffects();
+    });
+
+    expect(sendButton?.disabled).toBe(false);
+
+    await act(async () => {
+      sendButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(mockedSubmitFeedback).toHaveBeenCalledWith(
+      'feedback-token',
+      'Please make the car faster and add a boost pad.',
+    );
+    expect(container.querySelector('.status-feedback-sent')).not.toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
   });
 });

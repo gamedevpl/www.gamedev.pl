@@ -27,6 +27,7 @@ export interface BuildProgress {
 
 export interface SubmissionStatusResponseBase {
   status: SubmissionStatus;
+  slug?: string;
   /**
    * Present while an unmerged PR is open (building/in_review): the creator can
    * play the in-progress game straight from the PR branch, before the human
@@ -135,7 +136,7 @@ export async function deriveStatus(
 
     const published = await isSlugPublished(slug);
     if (!published) {
-      return { status: 'publishing' };
+      return { status: 'publishing', slug };
     }
 
     // The web app plays a published game through GET /api/games/:slug — same

@@ -52,6 +52,7 @@ describe('deriveStatus', () => {
   it('publishing: merged PR whose slug is not yet in the published catalog', async () => {
     expect(await deriveStatus('open', pr({ merged: true, state: 'MERGED' }), notPublished)).toEqual({
       status: 'publishing',
+      slug: 'sky-dodge',
     });
   });
 

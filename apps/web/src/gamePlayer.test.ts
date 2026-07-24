@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { embedGameHtml } from './gamePlayer';
+import { embedGameHtml, withGameLocale } from './gamePlayer';
 
 describe('embedGameHtml', () => {
   it('injects the hide-chrome style and bridge script before </body>', () => {
@@ -21,5 +21,29 @@ describe('embedGameHtml', () => {
     expect(out.startsWith('<canvas id="game"></canvas>')).toBe(true);
     expect(out).toContain('<style id="gdpl-embed">');
     expect(out).toContain('<script>');
+  });
+});
+
+describe('withGameLocale', () => {
+  it('rewrites the assembled document <html lang> to the app locale', () => {
+    const html = '<!doctype html><html lang="en"><head></head><body></body></html>';
+    const out = withGameLocale(html, 'pl');
+    expect(out).toContain('<html lang="pl">');
+    expect(out).not.toContain('lang="en"');
+  });
+
+  it('maps regional/unknown languages down to the en/pl a game ships', () => {
+    const html = '<html lang="en"></html>';
+    expect(withGameLocale(html, 'pl-PL')).toContain('lang="pl"');
+    expect(withGameLocale(html, 'de')).toContain('lang="en"');
+    expect(withGameLocale(html, undefined)).toContain('lang="en"');
+  });
+
+  it('adds a lang attribute when the <html> tag has none', () => {
+    expect(withGameLocale('<html><body></body></html>', 'pl')).toContain('<html lang="pl">');
+  });
+
+  it('leaves fragments without an <html> tag untouched', () => {
+    expect(withGameLocale('<canvas></canvas>', 'pl')).toBe('<canvas></canvas>');
   });
 });
