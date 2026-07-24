@@ -5,8 +5,11 @@
 // here alongside the unsubscribe path, which is why the store already carries the
 // emailedAt column.
 
-import type { NotificationType, SubmissionRecord, Store } from './store.js';
+import { normalizeLocale, submissionNotificationMessage } from './email-templates.js';
+import type { Mailer } from './mailer.js';
+import type { NotificationType, StoredNotification, SubmissionRecord, Store } from './store.js';
 import type { SubmissionPublishedResponse, SubmissionStatus, SubmissionStatusResponse } from './submission-status.js';
+import { mintUnsubscribeToken } from './unsubscribe-token.js';
 
 const SHORT_TYPE: Record<NotificationType, string> = {
   'submission.building': 'building',
@@ -31,6 +34,42 @@ export function statusToEvent(status: SubmissionStatus): NotificationType | null
 export interface EmitDeps {
   store: Store;
   now?: () => number;
+  /** When set (with unsubscribeSecret), notifications also fan out to email. */
+  mailer?: Mailer;
+  /** Absolute origin used to build email links, e.g. https://www.gamedev.pl */
+  appBaseUrl?: string;
+  /** Secret for signing the one-click unsubscribe token. */
+  unsubscribeSecret?: string;
+  /** Optional logger for best-effort email failures (they're retried next sweep). */
+  logError?: (err: unknown, msg: string) => void;
+}
+
+/**
+ * Best-effort notification email. Skips silently when email isn't configured, the
+ * user has no address or has unsubscribed, or the notification was already emailed.
+ * A send failure leaves emailedAt null so the next sweep retries. Never throws.
+ */
+async function maybeSendEmail(deps: EmitDeps, uid: string, notification: StoredNotification): Promise<void> {
+  if (!deps.mailer || !deps.unsubscribeSecret) return;
+  if (notification.emailedAt) return;
+  try {
+    const user = await deps.store.getUser(uid);
+    if (!user?.email || user.emailUnsubscribedAt) return;
+
+    const appBaseUrl = deps.appBaseUrl ?? 'https://www.gamedev.pl';
+    const actionUrl = `${appBaseUrl}/${notification.link}`;
+    const unsubscribeUrl = `${appBaseUrl}/api/email/unsubscribe?token=${mintUnsubscribeToken(uid, deps.unsubscribeSecret)}`;
+    const message = submissionNotificationMessage(user.email, normalizeLocale(user.locale), notification.type, {
+      title: notification.params.title ?? '',
+      actionUrl,
+      unsubscribeUrl,
+    });
+
+    await deps.mailer.send(message);
+    await deps.store.markNotificationEmailed(uid, notification.id);
+  } catch (err) {
+    deps.logError?.(err, 'notification email send failed');
+  }
 }
 
 export interface SubmissionNotificationEvent {
@@ -62,7 +101,7 @@ export async function emitSubmissionNotification(
   const link =
     event.type === 'submission.published' && event.slug ? `#/play/${event.slug}` : `#/status/${event.statusToken}`;
 
-  const { created } = await deps.store.createNotification(event.uid, {
+  const { created, notification } = await deps.store.createNotification(event.uid, {
     id,
     type: event.type,
     createdAt: now,
@@ -71,6 +110,10 @@ export async function emitSubmissionNotification(
     params: { title: event.gameTitle },
     link,
   });
+
+  // Fan out to email (best effort, idempotent via emailedAt). Runs on a fresh
+  // notification and also retries one whose earlier send failed (emailedAt null).
+  await maybeSendEmail(deps, event.uid, notification);
 
   return { created };
 }

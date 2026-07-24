@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { InMemoryStore } from './store.js';
-import { emitSubmissionNotification, notifyOnTransition, statusToEvent } from './notify.js';
+import { ConsoleMailer, type EmailMessage, type Mailer } from './mailer.js';
+import { emitSubmissionNotification, notifyOnTransition, statusToEvent, type EmitDeps } from './notify.js';
 import type { SubmissionStatusResponse } from './submission-status.js';
 
 describe('InMemoryStore notifications', () => {
@@ -214,5 +215,76 @@ describe('notifyOnTransition', () => {
     expect((await notifyOnTransition({ store }, await record(), { status: 'queued' }, 'tok')).emitted).toBe(false);
     expect((await notifyOnTransition({ store }, await record(), { status: 'publishing' }, 'tok')).emitted).toBe(false);
     expect(await store.listNotifications('g:owner')).toEqual([]);
+  });
+});
+
+describe('emitSubmissionNotification email fan-out', () => {
+  let store: InMemoryStore;
+  let mailer: ConsoleMailer;
+  const emailDeps = (): EmitDeps => ({
+    store,
+    mailer,
+    appBaseUrl: 'https://www.gamedev.pl',
+    unsubscribeSecret: 'secret',
+  });
+  const event = {
+    uid: 'g:owner',
+    type: 'submission.published' as const,
+    issueNumber: 9,
+    gameTitle: 'Sky Dodge',
+    statusToken: 'tok',
+    slug: 'sky-dodge',
+  };
+
+  beforeEach(async () => {
+    store = new InMemoryStore();
+    mailer = new ConsoleMailer(() => {});
+    await store.upsertUser({ uid: 'g:owner', email: 'owner@example.com' });
+  });
+
+  it('sends an email and stamps emailedAt for a subscribed user', async () => {
+    await emitSubmissionNotification(emailDeps(), event);
+    expect(mailer.sent).toHaveLength(1);
+    expect(mailer.sent[0].to).toBe('owner@example.com');
+    expect(mailer.sent[0].headers?.['List-Unsubscribe']).toContain('/api/email/unsubscribe?token=');
+    const list = await store.listNotifications('g:owner');
+    expect(list[0].emailedAt).not.toBeNull();
+  });
+
+  it('does not re-send on a repeat emit (emailedAt set)', async () => {
+    await emitSubmissionNotification(emailDeps(), event);
+    await emitSubmissionNotification(emailDeps(), event);
+    expect(mailer.sent).toHaveLength(1);
+  });
+
+  it('skips email for an unsubscribed user', async () => {
+    await store.setEmailUnsubscribed('g:owner', new Date().toISOString());
+    await emitSubmissionNotification(emailDeps(), event);
+    expect(mailer.sent).toHaveLength(0);
+    // In-app notification is still created.
+    expect(await store.listNotifications('g:owner')).toHaveLength(1);
+  });
+
+  it('skips email when the user has no address', async () => {
+    await store.upsertUser({ uid: 'g:noemail' });
+    await emitSubmissionNotification(emailDeps(), { ...event, uid: 'g:noemail' });
+    expect(mailer.sent).toHaveLength(0);
+  });
+
+  it('does not send when no mailer/secret is configured (in-app only)', async () => {
+    await emitSubmissionNotification({ store }, event);
+    expect(await store.listNotifications('g:owner')).toHaveLength(1);
+  });
+
+  it('leaves emailedAt null and does not throw when the send fails (retryable)', async () => {
+    const throwing: Mailer = {
+      name: 'throwing',
+      send: async (_m: EmailMessage) => {
+        throw new Error('provider down');
+      },
+    };
+    await emitSubmissionNotification({ ...emailDeps(), mailer: throwing }, event);
+    const list = await store.listNotifications('g:owner');
+    expect(list[0].emailedAt).toBeNull();
   });
 });

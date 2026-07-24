@@ -6,6 +6,7 @@
 // notification mails described in docs/notifications-plan.md.
 
 import type { EmailMessage } from './mailer.js';
+import type { NotificationType } from './store.js';
 
 export type Locale = 'en' | 'pl';
 
@@ -103,4 +104,80 @@ export function betaInviteEmail(locale: Locale, params: BetaInviteParams): Rende
 export function betaInviteMessage(to: string, locale: Locale, params: BetaInviteParams): EmailMessage {
   const { subject, text, html } = betaInviteEmail(locale, params);
   return { to, subject, text, html };
+}
+
+// --- Notification emails (docs/notifications-plan.md M1.5) ---
+//
+// Unlike the one-off invite, these are subscription-like, so every one carries a
+// visible unsubscribe link plus a List-Unsubscribe header. Copy is intentionally
+// short; `title` is the sanitized game title.
+
+export interface NotificationEmailParams {
+  /** Sanitized game title. */
+  title: string;
+  /** Absolute URL to the relevant page (status or play). */
+  actionUrl: string;
+  /** Absolute one-click unsubscribe URL (signed token). */
+  unsubscribeUrl: string;
+}
+
+const notificationCopy: Record<NotificationType, Record<Locale, { subject: string; lead: string; cta: string }>> = {
+  'submission.published': {
+    en: { subject: 'Your game is live on gamedev.pl', lead: 'is published and ready to play.', cta: 'Play it' },
+    pl: {
+      subject: 'Twoja gra jest już dostępna na gamedev.pl',
+      lead: 'została opublikowana i można w nią zagrać.',
+      cta: 'Zagraj',
+    },
+  },
+  'submission.building': {
+    en: { subject: 'Your game is being built', lead: 'is being built right now.', cta: 'Follow along' },
+    pl: { subject: 'Twoja gra jest tworzona', lead: 'jest właśnie tworzona.', cta: 'Śledź postęp' },
+  },
+  'submission.needs_changes': {
+    en: { subject: 'Your gamedev.pl submission needs changes', lead: 'needs another look.', cta: 'See details' },
+    pl: { subject: 'Twoje zgłoszenie na gamedev.pl wymaga zmian', lead: 'wymaga poprawek.', cta: 'Zobacz szczegóły' },
+  },
+};
+
+const unsubscribeLine: Record<Locale, string> = {
+  en: 'You are receiving this because you submitted a game to gamedev.pl. Unsubscribe:',
+  pl: 'Otrzymujesz tę wiadomość, ponieważ zgłosiłeś grę na gamedev.pl. Wypisz się:',
+};
+
+export function submissionNotificationMessage(
+  to: string,
+  locale: Locale,
+  type: NotificationType,
+  params: NotificationEmailParams,
+): EmailMessage {
+  const copy = notificationCopy[type][locale];
+  const title = params.title;
+  const actionUrl = escapeHtml(params.actionUrl);
+  const unsub = escapeHtml(params.unsubscribeUrl);
+
+  const text = [
+    `“${title}” ${copy.lead}`,
+    '',
+    `${copy.cta}: ${params.actionUrl}`,
+    '',
+    `${unsubscribeLine[locale]} ${params.unsubscribeUrl}`,
+  ].join('\n');
+
+  const html = [
+    `<p>“${escapeHtml(title)}” ${escapeHtml(copy.lead)}</p>`,
+    `<p><a href="${actionUrl}">${escapeHtml(copy.cta)}</a></p>`,
+    `<p style="color:#888;font-size:12px">${escapeHtml(unsubscribeLine[locale])} <a href="${unsub}">${escapeHtml(
+      params.unsubscribeUrl,
+    )}</a></p>`,
+  ].join('\n');
+
+  return {
+    to,
+    subject: copy.subject,
+    text,
+    html,
+    // RFC 2369: lets mail clients surface a native unsubscribe control.
+    headers: { 'List-Unsubscribe': `<${params.unsubscribeUrl}>` },
+  };
 }
