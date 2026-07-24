@@ -7,7 +7,6 @@
 
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { createPusherFromEnv } from './pusher.js';
 import type { Store } from './store.js';
 
 // The client sends `subscription.toJSON()` verbatim. Validate the shape we depend
@@ -67,43 +66,5 @@ export async function registerPushRoutes(app: FastifyInstance, options: PushRout
     }
     await store.deletePushSubscription(request.user.uid, parsed.data.endpoint);
     return reply.send({ ok: true });
-  });
-
-  // Send a test push to the caller's OWN devices. Lets a user confirm the whole
-  // chain (server → push service → service worker → OS notification) right after
-  // opting in, and doubles as a self-serve health check. Sends only to the
-  // caller's subscriptions, and prunes any the push service reports gone.
-  app.post('/api/push/test', async (request, reply) => {
-    if (!request.user) {
-      return reply.status(401).send({ error: 'authentication required' });
-    }
-    const pusher = createPusherFromEnv();
-    if (!pusher) {
-      return reply.status(503).send({ error: 'push not configured' });
-    }
-    const subscriptions = await store.listPushSubscriptions(request.user.uid);
-    const appBaseUrl = process.env.APP_BASE_URL?.trim() || 'https://www.gamedev.pl';
-    const payload = {
-      title: 'gamedev.pl',
-      body: 'Push notifications are working 🎉',
-      url: `${appBaseUrl}/`,
-      // Unique per call so repeat tests always surface a fresh banner — a fixed tag
-      // would let Chrome coalesce the second test silently into the first.
-      tag: `push-test-${Date.now()}`,
-    };
-
-    let sent = 0;
-    let pruned = 0;
-    await Promise.all(
-      subscriptions.map(async (sub) => {
-        const result = await pusher.send({ endpoint: sub.endpoint, keys: sub.keys }, payload);
-        if (result.outcome === 'sent') sent += 1;
-        else if (result.outcome === 'gone') {
-          await store.deletePushSubscription(request.user!.uid, sub.endpoint).catch(() => {});
-          pruned += 1;
-        }
-      }),
-    );
-    return reply.send({ ok: true, subscriptions: subscriptions.length, sent, pruned });
   });
 }

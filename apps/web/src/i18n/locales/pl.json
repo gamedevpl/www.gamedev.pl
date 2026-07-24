@@ -3,10 +3,10 @@
     "aria": "Powiadomienia",
     "title": "Powiadomienia",
     "empty": "Nic tu jeszcze nie ma.",
+    "clear": "Wyczyść",
     "push": {
       "enable": "Włącz powiadomienia push",
       "on": "Powiadomienia push włączone",
-      "test": "Wyślij testowe",
       "blocked": "Powiadomienia push są zablokowane w ustawieniach przeglądarki."
     },
     "submission": {

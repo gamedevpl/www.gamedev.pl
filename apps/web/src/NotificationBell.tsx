@@ -2,12 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext';
 import {
+  clearReadNotifications,
   fetchNotifications,
   markNotificationsRead,
   type AppNotification,
   type NotificationType,
 } from './notificationsApi';
-import { pushUiState, sendTestPush, subscribeToPush, unsubscribeFromPush, type PushUiState } from './pushApi';
+import { pushUiState, subscribeToPush, unsubscribeFromPush, type PushUiState } from './pushApi';
 import './NotificationBell.css';
 
 const POLL_MS = 60_000;
@@ -66,16 +67,19 @@ export function NotificationBell() {
     };
   }, [user]);
 
-  const testPush = useCallback(async () => {
-    setPushBusy(true);
+  // "Clear" deletes read notifications. Opening the panel already marks all read,
+  // but await it here so nothing currently shown survives the delete; a brand-new
+  // unread one that arrives meanwhile is intentionally kept.
+  const clearRead = useCallback(async () => {
+    setItems([]);
     try {
-      await sendTestPush();
+      await markNotificationsRead('all');
+      await clearReadNotifications();
     } catch {
-      // Non-fatal — the OS notification either arrives or it doesn't.
-    } finally {
-      setPushBusy(false);
+      // Best-effort — refresh reconciles with the server either way.
     }
-  }, []);
+    void refresh();
+  }, [refresh]);
 
   const togglePush = useCallback(async () => {
     setPushBusy(true);
@@ -143,7 +147,14 @@ export function NotificationBell() {
 
       {open && (
         <div className="notif-panel" role="menu">
-          <div className="notif-panel-head">{t('notifications.title', { defaultValue: 'Notifications' })}</div>
+          <div className="notif-panel-head">
+            <span>{t('notifications.title', { defaultValue: 'Notifications' })}</span>
+            {items.length > 0 && (
+              <button type="button" className="notif-clear" onClick={() => void clearRead()}>
+                {t('notifications.clear', { defaultValue: 'Clear' })}
+              </button>
+            )}
+          </div>
           {items.length === 0 ? (
             <div className="notif-empty">{t('notifications.empty', { defaultValue: 'Nothing yet.' })}</div>
           ) : (
@@ -181,11 +192,6 @@ export function NotificationBell() {
                   {push.subscribed
                     ? t('notifications.push.on', { defaultValue: 'Push notifications on' })
                     : t('notifications.push.enable', { defaultValue: 'Enable push notifications' })}
-                </button>
-              )}
-              {push.subscribed && push.permission === 'granted' && (
-                <button type="button" className="notif-push-test" onClick={() => void testPush()} disabled={pushBusy}>
-                  {t('notifications.push.test', { defaultValue: 'Send a test' })}
                 </button>
               )}
             </div>

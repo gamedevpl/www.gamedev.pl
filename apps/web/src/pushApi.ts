@@ -124,17 +124,6 @@ export async function pushUiState(): Promise<PushUiState> {
   }
 }
 
-/**
- * Send a test push to the current user's own devices. Returns how many were
- * delivered so the UI can confirm (or report "no devices"). Throws on a non-OK
- * response so the caller can surface a failure.
- */
-export async function sendTestPush(): Promise<{ sent: number; subscriptions: number }> {
-  const res = await fetch(`${API_BASE}/api/push/test`, { method: 'POST', credentials: 'include' });
-  if (!res.ok) throw new Error(`push test failed (${res.status})`);
-  return (await res.json()) as { sent: number; subscriptions: number };
-}
-
 /** Opt out: drop the browser subscription and tell the server to forget it. */
 export async function unsubscribeFromPush(): Promise<void> {
   if (!isPushSupported()) return;

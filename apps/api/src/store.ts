@@ -120,6 +120,8 @@ export interface Store {
   ): Promise<{ created: boolean; notification: StoredNotification }>;
   listNotifications(uid: string, opts?: { limit?: number }): Promise<StoredNotification[]>;
   markNotificationsRead(uid: string, ids: string[] | 'all'): Promise<void>;
+  /** Delete all read notifications for a user (the bell's "Clear"); unread survive. */
+  deleteReadNotifications(uid: string): Promise<void>;
   /** Stamp emailedAt after a successful send so retries don't re-send. */
   markNotificationEmailed(uid: string, id: string, at?: string): Promise<void>;
   /** Upsert a browser push subscription (idempotent by endpoint). */
@@ -343,6 +345,14 @@ export class InMemoryStore implements Store {
     for (const id of targets) {
       const n = forUser.get(id);
       if (n && n.readAt === null) forUser.set(id, { ...n, readAt: now });
+    }
+  }
+
+  async deleteReadNotifications(uid: string): Promise<void> {
+    const forUser = this.notifications.get(uid);
+    if (!forUser) return;
+    for (const [id, n] of forUser) {
+      if (n.readAt !== null) forUser.delete(id);
     }
   }
 
@@ -622,6 +632,22 @@ export class FirestoreStore implements Store {
     const batch = this.db.batch();
     ids.forEach((id) => batch.set(col.doc(id), { readAt: now }, { merge: true }));
     await batch.commit();
+  }
+
+  async deleteReadNotifications(uid: string): Promise<void> {
+    // Small per-user collection: fetch and filter in code rather than lean on a
+    // `!= null` query (which excludes docs missing the field and can need an index).
+    const col = this.db.collection('users').doc(uid).collection('notifications');
+    const snap = await col.get();
+    const batch = this.db.batch();
+    let count = 0;
+    snap.docs.forEach((d) => {
+      if ((d.data() as StoredNotification).readAt != null) {
+        batch.delete(d.ref);
+        count += 1;
+      }
+    });
+    if (count > 0) await batch.commit();
   }
 
   async markNotificationEmailed(uid: string, id: string, at?: string): Promise<void> {

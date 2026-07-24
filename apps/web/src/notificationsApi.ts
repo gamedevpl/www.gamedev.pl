@@ -35,3 +35,8 @@ export async function markNotificationsRead(target: string[] | 'all'): Promise<v
     body: JSON.stringify(target === 'all' ? { all: true } : { ids: target }),
   });
 }
+
+/** Delete the caller's read notifications (the bell's "Clear"). Unread survive. */
+export async function clearReadNotifications(): Promise<void> {
+  await fetch(`${API_BASE}/api/notifications/clear`, { method: 'POST', credentials: 'include' });
+}
