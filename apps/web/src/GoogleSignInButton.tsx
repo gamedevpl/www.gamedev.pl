@@ -63,7 +63,7 @@ export function GoogleSignInButton({ onSuccess, onError }: GoogleSignInButtonPro
           await signInWithGoogleToken(response.credential);
           onSuccess?.();
         } catch (err) {
-          window.google?.accounts?.id?.disableAutoSelect();
+          window.google?.accounts?.id?.disableAutoSelect?.();
           const message = err instanceof Error ? err.message : 'Sign in failed';
           onError?.(message, response.credential);
         }
