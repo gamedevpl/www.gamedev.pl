@@ -486,7 +486,8 @@ ${gameJs}`;
           if (!title) {
             return null;
           }
-          const status = frontmatter.status ?? '';
+          const rawStatus = frontmatter.status ?? '';
+          const status = rawStatus === 'archived' || rawStatus === 'disabled' ? rawStatus : 'published';
           const mediaMetadata =
             status === 'published' ? await readRawFile(`games/${slug}/media/metadata.json`, ref) : null;
           return {
