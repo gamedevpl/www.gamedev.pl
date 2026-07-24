@@ -1,4 +1,5 @@
-import { transform } from 'esbuild';
+import path from 'node:path';
+import { build, transform } from 'esbuild';
 
 interface CreateIssueInput {
   title: string;
@@ -45,6 +46,8 @@ export interface GameSources {
 // Canonical order must match the games repo's tools/lib/assemble.ts — the two
 // lists are independent copies and a mismatch silently breaks bundling.
 const GAME_KIT_MODULES = ['input', 'collision', 'drawing', 'effects', 'audio', 'party'] as const;
+const MAX_GAME_MODULES = 64;
+const MAX_GAME_SOURCE_BYTES = 200 * 1024;
 
 interface GameManifest {
   engine?: { modules?: unknown };
@@ -251,6 +254,75 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
     return (await response.json()) as T;
   }
 
+  async function bundleGameTypeScript(entrySource: string, ref: string, slug: string): Promise<string> {
+    const gameRoot = `/games/${slug}`;
+    const loadedPaths = new Set([`${gameRoot}/game.ts`]);
+    let sourceBytes = Buffer.byteLength(entrySource, 'utf8');
+    if (sourceBytes > MAX_GAME_SOURCE_BYTES) {
+      throw new Error(`game TypeScript exceeds ${MAX_GAME_SOURCE_BYTES} bytes`);
+    }
+
+    const result = await build({
+      stdin: {
+        contents: entrySource,
+        loader: 'ts',
+        resolveDir: gameRoot,
+        sourcefile: `${gameRoot}/game.ts`,
+      },
+      bundle: true,
+      write: false,
+      platform: 'browser',
+      target: 'es2022',
+      format: 'iife',
+      legalComments: 'inline',
+      plugins: [
+        {
+          name: 'github-game-modules',
+          setup(builder) {
+            builder.onResolve({ filter: /^\./ }, (args) => {
+              const resolvedPath = path.posix.resolve(args.resolveDir, args.path);
+              if (!resolvedPath.startsWith(`${gameRoot}/`) || !resolvedPath.endsWith('.ts')) {
+                return {
+                  errors: [{ text: `game imports must be TypeScript files inside ${gameRoot}` }],
+                };
+              }
+              return { path: resolvedPath, namespace: 'github-game-source' };
+            });
+            builder.onResolve({ filter: /^[^.]/ }, (args) => ({
+              errors: [{ text: `game runtime dependency is forbidden: "${args.path}"` }],
+            }));
+            builder.onLoad({ filter: /.*/, namespace: 'github-game-source' }, async (args) => {
+              if (!loadedPaths.has(args.path)) {
+                if (loadedPaths.size >= MAX_GAME_MODULES) {
+                  return { errors: [{ text: `game exceeds ${MAX_GAME_MODULES} TypeScript modules` }] };
+                }
+                loadedPaths.add(args.path);
+              }
+              const source = await readRawFile(args.path.slice(1), ref);
+              if (source === null) {
+                return { errors: [{ text: `game module not found: ${args.path}` }] };
+              }
+              sourceBytes += Buffer.byteLength(source, 'utf8');
+              if (sourceBytes > MAX_GAME_SOURCE_BYTES) {
+                return { errors: [{ text: `game TypeScript exceeds ${MAX_GAME_SOURCE_BYTES} bytes` }] };
+              }
+              return {
+                contents: source,
+                loader: 'ts',
+                resolveDir: path.posix.dirname(args.path),
+              };
+            });
+          },
+        },
+      ],
+    });
+    const output = result.outputFiles?.[0];
+    if (!output) {
+      throw new Error('game TypeScript bundler produced no output');
+    }
+    return output.text;
+  }
+
   return {
     async createIssue(input) {
       const result = await requestJson<{ number: number }>(`https://api.github.com/repos/${repo}/issues`, {
@@ -434,7 +506,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
           ? `window.__GAME_AUDIO_ASSETS__ = Object.freeze(${JSON.stringify(Object.fromEntries(assetEntries))});\n`
           : '';
       const transpiledSources = await Promise.all(
-        [coreTs, ...availableModuleSources, gameTs].map(async (source) => {
+        [coreTs, ...availableModuleSources].map(async (source) => {
           const result = await transform(source, {
             loader: 'ts',
             target: 'es2022',
@@ -444,7 +516,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
           return result.code;
         }),
       );
-      const gameJs = transpiledSources.pop() ?? '';
+      const gameJs = await bundleGameTypeScript(gameTs, ref, slug);
       const bundledJs = `${assetsJs}${transpiledSources.join('\n')}
 Object.freeze(window.GameKit);
 ${gameJs}`;

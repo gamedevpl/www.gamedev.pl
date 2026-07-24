@@ -238,4 +238,63 @@ describe('getGameSources', () => {
     expect(sources?.gameJs).not.toContain('): void');
     expect(() => new Function(sources?.gameJs ?? '')).not.toThrow();
   });
+
+  it('bundles a game-local TypeScript module graph from GitHub', async () => {
+    const files = new Map<string, string | Uint8Array>([
+      ['games/modular/index.html', '<canvas id="game"></canvas>'],
+      ['games/modular/game.ts', "import { startGame } from './game/runtime.ts'; startGame();"],
+      [
+        'games/modular/game/runtime.ts',
+        "import type { Score } from './model.ts'; export function startGame(): void { const score: Score = { value: 3 }; GameKit.mount({ score }); }",
+      ],
+      ['games/modular/game/model.ts', 'export type Score = { value: number };'],
+      ['games/modular/style.css', '.game { color: gold; }'],
+      ['games/modular/SPEC.md', specMd({ title: 'Modular Game' })],
+      ['games/modular/GAME.json', JSON.stringify({ engine: { modules: [] } })],
+      ['shared/game-shell.css', '.shell { display: grid; }'],
+      ['shared/modules/core.ts', 'window.GameKit = { mount() {} };'],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const requestedPath = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+      const value = files.get(requestedPath);
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    const sources = await client.getGameSources('main', 'modular');
+
+    expect(sources?.title).toBe('Modular Game');
+    expect(sources?.gameJs).toContain('value: 3');
+    expect(sources?.gameJs).toContain('startGame()');
+    expect(sources?.gameJs).not.toContain('import ');
+    expect(sources?.gameJs).not.toContain('Score');
+    expect(() => new Function(sources?.gameJs ?? '')).not.toThrow();
+  });
+
+  it.each([
+    ["import '../other-game/runtime.ts';", 'game imports must be TypeScript files inside'],
+    ["import 'some-package';", 'game runtime dependency is forbidden'],
+  ])('rejects an unsafe game import: %s', async (entrySource, expectedError) => {
+    const files = new Map<string, string>([
+      ['games/unsafe/index.html', '<canvas id="game"></canvas>'],
+      ['games/unsafe/game.ts', entrySource],
+      ['games/unsafe/style.css', '.game {}'],
+      ['games/unsafe/SPEC.md', specMd({ title: 'Unsafe Game' })],
+      ['games/unsafe/GAME.json', JSON.stringify({ engine: { modules: [] } })],
+      ['shared/game-shell.css', '.shell {}'],
+      ['shared/modules/core.ts', 'window.GameKit = {};'],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const requestedPath = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+      const value = files.get(requestedPath);
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    await expect(client.getGameSources('main', 'unsafe')).rejects.toThrow(expectedError);
+  });
 });

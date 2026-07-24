@@ -16,7 +16,11 @@ games/
     GAME.json        ← shared-engine module selection
     CAPTURE.json     ← deterministic play, assertion, and capture scenario
     index.html
-    game.ts
+    game.ts          ← lean composition root
+    game/
+      model.ts
+      runtime.ts
+      render.ts      ← optional, for games with substantial rendering logic
     style.css
     media/
       opening.png
@@ -32,8 +36,10 @@ games/
     publish.yml             ← publish bundles for gamedev.pl to serve
 ```
 
-The games repository contains TypeScript executable sources only. Its build tooling and this
-app's GitHub client transpile those sources into dependency-free JavaScript before browser delivery.
+The games repository contains TypeScript executable sources only. Game-local modules may import
+other `.ts` files within their own game directory; package imports and cross-game imports are not
+allowed. Its build tooling and this app's GitHub client bundle those module graphs into
+dependency-free JavaScript before browser delivery.
 
 **Coding agents maintain that repo.** GitHub Copilot works on it autonomously — fixing
 problems, and bringing each game into line with its current spec. Claude Code / Codex / agy
