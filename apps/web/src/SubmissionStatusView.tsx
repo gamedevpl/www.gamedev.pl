@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameFrame } from './GameFrame';
 import { PublishedGameFrame } from './PublishedGameFrame';
+import { PixelIcon, type PixelIconName } from './PixelIcon';
 import {
   getSubmissionPreview,
   getSubmissionStatus,
@@ -25,13 +26,13 @@ function pollDelayMs(status: SubmissionStatus['status']): number | null {
   return ACTIVE_BUILD_STATUSES.has(status) ? ACTIVE_POLL_MS : IDLE_POLL_MS;
 }
 
-const STATUS_ICONS: Record<SubmissionStatus['status'], string> = {
-  queued: '🕓',
-  building: '🛠️',
-  in_review: '👀',
-  publishing: '🚀',
-  published: '🎉',
-  needs_changes: '✏️',
+const STATUS_ICONS: Record<SubmissionStatus['status'], PixelIconName> = {
+  queued: 'clock',
+  building: 'wrench',
+  in_review: 'eye',
+  publishing: 'rocket',
+  published: 'star',
+  needs_changes: 'pencil',
 };
 
 // The linear happy path the timeline visualizes. needs_changes branches off it,
@@ -90,7 +91,7 @@ function StatusTimeline({ current }: { current: SubmissionStatus['status'] }) {
         return (
           <li key={step} className={`status-timeline-step status-timeline-${stepState}`}>
             <span className="status-timeline-dot" aria-hidden="true">
-              {stepState === 'done' ? '✓' : STATUS_ICONS[step]}
+              <PixelIcon name={stepState === 'done' ? 'check' : STATUS_ICONS[step]} size={13} />
             </span>
             <span className="status-timeline-label">{t(`statusView.states.${step}.label`)}</span>
           </li>
@@ -375,7 +376,10 @@ function BuildProgressPanel({ progress }: { progress: BuildProgress }) {
           <ul>
             {progress.checklist.map((item, index) => (
               <li key={index} className={item.checked ? 'checklist-done' : 'checklist-pending'}>
-                <span aria-hidden="true">{item.checked ? '✅' : '⬜'}</span> {item.text}
+                <span aria-hidden="true">
+                  <PixelIcon name={item.checked ? 'check' : 'checkbox'} size={12} />
+                </span>{' '}
+                {item.text}
               </li>
             ))}
           </ul>

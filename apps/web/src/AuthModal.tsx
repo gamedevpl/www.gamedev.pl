@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GoogleSignInButton } from './GoogleSignInButton';
+import { PixelIcon } from './PixelIcon';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -23,7 +24,9 @@ export function AuthModal({ isOpen, onClose, title, subtitle }: AuthModalProps) 
         </button>
 
         <div className="auth-modal-header">
-          <h2>🔒 {title ?? t('auth.authWallTitle')}</h2>
+          <h2>
+            <PixelIcon name="lock" size={18} /> {title ?? t('auth.authWallTitle')}
+          </h2>
           <p>{subtitle ?? t('auth.authWallSubtitle')}</p>
         </div>
 

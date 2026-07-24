@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { PixelIcon } from './PixelIcon';
 
 export interface QAOption {
   label: string;
@@ -71,7 +72,7 @@ export function CreatorQA({ questions, initialConcept, onSubmitWithConcept, onCa
 
       <div className="qa-actions qa-actions--top">
         <button type="button" className="btn btn-primary btn-create-now" onClick={handleSubmit}>
-          🚀 {t('qa.createNow')}
+          <PixelIcon name="rocket" size={14} /> {t('qa.createNow')}
         </button>
         {onCancel && (
           <button type="button" className="btn btn-secondary" onClick={onCancel}>
@@ -130,7 +131,7 @@ export function CreatorQA({ questions, initialConcept, onSubmitWithConcept, onCa
 
       <div className="qa-actions qa-actions--bottom">
         <button type="button" className="btn btn-primary btn-create-now" onClick={handleSubmit}>
-          🚀 {t('qa.createNow')}
+          <PixelIcon name="rocket" size={14} /> {t('qa.createNow')}
         </button>
       </div>
     </div>

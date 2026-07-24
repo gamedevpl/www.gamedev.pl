@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import githubIcon from './assets/github-mark-white.svg';
+import { PixelIcon } from './PixelIcon';
 
 export function TransparencySection() {
   const { t } = useTranslation();
@@ -7,13 +8,17 @@ export function TransparencySection() {
   return (
     <details id="transparency" className="panel transparency-accordion">
       <summary className="section-header transparency-summary">
-        <h2 className="section-title">📡 {t('transparency.title')}</h2>
+        <h2 className="section-title">
+          <PixelIcon name="signal" size={18} /> {t('transparency.title')}
+        </h2>
         <span className="summary-hint">{t('transparency.subtitle')}</span>
       </summary>
 
       <div className="transparency-grid">
         <div className="transparency-card activity-feed">
-          <h3>📡 {t('transparency.liveActivityTitle')}</h3>
+          <h3>
+            <PixelIcon name="signal" size={16} /> {t('transparency.liveActivityTitle')}
+          </h3>
           <ul className="activity-list">
             <li>
               <span className="time-badge">10m ago</span>
@@ -31,12 +36,16 @@ export function TransparencySection() {
         </div>
 
         <div className="transparency-card security-card">
-          <h3>🔒 {t('transparency.securityTitle')}</h3>
+          <h3>
+            <PixelIcon name="lock" size={16} /> {t('transparency.securityTitle')}
+          </h3>
           <p>{t('transparency.securityBody')}</p>
         </div>
 
         <div className="transparency-card open-source-card">
-          <h3>🌐 {t('transparency.openSourceTitle')}</h3>
+          <h3>
+            <PixelIcon name="globe" size={16} /> {t('transparency.openSourceTitle')}
+          </h3>
           <p>{t('transparency.openSourceBody')}</p>
           <a
             href="https://github.com/gamedevpl/www.gamedev.pl"

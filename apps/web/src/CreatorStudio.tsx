@@ -4,6 +4,7 @@ import type { SavedSpec } from './mySpecs';
 
 import { CreatorQA, type QAQuestion } from './CreatorQA';
 import { refineSpec } from './submissionApi';
+import { PixelIcon } from './PixelIcon';
 
 type CreatorStudioProps = {
   savedSpecs: SavedSpec[];
@@ -96,7 +97,9 @@ export function CreatorStudio({
   return (
     <section id="studio" className="panel studio-panel">
       <div className="section-header">
-        <h2 className="section-title">⚡ {t('studio.title')}</h2>
+        <h2 className="section-title">
+          <PixelIcon name="bolt" size={18} /> {t('studio.title')}
+        </h2>
         <div className="studio-tabs">
           <button
             className={`tab-btn ${activeTab === 'greenfield' ? 'active' : ''}`}
@@ -178,7 +181,13 @@ export function CreatorStudio({
                   submissionStatus === 'loading' || refineStatus === 'loading' || !title.trim() || !concept.trim()
                 }
               >
-                {refineStatus === 'loading' ? t('qa.analyzing') : `✨ ${t('qa.title')}`}
+                {refineStatus === 'loading' ? (
+                  t('qa.analyzing')
+                ) : (
+                  <>
+                    <PixelIcon name="sparkle" size={14} /> {t('qa.title')}
+                  </>
+                )}
               </button>
             </div>
           </form>
@@ -275,7 +284,7 @@ export function CreatorStudio({
                       <p className="spec-date">{new Date(spec.createdAt).toLocaleDateString()}</p>
                     </div>
                     <button className="primary-btn" onClick={() => onTrackToken(spec.token)}>
-                      🔍 Track Status
+                      <PixelIcon name="search" size={14} /> Track Status
                     </button>
                   </div>
                 ))}

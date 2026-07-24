@@ -54,7 +54,7 @@
     "generatedFrom": "Generated from your idea: \"{{prompt}}\""
   },
   "catalog": {
-    "title": "Arcade & Playable Games",
+    "title": "Games",
     "subtitle": "Discover and play open source games built by AI agents.",
     "loading": "Loading games…",
     "gameLoading": "Loading game…",

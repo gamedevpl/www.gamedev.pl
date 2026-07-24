@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { PixelIcon } from './PixelIcon';
 
 type SketchModalProps = {
   isOpen: boolean;
@@ -158,11 +159,13 @@ export function SketchModal({ isOpen, onClose, onSaveSketch }: SketchModalProps)
       <div className="sketch-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="sketch-modal-header">
           <div>
-            <h3 className="sketch-modal-title">🎨 {t('sketch.title')}</h3>
+            <h3 className="sketch-modal-title">
+              <PixelIcon name="palette" size={18} /> {t('sketch.title')}
+            </h3>
             <p className="sketch-modal-subtitle">{t('sketch.subtitle')}</p>
           </div>
           <button className="close-btn" onClick={onClose} aria-label="Close">
-            ✕
+            <PixelIcon name="close" size={16} />
           </button>
         </div>
 
@@ -189,10 +192,10 @@ export function SketchModal({ isOpen, onClose, onSaveSketch }: SketchModalProps)
               className={`tool-btn ${!isEraser ? 'active' : ''}`}
               onClick={() => setIsEraser(false)}
             >
-              ✏️ {t('sketch.pencil')}
+              <PixelIcon name="pencil" size={14} /> {t('sketch.pencil')}
             </button>
             <button type="button" className={`tool-btn ${isEraser ? 'active' : ''}`} onClick={() => setIsEraser(true)}>
-              🧹 {t('sketch.eraser')}
+              <PixelIcon name="eraser" size={14} /> {t('sketch.eraser')}
             </button>
           </div>
 
@@ -227,10 +230,10 @@ export function SketchModal({ isOpen, onClose, onSaveSketch }: SketchModalProps)
 
           <div className="tool-group action-group">
             <button type="button" className="action-btn" onClick={handleUndo} disabled={history.length <= 1}>
-              ↩ {t('sketch.undo')}
+              <PixelIcon name="undo" size={14} /> {t('sketch.undo')}
             </button>
             <button type="button" className="action-btn danger" onClick={handleClear}>
-              🗑️ {t('sketch.clear')}
+              <PixelIcon name="trash" size={14} /> {t('sketch.clear')}
             </button>
           </div>
         </div>
@@ -240,7 +243,7 @@ export function SketchModal({ isOpen, onClose, onSaveSketch }: SketchModalProps)
             {t('sketch.cancel')}
           </button>
           <button type="button" className="primary-btn attach-btn" onClick={handleAttach}>
-            ✨ {t('sketch.attach')}
+            <PixelIcon name="sparkle" size={14} /> {t('sketch.attach')}
           </button>
         </div>
       </div>
