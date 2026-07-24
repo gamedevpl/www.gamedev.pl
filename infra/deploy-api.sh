@@ -26,6 +26,8 @@
 #   BETA_ALLOWED_EMAILS=...    (comma-separated verified email addresses)
 #   MAIL_FROM=...              (RFC 5322 sender; defaults to noreply@mail.gamedev.pl)
 #   INVITE_URL=...             (where invitees land; defaults to https://www.gamedev.pl)
+#   NOTIFY_SWEEP_AUDIENCE=...  (sweep endpoint URL; enables OIDC auth on /api/internal/notify-sweep)
+#   NOTIFY_SWEEP_SA=...        (Cloud Scheduler SA email allowed to call the sweep)
 #
 # Then run:
 #   PROJECT_ID=my-proj ./infra/deploy-api.sh
@@ -49,6 +51,8 @@ BETA_ALLOWED_UIDS="${BETA_ALLOWED_UIDS:-}"
 BETA_ALLOWED_EMAILS="${BETA_ALLOWED_EMAILS:-}"
 MAIL_FROM="${MAIL_FROM:-}"
 INVITE_URL="${INVITE_URL:-}"
+NOTIFY_SWEEP_AUDIENCE="${NOTIFY_SWEEP_AUDIENCE:-}"
+NOTIFY_SWEEP_SA="${NOTIFY_SWEEP_SA:-}"
 
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/app:$(date +%Y%m%d-%H%M%S)"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -118,6 +122,12 @@ if [ -n "$MAIL_FROM" ]; then
 fi
 if [ -n "$INVITE_URL" ]; then
   ENV_VARS="${ENV_VARS}|INVITE_URL=${INVITE_URL}"
+fi
+if [ -n "$NOTIFY_SWEEP_AUDIENCE" ]; then
+  ENV_VARS="${ENV_VARS}|NOTIFY_SWEEP_AUDIENCE=${NOTIFY_SWEEP_AUDIENCE}"
+fi
+if [ -n "$NOTIFY_SWEEP_SA" ]; then
+  ENV_VARS="${ENV_VARS}|NOTIFY_SWEEP_SA=${NOTIFY_SWEEP_SA}"
 fi
 
 echo "==> Deploying to Cloud Run (scale-to-zero)"

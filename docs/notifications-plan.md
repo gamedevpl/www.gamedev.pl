@@ -1,10 +1,39 @@
 # Notifications: design & phased plan
 
-> Status: **proposed** (2026-07-23); owner decisions already folded in: email promoted to
+> Status: **M0 + M1 built** (2026-07-24). Owner decisions folded in: email promoted to
 > M1.5, provider = Resend (N4/N4b). Goal: tell players and creators when something they
 > care about happens — game generation completed, a game they follow got an update — without
 > forcing them to keep a tab open and poll. Builds on the M1 auth stack (Google sign-in,
 > Firestore, sessions) from [`auth-and-usage-plan.md`](./auth-and-usage-plan.md).
+>
+> **Built so far:** `submission-status.ts` (extracted `deriveStatus`), notification storage
+> on the `Store`, `notify.ts` (`emitSubmissionNotification` + `notifyOnTransition`),
+> opportunistic poll-path detection in the status route, the OIDC-gated sweep endpoint
+> `POST /api/internal/notify-sweep` (`internal-auth.ts`), the `GET/POST /api/notifications`
+> read API, and the in-app `NotificationBell`. **Remaining:** the Cloud Scheduler job that
+> calls the sweep (owner step, below), en/pl locale keys for the notification strings (the
+> bell renders English fallbacks until then), and M1.5 email (ships with its unsubscribe
+> endpoint — the `emailedAt` column and `notify.ts` seam are already in place).
+>
+> **Cloud Scheduler setup (owner-run, after a deploy).** The sweep endpoint stays closed
+> (deny-all) until `NOTIFY_SWEEP_AUDIENCE` + `NOTIFY_SWEEP_SA` are set on the service and a
+> scheduler job posts to it with an OIDC token. Region-sensitive — the service runs in
+> `europe-west1`:
+>
+> ```bash
+> SWEEP_URL="$(gcloud run services describe gamedev-app --region europe-west1 \
+>   --project gamedevpl --format 'value(status.url)')/api/internal/notify-sweep"
+> SA=notify-sweep@gamedevpl.iam.gserviceaccount.com
+> gcloud iam service-accounts create notify-sweep --project gamedevpl || true
+> # Redeploy with NOTIFY_SWEEP_AUDIENCE="$SWEEP_URL" NOTIFY_SWEEP_SA="$SA" set, then:
+> gcloud scheduler jobs create http notify-sweep --location europe-west1 --project gamedevpl \
+>   --schedule '*/2 * * * *' --uri "$SWEEP_URL" --http-method POST \
+>   --oidc-service-account-email "$SA" --oidc-token-audience "$SWEEP_URL"
+> ```
+>
+> The endpoint no-ops fast when no submissions are open, so the 2-minute cadence keeps
+> scale-to-zero economics. Until the job exists, the poll-path detection already delivers
+> notifications whenever a creator views their status page.
 
 ## Problem
 
