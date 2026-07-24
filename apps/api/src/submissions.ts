@@ -14,12 +14,14 @@ import { createDefaultContentChecker, type ContentChecker } from './moderation.j
 import { notifyOnTransition, type EmitDeps } from './notify.js';
 import { type Store } from './store.js';
 import {
+  CREATOR_FEEDBACK_MARKER,
   deriveStatus,
   extractSlugFromChangedFiles,
   sanitizeCreatorText,
   type SubmissionStatusResponse,
 } from './submission-status.js';
 import { InvalidTokenError, mintToken, verifyToken } from './submission-token.js';
+import { createTranslatorFromEnv, normalizeLocale, type Translator } from './translate.js';
 
 const CreateSubmissionRequestSchema = z.object({
   title: z.string().trim().min(3, 'title must be at least 3 characters').max(80, 'title must be at most 80 characters'),
@@ -31,9 +33,9 @@ const CreateSubmissionRequestSchema = z.object({
   displayName: z.string().trim().max(40, 'display name must be at most 40 characters').optional(),
 });
 
-// Marker the games-repo relay workflow matches on. Kept out of the rendered comment as
-// an HTML comment so creators never see it.
-export const CREATOR_FEEDBACK_MARKER = '<!-- gamedevpl:creator-feedback -->';
+// Re-exported for callers (and tests) that knew it here; it now lives with the status
+// parser, which reads the same marker back off the PR to rebuild the revision history.
+export { CREATOR_FEEDBACK_MARKER };
 
 const FeedbackRequestSchema = z.object({
   feedback: z
@@ -66,6 +68,8 @@ export interface SubmissionRoutesOptions {
   notifyAppBaseUrl?: string;
   /** Secret for signing unsubscribe tokens; defaults to SESSION_SECRET. */
   unsubscribeSecret?: string;
+  /** Localizes the agent's English build log; defaults to createTranslatorFromEnv(). */
+  translator?: Translator;
 }
 
 function checkUserAccess(request: FastifyRequest, reply: FastifyReply): boolean {
@@ -144,7 +148,10 @@ export async function registerSubmissionRoutes(
   const statusRateLimitWindowMs = 60 * 1000;
   const maxStatusChecksPerWindow = 120;
   const statusChecksByIp = new Map<string, number[]>();
-  const statusCache = new Map<number, CachedStatus>();
+  // Keyed by `${issueNumber}:${locale}` — the response body is localized, so two
+  // languages must not share an entry.
+  const statusCache = new Map<string, CachedStatus>();
+  const translator = options.translator ?? createTranslatorFromEnv();
 
   // Previews are heavier (several GitHub reads + assembly) and never cached — a
   // fresh preview must reflect the branch's latest commit — so cap them per IP.
@@ -262,6 +269,20 @@ export async function registerSubmissionRoutes(
       '```text',
       sanitizedConcept,
       '```',
+      '',
+      // The creator watches this build live on www.gamedev.pl: the PR checklist and
+      // commit subjects ARE the progress UI. Slow, code-flavoured updates are the
+      // top complaint about the wait, so ask for the cadence and wording we need.
+      '## Progress reporting',
+      '',
+      'The creator watches this build in real time on www.gamedev.pl — your PR body checklist and',
+      'your commit subjects are the only thing they see. So:',
+      '',
+      '- Open the pull request as a draft early, before the game is playable.',
+      '- Put a task checklist (`- [ ]` / `- [x]`) in the PR body and tick items off as you finish them.',
+      '- Commit in small steps rather than one big push, so the log keeps moving.',
+      '- Write commit subjects in plain language about the game, not the code',
+      '  (“add a boost pad on lap two”, not “refactor track module”).',
     ].join('\n');
 
     try {
@@ -283,12 +304,69 @@ export async function registerSubmissionRoutes(
     }
   });
 
+  // The agent's build log is English; a creator reading the site in another language
+  // gets it translated (cached per line, fail-open to the original text).
+  async function localizeStatus(status: SubmissionStatusResponse, locale: string): Promise<SubmissionStatusResponse> {
+    if (locale === 'en' || !status.progress) {
+      return status;
+    }
+
+    const { commits, checklist } = status.progress;
+    const sources = [...commits.map((commit) => commit.message), ...checklist.map((item) => item.text)];
+    if (sources.length === 0) {
+      return status;
+    }
+
+    const translated = await translator.translate(sources, locale);
+    return {
+      ...status,
+      progress: {
+        ...status.progress,
+        commits: commits.map((commit, index) => ({ ...commit, message: translated[index] ?? commit.message })),
+        checklist: checklist.map((item, index) => ({
+          ...item,
+          text: translated[commits.length + index] ?? item.text,
+        })),
+      },
+    };
+  }
+
+  // The creator's own submissions, newest first. Ownership lives in Firestore (never
+  // in GitHub), so this is the only way to answer "what was I building?" — and it's
+  // what frees a creator from having to save the tracking link. Tokens are re-minted
+  // from the issue number, so a fresh device recovers full access to its own games.
+  // Deliberately GitHub-free: it must stay fast enough to render on the home page.
+  app.get('/api/submissions/mine', async (request, reply) => {
+    if (!submissionTokenSecret) {
+      return reply.status(503).send({ error: 'submissions are not configured' });
+    }
+    if (!checkUserAccess(request, reply)) {
+      return;
+    }
+    if (!store) {
+      return reply.send({ submissions: [] });
+    }
+
+    const records = await store.listSubmissionsByOwner(request.user!.uid, { limit: 12 });
+    return reply.send({
+      submissions: records.map((record) => ({
+        token: mintToken(record.issueNumber, submissionTokenSecret),
+        title: record.title,
+        createdAt: record.createdAt,
+        // Last status we notified on — a cheap hint so the rail can render before
+        // the live per-game status polls come back.
+        lastKnownStatus: record.lastNotifiedStatus ?? null,
+      })),
+    });
+  });
+
   app.get('/api/submissions/:token', async (request, reply) => {
     if (!githubClient || !submissionTokenSecret) {
       return reply.status(503).send({ error: 'submissions are not configured' });
     }
 
     const token = z.string().parse((request.params as { token?: string }).token);
+    const locale = normalizeLocale((request.query as { locale?: string } | undefined)?.locale);
     const currentTime = now();
     if (isRateLimited(statusChecksByIp, request.ip, currentTime, maxStatusChecksPerWindow, statusRateLimitWindowMs)) {
       return reply.status(429).send({ error: 'too many status checks, please try again later' });
@@ -304,14 +382,16 @@ export async function registerSubmissionRoutes(
       throw error;
     }
 
-    const cached = statusCache.get(issueNumber);
+    const cacheKey = `${issueNumber}:${locale}`;
+    const cached = statusCache.get(cacheKey);
     if (cached && cached.expiresAt > currentTime) {
       return reply.send(cached.value);
     }
 
     try {
-      const status = await deriveSubmissionStatus(githubClient, issueNumber);
-      statusCache.set(issueNumber, { value: status, expiresAt: currentTime + 60_000 });
+      const derived = await deriveSubmissionStatus(githubClient, issueNumber);
+      const status = await localizeStatus(derived, locale);
+      statusCache.set(cacheKey, { value: status, expiresAt: currentTime + 60_000 });
 
       // Opportunistic detection (docs/notifications-plan.md N1): a poll that
       // observes a transition emits the owner's notification inline, so it lands

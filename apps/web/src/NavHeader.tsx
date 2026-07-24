@@ -86,8 +86,8 @@ export function NavHeader({ activeSpecsCount, onNavigate }: NavHeaderProps) {
               <button className="nav-link" onClick={() => handleNavClick('arcade')}>
                 <PixelIcon name="gamepad" size={14} /> {t('header.navArcade')}
               </button>
-              <button className="nav-link" onClick={() => handleNavClick('studio')}>
-                <PixelIcon name="folder" size={14} /> {t('header.navStudio')}
+              <button className="nav-link" onClick={() => handleNavClick('my-games')}>
+                <PixelIcon name="folder" size={14} /> {t('header.navMyGames')}
                 {activeSpecsCount > 0 && <span className="specs-count-badge">{activeSpecsCount}</span>}
               </button>
             </nav>

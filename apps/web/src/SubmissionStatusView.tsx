@@ -12,6 +12,7 @@ import {
   type SubmissionStatus,
 } from './submissionApi';
 import { statusHash } from './router';
+import { formatDuration, formatRelativeTime } from './relativeTime';
 
 const TERMINAL_STATUSES = new Set<SubmissionStatus['status']>(['published', 'needs_changes']);
 // The agent is actively working during these — poll tightly so progress feels live.
@@ -38,17 +39,6 @@ const STATUS_ICONS: Record<SubmissionStatus['status'], PixelIconName> = {
 // The linear happy path the timeline visualizes. needs_changes branches off it,
 // so it's handled as a separate "halted" state rather than a timeline position.
 const TIMELINE_STEPS: SubmissionStatus['status'][] = ['queued', 'building', 'in_review', 'publishing', 'published'];
-
-/** "4s" / "2m 14s" / "1h 03m" — compact, and it keeps ticking so the page feels alive. */
-function formatDuration(ms: number): string {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  if (hours > 0) return `${hours}h ${String(minutes).padStart(2, '0')}m`;
-  if (minutes > 0) return `${minutes}m ${String(seconds).padStart(2, '0')}s`;
-  return `${seconds}s`;
-}
 
 /**
  * Ticking "in progress for 2m 14s" readout. The submission time only exists in
@@ -101,6 +91,9 @@ function StatusTimeline({ current }: { current: SubmissionStatus['status'] }) {
   );
 }
 
+/** A change request sent from this tab, echoed locally until the API returns it. */
+type PendingRevision = { text: string; at: number };
+
 type SubmissionStatusViewProps = {
   token: string;
   submittedTitle?: string;
@@ -116,8 +109,9 @@ export function SubmissionStatusView({
   submittedAt,
   trackingUrl,
 }: SubmissionStatusViewProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [status, setStatus] = useState<SubmissionStatus | null>(null);
+  const [pendingRevisions, setPendingRevisions] = useState<PendingRevision[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isInvalidToken, setIsInvalidToken] = useState(false);
@@ -148,6 +142,7 @@ export function SubmissionStatusView({
     let timeoutId: number | undefined;
 
     setStatus(null);
+    setPendingRevisions([]);
     setLoading(true);
     setErrorMessage(null);
     setIsInvalidToken(false);
@@ -177,7 +172,7 @@ export function SubmissionStatusView({
 
     const poll = async () => {
       try {
-        const nextStatus = await getSubmissionStatus(token);
+        const nextStatus = await getSubmissionStatus(token, i18n.language);
         if (cancelled) return;
 
         setStatus(nextStatus);
@@ -209,7 +204,8 @@ export function SubmissionStatusView({
       cancelled = true;
       stopPolling();
     };
-  }, [t, token]);
+    // i18n.language is a dependency because the API localizes the build log for us.
+  }, [i18n.language, t, token]);
 
   const publishedGameTitle = submittedTitle ?? status?.slug ?? t('statusView.publishedGameTitle');
 
@@ -346,10 +342,15 @@ export function SubmissionStatusView({
               </p>
             ) : null}
 
-            {status.progress ? <BuildProgressPanel progress={status.progress} /> : null}
+            {status.progress ? (
+              <BuildProgressPanel progress={status.progress} pendingRevisions={pendingRevisions} />
+            ) : null}
 
             {(preview || status.status === 'needs_changes') && status.status !== 'published' ? (
-              <FeedbackPanel token={token} />
+              <FeedbackPanel
+                token={token}
+                onSent={(text) => setPendingRevisions((current) => [...current, { text, at: Date.now() }])}
+              />
             ) : null}
 
             {previewError && !preview ? <p className="error">{previewError}</p> : null}
@@ -423,7 +424,7 @@ function PlayCard({
  * comments it onto the open PR so the agent iterates. Shown while the game is still
  * in progress (or needs changes) — a published game can't be revised here.
  */
-function FeedbackPanel({ token }: { token: string }) {
+function FeedbackPanel({ token, onSent }: { token: string; onSent: (text: string) => void }) {
   const { t } = useTranslation();
   const [text, setText] = useState('');
   const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle');
@@ -439,6 +440,9 @@ function FeedbackPanel({ token }: { token: string }) {
       await submitFeedback(token, trimmed);
       setState('sent');
       setText('');
+      // Echo it into the activity feed straight away: the API only sees it once the
+      // comment round-trips through GitHub, which is a poll or two away.
+      onSent(trimmed);
     } catch (err) {
       const message = err instanceof Error ? err.message : '';
       if (message === 'content_rejected') {
@@ -488,16 +492,70 @@ function FeedbackPanel({ token }: { token: string }) {
   );
 }
 
-function BuildProgressPanel({ progress }: { progress: BuildProgress }) {
-  const { t } = useTranslation();
-  if (progress.checklist.length === 0 && progress.commits.length === 0) {
+/**
+ * One entry in the build story. Agent commits and the creator's own change requests
+ * are interleaved on a single timeline: a creator needs to see that what they asked
+ * for went in, and *when* — a bare list of commit subjects reads as an unmoving wall.
+ */
+/** After this much silence from the agent, the page explains the gap. */
+const QUIET_BUILD_MS = 15 * 60_000;
+
+type ActivityEntry = {
+  kind: 'commit' | 'revision';
+  text: string;
+  at: number;
+  /** Sent from this tab but not yet echoed back by the API. */
+  pending?: boolean;
+};
+
+function buildActivityFeed(progress: BuildProgress, pendingRevisions: PendingRevision[]): ActivityEntry[] {
+  const entries: ActivityEntry[] = [
+    ...progress.commits.map((commit) => ({
+      kind: 'commit' as const,
+      text: commit.message,
+      at: Date.parse(commit.committedDate),
+    })),
+    ...(progress.revisions ?? []).map((revision) => ({
+      kind: 'revision' as const,
+      text: revision.text,
+      at: Date.parse(revision.createdAt),
+    })),
+  ];
+
+  // A revision the API has already echoed back must not appear twice.
+  const known = new Set((progress.revisions ?? []).map((revision) => revision.text));
+  for (const pending of pendingRevisions) {
+    if (!known.has(pending.text)) {
+      entries.push({ kind: 'revision', text: pending.text, at: pending.at, pending: true });
+    }
+  }
+
+  // Newest first — that's what makes the build feel live.
+  return entries.filter((entry) => Number.isFinite(entry.at)).sort((a, b) => b.at - a.at);
+}
+
+function BuildProgressPanel({
+  progress,
+  pendingRevisions,
+}: {
+  progress: BuildProgress;
+  pendingRevisions: PendingRevision[];
+}) {
+  const { t, i18n } = useTranslation();
+  const activity = buildActivityFeed(progress, pendingRevisions);
+
+  if (progress.checklist.length === 0 && activity.length === 0) {
     return null;
   }
 
-  // Newest activity first — that's what makes the build feel "live".
-  const recentCommits = [...progress.commits].reverse();
   const doneCount = progress.checklist.filter((item) => item.checked).length;
   const donePercent = progress.checklist.length === 0 ? 0 : (doneCount / progress.checklist.length) * 100;
+  // The first unfinished task is the honest answer to "what is it doing right now?".
+  const currentStep = progress.checklist.find((item) => !item.checked);
+  const lastUpdate = activity[0];
+  // A long gap between pushes is normal, but silence with no explanation reads as
+  // "it's broken" — say so plainly instead of letting the creator guess.
+  const isQuiet = lastUpdate !== undefined && Date.now() - lastUpdate.at > QUIET_BUILD_MS;
 
   return (
     <div className="build-progress">
@@ -518,6 +576,12 @@ function BuildProgressPanel({ progress }: { progress: BuildProgress }) {
           >
             <div className="build-progress-bar-fill" style={{ width: `${donePercent}%` }} />
           </div>
+          {currentStep ? (
+            <p className="build-progress-current">
+              <span className="build-progress-current-spinner" aria-hidden="true" />
+              {t('statusView.progress.currentStep', { step: currentStep.text })}
+            </p>
+          ) : null}
           <ul>
             {progress.checklist.map((item, index) => (
               <li key={index} className={item.checked ? 'checklist-done' : 'checklist-pending'}>
@@ -531,13 +595,41 @@ function BuildProgressPanel({ progress }: { progress: BuildProgress }) {
         </div>
       ) : null}
 
-      {recentCommits.length > 0 ? (
+      {activity.length > 0 ? (
         <div className="build-progress-commits">
-          <h3 className="build-progress-heading">{t('statusView.progress.commitsTitle')}</h3>
-          <ul>
-            {recentCommits.map((commit, index) => (
-              <li key={index} className={index === 0 ? 'build-progress-commit-latest' : undefined}>
-                {commit.message}
+          <div className="build-progress-heading-row">
+            <h3 className="build-progress-heading">{t('statusView.progress.activityTitle')}</h3>
+            {lastUpdate ? (
+              <span className="build-progress-count">
+                {t('statusView.progress.lastUpdate', {
+                  time: formatRelativeTime(lastUpdate.at, i18n.language),
+                })}
+              </span>
+            ) : null}
+          </div>
+          {isQuiet ? <p className="build-progress-quiet">{t('statusView.progress.quietHint')}</p> : null}
+          <ul className="build-activity-list">
+            {activity.map((entry, index) => (
+              <li
+                key={`${entry.kind}-${entry.at}-${index}`}
+                className={`build-activity-item build-activity-${entry.kind}${index === 0 ? ' build-progress-commit-latest' : ''}`}
+              >
+                <span className="build-activity-icon" aria-hidden="true">
+                  <PixelIcon name={entry.kind === 'revision' ? 'pencil' : 'wrench'} size={12} />
+                </span>
+                <span className="build-activity-body">
+                  {entry.kind === 'revision' ? (
+                    <span className="build-activity-label">
+                      {entry.pending
+                        ? t('statusView.progress.yourRequestSending')
+                        : t('statusView.progress.yourRequest')}
+                    </span>
+                  ) : null}
+                  <span className="build-activity-text">{entry.text}</span>
+                </span>
+                <time className="build-activity-time">
+                  {entry.pending ? '' : formatRelativeTime(entry.at, i18n.language)}
+                </time>
               </li>
             ))}
           </ul>

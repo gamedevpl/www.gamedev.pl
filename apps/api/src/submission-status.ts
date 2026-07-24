@@ -13,6 +13,21 @@ export interface ChecklistItem {
   checked: boolean;
 }
 
+/**
+ * A change request the creator sent from the status page. Relayed onto the PR as a
+ * marked comment, and read back here so the status page can show the creator their
+ * own revision history — without it, a sent revision vanishes into the build log.
+ */
+export interface CreatorRevision {
+  text: string;
+  createdAt: string;
+}
+
+// Marker the games-repo relay workflow matches on. Kept out of the rendered comment
+// as an HTML comment so creators never see it. Lives here (rather than in
+// submissions.ts) because both the writer and this reader need it.
+export const CREATOR_FEEDBACK_MARKER = '<!-- gamedevpl:creator-feedback -->';
+
 export interface BuildProgress {
   /**
    * Head commit SHA of the PR. Changes each time the agent pushes, so the client
@@ -23,6 +38,8 @@ export interface BuildProgress {
   commits: Array<{ message: string; committedDate: string }>;
   /** The agent's task checklist parsed from the PR body, in order. */
   checklist: ChecklistItem[];
+  /** The creator's own change requests on this build, oldest→newest. */
+  revisions: CreatorRevision[];
 }
 
 export interface SubmissionStatusResponseBase {
@@ -92,6 +109,37 @@ function parseChecklist(body: string | undefined): ChecklistItem[] {
   return items;
 }
 
+const MAX_REVISIONS = 20;
+const MAX_REVISION_CHARS = 2000;
+
+/**
+ * Pulls the creator's change requests back out of the PR conversation. Each was
+ * posted by us with the marker plus the creator's text in a ```text fence — the
+ * games-repo relay workflow re-posts the same comment under a licensed identity to
+ * wake the agent, so identical texts are deduped to one entry.
+ */
+export function parseCreatorRevisions(comments: LinkedPullRequest['comments']): CreatorRevision[] {
+  const revisions: CreatorRevision[] = [];
+  const seen = new Set<string>();
+
+  for (const comment of comments ?? []) {
+    if (!comment.body.includes(CREATOR_FEEDBACK_MARKER)) continue;
+
+    // The creator's own words are the last fenced ```text block in the comment.
+    const fences = [...comment.body.matchAll(/```text\n([\s\S]*?)```/g)];
+    const raw = fences[fences.length - 1]?.[1];
+    if (!raw) continue;
+
+    const text = sanitizeCreatorText(raw, { singleLine: false }).slice(0, MAX_REVISION_CHARS);
+    if (!text || seen.has(text)) continue;
+
+    seen.add(text);
+    revisions.push({ text, createdAt: comment.createdAt });
+  }
+
+  return revisions.slice(-MAX_REVISIONS);
+}
+
 function buildProgress(linkedPr: LinkedPullRequest): BuildProgress | undefined {
   if (!linkedPr.headRefOid) {
     return undefined;
@@ -106,6 +154,7 @@ function buildProgress(linkedPr: LinkedPullRequest): BuildProgress | undefined {
     headSha: linkedPr.headRefOid,
     commits,
     checklist: parseChecklist(linkedPr.body),
+    revisions: parseCreatorRevisions(linkedPr.comments),
   };
 }
 

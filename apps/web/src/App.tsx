@@ -6,6 +6,7 @@ import { GameTheater } from './GameTheater';
 import { NavHeader } from './NavHeader';
 import { HeroPromptSection } from './HeroPromptSection';
 import { ArcadeCatalog } from './ArcadeCatalog';
+import { MyGamesRail } from './MyGamesRail';
 import { PixelIcon } from './PixelIcon';
 import { SubmissionStatusView } from './SubmissionStatusView';
 import { CreatorQA, type QAQuestion } from './CreatorQA';
@@ -38,6 +39,10 @@ export function App() {
 
   // Local storage saved specs
   const [savedSpecs, setSavedSpecs] = useState<SavedSpec[]>(() => getSavedSpecs());
+  // Bumped after a new submission so the my-games rail picks it up immediately.
+  const [myGamesRefreshKey, setMyGamesRefreshKey] = useState(0);
+  // Section to scroll to once the home route has rendered it (see handleNavigateSection).
+  const [pendingScrollTarget, setPendingScrollTarget] = useState<string | null>(null);
 
   // Stage content
   const [stageContent, setStageContent] = useState<StageContent | null>(null);
@@ -162,18 +167,37 @@ export function App() {
     }
   }, [qaQuestions]);
 
+  // Menu navigation is scroll-to-section, but the sections only exist on the home
+  // route — from a status page we have to go home first and scroll once the target
+  // has mounted (the my-games rail also has to finish loading before it exists).
   const handleNavigateSection = (sectionId: string) => {
-    if (sectionId === 'studio-active') {
-      window.location.hash = '#studio';
-      return;
-    }
     const element = document.getElementById(sectionId);
     if (element) {
-      element?.scrollIntoView?.({ behavior: 'smooth' });
-    } else if (route.view === 'status') {
-      window.location.hash = '#/';
+      element.scrollIntoView?.({ behavior: 'smooth' });
+      return;
     }
+    setPendingScrollTarget(sectionId);
+    navigateHash('#/');
   };
+
+  useEffect(() => {
+    if (!pendingScrollTarget || route.view !== 'home') return;
+
+    let attempts = 0;
+    const timer = window.setInterval(() => {
+      const element = document.getElementById(pendingScrollTarget);
+      if (element) {
+        element.scrollIntoView?.({ behavior: 'smooth' });
+      }
+      // Give a still-loading section a moment to appear, then stop either way.
+      if (element || (attempts += 1) > 20) {
+        window.clearInterval(timer);
+        setPendingScrollTarget(null);
+      }
+    }, 100);
+
+    return () => window.clearInterval(timer);
+  }, [pendingScrollTarget, route.view]);
 
   async function handleGenerateMock(text: string) {
     if (!user) {
@@ -261,6 +285,7 @@ export function App() {
         createdAt: Date.now(),
       });
       setSavedSpecs(updatedSpecs);
+      setMyGamesRefreshKey((key) => key + 1);
 
       setSubmissionStatus('idle');
 
@@ -365,6 +390,12 @@ export function App() {
                 onGenerateMock={(prompt) => void handleGenerateMock(prompt)}
               />
             </div>
+
+            <MyGamesRail
+              refreshKey={myGamesRefreshKey}
+              onOpenStatus={(token) => navigateHash(statusHash(token))}
+              onPlayPublished={(slug) => navigateHash(playHash(slug))}
+            />
 
             {qaQuestions.length > 0 && pendingSpec && (
               <div ref={qaRef}>

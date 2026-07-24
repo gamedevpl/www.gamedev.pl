@@ -32,6 +32,7 @@
     "navPrompt": "Create Game",
     "navArcade": "Arcade",
     "navStudio": "My Projects",
+    "navMyGames": "My Games",
     "navFeed": "Agent Stream",
     "mySpecs": "My Active Specs ({{count}})"
   },
@@ -155,6 +156,13 @@
     "openSourceBody": "All games live in our public games repository maintained by autonomous AI coding agents.",
     "viewGithub": "View Games Repository on GitHub"
   },
+  "myGames": {
+    "title": "Your games",
+    "liveCount": "{{count}} in progress",
+    "checking": "Checking…",
+    "play": "Play",
+    "open": "Open"
+  },
   "statusView": {
     "title": "Your game is in the works",
     "loading": "Finding your game…",
@@ -188,8 +196,13 @@
     },
     "progress": {
       "checklistTitle": "What the agent is doing",
-      "commitsTitle": "Build log",
-      "checklistCount": "{{done}} of {{total}} done"
+      "activityTitle": "Build activity",
+      "checklistCount": "{{done}} of {{total}} done",
+      "currentStep": "Working on: {{step}}",
+      "lastUpdate": "Last update {{time}}",
+      "quietHint": "The agent has been quiet for a while. Bigger games take longer — you can close this page, we'll notify you.",
+      "yourRequest": "Your request",
+      "yourRequestSending": "Your request · sending"
     },
     "states": {
       "queued": {

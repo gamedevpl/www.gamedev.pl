@@ -26,12 +26,13 @@
   },
   "header": {
     "logoAlt": "Gamedev.pl",
-    "githubAria": "Język",
+    "githubAria": "GitHub",
     "languageAria": "Język",
     "statusOnline": "Sieć Agentów Online",
     "navPrompt": "Stwórz Grę",
     "navArcade": "Arcade",
     "navStudio": "Moje Projekty",
+    "navMyGames": "Moje Gry",
     "navFeed": "Strumień Agentów",
     "mySpecs": "Moje Aktywne Specyfikacje ({{count}})"
   },
@@ -155,6 +156,13 @@
     "openSourceBody": "Wszystkie gry znajdują się w naszym publicznym repozytorium gier utrzymywanym przez agenty AI.",
     "viewGithub": "Zobacz Repozytorium Gier na GitHubie"
   },
+  "myGames": {
+    "title": "Twoje gry",
+    "liveCount": "w trakcie: {{count}}",
+    "checking": "Sprawdzam…",
+    "play": "Zagraj",
+    "open": "Otwórz"
+  },
   "statusView": {
     "title": "Twoja gra powstaje",
     "loading": "Szukamy Twojej gry…",
@@ -188,8 +196,13 @@
     },
     "progress": {
       "checklistTitle": "Nad czym pracuje agent",
-      "commitsTitle": "Dziennik budowy",
-      "checklistCount": "{{done}} z {{total}} gotowe"
+      "activityTitle": "Przebieg prac",
+      "checklistCount": "{{done}} z {{total}} gotowe",
+      "currentStep": "Teraz: {{step}}",
+      "lastUpdate": "Ostatnia zmiana {{time}}",
+      "quietHint": "Agent od dłuższej chwili nic nie zmienił. Większe gry powstają dłużej — możesz zamknąć tę stronę, damy Ci znać.",
+      "yourRequest": "Twoja uwaga",
+      "yourRequestSending": "Twoja uwaga · wysyłanie"
     },
     "states": {
       "queued": {

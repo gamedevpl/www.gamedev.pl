@@ -345,6 +345,54 @@ describe('SubmissionStatusView', () => {
     );
     expect(container.querySelector('.status-feedback-sent')).not.toBeNull();
 
+    // The request lands in the activity feed immediately — waiting for it to
+    // round-trip through GitHub is what made sent feedback feel like it vanished.
+    const echoed = container.querySelector('.build-activity-revision');
+    expect(echoed?.textContent).toContain('Please make the car faster and add a boost pad.');
+    expect(echoed?.textContent).toContain('Your request');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('shows the creator’s earlier change requests interleaved with the agent’s commits', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      preview: { slug: 'space-runner' },
+      progress: {
+        headSha: 'sha-1',
+        commits: [{ message: 'Speed up the car', committedDate: '2026-01-01T00:20:00Z' }],
+        checklist: [],
+        revisions: [{ text: 'Make the car faster please.', createdAt: '2026-01-01T00:10:00Z' }],
+      },
+    });
+    mockedGetSubmissionPreview.mockResolvedValue({
+      slug: 'space-runner',
+      title: 'Space Runner',
+      html: '<canvas></canvas>',
+    });
+    await i18n.changeLanguage('en');
+    window.location.hash = '#/status/revisions-token';
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'revisions-token' }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    const entries = [...container.querySelectorAll('.build-activity-item')].map((node) => node.textContent ?? '');
+    expect(entries).toHaveLength(2);
+    // Newest first: the commit that answered the request sits above the request.
+    expect(entries[0]).toContain('Speed up the car');
+    expect(entries[1]).toContain('Make the car faster please.');
+    expect(container.querySelectorAll('.build-activity-revision')).toHaveLength(1);
+
     await act(async () => {
       root.unmount();
     });

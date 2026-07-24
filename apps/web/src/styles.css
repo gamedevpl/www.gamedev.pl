@@ -2087,7 +2087,9 @@ body.player-open {
 }
 
 .build-progress-commits {
-  max-height: 160px;
+  /* Taller than a bare commit list needed: entries now carry the creator's own
+     (multi-line) change requests alongside the agent's one-liners. */
+  max-height: 300px;
   overflow-y: auto;
 }
 
@@ -2106,6 +2108,154 @@ body.player-open {
 .build-progress-commits li.build-progress-commit-latest {
   color: var(--text);
   font-weight: 600;
+}
+
+/* "Working on: …" — the one line that answers "what is happening right now?" */
+.build-progress-current {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 0.88rem;
+  color: var(--text);
+}
+
+.build-progress-current-spinner {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid rgba(148, 163, 184, 0.35);
+  border-top-color: var(--turquoise);
+  animation: status-spin 0.9s linear infinite;
+}
+
+/* The merged build feed: agent commits + the creator's own change requests. */
+.build-activity-list {
+  gap: 0 !important;
+}
+
+.build-activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  font-family: inherit !important;
+}
+
+.build-activity-item:last-child {
+  border-bottom: none;
+}
+
+.build-activity-icon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--muted);
+}
+
+.build-activity-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.build-activity-text {
+  overflow-wrap: anywhere;
+}
+
+.build-activity-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--turquoise);
+}
+
+.build-activity-time {
+  flex: none;
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* A creator's own words get the readable treatment; agent commits stay log-like. */
+.build-activity-revision .build-activity-text {
+  color: var(--text);
+  font-style: italic;
+}
+
+.build-activity-revision .build-activity-icon {
+  color: var(--turquoise);
+}
+
+/* MY GAMES RAIL — the home-page answer to "where did my game go?" */
+.my-games-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.my-game-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--panel-card);
+  border: 1px solid var(--panel-border);
+}
+
+.my-game-card.is-live {
+  border-color: rgba(45, 212, 191, 0.4);
+  box-shadow: 0 0 18px rgba(45, 212, 191, 0.08);
+}
+
+.my-game-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+}
+
+.my-game-card.is-live .my-game-status {
+  color: var(--turquoise);
+}
+
+.my-game-status-published {
+  color: var(--accent-blue);
+}
+
+.my-game-title {
+  margin: 0;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.my-game-meta {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.my-game-actions {
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+.my-game-actions .primary-btn {
+  width: 100%;
+  justify-content: center;
 }
 
 /* AUTHENTICATION UI */

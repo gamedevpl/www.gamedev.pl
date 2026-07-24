@@ -9,6 +9,20 @@ export type BuildProgress = {
   commits: Array<{ message: string; committedDate: string }>;
   /** The agent's task checklist parsed from the PR body. Untrusted text. */
   checklist: Array<{ text: string; checked: boolean }>;
+  /**
+   * The creator's own change requests on this build, oldest→newest. Read back off
+   * the PR so the status page can show a creator what they already asked for.
+   * Optional: an older API deploy doesn't send it.
+   */
+  revisions?: Array<{ text: string; createdAt: string }>;
+};
+
+/** One of the creator's games, as listed by GET /api/submissions/mine. */
+export type MySubmission = {
+  token: string;
+  title: string;
+  createdAt: string;
+  lastKnownStatus: SubmissionState | null;
 };
 
 export type SubmissionStatus = {
@@ -58,14 +72,34 @@ export async function submitSpec(input: {
   return (await response.json()) as { token: string; statusUrl: string };
 }
 
-export async function getSubmissionStatus(token: string): Promise<SubmissionStatus> {
-  const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}`);
+/**
+ * `locale` localizes the agent's build log (its commit subjects and checklist are
+ * written in English) — without it a Polish creator watches an English wall of text.
+ */
+export async function getSubmissionStatus(token: string, locale?: string): Promise<SubmissionStatus> {
+  const query = locale ? `?locale=${encodeURIComponent(locale)}` : '';
+  const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}${query}`);
 
   if (!response.ok) {
     await throwResponseError(response);
   }
 
   return (await response.json()) as SubmissionStatus;
+}
+
+/**
+ * The signed-in creator's own games. Server-side ownership means this works on a
+ * device that never saved the tracking link — the tokens come back with it.
+ */
+export async function listMySubmissions(): Promise<MySubmission[]> {
+  const response = await fetch(`${API_BASE}/api/submissions/mine`, { credentials: 'include' });
+
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+
+  const body = (await response.json()) as { submissions?: MySubmission[] };
+  return body.submissions ?? [];
 }
 
 export async function getSubmissionPreview(token: string): Promise<SubmissionPreview> {

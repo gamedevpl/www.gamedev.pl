@@ -14,6 +14,13 @@ export interface PullRequestCommit {
   committedDate: string;
 }
 
+export interface PullRequestComment {
+  /** Raw comment body. Untrusted text — sanitize before it reaches a creator. */
+  body: string;
+  /** ISO-8601 timestamp the comment was posted. */
+  createdAt: string;
+}
+
 export interface LinkedPullRequest {
   number: number;
   state: 'OPEN' | 'CLOSED' | 'MERGED';
@@ -32,6 +39,12 @@ export interface LinkedPullRequest {
   body?: string;
   /** Recent commits, oldest→newest, as a running build log. Untrusted text. */
   commits?: PullRequestCommit[];
+  /**
+   * Recent PR conversation comments, oldest→newest. Mined for the creator's own
+   * change requests (relayed here by POST .../feedback) so the status page can
+   * show them back — otherwise a creator has no record that their revision landed.
+   */
+  comments?: PullRequestComment[];
 }
 
 /** A game's sources, assembled with its selected shared engine modules. */
@@ -368,6 +381,9 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
                     commits: {
                       nodes: Array<{ commit: { messageHeadline: string; committedDate: string } }>;
                     };
+                    comments: {
+                      nodes: Array<{ body: string; createdAt: string }>;
+                    };
                   } | null;
                 }>;
               };
@@ -406,6 +422,12 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
                                   messageHeadline
                                   committedDate
                                 }
+                              }
+                            }
+                            comments(last: 30) {
+                              nodes {
+                                body
+                                createdAt
                               }
                             }
                           }
@@ -449,6 +471,10 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         commits: pullRequestNode.commits.nodes.map((node) => ({
           message: node.commit.messageHeadline,
           committedDate: node.commit.committedDate,
+        })),
+        comments: (pullRequestNode.comments?.nodes ?? []).map((node) => ({
+          body: node.body ?? '',
+          createdAt: node.createdAt,
         })),
       };
     },

@@ -94,6 +94,12 @@ export interface Store {
    * already-notified state (published / needs_changes recorded as last-notified).
    */
   listActiveSubmissions(): Promise<SubmissionRecord[]>;
+  /**
+   * Every submission a creator owns, newest first. Backs the "my games" rail, so a
+   * creator finds their work-in-progress without having saved the tracking link
+   * (and on a device that never had it in localStorage).
+   */
+  listSubmissionsByOwner(ownerUid: string, opts?: { limit?: number }): Promise<SubmissionRecord[]>;
   checkAndIncrementQuota(
     uid: string,
     dateStr: string,
@@ -196,6 +202,14 @@ export class InMemoryStore implements Store {
   async listActiveSubmissions(): Promise<SubmissionRecord[]> {
     return Array.from(this.submissions.values())
       .filter((s) => s.lastNotifiedStatus !== 'published' && s.lastNotifiedStatus !== 'needs_changes')
+      .map((s) => ({ ...s }));
+  }
+
+  async listSubmissionsByOwner(ownerUid: string, opts?: { limit?: number }): Promise<SubmissionRecord[]> {
+    return Array.from(this.submissions.values())
+      .filter((s) => s.ownerUid === ownerUid)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, opts?.limit ?? 20)
       .map((s) => ({ ...s }));
   }
 
@@ -449,6 +463,16 @@ export class FirestoreStore implements Store {
     return snap.docs
       .map((d) => d.data() as SubmissionRecord)
       .filter((s) => s.lastNotifiedStatus !== 'published' && s.lastNotifiedStatus !== 'needs_changes');
+  }
+
+  async listSubmissionsByOwner(ownerUid: string, opts?: { limit?: number }): Promise<SubmissionRecord[]> {
+    // Equality-only query (no orderBy) so Firestore needs no composite index; a
+    // creator's submission count is small, so sorting here is cheap.
+    const snap = await this.db.collection('submissions').where('ownerUid', '==', ownerUid).get();
+    return snap.docs
+      .map((d) => d.data() as SubmissionRecord)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, opts?.limit ?? 20);
   }
 
   async checkAndIncrementQuota(
