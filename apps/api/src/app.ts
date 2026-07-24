@@ -43,7 +43,11 @@ export interface BuildAppOptions {
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
   const generator = options.generator ?? createGenerator();
-  const app = Fastify({ logger: options.logger ?? false });
+  // Cloud Run terminates the connection and proxies to this container, so without
+  // trustProxy every request.ip is the proxy's own address — collapsing every
+  // per-IP rate limiter in the app into one shared, site-wide bucket. Trusting the
+  // proxy's X-Forwarded-For is safe here since Cloud Run itself is the only hop.
+  const app = Fastify({ logger: options.logger ?? false, trustProxy: true });
   const store = options.store ?? new InMemoryStore();
   const dailyGenerationQuota = options.dailyGenerationQuota ?? Number(process.env.DAILY_GENERATION_QUOTA ?? '20');
 

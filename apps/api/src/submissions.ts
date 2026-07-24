@@ -177,6 +177,13 @@ export async function registerSubmissionRoutes(
   const maxGamesPerWindow = 60;
   const gamesByIp = new Map<string, number[]>();
 
+  // A single catalog page render can request a poster, a video, and up to 4
+  // screenshots per card across every published game — easily 100+ requests
+  // in one load. That's a much bigger, legitimate burst than actually loading
+  // a game bundle, so gallery media gets its own, more generous bucket.
+  const maxMediaPerWindow = 400;
+  const mediaByIp = new Map<string, number[]>();
+
   async function getCatalogEntries(client: GitHubClient, forceFresh = false): Promise<CatalogGameEntry[]> {
     const currentTime = now();
     if (!forceFresh && catalogCache && catalogCache.expiresAt > currentTime) {
@@ -810,7 +817,7 @@ export async function registerSubmissionRoutes(
     }
 
     const currentTime = now();
-    if (isRateLimited(gamesByIp, request.ip, currentTime, maxGamesPerWindow, gamesRateLimitWindowMs)) {
+    if (isRateLimited(mediaByIp, request.ip, currentTime, maxMediaPerWindow, gamesRateLimitWindowMs)) {
       return reply.status(429).send({ error: 'too many game requests, please try again later' });
     }
 
