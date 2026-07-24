@@ -24,6 +24,30 @@ export interface UsageCounters {
   refines: number;
 }
 
+// Transactional creator events (docs/notifications-plan.md). Deliberately minimal —
+// queued/in_review are not notified. New types must pass the "would the user thank
+// us?" test before being added.
+export type NotificationType = 'submission.building' | 'submission.published' | 'submission.needs_changes';
+
+export interface StoredNotification {
+  /** Deterministic id (e.g. `sub-142-published`) so emission is idempotent. */
+  id: string;
+  type: NotificationType;
+  createdAt: string;
+  readAt: string | null;
+  /** Set once a notification email has been sent, so retries don't re-send. */
+  emailedAt: string | null;
+  /**
+   * i18n key + params rather than rendered text, so a language switch re-renders
+   * old notifications correctly. The client calls t(titleKey, params).
+   */
+  titleKey: string;
+  bodyKey: string;
+  params: Record<string, string>;
+  /** In-app destination, e.g. `#/status/<token>` or `#/play/<slug>`. */
+  link: string;
+}
+
 export type WaitlistStatus = 'pending' | 'approved' | 'rejected';
 
 export interface WaitlistEntry {
@@ -50,6 +74,18 @@ export interface Store {
   getWaitlistEntry(uid: string): Promise<WaitlistEntry | null>;
   isWaitlistApproved(uid: string, email?: string): Promise<boolean>;
   setWaitlistStatus(uid: string, status: WaitlistStatus): Promise<WaitlistEntry | null>;
+  /**
+   * Idempotent by notification id: a second emit for the same id is a no-op and
+   * returns `created: false` (a crashed/re-run sweep can safely re-emit).
+   */
+  createNotification(
+    uid: string,
+    notification: Omit<StoredNotification, 'readAt' | 'emailedAt'> & { createdAt?: string },
+  ): Promise<{ created: boolean; notification: StoredNotification }>;
+  listNotifications(uid: string, opts?: { limit?: number }): Promise<StoredNotification[]>;
+  markNotificationsRead(uid: string, ids: string[] | 'all'): Promise<void>;
+  /** Stamp emailedAt after a successful send so retries don't re-send. */
+  markNotificationEmailed(uid: string, id: string, at?: string): Promise<void>;
 }
 
 export class InMemoryStore implements Store {
@@ -57,6 +93,8 @@ export class InMemoryStore implements Store {
   private submissions = new Map<number, SubmissionRecord>();
   private usage = new Map<string, UsageCounters>();
   private waitlist = new Map<string, WaitlistEntry>();
+  // uid -> (notificationId -> notification)
+  private notifications = new Map<string, Map<string, StoredNotification>>();
 
   async getUser(uid: string): Promise<User | null> {
     const user = this.users.get(uid);
@@ -183,6 +221,56 @@ export class InMemoryStore implements Store {
     const updated: WaitlistEntry = { ...existing, status };
     this.waitlist.set(uid, updated);
     return { ...updated };
+  }
+
+  async createNotification(
+    uid: string,
+    notification: Omit<StoredNotification, 'readAt' | 'emailedAt'> & { createdAt?: string },
+  ): Promise<{ created: boolean; notification: StoredNotification }> {
+    const forUser = this.notifications.get(uid) ?? new Map<string, StoredNotification>();
+    const existing = forUser.get(notification.id);
+    if (existing) {
+      return { created: false, notification: { ...existing } };
+    }
+    const record: StoredNotification = {
+      id: notification.id,
+      type: notification.type,
+      createdAt: notification.createdAt ?? new Date().toISOString(),
+      readAt: null,
+      emailedAt: null,
+      titleKey: notification.titleKey,
+      bodyKey: notification.bodyKey,
+      params: { ...notification.params },
+      link: notification.link,
+    };
+    forUser.set(record.id, record);
+    this.notifications.set(uid, forUser);
+    return { created: true, notification: { ...record } };
+  }
+
+  async listNotifications(uid: string, opts?: { limit?: number }): Promise<StoredNotification[]> {
+    const forUser = this.notifications.get(uid);
+    if (!forUser) return [];
+    const sorted = Array.from(forUser.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const limited = opts?.limit ? sorted.slice(0, opts.limit) : sorted;
+    return limited.map((n) => ({ ...n }));
+  }
+
+  async markNotificationsRead(uid: string, ids: string[] | 'all'): Promise<void> {
+    const forUser = this.notifications.get(uid);
+    if (!forUser) return;
+    const now = new Date().toISOString();
+    const targets = ids === 'all' ? Array.from(forUser.keys()) : ids;
+    for (const id of targets) {
+      const n = forUser.get(id);
+      if (n && n.readAt === null) forUser.set(id, { ...n, readAt: now });
+    }
+  }
+
+  async markNotificationEmailed(uid: string, id: string, at?: string): Promise<void> {
+    const forUser = this.notifications.get(uid);
+    const n = forUser?.get(id);
+    if (n) forUser!.set(id, { ...n, emailedAt: at ?? new Date().toISOString() });
   }
 
   // Test/inspection only — not part of the Store interface. Production code never
@@ -349,5 +437,65 @@ export class FirestoreStore implements Store {
     await docRef.update({ status });
     const updatedSnap = await docRef.get();
     return updatedSnap.data() as WaitlistEntry;
+  }
+
+  private notificationRef(uid: string, id: string) {
+    return this.db.collection('users').doc(uid).collection('notifications').doc(id);
+  }
+
+  async createNotification(
+    uid: string,
+    notification: Omit<StoredNotification, 'readAt' | 'emailedAt'> & { createdAt?: string },
+  ): Promise<{ created: boolean; notification: StoredNotification }> {
+    const docRef = this.notificationRef(uid, notification.id);
+    return await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef);
+      if (snap.exists) {
+        return { created: false, notification: snap.data() as StoredNotification };
+      }
+      const record: StoredNotification = {
+        id: notification.id,
+        type: notification.type,
+        createdAt: notification.createdAt ?? new Date().toISOString(),
+        readAt: null,
+        emailedAt: null,
+        titleKey: notification.titleKey,
+        bodyKey: notification.bodyKey,
+        params: notification.params,
+        link: notification.link,
+      };
+      tx.set(docRef, record);
+      return { created: true, notification: record };
+    });
+  }
+
+  async listNotifications(uid: string, opts?: { limit?: number }): Promise<StoredNotification[]> {
+    const query = this.db
+      .collection('users')
+      .doc(uid)
+      .collection('notifications')
+      .orderBy('createdAt', 'desc')
+      .limit(opts?.limit ?? 20);
+    const snap = await query.get();
+    return snap.docs.map((d) => d.data() as StoredNotification);
+  }
+
+  async markNotificationsRead(uid: string, ids: string[] | 'all'): Promise<void> {
+    const now = new Date().toISOString();
+    const col = this.db.collection('users').doc(uid).collection('notifications');
+    if (ids === 'all') {
+      const unread = await col.where('readAt', '==', null).get();
+      const batch = this.db.batch();
+      unread.docs.forEach((d) => batch.update(d.ref, { readAt: now }));
+      await batch.commit();
+      return;
+    }
+    const batch = this.db.batch();
+    ids.forEach((id) => batch.set(col.doc(id), { readAt: now }, { merge: true }));
+    await batch.commit();
+  }
+
+  async markNotificationEmailed(uid: string, id: string, at?: string): Promise<void> {
+    await this.notificationRef(uid, id).set({ emailedAt: at ?? new Date().toISOString() }, { merge: true });
   }
 }
