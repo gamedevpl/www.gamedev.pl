@@ -1,4 +1,23 @@
 {
+  "notifications": {
+    "aria": "Powiadomienia",
+    "title": "Powiadomienia",
+    "empty": "Nic tu jeszcze nie ma.",
+    "submission": {
+      "published": {
+        "title": "Twoja gra jest już dostępna!",
+        "body": "„{{title}}” została opublikowana — kliknij, aby zagrać."
+      },
+      "building": {
+        "title": "Twoja gra jest tworzona",
+        "body": "Rozpoczęto pracę nad „{{title}}”."
+      },
+      "needs_changes": {
+        "title": "Twoje zgłoszenie wymaga zmian",
+        "body": "„{{title}}” wymaga poprawek."
+      }
+    }
+  },
   "header": {
     "logoAlt": "Gamedev.pl",
     "githubAria": "Język",

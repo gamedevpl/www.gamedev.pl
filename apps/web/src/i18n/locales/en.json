@@ -1,4 +1,23 @@
 {
+  "notifications": {
+    "aria": "Notifications",
+    "title": "Notifications",
+    "empty": "Nothing yet.",
+    "submission": {
+      "published": {
+        "title": "Your game is live!",
+        "body": "“{{title}}” is published — tap to play."
+      },
+      "building": {
+        "title": "Your game is building",
+        "body": "Work has started on “{{title}}”."
+      },
+      "needs_changes": {
+        "title": "Your submission needs changes",
+        "body": "“{{title}}” needs another look."
+      }
+    }
+  },
   "header": {
     "logoAlt": "Gamedev.pl",
     "githubAria": "GitHub",
