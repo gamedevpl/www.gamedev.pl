@@ -386,10 +386,17 @@ export function SubmissionStatusView({
 
             {/* Order matters: "played it — want changes?" follows straight on from the
                 play card, so the ask lands while the game is still in mind. The build
-                log is reference material and sits underneath. */}
-            {(preview || status.status === 'needs_changes') && status.status !== 'published' ? (
+                log is reference material and sits underneath.
+
+                This used to wait for a preview, which waits for a pull request — so the
+                first stretch of the build, when redirecting the agent is cheapest and the
+                creator is most likely to spot a misreading of their idea, was the one
+                stretch they could not say anything. The agent picks messages up off the
+                channel on its next report, so a note left now lands in a minute or two. */}
+            {status.status !== 'published' && status.status !== 'abandoned' ? (
               <FeedbackPanel
                 token={token}
+                building={!preview}
                 onSent={(text) => setPendingRevisions((current) => [...current, { text, at: Date.now() }])}
               />
             ) : null}
@@ -593,12 +600,24 @@ function PlayCard({
 }
 
 /**
- * Post-play revision loop: the creator played the draft and can describe what to
- * change. The feedback is relayed to the build agent (POST .../feedback), which
- * comments it onto the open PR so the agent iterates. Shown while the game is still
- * in progress (or needs changes) — a published game can't be revised here.
+ * Revision loop: the creator describes what to change. The feedback is relayed to the
+ * build agent (POST .../feedback), which both comments it onto the issue and queues it
+ * on the build channel, so the agent picks it up on its next report. Shown while the
+ * game is still in progress (or needs changes) — a published game can't be revised here.
+ *
+ * `building` swaps the copy for the stretch before a playable draft exists: there is
+ * nothing to have "played" yet, and the useful ask is a course correction rather than a
+ * revision.
  */
-function FeedbackPanel({ token, onSent }: { token: string; onSent: (text: string) => void }) {
+function FeedbackPanel({
+  token,
+  building,
+  onSent,
+}: {
+  token: string;
+  building: boolean;
+  onSent: (text: string) => void;
+}) {
   const { t } = useTranslation();
   const [text, setText] = useState('');
   const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle');
@@ -634,8 +653,12 @@ function FeedbackPanel({ token, onSent }: { token: string; onSent: (text: string
 
   return (
     <div className="status-feedback">
-      <h3 className="status-feedback-title">{t('statusView.feedback.title')}</h3>
-      <p className="status-feedback-hint">{t('statusView.feedback.hint')}</p>
+      <h3 className="status-feedback-title">
+        {t(building ? 'statusView.feedback.titleBuilding' : 'statusView.feedback.title')}
+      </h3>
+      <p className="status-feedback-hint">
+        {t(building ? 'statusView.feedback.hintBuilding' : 'statusView.feedback.hint')}
+      </p>
       <textarea
         className="status-feedback-input"
         value={text}

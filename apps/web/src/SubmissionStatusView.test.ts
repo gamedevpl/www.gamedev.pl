@@ -119,6 +119,34 @@ describe('SubmissionStatusView', () => {
     await i18n.changeLanguage('en');
   });
 
+  it('lets the creator steer the build before any playable draft exists', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    // Building, no PR, so no preview. The feedback box used to wait for a preview,
+    // which stranded the creator through the exact stretch where a course correction
+    // costs the least.
+    mockedGetSubmissionStatus.mockResolvedValue({ status: 'building' });
+    await i18n.changeLanguage('en');
+    window.location.hash = '#/status/steer-token';
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'steer-token' }));
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.status-feedback-input')).not.toBeNull();
+    // The in-build wording, not the "played it and something's off" wording.
+    expect(container.textContent).toContain('Want to steer it?');
+    expect(container.textContent).not.toContain('Played it and');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('shows the submitted prompt and a ticking elapsed timer while the build is running', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({ status: 'building' });

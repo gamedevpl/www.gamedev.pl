@@ -194,6 +194,8 @@
     "feedback": {
       "title": "Want changes?",
       "hint": "Played it and something's off? Tell the agent what to change and it'll revise your game.",
+      "titleBuilding": "Want to steer it?",
+      "hintBuilding": "It's still being made — you don't have to wait. Say what to change and the agent picks it up on its next update.",
       "placeholder": "e.g. make the car faster, add a second track, use brighter colours…",
       "submit": "Send feedback",
       "sending": "Sending…",
