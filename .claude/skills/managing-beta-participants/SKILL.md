@@ -41,16 +41,21 @@ npm run beta:approve -w @gamedevpl/api -- user@example.com
 npm run beta:approve -- user@example.com
 ```
 
-#### How `beta:approve` Works:
+### How User IDs (UIDs) Work & Why You Don't Need Them
 
-- **User already on waitlist**: Updates their existing `waitlist` document status to `"approved"`.
-- **User has NOT signed in / joined waitlist yet (Pre-approval)**:
-  Automatically creates a document `waitlist/email:user@example.com` with `status: 'approved'`.
-  When `user@example.com` signs in with Google for the first time, `isWaitlistApproved` matches their verified email and allows immediate login.
-- **Approving by Google UID**:
-  ```bash
-  npm run beta:approve -- g:12345678901234567890
-  ```
+You **do not need to know a user's Google UID** to approve them.
+
+1. **Google UID Format**:
+   - When a user logs in with Google, Fastify generates `uid = 'g:' + googleUser.sub` (where `sub` is Google's 21-digit internal account ID, e.g., `g:103948201948291048201`).
+
+2. **If the user already tried signing in or joined the waitlist**:
+   - The app automatically creates a document `waitlist/g:<sub>` containing their email address (`email: 'user@example.com'`).
+   - `npm run beta:approve -- user@example.com` queries Firestore by email, finds `waitlist/g:<sub>`, and updates `status: 'approved'`.
+
+3. **If approving someone BEFORE they ever visit the site (Pre-approval)**:
+   - `npm run beta:approve -- user@example.com` creates a document `waitlist/email:user@example.com` with `email: 'user@example.com'` and `status: 'approved'`.
+   - When the user eventually signs in with Google, Google provides their verified email (`user@example.com`).
+   - `store.isWaitlistApproved(uid, email)` queries Firestore for `where('email', '==', 'user@example.com')` and finds the approved document matching their email, granting instant access without ever needing their numeric Google `sub` ID.
 
 #### Other Status Options:
 
