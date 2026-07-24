@@ -297,3 +297,47 @@ describe('private beta gate', () => {
     await app.close();
   });
 });
+
+describe('client IP resolution behind the Cloud Run proxy', () => {
+  // Cloud Run appends the real client IP to X-Forwarded-For instead of replacing
+  // it, so a caller can prepend anything they like. Everything per-IP in this app
+  // (rate limits, abuse controls) depends on that prefix being ignored.
+  const realClientIp = '198.51.100.7';
+
+  async function exhaustAuthBucket(app: FastifyInstance, spoofedPrefix: string, attempts: number) {
+    let lastStatus = 0;
+    for (let i = 0; i < attempts; i++) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/auth/google',
+        headers: { 'x-forwarded-for': `${spoofedPrefix}, ${realClientIp}` },
+        payload: { idToken: 'not-a-real-token' },
+      });
+      lastStatus = res.statusCode;
+    }
+    return lastStatus;
+  }
+
+  it('ignores a client-supplied X-Forwarded-For prefix when bucketing by IP', async () => {
+    const app = await buildApp({ store: new InMemoryStore(), sessionSecret: 'test-secret' });
+
+    // The auth limiter allows 20 per window. Vary the spoofed prefix every time:
+    // if it were trusted, each request would land in its own fresh bucket and
+    // none of these would ever be limited.
+    await exhaustAuthBucket(app, '1.1.1.1', 20);
+    const afterLimit = await exhaustAuthBucket(app, '203.0.113.250', 1);
+    expect(afterLimit).toBe(429);
+
+    // A genuinely different client (different rightmost entry, the one Cloud Run
+    // wrote) must still be served — otherwise we're back to one global bucket.
+    const otherClient = await app.inject({
+      method: 'POST',
+      url: '/api/auth/google',
+      headers: { 'x-forwarded-for': '1.1.1.1, 203.0.113.9' },
+      payload: { idToken: 'not-a-real-token' },
+    });
+    expect(otherClient.statusCode).not.toBe(429);
+
+    await app.close();
+  });
+});

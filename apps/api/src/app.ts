@@ -44,10 +44,17 @@ export interface BuildAppOptions {
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
   const generator = options.generator ?? createGenerator();
   // Cloud Run terminates the connection and proxies to this container, so without
-  // trustProxy every request.ip is the proxy's own address — collapsing every
-  // per-IP rate limiter in the app into one shared, site-wide bucket. Trusting the
-  // proxy's X-Forwarded-For is safe here since Cloud Run itself is the only hop.
-  const app = Fastify({ logger: options.logger ?? false, trustProxy: true });
+  // trustProxy every request.ip is the proxy's own address (169.254.x.x) —
+  // collapsing every per-IP rate limiter in the app into one shared, site-wide
+  // bucket.
+  //
+  // The hop count matters and must not be `true`: Cloud Run *appends* the real
+  // client IP to X-Forwarded-For rather than replacing it, so a client sending
+  // `X-Forwarded-For: 1.2.3.4` produces "1.2.3.4, <real ip>". `true` trusts every
+  // hop and takes the leftmost entry — letting any caller choose their own rate
+  // limit bucket. Trusting exactly one hop resolves to the rightmost entry, which
+  // is the only one Cloud Run itself wrote, so spoofed prefixes are ignored.
+  const app = Fastify({ logger: options.logger ?? false, trustProxy: 1 });
   const store = options.store ?? new InMemoryStore();
   const dailyGenerationQuota = options.dailyGenerationQuota ?? Number(process.env.DAILY_GENERATION_QUOTA ?? '20');
 
@@ -122,19 +129,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   await registerEmailRoutes(app, { store, unsubscribeSecret: options.sessionSecret });
 
-  app.get('/api/health', async (request) => ({
-    status: 'ok',
-    provider: generator.name,
-    privateBeta,
-    // TEMPORARY (remove once trustProxy is pinned): reveals how many hops sit in
-    // front of this container so the trustProxy setting can be a hop count rather
-    // than `true` (which takes the leftmost, client-spoofable X-Forwarded-For entry).
-    proxyDebug: {
-      xff: request.headers['x-forwarded-for'] ?? null,
-      resolvedIp: request.ip,
-      socketIp: request.socket.remoteAddress ?? null,
-    },
-  }));
+  app.get('/api/health', async () => ({ status: 'ok', provider: generator.name, privateBeta }));
 
   app.get('/api/version', async () => ({ name: 'gamedev-pl', version: '0.0.0' }));
 
