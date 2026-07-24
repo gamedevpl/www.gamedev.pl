@@ -45,6 +45,32 @@ export interface BuildProgress {
    * build in trouble from a build that is merely slow, so the UI can say which.
    */
   checks?: 'SUCCESS' | 'FAILURE' | 'PENDING' | null;
+  /**
+   * The agent's own "here's what I'm doing" line, from `games/<slug>/PROGRESS.md`
+   * on its branch. Present only when the agent keeps that journal. Agent-authored,
+   * prompt-influenced text — sanitized here, escaped on render.
+   */
+  note?: string;
+}
+
+/**
+ * Newest line of an agent progress journal. The file is a newest-first list, so we
+ * take the first line that carries content, and strip the list bullet and any
+ * leading timestamp the agent prefixed it with.
+ */
+export function parseProgressNote(raw: string | null): string | undefined {
+  if (!raw) return undefined;
+
+  for (const line of raw.split('\n')) {
+    const withoutBullet = line.replace(/^\s*[-*]\s+/, '').trim();
+    // Skip headings, blank lines and horizontal rules.
+    if (!withoutBullet || withoutBullet.startsWith('#') || /^[-=_]{3,}$/.test(withoutBullet)) continue;
+
+    const withoutTimestamp = withoutBullet.replace(/^\d{4}-\d{2}-\d{2}[T ][\d:.]+Z?\s*[—–-]?\s*/, '');
+    const text = sanitizeCreatorText(withoutTimestamp, { singleLine: true }).slice(0, 300);
+    if (text) return text;
+  }
+  return undefined;
 }
 
 export interface SubmissionStatusResponseBase {

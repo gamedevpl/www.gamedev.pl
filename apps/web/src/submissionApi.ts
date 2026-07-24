@@ -12,6 +12,11 @@ export type BuildProgress = {
   /** CI rollup on the head commit — 'FAILURE' means in trouble, not just slow. */
   checks?: 'SUCCESS' | 'FAILURE' | 'PENDING' | null;
   /**
+   * The agent's own one-line "what I'm doing right now", written to its branch and
+   * localized by the API. Present only when the agent keeps that journal.
+   */
+  note?: string;
+  /**
    * The creator's own change requests on this build, oldest→newest. Read back off
    * the PR so the status page can show a creator what they already asked for.
    * Optional: an older API deploy doesn't send it.

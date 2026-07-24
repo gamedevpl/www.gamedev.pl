@@ -209,7 +209,8 @@
       "lastUpdate": "Ostatnia zmiana {{time}}",
       "quietHint": "Agent od dłuższej chwili nic nie zmienił. Większe gry powstają dłużej — możesz zamknąć tę stronę, damy Ci znać.",
       "yourRequest": "Twoja uwaga",
-      "yourRequestSending": "Twoja uwaga · wysyłanie"
+      "yourRequestSending": "Twoja uwaga · wysyłanie",
+      "agentSays": "Agent pisze"
     },
     "states": {
       "queued": {

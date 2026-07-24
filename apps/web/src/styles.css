@@ -2110,6 +2110,32 @@ body.player-open {
   font-weight: 600;
 }
 
+/* The agent's own words about what it's doing — the most direct signal we have,
+   so it sits at the top of the panel and outranks anything we infer. */
+.build-progress-note {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(45, 212, 191, 0.07);
+  border: 1px solid rgba(45, 212, 191, 0.25);
+}
+
+.build-progress-note-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--turquoise);
+}
+
+.build-progress-note-text {
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
 /* "Working on: …" — the one line that answers "what is happening right now?" */
 .build-progress-current {
   display: flex;

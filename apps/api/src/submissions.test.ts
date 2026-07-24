@@ -37,6 +37,7 @@ function createGithubClientStub(params: {
   gameSources?: GameSources | null;
   gameMedia?: Uint8Array | null;
   catalog?: CatalogGameEntry[];
+  progressNotes?: string | null;
 }) {
   const createIssue = vi.fn(async () => ({ number: params.issueNumber ?? 123 }));
   const getIssueState = vi.fn(async () => ({ state: params.issueState ?? 'open' }));
@@ -45,6 +46,7 @@ function createGithubClientStub(params: {
   const getGameMedia = vi.fn(async () => params.gameMedia ?? null);
   const getCatalog = vi.fn(async () => params.catalog ?? []);
   const createIssueComment = vi.fn(async () => ({ id: 1 }));
+  const getProgressNotes = vi.fn(async () => params.progressNotes ?? null);
   const githubClient: GitHubClient = {
     createIssue,
     getIssueState,
@@ -53,6 +55,7 @@ function createGithubClientStub(params: {
     getGameSources,
     getGameMedia,
     getCatalog,
+    getProgressNotes,
   };
   return {
     githubClient,
@@ -63,6 +66,7 @@ function createGithubClientStub(params: {
     getGameSources,
     getGameMedia,
     getCatalog,
+    getProgressNotes,
   };
 }
 
@@ -1295,6 +1299,64 @@ describe('GET /api/submissions/stats (build-time expectation)', () => {
 
     const res = await app.inject({ method: 'GET', url: '/api/submissions/stats', headers: authHeaders });
     expect(res.json()).toEqual({ medianMinutes: null, sampleSize: 0 });
+
+    await app.close();
+  });
+});
+
+describe('agent progress note', () => {
+  it('surfaces the agent’s own "what I am doing" line from its branch journal', async () => {
+    const { githubClient, getProgressNotes } = createGithubClientStub({
+      issueState: 'open',
+      linkedPr: {
+        number: 30,
+        state: 'OPEN',
+        merged: false,
+        isDraft: true,
+        titleHasWip: false,
+        headRefName: 'copilot/foo',
+        headRefOid: 'sha-1',
+        changedFiles: ['games/space-runner/index.html'],
+        commits: [],
+      },
+      progressNotes: [
+        '# Progress',
+        '',
+        '- 2026-01-01T00:10:00Z — Adding grenades to the soldiers.',
+        '- Made the squad move faster.',
+      ].join('\n'),
+    });
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
+
+    const res = await app.inject({ method: 'GET', url: `/api/submissions/${mintToken(123, secret)}` });
+    expect(res.statusCode).toBe(200);
+    // Newest entry only, with the bullet and timestamp stripped.
+    expect(res.json().progress.note).toBe('Adding grenades to the soldiers.');
+    expect(getProgressNotes).toHaveBeenCalledWith('copilot/foo', 'space-runner');
+
+    await app.close();
+  });
+
+  it('degrades to no note when the agent keeps no journal', async () => {
+    const { githubClient } = createGithubClientStub({
+      issueState: 'open',
+      linkedPr: {
+        number: 30,
+        state: 'OPEN',
+        merged: false,
+        isDraft: true,
+        titleHasWip: false,
+        headRefName: 'copilot/foo',
+        headRefOid: 'sha-1',
+        changedFiles: ['games/space-runner/index.html'],
+        commits: [],
+      },
+      progressNotes: null,
+    });
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
+
+    const res = await app.inject({ method: 'GET', url: `/api/submissions/${mintToken(123, secret)}` });
+    expect(res.json().progress.note).toBeUndefined();
 
     await app.close();
   });

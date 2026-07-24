@@ -17,6 +17,7 @@ import {
   CREATOR_FEEDBACK_MARKER,
   deriveStatus,
   extractSlugFromChangedFiles,
+  parseProgressNote,
   sanitizeCreatorText,
   type SubmissionStatusResponse,
 } from './submission-status.js';
@@ -201,10 +202,41 @@ export async function registerSubmissionRoutes(
 
   // Single source of GitHub-state → status derivation, shared by the on-demand
   // status route and the notification sweep so they never diverge.
-  async function deriveSubmissionStatus(client: GitHubClient, issueNumber: number): Promise<SubmissionStatusResponse> {
+  async function deriveSubmissionStatusWithPr(
+    client: GitHubClient,
+    issueNumber: number,
+  ): Promise<{ status: SubmissionStatusResponse; linkedPr: LinkedPullRequest | null }> {
     const issue = await client.getIssueState(issueNumber);
     const linkedPr = await client.findLinkedPR(issueNumber);
-    return deriveStatus(issue.state, linkedPr, (slug) => isSlugPublished(client, slug));
+    const status = await deriveStatus(issue.state, linkedPr, (slug) => isSlugPublished(client, slug));
+    return { status, linkedPr };
+  }
+
+  async function deriveSubmissionStatus(client: GitHubClient, issueNumber: number): Promise<SubmissionStatusResponse> {
+    return (await deriveSubmissionStatusWithPr(client, issueNumber)).status;
+  }
+
+  /**
+   * Pulls in the agent's own progress line from its branch. Best effort: a missing
+   * or unreadable journal just means the UI falls back to the commit log, which is
+   * what every build looked like before agents started writing these.
+   */
+  async function attachProgressNote(
+    client: GitHubClient,
+    status: SubmissionStatusResponse,
+    linkedPr: LinkedPullRequest | null,
+  ): Promise<SubmissionStatusResponse> {
+    const slug = status.preview?.slug;
+    if (!status.progress || !slug || !linkedPr?.headRefName) {
+      return status;
+    }
+
+    try {
+      const note = parseProgressNote(await client.getProgressNotes(linkedPr.headRefName, slug));
+      return note ? { ...status, progress: { ...status.progress, note } } : status;
+    } catch {
+      return status;
+    }
   }
 
   app.post('/api/submissions', async (request, reply) => {
@@ -283,6 +315,17 @@ export async function registerSubmissionRoutes(
       '- Commit in small steps rather than one big push, so the log keeps moving.',
       '- Write commit subjects in plain language about the game, not the code',
       '  (“add a boost pad on lap two”, not “refactor track module”).',
+      '- Keep a `games/<slug>/PROGRESS.md` journal: a newest-first list where the top line',
+      '  says, in one plain sentence, what you are working on right now. Commit it as soon',
+      '  as you start each step — that line is shown to the creator verbatim, so it is the',
+      '  fastest way to tell them what is happening.',
+      '',
+      '  ```markdown',
+      '  # Progress',
+      '',
+      '  - Adding grenades to the soldiers.',
+      '  - Made the squad move faster.',
+      '  ```',
     ].join('\n');
 
     try {
@@ -311,8 +354,12 @@ export async function registerSubmissionRoutes(
       return status;
     }
 
-    const { commits, checklist } = status.progress;
-    const sources = [...commits.map((commit) => commit.message), ...checklist.map((item) => item.text)];
+    const { commits, checklist, note } = status.progress;
+    const sources = [
+      ...commits.map((commit) => commit.message),
+      ...checklist.map((item) => item.text),
+      ...(note ? [note] : []),
+    ];
     if (sources.length === 0) {
       return status;
     }
@@ -327,6 +374,7 @@ export async function registerSubmissionRoutes(
           ...item,
           text: translated[commits.length + index] ?? item.text,
         })),
+        ...(note ? { note: translated[commits.length + checklist.length] ?? note } : {}),
       },
     };
   }
@@ -428,8 +476,9 @@ export async function registerSubmissionRoutes(
     }
 
     try {
-      const derived = await deriveSubmissionStatus(githubClient, issueNumber);
-      const status = await localizeStatus(derived, locale);
+      const { status: derived, linkedPr } = await deriveSubmissionStatusWithPr(githubClient, issueNumber);
+      const withNote = await attachProgressNote(githubClient, derived, linkedPr);
+      const status = await localizeStatus(withNote, locale);
       statusCache.set(cacheKey, { value: status, expiresAt: currentTime + 60_000 });
 
       // Opportunistic detection (docs/notifications-plan.md N1): a poll that

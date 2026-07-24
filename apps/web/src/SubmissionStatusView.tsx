@@ -643,14 +643,15 @@ function BuildProgressPanel({
   const { t, i18n } = useTranslation();
   const activity = buildActivityFeed(progress, pendingRevisions);
 
-  if (progress.checklist.length === 0 && activity.length === 0) {
+  if (progress.checklist.length === 0 && activity.length === 0 && !progress.note) {
     return null;
   }
 
   const doneCount = progress.checklist.filter((item) => item.checked).length;
   const donePercent = progress.checklist.length === 0 ? 0 : (doneCount / progress.checklist.length) * 100;
-  // The first unfinished task is the honest answer to "what is it doing right now?".
-  const currentStep = progress.checklist.find((item) => !item.checked);
+  // What the agent says it is doing beats what we infer from its checklist — fall
+  // back to the first unfinished task only when it has written nothing.
+  const currentStep = progress.note ? undefined : progress.checklist.find((item) => !item.checked);
   const lastUpdate = activity[0];
   // A long gap between pushes is normal, but silence with no explanation reads as
   // "it's broken" — say so plainly instead of letting the creator guess.
@@ -658,6 +659,13 @@ function BuildProgressPanel({
 
   return (
     <div className="build-progress">
+      {progress.note ? (
+        <p className="build-progress-note">
+          <span className="build-progress-note-label">{t('statusView.progress.agentSays')}</span>
+          <span className="build-progress-note-text">{progress.note}</span>
+        </p>
+      ) : null}
+
       {progress.checklist.length > 0 ? (
         <div className="build-progress-checklist">
           <div className="build-progress-heading-row">

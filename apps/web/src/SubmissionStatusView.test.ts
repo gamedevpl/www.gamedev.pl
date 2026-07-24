@@ -444,6 +444,40 @@ describe('SubmissionStatusView expectations & failures', () => {
     });
   });
 
+  it('shows the agent’s own progress line above anything it infers', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    mockedGetBuildStats.mockResolvedValue({ medianMinutes: null, sampleSize: 0 });
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      progress: {
+        headSha: 'sha-1',
+        commits: [],
+        checklist: [{ text: 'Add collision detection', checked: false }],
+        note: 'Adding grenades to the soldiers.',
+      },
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'note-token' }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.build-progress-note')?.textContent).toContain('Adding grenades to the soldiers.');
+    // The inferred "working on: <first unfinished task>" line stands down when the
+    // agent has said what it is doing.
+    expect(container.querySelector('.build-progress-current')).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('says so when CI is failing on the build', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');

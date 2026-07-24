@@ -183,6 +183,13 @@ export interface GitHubClient {
    */
   getGameSources(ref: string, slug: string): Promise<GameSources | null>;
   /**
+   * Reads the agent's own progress journal for a game on `ref`
+   * (`games/<slug>/PROGRESS.md`). This is how the coding agent narrates what it is
+   * doing in words a creator understands, instead of us inferring it from commit
+   * subjects. Returns null when the agent hasn't written one.
+   */
+  getProgressNotes(ref: string, slug: string): Promise<string | null>;
+  /**
    * Reads a website-ready screenshot or gameplay video from a published game's
    * media directory. Callers must still validate the filename against catalog
    * metadata before exposing the bytes.
@@ -499,6 +506,15 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
           createdAt: node.createdAt,
         })),
       };
+    },
+
+    async getProgressNotes(ref, slug) {
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) {
+        return null;
+      }
+      const raw = await readRawFile(`games/${slug}/PROGRESS.md`, ref);
+      // Cap the read: this is agent-authored and only its newest lines are shown.
+      return raw === null ? null : raw.slice(0, 4096);
     },
 
     async getGameSources(ref, slug) {
