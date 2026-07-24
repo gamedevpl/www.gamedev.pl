@@ -168,6 +168,10 @@ function generateCode(): string {
 export function sanitizeNick(raw: string): string {
   const collapsed = raw
     .replace(/[\p{C}]/gu, '')
+    // Strip the HTML-significant characters at the source too, so the relayed
+    // value is already inert. Both consumers (the React lobby and the game's
+    // canvas fillText) escape it as well — this is belt-and-braces.
+    .replace(/[<>&]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
   return collapsed.slice(0, 16);
@@ -180,10 +184,13 @@ const HelloFrameSchema = z.object({
   nick: z.string().optional(),
 });
 
+// The value field is `d`, not `v`: every frame carries `v` as the protocol
+// version, and a key-release (0) would otherwise overwrite it and be rejected as
+// a version mismatch by the other side.
 const InputFrameSchema = z.object({
   t: z.literal('input'),
   k: z.enum(INPUT_KEYS),
-  v: z.union([z.literal(0), z.literal(1)]),
+  d: z.union([z.literal(0), z.literal(1)]),
 });
 
 const PhaseFrameSchema = z.object({
@@ -350,7 +357,7 @@ export class RoomRegistry {
     if (!room) return;
     room.lastActivity = this.now();
     if (room.host) {
-      this.sendTo(room.host, { t: 'input', slot, k: key, v: value });
+      this.sendTo(room.host, { t: 'input', slot, k: key, d: value });
     }
   }
 
@@ -620,7 +627,7 @@ export async function registerMultiplayerRoutes(
           closeWith('not_a_controller');
           return;
         }
-        registry.relayInput(roomCode, slotNumber, message.k, message.v);
+        registry.relayInput(roomCode, slotNumber, message.k, message.d);
         return;
       }
 

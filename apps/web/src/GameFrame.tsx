@@ -1,6 +1,13 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type MutableRefObject } from 'react';
 
-type GameFrameProps = { title: string; html: string; src?: never } | { title: string; src: string; html?: never };
+type GameFrameSource = { title: string; html: string; src?: never } | { title: string; src: string; html?: never };
+
+/**
+ * `frameRef` lets a multiplayer host reach this iframe's contentWindow to relay
+ * controller input over postMessage. Single-player callers omit it and nothing
+ * about the frame changes — the sandbox attribute is identical either way.
+ */
+type GameFrameProps = GameFrameSource & { frameRef?: MutableRefObject<HTMLIFrameElement | null> };
 
 /**
  * Runs a generated game inside a sandboxed iframe. `allow-scripts` with NO
@@ -9,7 +16,8 @@ type GameFrameProps = { title: string; html: string; src?: never } | { title: st
  * arbitrary generated code (the same model itch.io / CodePen use).
  */
 export function GameFrame(props: GameFrameProps) {
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const localRef = useRef<HTMLIFrameElement>(null);
+  const iframeRef = props.frameRef ?? localRef;
 
   useEffect(() => {
     // Automatically focus the iframe so arrow keys / WASD controls work immediately
@@ -17,7 +25,7 @@ export function GameFrame(props: GameFrameProps) {
       iframeRef.current?.focus();
     }, 100);
     return () => clearTimeout(timer);
-  }, [props.html, props.src]);
+  }, [props.html, props.src, iframeRef]);
 
   return (
     <iframe

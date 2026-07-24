@@ -8,6 +8,13 @@ export interface CatalogMedia {
   video: string | null;
 }
 
+/** Present only for games that declare `multiplayer: controllers` in their spec. */
+export interface CatalogMultiplayer {
+  mode: 'controllers';
+  minPlayers: number;
+  maxPlayers: number;
+}
+
 export interface CatalogEntry {
   slug: string;
   title: string;
@@ -15,6 +22,7 @@ export interface CatalogEntry {
   controls: string;
   status: string;
   media: CatalogMedia | null;
+  multiplayer: CatalogMultiplayer | null;
 }
 
 /** A published game assembled by the API, ready for the sandboxed iframe's srcDoc. */
@@ -53,6 +61,21 @@ function parseCatalogMedia(value: unknown): CatalogMedia | null {
   return screenshots.length > 0 || video ? { screenshots, video } : null;
 }
 
+function parseCatalogMultiplayer(value: unknown): CatalogMultiplayer | null {
+  if (typeof value !== 'object' || value === null) {
+    return null;
+  }
+  const multiplayer = value as { mode?: unknown; minPlayers?: unknown; maxPlayers?: unknown };
+  if (
+    multiplayer.mode !== 'controllers' ||
+    typeof multiplayer.minPlayers !== 'number' ||
+    typeof multiplayer.maxPlayers !== 'number'
+  ) {
+    return null;
+  }
+  return { mode: 'controllers', minPlayers: multiplayer.minPlayers, maxPlayers: multiplayer.maxPlayers };
+}
+
 export async function fetchCatalog(): Promise<CatalogEntry[]> {
   const response = await fetch(`${API_BASE}/api/catalog`);
 
@@ -68,7 +91,7 @@ export async function fetchCatalog(): Promise<CatalogEntry[]> {
 
   return body
     .filter(
-      (entry): entry is Omit<CatalogEntry, 'media'> & { media?: unknown } =>
+      (entry): entry is Omit<CatalogEntry, 'media' | 'multiplayer'> & { media?: unknown; multiplayer?: unknown } =>
         typeof entry === 'object' &&
         entry !== null &&
         typeof entry.slug === 'string' &&
@@ -78,7 +101,11 @@ export async function fetchCatalog(): Promise<CatalogEntry[]> {
         typeof entry.status === 'string' &&
         entry.status === 'published',
     )
-    .map((entry) => ({ ...entry, media: parseCatalogMedia(entry.media) }));
+    .map((entry) => ({
+      ...entry,
+      media: parseCatalogMedia(entry.media),
+      multiplayer: parseCatalogMultiplayer((entry as { multiplayer?: unknown }).multiplayer),
+    }));
 }
 
 export async function fetchPublishedGame(slug: string): Promise<PublishedGame> {

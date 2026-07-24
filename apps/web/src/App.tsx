@@ -15,9 +15,14 @@ import { useAuth } from './AuthContext';
 import { AuthModal } from './AuthModal';
 import { ClosedBetaSplash } from './ClosedBetaSplash';
 import { AppLoadingScreen } from './AppLoadingScreen';
+import { ControllerView } from './mp/ControllerView';
+import { PartyStage } from './mp/PartyStage';
+import { createPartySession, type PartySession } from './mp/mpApi';
 
 type StageContent =
-  { type: 'catalog'; game: CatalogEntry } | { type: 'generated'; game: GeneratedGame; prompt: string };
+  | { type: 'catalog'; game: CatalogEntry }
+  | { type: 'generated'; game: GeneratedGame; prompt: string }
+  | { type: 'party'; game: CatalogEntry; session: PartySession };
 
 export function App() {
   const { t } = useTranslation();
@@ -43,6 +48,9 @@ export function App() {
   // Demo generator state
   const [mockStatus, setMockStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [mockError, setMockError] = useState<string | null>(null);
+
+  // Multiplayer lobby state
+  const [partyError, setPartyError] = useState<string | null>(null);
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -193,6 +201,30 @@ export function App() {
     document.getElementById('stage')?.scrollIntoView?.({ behavior: 'smooth' });
   }
 
+  async function handlePlayTogether(game: CatalogEntry) {
+    if (!user) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+    if (!game.multiplayer) return;
+
+    setPartyError(null);
+    try {
+      const session = await createPartySession(game.slug, game.multiplayer.maxPlayers);
+      setStageContent({ type: 'party', game, session });
+      document.getElementById('stage')?.scrollIntoView?.({ behavior: 'smooth' });
+    } catch (error) {
+      setPartyError(error instanceof Error ? error.message : t('errors.generic'));
+    }
+  }
+
+  // A phone that scanned a lobby QR is anonymous by design: it has no session and
+  // never will, so the controller route is checked BEFORE the auth gates. It is
+  // useless without a valid room token, which only an allowlisted host can mint.
+  if (route.view === 'join') {
+    return <ControllerView code={route.code} token={route.token} />;
+  }
+
   if (authLoading) {
     return <AppLoadingScreen />;
   }
@@ -230,7 +262,29 @@ export function App() {
 
             {stageContent && (
               <section id="stage" className="panel stage is-playing-full-viewport">
-                {stageContent.type === 'catalog' ? (
+                {stageContent.type === 'party' ? (
+                  <>
+                    <div className="game-theater-bar">
+                      <div className="game-theater-meta">
+                        <span className="theater-badge">📱 {t('party.badge')}</span>
+                        <h2 className="theater-title">{stageContent.game.title}</h2>
+                      </div>
+                      <div className="game-theater-actions">
+                        <button className="secondary-btn exit-btn" onClick={() => setStageContent(null)}>
+                          ✕ {t('catalog.exitPlayer', { defaultValue: 'Exit Player' })}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="game-viewport-container">
+                      <PartyStage
+                        key={stageContent.session.code}
+                        game={stageContent.game}
+                        session={stageContent.session}
+                        onExit={() => setStageContent(null)}
+                      />
+                    </div>
+                  </>
+                ) : stageContent.type === 'catalog' ? (
                   <>
                     <div className="game-theater-bar">
                       <div className="game-theater-meta">
@@ -287,12 +341,15 @@ export function App() {
               </section>
             )}
 
+            {partyError && <p className="error party-error">{partyError}</p>}
+
             <ArcadeCatalog
               catalogStatus={catalogStatus}
               catalogError={catalogError}
               catalogEntries={catalogEntries}
               onPlayGame={handlePlayGame}
               onRemixGame={handleRemixGame}
+              onPlayTogether={(game) => void handlePlayTogether(game)}
             />
           </>
         )}

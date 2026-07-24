@@ -194,5 +194,48 @@
       "injection": "That looks like it's trying to instruct the build agent rather than describe a game. Please rephrase and try again.",
       "other": "We can't accept that as written. Please rephrase and try again."
     }
+  },
+  "party": {
+    "badge": "Party mode",
+    "playTogether": "Play together",
+    "playersBadge": "Up to {{max}} players",
+    "scanToJoin": "Scan to join",
+    "scanHint": "Each player points their phone camera at the code. {{min}}–{{max}} players; anyone without a phone can use the keyboard.",
+    "qrLabel": "QR code to join room {{code}}",
+    "emptySlot": "Open slot",
+    "keyboardSlot": "Keyboard {{slot}}",
+    "onPhone": "On phone",
+    "kick": "Remove",
+    "start": "Start with {{count}} on phones",
+    "startAnyway": "Start now",
+    "cancel": "Cancel",
+    "statusReady": "Lobby is live — waiting for players",
+    "statusConnecting": "Opening the lobby…",
+    "statusPlaying": "Playing",
+    "statusWaiting": "Waiting for the host",
+    "statusReconnecting": "Reconnecting…",
+    "joinTitle": "Join the game",
+    "nickLabel": "Your name",
+    "join": "Join",
+    "slotBadge": "P{{slot}}",
+    "up": "Up",
+    "down": "Down",
+    "left": "Left",
+    "right": "Right",
+    "action": "Action button",
+    "roomClosedTitle": "The lobby closed",
+    "backToCatalog": "Back to the catalog",
+    "controllerClosedHint": "Ask the host to open a new lobby, then scan again.",
+    "closed": {
+      "generic": "The lobby is no longer available.",
+      "kicked": "You were removed from the game.",
+      "host_left": "The host closed the game.",
+      "expired": "The lobby timed out.",
+      "replaced": "The host started a different lobby.",
+      "room_not_found": "That lobby no longer exists.",
+      "room_full_or_invalid": "The lobby is full.",
+      "unreachable": "Lost connection to the lobby.",
+      "rate_limited": "Too many inputs — connection closed."
+    }
   }
 }

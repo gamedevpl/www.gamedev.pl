@@ -194,5 +194,48 @@
       "injection": "Wygląda na to, że to próba wydania poleceń agentowi budującemu grę, a nie opis gry. Popraw treść i spróbuj ponownie.",
       "other": "Nie możemy przyjąć tego w tej formie. Popraw treść i spróbuj ponownie."
     }
+  },
+  "party": {
+    "badge": "Tryb imprezowy",
+    "playTogether": "Zagrajcie razem",
+    "playersBadge": "Do {{max}} graczy",
+    "scanToJoin": "Zeskanuj, aby dołączyć",
+    "scanHint": "Każdy gracz kieruje aparat telefonu na kod. {{min}}–{{max}} graczy; kto nie ma telefonu, gra na klawiaturze.",
+    "qrLabel": "Kod QR do pokoju {{code}}",
+    "emptySlot": "Wolne miejsce",
+    "keyboardSlot": "Klawiatura {{slot}}",
+    "onPhone": "Na telefonie",
+    "kick": "Usuń",
+    "start": "Zacznij — {{count}} na telefonach",
+    "startAnyway": "Zacznij teraz",
+    "cancel": "Anuluj",
+    "statusReady": "Pokój działa — czekamy na graczy",
+    "statusConnecting": "Otwieram pokój…",
+    "statusPlaying": "Gramy",
+    "statusWaiting": "Czekaj na gospodarza",
+    "statusReconnecting": "Ponowne łączenie…",
+    "joinTitle": "Dołącz do gry",
+    "nickLabel": "Twoja nazwa",
+    "join": "Dołącz",
+    "slotBadge": "G{{slot}}",
+    "up": "Góra",
+    "down": "Dół",
+    "left": "Lewo",
+    "right": "Prawo",
+    "action": "Przycisk akcji",
+    "roomClosedTitle": "Pokój został zamknięty",
+    "backToCatalog": "Wróć do katalogu",
+    "controllerClosedHint": "Poproś gospodarza o nowy pokój i zeskanuj kod ponownie.",
+    "closed": {
+      "generic": "Pokój nie jest już dostępny.",
+      "kicked": "Zostałeś usunięty z gry.",
+      "host_left": "Gospodarz zakończył grę.",
+      "expired": "Pokój wygasł.",
+      "replaced": "Gospodarz otworzył inny pokój.",
+      "room_not_found": "Ten pokój już nie istnieje.",
+      "room_full_or_invalid": "Pokój jest pełny.",
+      "unreachable": "Utracono połączenie z pokojem.",
+      "rate_limited": "Zbyt wiele sygnałów — połączenie zamknięte."
+    }
   }
 }

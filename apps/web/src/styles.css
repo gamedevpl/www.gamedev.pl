@@ -2122,3 +2122,328 @@ body.player-open {
   color: var(--muted);
   margin-left: 12px;
 }
+
+/* ---------------------------------------------------------------------------
+   Multiplayer party mode (docs/multiplayer-plan.md)
+   Two surfaces: the shared screen's lobby, and the phone controller. The
+   controller is thumb-sized and touch-only by design — it is the one page in
+   this app that is never viewed on a desktop.
+   --------------------------------------------------------------------------- */
+
+.card-party-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border: 1px solid var(--turquoise);
+  border-radius: 999px;
+  color: var(--turquoise);
+  font-size: 0.7rem;
+  font-weight: 700;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.party-btn {
+  border-color: var(--turquoise) !important;
+  color: var(--turquoise) !important;
+}
+
+.party-error {
+  margin: 12px auto;
+  text-align: center;
+}
+
+.party-lobby {
+  display: flex;
+  flex-wrap: wrap;
+  gap: clamp(16px, 4vw, 48px);
+  align-items: center;
+  justify-content: center;
+  padding: clamp(16px, 3vw, 36px);
+  height: 100%;
+  overflow-y: auto;
+}
+
+.party-qr-block {
+  text-align: center;
+}
+
+.party-qr {
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  /* The QR is the product: it has to be scannable from across a table. */
+  width: clamp(220px, 34vmin, 380px);
+  height: auto;
+}
+
+.party-code {
+  margin: 12px 0 2px;
+  font-size: clamp(1.6rem, 4vw, 2.4rem);
+  font-weight: 800;
+  letter-spacing: 0.24em;
+  color: var(--turquoise);
+}
+
+.party-url {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  word-break: break-all;
+  max-width: 34ch;
+}
+
+.party-lobby-side {
+  min-width: min(340px, 100%);
+  max-width: 460px;
+}
+
+.party-title {
+  margin: 0 0 6px;
+  font-size: clamp(1.4rem, 3vw, 2rem);
+}
+
+.party-sub {
+  margin: 0 0 18px;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.party-slots {
+  list-style: none;
+  margin: 0 0 20px;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.party-slot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: var(--panel-card);
+  opacity: 0.55;
+  transition:
+    opacity 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.party-slot.is-connected {
+  opacity: 1;
+  border-color: var(--turquoise);
+}
+
+.party-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.party-slot-name {
+  font-weight: 700;
+  flex: 1;
+}
+
+.party-slot-tag {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.party-kick {
+  border: none;
+  background: none;
+  color: var(--error);
+  cursor: pointer;
+  font-size: 0.78rem;
+}
+
+.party-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.party-status {
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.party-panel {
+  display: grid;
+  place-content: center;
+  gap: 12px;
+  text-align: center;
+  height: 100%;
+  padding: 24px;
+}
+
+.party-playing {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.party-slotstrip {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+}
+
+.party-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  opacity: 0.5;
+}
+
+.party-chip.is-connected {
+  opacity: 1;
+}
+
+/* --- phone controller ---------------------------------------------------- */
+
+.controller-screen {
+  --slot-color: var(--turquoise);
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 14px;
+  gap: 12px;
+  background: var(--bg-gradient);
+  /* Never scroll, never zoom, never select: this is a gamepad, not a document. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  overscroll-behavior: none;
+}
+
+.controller-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.controller-badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: #07101f;
+  font-weight: 800;
+  font-size: 0.8rem;
+}
+
+.controller-nick {
+  font-weight: 700;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.controller-status {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.controller-status-reconnecting {
+  color: #ffd56a;
+}
+
+.controller-pad {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 8px;
+  max-height: 58vh;
+}
+
+.pad-btn {
+  border: 2px solid var(--slot-color);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--slot-color);
+  font-size: 1.6rem;
+  touch-action: none;
+}
+
+.pad-btn:active {
+  background: var(--slot-color);
+  color: #07101f;
+}
+
+.pad-up {
+  grid-area: 1 / 2;
+}
+.pad-left {
+  grid-area: 2 / 1;
+}
+.pad-right {
+  grid-area: 2 / 3;
+}
+.pad-down {
+  grid-area: 3 / 2;
+}
+
+.action-btn {
+  min-height: 22vh;
+  border: none;
+  border-radius: 20px;
+  background: var(--slot-color);
+  color: #07101f;
+  font-size: 2rem;
+  font-weight: 900;
+  touch-action: none;
+}
+
+.action-btn:active {
+  filter: brightness(0.82);
+}
+
+.controller-join,
+.controller-message {
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  gap: 14px;
+}
+
+.controller-room {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: 0.24em;
+  color: var(--turquoise);
+}
+
+.controller-label {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.controller-input {
+  width: min(320px, 80vw);
+  padding: 12px 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: var(--panel-card);
+  color: var(--text);
+  font-size: 1.1rem;
+  text-align: center;
+}
+
+.controller-join-btn {
+  width: min(320px, 80vw);
+  min-height: 52px;
+  font-size: 1.05rem;
+}

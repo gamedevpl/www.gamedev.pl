@@ -37,10 +37,40 @@ describe('catalog helpers', () => {
           screenshots: [{ name: 'opening', file: 'opening.png' }],
           video: 'gameplay.mp4',
         },
+        multiplayer: null,
       },
     ]);
     // The catalog is served by our own API, not public GitHub Pages.
     expect(globalThis.fetch).toHaveBeenCalledWith('/api/catalog');
+  });
+
+  it('keeps well-formed multiplayer metadata and drops malformed metadata', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          {
+            slug: 'arena-tag',
+            title: 'Arena Tag',
+            genre: 'party',
+            controls: 'D-pad',
+            status: 'published',
+            multiplayer: { mode: 'controllers', minPlayers: 2, maxPlayers: 4 },
+          },
+          {
+            slug: 'broken',
+            title: 'Broken',
+            genre: 'party',
+            controls: 'D-pad',
+            status: 'published',
+            multiplayer: { mode: 'lockstep', minPlayers: 2, maxPlayers: 4 },
+          },
+        ]),
+      ),
+    );
+
+    const entries = await fetchCatalog();
+    expect(entries[0].multiplayer).toEqual({ mode: 'controllers', minPlayers: 2, maxPlayers: 4 });
+    expect(entries[1].multiplayer).toBeNull();
   });
 
   it('builds same-origin media URLs with encoded path segments', () => {

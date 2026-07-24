@@ -8,6 +8,7 @@ type ArcadeCatalogProps = {
   catalogEntries: CatalogEntry[];
   onPlayGame: (game: CatalogEntry) => void;
   onRemixGame: (game: CatalogEntry) => void;
+  onPlayTogether: (game: CatalogEntry) => void;
 };
 
 function humanizeMoment(name: string): string {
@@ -21,10 +22,12 @@ function CatalogCard({
   entry,
   onPlayGame,
   onRemixGame,
+  onPlayTogether,
 }: {
   entry: CatalogEntry;
   onPlayGame: (game: CatalogEntry) => void;
   onRemixGame: (game: CatalogEntry) => void;
+  onPlayTogether: (game: CatalogEntry) => void;
 }) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -137,30 +140,36 @@ function CatalogCard({
             {isPreviewPlaying ? `❚❚ ${t('catalog.pausePreview')}` : `▶ ${t('catalog.watchPreview')}`}
           </button>
         )}
+
+        <span className="genre-pill">{entry.genre}</span>
+
+        {screenshots.length > 1 && (
+          <div className="catalog-moments" aria-label={t('catalog.gameMoments', { title: entry.title })}>
+            {screenshots.slice(0, 4).map((screenshot, index) => (
+              <button
+                key={screenshot.file}
+                type="button"
+                className={index === selectedScreenshot ? 'catalog-moment is-selected' : 'catalog-moment'}
+                aria-label={t('catalog.viewMoment', { moment: humanizeMoment(screenshot.name), title: entry.title })}
+                aria-pressed={index === selectedScreenshot}
+                onClick={() => selectScreenshot(index)}
+              >
+                <img src={catalogMediaUrl(entry.slug, screenshot.file)} alt="" loading="lazy" />
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {screenshots.length > 1 && (
-        <div className="catalog-moments" aria-label={t('catalog.gameMoments', { title: entry.title })}>
-          {screenshots.slice(0, 4).map((screenshot, index) => (
-            <button
-              key={screenshot.file}
-              type="button"
-              className={index === selectedScreenshot ? 'catalog-moment is-selected' : 'catalog-moment'}
-              aria-label={t('catalog.viewMoment', { moment: humanizeMoment(screenshot.name), title: entry.title })}
-              aria-pressed={index === selectedScreenshot}
-              onClick={() => selectScreenshot(index)}
-            >
-              <img src={catalogMediaUrl(entry.slug, screenshot.file)} alt="" loading="lazy" />
-            </button>
-          ))}
-        </div>
-      )}
-
       <div className="catalog-card-content">
-        <div className="card-header">
-          <h3>{entry.title}</h3>
-          <span className="genre-pill">{entry.genre}</span>
-        </div>
+        <h3 className="card-title">
+          {entry.title}
+          {entry.multiplayer && (
+            <span className="card-party-badge">
+              📱 {t('party.playersBadge', { max: entry.multiplayer.maxPlayers })}
+            </span>
+          )}
+        </h3>
 
         <dl className="catalog-meta">
           <div>
@@ -173,6 +182,11 @@ function CatalogCard({
           <button className="primary-btn" onClick={() => onPlayGame(entry)}>
             ▶ {t('catalog.play')}
           </button>
+          {entry.multiplayer && (
+            <button className="secondary-btn party-btn" onClick={() => onPlayTogether(entry)}>
+              📱 {t('party.playTogether')}
+            </button>
+          )}
           <button className="secondary-btn" onClick={() => onRemixGame(entry)}>
             ⚡ {t('catalog.remix')}
           </button>
@@ -188,6 +202,7 @@ export function ArcadeCatalog({
   catalogEntries,
   onPlayGame,
   onRemixGame,
+  onPlayTogether,
 }: ArcadeCatalogProps) {
   const { t } = useTranslation();
 
@@ -207,7 +222,13 @@ export function ArcadeCatalog({
       ) : (
         <div className="catalog-grid">
           {catalogEntries.map((entry) => (
-            <CatalogCard key={entry.slug} entry={entry} onPlayGame={onPlayGame} onRemixGame={onRemixGame} />
+            <CatalogCard
+              key={entry.slug}
+              entry={entry}
+              onPlayGame={onPlayGame}
+              onRemixGame={onRemixGame}
+              onPlayTogether={onPlayTogether}
+            />
           ))}
         </div>
       )}
