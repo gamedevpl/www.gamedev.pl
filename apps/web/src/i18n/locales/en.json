@@ -195,7 +195,9 @@
     "previewError": "We couldn't load the preview right now. Please try again in a moment.",
     "gallery": {
       "alt": "The game as it looks right now",
-      "caption": "How your game looks right now"
+      "caption": "How your game looks right now",
+      "expand": "Click to see it full size",
+      "close": "Close"
     },
     "feedback": {
       "title": "Want changes?",

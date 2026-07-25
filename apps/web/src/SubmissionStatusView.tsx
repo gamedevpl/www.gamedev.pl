@@ -395,8 +395,6 @@ export function SubmissionStatusView({
                 creator is most likely to spot a misreading of their idea, was the one
                 stretch they could not say anything. The agent picks messages up off the
                 channel on its next report, so a note left now lands in a minute or two. */}
-            {status.media && status.media.length > 0 ? <BuildGallery token={token} media={status.media} /> : null}
-
             {status.status !== 'published' && status.status !== 'abandoned' ? (
               <FeedbackPanel
                 token={token}
@@ -406,8 +404,10 @@ export function SubmissionStatusView({
             ) : null}
 
             <BuildProgressPanel
+              token={token}
               progress={status.progress}
               events={status.events ?? []}
+              media={status.media ?? []}
               pendingRevisions={pendingRevisions}
             />
 
@@ -604,52 +604,43 @@ function PlayCard({
 }
 
 /**
- * Pictures of the build so far, newest first.
+ * One picture of the build, full size, over the page.
  *
- * The status page was words only — a checklist, commit subjects, and the agent's own
- * sentences — through an hour of watching something visual being made. These are the
- * frames the agent renders anyway: committed captures once it has pushed, and
- * screenshots pushed straight down the channel before that.
- *
- * Images are dropped from the list when they fail to load rather than left as broken
- * frames: a capture can vanish between the status poll that listed it and the request
- * for its bytes, when the agent force-pushes a branch mid-build.
+ * The pictures live on the timeline as thumbnails, which is where they belong: they
+ * are things that happened, in among the sentences and commits describing the same
+ * moments. But a thumbnail of a game is close to useless — you cannot see whether the
+ * bridge holds — so any of them opens here at whatever size the viewport allows.
  */
-function BuildGallery({ token, media }: { token: string; media: BuildMediaItem[] }) {
+function ShotLightbox({ token, item, onClose }: { token: string; item: BuildMediaItem; onClose: () => void }) {
   const { t } = useTranslation();
-  const [broken, setBroken] = useState<string[]>([]);
-  const [selected, setSelected] = useState<string | null>(null);
 
-  const shown = media.filter((item) => !broken.includes(item.ref));
-  if (shown.length === 0) return null;
-
-  const current = shown.find((item) => item.ref === selected) ?? shown[0];
-  const markBroken = (ref: string) => setBroken((current) => [...current, ref]);
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
 
   return (
-    <div className="status-gallery">
+    <div
+      className="status-lightbox"
+      role="dialog"
+      aria-modal="true"
+      aria-label={item.label || t('statusView.gallery.alt')}
+      onClick={onClose}
+    >
+      {/* The image swallows the click so only the backdrop closes. */}
       <img
-        className="status-gallery-hero"
-        src={buildMediaUrl(token, current)}
-        alt={current.label || t('statusView.gallery.alt')}
-        onError={() => markBroken(current.ref)}
+        className="status-lightbox-image"
+        src={buildMediaUrl(token, item)}
+        alt={item.label || t('statusView.gallery.alt')}
+        onClick={(event) => event.stopPropagation()}
       />
-      {shown.length > 1 ? (
-        <div className="status-gallery-strip">
-          {shown.map((item) => (
-            <img
-              key={item.ref}
-              className={`status-gallery-thumb${item.ref === current.ref ? ' is-current' : ''}`}
-              src={buildMediaUrl(token, item)}
-              alt={item.label || t('statusView.gallery.alt')}
-              loading="lazy"
-              onClick={() => setSelected(item.ref)}
-              onError={() => markBroken(item.ref)}
-            />
-          ))}
-        </div>
-      ) : null}
-      <p className="status-gallery-caption">{current.label || t('statusView.gallery.caption')}</p>
+      {item.label ? <p className="status-lightbox-caption">{item.label}</p> : null}
+      <button type="button" className="status-lightbox-close" onClick={onClose}>
+        {t('statusView.gallery.close')}
+      </button>
     </div>
   );
 }
@@ -753,7 +744,7 @@ function FeedbackPanel({
 const QUIET_BUILD_MS = 15 * 60_000;
 
 type ActivityEntry = {
-  kind: 'commit' | 'revision' | 'event';
+  kind: 'commit' | 'revision' | 'event' | 'media';
   text: string;
   at: number;
   /** Sent from this tab but not yet echoed back by the API. */
@@ -761,6 +752,8 @@ type ActivityEntry = {
   /** For agent events: the step it reported, rendered from our own translations. */
   step?: BuildStep;
   eventKind?: BuildEventKind;
+  /** Pictures shown as thumbnails on this row, expandable to full size. */
+  media?: BuildMediaItem[];
 };
 
 /** Icon per feed entry. Agent events say what kind of moment they are. */
@@ -772,12 +765,47 @@ const EVENT_ICONS: Record<BuildEventKind, PixelIconName> = {
   done: 'check',
 };
 
+/**
+ * Places the build's pictures on the timeline.
+ *
+ * A screenshot the agent pushed is a moment, so it gets its own row at the time it
+ * was taken. The captures committed on the branch are not moments — they are one set
+ * describing how the game looks at its latest commit — so they share a single row,
+ * dated to that commit rather than scattered across the feed at identical times.
+ */
+function mediaEntries(media: BuildMediaItem[], commitTime: number, caption: string): ActivityEntry[] {
+  const branch = media.filter((item) => item.source === 'branch');
+  const entries: ActivityEntry[] =
+    branch.length > 0 ? [{ kind: 'media', text: caption, at: commitTime, media: branch }] : [];
+
+  for (const shot of media) {
+    if (shot.source === 'branch') continue;
+    entries.push({
+      kind: 'media',
+      text: shot.label ?? caption,
+      at: shot.createdAt ? Date.parse(shot.createdAt) : commitTime,
+      media: [shot],
+    });
+  }
+  return entries;
+}
+
 function buildActivityFeed(
   progress: BuildProgress | undefined,
   events: BuildEvent[],
   pendingRevisions: PendingRevision[],
+  media: BuildMediaItem[],
+  mediaCaption: string,
 ): ActivityEntry[] {
+  // Branch captures belong at the commit that carries them; without commits the best
+  // available answer is "now", which keeps them at the top where they are useful.
+  const newestCommit = (progress?.commits ?? [])
+    .map((commit) => Date.parse(commit.committedDate))
+    .filter((time) => Number.isFinite(time))
+    .sort((a, b) => b - a)[0];
+
   const entries: ActivityEntry[] = [
+    ...mediaEntries(media, newestCommit ?? Date.now(), mediaCaption),
     ...events.map((event) => ({
       kind: 'event' as const,
       text: event.text,
@@ -810,16 +838,26 @@ function buildActivityFeed(
 }
 
 function BuildProgressPanel({
+  token,
   progress,
   events,
+  media,
   pendingRevisions,
 }: {
+  token: string;
   progress?: BuildProgress;
   events: BuildEvent[];
+  media: BuildMediaItem[];
   pendingRevisions: PendingRevision[];
 }) {
   const { t, i18n } = useTranslation();
-  const activity = buildActivityFeed(progress, events, pendingRevisions);
+  // A capture can vanish between the poll that listed it and the request for its
+  // bytes — the agent force-pushes its branch mid-build — so a picture that fails to
+  // load is dropped rather than left as a broken frame.
+  const [broken, setBroken] = useState<string[]>([]);
+  const [zoomed, setZoomed] = useState<BuildMediaItem | null>(null);
+  const shownMedia = media.filter((item) => !broken.includes(item.ref));
+  const activity = buildActivityFeed(progress, events, pendingRevisions, shownMedia, t('statusView.gallery.caption'));
   const checklist = progress?.checklist ?? [];
   // The agent's own latest word, in order of directness: an event it pushed over the
   // build channel, then the journal it committed, then nothing.
@@ -916,9 +954,11 @@ function BuildProgressPanel({
                     name={
                       entry.kind === 'revision'
                         ? 'pencil'
-                        : entry.kind === 'event'
-                          ? EVENT_ICONS[entry.eventKind ?? 'step']
-                          : 'wrench'
+                        : entry.kind === 'media'
+                          ? 'eye'
+                          : entry.kind === 'event'
+                            ? EVENT_ICONS[entry.eventKind ?? 'step']
+                            : 'wrench'
                     }
                     size={12}
                   />
@@ -936,6 +976,26 @@ function BuildProgressPanel({
                     <span className="build-activity-label">{t(`statusView.progress.steps.${entry.step}`)}</span>
                   ) : null}
                   <span className="build-activity-text">{entry.text}</span>
+                  {entry.media ? (
+                    <span className="build-activity-shots">
+                      {entry.media.map((item) => (
+                        <button
+                          key={item.ref}
+                          type="button"
+                          className="build-activity-shot"
+                          onClick={() => setZoomed(item)}
+                          title={t('statusView.gallery.expand')}
+                        >
+                          <img
+                            src={buildMediaUrl(token, item)}
+                            alt={item.label || t('statusView.gallery.alt')}
+                            loading="lazy"
+                            onError={() => setBroken((refs) => [...refs, item.ref])}
+                          />
+                        </button>
+                      ))}
+                    </span>
+                  ) : null}
                 </span>
                 <time className="build-activity-time" dateTime={new Date(entry.at).toISOString()}>
                   {entry.pending ? '' : formatRelativeTime(entry.at, i18n.language)}
@@ -945,6 +1005,8 @@ function BuildProgressPanel({
           </ul>
         </div>
       ) : null}
+
+      {zoomed ? <ShotLightbox token={token} item={zoomed} onClose={() => setZoomed(null)} /> : null}
     </div>
   );
 }

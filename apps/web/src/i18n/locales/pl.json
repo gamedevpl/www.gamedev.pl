@@ -195,7 +195,9 @@
     "previewError": "Nie udało się teraz wczytać podglądu. Spróbuj ponownie za chwilę.",
     "gallery": {
       "alt": "Tak gra wygląda w tej chwili",
-      "caption": "Tak wygląda teraz Twoja gra"
+      "caption": "Tak wygląda teraz Twoja gra",
+      "expand": "Kliknij, aby zobaczyć w pełnym rozmiarze",
+      "close": "Zamknij"
     },
     "feedback": {
       "title": "Chcesz zmian?",

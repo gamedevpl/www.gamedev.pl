@@ -794,12 +794,26 @@ describe('SubmissionStatusView stop & retry', () => {
       await flushEffects();
     });
 
-    const hero = container.querySelector('.status-gallery-hero') as HTMLImageElement | null;
-    expect(hero).not.toBeNull();
-    expect(hero!.getAttribute('src')).toContain('/api/submissions/media-token/shot/shot-2');
+    // Thumbnails live on the timeline, not as a banner above it.
+    const shots = container.querySelectorAll('.build-activity-shot img');
+    expect(shots).toHaveLength(2);
+    expect(shots[0]!.getAttribute('src')).toContain('/api/submissions/media-token/shot/shot-2');
     // The agent's own caption is what the creator reads, not a generic placeholder.
     expect(container.textContent).toContain('The bridge holds');
-    expect(container.querySelectorAll('.status-gallery-thumb')).toHaveLength(2);
+    expect(container.querySelector('.status-lightbox')).toBeNull();
+
+    // Clicking one opens it full size; Escape closes it again.
+    await act(async () => {
+      (container.querySelector('.build-activity-shot') as HTMLButtonElement).click();
+    });
+    const lightbox = container.querySelector('.status-lightbox-image') as HTMLImageElement | null;
+    expect(lightbox).not.toBeNull();
+    expect(lightbox!.getAttribute('src')).toContain('/api/submissions/media-token/shot/shot-2');
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    expect(container.querySelector('.status-lightbox')).toBeNull();
 
     await act(async () => {
       root.unmount();

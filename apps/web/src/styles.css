@@ -1951,58 +1951,83 @@ body.player-open {
 }
 
 /* Post-play revision loop: tell the agent what to change after trying the draft. */
-/* Pictures of the build. The newest leads at full width because it is the answer to
-   "what does my game look like right now?"; the rest are a strip of what came before,
-   which reads as progress in a way a list of sentences does not. */
-.status-gallery {
-  margin: 20px 0 4px;
-}
-
-.status-gallery-hero {
-  display: block;
-  width: 100%;
-  border-radius: 12px;
-  border: 1px solid var(--panel-border);
-  background: var(--panel-card);
-  /* Pixel art: never smooth it on the way up. */
-  image-rendering: pixelated;
-}
-
-.status-gallery-strip {
+/* Pictures of the build sit on the timeline, at the moment they belong to, rather
+   than as a banner above it — they are things that happened, like the commits and
+   the agent's sentences around them. Kept small on the row; full size is one click. */
+.build-activity-shots {
   display: flex;
-  gap: 8px;
-  margin-top: 8px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-  scrollbar-width: thin;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
 }
 
-.status-gallery-thumb {
-  flex: 0 0 auto;
-  width: 96px;
-  height: 64px;
-  object-fit: cover;
-  border-radius: 6px;
+.build-activity-shot {
+  padding: 0;
   border: 1px solid var(--panel-border);
+  border-radius: 6px;
   background: var(--panel-card);
-  image-rendering: pixelated;
-  cursor: pointer;
-  opacity: 0.72;
+  cursor: zoom-in;
+  line-height: 0;
+  opacity: 0.85;
   transition:
     opacity 120ms ease,
     border-color 120ms ease;
 }
 
-.status-gallery-thumb:hover,
-.status-gallery-thumb.is-current {
+.build-activity-shot:hover,
+.build-activity-shot:focus-visible {
   opacity: 1;
   border-color: var(--accent, var(--panel-border));
 }
 
-.status-gallery-caption {
-  margin: 6px 0 0;
-  font-size: 0.85rem;
-  color: var(--muted);
+.build-activity-shot img {
+  display: block;
+  width: 88px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 5px;
+  /* Pixel art: never smooth it. */
+  image-rendering: pixelated;
+}
+
+.status-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.82);
+  cursor: zoom-out;
+}
+
+.status-lightbox-image {
+  max-width: min(100%, 1100px);
+  max-height: 78vh;
+  border-radius: 10px;
+  border: 1px solid var(--panel-border);
+  image-rendering: pixelated;
+  cursor: default;
+}
+
+.status-lightbox-caption {
+  margin: 0;
+  max-width: 60ch;
+  text-align: center;
+  color: #e8e8e8;
+  font-size: 0.95rem;
+}
+
+.status-lightbox-close {
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-card);
+  color: var(--text);
+  cursor: pointer;
 }
 
 .status-feedback {
