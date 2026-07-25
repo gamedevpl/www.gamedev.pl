@@ -74,9 +74,12 @@ export function CreatorQA({ questions, initialConcept, onSubmitWithConcept, onCa
         <button type="button" className="btn btn-primary btn-create-now" onClick={handleSubmit}>
           <PixelIcon name="rocket" size={14} /> {t('qa.createNow')}
         </button>
+        {/* This dismisses the panel and drops the pending spec — it does *not* submit.
+            It was labelled "skip clarifications", which reads as "create without
+            answering"; that is what the primary button next to it already does. */}
         {onCancel && (
           <button type="button" className="btn btn-secondary" onClick={onCancel}>
-            {t('qa.skipAll')}
+            {t('qa.backToEditing')}
           </button>
         )}
       </div>

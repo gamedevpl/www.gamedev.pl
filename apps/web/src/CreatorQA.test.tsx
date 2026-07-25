@@ -79,6 +79,48 @@ describe('CreatorQA', () => {
     await act(async () => root.unmount());
   });
 
+  it('labels the secondary action for what it does — dismiss, not submit', async () => {
+    // It used to read "Skip Clarifications", which promises the thing the primary
+    // button does. Whatever the wording becomes, it must not imply a submission.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    let submitted = false;
+    let cancelled = false;
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(CreatorQA, {
+          questions: mockQuestions,
+          initialConcept: 'Dodge the falling rocks and survive as long as possible',
+          onSubmitWithConcept: () => {
+            submitted = true;
+          },
+          onCancel: () => {
+            cancelled = true;
+          },
+        }),
+      );
+      await flushEffects();
+    });
+
+    const cancelBtn = container.querySelector<HTMLButtonElement>('.btn-secondary');
+    expect(cancelBtn?.textContent).toBe('Back to Editing');
+
+    await act(async () => {
+      cancelBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+
+    expect(cancelled).toBe(true);
+    expect(submitted).toBe(false);
+
+    await act(async () => root.unmount());
+  });
+
   it('submits initial concept unchanged when no chips or custom answers are selected', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
