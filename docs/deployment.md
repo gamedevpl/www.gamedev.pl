@@ -10,7 +10,7 @@
 
 ## Automated CD Pipeline (`.github/workflows/deploy.yml`)
 
-Deployments to Cloud Run are triggered on push to `the-new-gamedevpl`:
+Deployments to Cloud Run are triggered on push to `master`:
 
 1. **CI Gate (`ci-gate`):** Runs `npm run lint`, `npm run type-check`, `npm run test`, `npm run build` on Node 20.
 2. **Keyless OIDC Auth:** Authenticates via GCP Workload Identity Federation (no long-lived service account keys).
