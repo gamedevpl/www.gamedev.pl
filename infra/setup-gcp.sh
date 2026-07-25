@@ -71,17 +71,23 @@ gcloud secrets add-iam-policy-binding session-secret \
 # The collection group is `playEvents`, deliberately not `events` — a TTL policy applies
 # to a collection group rather than a path, and `submissions/{n}/events` holds durable
 # build history that must never expire.
+# `ttls list` reports only fields that already have a policy, so a name match is the
+# existence check. Matched with grep rather than `--filter`, whose `:` operator does not
+# match a slash-separated path reliably.
 echo "==> 6/6 Ensuring the 90-day TTL policy on telemetry playEvents.expiresAt"
-TTL_STATE="$(gcloud firestore fields ttls list --project="$PROJECT_ID" \
-  --filter="name:playEvents/fields/expiresAt" --format="value(ttlConfig.state)" 2>/dev/null || true)"
-if [ -n "$TTL_STATE" ]; then
-  echo "    TTL policy already present (state: ${TTL_STATE})."
+if gcloud firestore fields ttls list --project="$PROJECT_ID" --format="value(name)" 2>/dev/null |
+  grep -q "collectionGroups/playEvents/fields/expiresAt"; then
+  echo "    TTL policy already present."
 else
+  # --enable-ttl is required and is what makes the field the collection group's TTL
+  # field. No --expiration-offset: `expiresAt` is already the absolute deadline, so the
+  # row expires exactly at the value the writer computed.
   gcloud firestore fields ttls update expiresAt \
     --collection-group=playEvents \
+    --enable-ttl \
     --project="$PROJECT_ID"
-  echo "    TTL policy created. It applies to documents written from now on; rows"
-  echo "    predating the field are never expired by it."
+  echo "    TTL policy created. It applies to documents carrying the field; rows written"
+  echo "    before it existed are never expired by it."
 fi
 
 echo ""
