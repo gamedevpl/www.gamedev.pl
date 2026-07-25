@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { AuthProvider } from './AuthContext';
+import { NAVIGATE_EVENT, type NavigateEventDetail } from './router';
 import i18n from './i18n';
 
 async function flushEffects() {
@@ -93,11 +94,26 @@ describe('catalog playback', () => {
     });
     expect(previewButton?.textContent).toContain('Pause preview');
 
+    // history.pushState fires nothing, so in-app navigation is announced explicitly
+    // for listeners outside App (analytics). Without it their only option is to
+    // monkey-patch history — see NAVIGATE_EVENT in router.ts.
+    const navigations: string[] = [];
+    const onNavigate = (event: Event) => {
+      navigations.push((event as CustomEvent<NavigateEventDetail>).detail.path);
+    };
+    window.addEventListener(NAVIGATE_EVENT, onNavigate);
+
     await act(async () => {
       playButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushEffects();
       await flushEffects();
     });
+
+    expect(navigations).toEqual(['/play/sky-dodge']);
+    // Announced only after the URL is already the new one, so a listener that reads
+    // window.location instead of trusting `detail` still sees the same place.
+    expect(window.location.pathname).toBe('/play/sky-dodge');
+    window.removeEventListener(NAVIGATE_EVENT, onNavigate);
 
     const iframe = container.querySelector('iframe[title="Sky Dodge"]');
     expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts');

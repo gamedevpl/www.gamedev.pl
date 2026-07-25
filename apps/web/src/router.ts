@@ -116,6 +116,21 @@ export function joinPath(code: string, token: string): string {
 }
 
 /**
+ * Fired on `window` after an in-app navigation, with `detail.path` set to the new
+ * path. `history.pushState` fires nothing, so without this the only way for code
+ * outside the App component — analytics, most obviously — to notice that the route
+ * changed is to monkey-patch `history.pushState`, which is a global side effect that
+ * breaks confusingly and does not compose if two modules try it.
+ *
+ * Listeners should treat this as a hint to re-read `window.location`, not as the
+ * source of truth. `popstate` still covers back/forward; this covers only the
+ * programmatic pushes that the browser stays silent about.
+ */
+export const NAVIGATE_EVENT = 'gdpl:navigate';
+
+export type NavigateEventDetail = { path: string };
+
+/**
  * URL for a legal document, optionally pointing at one section:
  * `/terms#zglaszanie`. Legal documents get cited clause by clause — in a takedown
  * notice, in a reply to a user — so a link has to be able to land on one.

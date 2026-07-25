@@ -12,7 +12,7 @@ import { GameHealthView } from './GameHealthView';
 import { PixelIcon } from './PixelIcon';
 import { SubmissionStatusView } from './SubmissionStatusView';
 import { CreatorQA, type QAQuestion } from './CreatorQA';
-import { canonicalPlayPath, parsePathRoute, statusPath, playPath, type AppRoute } from './router';
+import { canonicalPlayPath, NAVIGATE_EVENT, parsePathRoute, statusPath, playPath, type AppRoute } from './router';
 import { LegalPage } from './LegalPage';
 import { SiteFooter } from './SiteFooter';
 
@@ -386,6 +386,10 @@ export function App() {
     // Update the URL (the source of truth) and the route synchronously so
     // navigation is immediate (and testable) without waiting for popstate.
     window.history.pushState(null, '', path);
+    // pushState is silent, so announce the navigation for anything living outside
+    // this component (see NAVIGATE_EVENT). Dispatched before the state update so a
+    // listener reading window.location sees the URL we just pushed.
+    window.dispatchEvent(new CustomEvent(NAVIGATE_EVENT, { detail: { path } }));
     setRoute(readLocationRoute());
   }
 
@@ -426,7 +430,11 @@ export function App() {
   if (route.view === 'legal') {
     return (
       <div className="app app--legal">
-        <NavHeader activeSpecsCount={savedSpecs.length} onNavigate={handleNavigateSection} onHome={() => navigate('/')} />
+        <NavHeader
+          activeSpecsCount={savedSpecs.length}
+          onNavigate={handleNavigateSection}
+          onHome={() => navigate('/')}
+        />
         <main className="content">
           <LegalPage doc={route.doc} onBack={() => navigate('/')} />
         </main>
