@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
+import { isPlayTimeAccruing, TelemetrySession } from './telemetry';
 
 // Message envelope tags. The host is the app; the player is the bridge script
 // that runs inside the sandboxed game iframe.
@@ -19,14 +20,28 @@ const PLAYER = 'gdpl-player';
 //      what makes WASD work without a click first), and key events inside an
 //      opaque-origin frame never reach the app's own listener — so without this
 //      relay, "get me out of here" silently stops working.
+//   5. reports health — uncaught errors and animation-frame liveness. This is the
+//      only vantage point that has them: the game runs in an opaque origin the app
+//      cannot inspect, and its CSP blocks every way it could report for itself. An
+//      uncaught error is the single most reliable "this published game is broken"
+//      signal we can get, and `frames: 0` while on screen distinguishes a stalled
+//      game from a hard game (docs/improvement-loop-plan.md IL-1).
 const BRIDGE = `(function(){
   function el(id){return document.getElementById(id);}
+  function post(m){m.source='${PLAYER}';parent.postMessage(m,'*');}
   function isMuted(){var s=el('sound-toggle');return s?s.getAttribute('aria-pressed')==='true':false;}
   function sendMeta(){
     var t=el('game-title'),d=el('game-desc');
-    parent.postMessage({source:'${PLAYER}',type:'meta',title:t?(t.textContent||'').trim():'',desc:d?(d.textContent||'').trim():'',muted:isMuted()},'*');
+    post({type:'meta',title:t?(t.textContent||'').trim():'',desc:d?(d.textContent||'').trim():'',muted:isMuted()});
   }
-  function sendSound(){parent.postMessage({source:'${PLAYER}',type:'sound',muted:isMuted()},'*');}
+  function sendSound(){post({type:'sound',muted:isMuted()});}
+  addEventListener('error',function(e){post({type:'error',message:String((e&&e.message)||'error').slice(0,200)});});
+  addEventListener('unhandledrejection',function(e){
+    var r=e&&e.reason;post({type:'error',message:String((r&&r.message)||r||'unhandled rejection').slice(0,200)});
+  });
+  var frames=0;
+  if('requestAnimationFrame'in window){(function tick(){frames++;requestAnimationFrame(tick);})();}
+  setInterval(function(){post({type:'alive',frames:frames});frames=0;},5000);
   addEventListener('message',function(e){
     var m=e.data||{};
     if(m.source!=='${HOST}')return;
@@ -35,7 +50,7 @@ const BRIDGE = `(function(){
   });
   addEventListener('keydown',function(e){
     // Report only — the game keeps its own Escape handling (pause menus etc).
-    if(e.key==='Escape'){parent.postMessage({source:'${PLAYER}',type:'key',key:'Escape'},'*');}
+    if(e.key==='Escape'){post({type:'key',key:'Escape'});}
   });
   function init(){
     sendMeta();
@@ -77,6 +92,88 @@ export function withGameLocale(html: string, lang: string | undefined | null): s
     return html.replace(/(<html\b[^>]*?\slang\s*=\s*)("[^"]*"|'[^']*')/i, `$1"${locale}"`);
   }
   return html.replace(/<html\b/i, `<html lang="${locale}"`);
+}
+
+/**
+ * Records one play session of a published game (docs/improvement-loop-plan.md IL-1).
+ *
+ * Lives here rather than in `GameTheater` on purpose: the theater also stages drafts
+ * and multiplayer, and a creator playtesting their own work-in-progress is developer
+ * traffic that must not land in the funnel. Mounting alongside the *published* game
+ * makes "is this a real play of a real game" a structural fact instead of a condition
+ * someone has to remember to write.
+ */
+export function useGameTelemetry(slug: string, enabled: boolean, slots?: number) {
+  useEffect(() => {
+    if (!enabled) return;
+
+    const session = new TelemetrySession(slug, crypto.randomUUID());
+    session.record({ type: 'game_opened', ...(slots === undefined ? {} : { slots }) });
+    // Sent immediately rather than batched. Every other event can afford to wait, but
+    // a tab that is killed outright runs no cleanup and flushes nothing — and an open
+    // we never hear about is a hole in the denominator of every ratio downstream.
+    session.flush();
+
+    // Heartbeat rather than a start/stop stopwatch: a tab can be closed, crash, or be
+    // discarded without ever running cleanup, and a session that ends that way should
+    // still have its play time up to the last tick. Each beat is only claimed after
+    // the interval has actually elapsed with the page focused.
+    const heartbeatSec = 15;
+    const timer = window.setInterval(() => {
+      if (isPlayTimeAccruing(document)) session.record({ type: 'play_time', seconds: heartbeatSec });
+    }, heartbeatSec * 1000);
+
+    // Health and depth from inside the frame. `progress`/`score`/`end` arrive only
+    // from games using the games-repo telemetry module; nothing sends them yet, and
+    // accepting them now means adding it later touches no app code.
+    function onMessage(event: MessageEvent) {
+      const data = event.data as {
+        source?: string;
+        type?: string;
+        message?: string;
+        frames?: number;
+        label?: string;
+        value?: number;
+        outcome?: 'won' | 'lost' | 'quit';
+      };
+      if (!data || data.source !== PLAYER) return;
+      switch (data.type) {
+        case 'error':
+          session.record({ type: 'error', message: String(data.message ?? '') });
+          break;
+        case 'alive':
+          // Only while the player is actually watching — frames reported by a
+          // backgrounded tab say nothing about whether the game works.
+          if (isPlayTimeAccruing(document)) session.record({ type: 'alive', frames: Number(data.frames ?? 0) });
+          break;
+        case 'progress':
+          session.record({ type: 'progress', label: String(data.label ?? '') });
+          break;
+        case 'score':
+          session.record({ type: 'score', value: Number(data.value) });
+          break;
+        case 'end':
+          if (data.outcome) session.record({ type: 'end', outcome: data.outcome });
+          break;
+      }
+    }
+    window.addEventListener('message', onMessage);
+
+    // A hidden tab may never get another frame of script, so flush on the way out
+    // instead of hoping for unmount.
+    function onHide() {
+      if (document.visibilityState === 'hidden') session.flush();
+    }
+    document.addEventListener('visibilitychange', onHide);
+
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('message', onMessage);
+      document.removeEventListener('visibilitychange', onHide);
+      session.record({ type: 'game_closed' });
+      session.close();
+    };
+  }, [slug, enabled, slots]);
 }
 
 export type GamePlayerMeta = { title: string; desc: string };

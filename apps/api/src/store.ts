@@ -99,6 +99,47 @@ export interface UsageCounters {
   feedback: number;
 }
 
+/**
+ * What the player shell reports about a play session (docs/improvement-loop-plan.md IL-1).
+ *
+ * `game_opened` / `play_time` / `game_closed` are emitted by the app itself, so the
+ * funnel never depends on a game cooperating. `error` and `alive` come from the bridge
+ * injected into the game's iframe, and are the cheapest reliable answer to "is this
+ * published game actually broken for real players". `progress` / `score` / `end` arrive
+ * only from games that opt into the games-repo telemetry module, which does not exist
+ * yet — the shapes are accepted now so adding it later needs no API change.
+ *
+ * Deliberately **not** attributed: no uid, no IP, no user agent. A session id is
+ * generated per game-open and never persisted anywhere in the browser, so these rows
+ * answer "how did this game do" and cannot answer "what did this person play".
+ */
+export type TelemetryEventType =
+  'game_opened' | 'play_time' | 'game_closed' | 'error' | 'alive' | 'progress' | 'score' | 'end';
+
+export interface TelemetryEvent {
+  /** Game identity — the submission the reported slug resolved to. */
+  issueNumber: number;
+  /** Ephemeral per-open id from the shell. Never a uid. */
+  sessionId: string;
+  type: TelemetryEventType;
+  /** Assigned server-side on receipt; client clocks are not trusted for ordering. */
+  at: string;
+  /** `play_time`: seconds of focused play this heartbeat covers. */
+  seconds?: number;
+  /** `alive`: animation frames observed since the previous tick. 0 means stalled. */
+  frames?: number;
+  /** `game_opened`: connected controller slots, when the game was opened as a party. */
+  slots?: number;
+  /** `error`: bounded, truncated message. Never a stack — that is a code-leak channel. */
+  message?: string;
+  /** `progress`: label from a bounded per-session set. */
+  label?: string;
+  /** `score`: the reported value, range-checked by the shell. */
+  value?: number;
+  /** `end`: how the session finished. */
+  outcome?: 'won' | 'lost' | 'quit';
+}
+
 // Transactional creator events (docs/notifications-plan.md). Deliberately minimal —
 // queued/in_review are not notified. New types must pass the "would the user thank
 // us?" test before being added.
@@ -185,6 +226,14 @@ export interface Store {
   listPendingCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]>;
   /** Marks messages collected, so the agent is not handed the same request twice. */
   markCreatorMessagesDelivered(issueNumber: number, ids: string[]): Promise<void>;
+  /**
+   * Appends validated play-session events. Date-partitioned so a TTL policy can
+   * expire a whole day at once and the aggregation job reads one partition rather
+   * than fanning out across every submission.
+   */
+  appendTelemetryEvents(dateStr: string, events: TelemetryEvent[]): Promise<void>;
+  /** One day's events for a game — the read the aggregation job (IL-2) will use. */
+  listTelemetryEvents(dateStr: string, opts?: { issueNumber?: number; limit?: number }): Promise<TelemetryEvent[]>;
   /** Today's usage counters for a user, without incrementing anything. */
   getUsage(uid: string, dateStr: string): Promise<UsageCounters>;
   /** Most recently published submissions, newest first — the build-time sample. */
@@ -262,6 +311,8 @@ export class InMemoryStore implements Store {
   private creatorMessages = new Map<number, CreatorMessage[]>();
   private usage = new Map<string, UsageCounters>();
   private waitlist = new Map<string, WaitlistEntry>();
+  // yyyymmdd -> events recorded that day
+  private telemetry = new Map<string, TelemetryEvent[]>();
   // uid -> (notificationId -> notification)
   private notifications = new Map<string, Map<string, StoredNotification>>();
   // uid -> (endpoint-hash -> subscription)
@@ -425,6 +476,22 @@ export class InMemoryStore implements Store {
         targets.has(message.id) && !message.deliveredAt ? { ...message, deliveredAt: at } : message,
       ),
     );
+  }
+
+  async appendTelemetryEvents(dateStr: string, events: TelemetryEvent[]): Promise<void> {
+    const existing = this.telemetry.get(dateStr) ?? [];
+    existing.push(...events.map((event) => ({ ...event })));
+    this.telemetry.set(dateStr, existing);
+  }
+
+  async listTelemetryEvents(
+    dateStr: string,
+    opts?: { issueNumber?: number; limit?: number },
+  ): Promise<TelemetryEvent[]> {
+    return (this.telemetry.get(dateStr) ?? [])
+      .filter((event) => opts?.issueNumber === undefined || event.issueNumber === opts.issueNumber)
+      .slice(0, opts?.limit ?? 1000)
+      .map((event) => ({ ...event }));
   }
 
   async getUsage(uid: string, dateStr: string): Promise<UsageCounters> {
@@ -821,6 +888,31 @@ export class FirestoreStore implements Store {
     const batch = this.db.batch();
     ids.forEach((id) => batch.set(collection.doc(id), { deliveredAt: at }, { merge: true }));
     await batch.commit();
+  }
+
+  private telemetryCollection(dateStr: string) {
+    return this.db.collection('telemetry').doc(dateStr).collection('events');
+  }
+
+  async appendTelemetryEvents(dateStr: string, events: TelemetryEvent[]): Promise<void> {
+    if (events.length === 0) return;
+    // One batch per flush: a play session sends a handful of events at a time, well
+    // inside Firestore's 500-write batch limit (the route caps a request long before).
+    const collection = this.telemetryCollection(dateStr);
+    const batch = this.db.batch();
+    events.forEach((event) => batch.set(collection.doc(randomUUID()), event));
+    await batch.commit();
+  }
+
+  async listTelemetryEvents(
+    dateStr: string,
+    opts?: { issueNumber?: number; limit?: number },
+  ): Promise<TelemetryEvent[]> {
+    // Equality-only filter plus a limit, so no composite index is needed.
+    const base = this.telemetryCollection(dateStr);
+    const query = opts?.issueNumber === undefined ? base : base.where('issueNumber', '==', opts.issueNumber);
+    const snap = await query.limit(opts?.limit ?? 1000).get();
+    return snap.docs.map((doc) => doc.data() as TelemetryEvent);
   }
 
   async getUsage(uid: string, dateStr: string): Promise<UsageCounters> {

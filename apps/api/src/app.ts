@@ -17,6 +17,7 @@ import { registerPushRoutes } from './push-routes.js';
 import { registerRefineRoute, type SpecRefiner } from './refine.js';
 import { InMemoryStore, type Store } from './store.js';
 import { registerSubmissionRoutes, type SubmissionRoutesOptions } from './submissions.js';
+import { registerTelemetryRoutes } from './telemetry.js';
 
 const GenerateRequestSchema = z.object({
   prompt: z.string().trim().min(1, 'prompt is required').max(500, 'prompt is too long'),
@@ -128,6 +129,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await registerPushRoutes(app, { store, vapidPublicKey: process.env.VAPID_PUBLIC_KEY?.trim() });
 
   await registerEmailRoutes(app, { store, unsubscribeSecret: options.sessionSecret });
+
+  // Play-session telemetry (docs/improvement-loop-plan.md IL-1). Deliberately *not*
+  // exempted from the private-beta wall below: during closed beta every player is a
+  // signed-in member, so the wall costs nothing and keeps the intake shut to the
+  // open internet. Revisit when the site opens — the handler itself never reads
+  // request.user and records nothing that identifies a player.
+  await registerTelemetryRoutes(app, { store });
 
   app.get('/api/health', async () => ({ status: 'ok', provider: generator.name, privateBeta }));
 

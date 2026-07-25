@@ -1,11 +1,21 @@
 # Game Improvement Loop: feedback-driven, agent-assisted iteration
 
-> Status: 📋 design proposal — **revised 2026-07-25** against the shipped platform
-> (first drafted 2026-07-23). Everything the first draft listed as a dependency is
-> now live: catalog, player, submission → Copilot → PR → publish, notifications
-> (in-app + email + push), and a live agent channel. The revision matters because
-> three of the original design decisions were made against a platform that no
-> longer exists — see [What changed](#what-changed-since-the-first-draft).
+> Status: 🚧 **IL-1's capture path is built** (2026-07-25); IL-2 onward is still
+> design. Revised the same day against the shipped platform (first drafted
+> 2026-07-23) — everything the first draft listed as a dependency is now live:
+> catalog, player, submission → Copilot → PR → publish, notifications (in-app +
+> email + push), and a live agent channel. The revision matters because three of
+> the original design decisions were made against a platform that no longer
+> exists — see [What changed](#what-changed-since-the-first-draft).
+>
+> **Built so far:** the player bridge reports uncaught errors and animation-frame
+> liveness ([gamePlayer.ts](../apps/web/src/gamePlayer.ts)); a play session reports
+> `game_opened` / `play_time` / `game_closed` from the app itself
+> ([telemetry.ts](../apps/web/src/telemetry.ts), mounted in
+> [PublishedGameFrame.tsx](../apps/web/src/PublishedGameFrame.tsx)); and
+> `POST /api/telemetry` validates, caps, and stores them unattributed
+> ([telemetry.ts](../apps/api/src/telemetry.ts)). Votes, written player feedback,
+> and the games-repo telemetry module are the rest of IL-1.
 
 ## Why
 
@@ -394,18 +404,32 @@ at all and feeds the only autonomous-eligible class.
 
 ### Phase IL-1 — Capture (no agents, immediate creator value)
 
-- **Bridge health signals**: extend [gamePlayer.ts](../apps/web/src/gamePlayer.ts)
-  with `error` / `unhandledrejection` / rAF-liveness reporting under the existing
-  `gdpl-player` envelope. No games-repo change.
-- **Shell funnel events** from `GameTheater`: `game_opened`, visibility+focus-gated
-  `play_time` heartbeat, `game_closed`, `slots` for party sessions → batched
-  `POST /api/telemetry`.
-- **Thumbs up/down**: endpoints + `submissions/{n}/votes`, control in the player
+- ✅ **Bridge health signals**: [gamePlayer.ts](../apps/web/src/gamePlayer.ts) reports
+  `error` / `unhandledrejection` / rAF liveness under the existing `gdpl-player`
+  envelope. No games-repo change was needed.
+- ✅ **Funnel events** — `game_opened`, a visibility+focus-gated `play_time`
+  heartbeat, `game_closed`, and `slots` for party sessions, batched to
+  `POST /api/telemetry`. They live in `useGameTelemetry`, mounted from
+  [PublishedGameFrame.tsx](../apps/web/src/PublishedGameFrame.tsx) rather than the
+  theater: the theater also stages drafts and multiplayer, and a creator
+  playtesting their own work-in-progress is developer traffic that must not enter
+  the funnel. `game_opened` is sent immediately rather than batched, because a tab
+  killed outright runs no cleanup and a lost open is a hole in every downstream
+  denominator.
+- ✅ **Intake** ([telemetry.ts](../apps/api/src/telemetry.ts)): fixed vocabulary,
+  50 events/request, 400/session, 120 flushes/minute/IP, server-assigned
+  timestamps, published games only, and **nothing that identifies a player** — no
+  uid, no IP, no user agent stored.
+- 📋 **Thumbs up/down**: endpoints + `submissions/{n}/votes`, control in the player
   header next to the existing sound toggle.
-- **Written player feedback**: the sibling endpoint above, plus a minimal
+- 📋 **Written player feedback**: the sibling endpoint above, plus a minimal
   post-play prompt.
-- **`shared/modules/telemetry.js`** in the games repo (opt-in via `GAME.json`),
+- 📋 **`shared/modules/telemetry.js`** in the games repo (opt-in via `GAME.json`),
   documented in its agent instructions so maintenance adds markers organically.
+  The API already accepts `progress` / `score` / `end`, so landing it needs no
+  app change.
+- 📋 A Firestore TTL policy on `telemetry/{yyyymmdd}` — the 90-day retention this
+  plan promises is currently a documented intention, not an enforced one.
 - Exit: health, funnel and votes visibly accumulating for live games.
 
 ### Phase IL-2 — Distill (aggregates + dashboard)
