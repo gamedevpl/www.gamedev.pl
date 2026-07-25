@@ -87,10 +87,9 @@ Replace hash plumbing with pathname plumbing:
 2. **Builders** rename `playHash` / `draftHash` / `statusHash` → `playPath` / `draftPath` /
    `statusPath`, returning `/play/…` etc. (leading slash, no hash).
 3. **`navigate(path)`** — `history.pushState(null, '', path)` then `setRoute(parsePathRoute(path))`.
-   Use `replaceState` when migrating a legacy hash or correcting a trailing slash.
+   Use `replaceState` only for cosmetic corrections (e.g. trailing slash), not for `#/` compat.
 4. **`popstate` listener** instead of `hashchange`.
-5. **Initial route** — `parsePathRoute(window.location.pathname)`, after optional legacy
-   hash migration (below).
+5. **Initial route** — `parsePathRoute(window.location.pathname)`.
 
 This keeps the existing `AppRoute` type and all the stage/theater effects that key off
 `route.view`.
@@ -104,29 +103,18 @@ This keeps the existing `AppRoute` type and all the stage/theater effects that k
 
 ---
 
-## Legacy hash → path migration (must ship with the cutover)
+## No migration (closed beta)
 
-Bookmarks, push payloads, emails, and in-app notification rows will keep pointing at
-`#/…` for a long time. On every cold load of the SPA:
+We are in closed beta — **do not** keep a dual router, boot-time `#/…` → path redirect, or
+client-side normalization of old hash links. Hard cutover:
 
-```
-if location.hash matches #/play|draft|status|join|health|/:
-  replaceState to the equivalent path
-  clear the hash (replaceState to pathname only)
-```
-
-Also accept old hashes if somehow still present after load (defensive one-shot on boot is
-enough; no permanent dual router).
-
-**In-app notification `link` field:** when rendering the bell, normalize
-`#/play/x` → `/play/x` (and same for status/draft). New writes from `notify.ts` store the
-path form (`/play/…`, `/status/…`). No Firestore backfill required if the client normalizes
-on read.
-
-**Email / push absolute URL join:** today
-`` `${appBaseUrl}/${notification.link}` `` with `link = '#/play/…'` accidentally works
-(`https://www.gamedev.pl/#/play/…`). With path links it would produce a double slash
-(`…pl//play/…`). Fix the join once:
+- Delete hash parsing / builders; path-only from the merge forward.
+- Old `#/play/…` bookmarks, emails, and push payloads simply stop working (acceptable).
+- In-app notification `link` values: write `/play/…` / `/status/…` going forward. Pre-cutover
+  rows with `#/…` may 404 or no-op in the bell — no backfill, no normalize-on-read.
+- Email / push absolute URL join: today
+  `` `${appBaseUrl}/${notification.link}` `` with `link = '#/play/…'` accidentally works.
+  With path links it would produce a double slash (`…pl//play/…`). Fix the join once:
 
 ```ts
 function absoluteAppUrl(base: string, path: string): string {
@@ -180,12 +168,13 @@ matches how creators already bookmark them; no special case.
 Small PRs, each green under the usual gate
 (`type-check && lint && test && build`).
 
-### PR 1 — Router core + App wiring + legacy redirect
+### PR 1 — Router core + App wiring
 
 - Rewrite `router.ts` / tests: `parsePathRoute`, path builders, join hybrid if A.
-- `App.tsx`: `popstate`, `navigate`, initial parse, boot-time hash→path migration.
+- `App.tsx`: `popstate`, `navigate`, initial parse from `pathname` only.
 - Update UI `href`s (`NavHeader`, `DraftView`, `GameHealthView`, `SubmissionStatusView`).
-- Update web tests that poke `window.location.hash`.
+- Update web tests that currently poke `window.location.hash` → drive `pathname` /
+  `history.pushState` instead.
 
 ### PR 2 — API emitters (notifications, MP join, comments)
 
@@ -200,7 +189,7 @@ Small PRs, each green under the usual gate
 - Patch references in `multiplayer-plan.md`, `steel-thread-plan.md`,
   `notifications-plan.md`, `mobile-app-plan.md`, `improvement-loop-plan.md`,
   `creator-experience-review.md`, `roadmap.md` (hash → path wording).
-- Link from [`docs/README.md`](./README.md).
+- Link from [`docs/README.md`](./README.md) (already done when this plan landed).
 
 Optional follow-up (not blocking): strip any remaining `#/` mentions in older archived
 plans for consistency.
@@ -214,25 +203,22 @@ plans for consistency.
 - SEO meta per game (nice later; paths make it _possible_, this plan does not add it).
 - CDN cache rules beyond what closed-beta launch already describes — `index.html` stays
   `no-cache`; only `/assets/*` is immutable.
-- Migrating historical Firestore notification documents (client normalizes instead).
+- Any compat layer for old `#/` URLs, notification rows, emails, or push payloads.
 
 ---
 
 ## Test plan
 
-- Unit: every former hash case in `router.test.ts` / `protocol.test.ts` for paths; legacy
-  `#/play/x` → `/play/x` migration helper.
+- Unit: every former hash case in `router.test.ts` / `protocol.test.ts`, rewritten for paths.
 - Component: catalog / status / theater tests drive `history.pushState` / `pathname`
   instead of `location.hash`.
 - API: notify + mp joinPath assertions for new shapes; email/push URL has a single slash.
 - Manual smoke after deploy:
   1. Open `/play/<known-slug>` cold (hard refresh) → theater.
-  2. Open old `#/play/<slug>` → address bar becomes `/play/<slug>`, theater opens.
-  3. Submit a game → lands on `/status/<token>`; refresh keeps status view.
-  4. Share `/draft/<slug>` in a private window → read-only draft.
-  5. Host a party → scan QR → guest controller still joins (Option A fragment token).
-  6. Click an old in-app notification with `#/play/…` → still navigates.
-  7. Web Push click (if subscribed) opens the path URL in an existing tab via `sw.js`.
+  2. Submit a game → lands on `/status/<token>`; refresh keeps status view.
+  3. Share `/draft/<slug>` in a private window → read-only draft.
+  4. Host a party → scan QR → guest controller still joins (Option A fragment token).
+  5. Web Push click (if subscribed) opens the path URL in an existing tab via `sw.js`.
 
 ---
 
@@ -241,7 +227,7 @@ plans for consistency.
 | Risk                          | Mitigation                                                          |
 | ----------------------------- | ------------------------------------------------------------------- |
 | Join token logged if Option B | Prefer Option A; else Referrer-Policy + short TTL                   |
-| Stale emails/push with `#/…`  | Boot-time hash migration forever (cheap)                            |
+| Pre-cutover `#/` links break  | Accepted — closed beta; no migration                                |
 | Double-slash absolute URLs    | `absoluteAppUrl` helper + tests                                     |
 | Accidental `/api` collision   | Route table stays outside `/api`; SPA fallback already skips `/api` |
 | SW caches wrong shell         | Unchanged — SW still does not cache `index.html`                    |
@@ -252,5 +238,5 @@ plans for consistency.
 
 - [ ] Join shape: **A** hybrid / **B** full path / **C** hash island — default **A**
 - [ ] Keep custom History-API router (yes) vs adopt React Router (no, unless scope grows)
-- [ ] Legacy hash redirect: permanent soft-compat (yes)
-- [ ] Notification storage: write paths; normalize on read (yes)
+- [x] No `#/` migration / dual router (closed beta hard cutover)
+- [x] Notification storage: write paths only; no normalize-on-read
