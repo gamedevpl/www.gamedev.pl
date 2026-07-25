@@ -191,6 +191,10 @@
     "draftHint": "A work-in-progress build. Reopen it any time to pick up the agent's latest changes.",
     "previewNotReady": "No playable build yet. The agent is still laying down code — this page updates itself the moment there is something to play.",
     "previewError": "We couldn't load the preview right now. Please try again in a moment.",
+    "gallery": {
+      "alt": "The game as it looks right now",
+      "caption": "How your game looks right now"
+    },
     "feedback": {
       "title": "Want changes?",
       "hint": "Played it and something's off? Tell the agent what to change and it'll revise your game.",

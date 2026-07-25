@@ -770,4 +770,39 @@ describe('SubmissionStatusView stop & retry', () => {
       root.unmount();
     });
   });
+
+  it('shows pictures of the build, newest first, before any commit exists', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    // Still queued: no PR, no preview, nothing committed. The only pictures that can
+    // exist at this point are ones the agent pushed straight down the channel.
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'queued',
+      media: [
+        { source: 'channel', ref: 'shot-2', label: 'The bridge holds', createdAt: new Date().toISOString() },
+        { source: 'channel', ref: 'shot-1', createdAt: new Date(Date.now() - 60_000).toISOString() },
+      ],
+    });
+    await i18n.changeLanguage('en');
+    window.location.hash = '#/status/media-token';
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'media-token' }));
+      await flushEffects();
+    });
+
+    const hero = container.querySelector('.status-gallery-hero') as HTMLImageElement | null;
+    expect(hero).not.toBeNull();
+    expect(hero!.getAttribute('src')).toContain('/api/submissions/media-token/shot/shot-2');
+    // The agent's own caption is what the creator reads, not a generic placeholder.
+    expect(container.textContent).toContain('The bridge holds');
+    expect(container.querySelectorAll('.status-gallery-thumb')).toHaveLength(2);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

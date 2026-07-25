@@ -1172,6 +1172,13 @@ describe('submission feedback route', () => {
     // not from this machine account, or the coding agent ignores it.
     expect(body).toContain(CREATOR_FEEDBACK_MARKER);
     expect(body).not.toContain('@copilot');
+    // The comment carries the build token, because this comment is what wakes a
+    // *new* container: the environment variable and the CLI's token cache both died
+    // with the previous session's workspace, and a woken agent does not go back to
+    // re-read the original issue. Without this it reports nothing at all.
+    expect(body).toContain(mintAgentToken(123, secret));
+    expect(body).toContain('GAMEDEVPL_BUILD_TOKEN');
+    expect(body).not.toContain(mintToken(123, secret));
     await app.close();
   });
 

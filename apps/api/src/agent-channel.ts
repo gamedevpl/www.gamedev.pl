@@ -56,6 +56,38 @@ const AckRequestSchema = z.object({
   ids: z.array(z.string().trim().min(1).max(64)).max(50),
 });
 
+const MAX_SHOT_LABEL = 120;
+/** ~300 KB decoded, which a pixel-art frame sits well inside. */
+const maxShotBytes = 300 * 1024;
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+const BuildShotInputSchema = z.object({
+  // Sized in base64 characters, so an oversized payload is rejected before it is
+  // decoded. 4/3 expansion plus padding slack.
+  png: z
+    .string()
+    .trim()
+    .min(1, 'png is required')
+    .max(Math.ceil((maxShotBytes * 4) / 3) + 1024, 'screenshot is too large')
+    .regex(/^[A-Za-z0-9+/\s]*={0,2}$/, 'png must be base64'),
+  label: z
+    .string()
+    .trim()
+    .max(MAX_SHOT_LABEL * 4)
+    .optional(),
+  labelLocalized: z
+    .string()
+    .trim()
+    .max(MAX_SHOT_LABEL * 4)
+    .optional(),
+  locale: z
+    .string()
+    .trim()
+    .max(10)
+    .regex(/^[a-z]{2}(-[A-Za-z0-9]{2,8})?$/, 'invalid locale')
+    .optional(),
+});
+
 export interface AgentChannelOptions {
   store?: Store;
   /** Signing key for build tokens; the same secret that mints submission tokens. */
@@ -70,9 +102,13 @@ export interface AgentChannelOptions {
   maxEventsPerBuild?: number;
   /** Events one build may record per hour. */
   maxEventsPerWindow?: number;
+  /** Hard ceiling on stored screenshots per build. */
+  maxShotsPerBuild?: number;
+  /** Screenshots one build may push per hour. */
+  maxShotsPerWindow?: number;
 }
 
-type RejectionReason = 'stopped' | 'rate_limited' | 'too_many_events';
+type RejectionReason = 'stopped' | 'rate_limited' | 'too_many_events' | 'too_many_shots';
 
 /** Sliding-window limiter keyed by build. The token is the identity, not the IP. */
 function isRateLimited(buckets: Map<number, number[]>, key: number, currentTime: number, max: number): boolean {
@@ -97,8 +133,12 @@ export async function registerAgentChannelRoutes(
   const maxEventsPerBuild = options.maxEventsPerBuild ?? 500;
   const maxEventsPerWindow = options.maxEventsPerWindow ?? 240;
   const maxInboxChecksPerWindow = 600;
+  // Screenshots are far heavier than sentences, so they get their own, tighter caps.
+  const maxShotsPerBuild = options.maxShotsPerBuild ?? 24;
+  const maxShotsPerWindow = options.maxShotsPerWindow ?? 40;
   const eventsByBuild = new Map<number, number[]>();
   const inboxChecksByBuild = new Map<number, number[]>();
+  const shotsByBuild = new Map<number, number[]>();
 
   /**
    * Resolves the build a request is about. The token is the whole credential: it
@@ -217,6 +257,72 @@ export async function registerAgentChannelRoutes(
     options.onEvent?.(issueNumber);
 
     return reply.send({ accepted: true, event: stored, ...(await channelState(issueNumber, record)) });
+  });
+
+  /**
+   * A picture of the game as it stands, pushed before any commit.
+   *
+   * The agent already renders real frames headlessly (`npm run capture`), but those
+   * only reach the creator once they are committed and pushed, which is late. This
+   * takes the same PNG directly. Bytes are checked rather than trusted: the payload
+   * must actually start with a PNG signature, because everything downstream serves it
+   * back to a browser as an image.
+   */
+  app.post('/api/agent/build/shot', async (request, reply) => {
+    const resolved = await resolveBuild(request, reply);
+    if (!resolved) return reply;
+    const { issueNumber, record } = resolved;
+
+    const parsed = BuildShotInputSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
+    }
+
+    const reject = async (reason: RejectionReason) =>
+      reply.send({ accepted: false, rejected: reason, ...(await channelState(issueNumber, record)) });
+
+    if (stopReason(record)) {
+      return reject('stopped');
+    }
+    if (isRateLimited(shotsByBuild, issueNumber, now(), maxShotsPerWindow)) {
+      return reject('rate_limited');
+    }
+    if ((await store!.countBuildShots(issueNumber)) >= maxShotsPerBuild) {
+      return reject('too_many_shots');
+    }
+
+    const bytes = Buffer.from(parsed.data.png, 'base64');
+    if (bytes.length > maxShotBytes) {
+      return reply.status(413).send({ error: 'screenshot is too large' });
+    }
+    if (!bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
+      return reply.status(400).send({ error: 'not a PNG' });
+    }
+
+    const label = parsed.data.label
+      ? sanitizeCreatorText(parsed.data.label, { singleLine: true }).slice(0, MAX_SHOT_LABEL)
+      : '';
+    const labelLocalized = parsed.data.labelLocalized
+      ? sanitizeCreatorText(parsed.data.labelLocalized, { singleLine: true }).slice(0, MAX_SHOT_LABEL)
+      : '';
+    // Same rule as a progress sentence: a caption with no language tag cannot be
+    // matched to a reader, so it is dropped rather than shown to the wrong one.
+    const hasLocalized = Boolean(labelLocalized && parsed.data.locale);
+
+    // Re-encoded from the decoded bytes rather than stored as sent: whatever
+    // whitespace or padding variant arrived, what we keep is canonical base64.
+    const stored = await store!.appendBuildShot(issueNumber, {
+      data: bytes.toString('base64'),
+      ...(label ? { label } : {}),
+      ...(hasLocalized ? { labelLocalized, locale: parsed.data.locale } : {}),
+    });
+    options.onEvent?.(issueNumber);
+
+    return reply.send({
+      accepted: true,
+      shot: { id: stored.id, createdAt: stored.createdAt, ...(label ? { label } : {}) },
+      ...(await channelState(issueNumber, record)),
+    });
   });
 
   // Collect without reporting. Deliberately does NOT mark messages delivered — an

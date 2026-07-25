@@ -8,7 +8,9 @@ import {
   getSubmissionPreview,
   getSubmissionStatus,
   submitFeedback,
+  buildMediaUrl,
   type BuildEvent,
+  type BuildMediaItem,
   type BuildEventKind,
   type BuildProgress,
   type BuildStep,
@@ -393,6 +395,8 @@ export function SubmissionStatusView({
                 creator is most likely to spot a misreading of their idea, was the one
                 stretch they could not say anything. The agent picks messages up off the
                 channel on its next report, so a note left now lands in a minute or two. */}
+            {status.media && status.media.length > 0 ? <BuildGallery token={token} media={status.media} /> : null}
+
             {status.status !== 'published' && status.status !== 'abandoned' ? (
               <FeedbackPanel
                 token={token}
@@ -595,6 +599,57 @@ function PlayCard({
       <button className="primary-btn status-play-cta" onClick={onPlay}>
         <PixelIcon name="play" size={13} /> {cta}
       </button>
+    </div>
+  );
+}
+
+/**
+ * Pictures of the build so far, newest first.
+ *
+ * The status page was words only — a checklist, commit subjects, and the agent's own
+ * sentences — through an hour of watching something visual being made. These are the
+ * frames the agent renders anyway: committed captures once it has pushed, and
+ * screenshots pushed straight down the channel before that.
+ *
+ * Images are dropped from the list when they fail to load rather than left as broken
+ * frames: a capture can vanish between the status poll that listed it and the request
+ * for its bytes, when the agent force-pushes a branch mid-build.
+ */
+function BuildGallery({ token, media }: { token: string; media: BuildMediaItem[] }) {
+  const { t } = useTranslation();
+  const [broken, setBroken] = useState<string[]>([]);
+  const [selected, setSelected] = useState<string | null>(null);
+
+  const shown = media.filter((item) => !broken.includes(item.ref));
+  if (shown.length === 0) return null;
+
+  const current = shown.find((item) => item.ref === selected) ?? shown[0];
+  const markBroken = (ref: string) => setBroken((current) => [...current, ref]);
+
+  return (
+    <div className="status-gallery">
+      <img
+        className="status-gallery-hero"
+        src={buildMediaUrl(token, current)}
+        alt={current.label || t('statusView.gallery.alt')}
+        onError={() => markBroken(current.ref)}
+      />
+      {shown.length > 1 ? (
+        <div className="status-gallery-strip">
+          {shown.map((item) => (
+            <img
+              key={item.ref}
+              className={`status-gallery-thumb${item.ref === current.ref ? ' is-current' : ''}`}
+              src={buildMediaUrl(token, item)}
+              alt={item.label || t('statusView.gallery.alt')}
+              loading="lazy"
+              onClick={() => setSelected(item.ref)}
+              onError={() => markBroken(item.ref)}
+            />
+          ))}
+        </div>
+      ) : null}
+      <p className="status-gallery-caption">{current.label || t('statusView.gallery.caption')}</p>
     </div>
   );
 }

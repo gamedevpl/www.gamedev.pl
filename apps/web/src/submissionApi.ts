@@ -73,7 +73,31 @@ export type SubmissionStatus = {
    * stretch where the page used to have nothing at all to show.
    */
   events?: BuildEvent[];
+  /**
+   * Pictures of the build, newest first. `branch` items are captures the agent
+   * committed; `channel` items were pushed straight to the API and can appear long
+   * before the first commit. Build the URL with {@link buildMediaUrl}.
+   */
+  media?: BuildMediaItem[];
 };
+
+export type BuildMediaItem = {
+  source: 'branch' | 'channel';
+  ref: string;
+  /** Untrusted, agent-authored text — render escaped. */
+  label?: string;
+  createdAt?: string;
+};
+
+/**
+ * Where to fetch one of a build's pictures. The two sources are served by different
+ * routes — one reads the agent's branch, the other our own store — but the caller
+ * only ever has an item, so the choice lives here rather than at every `<img>`.
+ */
+export function buildMediaUrl(token: string, item: BuildMediaItem): string {
+  const path = item.source === 'branch' ? 'media' : 'shot';
+  return `${API_BASE}/api/submissions/${encodeURIComponent(token)}/${path}/${encodeURIComponent(item.ref)}`;
+}
 
 export type SubmissionPreview = {
   slug: string;

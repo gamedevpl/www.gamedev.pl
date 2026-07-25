@@ -147,6 +147,27 @@ export interface SubmissionStatusResponseBase {
    * the first PR exists are exactly when the creator is staring at an empty page.
    */
   events?: BuildEvent[];
+  /**
+   * Pictures of the game as it is now, newest first — the build log stops being a
+   * wall of text. Same reasoning as `events`: kept outside `progress` so a build
+   * with no pull request yet can still show something.
+   */
+  media?: BuildMediaItem[];
+}
+
+/**
+ * One picture of a build in progress. Two sources, because they become available at
+ * different times: `branch` media is committed by the agent (real capture output,
+ * but only once it has run capture and pushed), while `channel` media is pushed
+ * straight to us and can arrive in the first minutes.
+ */
+export interface BuildMediaItem {
+  source: 'branch' | 'channel';
+  /** Filename on the branch, or the stored shot id — the client builds the URL. */
+  ref: string;
+  /** Capture name ('opening') or agent-authored caption. */
+  label?: string;
+  createdAt?: string;
 }
 
 export interface SubmissionPublishedResponse extends SubmissionStatusResponseBase {

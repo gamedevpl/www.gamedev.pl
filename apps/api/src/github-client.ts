@@ -209,6 +209,13 @@ export interface GitHubClient {
    */
   getGameMedia(ref: string, slug: string, filename: string): Promise<Uint8Array | null>;
   /**
+   * Reads a game's media manifest on any ref, so an in-progress build's own captures
+   * can be shown from its branch. The published catalog answers this for merged games;
+   * an unmerged branch has no catalog entry, and its media is exactly what a creator
+   * watching that build wants to see.
+   */
+  getGameMediaManifest(ref: string, slug: string): Promise<CatalogGameMedia | null>;
+  /**
    * Builds the game catalog straight from the repo: lists `games/` directories
    * on `ref` and reads each game's SPEC.md frontmatter. Replaces the old
    * dependency on the public GitHub Pages `catalog.json` so the games repo can
@@ -719,6 +726,13 @@ ${gameJs}`;
         return null;
       }
       return readRawBytes(`games/${slug}/media/${filename}`, ref);
+    },
+
+    async getGameMediaManifest(ref, slug) {
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) {
+        return null;
+      }
+      return parseGameMedia(await readRawFile(`games/${slug}/media/metadata.json`, ref));
     },
 
     async getCatalog(ref) {

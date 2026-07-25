@@ -296,4 +296,79 @@ describe('agent build channel', () => {
     expect(limited.json()).toMatchObject({ accepted: false, rejected: 'rate_limited' });
     expect(limited.json().pending).toEqual([]);
   });
+  // A 1x1 PNG — the smallest payload that still carries a real PNG signature.
+  const TINY_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+  it('stores a pushed screenshot, lists it on the status response, and serves the bytes', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    app = await createApp(store);
+
+    const pushed = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/shot',
+      headers: agentHeaders(),
+      payload: { png: TINY_PNG, label: 'First bridge' },
+    });
+
+    expect(pushed.statusCode).toBe(200);
+    expect(pushed.json().accepted).toBe(true);
+    const shotId = pushed.json().shot.id as string;
+
+    // No pull request exists in this fixture, so this is exactly the empty-page
+    // stretch the channel is for: a picture with nothing committed anywhere.
+    const token = mintToken(ISSUE, secret);
+    const status = await app.inject({ method: 'GET', url: `/api/submissions/${token}` });
+    expect(status.json().media).toEqual([
+      expect.objectContaining({ source: 'channel', ref: shotId, label: 'First bridge' }),
+    ]);
+
+    const image = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${token}/shot/${shotId}`,
+      headers: creatorHeaders(),
+    });
+    expect(image.statusCode).toBe(200);
+    expect(image.headers['content-type']).toContain('image/png');
+    expect(image.rawPayload.subarray(0, 8)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  });
+
+  it('refuses a payload that is not a PNG, whatever it claims to be', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    app = await createApp(store);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/shot',
+      headers: agentHeaders(),
+      payload: { png: Buffer.from('<svg onload=alert(1)>').toString('base64') },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toBe('not a PNG');
+    expect(await store.countBuildShots(ISSUE)).toBe(0);
+  });
+
+  it('will not serve one build\u2019s screenshot to another build\u2019s token', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    await seedSubmission(store, 99);
+    app = await createApp(store);
+
+    const pushed = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/shot',
+      headers: agentHeaders(),
+      payload: { png: TINY_PNG },
+    });
+    const shotId = pushed.json().shot.id as string;
+
+    const stolen = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(99, secret)}/shot/${shotId}`,
+      headers: creatorHeaders(),
+    });
+    expect(stolen.statusCode).toBe(404);
+  });
 });

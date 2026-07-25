@@ -1851,6 +1851,60 @@ body.player-open {
 }
 
 /* Post-play revision loop: tell the agent what to change after trying the draft. */
+/* Pictures of the build. The newest leads at full width because it is the answer to
+   "what does my game look like right now?"; the rest are a strip of what came before,
+   which reads as progress in a way a list of sentences does not. */
+.status-gallery {
+  margin: 20px 0 4px;
+}
+
+.status-gallery-hero {
+  display: block;
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-card);
+  /* Pixel art: never smooth it on the way up. */
+  image-rendering: pixelated;
+}
+
+.status-gallery-strip {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+
+.status-gallery-thumb {
+  flex: 0 0 auto;
+  width: 96px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-card);
+  image-rendering: pixelated;
+  cursor: pointer;
+  opacity: 0.72;
+  transition:
+    opacity 120ms ease,
+    border-color 120ms ease;
+}
+
+.status-gallery-thumb:hover,
+.status-gallery-thumb.is-current {
+  opacity: 1;
+  border-color: var(--accent, var(--panel-border));
+}
+
+.status-gallery-caption {
+  margin: 6px 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
 .status-feedback {
   margin: 20px 0 24px;
   padding: 18px 20px;

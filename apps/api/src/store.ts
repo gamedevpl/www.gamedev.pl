@@ -67,6 +67,30 @@ export interface CreatorMessage {
   deliveredAt?: string | null;
 }
 
+/**
+ * A screenshot the agent pushed over the build channel rather than committing.
+ *
+ * Committed media only exists once the agent has run capture and pushed, which is
+ * late in a build; this is the path that can put a picture on the creator's screen
+ * in the first minutes. Bytes live here as base64 because a pixel-art PNG at these
+ * sizes is tens of kilobytes — comfortably inside a Firestore document, and not
+ * worth a bucket, its IAM, and a retention job.
+ */
+export interface BuildShot {
+  id: string;
+  /** base64-encoded PNG. */
+  data: string;
+  /** Agent-authored caption in English, already sanitized. */
+  label?: string;
+  /** The same caption in `locale`, authored rather than machine translated. */
+  labelLocalized?: string;
+  locale?: string;
+  createdAt: string;
+}
+
+/** A shot without its bytes — what a listing needs. */
+export type BuildShotSummary = Omit<BuildShot, 'data'>;
+
 export interface UsageCounters {
   submissions: number;
   previews: number;
@@ -144,6 +168,17 @@ export interface Store {
   listBuildEvents(issueNumber: number, opts?: { limit?: number }): Promise<BuildEvent[]>;
   /** How many events a build has recorded — the cap that bounds a runaway agent. */
   countBuildEvents(issueNumber: number): Promise<number>;
+  /** Stores a screenshot the agent pushed straight to us, before any commit. */
+  appendBuildShot(
+    issueNumber: number,
+    shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string },
+  ): Promise<BuildShot>;
+  /** A build's pushed screenshots, newest first. Bytes are omitted unless asked for. */
+  listBuildShots(issueNumber: number, opts?: { limit?: number }): Promise<BuildShotSummary[]>;
+  /** One pushed screenshot, bytes included — the read behind serving it. */
+  getBuildShot(issueNumber: number, id: string): Promise<BuildShot | null>;
+  /** How many screenshots a build has pushed — the cap that bounds a runaway agent. */
+  countBuildShots(issueNumber: number): Promise<number>;
   /** Queues a creator change request for the agent to collect. */
   appendCreatorMessage(issueNumber: number, text: string): Promise<CreatorMessage>;
   /** Undelivered creator messages, oldest first — the agent's inbox. */
@@ -223,6 +258,7 @@ export class InMemoryStore implements Store {
   private users = new Map<string, User>();
   private submissions = new Map<number, SubmissionRecord>();
   private buildEvents = new Map<number, BuildEvent[]>();
+  private buildShots = new Map<number, BuildShot[]>();
   private creatorMessages = new Map<number, CreatorMessage[]>();
   private usage = new Map<string, UsageCounters>();
   private waitlist = new Map<string, WaitlistEntry>();
@@ -328,6 +364,33 @@ export class InMemoryStore implements Store {
 
   async countBuildEvents(issueNumber: number): Promise<number> {
     return this.buildEvents.get(issueNumber)?.length ?? 0;
+  }
+
+  async appendBuildShot(
+    issueNumber: number,
+    shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string },
+  ): Promise<BuildShot> {
+    const record: BuildShot = { ...shot, id: randomUUID(), createdAt: shot.createdAt ?? new Date().toISOString() };
+    const existing = this.buildShots.get(issueNumber) ?? [];
+    existing.push(record);
+    this.buildShots.set(issueNumber, existing);
+    return { ...record };
+  }
+
+  async listBuildShots(issueNumber: number, opts?: { limit?: number }): Promise<BuildShotSummary[]> {
+    return [...(this.buildShots.get(issueNumber) ?? [])]
+      .sort(byNewestFirst)
+      .slice(0, opts?.limit ?? 12)
+      .map(({ data: _data, ...summary }) => ({ ...summary }));
+  }
+
+  async getBuildShot(issueNumber: number, id: string): Promise<BuildShot | null> {
+    const found = this.buildShots.get(issueNumber)?.find((shot) => shot.id === id);
+    return found ? { ...found } : null;
+  }
+
+  async countBuildShots(issueNumber: number): Promise<number> {
+    return this.buildShots.get(issueNumber)?.length ?? 0;
   }
 
   async appendCreatorMessage(issueNumber: number, text: string): Promise<CreatorMessage> {
@@ -670,6 +733,10 @@ export class FirestoreStore implements Store {
     return this.db.collection('submissions').doc(String(issueNumber)).collection('messages');
   }
 
+  private shotsCollection(issueNumber: number) {
+    return this.db.collection('submissions').doc(String(issueNumber)).collection('shots');
+  }
+
   async appendBuildEvent(
     issueNumber: number,
     event: Omit<BuildEvent, 'id' | 'createdAt'> & { createdAt?: string },
@@ -691,6 +758,38 @@ export class FirestoreStore implements Store {
 
   async countBuildEvents(issueNumber: number): Promise<number> {
     const snap = await this.eventsCollection(issueNumber).count().get();
+    return snap.data().count;
+  }
+
+  async appendBuildShot(
+    issueNumber: number,
+    shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string },
+  ): Promise<BuildShot> {
+    const record: BuildShot = { ...shot, id: randomUUID(), createdAt: shot.createdAt ?? new Date().toISOString() };
+    const document = Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined));
+    await this.shotsCollection(issueNumber).doc(record.id).set(document);
+    return record;
+  }
+
+  async listBuildShots(issueNumber: number, opts?: { limit?: number }): Promise<BuildShotSummary[]> {
+    // `select()` keeps the bytes on the server: a listing rides the status response,
+    // which is polled every few seconds, and the images themselves are fetched once
+    // each by the browser and then cached.
+    const snap = await this.shotsCollection(issueNumber)
+      .select('id', 'label', 'labelLocalized', 'locale', 'createdAt')
+      .orderBy('createdAt', 'desc')
+      .limit(opts?.limit ?? 12)
+      .get();
+    return snap.docs.map((doc) => doc.data() as BuildShotSummary).sort(byNewestFirst);
+  }
+
+  async getBuildShot(issueNumber: number, id: string): Promise<BuildShot | null> {
+    const doc = await this.shotsCollection(issueNumber).doc(id).get();
+    return doc.exists ? (doc.data() as BuildShot) : null;
+  }
+
+  async countBuildShots(issueNumber: number): Promise<number> {
+    const snap = await this.shotsCollection(issueNumber).count().get();
     return snap.data().count;
   }
 

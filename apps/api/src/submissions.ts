@@ -8,6 +8,7 @@ import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLar
 import {
   createGitHubClient,
   type CatalogGameEntry,
+  type CatalogGameMedia,
   type GitHubClient,
   type LinkedPullRequest,
 } from './github-client.js';
@@ -15,7 +16,7 @@ import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './
 import { createMailerFromEnv, type Mailer } from './mailer.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { notifyOnTransition, type EmitDeps } from './notify.js';
-import { type Store } from './store.js';
+import { type BuildShotSummary, type Store } from './store.js';
 import {
   CREATOR_FEEDBACK_MARKER,
   deriveStatus,
@@ -23,6 +24,7 @@ import {
   parseProgressNote,
   sanitizeCreatorText,
   type BuildEvent,
+  type BuildMediaItem,
   type SubmissionStatusResponse,
 } from './submission-status.js';
 import { InvalidTokenError, mintToken, verifyToken } from './submission-token.js';
@@ -169,8 +171,39 @@ export async function registerSubmissionRoutes(
   const contentChecker = options.contentChecker ?? createDefaultContentChecker();
 
   /**
-   * The build-channel briefing appended to every submission issue. This is the only
-   * place the agent learns the channel exists, so it carries the credential, the
+   * The channel credential, compact enough to ride along with something else.
+   *
+   * A follow-up session runs in a fresh container: the environment variable is gone,
+   * and the token cache the CLI keeps lives in a workspace that no longer exists. The
+   * token is in the issue body, but a session woken by a pull-request comment has no
+   * reason to go back and read the issue — so it reported nothing at all. Whatever
+   * wakes the agent has to carry the credential with it.
+   */
+  function buildChannelReminder(agentToken: string, locale: string): string {
+    return [
+      '<details><summary>Reporting progress on this build</summary>',
+      '',
+      'The creator is watching this on www.gamedev.pl. Set the token once and report as you go —',
+      'each command runs in a fresh shell, but the CLI remembers it after the first call:',
+      '',
+      '```bash',
+      `export GAMEDEVPL_API=${notifyAppBaseUrl}`,
+      `export GAMEDEVPL_BUILD_TOKEN=${agentToken}`,
+      locale === 'en'
+        ? 'npm run progress -- --step fixing "Making the change you asked for."'
+        : `npm run progress -- --step fixing "Making the change you asked for." --lang ${locale} --localized "..."`,
+      '```',
+      '',
+      `The quoted sentence is always English${locale === 'en' ? '' : `; \`--localized\` carries ${locale}`}.`,
+      'This token is scoped to this build and can only post progress about it.',
+      '',
+      '</details>',
+    ].join('\n');
+  }
+
+  /**
+   * The build-channel briefing appended to every submission issue. This is where the
+   * agent first learns the channel exists, so it carries the credential, the
    * vocabulary, and — most importantly — the reason: someone is watching this build
    * happen, and until now they watched it through a transport that made the agent
    * choose between reporting and working.
@@ -264,6 +297,82 @@ export async function registerSubmissionRoutes(
     return value;
   }
 
+  const maxShotsShown = 12;
+  const shotsCache = new Map<number, { expiresAt: number; value: BuildShotSummary[] }>();
+
+  async function loadBuildShots(issueNumber: number): Promise<BuildShotSummary[]> {
+    if (!store) return [];
+    const currentTime = now();
+    const cached = shotsCache.get(issueNumber);
+    if (cached && cached.expiresAt > currentTime) {
+      return cached.value;
+    }
+    const value = await store.listBuildShots(issueNumber, { limit: maxShotsShown });
+    shotsCache.set(issueNumber, { value, expiresAt: currentTime + eventsCacheTtlMs });
+    return value;
+  }
+
+  // A branch's captures only change when the agent pushes, so this is keyed by the
+  // head commit rather than timed out: a build that pushes nothing for an hour costs
+  // one GitHub read, and the first poll after a push sees the new frames.
+  const branchMediaCache = new Map<string, CatalogGameMedia | null>();
+  const maxBranchMediaKeys = 200;
+
+  async function loadBranchMedia(slug: string, headSha: string): Promise<CatalogGameMedia | null> {
+    if (!githubClient) return null;
+    const key = `${slug}@${headSha}`;
+    const cached = branchMediaCache.get(key);
+    if (cached !== undefined) return cached;
+
+    let value: CatalogGameMedia | null = null;
+    try {
+      value = await githubClient.getGameMediaManifest(headSha, slug);
+    } catch {
+      // Decorative: a build with no readable manifest simply shows no pictures.
+      value = null;
+    }
+    if (branchMediaCache.size >= maxBranchMediaKeys) {
+      const oldestKey = branchMediaCache.keys().next().value;
+      if (oldestKey !== undefined) branchMediaCache.delete(oldestKey);
+    }
+    branchMediaCache.set(key, value);
+    return value;
+  }
+
+  /**
+   * Pictures of this build, best-evidence first. Committed captures lead when they
+   * exist — they are the real thing, rendered from the sources on the branch — and
+   * pushed screenshots carry the early minutes, before any commit exists.
+   */
+  async function buildMedia(
+    status: SubmissionStatusResponse,
+    issueNumber: number,
+    locale: string,
+  ): Promise<BuildMediaItem[]> {
+    const slug = status.preview?.slug ?? status.slug;
+    const headSha = status.progress?.headSha;
+    const branch = slug && headSha && status.status !== 'published' ? await loadBranchMedia(slug, headSha) : null;
+
+    return [
+      ...(branch?.screenshots ?? []).map((screenshot): BuildMediaItem => ({
+        source: 'branch',
+        ref: screenshot.file,
+        label: screenshot.name,
+      })),
+      ...(await loadBuildShots(issueNumber)).map((shot): BuildMediaItem => {
+        // The caption the agent wrote in the reader's own language when it has one,
+        // and the English it always writes otherwise.
+        const caption = shot.locale === locale && shot.labelLocalized ? shot.labelLocalized : shot.label;
+        return {
+          source: 'channel',
+          ref: shot.id,
+          ...(caption ? { label: caption } : {}),
+          createdAt: shot.createdAt,
+        };
+      }),
+    ];
+  }
+
   /**
    * Resolves each event to one sentence in the reader's language. An agent that wrote
    * the sentence in the creator's language already (the common case — we tell it which
@@ -297,14 +406,22 @@ export async function registerSubmissionRoutes(
     });
   }
 
-  /** Attaches the agent's own updates to a status response, in the reader's language. */
+  /**
+   * Attaches what the agent sent us directly — its updates, in the reader's language,
+   * and its pictures. Both sit outside the 60s status cache for the same reason: they
+   * are the only things that move in the long stretch before a pull request exists.
+   */
   async function attachBuildEvents(
     status: SubmissionStatusResponse,
     issueNumber: number,
     locale: string,
   ): Promise<SubmissionStatusResponse> {
-    const events = await loadBuildEvents(issueNumber);
-    return events.length === 0 ? status : { ...status, events: await localizeEvents(events, locale) };
+    const [events, media] = await Promise.all([loadBuildEvents(issueNumber), buildMedia(status, issueNumber, locale)]);
+    return {
+      ...status,
+      ...(events.length > 0 ? { events: await localizeEvents(events, locale) } : {}),
+      ...(media.length > 0 ? { media } : {}),
+    };
   }
 
   // Previews are heavier (several GitHub reads + assembly) and never cached — a
@@ -843,6 +960,7 @@ export async function registerSubmissionRoutes(
 
     const target = linkedPr && linkedPr.state === 'OPEN' ? linkedPr.number : issueNumber;
     const sanitizedFeedback = sanitizeCreatorText(parsed.data.feedback, { singleLine: false });
+    const creatorLocale = store ? ((await store.getSubmission(issueNumber))?.locale ?? 'en') : 'en';
     // No `@copilot` mention here on purpose. This comment is authored by the app's machine
     // account, and the coding agent only opens a session for a mention from a Copilot-licensed
     // user — a mention from this account is silently ignored. The relay workflow in the games
@@ -859,6 +977,8 @@ export async function registerSubmissionRoutes(
       '```text',
       sanitizedFeedback,
       '```',
+      '',
+      buildChannelReminder(mintAgentToken(issueNumber, submissionTokenSecret), creatorLocale),
     ].join('\n');
 
     try {
@@ -1009,6 +1129,141 @@ export async function registerSubmissionRoutes(
     }
 
     return replyWithDraft(request, reply, issueNumber);
+  });
+
+  /**
+   * A capture committed on the build's own branch.
+   *
+   * The published route next to this one resolves through the catalog on `main`, which
+   * an unmerged build is not in — so a creator watching their game being made could
+   * not see the very frames the agent had just rendered of it. The allowlist is read
+   * from the manifest at the same commit as the bytes, so only files that build's own
+   * metadata declares can be served, and only for the token that owns it.
+   */
+  app.get('/api/submissions/:token/media/:filename', async (request, reply) => {
+    if (!githubClient || !submissionTokenSecret) {
+      return reply.status(503).send({ error: 'submissions are not configured' });
+    }
+    if (!checkUserAccess(request, reply)) {
+      return;
+    }
+
+    const parsedParams = z
+      .object({
+        token: z.string(),
+        filename: z.string().regex(/^[a-z0-9][a-z0-9-]*\.png$/),
+      })
+      .safeParse(request.params);
+    if (!parsedParams.success) {
+      return reply.status(404).send({ error: 'media not found' });
+    }
+
+    const currentTime = now();
+    if (isRateLimited(mediaByIp, request.ip, currentTime, maxMediaPerWindow, gamesRateLimitWindowMs)) {
+      return reply.status(429).send({ error: 'too many game requests, please try again later' });
+    }
+
+    let issueNumber: number;
+    try {
+      issueNumber = verifyToken(parsedParams.data.token, submissionTokenSecret);
+    } catch (error) {
+      if (error instanceof InvalidTokenError) {
+        return reply.status(400).send({ error: 'invalid submission token' });
+      }
+      throw error;
+    }
+
+    try {
+      const linkedPr = await githubClient.findLinkedPR(issueNumber);
+      const headSha = linkedPr?.headRefOid;
+      const slug = linkedPr ? extractSlugFromChangedFiles(linkedPr.changedFiles) : null;
+      if (!headSha || !slug) {
+        return reply.status(404).send({ error: 'media not found' });
+      }
+
+      const cacheKey = `draft:${slug}@${headSha}/${parsedParams.data.filename}`;
+      const cachedMedia = mediaCache.get(cacheKey);
+      if (cachedMedia && cachedMedia.expiresAt > currentTime) {
+        return sendMedia(request, reply, cachedMedia);
+      }
+
+      const manifest = await loadBranchMedia(slug, headSha);
+      const allowed = new Set((manifest?.screenshots ?? []).map((screenshot) => screenshot.file));
+      if (!allowed.has(parsedParams.data.filename)) {
+        return reply.status(404).send({ error: 'media not found' });
+      }
+
+      const media = await githubClient.getGameMedia(headSha, slug, parsedParams.data.filename);
+      if (!media) {
+        return reply.status(404).send({ error: 'media not found' });
+      }
+
+      const body = Buffer.from(media);
+      const cacheEntry = {
+        expiresAt: currentTime + mediaTtlMs,
+        etag: `"${createHash('sha256').update(body).digest('base64url').slice(0, 27)}"`,
+        contentType: 'image/png',
+        body,
+      };
+      if (mediaCache.size >= maxCachedMediaEntries) {
+        const oldestKey = mediaCache.keys().next().value;
+        if (oldestKey !== undefined) mediaCache.delete(oldestKey);
+      }
+      mediaCache.set(cacheKey, cacheEntry);
+
+      return sendMedia(request, reply, cacheEntry);
+    } catch (error) {
+      request.log.error({ err: error }, 'failed to serve draft media');
+      return reply.status(502).send({ error: 'failed to load game media' });
+    }
+  });
+
+  /** A screenshot the agent pushed over the channel, before it committed anything. */
+  app.get('/api/submissions/:token/shot/:id', async (request, reply) => {
+    if (!submissionTokenSecret || !store) {
+      return reply.status(503).send({ error: 'submissions are not configured' });
+    }
+    if (!checkUserAccess(request, reply)) {
+      return;
+    }
+
+    const parsedParams = z.object({ token: z.string(), id: z.string().max(64) }).safeParse(request.params);
+    if (!parsedParams.success) {
+      return reply.status(404).send({ error: 'media not found' });
+    }
+
+    const currentTime = now();
+    if (isRateLimited(mediaByIp, request.ip, currentTime, maxMediaPerWindow, gamesRateLimitWindowMs)) {
+      return reply.status(429).send({ error: 'too many game requests, please try again later' });
+    }
+
+    let issueNumber: number;
+    try {
+      issueNumber = verifyToken(parsedParams.data.token, submissionTokenSecret);
+    } catch (error) {
+      if (error instanceof InvalidTokenError) {
+        return reply.status(400).send({ error: 'invalid submission token' });
+      }
+      throw error;
+    }
+
+    try {
+      const shot = await store.getBuildShot(issueNumber, parsedParams.data.id);
+      if (!shot) {
+        return reply.status(404).send({ error: 'media not found' });
+      }
+
+      const body = Buffer.from(shot.data, 'base64');
+      return sendMedia(request, reply, {
+        // Immutable once stored, so the id is a sound ETag on its own.
+        etag: `"${shot.id}"`,
+        contentType: 'image/png',
+        body,
+      });
+    } catch (error) {
+      request.log.error({ err: error }, 'failed to serve build screenshot');
+      return reply.status(502).send({ error: 'failed to load game media' });
+    }
   });
 
   /**
