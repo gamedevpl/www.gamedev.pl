@@ -2310,6 +2310,35 @@ body.player-open {
     scroll-snap-align: start;
   }
 
+  /* The sketch pad is drawn on with a finger, but its own controls were the
+     smallest targets in the app — 22px colour swatches and 28px size buttons.
+     Scoped to the modal so nothing outside it inherits the sizing; the palette
+     wraps rather than shrinking back below the thumb floor. */
+  .sketch-modal-backdrop .tool-btn,
+  .sketch-modal-backdrop .action-btn,
+  .sketch-modal-backdrop .close-btn {
+    min-height: 44px;
+    padding: 6px 14px;
+  }
+
+  .sketch-modal-backdrop .close-btn {
+    min-width: 44px;
+  }
+
+  .sketch-modal-backdrop .palette-group {
+    flex-wrap: wrap;
+  }
+
+  .sketch-modal-backdrop .color-swatch {
+    width: 44px;
+    height: 44px;
+  }
+
+  .sketch-modal-backdrop .size-btn {
+    width: 44px;
+    height: 44px;
+  }
+
   /* iOS Safari force-zooms the page when a focused field is under 16px, and it
      never zooms back out — you answer one QA question and spend the rest of the
      visit scrolling sideways. 16px is the threshold, not a design choice. */
@@ -3541,7 +3570,11 @@ body.player-open {
   grid-area: 3 / 2;
 }
 
-.action-btn {
+/* Scoped to the controller. `.action-btn` is also the sketch modal's Undo/Clear
+   (see the rule near .tool-btn), and this one — sized for a full-screen phone
+   gamepad — is later in the file at equal specificity, so it was winning there
+   and rendering those two buttons 88px tall with 32px text. */
+.controller-screen .action-btn {
   min-height: 22vh;
   border: none;
   border-radius: 20px;
@@ -3552,7 +3585,7 @@ body.player-open {
   touch-action: none;
 }
 
-.action-btn:active {
+.controller-screen .action-btn:active {
   filter: brightness(0.82);
 }
 

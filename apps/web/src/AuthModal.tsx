@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { GoogleSignInButton } from './GoogleSignInButton';
 import { PixelIcon } from './PixelIcon';
@@ -16,7 +17,13 @@ export function AuthModal({ isOpen, onClose, title, subtitle }: AuthModalProps) 
 
   if (!isOpen) return null;
 
-  return (
+  // Portalled to the body because one of the two call sites renders this inside
+  // <header>, which carries a backdrop-filter. That makes the header the containing
+  // block for position:fixed descendants, so the backdrop was clamped to the header's
+  // 61px and the card — including its close button — was laid out above the top of
+  // the screen, unreachable. A portal fixes it at the source and keeps any future
+  // filtered or transformed ancestor from doing the same thing again.
+  return createPortal(
     <div className="modal-backdrop" onClick={onClose}>
       <div className="auth-modal-card" onClick={(e) => e.stopPropagation()}>
         <button className="modal-close-btn" onClick={onClose} aria-label="Close">
@@ -36,6 +43,7 @@ export function AuthModal({ isOpen, onClose, title, subtitle }: AuthModalProps) 
           <GoogleSignInButton onSuccess={onClose} onError={(errMsg) => setError(errMsg)} />
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
