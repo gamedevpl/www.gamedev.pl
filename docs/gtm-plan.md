@@ -9,7 +9,7 @@ This is the plan for taking www.gamedev.pl from closed beta to a public, growing
 Assets:
 
 1. **The gamedev.pl domain and its community history.** Real brand equity in Poland with exactly the audience that will understand the product first. This is the unfair distribution advantage — not social media reach.
-2. **Every created game is a landing page.** A creator who shares their game does the marketing. The product has a built-in growth loop; the job is to remove friction from it, not to buy traffic.
+2. **Every created game is a landing page.** A creator who shares their game does the marketing. The product has a built-in growth loop; the job is to remove friction from it, not to buy traffic. Shared-link traffic arrives mostly on phones, and as of 2026-07-25 the whole catalog is thumb-playable — CI-enforced, with touch support derived from each game's source rather than self-declared — so the loop's biggest drop-off risk (link opens, game unplayable) is already closed.
 3. **Party mode is physically viral.** One screen plus N phones means every session demos the product to N people who did nothing but scan a code.
 4. **The platform repo is already open source** ([gamedevpl/www.gamedev.pl](https://github.com/gamedevpl/www.gamedev.pl), GPL-3.0) — but its metadata still describes the pre-rebirth static site.
 5. **The product is substantially built and operated by AI agents** — creation pipeline, QA gate, feedback loops through PR comments. The repo is a live documentary of a thing most developers have only read think-pieces about. This is a marketing asset, not just an implementation detail.
@@ -110,7 +110,7 @@ Goal: game pages become the acquisition engine; creation converts from play; lau
 
 - **Every game page is a real landing page:** playable instantly, OG image, "Made with a prompt on gamedev.pl — make your own" CTA, creator attribution. Engineering work, not marketing spend; highest-ROI item in this stage.
 - **Remix as the cheap on-ramp.** A remix (tweaking an existing game's prompt) is a smaller agent run than creation from scratch — cheaper for us, lower blank-page anxiety for the user.
-- **SEO compounding:** indexable catalog pages ("free browser games", "party games to play on phones", Polish equivalents). The PWA work (installability, offline) supports this funnel.
+- **SEO compounding:** indexable catalog pages ("free browser games", "party games to play on phones", Polish equivalents). The PWA work (installability, offline — in flight as of 2026-07-25) supports this funnel once shipped.
 - **Recurring prompt jam.** Weekly theme, winners featured on the homepage — a free content calendar, a retention hook, and a curation mechanism. Winners' games (with consent) go into a public showcase with the creator's name on github.com/gamedevpl; they share it, their followers arrive.
 - **Staggered English launch moments,** each weeks apart so every cost spike is survivable and each gets its own GitHub Trending window:
   1. **Show HN** — the biggest single star event. Title carries the alternative-positioning ("open-source AI game maker"); first comment links the repo and explains the architecture honestly, including the local mode. A front page typically converts to a few hundred stars in 24–48h — enough for GitHub Trending, which compounds for free.
@@ -146,6 +146,7 @@ Goal: game pages become the acquisition engine; creation converts from play; lau
 - No fully open registration "because growth" — the invite gate is the cost control.
 - No incentivized stars, ever.
 - No publicly promising the agent-fixes-issues loop before it has worked quietly for weeks.
+- No promising "install the app", offline play, or iOS push in any launch copy until the PWA has actually shipped — as of 2026-07-25 there is no install path, iOS push is impossible without one (web push is desktop/Android only), and there is no app-store presence. Mobile claims in marketing stay limited to what is CI-enforced: every game plays with a thumb in the browser.
 - No raw user reports on public GitHub — the two-lane model exists so private data never lands in public issues.
 
 ## First-week checklist
