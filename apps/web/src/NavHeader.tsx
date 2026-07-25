@@ -45,13 +45,13 @@ export function NavHeader({ activeSpecsCount, onNavigate }: NavHeaderProps) {
             )}
             <span className="user-name">{user.name || user.email || 'User'}</span>
             <NotificationBell />
-            <button className="logout-btn" onClick={logout} title="Sign Out">
-              Sign out
+            <button className="logout-btn" onClick={logout} title={t('header.signOut')}>
+              {t('header.signOut')}
             </button>
           </div>
         ) : (
           <button className="sign-in-btn" onClick={() => setIsAuthModalOpen(true)}>
-            Sign in
+            {t('header.signIn')}
           </button>
         )}
 
@@ -90,6 +90,35 @@ export function NavHeader({ activeSpecsCount, onNavigate }: NavHeaderProps) {
                 <PixelIcon name="folder" size={14} /> {t('header.navMyGames')}
                 {activeSpecsCount > 0 && <span className="specs-count-badge">{activeSpecsCount}</span>}
               </button>
+
+              {/* Controls that live in the header bar on a desktop but cannot fit
+                  beside it on a phone. Hidden above the mobile breakpoint, where
+                  the header itself still shows them. */}
+              <div className="menu-extras">
+                {user && (
+                  <button
+                    className="nav-link"
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      logout();
+                    }}
+                  >
+                    <PixelIcon name="user" size={14} /> {t('header.signOut')}
+                  </button>
+                )}
+
+                <a
+                  className="nav-link"
+                  href="https://github.com/gamedevpl/www.gamedev.pl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  <img src={githubIcon} alt="" width="14" height="14" /> GitHub
+                </a>
+
+                <LanguageSwitcher />
+              </div>
             </nav>
           )}
         </div>

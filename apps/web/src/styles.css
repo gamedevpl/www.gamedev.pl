@@ -83,6 +83,7 @@ a {
   justify-content: space-between;
   padding: 12px 28px;
   background-color: rgba(22, 28, 34, 0.9);
+  -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--panel-border);
   position: sticky;
@@ -245,6 +246,7 @@ a {
   top: calc(100% + 12px);
   right: 0;
   background: rgba(22, 28, 34, 0.95);
+  -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
   border: 1px solid var(--panel-border);
   border-radius: 12px;
@@ -271,6 +273,20 @@ a {
 .dropdown-menu .nav-link:hover {
   background: rgba(0, 228, 172, 0.12);
   color: var(--turquoise);
+}
+
+/* Language, GitHub and sign-out live in the header bar on a desktop. The
+   mobile breakpoint hides them there and reveals this group instead. */
+.menu-extras {
+  display: none;
+}
+
+.menu-extras a.nav-link {
+  text-decoration: none;
+}
+
+.menu-extras a.nav-link img {
+  opacity: 0.8;
 }
 
 /* MAIN CONTENT LAYOUT */
@@ -389,6 +405,7 @@ a {
   padding: 4px 8px;
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.1);
+  -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
 }
 
@@ -516,6 +533,7 @@ a {
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.8);
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   z-index: 10000;
   display: flex;
@@ -986,6 +1004,7 @@ button:disabled {
   border-radius: 999px;
   color: #fff;
   background: rgba(6, 10, 14, 0.84);
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   font-size: 0.72rem;
   font-weight: 700;
@@ -1048,6 +1067,7 @@ button:disabled {
   right: 10px;
   color: #fff;
   background: rgba(6, 10, 14, 0.82);
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.22);
   font-size: 10px;
@@ -1429,6 +1449,7 @@ body.player-open {
   padding-left: max(24px, env(safe-area-inset-left));
   padding-right: max(24px, env(safe-area-inset-right));
   background: rgba(18, 24, 30, 0.95);
+  -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--panel-border);
   width: 100%;
@@ -1544,6 +1565,7 @@ body.player-open {
   font-size: 0.88rem;
   font-weight: 600;
   text-align: center;
+  -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   /* Never intercept a tap meant for the game. */
   pointer-events: none;
@@ -2123,16 +2145,28 @@ body.player-open {
 
 /* MOBILE RESPONSIVENESS */
 @media (max-width: 768px) {
+  /* One row, not two. A stacked header cost 102px — an eighth of a phone
+     screen — to show a logo and five controls. Everything that isn't the
+     logo, the session, or the menu button moves into the menu itself. */
   .app-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-    padding: 12px 16px;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
   }
 
   .logo-brand {
-    justify-content: space-between;
-    width: 100%;
+    min-width: 0;
+  }
+
+  .app-header .logo {
+    font-size: 1.4em;
+  }
+
+  .app-header .logo img {
+    width: 28px;
+    height: 28px;
+    margin-right: 8px;
   }
 
   .header-nav {
@@ -2146,8 +2180,81 @@ body.player-open {
   }
 
   .header-actions {
+    gap: 8px;
+  }
+
+  /* Relocated into .menu-extras inside the dropdown. Signing out in
+     particular should not sit one thumb-width from the menu button. */
+  .header-actions > .language-switcher,
+  .header-actions > .github,
+  .user-profile-badge .user-name,
+  .user-profile-badge .logout-btn {
+    display: none;
+  }
+
+  .menu-extras {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 6px;
+    padding-top: 10px;
+    border-top: 1px solid var(--panel-border);
+  }
+
+  .menu-extras .language-switcher {
+    gap: 8px;
+    padding: 4px 4px 0;
+  }
+
+  .menu-extras .language-switcher button {
+    flex: 1;
+    min-height: 44px;
+  }
+
+  /* Thumb-sized targets. 44px is the iOS HIG floor; below it, taps miss. */
+  .hamburger-btn,
+  .sign-in-btn,
+  .dropdown-menu .nav-link {
+    min-height: 44px;
+  }
+
+  .hamburger-btn {
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
     justify-content: center;
-    gap: 12px;
+    padding: 6px;
+  }
+
+  .sign-in-btn {
+    padding: 0 16px;
+    white-space: nowrap;
+  }
+
+  .dropdown-menu .nav-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .user-profile-badge {
+    padding: 4px;
+  }
+
+  /* The mic / upload / sketch row sat at 30x26 — under half a fingertip. */
+  .prompt-icon-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .chip-btn,
+  .primary-btn,
+  .app-header .logo {
+    min-height: 44px;
+  }
+
+  .chip-btn {
+    padding: 6px 16px;
   }
 
   .content {
@@ -2618,6 +2725,7 @@ body.player-open {
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.75);
+  -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;

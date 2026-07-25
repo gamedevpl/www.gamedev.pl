@@ -26,6 +26,8 @@
     }
   },
   "header": {
+    "signIn": "Zaloguj się",
+    "signOut": "Wyloguj się",
     "logoAlt": "Gamedev.pl",
     "githubAria": "GitHub",
     "languageAria": "Język",
