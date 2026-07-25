@@ -13,7 +13,11 @@ export type AppRoute =
   // A phone that scanned a lobby QR. Both the room code and its join token live
   // in the fragment, so the credential never reaches the server in a request line
   // (see docs/multiplayer-plan.md §4.3).
-  | { view: 'join'; code: string; token: string };
+  | { view: 'join'; code: string; token: string }
+  // The operator telemetry view. Unlisted rather than secret: reaching the route
+  // renders nothing unless the API recognises the caller as an admin, and the API
+  // answers 404 to everyone else.
+  | { view: 'health' };
 
 // Game slugs are lowercase kebab-case (matches the games-repo catalog); keep the
 // route pattern strict so arbitrary fragments can't masquerade as a play route.
@@ -45,6 +49,10 @@ export function parseHashRoute(hash: string): AppRoute {
     if (SLUG_PATTERN.test(slug)) {
       return { view: 'draft', slug };
     }
+  }
+
+  if (normalizedHash === '/health') {
+    return { view: 'health' };
   }
 
   const joinMatch = normalizedHash.match(/^\/join\/([A-Z0-9]{6})\/([A-Za-z0-9_-]+)$/);

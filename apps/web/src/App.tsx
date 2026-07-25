@@ -8,6 +8,7 @@ import { HeroPromptSection } from './HeroPromptSection';
 import { ArcadeCatalog } from './ArcadeCatalog';
 import { MyGamesRail } from './MyGamesRail';
 import { DraftView } from './DraftView';
+import { GameHealthView } from './GameHealthView';
 import { PixelIcon } from './PixelIcon';
 import { SubmissionStatusView } from './SubmissionStatusView';
 import { CreatorQA, type QAQuestion } from './CreatorQA';
@@ -387,7 +388,9 @@ export function App() {
       <NavHeader activeSpecsCount={savedSpecs.length} onNavigate={handleNavigateSection} />
 
       <main className="content">
-        {route.view === 'draft' ? (
+        {route.view === 'health' ? (
+          <GameHealthView />
+        ) : route.view === 'draft' ? (
           <DraftView slug={route.slug} onExit={() => navigateHash('#/')} />
         ) : route.view === 'status' ? (
           <SubmissionStatusView

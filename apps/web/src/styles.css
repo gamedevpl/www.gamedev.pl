@@ -3693,3 +3693,146 @@ body.player-open {
 .quota-note.is-spent {
   color: #fbbf24;
 }
+
+/* Operator telemetry view (docs/improvement-loop-plan.md IL-2). Reachable only at
+   #/health, and only renders for an admin — the API 404s everyone else. Styled plainly
+   on purpose: this is an instrument, not a product surface. */
+.health {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem 1rem 4rem;
+}
+
+.health-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.health-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: var(--text);
+}
+
+.health-windows {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.health-window {
+  min-height: 36px;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.health-window.is-active {
+  border-color: var(--turquoise);
+  color: var(--turquoise);
+}
+
+.health-summary {
+  margin: 1rem 0 0.25rem;
+  color: var(--text);
+}
+
+.health-empty,
+.health-note {
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* Wide content scrolls inside its own box rather than pushing the page sideways. */
+.health-table-scroll {
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+.health-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.health-table th,
+.health-table td {
+  padding: 0.5rem 0.75rem;
+  text-align: right;
+  border-bottom: 1px solid var(--panel-border);
+  white-space: nowrap;
+}
+
+.health-table th:first-child,
+.health-table td:first-child,
+.health-table th:nth-child(2),
+.health-table td:nth-child(2) {
+  text-align: left;
+}
+
+.health-table th {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.health-slug a {
+  color: var(--accent-blue);
+  text-decoration: none;
+}
+
+.health-slug a:hover {
+  text-decoration: underline;
+}
+
+.health-badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+}
+
+.health-badge--bad {
+  background: rgba(255, 107, 107, 0.15);
+  color: var(--error);
+}
+
+.health-badge--warn {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+}
+
+.health-badge--ok {
+  background: rgba(0, 228, 172, 0.12);
+  color: var(--turquoise);
+}
+
+.health-badge--idle {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--muted);
+}
+
+.health-errors summary {
+  cursor: pointer;
+  color: var(--error);
+}
+
+.health-errors ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1rem;
+  text-align: left;
+  white-space: normal;
+  max-width: 32rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.health-error-count {
+  color: var(--text);
+}

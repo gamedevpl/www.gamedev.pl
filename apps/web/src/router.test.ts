@@ -36,6 +36,12 @@ describe('parseHashRoute', () => {
     expect(parseHashRoute('#/join/ABC123/tok_en-1')).toEqual({ view: 'join', code: 'ABC123', token: 'tok_en-1' });
   });
 
+  it('parses the operator health route', () => {
+    expect(parseHashRoute('#/health')).toEqual({ view: 'health' });
+    // Unlisted, not secret — but it still must not swallow neighbouring paths.
+    expect(parseHashRoute('#/health/brick-storm')).toEqual({ view: 'home' });
+  });
+
   it('falls back to home on anything unrecognized', () => {
     expect(parseHashRoute('#/nope')).toEqual({ view: 'home' });
   });

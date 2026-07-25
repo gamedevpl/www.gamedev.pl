@@ -485,6 +485,26 @@ at all and feeds the only autonomous-eligible class.
 
 ### Phase IL-2 — Distill (aggregates + dashboard)
 
+- ✅ **Operator health view** — `GET /api/admin/telemetry/health?days=N`
+  ([admin.ts](../apps/api/src/admin.ts)) over a pure aggregator
+  ([telemetry-health.ts](../apps/api/src/telemetry-health.ts)), rendered at the
+  unlisted `#/health` route. Per game: sessions, bounces, median play time, median
+  fps, stall rate, and grouped error messages, worst first.
+
+  Scoped to **operators rather than creators, and that ordering was deliberate**: a
+  creator scorecard has to attribute a game to a person, attribution runs through
+  `submissions.ownerUid`, and most catalog games have no submission document — so
+  the per-creator view would have covered a fraction of the catalog while appearing
+  to answer "is my game working". `ADMIN_UIDS` is a separate allowlist from the beta
+  one, since admission to the beta is not permission to read everyone's numbers, and
+  unset admits nobody. Non-admins get **404, not 403** — the existence of the surface
+  is not something a beta tester needs confirmed.
+
+  It computes on read rather than from a stored aggregate: one equality-free query
+  per day partition, capped at 1000 events each, with `truncated` in the response so
+  a capped day is reported as a floor instead of silently under-counting. That is
+  cheap at current volume and defers the scheduler until volume argues for it.
+
 - Daily aggregation job (Cloud Scheduler → internal endpoint, same pattern as
   the notify sweep) → `scorecard/current`.
 - Feedback theme extraction through the genai seam.

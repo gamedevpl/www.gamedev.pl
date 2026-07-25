@@ -23,6 +23,7 @@
 #   WEB_ORIGIN=...             (CORS allowed origins)
 #   PRIVATE_BETA=true          (gate all data reads behind a session + allowlist)
 #   BETA_ALLOWED_UIDS=...      (comma-separated g:<sub> values)
+#   ADMIN_UIDS=...             (comma-separated g:<sub> values; operator telemetry view)
 #   BETA_ALLOWED_EMAILS=...    (comma-separated verified email addresses)
 #   MAIL_FROM=...              (RFC 5322 sender; defaults to noreply@mail.gamedev.pl)
 #   INVITE_URL=...             (where invitees land; defaults to https://www.gamedev.pl)
@@ -127,6 +128,12 @@ if [ -n "$BETA_ALLOWED_UIDS" ]; then
 fi
 if [ -n "$BETA_ALLOWED_EMAILS" ]; then
   ENV_VARS="${ENV_VARS}|BETA_ALLOWED_EMAILS=${BETA_ALLOWED_EMAILS}"
+fi
+# Operator telemetry view. Separate from the beta allowlist on purpose: being admitted
+# to the closed beta is not the same as being allowed to read every game's numbers.
+# Unset means the route admits nobody, which is the correct default.
+if [ -n "${ADMIN_UIDS:-}" ]; then
+  ENV_VARS="${ENV_VARS}|ADMIN_UIDS=${ADMIN_UIDS}"
 fi
 if [ -n "$MAIL_FROM" ]; then
   ENV_VARS="${ENV_VARS}|MAIL_FROM=${MAIL_FROM}"

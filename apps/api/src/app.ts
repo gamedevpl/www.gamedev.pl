@@ -7,6 +7,7 @@ import path from 'node:path';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
+import { registerAdminRoutes } from './admin.js';
 import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
 import { createGenerator } from './generator.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
@@ -43,6 +44,8 @@ export interface BuildAppOptions {
   betaAllowedUids?: string;
   // Private beta allowlist — Google-verified emails (comma-separated, case-insensitive)
   betaAllowedEmails?: string;
+  // Uids (comma-separated) allowed to read the operator telemetry view
+  adminUids?: string;
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -94,6 +97,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       .filter(Boolean),
   );
 
+  const adminUids = new Set(
+    (options.adminUids ?? process.env.ADMIN_UIDS ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+
   const contentChecker = options.contentChecker ?? createDefaultContentChecker();
 
   // Auth plugin registers cookies, /api/auth/* endpoints, and user session decorator.
@@ -142,6 +152,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     store,
     ...(options.telemetryRoutes ?? { publishedSlugs: createPublishedSlugGateFromEnv() }),
   });
+
+  // Operator reads over that telemetry. Separate allowlist from the beta one: being
+  // let into the closed beta is not the same as being allowed to read every game's
+  // numbers. Unset means the route admits nobody, which is the right default for a
+  // surface whose whole purpose is seeing across other people's games.
+  await registerAdminRoutes(app, { store, adminUids });
 
   app.get('/api/health', async () => ({ status: 'ok', provider: generator.name, privateBeta }));
 
