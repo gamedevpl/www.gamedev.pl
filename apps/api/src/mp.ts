@@ -283,11 +283,14 @@ export class RoomRegistry {
     this.rooms.set(code, room);
 
     const expiresAt = createdAt + JOIN_TOKEN_TTL_MS;
+    // Hybrid join URL: room code in the path, credential in the fragment so it
+    // never hits access logs or Referer (docs/path-routing-plan.md).
+    const joinToken = mintRoomToken(code, expiresAt, this.secret, 'guest');
     return {
       code,
       hostToken: mintRoomToken(code, expiresAt, this.secret, 'host'),
-      joinToken: mintRoomToken(code, expiresAt, this.secret, 'guest'),
-      joinPath: `/#/join/${code}/${mintRoomToken(code, expiresAt, this.secret, 'guest')}`,
+      joinToken,
+      joinPath: `/join/${code}#${joinToken}`,
       maxPlayers,
       expiresAt,
     };

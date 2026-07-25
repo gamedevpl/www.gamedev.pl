@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseGameBridgeMessage, parseServerFrame, PROTOCOL_VERSION } from './protocol';
-import { parseHashRoute } from '../router';
+import { parsePathRoute } from '../router';
 
 describe('parseServerFrame', () => {
   it('accepts a well-formed roster', () => {
@@ -65,8 +65,8 @@ describe('parseGameBridgeMessage', () => {
 });
 
 describe('join route', () => {
-  it('parses a scanned lobby link', () => {
-    expect(parseHashRoute('#/join/K7M3QP/abc-DEF_123')).toEqual({
+  it('parses a scanned lobby link (code in path, token in fragment)', () => {
+    expect(parsePathRoute('/join/K7M3QP', '#abc-DEF_123')).toEqual({
       view: 'join',
       code: 'K7M3QP',
       token: 'abc-DEF_123',
@@ -74,14 +74,14 @@ describe('join route', () => {
   });
 
   it('falls back home for malformed join links', () => {
-    expect(parseHashRoute('#/join/lower1/token')).toEqual({ view: 'home' });
-    expect(parseHashRoute('#/join/TOOLONG9/token')).toEqual({ view: 'home' });
-    expect(parseHashRoute('#/join/K7M3QP')).toEqual({ view: 'home' });
-    expect(parseHashRoute('#/join/K7M3QP/tok/en')).toEqual({ view: 'home' });
+    expect(parsePathRoute('/join/lower1', '#token')).toEqual({ view: 'home' });
+    expect(parsePathRoute('/join/TOOLONG9', '#token')).toEqual({ view: 'home' });
+    expect(parsePathRoute('/join/K7M3QP')).toEqual({ view: 'home' });
+    expect(parsePathRoute('/join/K7M3QP/tok/en')).toEqual({ view: 'home' });
   });
 
   it('still parses the existing routes', () => {
-    expect(parseHashRoute('')).toEqual({ view: 'home' });
-    expect(parseHashRoute('#/status/abc')).toEqual({ view: 'status', token: 'abc' });
+    expect(parsePathRoute('/')).toEqual({ view: 'home' });
+    expect(parsePathRoute('/status/abc')).toEqual({ view: 'status', token: 'abc' });
   });
 });

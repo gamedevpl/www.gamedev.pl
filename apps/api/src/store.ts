@@ -223,7 +223,7 @@ export interface StoredNotification {
   titleKey: string;
   bodyKey: string;
   params: Record<string, string>;
-  /** In-app destination, e.g. `#/status/<token>` or `#/play/<slug>`. */
+  /** In-app destination, e.g. `/status/<token>` or `/play/<slug>`. */
   link: string;
 }
 

@@ -101,7 +101,7 @@ wait" once that flavor ships.
 
 ### 3.2 Guest flow (the phone)
 
-1. Scan QR → phone browser opens `https://<app>/#/join/<code>/<token>`.
+1. Scan QR → phone browser opens `https://<app>/join/<code>#<token>`.
 2. **No account, no install.** One screen: pick a nickname (pre-filled with a fun default,
    e.g. "Green Fox") → **Join**.
 3. Controller renders: a d-pad plus one action button, in the slot's color, sized for thumbs,
@@ -194,9 +194,10 @@ rate-limits (token bucket, ~40 frames/s/connection), and forwards.
 - `POST /api/mp/sessions` mints a **signed join token** (HMAC over `code|exp`, same discipline
   as `submission-token.ts`, keyed off `SESSION_SECRET` with a distinct scope string so a room
   token can never be confused with a session cookie).
-- The QR encodes `https://<app>/#/join/<code>/<token>` — the token rides in the **fragment**,
-  which browsers never send to the server, so it stays out of access logs and Referer headers.
-  It is then presented in the WS `hello` **frame body** (not the URL) — same reasoning.
+- The QR encodes `https://<app>/join/<code>#<token>` — room code in the path, token in the
+  **fragment**, which browsers never send to the server, so it stays out of access logs and
+  Referer headers. It is then presented in the WS `hello` **frame body** (not the URL) — same
+  reasoning.
 - Guests get an ephemeral slot — **no account, no user doc, no cookie**. Nickname lives only
   in room memory and dies with the room.
 - Beta reconciliation: the SPA shell is already public; `/api/mp/ws` is the **only** API a
@@ -338,7 +339,7 @@ relay, rate limits, beta-wall exemption, full unit-test matrix.
 Check 12, `GAME_KIT_MODULES` update, agent instructions, and the two games below.
 
 **M3 — Lobby, QR, controller, bridge** (`apps/web`) · "Play together", lobby overlay with QR,
-`#/join/:code/:token` route, nickname screen, d-pad controller, `GameFrame` bridge,
+`/join/:code` + `#token` route, nickname screen, d-pad controller, `GameFrame` bridge,
 catalog badge, i18n en/pl.
 
 **M4 — Metadata plumbing** · flat frontmatter → `CatalogGameEntry` → `/api/catalog` → web.

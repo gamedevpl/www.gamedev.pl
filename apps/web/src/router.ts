@@ -10,9 +10,9 @@ export type AppRoute =
   // shareable form of a build: it carries no status token, so it grants watching
   // rights only — no change requests, no quota spend.
   | { view: 'draft'; slug: string }
-  // A phone that scanned a lobby QR. Both the room code and its join token live
-  // in the fragment, so the credential never reaches the server in a request line
-  // (see docs/multiplayer-plan.md §4.3).
+  // A phone that scanned a lobby QR. The room code is a path segment; the join
+  // token rides in the fragment so it never hits access logs or Referer
+  // (see docs/path-routing-plan.md § Join, docs/multiplayer-plan.md §4.3).
   | { view: 'join'; code: string; token: string }
   // The operator telemetry view. Unlisted rather than secret: reaching the route
   // renders nothing unless the API recognises the caller as an admin, and the API
@@ -20,30 +20,39 @@ export type AppRoute =
   | { view: 'health' };
 
 // Game slugs are lowercase kebab-case (matches the games-repo catalog); keep the
-// route pattern strict so arbitrary fragments can't masquerade as a play route.
+// route pattern strict so arbitrary path segments can't masquerade as a play route.
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-export function parseHashRoute(hash: string): AppRoute {
-  const normalizedHash = hash.startsWith('#') ? hash.slice(1) : hash;
+// Canonical play prefix is `/play`. `/ay` and `/ai` are accepted aliases (same view);
+// the app rewrites them to `/play/<slug>` so shared URLs stay consistent.
+const PLAY_PREFIX_PATTERN = /^\/(play|ay|ai)\/([^/]+)$/;
 
-  if (normalizedHash === '' || normalizedHash === '/') {
+/**
+ * Parse the SPA route from pathname (+ optional hash for the join credential).
+ * Unknown / invalid paths fall back to home.
+ */
+export function parsePathRoute(pathname: string, hash = ''): AppRoute {
+  const normalizedPath = pathname.startsWith('/') ? pathname : `/${pathname}`;
+  const fragment = hash.startsWith('#') ? hash.slice(1) : hash;
+
+  if (normalizedPath === '' || normalizedPath === '/') {
     return { view: 'home' };
   }
 
-  const statusMatch = normalizedHash.match(/^\/status\/([^/]+)$/);
+  const statusMatch = normalizedPath.match(/^\/status\/([^/]+)$/);
   if (statusMatch?.[1]) {
     return { view: 'status', token: decodeURIComponent(statusMatch[1]) };
   }
 
-  const playMatch = normalizedHash.match(/^\/play\/([^/]+)$/);
-  if (playMatch?.[1]) {
-    const slug = decodeURIComponent(playMatch[1]);
+  const playMatch = normalizedPath.match(PLAY_PREFIX_PATTERN);
+  if (playMatch?.[2]) {
+    const slug = decodeURIComponent(playMatch[2]);
     if (SLUG_PATTERN.test(slug)) {
       return { view: 'play', slug };
     }
   }
 
-  const draftMatch = normalizedHash.match(/^\/draft\/([^/]+)$/);
+  const draftMatch = normalizedPath.match(/^\/draft\/([^/]+)$/);
   if (draftMatch?.[1]) {
     const slug = decodeURIComponent(draftMatch[1]);
     if (SLUG_PATTERN.test(slug)) {
@@ -51,26 +60,44 @@ export function parseHashRoute(hash: string): AppRoute {
     }
   }
 
-  if (normalizedHash === '/health') {
+  if (normalizedPath === '/health') {
     return { view: 'health' };
   }
 
-  const joinMatch = normalizedHash.match(/^\/join\/([A-Z0-9]{6})\/([A-Za-z0-9_-]+)$/);
-  if (joinMatch?.[1] && joinMatch[2]) {
-    return { view: 'join', code: joinMatch[1], token: joinMatch[2] };
+  // Hybrid join: /join/<code>#<token> — credential stays out of the request line.
+  const joinMatch = normalizedPath.match(/^\/join\/([A-Z0-9]{6})$/);
+  if (joinMatch?.[1] && fragment && /^[A-Za-z0-9_-]+$/.test(fragment)) {
+    return { view: 'join', code: joinMatch[1], token: fragment };
   }
 
   return { view: 'home' };
 }
 
-export function statusHash(token: string): string {
-  return `#/status/${encodeURIComponent(token)}`;
+export function statusPath(token: string): string {
+  return `/status/${encodeURIComponent(token)}`;
 }
 
-export function playHash(slug: string): string {
-  return `#/play/${encodeURIComponent(slug)}`;
+/** Canonical play URL. Emit this; `/ay/<slug>` and `/ai/<slug>` only as inbound aliases. */
+export function playPath(slug: string): string {
+  return `/play/${encodeURIComponent(slug)}`;
 }
 
-export function draftHash(slug: string): string {
-  return `#/draft/${encodeURIComponent(slug)}`;
+/**
+ * If pathname is a play alias (`/ay/…` or `/ai/…`), return the canonical `/play/…`
+ * path to rewrite to. Otherwise null (already canonical, or not a play route).
+ */
+export function canonicalPlayPath(pathname: string): string | null {
+  const route = parsePathRoute(pathname);
+  if (route.view !== 'play') return null;
+  const canonical = playPath(route.slug);
+  return pathname === canonical ? null : canonical;
+}
+
+export function draftPath(slug: string): string {
+  return `/draft/${encodeURIComponent(slug)}`;
+}
+
+/** QR / share URL path+fragment for a multiplayer lobby guest. */
+export function joinPath(code: string, token: string): string {
+  return `/join/${code}#${token}`;
 }

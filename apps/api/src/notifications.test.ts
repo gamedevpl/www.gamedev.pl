@@ -16,7 +16,7 @@ async function seed(store: InMemoryStore, uid: string) {
     titleKey: 'notifications.submission.published.title',
     bodyKey: 'notifications.submission.published.body',
     params: { title: 'Sky Dodge' },
-    link: '#/play/sky-dodge',
+    link: '/play/sky-dodge',
   });
 }
 
@@ -77,7 +77,7 @@ describe('notification routes', () => {
       titleKey: 'k',
       bodyKey: 'b',
       params: {},
-      link: '#/status/x',
+      link: '/status/x',
     });
   }
 

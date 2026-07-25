@@ -16,7 +16,7 @@ describe('catalog playback', () => {
   afterEach(() => {
     document.body.innerHTML = '';
     localStorage.clear();
-    window.location.hash = '#/';
+    window.history.pushState(null, '', '/');
     vi.restoreAllMocks();
   });
 
@@ -64,7 +64,7 @@ describe('catalog playback', () => {
     });
 
     await i18n.changeLanguage('en');
-    window.location.hash = '#/';
+    window.history.pushState(null, '', '/');
 
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -143,7 +143,7 @@ describe('catalog playback', () => {
       throw new Error(`unexpected fetch: ${url}`);
     });
 
-    window.location.hash = '#/';
+    window.history.pushState(null, '', '/');
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -158,14 +158,14 @@ describe('catalog playback', () => {
     expect(initialCalls).toBeGreaterThan(0);
 
     await act(async () => {
-      window.location.hash = '#/status/some-token';
-      window.dispatchEvent(new HashChangeEvent('hashchange'));
+      window.history.pushState(null, '', '/status/some-token');
+      window.dispatchEvent(new PopStateEvent('popstate'));
       await flushEffects();
     });
 
     await act(async () => {
-      window.location.hash = '#/';
-      window.dispatchEvent(new HashChangeEvent('hashchange'));
+      window.history.pushState(null, '', '/');
+      window.dispatchEvent(new PopStateEvent('popstate'));
       await flushEffects();
       await flushEffects();
     });
@@ -177,7 +177,7 @@ describe('catalog playback', () => {
     });
   });
 
-  it('opens game theater for direct play hash routes even before catalog is loaded', async () => {
+  it('opens game theater for direct play path routes even before catalog is loaded', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const fetched: string[] = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
@@ -200,7 +200,7 @@ describe('catalog playback', () => {
       throw new Error(`unexpected fetch: ${url}`);
     });
 
-    window.location.hash = '#/play/football-3d-lite';
+    window.history.pushState(null, '', '/play/football-3d-lite');
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);

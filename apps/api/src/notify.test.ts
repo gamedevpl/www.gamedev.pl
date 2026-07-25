@@ -1,8 +1,28 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { InMemoryStore } from './store.js';
 import { ConsoleMailer, type EmailMessage, type Mailer } from './mailer.js';
-import { emitSubmissionNotification, notifyOnTransition, statusToEvent, type EmitDeps } from './notify.js';
+import {
+  absoluteAppUrl,
+  emitSubmissionNotification,
+  notifyOnTransition,
+  statusToEvent,
+  type EmitDeps,
+} from './notify.js';
+
 import type { SubmissionStatusResponse } from './submission-status.js';
+
+describe('absoluteAppUrl', () => {
+  it('joins origin and path without a double slash', () => {
+    expect(absoluteAppUrl('https://www.gamedev.pl', '/play/sky-dodge')).toBe('https://www.gamedev.pl/play/sky-dodge');
+    expect(absoluteAppUrl('https://www.gamedev.pl/', '/status/tok')).toBe('https://www.gamedev.pl/status/tok');
+  });
+
+  it('rejects absolute and protocol-relative paths (open-redirect guard)', () => {
+    expect(() => absoluteAppUrl('https://www.gamedev.pl', 'https://evil.test/phish')).toThrow(/in-app path/);
+    expect(() => absoluteAppUrl('https://www.gamedev.pl', '//evil.test/phish')).toThrow(/in-app path/);
+    expect(() => absoluteAppUrl('https://www.gamedev.pl', 'play/sky-dodge')).toThrow(/in-app path/);
+  });
+});
 
 describe('InMemoryStore notifications', () => {
   let store: InMemoryStore;
@@ -17,7 +37,7 @@ describe('InMemoryStore notifications', () => {
       titleKey: 'notifications.submission.published.title',
       bodyKey: 'notifications.submission.published.body',
       params: { title: 'Sky Dodge' },
-      link: '#/play/sky-dodge',
+      link: '/play/sky-dodge',
     });
     expect(created).toBe(true);
     expect(notification.readAt).toBeNull();
@@ -31,7 +51,7 @@ describe('InMemoryStore notifications', () => {
       titleKey: 'k',
       bodyKey: 'b',
       params: {},
-      link: '#/play/x',
+      link: '/play/x',
     };
     await store.createNotification('g:1', args);
     await store.markNotificationsRead('g:1', 'all');
@@ -51,7 +71,7 @@ describe('InMemoryStore notifications', () => {
       titleKey: 'k',
       bodyKey: 'b',
       params: {},
-      link: '#/status/a',
+      link: '/status/a',
     });
     await store.createNotification('g:1', {
       id: 'b',
@@ -60,7 +80,7 @@ describe('InMemoryStore notifications', () => {
       titleKey: 'k',
       bodyKey: 'b',
       params: {},
-      link: '#/status/b',
+      link: '/status/b',
     });
     const list = await store.listNotifications('g:1', { limit: 1 });
     expect(list).toHaveLength(1);
@@ -75,7 +95,7 @@ describe('InMemoryStore notifications', () => {
         titleKey: 'k',
         bodyKey: 'b',
         params: {},
-        link: '#/x',
+        link: '/x',
       });
     }
     await store.markNotificationsRead('g:1', ['a']);
@@ -95,7 +115,7 @@ describe('InMemoryStore notifications', () => {
       titleKey: 'k',
       bodyKey: 'b',
       params: {},
-      link: '#/x',
+      link: '/x',
     });
     await store.markNotificationEmailed('g:1', 'a', '2026-07-24T12:00:00Z');
     const list = await store.listNotifications('g:1');
@@ -109,7 +129,7 @@ describe('InMemoryStore notifications', () => {
       titleKey: 'k',
       bodyKey: 'b',
       params: {},
-      link: '#/x',
+      link: '/x',
     });
     expect(await store.listNotifications('g:2')).toEqual([]);
   });
@@ -141,10 +161,10 @@ describe('emitSubmissionNotification', () => {
     const list = await store.listNotifications('g:1');
     const published = list.find((n) => n.type === 'submission.published');
     const building = list.find((n) => n.type === 'submission.building');
-    expect(published?.link).toBe('#/play/sky-dodge');
+    expect(published?.link).toBe('/play/sky-dodge');
     expect(published?.id).toBe('sub-42-published');
     expect(published?.params).toEqual({ title: 'Sky Dodge' });
-    expect(building?.link).toBe('#/status/tok');
+    expect(building?.link).toBe('/status/tok');
     expect(building?.id).toBe('sub-42-building');
   });
 
@@ -199,7 +219,7 @@ describe('emitSubmissionNotification push fan-out', () => {
     };
     await emitSubmissionNotification({ store, pusher, appBaseUrl: 'https://www.gamedev.pl' }, event);
     expect(sent).toHaveLength(1);
-    expect(sent[0].payload.url).toBe('https://www.gamedev.pl/#/play/sky-dodge');
+    expect(sent[0].payload.url).toBe('https://www.gamedev.pl/play/sky-dodge');
     expect(sent[0].payload.tag).toBe('sub-42-published');
     expect(sent[0].payload.body).toContain('Sky Dodge');
   });
@@ -271,7 +291,7 @@ describe('notifyOnTransition', () => {
     const res = await notifyOnTransition({ store }, await record(), published, 'tok');
     expect(res.emitted).toBe(true);
     const list = await store.listNotifications('g:owner');
-    expect(list[0].link).toBe('#/play/sky-dodge');
+    expect(list[0].link).toBe('/play/sky-dodge');
     // published is terminal for the sweep
     expect(await store.listActiveSubmissions()).toEqual([]);
   });

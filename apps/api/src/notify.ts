@@ -32,6 +32,24 @@ export function statusToEvent(status: SubmissionStatus): NotificationType | null
   return STATUS_TO_EVENT[status] ?? null;
 }
 
+/**
+ * Join an app origin and an in-app path into an absolute URL without double slashes.
+ * Rejects absolute / protocol-relative inputs so a poisoned notification.link cannot
+ * turn email/push CTAs into an open redirect.
+ */
+export function absoluteAppUrl(base: string, path: string): string {
+  if (!path.startsWith('/') || path.startsWith('//') || path.includes('://')) {
+    throw new Error(`absoluteAppUrl: expected in-app path, got ${JSON.stringify(path)}`);
+  }
+  const normalizedBase = base.endsWith('/') ? base : `${base}/`;
+  const url = new URL(path, normalizedBase);
+  const baseOrigin = new URL(normalizedBase).origin;
+  if (url.origin !== baseOrigin) {
+    throw new Error(`absoluteAppUrl: path escaped origin (${url.origin})`);
+  }
+  return url.toString();
+}
+
 export interface EmitDeps {
   store: Store;
   now?: () => number;
@@ -68,8 +86,11 @@ async function maybeSendEmail(deps: EmitDeps, uid: string, notification: StoredN
     if (!user?.email || user.emailUnsubscribedAt) return;
 
     const appBaseUrl = deps.appBaseUrl ?? process.env.APP_BASE_URL?.trim() ?? 'https://www.gamedev.pl';
-    const actionUrl = `${appBaseUrl}/${notification.link}`;
-    const unsubscribeUrl = `${appBaseUrl}/api/email/unsubscribe?token=${mintUnsubscribeToken(uid, unsubscribeSecret)}`;
+    const actionUrl = absoluteAppUrl(appBaseUrl, notification.link);
+    const unsubscribeUrl = absoluteAppUrl(
+      appBaseUrl,
+      `/api/email/unsubscribe?token=${mintUnsubscribeToken(uid, unsubscribeSecret)}`,
+    );
     const message = submissionNotificationMessage(user.email, normalizeLocale(user.locale), notification.type, {
       title: notification.params.title ?? '',
       actionUrl,
@@ -104,7 +125,7 @@ async function maybePush(deps: EmitDeps, uid: string, notification: StoredNotifi
       notification.type,
       notification.params.title ?? '',
     );
-    const payload = { title, body, url: `${appBaseUrl}/${notification.link}`, tag: notification.id };
+    const payload = { title, body, url: absoluteAppUrl(appBaseUrl, notification.link), tag: notification.id };
 
     await Promise.all(
       subscriptions.map(async (sub) => {
@@ -146,7 +167,7 @@ export async function emitSubmissionNotification(
 
   // Published games deep-link to play; everything else to the status page.
   const link =
-    event.type === 'submission.published' && event.slug ? `#/play/${event.slug}` : `#/status/${event.statusToken}`;
+    event.type === 'submission.published' && event.slug ? `/play/${event.slug}` : `/status/${event.statusToken}`;
 
   const { created, notification } = await deps.store.createNotification(event.uid, {
     id,

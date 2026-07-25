@@ -83,7 +83,7 @@ export function GameTheater({ title, badge, source, onExit, meta, orientation = 
   const player = useGamePlayer(frameRef, true, requestExit);
 
   // The game reports its own (localized) title over the bridge. Prefer it: on a
-  // direct `#/play/<slug>` link there's no catalog entry to take a title from, so
+  // direct `/play/<slug>` link there's no catalog entry to take a title from, so
   // the caller can only derive one from the slug.
   const displayTitle = player.meta?.title?.trim() || title;
 

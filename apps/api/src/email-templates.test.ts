@@ -60,7 +60,7 @@ describe('betaInviteMessage', () => {
 describe('submissionNotificationMessage', () => {
   const params = {
     title: 'Sky Dodge',
-    actionUrl: 'https://www.gamedev.pl/#/play/sky-dodge',
+    actionUrl: 'https://www.gamedev.pl/play/sky-dodge',
     unsubscribeUrl: 'https://www.gamedev.pl/api/email/unsubscribe?token=abc',
   };
 

@@ -104,7 +104,7 @@ describe('the QA gate in App', () => {
   afterEach(() => {
     document.body.innerHTML = '';
     localStorage.clear();
-    window.location.hash = '#/';
+    window.history.pushState(null, '', '/');
     vi.restoreAllMocks();
   });
 
