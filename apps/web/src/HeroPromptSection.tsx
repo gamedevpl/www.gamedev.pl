@@ -9,7 +9,8 @@ type HeroPromptSectionProps = {
   initialPrompt?: string;
   catalogEntries?: CatalogEntry[];
   onPlayGame?: (entry: CatalogEntry) => void;
-  submissionStatus: 'idle' | 'loading';
+  /** 'refining' is the pre-submission spec-refiner call; nothing has been sent yet. */
+  submissionStatus: 'idle' | 'refining' | 'loading';
   submissionError: string | null;
   onSubmitSpec: (title: string, concept: string) => void;
   mockStatus: 'idle' | 'loading' | 'error';
@@ -421,15 +422,21 @@ export function HeroPromptSection({
                 type="submit"
                 className="primary-btn build-btn"
                 disabled={
-                  submissionStatus === 'loading' ||
+                  submissionStatus !== 'idle' ||
                   mockStatus === 'loading' ||
                   (!promptText.trim() && attachments.length === 0)
                 }
               >
                 <PixelIcon name="rocket" size={16} />{' '}
-                {submissionStatus === 'loading' || mockStatus === 'loading'
-                  ? t('submit.submitting')
-                  : t('hero.buildGameButton')}
+                {/* Three states, not two: the refiner runs for a few seconds before
+                    anything is submitted, and saying "Submitting…" through it was the
+                    creator's first impression of a feature that had just started
+                    working at all. */}
+                {submissionStatus === 'refining'
+                  ? t('qa.analyzing')
+                  : submissionStatus === 'loading' || mockStatus === 'loading'
+                    ? t('submit.submitting')
+                    : t('hero.buildGameButton')}
               </button>
             </div>
           </div>

@@ -55,6 +55,47 @@ describe('HeroPromptSection', () => {
     await act(async () => root.unmount());
   });
 
+  it('says it is analyzing while the refiner runs, and submitting only once it is', async () => {
+    // The refiner takes a few seconds before anything is sent; claiming "Submitting…"
+    // through it described a request that had not been made yet.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const renderWithStatus = async (submissionStatus: 'idle' | 'refining' | 'loading') => {
+      await act(async () => {
+        root.render(
+          createElement(HeroPromptSection, {
+            initialPrompt: 'a game about a space postman',
+            catalogEntries: [],
+            submissionStatus,
+            submissionError: null,
+            onSubmitSpec: vi.fn(),
+            mockStatus: 'idle',
+            mockError: null,
+            onGenerateMock: vi.fn(),
+          }),
+        );
+        await flushEffects();
+      });
+      return container.querySelector<HTMLButtonElement>('.build-btn');
+    };
+
+    expect((await renderWithStatus('refining'))?.textContent).toContain('Analyzing your idea');
+    expect((await renderWithStatus('loading'))?.textContent).toContain('Submitting');
+    expect((await renderWithStatus('idle'))?.textContent).toContain('Build My Game');
+
+    // Both busy states must also keep the button from firing a second request.
+    expect((await renderWithStatus('refining'))?.disabled).toBe(true);
+    expect((await renderWithStatus('loading'))?.disabled).toBe(true);
+    expect((await renderWithStatus('idle'))?.disabled).toBe(false);
+
+    await act(async () => root.unmount());
+  });
+
   it('opens sketch modal when sketch button is clicked', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');

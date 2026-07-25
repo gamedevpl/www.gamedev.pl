@@ -53,7 +53,9 @@ export function App() {
   const [stageContent, setStageContent] = useState<StageContent | null>(null);
 
   // Greenfield submission state
-  const [submissionStatus, setSubmissionStatus] = useState<'idle' | 'loading'>('idle');
+  // 'refining' is the spec-refiner call that precedes a submission — a few seconds
+  // during which nothing has been submitted yet, so the UI must not claim otherwise.
+  const [submissionStatus, setSubmissionStatus] = useState<'idle' | 'refining' | 'loading'>('idle');
   const [submissionError, setSubmissionError] = useState<string | null>(null);
 
   // Clarifying-questions gate: a submission runs the spec refiner first, and when
@@ -256,7 +258,7 @@ export function App() {
     const trimmedConcept = concept.trim();
     if (!trimmedTitle || !trimmedConcept) return;
 
-    setSubmissionStatus('loading');
+    setSubmissionStatus('refining');
     setSubmissionError(null);
 
     try {
