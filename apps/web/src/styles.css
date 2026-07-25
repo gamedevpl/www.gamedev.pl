@@ -2155,12 +2155,24 @@ body.player-open {
     padding: 8px 12px;
   }
 
+  /* min-width:0 lets the brand shrink, but the anchor inside it does not — at
+     320px with the Polish "Zaloguj się" it drew straight through the button.
+     Clipping the wordmark is the safe failure here; a collision is not. */
   .logo-brand {
     min-width: 0;
+    overflow: hidden;
   }
 
   .app-header .logo {
     font-size: 1.4em;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .app-header .logo img {
+    flex: 0 0 auto;
   }
 
   .app-header .logo img {
@@ -2247,6 +2259,37 @@ body.player-open {
     min-height: 44px;
   }
 
+  /* rows=2 at 1.15rem clipped the placeholder mid-word and left a scrollbar in
+     an empty field. 16px is the floor that keeps iOS from zooming; the height
+     is sized for the narrowest phone we support, where the Polish hint takes
+     four lines. A textarea cannot grow to its own placeholder, so this is a
+     floor rather than a fit — wider phones get a little slack instead. */
+  .big-prompt-input {
+    font-size: 16px;
+    padding: 14px 16px;
+    min-height: 128px;
+  }
+
+  /* That pill is absolutely positioned over the textarea, where it covered a
+     third of the box — including the placeholder that tells you what to write.
+     Thumb-sizing the buttons made it worse. There is no room to float anything
+     over a 375px input, so on a phone it becomes a plain row underneath. */
+  .prompt-textarea-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .prompt-media-actions {
+    position: static;
+    align-self: flex-start;
+    padding: 0;
+    background: none;
+    border: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
   .chip-btn,
   .primary-btn,
   .app-header .logo {
@@ -2254,7 +2297,9 @@ body.player-open {
   }
 
   .chip-btn {
+    flex: 0 0 auto;
     padding: 6px 16px;
+    scroll-snap-align: start;
   }
 
   /* iOS Safari force-zooms the page when a focused field is under 16px, and it
@@ -2290,9 +2335,23 @@ body.player-open {
     gap: 12px;
   }
 
+  /* Wrapped, three suggestions stacked into 148px — a fifth of an iPhone SE,
+     spent on examples. One swipeable row costs 44px and still reaches all of
+     them. The negative margin lets the strip bleed to the card edge, so a
+     half-visible third chip signals there is more to swipe to. */
   .chip-container {
-    justify-content: center;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    margin: 0 -14px;
+    padding: 0 14px;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .chip-container::-webkit-scrollbar {
+    display: none;
   }
 
   .action-buttons {
@@ -2343,6 +2402,25 @@ body.player-open {
   .status-play-cta {
     width: 100%;
     justify-content: center;
+  }
+}
+
+/* iPhone SE and the narrow end of Android. The wordmark can survive down here
+   without being cut off, but only a size smaller — the ellipsis above is the
+   net, not the plan. */
+@media (max-width: 360px) {
+  .app-header .logo {
+    font-size: 1.2em;
+  }
+
+  .app-header .logo img {
+    width: 24px;
+    height: 24px;
+    margin-right: 6px;
+  }
+
+  .hero-headline {
+    font-size: 1.8rem;
   }
 }
 
