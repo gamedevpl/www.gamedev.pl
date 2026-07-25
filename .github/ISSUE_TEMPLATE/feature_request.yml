@@ -1,0 +1,43 @@
+name: Idea or feature request
+description: Suggest something the platform should do differently.
+labels: ['enhancement']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ideas for **the platform** belong here — the arcade, the player, the creation flow,
+        party mode. An idea for **a game** is not a feature request: describe it on the site
+        and an AI agent will build it.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is the problem?
+      description: >-
+        Describe the situation you are in, not the solution you have in mind. The clearest
+        requests start from a moment where the product got in your way.
+      placeholder: When I share a game with friends, they cannot tell whether it works on a phone before opening it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you do about it?
+      description: Optional. A concrete suggestion, if you have one.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of the product?
+      options:
+        - Playing games
+        - Creating or revising a game
+        - Party mode / phone controllers
+        - Accounts, sign-in, notifications
+        - The site itself (navigation, language, mobile)
+        - Something else
+    validations:
+      required: false

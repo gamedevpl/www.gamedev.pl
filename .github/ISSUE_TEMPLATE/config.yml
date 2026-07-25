@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/gamedevpl/www.gamedev.pl/security/advisories/new
+    about: Report privately. Never open a public issue for a security problem.
+  - name: Report a game as illegal or harmful
+    url: https://www.gamedev.pl
+    about: Game content is reported through the site itself, where the legal notice-and-action process lives.
+  - name: Questions and ideas in the open
+    url: https://github.com/gamedevpl/www.gamedev.pl/discussions
+    about: For anything that is not yet a bug or a concrete request.

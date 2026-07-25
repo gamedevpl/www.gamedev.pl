@@ -1,0 +1,70 @@
+name: Bug report
+description: Something on www.gamedev.pl is broken or behaves unexpectedly.
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Two things before you start:
+
+        - **Security problems do not belong here.** Report those privately through
+          [a security advisory](https://github.com/gamedevpl/www.gamedev.pl/security/advisories/new).
+        - **This issue is public.** Please leave out your email, your session cookie, and
+          anything else you would not post on a forum. If your report is about one specific
+          game or build, the report ID below is enough for us to find the logs.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what you got instead.
+      placeholder: I tapped Play on a game from the arcade and the screen stayed black.
+    validations:
+      required: true
+
+  - type: input
+    id: where
+    attributes:
+      label: Where?
+      description: The page or game you were on.
+      placeholder: https://www.gamedev.pl/#/play/arena-tag
+    validations:
+      required: false
+
+  - type: input
+    id: report-id
+    attributes:
+      label: Report ID
+      description: >-
+        If the site showed you a report ID, paste it here. It points us straight at the
+        server-side logs for your session, so we do not have to ask you for details.
+      placeholder: e.g. r_8f3c21
+    validations:
+      required: false
+
+  - type: input
+    id: environment
+    attributes:
+      label: Browser and device
+      placeholder: Safari on iPhone SE, iOS 18 / Chrome 130 on Windows
+    validations:
+      required: true
+
+  - type: textarea
+    id: console
+    attributes:
+      label: Console errors
+      description: Anything red in the browser console, if you know how to look.
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: hygiene
+    attributes:
+      label: Before submitting
+      options:
+        - label: This is not a security vulnerability.
+          required: true
+        - label: I have not included personal data or credentials in this report.
+          required: true
