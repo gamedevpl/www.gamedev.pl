@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { GenAIClient } from 'genaicode';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -16,6 +17,8 @@ export interface RefineQuestion {
   question: string;
   options: RefineOption[];
   allowFreeText?: boolean;
+  /** The options combine rather than compete ("which mechanics?"), so the UI accumulates. */
+  multiple?: boolean;
 }
 
 export interface RefineResponse {
@@ -49,6 +52,14 @@ export interface VertexSpecRefinerOptions {
 // never rendered a question. Env-tunable so the ceiling can move without a deploy.
 export const DEFAULT_REFINE_TIMEOUT_MS = 20_000;
 
+/**
+ * How long an answered spec stays free to re-ask, and how many are held. Short
+ * enough that an edited concept is never served a stale answer for long; the cap
+ * bounds memory on a single Cloud Run instance (4KB concepts, so ~1MB at worst).
+ */
+const REFINE_CACHE_TTL_MS = 10 * 60_000;
+const REFINE_CACHE_MAX_ENTRIES = 200;
+
 const RefineResultSchema = z.object({
   questions: z
     .array(
@@ -57,6 +68,7 @@ const RefineResultSchema = z.object({
         question: z.string().optional(),
         options: z.array(z.object({ label: z.string(), detail: z.string().optional() })).optional(),
         allowFreeText: z.boolean().optional(),
+        multiple: z.boolean().optional(),
       }),
     )
     .optional(),
@@ -121,10 +133,13 @@ Respond STRICTLY with a JSON object following this schema:
       "options": [
         { "label": "Option Name", "detail": "Brief explanation" }
       ],
-      "allowFreeText": true
+      "allowFreeText": true,
+      "multiple": false
     }
   ]
 }
+
+Set "multiple": true only when the options genuinely combine rather than compete — "which mechanics should be in?" can take several, "which visual style?" cannot. Default to false.
 
 If the concept is already fully specified, return {"questions": []}.
 
@@ -145,6 +160,10 @@ ${params.concept}
           question: q.question ?? '',
           options: q.options?.map((o) => ({ label: o.label, detail: o.detail })) ?? [],
           allowFreeText: q.allowFreeText !== false,
+          // Opposite default to allowFreeText: single choice unless the model says so,
+          // because presenting a single-choice question as multi-choice invites answers
+          // that contradict each other.
+          multiple: q.multiple === true,
         })),
       };
     } catch (err) {
@@ -212,6 +231,44 @@ export async function registerRefineRoute(app: FastifyInstance, options: RefineR
   const rateLimitWindowMs = 60 * 60 * 1000;
   const maxRefinesPerWindowPerIp = 30;
 
+  /**
+   * Identical spec in, identical questions out — for free.
+   *
+   * The daily allowance is twenty, and it was possible to spend several of them on
+   * one idea: dismiss the panel and resubmit, double-click the button, reload and
+   * try again. None of those are the creator asking a new question, and each cost a
+   * Vertex call and a slot they might want later that day. Keyed on the content, so
+   * a genuinely edited concept still gets a fresh answer, and shared across users
+   * because the questions depend on the spec alone.
+   */
+  const refineCache = new Map<string, { expiresAt: number; result: RefineResponse }>();
+
+  const cacheKey = (data: { title: string; concept: string; locale?: string }) =>
+    createHash('sha256')
+      .update(`${data.locale ?? 'en'} ${data.title} ${data.concept}`)
+      .digest('hex');
+
+  const readCache = (key: string, now: number): RefineResponse | null => {
+    const hit = refineCache.get(key);
+    if (!hit) return null;
+    if (hit.expiresAt <= now) {
+      refineCache.delete(key);
+      return null;
+    }
+    return hit.result;
+  };
+
+  const writeCache = (key: string, result: RefineResponse, now: number) => {
+    // Never cache a fail-open: an empty answer is exactly what a timeout produces,
+    // and pinning that for ten minutes would turn one slow call into a dead panel.
+    if (result.questions.length === 0) return;
+    if (refineCache.size >= REFINE_CACHE_MAX_ENTRIES) {
+      const oldest = refineCache.keys().next().value;
+      if (oldest !== undefined) refineCache.delete(oldest);
+    }
+    refineCache.set(key, { result, expiresAt: now + REFINE_CACHE_TTL_MS });
+  };
+
   app.post('/api/submissions/refine', async (request: FastifyRequest, reply) => {
     if (!checkUserAccess(request, reply)) {
       return;
@@ -222,18 +279,28 @@ export async function registerRefineRoute(app: FastifyInstance, options: RefineR
       return reply.status(400).send({ error: parseResult.error.issues[0]?.message ?? 'invalid request' });
     }
 
-    // 1. Content moderation first (422 on reject, spends no quota / vertex calls)
-    const moderation = await contentChecker.checkFields([parseResult.data.title, parseResult.data.concept]);
-    if (!moderation.allowed) {
-      return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
-    }
-
     const currentTime = Date.now();
     if (isRateLimited(refinesByIp, request.ip, currentTime, maxRefinesPerWindowPerIp, rateLimitWindowMs)) {
       return reply.status(429).send({ error: 'too many refine requests, please try again later' });
     }
 
-    // 2. Daily refine quota check
+    // 1. A repeat of a spec already answered: no moderation call, no quota, no Vertex.
+    // Safe to skip moderation because nothing reaches the cache without passing it —
+    // the cached questions are the ones we ourselves produced for this exact text.
+    const key = cacheKey(parseResult.data);
+    const cached = readCache(key, currentTime);
+    if (cached) {
+      request.log.info({ questionCount: cached.questions.length, cached: true }, 'spec refine complete');
+      return cached;
+    }
+
+    // 2. Content moderation (422 on reject, spends no quota / vertex calls)
+    const moderation = await contentChecker.checkFields([parseResult.data.title, parseResult.data.concept]);
+    if (!moderation.allowed) {
+      return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
+    }
+
+    // 3. Daily refine quota check
     const dateStr = new Date(currentTime).toISOString().slice(0, 10);
     if (store) {
       const quota = await store.checkAndIncrementQuota(request.user!.uid, dateStr, dailyRefineQuota, 'refines');
@@ -245,7 +312,7 @@ export async function registerRefineRoute(app: FastifyInstance, options: RefineR
       }
     }
 
-    // 3. Call spec refiner (fail-open)
+    // 4. Call spec refiner (fail-open)
     const startedAt = Date.now();
     try {
       const result = await specRefiner.refine({
@@ -259,9 +326,10 @@ export async function registerRefineRoute(app: FastifyInstance, options: RefineR
       // survived unnoticed in production. A zero here with a refiner warning
       // alongside it is a failure; a zero on its own is a clean spec.
       request.log.info(
-        { questionCount: result.questions.length, durationMs: Date.now() - startedAt },
+        { questionCount: result.questions.length, durationMs: Date.now() - startedAt, cached: false },
         'spec refine complete',
       );
+      writeCache(key, result, currentTime);
       return result;
     } catch (err) {
       if (process.env.NODE_ENV !== 'test') {

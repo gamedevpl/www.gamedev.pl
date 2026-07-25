@@ -132,6 +132,73 @@ describe('CreatorQA', () => {
     await act(async () => root.unmount());
   });
 
+  it('accumulates chips on a multi-choice question and restores saved answers', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const multiQuestion: QAQuestion[] = [
+      {
+        id: 'mechanics',
+        question: 'Which mechanics should be in?',
+        options: [{ label: 'Crafting' }, { label: 'Trading' }, { label: 'Combat' }],
+        multiple: true,
+      },
+    ];
+
+    let submittedConcept = '';
+    const answerSnapshots: Array<{ selected: Record<string, string[]>; custom: Record<string, string> }> = [];
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(CreatorQA, {
+          questions: multiQuestion,
+          initialConcept: 'A trading game',
+          onSubmitWithConcept: (concept) => {
+            submittedConcept = concept;
+          },
+          // Restored from a previous visit — the reload case.
+          initialAnswers: { selected: { mechanics: ['Crafting'] }, custom: {} },
+          onAnswersChange: (answers) => answerSnapshots.push(answers),
+        }),
+      );
+      await flushEffects();
+    });
+
+    const chips = container.querySelectorAll<HTMLButtonElement>('.qa-chip');
+    expect(chips[0].getAttribute('aria-pressed')).toBe('true');
+
+    await act(async () => {
+      chips[1].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+
+    // Single-choice would have replaced 'Crafting'; this one keeps both.
+    expect(chips[0].getAttribute('aria-pressed')).toBe('true');
+    expect(chips[1].getAttribute('aria-pressed')).toBe('true');
+    expect(answerSnapshots.at(-1)?.selected.mechanics).toEqual(['Crafting', 'Trading']);
+
+    // Clicking a lit chip still clears it, so "no opinion" stays reachable.
+    await act(async () => {
+      chips[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+    expect(chips[0].getAttribute('aria-pressed')).toBe('false');
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('.btn-create-now')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+
+    expect(submittedConcept).toContain('- Which mechanics should be in: Trading');
+
+    await act(async () => root.unmount());
+  });
+
   it('stays up and says so while the submission is in flight', async () => {
     // The panel used to unmount the instant you approved, leaving blank space for as
     // long as the API took to create the issue. It now reports its own progress.

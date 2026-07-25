@@ -258,6 +258,7 @@ export async function refineSpec(input: { title: string; concept: string; locale
     question: string;
     options: Array<{ label: string; detail?: string }>;
     allowFreeText?: boolean;
+    multiple?: boolean;
   }>;
 }> {
   const response = await fetch(`${API_BASE}/api/submissions/refine`, {
@@ -277,6 +278,7 @@ export async function refineSpec(input: { title: string; concept: string; locale
       question: string;
       options: Array<{ label: string; detail?: string }>;
       allowFreeText?: boolean;
+      multiple?: boolean;
     }>;
   };
 }

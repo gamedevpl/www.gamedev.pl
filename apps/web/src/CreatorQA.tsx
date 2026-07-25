@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon';
+import type { PendingQaAnswers } from './pendingQa';
 
 export interface QAOption {
   label: string;
@@ -12,6 +13,8 @@ export interface QAQuestion {
   question: string;
   options: QAOption[];
   allowFreeText?: boolean;
+  /** Some dimensions are naturally plural ("which mechanics?"); the refiner marks those. */
+  multiple?: boolean;
 }
 
 interface CreatorQAProps {
@@ -23,6 +26,10 @@ interface CreatorQAProps {
   submitting?: boolean;
   /** Shown here as well as in the hero, because this is where the creator is looking. */
   error?: string | null;
+  /** Answers restored from a previous visit, so a reload doesn't cost the work again. */
+  initialAnswers?: PendingQaAnswers;
+  /** Fires on every edit so the caller can park the session; keep it referentially stable. */
+  onAnswersChange?: (answers: PendingQaAnswers) => void;
 }
 
 export function CreatorQA({
@@ -32,23 +39,42 @@ export function CreatorQA({
   onCancel,
   submitting = false,
   error = null,
+  initialAnswers,
+  onAnswersChange,
 }: CreatorQAProps) {
   const { t } = useTranslation();
-  const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
-  const [customText, setCustomText] = useState<Record<string, string>>({});
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string[]>>(initialAnswers?.selected ?? {});
+  const [customText, setCustomText] = useState<Record<string, string>>(initialAnswers?.custom ?? {});
 
-  const handleSelectOption = (questionId: string, label: string) => {
-    setSelectedAnswers((prev) => ({
-      ...prev,
-      [questionId]: prev[questionId] === label ? '' : label,
-    }));
+  const report = (selected: Record<string, string[]>, custom: Record<string, string>) => {
+    onAnswersChange?.({ selected, custom });
+  };
+
+  const handleSelectOption = (question: QAQuestion, label: string) => {
+    setSelectedAnswers((prev) => {
+      const current = prev[question.id] ?? [];
+      const isOn = current.includes(label);
+      // Single-choice questions replace; multi-choice accumulate. Either way clicking
+      // a chosen chip clears it, so there is always a way back to "no opinion".
+      const next = question.multiple
+        ? isOn
+          ? current.filter((item) => item !== label)
+          : [...current, label]
+        : isOn
+          ? []
+          : [label];
+      const updated = { ...prev, [question.id]: next };
+      report(updated, customText);
+      return updated;
+    });
   };
 
   const handleCustomTextChange = (questionId: string, text: string) => {
-    setCustomText((prev) => ({
-      ...prev,
-      [questionId]: text,
-    }));
+    setCustomText((prev) => {
+      const updated = { ...prev, [questionId]: text };
+      report(selectedAnswers, updated);
+      return updated;
+    });
   };
 
   /**
@@ -60,7 +86,7 @@ export function CreatorQA({
    * refinement is the commonest way to answer these questions, so the two combine.
    */
   const answerFor = (questionId: string): string => {
-    const selected = selectedAnswers[questionId];
+    const selected = (selectedAnswers[questionId] ?? []).join(', ');
     const custom = customText[questionId]?.trim();
     if (selected && custom) return `${selected} — ${custom}`;
     return custom || selected || '';
@@ -110,17 +136,20 @@ export function CreatorQA({
 
       <div className="qa-questions-list">
         {questions.map((q) => {
-          const selected = selectedAnswers[q.id];
+          const selected = selectedAnswers[q.id] ?? [];
           const custom = customText[q.id] ?? '';
 
           return (
             <div key={q.id} className="qa-card">
-              <h4 className="qa-card__question">{q.question}</h4>
+              <h4 className="qa-card__question">
+                {q.question}
+                {q.multiple && <span className="qa-card__hint"> {t('qa.pickSeveral')}</span>}
+              </h4>
               <div className="qa-chips">
                 {q.options.map((opt) => {
                   // Stays lit while free text is typed: the two are now one answer,
                   // and un-highlighting the chip was how the old behaviour hid itself.
-                  const isSelected = selected === opt.label;
+                  const isSelected = selected.includes(opt.label);
                   return (
                     <button
                       key={opt.label}
@@ -129,7 +158,7 @@ export function CreatorQA({
                       // every chip identically whether or not it was chosen.
                       aria-pressed={isSelected}
                       className={`qa-chip ${isSelected ? 'qa-chip--selected' : ''}`}
-                      onClick={() => handleSelectOption(q.id, opt.label)}
+                      onClick={() => handleSelectOption(q, opt.label)}
                     >
                       <span className="qa-chip__label">{opt.label}</span>
                       {opt.detail && <span className="qa-chip__detail">{opt.detail}</span>}

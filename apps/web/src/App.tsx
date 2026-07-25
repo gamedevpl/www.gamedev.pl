@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { generateGame, type GeneratedGame, type GenerateGameApiError } from './api';
 import { fetchCatalog, type CatalogEntry } from './catalog';
@@ -15,6 +15,7 @@ import { CreatorQA, type QAQuestion } from './CreatorQA';
 import { parseHashRoute, statusHash, playHash } from './router';
 import { submitSpec, refineSpec, type SubmissionApiError } from './submissionApi';
 import { getSavedSpecs, saveSpec, type SavedSpec } from './mySpecs';
+import { clearPendingQa, loadPendingQa, savePendingQa, type PendingQaAnswers } from './pendingQa';
 import { useAuth } from './AuthContext';
 import { AuthModal } from './AuthModal';
 import { ClosedBetaSplash } from './ClosedBetaSplash';
@@ -62,8 +63,13 @@ export function App() {
   // Clarifying-questions gate: a submission runs the spec refiner first, and when
   // it returns questions the creator must answer them before generation proceeds.
   // pendingSpec holds the spec awaiting those answers.
-  const [qaQuestions, setQaQuestions] = useState<QAQuestion[]>([]);
-  const [pendingSpec, setPendingSpec] = useState<{ title: string; concept: string; displayName: string } | null>(null);
+  // Seeded from localStorage so a reload mid-round resumes instead of throwing the
+  // questions away and charging another refine to ask them again.
+  const restoredQa = useRef(loadPendingQa());
+  const [qaQuestions, setQaQuestions] = useState<QAQuestion[]>(restoredQa.current?.questions ?? []);
+  const [pendingSpec, setPendingSpec] = useState<{ title: string; concept: string; displayName: string } | null>(
+    restoredQa.current?.spec ?? null,
+  );
   const qaRef = useRef<HTMLDivElement | null>(null);
 
   // Demo generator state
@@ -269,8 +275,10 @@ export function App() {
         locale: i18n.language,
       });
       if (questions.length > 0) {
-        setPendingSpec({ title: trimmedTitle, concept: trimmedConcept, displayName: displayName.trim() });
+        const spec = { title: trimmedTitle, concept: trimmedConcept, displayName: displayName.trim() };
+        setPendingSpec(spec);
         setQaQuestions(questions);
+        savePendingQa({ spec, questions, answers: { selected: {}, custom: {} } });
         setSubmissionStatus('idle');
         return;
       }
@@ -312,6 +320,7 @@ export function App() {
       // whole call. A no-op when the spec never went through the gate.
       setQaQuestions([]);
       setPendingSpec(null);
+      clearPendingQa();
 
       window.location.hash = statusHash(response.token);
     } catch (err) {
@@ -343,7 +352,18 @@ export function App() {
   const handleQaCancel = () => {
     setQaQuestions([]);
     setPendingSpec(null);
+    clearPendingQa();
   };
+
+  // Every keystroke and chip lands in storage, so the round survives a reload at any
+  // point rather than only between questions.
+  const handleQaAnswersChange = useCallback(
+    (answers: PendingQaAnswers) => {
+      if (!pendingSpec) return;
+      savePendingQa({ spec: pendingSpec, questions: qaQuestions, answers });
+    },
+    [pendingSpec, qaQuestions],
+  );
 
   function navigateHash(hash: string) {
     // Update the URL (the source of truth) and the route synchronously. The
@@ -449,6 +469,8 @@ export function App() {
                   onCancel={handleQaCancel}
                   submitting={submissionStatus === 'loading'}
                   error={submissionError}
+                  initialAnswers={restoredQa.current?.answers}
+                  onAnswersChange={handleQaAnswersChange}
                 />
               </div>
             )}
