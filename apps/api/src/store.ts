@@ -976,7 +976,9 @@ export class FirestoreStore implements Store {
     return snap.docs.map((doc) => {
       // Retention plumbing stays out of the domain object, so a reader cannot mistake
       // it for signal and the privacy field-allowlist stays exactly the event's fields.
-      const { [TELEMETRY_TTL_FIELD]: _expiresAt, ...event } = doc.data();
+      // `data()` hands back a fresh object per call, so dropping the field is local.
+      const event = doc.data();
+      delete event[TELEMETRY_TTL_FIELD];
       return event as TelemetryEvent;
     });
   }
