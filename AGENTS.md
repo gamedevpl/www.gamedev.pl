@@ -70,3 +70,26 @@ autonomous agents here. Read them directly:
 Both carry a **mandatory self-improvement clause**: if you use one and it turns out to be
 wrong, stale, or missing something that cost you time, update it in the same session. That
 applies regardless of which agent you are.
+
+## Cursor Cloud specific instructions
+
+Setup is just `npm install` (see the "Green gate" and `docs/contributing-for-agents.md` for the
+standard commands). Everything runs offline with the `mock` generator — no cloud, keys, or
+secrets. Non-obvious caveats for running/testing locally:
+
+- **Open the web app at `http://localhost:5173`, not `http://127.0.0.1:5173`.** `npm run dev`
+  (Vite) binds to `localhost` (IPv6 `::1`) only, so `127.0.0.1` refuses the connection. The API
+  is at `127.0.0.1:3001`; Vite proxies `/api` → the API (`apps/web/vite.config.ts`).
+- **`GET /api/catalog` returns 503 ("catalog is not configured") locally, and the home page
+  shows a red "Could not load the catalog" error — this is expected.** The catalog is served
+  from the separate games repo, which isn't wired up in local dev.
+- **The generate/create loop is gated behind Google sign-in in the UI** — clicking "Build My
+  Game" opens a "Sign in with Google" modal, and `POST /api/generate-game` returns 401 without a
+  session. Real Google OAuth isn't available locally. To exercise the authenticated
+  generate→assemble loop without Google, do what the tests do: `InMemoryStore.upsertUser(...)` +
+  `mintSessionToken(uid, 'dev-session-secret-change-me')` and send it as the `gamedev_session`
+  cookie (see `apps/api/src/app.test.ts`). Dev uses `InMemoryStore` and that default session
+  secret (`apps/api/src/server.ts`, `auth.ts`).
+- Generated games render only in `<iframe sandbox="allow-scripts">` with no `allow-same-origin`
+  (`apps/web/src/GameFrame.tsx`) — the safety invariant. A produced game document is a
+  self-contained `<!doctype html>` with inlined `<style>`/`<script>`.
