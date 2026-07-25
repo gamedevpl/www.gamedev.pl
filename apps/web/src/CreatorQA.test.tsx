@@ -79,6 +79,59 @@ describe('CreatorQA', () => {
     await act(async () => root.unmount());
   });
 
+  it('combines a chosen chip with free text instead of dropping the chip', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    let submittedConcept = '';
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(CreatorQA, {
+          questions: mockQuestions,
+          initialConcept: 'Dodge the falling rocks and survive as long as possible',
+          onSubmitWithConcept: (concept) => {
+            submittedConcept = concept;
+          },
+        }),
+      );
+      await flushEffects();
+    });
+
+    const chips = container.querySelectorAll<HTMLButtonElement>('.qa-chip');
+    await act(async () => {
+      chips[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+
+    const input = container.querySelector<HTMLInputElement>('.qa-custom-input .input-text');
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      setter?.call(input, 'but with an Amiga palette');
+      input?.dispatchEvent(new Event('input', { bubbles: true }));
+      await flushEffects();
+    });
+
+    // The chip stays lit — un-highlighting it is what made the old data loss invisible.
+    expect(chips[0].classList.contains('qa-chip--selected')).toBe(true);
+    expect(chips[0].getAttribute('aria-pressed')).toBe('true');
+    expect(chips[1].getAttribute('aria-pressed')).toBe('false');
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('.btn-create-now')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+
+    expect(submittedConcept).toContain('- What visual style fits best: Pixel Art — but with an Amiga palette');
+
+    await act(async () => root.unmount());
+  });
+
   it('labels the secondary action for what it does — dismiss, not submit', async () => {
     // It used to read "Skip Clarifications", which promises the thing the primary
     // button does. Whatever the wording becomes, it must not imply a submission.

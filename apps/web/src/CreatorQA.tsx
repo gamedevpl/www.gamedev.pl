@@ -40,13 +40,26 @@ export function CreatorQA({ questions, initialConcept, onSubmitWithConcept, onCa
     }));
   };
 
+  /**
+   * A chip and free text are one answer, not two competing ones.
+   *
+   * Free text used to *replace* the chip, so clicking "Pixel Art" and then typing
+   * "but with an Amiga palette" threw the chip away and sent only the qualifier —
+   * silently, since the creator had already seen their choice highlighted. Typing a
+   * refinement is the commonest way to answer these questions, so the two combine.
+   */
+  const answerFor = (questionId: string): string => {
+    const selected = selectedAnswers[questionId];
+    const custom = customText[questionId]?.trim();
+    if (selected && custom) return `${selected} — ${custom}`;
+    return custom || selected || '';
+  };
+
   const buildMergedConcept = (): string => {
     const clarifications: string[] = [];
 
     for (const q of questions) {
-      const selected = selectedAnswers[q.id];
-      const custom = customText[q.id]?.trim();
-      const answer = custom || selected;
+      const answer = answerFor(q.id);
       if (answer) {
         clarifications.push(`- ${q.question.replace(/\?$/, '')}: ${answer}`);
       }
@@ -94,11 +107,16 @@ export function CreatorQA({ questions, initialConcept, onSubmitWithConcept, onCa
               <h4 className="qa-card__question">{q.question}</h4>
               <div className="qa-chips">
                 {q.options.map((opt) => {
-                  const isSelected = selected === opt.label && !custom.trim();
+                  // Stays lit while free text is typed: the two are now one answer,
+                  // and un-highlighting the chip was how the old behaviour hid itself.
+                  const isSelected = selected === opt.label;
                   return (
                     <button
                       key={opt.label}
                       type="button"
+                      // Selection lived only in a class, so a screen reader announced
+                      // every chip identically whether or not it was chosen.
+                      aria-pressed={isSelected}
                       className={`qa-chip ${isSelected ? 'qa-chip--selected' : ''}`}
                       onClick={() => handleSelectOption(q.id, opt.label)}
                     >
@@ -115,6 +133,9 @@ export function CreatorQA({ questions, initialConcept, onSubmitWithConcept, onCa
                     type="text"
                     className="input-text"
                     placeholder={t('qa.otherPlaceholder')}
+                    // The placeholder is the only visible cue, and placeholders are
+                    // not names — without this the field is announced unlabelled.
+                    aria-label={`${q.question} — ${t('qa.otherPlaceholder')}`}
                     value={custom}
                     onChange={(e) => handleCustomTextChange(q.id, e.target.value)}
                   />
