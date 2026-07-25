@@ -14,6 +14,10 @@ export default [
       '**/dist/**',
       '**/build/**',
       '**/coverage/**',
+      // Agent worktrees are checkouts of *other branches* nested inside this one.
+      // Flat config does not read .gitignore, so without this the repo lints code
+      // that isn't on this branch and fails on findings nobody here can fix.
+      '**/.claude/worktrees/**',
       // Plain JS was never linted under `--ext ts,tsx`; the game templates, the engine
       // and the service worker run against globals this config does not declare.
       '**/*.js',
