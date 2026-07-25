@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { PatternChecker } from './moderation.js';
-import { StubSpecRefiner, VertexSpecRefiner } from './refine.js';
+import { DEFAULT_REFINE_TIMEOUT_MS, StubSpecRefiner, VertexSpecRefiner } from './refine.js';
 import { InMemoryStore } from './store.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
@@ -173,6 +173,29 @@ describe('VertexSpecRefiner over a genaicode client', () => {
     const result = await refiner.refine({ title: 'Game', concept: 'Concept' });
 
     expect(result.questions).toEqual([{ id: 'q_0', question: '', options: [], allowFreeText: false }]);
+  });
+
+  it('fails open when the call outruns its abort budget', async () => {
+    // The production failure mode this guards: the model answers, just not within
+    // the budget, so the request aborts and the creator silently gets no questions.
+    const refiner = new VertexSpecRefiner({
+      timeoutMs: 20,
+      client: genaicode({
+        name: 'hangs',
+        generate: (request) =>
+          new Promise((_resolve, reject) => {
+            request.signal?.addEventListener('abort', () => reject(request.signal?.reason));
+          }),
+      }),
+    });
+
+    expect(await refiner.refine({ title: 'Game', concept: 'Concept' })).toEqual({ questions: [] });
+  });
+
+  it('budgets far more time than the one-token moderation call', () => {
+    // 5s was the old default and it aborted every real production attempt. Keeping
+    // this floor explicit so the budget is not quietly tightened back to it.
+    expect(DEFAULT_REFINE_TIMEOUT_MS).toBeGreaterThanOrEqual(15_000);
   });
 
   it('fails open on a malformed or non-conforming response', async () => {

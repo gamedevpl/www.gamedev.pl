@@ -42,6 +42,13 @@ export interface VertexSpecRefinerOptions {
   client?: GenAIClient;
 }
 
+// Moderation's 5s is right for a one-token verdict; refinement has to author up to
+// four questions with labelled options *and* per-option detail text, in the
+// creator's language. Prod logs (2026-07-24 21:56Z and 23:05Z) show both real
+// attempts after the model fix aborting on the old 5s budget, so the panel has
+// never rendered a question. Env-tunable so the ceiling can move without a deploy.
+export const DEFAULT_REFINE_TIMEOUT_MS = 20_000;
+
 const RefineResultSchema = z.object({
   questions: z
     .array(
@@ -64,7 +71,7 @@ export class VertexSpecRefiner implements SpecRefiner {
 
   constructor(options: VertexSpecRefinerOptions = {}) {
     this.options = options;
-    this.timeoutMs = options.timeoutMs ?? 5000;
+    this.timeoutMs = options.timeoutMs ?? Number(process.env.REFINE_TIMEOUT_MS ?? DEFAULT_REFINE_TIMEOUT_MS);
     this.refinerFetcher = options.refinerFetcher;
   }
 
@@ -82,7 +89,13 @@ export class VertexSpecRefiner implements SpecRefiner {
         defaultRegion: 'global',
         model: this.options.model,
         defaultModel: 'gemini-3.6-flash',
-        generationConfig: { responseMimeType: 'application/json' } as VertexGenerationConfig,
+        // Thinking off: the prompt asks for a fixed JSON shape, not reasoning, and
+        // the latency it adds is what pushed this call past its abort budget in
+        // production. Moderation keeps its own config — this one is refine-only.
+        generationConfig: {
+          responseMimeType: 'application/json',
+          thinkingConfig: { thinkingBudget: 0 },
+        } as VertexGenerationConfig,
       });
     return this.client;
   }
@@ -137,7 +150,9 @@ ${params.concept}
     } catch (err) {
       // Fail-open per spec: timeout/error degrades silently to empty questions
       if (process.env.NODE_ENV !== 'test') {
-        console.warn('Vertex AI spec refinement failed/timed out, failing open:', err);
+        // The budget is printed because an AbortError alone doesn't say what it
+        // was measured against, and that budget is now env-tunable.
+        console.warn(`Vertex AI spec refinement failed/timed out (budget ${this.timeoutMs}ms), failing open:`, err);
       }
       return { questions: [] };
     }
@@ -231,12 +246,22 @@ export async function registerRefineRoute(app: FastifyInstance, options: RefineR
     }
 
     // 3. Call spec refiner (fail-open)
+    const startedAt = Date.now();
     try {
       const result = await specRefiner.refine({
         title: parseResult.data.title,
         concept: parseResult.data.concept,
         locale: parseResult.data.locale,
       });
+      // Fail-open makes an outage look exactly like a fully-specified concept: both
+      // are zero questions and a 200. Without this line there is no way to tell them
+      // apart in logs, which is how a dead model and then a too-short timeout each
+      // survived unnoticed in production. A zero here with a refiner warning
+      // alongside it is a failure; a zero on its own is a clean spec.
+      request.log.info(
+        { questionCount: result.questions.length, durationMs: Date.now() - startedAt },
+        'spec refine complete',
+      );
       return result;
     } catch (err) {
       if (process.env.NODE_ENV !== 'test') {
