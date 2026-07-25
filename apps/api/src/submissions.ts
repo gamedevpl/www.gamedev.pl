@@ -13,6 +13,7 @@ import {
   type LinkedPullRequest,
 } from './github-client.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
+import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { notifyOnTransition, type EmitDeps } from './notify.js';
@@ -144,7 +145,22 @@ export async function registerSubmissionRoutes(
 ): Promise<void> {
   const githubToken = options.githubToken ?? process.env.GITHUB_TOKEN;
   const gamesRepo = options.gamesRepo ?? process.env.GAMES_REPO ?? 'gamedevpl/www.gamedev.pl-games';
-  const submissionTokenSecret = options.submissionTokenSecret ?? process.env.SUBMISSION_TOKEN_SECRET;
+
+  // Local development runs the whole product without a GitHub token: game content is
+  // read from a games checkout or bundled fixtures, and issues live in memory. It is
+  // deliberately narrow — production must keep 503-ing when its config is missing, and
+  // tests (NODE_ENV=test) must keep observing the unconfigured behaviour they assert.
+  const nodeEnv = process.env.NODE_ENV;
+  const localGames =
+    nodeEnv !== 'production' && nodeEnv !== 'test' && !githubToken && !options.githubClient
+      ? await resolveLocalGamesDir()
+      : null;
+
+  const submissionTokenSecret =
+    options.submissionTokenSecret ??
+    process.env.SUBMISSION_TOKEN_SECRET ??
+    // Signs status tokens for builds that only ever exist on this machine.
+    (localGames ? 'local-development-submission-secret' : undefined);
   const fetchImpl = options.fetchImpl ?? fetch;
   const now = options.now ?? Date.now;
   const store = options.store;
@@ -263,7 +279,18 @@ export async function registerSubmissionRoutes(
   const githubClient =
     githubToken && submissionTokenSecret
       ? (options.githubClient ?? createGitHubClient({ token: githubToken, repo: gamesRepo, fetchImpl }))
-      : null;
+      : localGames
+        ? createLocalGamesClient({ rootDir: localGames.rootDir })
+        : null;
+
+  if (localGames) {
+    app.log.info(
+      { rootDir: localGames.rootDir, source: localGames.source },
+      localGames.source === 'fixtures'
+        ? 'no GITHUB_TOKEN: serving bundled fixture games (see docs/local-development.md)'
+        : 'no GITHUB_TOKEN: serving games from a local checkout',
+    );
+  }
 
   const rateLimitWindowMs = 60 * 60 * 1000;
   const maxSubmissionsPerWindow = 5;

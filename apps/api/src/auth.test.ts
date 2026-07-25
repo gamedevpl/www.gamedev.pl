@@ -394,3 +394,53 @@ describe('beta rejection includes waitlistStatus', () => {
     expect(res.headers['set-cookie']).toBeDefined();
   });
 });
+
+describe('Local development sign-in', () => {
+  const originalEnv = process.env.NODE_ENV;
+
+  afterEach(() => {
+    process.env.NODE_ENV = originalEnv;
+  });
+
+  const setupServer = async () => {
+    const store = new InMemoryStore();
+    const app: FastifyInstance = Fastify({ logger: false });
+    await registerAuthPlugin(app, { store, sessionSecret: 'test-secret-key' });
+    return { app, store };
+  };
+
+  it('mints a session for a synthetic account outside production', async () => {
+    const { app, store } = await setupServer();
+
+    const res = await app.inject({ method: 'POST', url: '/api/auth/dev', payload: {} });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).user.uid).toBe('dev:local');
+    expect(res.headers['set-cookie']).toBeDefined();
+    // The uid namespace keeps a local account from ever colliding with a Google identity.
+    expect(await store.getUser('dev:local')).not.toBeNull();
+
+    await app.close();
+  });
+
+  it('is invisible in production', async () => {
+    process.env.NODE_ENV = 'production';
+    const { app } = await setupServer();
+
+    const res = await app.inject({ method: 'POST', url: '/api/auth/dev', payload: {} });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.headers['set-cookie']).toBeUndefined();
+
+    await app.close();
+  });
+
+  it('rejects a malformed handle rather than minting an odd uid', async () => {
+    const { app } = await setupServer();
+
+    const res = await app.inject({ method: 'POST', url: '/api/auth/dev', payload: { uid: 'Not A Handle!' } });
+
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+});

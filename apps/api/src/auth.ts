@@ -353,6 +353,58 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
     }
   });
 
+  // Local development sign-in. Real Google OAuth needs a client ID, a consent screen and
+  // an authorized origin, none of which a first-time contributor has — so without this the
+  // entire authenticated half of the product (creating, revising, notifications) is
+  // unreachable on a laptop, and the only workaround was minting a session token by hand
+  // the way the tests do.
+  //
+  // It mints a session for a synthetic account with no credential of any kind, so it must
+  // never exist in production. NODE_ENV is the gate, and the route answers 404 there rather
+  // than 403: a deployment that somehow reached this line should not even advertise it.
+  // The uid is namespaced `dev:` so it can never collide with a Google `g:` identity.
+  app.post('/api/auth/dev', async (request, reply) => {
+    if (isProd) {
+      return reply.status(404).send({ error: 'not found' });
+    }
+
+    const parsed = z
+      .object({
+        uid: z
+          .string()
+          .trim()
+          .regex(/^[a-z0-9-]{1,40}$/, 'invalid dev uid')
+          .optional(),
+      })
+      .safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
+    }
+
+    const handle = parsed.data.uid ?? 'local';
+    const uid = `dev:${handle}`;
+
+    const user = await store.upsertUser({
+      uid,
+      email: `${handle}@localhost`,
+      name: `Local ${handle}`,
+    });
+
+    if (user.tier === 'blocked') {
+      return reply.status(403).send({ error: 'account is blocked' });
+    }
+
+    reply.setCookie(SESSION_COOKIE_NAME, mintSessionToken(uid, effectiveSessionSecret), {
+      path: '/',
+      httpOnly: true,
+      secure: false,
+      sameSite: 'lax',
+      maxAge: DEFAULT_SESSION_DURATION_SECONDS,
+    });
+
+    return { user };
+  });
+
   app.post('/api/auth/logout', async (_request, reply) => {
     reply.clearCookie(SESSION_COOKIE_NAME, { path: '/' });
     return { status: 'ok' };
