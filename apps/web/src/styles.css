@@ -82,6 +82,11 @@ a {
   align-items: center;
   justify-content: space-between;
   padding: 12px 28px;
+  /* Installed on iOS the app runs under a translucent status bar, so the header
+     shares its space with the clock and the battery unless it pays the inset —
+     20px on a home-button phone, ~47px on a notched one. Resolves to 0 in a
+     browser tab and on every desktop, where the max() keeps the 12px. */
+  padding-top: max(12px, env(safe-area-inset-top));
   background-color: rgba(22, 28, 34, 0.9);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
@@ -2153,6 +2158,9 @@ body.player-open {
     align-items: center;
     gap: 8px;
     padding: 8px 12px;
+    /* The shorthand above would drop the inset the base rule pays, and a phone is
+       the only place it is ever non-zero. */
+    padding-top: max(8px, env(safe-area-inset-top));
   }
 
   /* min-width:0 lets the brand shrink, but the anchor inside it does not — at
