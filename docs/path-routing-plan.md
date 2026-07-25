@@ -63,11 +63,16 @@ Same path shapes, without the `#`:
 | Path              | `AppRoute`                                   |
 | ----------------- | -------------------------------------------- |
 | `/`               | `{ view: 'home' }`                           |
-| `/play/<slug>`    | `{ view: 'play', slug }`                     |
+| `/play/<slug>`    | `{ view: 'play', slug }` (canonical)         |
+| `/ay/<slug>`      | same play view — rewritten to `/play/<slug>` |
+| `/ai/<slug>`      | same play view — rewritten to `/play/<slug>` |
 | `/draft/<slug>`   | `{ view: 'draft', slug }`                    |
 | `/status/<token>` | `{ view: 'status', token }`                  |
 | `/health`         | `{ view: 'health' }`                         |
 | `/join/<code>/…`  | `{ view: 'join', code, token }` — see § Join |
+
+No `/game/` segment — everything playable is a game; `/play` (and the `/ay` /
+`/ai` aliases) is enough. Emitters always write `/play/<slug>`.
 
 Slug validation stays as today: lowercase kebab-case only
 (`^[a-z0-9]+(?:-[a-z0-9]+)*$`). Unknown / invalid paths → home (same as today).

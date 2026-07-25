@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { draftPath, joinPath, parsePathRoute, playPath, statusPath } from './router';
+import { canonicalPlayPath, draftPath, joinPath, parsePathRoute, playPath, statusPath } from './router';
 
 describe('parsePathRoute', () => {
   it('maps empty and root paths to home', () => {
@@ -14,6 +14,13 @@ describe('parsePathRoute', () => {
   it('parses a published-game permalink', () => {
     expect(parsePathRoute('/play/kotek-w-cyrku')).toEqual({ view: 'play', slug: 'kotek-w-cyrku' });
     expect(parsePathRoute('/play/dodge')).toEqual({ view: 'play', slug: 'dodge' });
+  });
+
+  it('accepts /ay and /ai as play aliases', () => {
+    expect(parsePathRoute('/ay/sky-dodge')).toEqual({ view: 'play', slug: 'sky-dodge' });
+    expect(parsePathRoute('/ai/sky-dodge')).toEqual({ view: 'play', slug: 'sky-dodge' });
+    expect(parsePathRoute('/ay/-bad')).toEqual({ view: 'home' });
+    expect(parsePathRoute('/ai/')).toEqual({ view: 'home' });
   });
 
   it('rejects non-slug play paths', () => {
@@ -66,6 +73,14 @@ describe('path builders', () => {
   it('builds a play path that round-trips', () => {
     expect(playPath('kotek-w-cyrku')).toBe('/play/kotek-w-cyrku');
     expect(parsePathRoute(playPath('space-dash'))).toEqual({ view: 'play', slug: 'space-dash' });
+  });
+
+  it('canonicalizes play aliases to /play/<slug>', () => {
+    expect(canonicalPlayPath('/ay/sky-dodge')).toBe('/play/sky-dodge');
+    expect(canonicalPlayPath('/ai/sky-dodge')).toBe('/play/sky-dodge');
+    expect(canonicalPlayPath('/play/sky-dodge')).toBeNull();
+    expect(canonicalPlayPath('/draft/sky-dodge')).toBeNull();
+    expect(canonicalPlayPath('/')).toBeNull();
   });
 
   it('builds a draft path that round-trips', () => {

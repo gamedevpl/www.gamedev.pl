@@ -12,7 +12,16 @@ import { GameHealthView } from './GameHealthView';
 import { PixelIcon } from './PixelIcon';
 import { SubmissionStatusView } from './SubmissionStatusView';
 import { CreatorQA, type QAQuestion } from './CreatorQA';
-import { parsePathRoute, statusPath, playPath } from './router';
+import { canonicalPlayPath, parsePathRoute, statusPath, playPath, type AppRoute } from './router';
+
+/** Read the current URL into an AppRoute, rewriting `/ay|/ai/<slug>` → `/play/<slug>`. */
+function readLocationRoute(): AppRoute {
+  const canonical = canonicalPlayPath(window.location.pathname);
+  if (canonical) {
+    window.history.replaceState(null, '', canonical);
+  }
+  return parsePathRoute(window.location.pathname, window.location.hash);
+}
 import { submitSpec, refineSpec, type SubmissionApiError } from './submissionApi';
 import { getSavedSpecs, saveSpec, type SavedSpec } from './mySpecs';
 import { clearPendingQa, loadPendingQa, savePendingQa, type PendingQaAnswers } from './pendingQa';
@@ -32,7 +41,7 @@ type StageContent =
 export function App() {
   const { t, i18n } = useTranslation();
   const { user, loading: authLoading, privateBeta } = useAuth();
-  const [route, setRoute] = useState(() => parsePathRoute(window.location.pathname, window.location.hash));
+  const [route, setRoute] = useState(() => readLocationRoute());
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   // Catalog state
@@ -85,7 +94,7 @@ export function App() {
     // editing only the hash (paste `/join/<code>#<token>` while already on that
     // path) does not fire popstate.
     const syncRoute = () => {
-      setRoute(parsePathRoute(window.location.pathname, window.location.hash));
+      setRoute(readLocationRoute());
     };
 
     window.addEventListener('popstate', syncRoute);
@@ -375,7 +384,7 @@ export function App() {
     // Update the URL (the source of truth) and the route synchronously so
     // navigation is immediate (and testable) without waiting for popstate.
     window.history.pushState(null, '', path);
-    setRoute(parsePathRoute(window.location.pathname, window.location.hash));
+    setRoute(readLocationRoute());
   }
 
   function handlePlayGame(game: CatalogEntry) {

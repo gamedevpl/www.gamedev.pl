@@ -23,6 +23,10 @@ export type AppRoute =
 // route pattern strict so arbitrary path segments can't masquerade as a play route.
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
+// Canonical play prefix is `/play`. `/ay` and `/ai` are accepted aliases (same view);
+// the app rewrites them to `/play/<slug>` so shared URLs stay consistent.
+const PLAY_PREFIX_PATTERN = /^\/(play|ay|ai)\/([^/]+)$/;
+
 /**
  * Parse the SPA route from pathname (+ optional hash for the join credential).
  * Unknown / invalid paths fall back to home.
@@ -40,9 +44,9 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
     return { view: 'status', token: decodeURIComponent(statusMatch[1]) };
   }
 
-  const playMatch = normalizedPath.match(/^\/play\/([^/]+)$/);
-  if (playMatch?.[1]) {
-    const slug = decodeURIComponent(playMatch[1]);
+  const playMatch = normalizedPath.match(PLAY_PREFIX_PATTERN);
+  if (playMatch?.[2]) {
+    const slug = decodeURIComponent(playMatch[2]);
     if (SLUG_PATTERN.test(slug)) {
       return { view: 'play', slug };
     }
@@ -73,8 +77,20 @@ export function statusPath(token: string): string {
   return `/status/${encodeURIComponent(token)}`;
 }
 
+/** Canonical play URL. Emit this; `/ay/<slug>` and `/ai/<slug>` only as inbound aliases. */
 export function playPath(slug: string): string {
   return `/play/${encodeURIComponent(slug)}`;
+}
+
+/**
+ * If pathname is a play alias (`/ay/…` or `/ai/…`), return the canonical `/play/…`
+ * path to rewrite to. Otherwise null (already canonical, or not a play route).
+ */
+export function canonicalPlayPath(pathname: string): string | null {
+  const route = parsePathRoute(pathname);
+  if (route.view !== 'play') return null;
+  const canonical = playPath(route.slug);
+  return pathname === canonical ? null : canonical;
 }
 
 export function draftPath(slug: string): string {
