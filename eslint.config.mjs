@@ -1,0 +1,52 @@
+import js from '@eslint/js';
+import tsPlugin from '@typescript-eslint/eslint-plugin';
+import reactHooks from 'eslint-plugin-react-hooks';
+import reactRefresh from 'eslint-plugin-react-refresh';
+import globals from 'globals';
+
+// Flat config lints a file only when some block's `files` pattern matches it, so the
+// ts/tsx blocks below are what define the lint surface — the same one `--ext ts,tsx` gave.
+const TS_FILES = ['**/*.ts', '**/*.tsx'];
+
+export default [
+  {
+    ignores: [
+      '**/dist/**',
+      '**/build/**',
+      '**/coverage/**',
+      // Plain JS was never linted under `--ext ts,tsx`; the game templates, the engine
+      // and the service worker run against globals this config does not declare.
+      '**/*.js',
+      '**/*.cjs',
+      '**/*.mjs',
+    ],
+  },
+  { ...js.configs.recommended, files: TS_FILES },
+  // Carries the parser plus the `eslint-recommended` block that switches off the core
+  // rules TypeScript already covers (no-undef, no-unused-vars, no-redeclare, ...).
+  ...tsPlugin.configs['flat/recommended'],
+  {
+    files: TS_FILES,
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      parserOptions: { ecmaFeatures: { jsx: true } },
+      globals: { ...globals.node, ...globals.browser },
+    },
+    rules: {
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+    },
+  },
+  {
+    files: ['apps/web/**/*.ts', 'apps/web/**/*.tsx'],
+    plugins: { 'react-hooks': reactHooks, 'react-refresh': reactRefresh },
+    rules: {
+      // The two rules this repo has always enforced. react-hooks 7's `recommended` also
+      // turns on the React Compiler rules (purity, refs, set-state-in-effect, ...); those
+      // flag 14 pre-existing issues here, so adopting them is its own piece of work.
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
+      'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+    },
+  },
+];

@@ -324,7 +324,7 @@ export async function registerSubmissionRoutes(
     const cached = branchMediaCache.get(key);
     if (cached !== undefined) return cached;
 
-    let value: CatalogGameMedia | null = null;
+    let value: CatalogGameMedia | null;
     try {
       value = await githubClient.getGameMediaManifest(headSha, slug);
     } catch {

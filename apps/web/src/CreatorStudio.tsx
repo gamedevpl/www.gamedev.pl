@@ -71,7 +71,7 @@ export function CreatorStudio({
         // Fail-open or clean prompt: directly submit
         onSubmitSpec(title.trim(), concept.trim(), displayName.trim());
       }
-    } catch (err) {
+    } catch {
       // Fail-open on error: proceed to submit directly
       onSubmitSpec(title.trim(), concept.trim(), displayName.trim());
     } finally {
