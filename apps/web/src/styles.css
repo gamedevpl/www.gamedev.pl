@@ -1495,6 +1495,8 @@ body.player-open {
 .game-viewport-container {
   flex: 1;
   width: 100%;
+  /* Positioning context for the rotate hint that overlays the game. */
+  position: relative;
   /* `height: 100%` here would resolve against the stage and ignore the header bar,
      overflowing the game off the bottom of a short (landscape phone) viewport.
      `flex: 1` with min-height:0 gives it exactly the space the bar leaves. */
@@ -1516,6 +1518,36 @@ body.player-open {
   border-radius: 0;
   box-shadow: none;
   touch-action: none;
+}
+
+/* The rotate nudge. Deliberately not a blocking overlay: the game keeps running
+   underneath and the hint disappears by itself once the device is turned, so a
+   player who would rather stay in the "wrong" orientation is never trapped. */
+.theater-rotate-hint {
+  position: absolute;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  /* Centred by symmetric insets + auto margins rather than left:50%, which would
+     cap the shrink-to-fit width at half the container and needlessly wrap. */
+  left: 16px;
+  right: 16px;
+  margin-inline: auto;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: rgba(12, 18, 24, 0.86);
+  border: 1px solid rgba(0, 228, 172, 0.32);
+  color: var(--text);
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-align: center;
+  backdrop-filter: blur(6px);
+  /* Never intercept a tap meant for the game. */
+  pointer-events: none;
+  animation: fadeIn 0.25s ease-out;
 }
 
 /* Icon + label, so the label can drop out on a narrow screen and leave a square,

@@ -15,6 +15,9 @@ export interface CatalogMultiplayer {
   maxPlayers: number;
 }
 
+/** The orientation a game was designed for; 'any' unless its spec says otherwise. */
+export type CatalogOrientation = 'any' | 'portrait' | 'landscape';
+
 export interface CatalogEntry {
   slug: string;
   title: string;
@@ -23,6 +26,7 @@ export interface CatalogEntry {
   status: string;
   media: CatalogMedia | null;
   multiplayer: CatalogMultiplayer | null;
+  orientation: CatalogOrientation;
 }
 
 /** A published game assembled by the API, ready for the sandboxed iframe's srcDoc. */
@@ -76,6 +80,11 @@ function parseCatalogMultiplayer(value: unknown): CatalogMultiplayer | null {
   return { mode: 'controllers', minPlayers: multiplayer.minPlayers, maxPlayers: multiplayer.maxPlayers };
 }
 
+/** An older API (or a spec typo the API let through) simply means "no preference". */
+function parseCatalogOrientation(value: unknown): CatalogOrientation {
+  return value === 'portrait' || value === 'landscape' ? value : 'any';
+}
+
 export async function fetchCatalog(): Promise<CatalogEntry[]> {
   const response = await fetch(`${API_BASE}/api/catalog`);
 
@@ -91,7 +100,13 @@ export async function fetchCatalog(): Promise<CatalogEntry[]> {
 
   return body
     .filter(
-      (entry): entry is Omit<CatalogEntry, 'media' | 'multiplayer'> & { media?: unknown; multiplayer?: unknown } =>
+      (
+        entry,
+      ): entry is Omit<CatalogEntry, 'media' | 'multiplayer' | 'orientation'> & {
+        media?: unknown;
+        multiplayer?: unknown;
+        orientation?: unknown;
+      } =>
         typeof entry === 'object' &&
         entry !== null &&
         typeof entry.slug === 'string' &&
@@ -105,6 +120,7 @@ export async function fetchCatalog(): Promise<CatalogEntry[]> {
       ...entry,
       media: parseCatalogMedia(entry.media),
       multiplayer: parseCatalogMultiplayer((entry as { multiplayer?: unknown }).multiplayer),
+      orientation: parseCatalogOrientation(entry.orientation),
     }));
 }
 

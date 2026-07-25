@@ -85,7 +85,9 @@
     "soundOn": "Dźwięk: Wł.",
     "soundOff": "Dźwięk: Wył.",
     "fullscreen": "Pełny ekran",
-    "exitFullscreen": "Zamknij pełny ekran"
+    "exitFullscreen": "Zamknij pełny ekran",
+    "rotateLandscape": "Obróć telefon poziomo, aby zagrać",
+    "rotatePortrait": "Trzymaj telefon pionowo, aby zagrać"
   },
   "catalog": {
     "title": "Gry",

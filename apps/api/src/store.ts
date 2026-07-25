@@ -117,8 +117,16 @@ export type TelemetryEventType =
   'game_opened' | 'play_time' | 'game_closed' | 'error' | 'alive' | 'progress' | 'score' | 'end';
 
 export interface TelemetryEvent {
-  /** Game identity — the submission the reported slug resolved to. */
-  issueNumber: number;
+  /**
+   * Game identity: the games-repo slug.
+   *
+   * Not the submission's issue number. The catalog is built straight from the games
+   * repo ([github-client.ts](./github-client.ts) `getCatalog`), so the slug is the only
+   * identity every playable game has — most predate the submission flow and have no
+   * `submissions/{issueNumber}` document at all. IL-2 can join to a submission at read
+   * time via `getSubmissionBySlug` when it needs a creator to notify.
+   */
+  slug: string;
   /** Ephemeral per-open id from the shell. Never a uid. */
   sessionId: string;
   type: TelemetryEventType;
@@ -233,7 +241,7 @@ export interface Store {
    */
   appendTelemetryEvents(dateStr: string, events: TelemetryEvent[]): Promise<void>;
   /** One day's events for a game — the read the aggregation job (IL-2) will use. */
-  listTelemetryEvents(dateStr: string, opts?: { issueNumber?: number; limit?: number }): Promise<TelemetryEvent[]>;
+  listTelemetryEvents(dateStr: string, opts?: { slug?: string; limit?: number }): Promise<TelemetryEvent[]>;
   /** Today's usage counters for a user, without incrementing anything. */
   getUsage(uid: string, dateStr: string): Promise<UsageCounters>;
   /** Most recently published submissions, newest first — the build-time sample. */
@@ -484,12 +492,9 @@ export class InMemoryStore implements Store {
     this.telemetry.set(dateStr, existing);
   }
 
-  async listTelemetryEvents(
-    dateStr: string,
-    opts?: { issueNumber?: number; limit?: number },
-  ): Promise<TelemetryEvent[]> {
+  async listTelemetryEvents(dateStr: string, opts?: { slug?: string; limit?: number }): Promise<TelemetryEvent[]> {
     return (this.telemetry.get(dateStr) ?? [])
-      .filter((event) => opts?.issueNumber === undefined || event.issueNumber === opts.issueNumber)
+      .filter((event) => opts?.slug === undefined || event.slug === opts.slug)
       .slice(0, opts?.limit ?? 1000)
       .map((event) => ({ ...event }));
   }
@@ -904,13 +909,10 @@ export class FirestoreStore implements Store {
     await batch.commit();
   }
 
-  async listTelemetryEvents(
-    dateStr: string,
-    opts?: { issueNumber?: number; limit?: number },
-  ): Promise<TelemetryEvent[]> {
+  async listTelemetryEvents(dateStr: string, opts?: { slug?: string; limit?: number }): Promise<TelemetryEvent[]> {
     // Equality-only filter plus a limit, so no composite index is needed.
     const base = this.telemetryCollection(dateStr);
-    const query = opts?.issueNumber === undefined ? base : base.where('issueNumber', '==', opts.issueNumber);
+    const query = opts?.slug === undefined ? base : base.where('slug', '==', opts.slug);
     const snap = await query.limit(opts?.limit ?? 1000).get();
     return snap.docs.map((doc) => doc.data() as TelemetryEvent);
   }

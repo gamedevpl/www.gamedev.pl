@@ -114,6 +114,10 @@ export function App() {
         status: 'published',
         media: null,
         multiplayer: null,
+        // A deep link that beat the catalog: assume no preference rather than
+        // nagging someone to rotate for a game whose spec we haven't read yet.
+        // The effect above swaps in the real entry once the catalog lands.
+        orientation: 'any',
       };
       setStageContent({ type: 'catalog', game: initialGame });
       document.getElementById('stage')?.scrollIntoView?.({ behavior: 'smooth' });
@@ -467,6 +471,7 @@ export function App() {
                 badge={{ icon: 'gamepad', label: t('catalog.playingBadge', { defaultValue: 'Playing' }) }}
                 source={{ slug: stageContent.game.slug }}
                 onExit={() => navigateHash('#/')}
+                orientation={stageContent.game.orientation}
               />
             )}
 

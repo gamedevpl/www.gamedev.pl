@@ -134,7 +134,16 @@ export interface CatalogGameEntry {
    * the web app badges and offers "Play together" only when this is set.
    */
   multiplayer: CatalogGameMultiplayer | null;
+  /**
+   * The orientation the game was designed for, from `orientation:` in SPEC.md
+   * frontmatter. Design intent nothing in the source can reveal, so unlike touch
+   * support it is authored rather than derived. Defaults to 'any'; the player
+   * uses it to nudge a phone that is held the wrong way round.
+   */
+  orientation: CatalogGameOrientation;
 }
+
+export type CatalogGameOrientation = 'any' | 'portrait' | 'landscape';
 
 export interface CatalogGameMultiplayer {
   mode: 'controllers';
@@ -164,6 +173,18 @@ function parseMultiplayer(frontmatter: Record<string, string>): CatalogGameMulti
     return null;
   }
   return { mode: 'controllers', minPlayers, maxPlayers };
+}
+
+const GAME_ORIENTATIONS = new Set<CatalogGameOrientation>(['any', 'portrait', 'landscape']);
+
+/**
+ * Anything unrecognised degrades to 'any' rather than failing the catalog: an
+ * orientation typo should not take a playable game off the site. The games
+ * repo's own validate (Check 13) is what holds authors to the valid set.
+ */
+function parseOrientation(frontmatter: Record<string, string>): CatalogGameOrientation {
+  const value = (frontmatter.orientation ?? '').trim().toLowerCase() as CatalogGameOrientation;
+  return GAME_ORIENTATIONS.has(value) ? value : 'any';
 }
 
 export interface GitHubClient {
@@ -768,6 +789,7 @@ ${gameJs}`;
             status,
             media: parseGameMedia(mediaMetadata),
             multiplayer: parseMultiplayer(frontmatter),
+            orientation: parseOrientation(frontmatter),
           };
         }),
       );

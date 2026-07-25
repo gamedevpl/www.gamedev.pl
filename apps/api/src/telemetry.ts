@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import type { PublishedSlugGate } from './published-slugs.js';
 import type { Store, TelemetryEvent } from './store.js';
 
 /**
@@ -18,9 +19,12 @@ import type { Store, TelemetryEvent } from './store.js';
  * no IP, no user agent — so these rows answer "how did this game do" and cannot
  * answer "what did this person play".
  *
- * Only *published* games are recorded. A creator playtesting their own draft is
- * real signal, but it is developer traffic, and mixing it into the funnel would
- * make every number a creator sees partly a reflection of themselves.
+ * Only *published* games are recorded, judged by catalog membership — see
+ * [published-slugs.ts](./published-slugs.ts) for why the submission document is the
+ * wrong authority for that question. A creator playtesting their own draft is real
+ * signal, but it is developer traffic, and mixing it into the funnel would make
+ * every number a creator sees partly a reflection of themselves; a draft preview is
+ * not in the published catalog, so it stays out.
  */
 
 /** Bounds one flush; the shell batches ~4 events per 15s, so this is generous. */
@@ -32,6 +36,8 @@ const MAX_REQUESTS_PER_WINDOW = 120;
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const MAX_MESSAGE_LENGTH = 200;
 const MAX_LABEL_LENGTH = 40;
+/** Log every Nth unknown-slug drop: enough to notice a systemic problem, not a flood. */
+const DROP_LOG_INTERVAL = 25;
 
 const EventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('game_opened'), slots: z.number().int().min(1).max(8).optional() }),
@@ -73,6 +79,11 @@ const RequestSchema = z.object({
 
 export interface TelemetryRoutesOptions {
   store: Store;
+  /**
+   * Decides whether a slug is a published game. Absent (no games repo configured),
+   * every flush is accepted and dropped — the same answer an unknown slug gets.
+   */
+  publishedSlugs?: PublishedSlugGate | null;
   now?: () => number;
 }
 
@@ -92,10 +103,12 @@ function isRateLimited(buckets: Map<string, number[]>, key: string, currentTime:
 }
 
 export async function registerTelemetryRoutes(app: FastifyInstance, options: TelemetryRoutesOptions): Promise<void> {
-  const { store } = options;
+  const { store, publishedSlugs } = options;
   const now = options.now ?? Date.now;
 
   const requestsByIp = new Map<string, number[]>();
+  /** Flushes discarded for an unrecognised slug; logged sparsely, never per request. */
+  let droppedUnknownSlug = 0;
   /** sessionId -> { count, lastSeen }, pruned lazily so an idle process does not grow. */
   const sessionCounts = new Map<string, { count: number; lastSeen: number }>();
 
@@ -118,10 +131,21 @@ export async function registerTelemetryRoutes(app: FastifyInstance, options: Tel
       return reply.status(429).send({ error: 'too many telemetry requests' });
     }
 
-    const submission = await store.getSubmissionBySlug(parsed.data.slug);
-    // Unknown or unpublished slug: accept and drop. Reporting the difference would
-    // turn this endpoint into a slug oracle, and a client cannot act on the answer.
-    if (!submission?.publishedAt) {
+    // Unknown, unpublished, or draft-only slug: accept and drop. Reporting the
+    // difference would turn this endpoint into a slug oracle, and a client cannot act
+    // on the answer. Note this branch is *silent by design*, which is precisely how it
+    // hid a bug that discarded ~95% of real play — hence the counter below, so the
+    // drop rate is visible in logs instead of being invisible until someone queries
+    // Firestore and finds nothing.
+    const published = (await publishedSlugs?.isPublished(parsed.data.slug)) ?? false;
+    if (!published) {
+      droppedUnknownSlug += 1;
+      if (droppedUnknownSlug % DROP_LOG_INTERVAL === 1) {
+        request.log.warn(
+          { slug: parsed.data.slug, droppedUnknownSlug },
+          'telemetry dropped: slug is not a published game',
+        );
+      }
       return reply.status(202).send({ accepted: 0 });
     }
 
@@ -135,7 +159,7 @@ export async function registerTelemetryRoutes(app: FastifyInstance, options: Tel
 
     const at = new Date(currentTime).toISOString();
     const events: TelemetryEvent[] = parsed.data.events.slice(0, room).map((event) => {
-      const base = { issueNumber: submission.issueNumber, sessionId: parsed.data.sessionId, at };
+      const base = { slug: parsed.data.slug, sessionId: parsed.data.sessionId, at };
       switch (event.type) {
         case 'game_opened':
           return { ...base, type: event.type, ...(event.slots === undefined ? {} : { slots: event.slots }) };

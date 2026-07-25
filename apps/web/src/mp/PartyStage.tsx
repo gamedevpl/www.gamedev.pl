@@ -131,7 +131,12 @@ export function PartyStage({ game, session, onExit }: PartyStageProps) {
             </span>
           ))}
         </div>
-        <PublishedGameFrame slug={game.slug} title={game.title} frameRef={frameRef} />
+        <PublishedGameFrame
+          slug={game.slug}
+          title={game.title}
+          frameRef={frameRef}
+          slots={roster.filter((slot) => slot.connected).length}
+        />
       </div>
     );
   }

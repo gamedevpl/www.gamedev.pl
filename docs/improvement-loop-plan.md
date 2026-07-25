@@ -16,6 +16,15 @@
 > `POST /api/telemetry` validates, caps, and stores them unattributed
 > ([telemetry.ts](../apps/api/src/telemetry.ts)). Votes, written player feedback,
 > and the games-repo telemetry module are the rest of IL-1.
+>
+> **Not yet observed working in production.** The first deploy of the intake wrote
+> nothing at all: it gated on the submission document, which 34 of 42 catalog games
+> do not have, so every flush was accepted and silently discarded. Fixed the same
+> day by keying on the games-repo slug and gating on catalog membership
+> ([published-slugs.ts](../apps/api/src/published-slugs.ts)); the drop path now
+> counts and logs itself, because a silent branch is what hid the bug. The next real
+> play session on the live site is the thing that proves it — treat "capture works"
+> as unconfirmed until a row exists in `telemetry/{yyyymmdd}/events`.
 
 ## Why
 
@@ -41,17 +50,17 @@ never-raw-text-in, never auto-merge. What changed is that most of the plumbing
 it proposed to build now exists for other reasons, and two of its decisions were
 made from stale premises.
 
-| First draft assumed                                                       | Reality on 2026-07-25                                                                                                                                       | Consequence for this plan                                                                              |
-| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Telemetry needs a new games-repo `postMessage` convention before it works | The app **already injects a bridge** into every game it plays ([gamePlayer.ts](../apps/web/src/gamePlayer.ts)), with a `gdpl-host` / `gdpl-player` envelope | Funnel + error capture ship with **zero games-repo changes**. Only progression depth needs game opt-in |
-| Games are addressed as `games/{gameId}`                                   | There is no `games` collection — a game is `submissions/{issueNumber}` with a `slug` (`getSubmissionBySlug`)                                                | The whole data model is re-keyed; no new identity is introduced                                        |
-| "No email sender exists", so the digest is on-site only                   | Mailer, templates, unsubscribe tokens, Web Push and an in-app bell all shipped                                                                              | **Decision reversed**: the digest rides the existing notification seam                                 |
-| The improvement quota would need new quota machinery                      | `UsageCounters` is already a named-kind counter set (`submissions`, `previews`, `mocks`, `refines`, `feedback`)                                             | The separate improvement quota is one new counter kind                                                 |
-| Theme extraction uses "Vertex Flash-Lite plumbing"                        | Vertex calls now route through the genaicode seam ([genai.ts](../apps/api/src/genai.ts)); moderation runs Gemini 3 Flash                                    | Naming corrected; the seam is the integration point, not Vertex directly                               |
-| Written feedback → agent is a thing to design                             | `POST /api/submissions/:token/feedback` already does it: moderate → sanitize → fenced PR comment → queue into the agent inbox                               | The Act plane's delivery path is **built and proven**; player feedback is the missing sibling          |
-| An agent's progress arrives by git                                        | The build channel ([agent-channel.ts](../apps/api/src/agent-channel.ts)) takes progress, screenshots, and hands back queued creator requests                | Improvement runs get live progress and before/after shots for free                                     |
-| "Assign the issue to Copilot" is a solved primitive                       | Bot `@copilot` mentions are dropped silently; re-mentions are relayed under a licensed human PAT                                                            | The autonomy story is **gated on that relay**, and it is now the loop's biggest single risk            |
-| Games are single-player, one player per session                           | Party mode ships: one shared screen, 2–8 phone controllers, guests with no account and ephemeral rooms                                                      | Sessions are no longer 1:1 with players; guest privacy constrains what may be recorded                 |
+| First draft assumed                                                       | Reality on 2026-07-25                                                                                                                                                                             | Consequence for this plan                                                                              |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Telemetry needs a new games-repo `postMessage` convention before it works | The app **already injects a bridge** into every game it plays ([gamePlayer.ts](../apps/web/src/gamePlayer.ts)), with a `gdpl-host` / `gdpl-player` envelope                                       | Funnel + error capture ship with **zero games-repo changes**. Only progression depth needs game opt-in |
+| Games are addressed as `games/{gameId}`                                   | Half right, and the half that was wrong cost a day: a **submission** is `submissions/{issueNumber}`, but a **game** is a games-repo slug, and only 8 of 42 catalog games have a submission at all | Keyed by `slug`. Re-keying on the submission was tried first and silently dropped ~95% of play         |
+| "No email sender exists", so the digest is on-site only                   | Mailer, templates, unsubscribe tokens, Web Push and an in-app bell all shipped                                                                                                                    | **Decision reversed**: the digest rides the existing notification seam                                 |
+| The improvement quota would need new quota machinery                      | `UsageCounters` is already a named-kind counter set (`submissions`, `previews`, `mocks`, `refines`, `feedback`)                                                                                   | The separate improvement quota is one new counter kind                                                 |
+| Theme extraction uses "Vertex Flash-Lite plumbing"                        | Vertex calls now route through the genaicode seam ([genai.ts](../apps/api/src/genai.ts)); moderation runs Gemini 3 Flash                                                                          | Naming corrected; the seam is the integration point, not Vertex directly                               |
+| Written feedback → agent is a thing to design                             | `POST /api/submissions/:token/feedback` already does it: moderate → sanitize → fenced PR comment → queue into the agent inbox                                                                     | The Act plane's delivery path is **built and proven**; player feedback is the missing sibling          |
+| An agent's progress arrives by git                                        | The build channel ([agent-channel.ts](../apps/api/src/agent-channel.ts)) takes progress, screenshots, and hands back queued creator requests                                                      | Improvement runs get live progress and before/after shots for free                                     |
+| "Assign the issue to Copilot" is a solved primitive                       | Bot `@copilot` mentions are dropped silently; re-mentions are relayed under a licensed human PAT                                                                                                  | The autonomy story is **gated on that relay**, and it is now the loop's biggest single risk            |
+| Games are single-player, one player per session                           | Party mode ships: one shared screen, 2–8 phone controllers, guests with no account and ephemeral rooms                                                                                            | Sessions are no longer 1:1 with players; guest privacy constrains what may be recorded                 |
 
 Two things the first draft got right and this revision keeps unchanged: the
 router's Defect / Friction / Design-change split, and the measurement plane.
@@ -217,27 +226,34 @@ Three planes, deliberately decoupled:
 
 ## Data model (Firestore)
 
-A game's identity is its submission — `submissions/{issueNumber}`, resolvable
-from a URL via `getSubmissionBySlug(slug)`. The loop introduces no new game id.
+A game's identity is its **games-repo slug**. The loop introduces no new game id,
+but it cannot use the submission's issue number either: the catalog is built
+straight from the games repo, and most playable games have no submission document
+at all. As of 2026-07-25, of 42 games in the catalog, 8 had a submission and 2 had
+`publishedAt` — so keying on the submission addresses ~5% of the platform. Where a
+creator must be reached, `getSubmissionBySlug(slug)` joins to their submission at
+read time, and returns null for the majority that were never commissioned here.
 
 ```
 submissions/{issueNumber}/
+  playerFeedback/{id}  ← { uid|null, text, moderation: {...}, status: new|triaged|linked }
+games/{slug}/
   scorecard/current    ← rolling aggregate doc (the ONLY thing agents read)
   votes/{uid}          ← { value: up|down, updatedAt }
-  playerFeedback/{id}  ← { uid|null, text, moderation: {...}, status: new|triaged|linked }
-telemetry/{yyyymmdd}/events/{id}   ← raw events, 90-day TTL, keyed by issueNumber
-suggestions/{id}       ← { issueNumber, insight, proposedAction, evidence, status:
+telemetry/{yyyymmdd}/events/{id}   ← raw events, 90-day TTL, keyed by slug
+suggestions/{id}       ← { slug, insight, proposedAction, evidence, status:
                            proposed|approved|rejected|issue-filed|merged|measured }
 ```
 
 Notes on the shape:
 
-- Votes and feedback are **subcollections of the submission**, matching how
-  `events`, `messages` and `shots` already hang off it. One less top-level
-  collection, and a takedown deletes the game's whole record with it.
+- Scorecards and votes hang off **`games/{slug}`**, a collection this plan does
+  introduce after all — because it is the only place every playable game can be
+  addressed. Player feedback stays under the submission, where the existing
+  creator-feedback route already writes it and where a takedown removes it.
 - Raw telemetry is date-partitioned top-level so a TTL policy can expire it
   wholesale, and so the aggregation job reads one day's partition rather than
-  fanning out across submissions.
+  fanning out across games.
 - `suggestions` is top-level because the babysitter queries it globally
   ("what is proposed anywhere, ranked by value") far more often than per game.
 

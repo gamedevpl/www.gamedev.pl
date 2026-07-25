@@ -14,10 +14,36 @@ type GameTheaterProps = {
   badge: { icon: PixelIconName; label: string };
   source: GameTheaterSource;
   onExit: () => void;
+  /** The orientation the game was designed for; drives the rotate nudge. */
+  orientation?: 'any' | 'portrait' | 'landscape';
   /** Extra header content shown when the bridge hasn't reported a description yet
    *  (e.g. the prompt a generated game was made from). */
   meta?: ReactNode;
 };
+
+/**
+ * True while a handheld is held the wrong way round for this game.
+ *
+ * Only handhelds are nudged: a desktop window can be any shape and its owner
+ * resizes it rather than turning it over, so telling them to rotate is noise.
+ */
+function useOrientationMismatch(desired: 'any' | 'portrait' | 'landscape'): boolean {
+  const [mismatched, setMismatched] = useState(false);
+
+  useEffect(() => {
+    if (desired === 'any' || typeof matchMedia !== 'function' || !matchMedia('(pointer: coarse)').matches) {
+      setMismatched(false);
+      return;
+    }
+    const query = matchMedia(`(orientation: ${desired})`);
+    const update = () => setMismatched(!query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, [desired]);
+
+  return mismatched;
+}
 
 /**
  * The full-viewport game player ("theater"): a fixed overlay with a header bar
@@ -26,7 +52,7 @@ type GameTheaterProps = {
  * sound chrome is hidden and surfaced here instead. Callers own page scroll-locking
  * (`document.body.classList` 'player-open') and the overlay's mount lifecycle.
  */
-export function GameTheater({ title, badge, source, onExit, meta }: GameTheaterProps) {
+export function GameTheater({ title, badge, source, onExit, meta, orientation = 'any' }: GameTheaterProps) {
   const { t } = useTranslation();
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const exitRef = useRef<HTMLButtonElement | null>(null);
@@ -35,6 +61,8 @@ export function GameTheater({ title, badge, source, onExit, meta }: GameTheaterP
   // Playing is the one thing you do here without touching the screen for minutes at
   // a time, which is exactly when a phone dims and sleeps. Hold the screen awake.
   useScreenWakeLock(true);
+
+  const rotateHint = useOrientationMismatch(orientation);
 
   // Callers routinely pass a fresh `onExit` closure on every render (and the status
   // view re-renders every few seconds while a build polls). Keeping it in a ref lets
@@ -155,6 +183,14 @@ export function GameTheater({ title, badge, source, onExit, meta }: GameTheaterP
           <PublishedGameFrame key={source.slug} slug={source.slug} title={title} frameRef={frameRef} embed />
         ) : (
           <GameFrame title={title} html={source.html} frameRef={frameRef} embed />
+        )}
+        {/* A nudge, not a gate: the game stays playable and running underneath, and
+            the hint clears itself the moment the device is turned. */}
+        {rotateHint && (
+          <div className="theater-rotate-hint" role="status">
+            <PixelIcon name="phone" size={20} />
+            <span>{orientation === 'landscape' ? t('player.rotateLandscape') : t('player.rotatePortrait')}</span>
+          </div>
         )}
       </div>
     </section>

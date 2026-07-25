@@ -72,6 +72,7 @@ describe('getCatalog', () => {
           video: 'gameplay.mp4',
         },
         multiplayer: null,
+        orientation: 'any',
       },
     ]);
   });
@@ -112,6 +113,7 @@ describe('getCatalog', () => {
         status: 'published',
         media: null,
         multiplayer: null,
+        orientation: 'any',
       },
     ]);
   });
@@ -176,6 +178,47 @@ describe('getCatalog', () => {
     expect(bySlug.crowded).toBeNull();
     expect(bySlug.exotic).toBeNull();
     expect(bySlug.vague).toBeNull();
+  });
+
+  it('reads the orientation a game asks for, degrading anything odd to "any"', async () => {
+    const specs: Record<string, Record<string, string>> = {
+      wide: { title: 'Wide', status: 'published', orientation: 'landscape' },
+      tall: { title: 'Tall', status: 'published', orientation: 'portrait' },
+      shouty: { title: 'Shouty', status: 'published', orientation: 'LANDSCAPE' },
+      // A typo must not take a perfectly playable game off the site — and must
+      // not make the player nag someone to rotate towards nothing.
+      typo: { title: 'Typo', status: 'published', orientation: 'sideways' },
+      silent: { title: 'Silent', status: 'published' },
+    };
+
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/contents/games?')) {
+        return new Response(JSON.stringify(Object.keys(specs).map((name) => ({ name, type: 'dir' }))), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      for (const [name, frontmatter] of Object.entries(specs)) {
+        if (url.includes(`/contents/games/${name}/SPEC.md`)) {
+          return new Response(specMd(frontmatter), { status: 200 });
+        }
+      }
+      if (url.includes('/media/metadata.json')) {
+        return new Response('not found', { status: 404 });
+      }
+      throw new Error(`unexpected request: ${url}`);
+    }) as unknown as typeof fetch;
+
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+    const catalog = await client.getCatalog('main');
+    const bySlug = Object.fromEntries(catalog.map((entry) => [entry.slug, entry.orientation]));
+
+    expect(bySlug.wide).toBe('landscape');
+    expect(bySlug.tall).toBe('portrait');
+    expect(bySlug.shouty).toBe('landscape');
+    expect(bySlug.typo).toBe('any');
+    expect(bySlug.silent).toBe('any');
   });
 });
 

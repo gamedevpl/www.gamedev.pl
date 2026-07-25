@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
+import { createPublishedSlugGate } from './published-slugs.js';
 import { InMemoryStore } from './store.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
@@ -10,27 +11,42 @@ function authHeaders(uid = 'g:me') {
   return { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken(uid, sessionSecret)}` };
 }
 
-async function publishedStore() {
-  const store = new InMemoryStore();
-  await store.upsertUser({ uid: 'g:me' });
-  await store.createSubmission(42, 'g:owner', 'Space Hop');
-  await store.setSubmissionSlug(42, 'space-hop');
-  await store.setSubmissionPublishedAt(42, '2026-07-21T10:00:00.000Z');
-  return store;
+/**
+ * A catalog gate over a fixed set of slugs. The published catalog is built from the
+ * games repo, so this — not a Firestore submission — is what decides whether a game
+ * is real; see the regression test at the bottom for why that distinction matters.
+ */
+function gateOver(published: string[], drafts: string[] = []) {
+  const entries = [
+    ...published.map((slug) => ({ slug, status: 'published' as const })),
+    ...drafts.map((slug) => ({ slug, status: 'draft' as const })),
+  ];
+  return createPublishedSlugGate({ client: { getCatalog: async () => entries as never } });
+}
+
+function appWith(store: InMemoryStore, published = ['space-hop'], drafts: string[] = []) {
+  return buildApp({
+    store,
+    sessionSecret,
+    telemetryRoutes: { publishedSlugs: gateOver(published, drafts) },
+  });
 }
 
 function post(app: Awaited<ReturnType<typeof buildApp>>, payload: unknown, headers = authHeaders()) {
   return app.inject({ method: 'POST', url: '/api/telemetry', payload: payload as object, headers });
 }
 
+const today = () => new Date().toISOString().slice(0, 10);
+
 describe('POST /api/telemetry', () => {
   let store: InMemoryStore;
   beforeEach(async () => {
-    store = await publishedStore();
+    store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:me' });
   });
 
-  it('records a batch against the submission the slug resolves to', async () => {
-    const app = await buildApp({ store, sessionSecret });
+  it('records a batch against the slug that reported it', async () => {
+    const app = await appWith(store);
     const res = await post(app, {
       slug: 'space-hop',
       sessionId,
@@ -40,25 +56,24 @@ describe('POST /api/telemetry', () => {
     expect(res.statusCode).toBe(202);
     expect(res.json()).toEqual({ accepted: 3 });
 
-    const dateStr = new Date().toISOString().slice(0, 10);
-    const stored = await store.listTelemetryEvents(dateStr, { issueNumber: 42 });
+    const stored = await store.listTelemetryEvents(today(), { slug: 'space-hop' });
     expect(stored.map((event) => event.type)).toEqual(['game_opened', 'play_time', 'game_closed']);
-    expect(stored[0]).toMatchObject({ issueNumber: 42, sessionId, slots: 3 });
+    expect(stored[0]).toMatchObject({ slug: 'space-hop', sessionId, slots: 3 });
     await app.close();
   });
 
   it('stores no player identity — not the uid, not the ip', async () => {
-    const app = await buildApp({ store, sessionSecret });
+    const app = await appWith(store);
     await post(app, { slug: 'space-hop', sessionId, events: [{ type: 'game_opened' }] });
 
-    const [event] = await store.listTelemetryEvents(new Date().toISOString().slice(0, 10));
-    expect(Object.keys(event).sort()).toEqual(['at', 'issueNumber', 'sessionId', 'type']);
+    const [event] = await store.listTelemetryEvents(today());
+    expect(Object.keys(event).sort()).toEqual(['at', 'sessionId', 'slug', 'type']);
     expect(JSON.stringify(event)).not.toContain('g:me');
     await app.close();
   });
 
   it('timestamps server-side, ignoring any client-sent time', async () => {
-    const app = await buildApp({ store, sessionSecret });
+    const app = await appWith(store);
     await post(app, {
       slug: 'space-hop',
       sessionId,
@@ -66,33 +81,41 @@ describe('POST /api/telemetry', () => {
       events: [{ type: 'game_opened', at: '1999-01-01T00:00:00.000Z' }],
     });
 
-    const [event] = await store.listTelemetryEvents(new Date().toISOString().slice(0, 10));
+    const [event] = await store.listTelemetryEvents(today());
     expect(Date.parse(event.at)).toBeGreaterThan(Date.parse('2026-01-01T00:00:00.000Z'));
     await app.close();
   });
 
   it('accepts and drops an unknown slug without revealing that it is unknown', async () => {
-    const app = await buildApp({ store, sessionSecret });
+    const app = await appWith(store);
     const res = await post(app, { slug: 'not-a-game', sessionId, events: [{ type: 'game_opened' }] });
 
     expect(res.statusCode).toBe(202);
     expect(res.json()).toEqual({ accepted: 0 });
-    expect(await store.listTelemetryEvents(new Date().toISOString().slice(0, 10))).toHaveLength(0);
+    expect(await store.listTelemetryEvents(today())).toHaveLength(0);
     await app.close();
   });
 
   it('drops events for a draft — a creator playtesting is not funnel data', async () => {
-    await store.createSubmission(43, 'g:owner', 'Work In Progress');
-    await store.setSubmissionSlug(43, 'wip-game');
-    const app = await buildApp({ store, sessionSecret });
+    const app = await appWith(store, ['space-hop'], ['wip-game']);
     const res = await post(app, { slug: 'wip-game', sessionId, events: [{ type: 'game_opened' }] });
 
+    expect(res.json()).toEqual({ accepted: 0 });
+    expect(await store.listTelemetryEvents(today())).toHaveLength(0);
+    await app.close();
+  });
+
+  it('drops everything when no games repo is configured, rather than trusting the slug', async () => {
+    const app = await buildApp({ store, sessionSecret, telemetryRoutes: { publishedSlugs: null } });
+    const res = await post(app, { slug: 'space-hop', sessionId, events: [{ type: 'game_opened' }] });
+
+    expect(res.statusCode).toBe(202);
     expect(res.json()).toEqual({ accepted: 0 });
     await app.close();
   });
 
   it('rejects an unknown event type and a malformed payload', async () => {
-    const app = await buildApp({ store, sessionSecret });
+    const app = await appWith(store);
 
     for (const payload of [
       { slug: 'space-hop', sessionId, events: [{ type: 'exfiltrate', data: 'secrets' }] },
@@ -110,7 +133,7 @@ describe('POST /api/telemetry', () => {
   });
 
   it('rejects a batch larger than the per-request cap', async () => {
-    const app = await buildApp({ store, sessionSecret });
+    const app = await appWith(store);
     const res = await post(app, {
       slug: 'space-hop',
       sessionId,
@@ -122,20 +145,16 @@ describe('POST /api/telemetry', () => {
   });
 
   it('truncates an over-long error message rather than storing it whole', async () => {
-    const app = await buildApp({ store, sessionSecret });
-    await post(app, {
-      slug: 'space-hop',
-      sessionId,
-      events: [{ type: 'error', message: 'x'.repeat(700) }],
-    });
+    const app = await appWith(store);
+    await post(app, { slug: 'space-hop', sessionId, events: [{ type: 'error', message: 'x'.repeat(700) }] });
 
-    const [event] = await store.listTelemetryEvents(new Date().toISOString().slice(0, 10));
+    const [event] = await store.listTelemetryEvents(today());
     expect(event.message).toHaveLength(200);
     await app.close();
   });
 
   it('stops recording once a session hits its ceiling', async () => {
-    const app = await buildApp({ store, sessionSecret });
+    const app = await appWith(store);
     const batch = Array.from({ length: 50 }, () => ({ type: 'alive', frames: 60 }));
 
     for (let i = 0; i < 8; i++) {
@@ -145,12 +164,12 @@ describe('POST /api/telemetry', () => {
     // 400 accepted; the ninth flush is dropped whole.
     const res = await post(app, { slug: 'space-hop', sessionId, events: batch });
     expect(res.json()).toEqual({ accepted: 0 });
-    expect(await store.listTelemetryEvents(new Date().toISOString().slice(0, 10), { limit: 10_000 })).toHaveLength(400);
+    expect(await store.listTelemetryEvents(today(), { limit: 10_000 })).toHaveLength(400);
     await app.close();
   });
 
   it('rate-limits a flood from one address', async () => {
-    const app = await buildApp({ store, sessionSecret });
+    const app = await appWith(store);
     let limited = false;
     for (let i = 0; i < 130 && !limited; i++) {
       const res = await post(app, {
@@ -166,7 +185,12 @@ describe('POST /api/telemetry', () => {
   });
 
   it('is behind the private-beta wall like every other data route', async () => {
-    const app = await buildApp({ store, sessionSecret, betaAllowedUids: 'g:me' });
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      betaAllowedUids: 'g:me',
+      telemetryRoutes: { publishedSlugs: gateOver(['space-hop']) },
+    });
     const res = await app.inject({
       method: 'POST',
       url: '/api/telemetry',
@@ -174,6 +198,26 @@ describe('POST /api/telemetry', () => {
     });
 
     expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  /**
+   * The regression that made this whole path a no-op in production for a day.
+   *
+   * Intake used to resolve the slug to `submissions/{issueNumber}` and require
+   * `publishedAt`. Of 42 playable games, 8 had a submission document and 2 had
+   * `publishedAt` — so ~95% of real play was accepted with 202 and silently thrown
+   * away. A game in the published catalog must record whether or not this platform
+   * has any memory of it having been commissioned.
+   */
+  it('records a published catalog game that has no submission document at all', async () => {
+    const app = await appWith(store, ['arena-tag']);
+    expect(await store.getSubmissionBySlug('arena-tag')).toBeNull();
+
+    const res = await post(app, { slug: 'arena-tag', sessionId, events: [{ type: 'game_opened' }] });
+
+    expect(res.json()).toEqual({ accepted: 1 });
+    expect(await store.listTelemetryEvents(today(), { slug: 'arena-tag' })).toHaveLength(1);
     await app.close();
   });
 });

@@ -85,7 +85,9 @@
     "soundOn": "Sound: On",
     "soundOff": "Sound: Off",
     "fullscreen": "Fullscreen",
-    "exitFullscreen": "Exit Fullscreen"
+    "exitFullscreen": "Exit Fullscreen",
+    "rotateLandscape": "Turn your phone sideways to play",
+    "rotatePortrait": "Hold your phone upright to play"
   },
   "catalog": {
     "title": "Games",

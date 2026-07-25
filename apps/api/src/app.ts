@@ -17,7 +17,8 @@ import { registerPushRoutes } from './push-routes.js';
 import { registerRefineRoute, type SpecRefiner } from './refine.js';
 import { InMemoryStore, type Store } from './store.js';
 import { registerSubmissionRoutes, type SubmissionRoutesOptions } from './submissions.js';
-import { registerTelemetryRoutes } from './telemetry.js';
+import { registerTelemetryRoutes, type TelemetryRoutesOptions } from './telemetry.js';
+import { createPublishedSlugGateFromEnv } from './published-slugs.js';
 
 const GenerateRequestSchema = z.object({
   prompt: z.string().trim().min(1, 'prompt is required').max(500, 'prompt is too long'),
@@ -36,6 +37,8 @@ export interface BuildAppOptions {
   contentChecker?: ContentChecker;
   specRefiner?: SpecRefiner;
   multiplayerRoutes?: MultiplayerRoutesOptions;
+  /** Seams for play-session telemetry; defaults to a live catalog-backed slug gate. */
+  telemetryRoutes?: Omit<TelemetryRoutesOptions, 'store'>;
   // Private beta allowlist — uids (comma-separated) allowed to sign in and access gated routes
   betaAllowedUids?: string;
   // Private beta allowlist — Google-verified emails (comma-separated, case-insensitive)
@@ -135,7 +138,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // signed-in member, so the wall costs nothing and keeps the intake shut to the
   // open internet. Revisit when the site opens — the handler itself never reads
   // request.user and records nothing that identifies a player.
-  await registerTelemetryRoutes(app, { store });
+  await registerTelemetryRoutes(app, {
+    store,
+    ...(options.telemetryRoutes ?? { publishedSlugs: createPublishedSlugGateFromEnv() }),
+  });
 
   app.get('/api/health', async () => ({ status: 'ok', provider: generator.name, privateBeta }));
 

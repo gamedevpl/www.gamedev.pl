@@ -38,10 +38,28 @@ describe('catalog helpers', () => {
           video: 'gameplay.mp4',
         },
         multiplayer: null,
+        orientation: 'any',
       },
     ]);
     // The catalog is served by our own API, not public GitHub Pages.
     expect(globalThis.fetch).toHaveBeenCalledWith('/api/catalog');
+  });
+
+  it('keeps a declared orientation and treats anything else as no preference', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          { slug: 'a', title: 'A', genre: '', controls: '', status: 'published', orientation: 'landscape' },
+          { slug: 'b', title: 'B', genre: '', controls: '', status: 'published', orientation: 'portrait' },
+          { slug: 'c', title: 'C', genre: '', controls: '', status: 'published', orientation: 'sideways' },
+          // An API older than this field must not make the player nag anyone.
+          { slug: 'd', title: 'D', genre: '', controls: '', status: 'published' },
+        ]),
+      ),
+    );
+
+    const entries = await fetchCatalog();
+    expect(entries.map((entry) => entry.orientation)).toEqual(['landscape', 'portrait', 'any', 'any']);
   });
 
   it('keeps well-formed multiplayer metadata and drops malformed metadata', async () => {
