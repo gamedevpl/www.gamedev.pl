@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f1418" />
+    <title>Gamedev.pl</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        padding: 24px;
+        box-sizing: border-box;
+        background: radial-gradient(circle at 50% 0%, #1a232b 0%, #0f1418 70%);
+        color: #e6edf3;
+        font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+        text-align: center;
+      }
+      img {
+        width: 96px;
+        height: 96px;
+        image-rendering: pixelated;
+      }
+      h1 {
+        margin: 0;
+        font-size: 1.25rem;
+      }
+      p {
+        margin: 0;
+        max-width: 28ch;
+        color: #9fb0bd;
+        line-height: 1.5;
+      }
+      button {
+        margin-top: 6px;
+        padding: 12px 22px;
+        min-height: 44px;
+        border: 0;
+        border-radius: 10px;
+        background: #38bdf8;
+        color: #0f1418;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <img src="/icons/icon-192.png" alt="" />
+    <h1 id="title">You're offline</h1>
+    <p id="body">Gamedev.pl needs a connection. Your games are safe — this page will work again as soon as you're back.</p>
+    <button id="retry" type="button">Try again</button>
+    <script>
+      // No bundle here on purpose — this page has to render with the network down,
+      // so it carries its own two translations rather than reaching for i18next.
+      var polish = (navigator.language || 'en').toLowerCase().indexOf('pl') === 0;
+      if (polish) {
+        document.documentElement.lang = 'pl';
+        document.getElementById('title').textContent = 'Jesteś offline';
+        document.getElementById('body').textContent =
+          'Gamedev.pl potrzebuje połączenia. Twoje gry są bezpieczne — ta strona zadziała, gdy tylko wrócisz do sieci.';
+        document.getElementById('retry').textContent = 'Spróbuj ponownie';
+      }
+      document.getElementById('retry').addEventListener('click', function () {
+        location.replace('/');
+      });
+    </script>
+  </body>
+</html>

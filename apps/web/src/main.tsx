@@ -12,3 +12,24 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </AuthProvider>
   </React.StrictMode>,
 );
+
+/*
+ * Register the worker for everyone, not just people who turn on notifications.
+ *
+ * pushApi registers it too, but only from the opt-in flow — and a browser will not
+ * offer to install an app whose pages no service worker is controlling. Leaving
+ * registration to the notification bell meant the install prompt appeared only for
+ * users who had already accepted notifications, which is backwards: on iOS,
+ * installing is what makes notifications possible in the first place.
+ *
+ * After `load` so it never competes with the first render for bandwidth. Registering
+ * twice is harmless — the browser dedupes by script URL and scope.
+ */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // A blocked or unsupported worker costs the install prompt and offline page,
+      // nothing else. The app itself does not depend on it.
+    });
+  });
+}

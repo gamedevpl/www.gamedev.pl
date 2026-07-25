@@ -5,6 +5,22 @@
     <!-- viewport-fit=cover lets the game theater use the whole screen on a notched
          phone; the safe-area insets it enables are applied back as padding in CSS. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- Installed-app metadata. The manifest is what lets a phone add this to the home
+         screen and run it without browser chrome; on iOS it is also the precondition for
+         Web Push, which Safari delivers only to an installed app. Deliberately no
+         "orientation" in the manifest: the game theater needs landscape, and locking the
+         app to portrait would take that away. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#0f1418" />
+    <!-- iOS ignores the manifest's icons for the home screen and reads this instead. -->
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <!-- Pre-16.4 iOS has no manifest support at all; these are how it learns the app is
+         standalone. Harmless duplication of the manifest everywhere else. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Gamedev.pl" />
+
     <title>Gamedev.pl — Describe a game, play it</title>
   </head>
   <body>

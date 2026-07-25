@@ -1,10 +1,55 @@
-/* Web Push service worker (docs/notifications-plan.md M2).
+/* Web Push service worker (docs/notifications-plan.md M2), plus the minimum an
+ * installable app needs.
  *
- * Deliberately tiny: it only relays push messages to the OS and routes a click
- * back into the app. It caches nothing and does not intercept fetches — this is a
- * notification worker, not an offline/PWA worker. Served from the site root
- * (apps/web/public/sw.js → /sw.js) so its scope covers the whole app.
+ * Served from the site root (apps/web/public/sw.js → /sw.js) so its scope covers the
+ * whole app.
+ *
+ * On caching: this still caches no application code. The only cached document is
+ * /offline.html, shown when a navigation fails with the network down — Chrome will not
+ * offer to install an app whose service worker has no fetch handler and cannot answer
+ * offline. Caching index.html or the hashed bundles instead would make the worker the
+ * thing that decides which version of the app a returning user gets, and a stale shell
+ * is a far worse failure than a missing offline page.
  */
+const OFFLINE_CACHE = 'offline-v1';
+const OFFLINE_URL = '/offline.html';
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    (async () => {
+      const cache = await caches.open(OFFLINE_CACHE);
+      // reload: skip the HTTP cache, so a redeploy of the page is picked up here.
+      await cache.add(new Request(OFFLINE_URL, { cache: 'reload' }));
+      await self.skipWaiting();
+    })(),
+  );
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    (async () => {
+      const names = await caches.keys();
+      await Promise.all(names.filter((name) => name !== OFFLINE_CACHE).map((name) => caches.delete(name)));
+      await self.clients.claim();
+    })(),
+  );
+});
+
+self.addEventListener('fetch', (event) => {
+  // Only page loads. Everything else — the bundles, the API, the games — goes
+  // straight to the network as if this worker were not here.
+  if (event.request.mode !== 'navigate') return;
+
+  event.respondWith(
+    (async () => {
+      try {
+        return await fetch(event.request);
+      } catch {
+        return (await caches.match(OFFLINE_URL)) ?? Response.error();
+      }
+    })(),
+  );
+});
 
 self.addEventListener('push', (event) => {
   let data = {};
@@ -18,6 +63,10 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'gamedev.pl';
   const options = {
     body: data.body || '',
+    // Without these the OS falls back to the browser's own logo, which reads as a
+    // notification from Chrome rather than one from the app the user installed.
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
     tag: data.tag, // same tag coalesces repeat pings for one event
     // Re-alert (banner/sound) even when a notification with this tag already
     // exists — otherwise a same-tag repeat updates silently. Requires a tag.
