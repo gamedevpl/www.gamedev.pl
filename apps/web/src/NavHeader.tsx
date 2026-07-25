@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext';
 import { AuthModal } from './AuthModal';
@@ -11,9 +11,11 @@ import logo from './logo-gamedev.png';
 type NavHeaderProps = {
   activeSpecsCount: number;
   onNavigate: (sectionId: string) => void;
+  /** In-app home navigation (avoids a full reload / beforeunload while a game is open). */
+  onHome: () => void;
 };
 
-export function NavHeader({ activeSpecsCount, onNavigate }: NavHeaderProps) {
+export function NavHeader({ activeSpecsCount, onNavigate, onHome }: NavHeaderProps) {
   const { t } = useTranslation();
   const { user, logout } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -24,10 +26,18 @@ export function NavHeader({ activeSpecsCount, onNavigate }: NavHeaderProps) {
     setIsMenuOpen(false);
   };
 
+  const handleLogoClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    // Preserve modified clicks (new tab / new window) and non-primary buttons.
+    if (event.defaultPrevented || event.button !== 0) return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    onHome();
+  };
+
   return (
     <header className="app-header">
       <div className="logo-brand">
-        <a href="/" className="logo">
+        <a href="/" className="logo" onClick={handleLogoClick}>
           <img src={logo} alt={t('header.logoAlt')} width="36" height="32" />
           gamedev<span className="turquoise">.pl</span>
         </a>

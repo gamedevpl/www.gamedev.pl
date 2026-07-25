@@ -47,7 +47,16 @@ export function DraftView({ slug, onExit }: { slug: string; onExit: () => void }
       <section className="panel status-panel">
         <h2 className="section-title">{t('draft.title')}</h2>
         <p className="error">{error}</p>
-        <a className="inline-link" href="/">
+        <a
+          className="inline-link"
+          href="/"
+          onClick={(event) => {
+            if (event.defaultPrevented || event.button !== 0) return;
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            event.preventDefault();
+            onExit();
+          }}
+        >
           {t('statusView.backHome')}
         </a>
       </section>

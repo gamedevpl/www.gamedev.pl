@@ -80,13 +80,19 @@ export function App() {
   const [partyError, setPartyError] = useState<string | null>(null);
 
   useEffect(() => {
-    const handlePopState = () => {
+    // popstate covers back/forward (and path changes via history API). hashchange
+    // is required for hybrid join URLs: the credential lives in the fragment, and
+    // editing only the hash (paste `/join/<code>#<token>` while already on that
+    // path) does not fire popstate.
+    const syncRoute = () => {
       setRoute(parsePathRoute(window.location.pathname, window.location.hash));
     };
 
-    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('popstate', syncRoute);
+    window.addEventListener('hashchange', syncRoute);
     return () => {
-      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('popstate', syncRoute);
+      window.removeEventListener('hashchange', syncRoute);
     };
   }, []);
 
@@ -412,7 +418,7 @@ export function App() {
 
   return (
     <div className="app">
-      <NavHeader activeSpecsCount={savedSpecs.length} onNavigate={handleNavigateSection} />
+      <NavHeader activeSpecsCount={savedSpecs.length} onNavigate={handleNavigateSection} onHome={() => navigate('/')} />
 
       <main className="content">
         {route.view === 'health' ? (

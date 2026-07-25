@@ -32,11 +32,22 @@ export function statusToEvent(status: SubmissionStatus): NotificationType | null
   return STATUS_TO_EVENT[status] ?? null;
 }
 
-/** Join an app origin and an in-app path into an absolute URL without double slashes. */
+/**
+ * Join an app origin and an in-app path into an absolute URL without double slashes.
+ * Rejects absolute / protocol-relative inputs so a poisoned notification.link cannot
+ * turn email/push CTAs into an open redirect.
+ */
 export function absoluteAppUrl(base: string, path: string): string {
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  if (!path.startsWith('/') || path.startsWith('//') || path.includes('://')) {
+    throw new Error(`absoluteAppUrl: expected in-app path, got ${JSON.stringify(path)}`);
+  }
   const normalizedBase = base.endsWith('/') ? base : `${base}/`;
-  return new URL(normalizedPath, normalizedBase).toString();
+  const url = new URL(path, normalizedBase);
+  const baseOrigin = new URL(normalizedBase).origin;
+  if (url.origin !== baseOrigin) {
+    throw new Error(`absoluteAppUrl: path escaped origin (${url.origin})`);
+  }
+  return url.toString();
 }
 
 export interface EmitDeps {

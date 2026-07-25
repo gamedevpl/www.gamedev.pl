@@ -9,13 +9,20 @@ import {
   type EmitDeps,
 } from './notify.js';
 
+import type { SubmissionStatusResponse } from './submission-status.js';
+
 describe('absoluteAppUrl', () => {
   it('joins origin and path without a double slash', () => {
     expect(absoluteAppUrl('https://www.gamedev.pl', '/play/sky-dodge')).toBe('https://www.gamedev.pl/play/sky-dodge');
     expect(absoluteAppUrl('https://www.gamedev.pl/', '/status/tok')).toBe('https://www.gamedev.pl/status/tok');
   });
+
+  it('rejects absolute and protocol-relative paths (open-redirect guard)', () => {
+    expect(() => absoluteAppUrl('https://www.gamedev.pl', 'https://evil.test/phish')).toThrow(/in-app path/);
+    expect(() => absoluteAppUrl('https://www.gamedev.pl', '//evil.test/phish')).toThrow(/in-app path/);
+    expect(() => absoluteAppUrl('https://www.gamedev.pl', 'play/sky-dodge')).toThrow(/in-app path/);
+  });
 });
-import type { SubmissionStatusResponse } from './submission-status.js';
 
 describe('InMemoryStore notifications', () => {
   let store: InMemoryStore;
