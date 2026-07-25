@@ -13,6 +13,8 @@ import { PixelIcon } from './PixelIcon';
 import { SubmissionStatusView } from './SubmissionStatusView';
 import { CreatorQA, type QAQuestion } from './CreatorQA';
 import { canonicalPlayPath, parsePathRoute, statusPath, playPath, type AppRoute } from './router';
+import { LegalPage } from './LegalPage';
+import { SiteFooter } from './SiteFooter';
 
 /** Read the current URL into an AppRoute, rewriting `/ay|/ai/<slug>` → `/play/<slug>`. */
 function readLocationRoute(): AppRoute {
@@ -417,6 +419,22 @@ export function App() {
     return <ControllerView code={route.code} token={route.token} />;
   }
 
+  // Ahead of both the loading screen and the beta gate on purpose. The privacy policy
+  // has to be readable by someone who has not signed in and is deciding whether to —
+  // that decision is the moment of collection GDPR art. 13 is about, and the terms
+  // are what they would be agreeing to. A legal page behind a login is not published.
+  if (route.view === 'legal') {
+    return (
+      <div className="app app--legal">
+        <NavHeader activeSpecsCount={savedSpecs.length} onNavigate={handleNavigateSection} onHome={() => navigate('/')} />
+        <main className="content">
+          <LegalPage doc={route.doc} onBack={() => navigate('/')} />
+        </main>
+        <SiteFooter />
+      </div>
+    );
+  }
+
   if (authLoading) {
     return <AppLoadingScreen />;
   }
@@ -519,10 +537,14 @@ export function App() {
               <GameTheater
                 key={stageContent.game.slug}
                 title={stageContent.game.title}
-                badge={{ icon: 'gamepad', label: t('catalog.playingBadge', { defaultValue: 'Playing' }) }}
+                // The badge said "Playing", which the full-screen game already made
+                // obvious. Spending it on the AI disclosure instead puts that notice
+                // where someone is actually consuming the generated content.
+                badge={{ icon: 'sparkle', label: t('ai.generatedBadge') }}
                 source={{ slug: stageContent.game.slug }}
                 onExit={() => navigate('/')}
                 orientation={stageContent.game.orientation}
+                reportSlug={stageContent.game.slug}
               />
             )}
 
@@ -530,7 +552,7 @@ export function App() {
               <GameTheater
                 key={stageContent.game.html}
                 title={stageContent.game.title}
-                badge={{ icon: 'rocket', label: 'AI Generated Game' }}
+                badge={{ icon: 'rocket', label: t('ai.generatedBadge') }}
                 source={{ html: stageContent.game.html }}
                 onExit={() => setStageContent(null)}
                 meta={
@@ -553,6 +575,10 @@ export function App() {
           </>
         )}
       </main>
+
+      {/* Hidden while a game is on stage: the player is a full-viewport fixed overlay,
+          and a footer scrolling underneath it is chrome nobody can reach anyway. */}
+      {!stageContent && <SiteFooter />}
 
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
     </div>

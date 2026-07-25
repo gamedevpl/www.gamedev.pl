@@ -328,6 +328,35 @@
       "other": "Nie możemy przyjąć tego w tej formie. Popraw treść i spróbuj ponownie."
     }
   },
+  "legal": {
+    "privacy": "Polityka prywatności",
+    "terms": "Regulamin",
+    "back": "Powrót do serwisu",
+    "contents": "Spis treści",
+    "effective": "Obowiązuje od {{date}}"
+  },
+  "footer": {
+    "legalNav": "Informacje prawne",
+    "reportIllegal": "Zgłoś nielegalne treści",
+    "contact": "Kontakt",
+    "aiDisclosure": "Gry w serwisie gamedev.pl tworzy sztuczna inteligencja na podstawie opisów napisanych przez użytkowników. Mogą zawierać błędy."
+  },
+  "ai": {
+    "generatedBadge": "Gra wygenerowana przez AI",
+    "generatedShort": "AI",
+    "generatedTooltip": "Kod, grafikę i dźwięk tej gry wygenerowała sztuczna inteligencja.",
+    "creatorNotice": "Opisujesz swój pomysł systemowi AI, który napisze grę. To, co wpiszesz, przetwarzają modele AI —"
+  },
+  "report": {
+    "action": "Zgłoś grę",
+    "mailSubject": "Zgłoszenie nielegalnych treści: {{title}} ({{slug}})",
+    "mailIntro": "Zgłaszam treść, którą uważam za nielegalną. Uzupełnij proszę poniższe punkty — wszystkie cztery są potrzebne, aby zgłoszenie mogło zostać rozpatrzone.",
+    "fieldLocation": "Lokalizacja (adres URL)",
+    "fieldGame": "Gra",
+    "fieldWhy": "Dlaczego uważam, że treść jest nielegalna (proszę o konkrety)",
+    "fieldWho": "Moje imię i adres e-mail (możesz pominąć, jeśli zgłoszenie dotyczy przestępstw przeciwko wolności seksualnej)",
+    "goodFaith": "Oświadczam, że w dobrej wierze uważam informacje zawarte w tym zgłoszeniu za prawdziwe i kompletne."
+  },
   "party": {
     "badge": "Tryb imprezowy",
     "playTogether": "Zagrajcie razem",

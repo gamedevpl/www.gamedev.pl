@@ -1,3 +1,5 @@
+import type { LegalDocId } from './legal/types';
+
 export type AppRoute =
   | { view: 'home' }
   | { view: 'status'; token: string }
@@ -17,7 +19,10 @@ export type AppRoute =
   // The operator telemetry view. Unlisted rather than secret: reaching the route
   // renders nothing unless the API recognises the caller as an admin, and the API
   // answers 404 to everyone else.
-  | { view: 'health' };
+  | { view: 'health' }
+  // Privacy policy and terms. Reachable without a session — someone deciding whether
+  // to sign in has to be able to read what signing in would mean first.
+  | { view: 'legal'; doc: LegalDocId };
 
 // Game slugs are lowercase kebab-case (matches the games-repo catalog); keep the
 // route pattern strict so arbitrary path segments can't masquerade as a play route.
@@ -37,6 +42,14 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
 
   if (normalizedPath === '' || normalizedPath === '/') {
     return { view: 'home' };
+  }
+
+  if (normalizedPath === '/privacy') {
+    return { view: 'legal', doc: 'privacy' };
+  }
+
+  if (normalizedPath === '/terms') {
+    return { view: 'legal', doc: 'terms' };
   }
 
   const statusMatch = normalizedPath.match(/^\/status\/([^/]+)$/);
@@ -100,4 +113,26 @@ export function draftPath(slug: string): string {
 /** QR / share URL path+fragment for a multiplayer lobby guest. */
 export function joinPath(code: string, token: string): string {
   return `/join/${code}#${token}`;
+}
+
+/**
+ * URL for a legal document, optionally pointing at one section:
+ * `/terms#zglaszanie`. Legal documents get cited clause by clause — in a takedown
+ * notice, in a reply to a user — so a link has to be able to land on one.
+ */
+export function legalPath(doc: LegalDocId, sectionId?: string): string {
+  return sectionId ? `/${doc}#${sectionId}` : `/${doc}`;
+}
+
+/**
+ * The section anchor carried by a legal URL's fragment.
+ *
+ * The browser will not do this scroll for us: the target section does not exist in
+ * the DOM when the fragment is first parsed, because React has not rendered it yet.
+ * Returns null for the join route's credential fragment shape — that one is a token,
+ * not a heading, and must never be treated as a scroll target.
+ */
+export function legalAnchor(hash: string): string | null {
+  const fragment = hash.startsWith('#') ? hash.slice(1) : hash;
+  return fragment ? fragment : null;
 }

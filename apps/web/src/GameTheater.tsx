@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { GameFrame } from './GameFrame';
 import { PublishedGameFrame } from './PublishedGameFrame';
 import { PixelIcon, type PixelIconName } from './PixelIcon';
+import { ReportGameButton } from './ReportGameButton';
 import { useGamePlayer } from './gamePlayer';
 import { useScreenWakeLock } from './useScreenWakeLock';
 
@@ -19,6 +20,13 @@ type GameTheaterProps = {
   /** Extra header content shown when the bridge hasn't reported a description yet
    *  (e.g. the prompt a generated game was made from). */
   meta?: ReactNode;
+  /**
+   * Slug of a *published* game, which turns on the "Report game" control (DSA art. 16).
+   * Passed explicitly rather than derived from `source`, because drafts and local mocks
+   * are also slug- or html-sourced and are seen by their own creator only — there is
+   * nobody to report them to, and offering it there is noise.
+   */
+  reportSlug?: string;
 };
 
 /**
@@ -52,7 +60,7 @@ function useOrientationMismatch(desired: 'any' | 'portrait' | 'landscape'): bool
  * sound chrome is hidden and surfaced here instead. Callers own page scroll-locking
  * (`document.body.classList` 'player-open') and the overlay's mount lifecycle.
  */
-export function GameTheater({ title, badge, source, onExit, meta, orientation = 'any' }: GameTheaterProps) {
+export function GameTheater({ title, badge, source, onExit, meta, orientation = 'any', reportSlug }: GameTheaterProps) {
   const { t } = useTranslation();
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const exitRef = useRef<HTMLButtonElement | null>(null);
@@ -167,6 +175,7 @@ export function GameTheater({ title, badge, source, onExit, meta, orientation = 
               <span className="btn-label">{fullscreen ? t('player.exitFullscreen') : t('player.fullscreen')}</span>
             </button>
           )}
+          {reportSlug && <ReportGameButton slug={reportSlug} title={displayTitle} />}
           <button
             className="secondary-btn exit-btn"
             onClick={onExit}

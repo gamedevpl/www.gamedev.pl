@@ -445,6 +445,14 @@ export function HeroPromptSection({
         {submissionError && <p className="error">{submissionError}</p>}
         {mockError && <p className="error">{mockError}</p>}
 
+        {/* AI Act art. 50(1): a person interacting with an AI system has to be told so.
+            This is the point of interaction — the box they type their idea into — and
+            it doubles as the notice that what they write goes to AI models, which the
+            privacy policy explains in full. */}
+        <p className="ai-notice">
+          <PixelIcon name="sparkle" size={12} /> {t('ai.creatorNotice')} <a href="/privacy">{t('legal.privacy')}</a>
+        </p>
+
         <SketchModal isOpen={isSketchOpen} onClose={() => setIsSketchOpen(false)} onSaveSketch={handleSaveSketch} />
       </div>
     </section>

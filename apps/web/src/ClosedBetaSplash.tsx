@@ -81,6 +81,14 @@ export function ClosedBetaSplash() {
         </div>
 
         <p className="beta-splash__footer">{t('betaSplash.footer')}</p>
+
+        {/* The splash is the whole site for anyone not signed in, and signing in is the
+            moment personal data starts being collected — so this is where the terms and
+            the privacy policy have to be reachable, not one screen further in. */}
+        <nav className="beta-splash__legal" aria-label={t('footer.legalNav')}>
+          <a href="/terms">{t('legal.terms')}</a>
+          <a href="/privacy">{t('legal.privacy')}</a>
+        </nav>
       </div>
     </div>
   );

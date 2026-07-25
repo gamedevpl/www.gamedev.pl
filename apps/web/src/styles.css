@@ -3877,3 +3877,293 @@ body.player-open {
 .health-error-count {
   color: var(--text);
 }
+
+/* ---------------------------------------------------------------------------
+   Legal chrome: site footer, the privacy/terms reader, and the AI-generation
+   disclosures. See docs/legal-compliance-plan.md for what each element is for —
+   several of these are required by law to be visible, so they intentionally do
+   not collapse away on small screens.
+   --------------------------------------------------------------------------- */
+
+.site-footer {
+  border-top: 1px solid var(--panel-border);
+  margin-top: 3rem;
+  padding: 2rem 1.5rem calc(2rem + env(safe-area-inset-bottom));
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.site-footer__inner {
+  max-width: 68rem;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem 3rem;
+  justify-content: space-between;
+}
+
+.site-footer__brand {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--text);
+  margin: 0 0 0.4rem;
+}
+
+.site-footer__operator {
+  margin: 0.15rem 0;
+}
+
+.site-footer__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.25rem;
+  align-content: flex-start;
+}
+
+.site-footer a {
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.site-footer a:hover,
+.site-footer a:focus-visible {
+  color: var(--turquoise);
+  border-bottom-color: var(--turquoise);
+}
+
+.site-footer__ai,
+.site-footer__copy {
+  max-width: 68rem;
+  margin: 1.5rem auto 0;
+  font-size: 0.78rem;
+}
+
+.site-footer__copy {
+  margin-top: 0.5rem;
+  opacity: 0.7;
+}
+
+/* Legal documents ---------------------------------------------------------- */
+
+.legal-page {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 1rem 1.25rem 3rem;
+  line-height: 1.65;
+}
+
+.legal-back {
+  margin-bottom: 1.5rem;
+}
+
+.legal-title {
+  font-size: clamp(1.6rem, 4vw, 2.2rem);
+  margin: 0 0 0.35rem;
+}
+
+.legal-effective {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0 0 1.25rem;
+}
+
+.legal-intro {
+  color: var(--text);
+  font-size: 1.02rem;
+  margin: 0 0 2rem;
+}
+
+.legal-toc {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 2.5rem;
+}
+
+.legal-toc-title {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin: 0 0 0.75rem;
+}
+
+.legal-toc ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  columns: 2;
+  column-gap: 2rem;
+}
+
+.legal-toc li {
+  margin: 0.2rem 0;
+  break-inside: avoid;
+}
+
+.legal-section {
+  margin-bottom: 2.25rem;
+  /* Anchored deep links land under the sticky header without this. */
+  scroll-margin-top: 5rem;
+}
+
+.legal-section h2 {
+  font-size: 1.15rem;
+  margin: 0 0 0.75rem;
+  color: var(--turquoise);
+}
+
+.legal-section p,
+.legal-section li {
+  color: #d7dee6;
+}
+
+.legal-section ul {
+  padding-left: 1.2rem;
+}
+
+.legal-section li {
+  margin: 0.35rem 0;
+}
+
+.legal-page a {
+  color: var(--turquoise);
+}
+
+/* The processing register is four columns wide and has to survive a phone: it
+   scrolls inside its own box rather than making the whole page scroll sideways. */
+.legal-table-scroll {
+  overflow-x: auto;
+  margin: 1rem 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+}
+
+.legal-table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 34rem;
+  font-size: 0.85rem;
+}
+
+.legal-table th,
+.legal-table td {
+  border-bottom: 1px solid var(--panel-border);
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.legal-table th {
+  background: var(--panel);
+  color: var(--text);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.legal-table td {
+  color: #d7dee6;
+}
+
+.legal-table tr:last-child td {
+  border-bottom: none;
+}
+
+.legal-footer {
+  border-top: 1px solid var(--panel-border);
+  margin-top: 2.5rem;
+  padding-top: 1.25rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.legal-footer p {
+  margin: 0.2rem 0;
+}
+
+.legal-operator {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* AI-generation disclosures (AI Act art. 50) -------------------------------- */
+
+.ai-pill {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #fff;
+  background: rgba(6, 10, 14, 0.82);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--turquoise-glow);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+/* Deliberately not a flex row: as a flex item the icon became its own wrapped line on
+   a 360px phone, stranded above the sentence it belongs to. Inline flow keeps it
+   attached to the first word at every width. */
+.ai-notice {
+  margin: 1rem 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.55;
+  text-align: left;
+}
+
+.ai-notice svg {
+  vertical-align: -1px;
+  margin-right: 0.35rem;
+}
+
+.ai-notice a {
+  color: var(--turquoise);
+}
+
+.beta-splash__legal {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  margin-top: 1rem;
+  font-size: 0.8rem;
+}
+
+.beta-splash__legal a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.beta-splash__legal a:hover,
+.beta-splash__legal a:focus-visible {
+  color: var(--turquoise);
+}
+
+/* The report control is an anchor styled as one of the theater's buttons, so it
+   has to opt into the same layout the real buttons get from .secondary-btn. */
+.report-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+}
+
+@media (max-width: 640px) {
+  .legal-toc ul {
+    columns: 1;
+  }
+
+  .site-footer__inner {
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+}

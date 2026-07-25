@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { canonicalPlayPath, draftPath, joinPath, parsePathRoute, playPath, statusPath } from './router';
+import {
+  canonicalPlayPath,
+  draftPath,
+  joinPath,
+  legalAnchor,
+  legalPath,
+  parsePathRoute,
+  playPath,
+  statusPath,
+} from './router';
 
 describe('parsePathRoute', () => {
   it('maps empty and root paths to home', () => {
@@ -67,6 +76,27 @@ describe('parsePathRoute', () => {
   it('falls back to home for unknown paths', () => {
     expect(parsePathRoute('/nope')).toEqual({ view: 'home' });
   });
+
+  it('parses the legal routes', () => {
+    expect(parsePathRoute('/privacy')).toEqual({ view: 'legal', doc: 'privacy' });
+    expect(parsePathRoute('/terms')).toEqual({ view: 'legal', doc: 'terms' });
+  });
+
+  // A cited clause has to survive the trip: `/terms#zglaszanie` is what goes into a
+  // reply telling someone how to report content, and if the fragment knocked the
+  // route back to home it would land them on the front page instead.
+  it('keeps the route when a section anchor rides along', () => {
+    expect(parsePathRoute('/terms', '#zglaszanie')).toEqual({ view: 'legal', doc: 'terms' });
+    expect(parsePathRoute('/privacy', '#prawa')).toEqual({ view: 'legal', doc: 'privacy' });
+  });
+});
+
+describe('legalAnchor', () => {
+  it('extracts the section anchor, and nothing when there is none', () => {
+    expect(legalAnchor('#zglaszanie')).toBe('zglaszanie');
+    expect(legalAnchor('')).toBeNull();
+    expect(legalAnchor('#')).toBeNull();
+  });
 });
 
 describe('path builders', () => {
@@ -101,5 +131,14 @@ describe('path builders', () => {
       code: 'K7M3QP',
       token: 'abc-DEF_123',
     });
+  });
+
+  it('round-trips a legal document, with and without a section', () => {
+    expect(legalPath('privacy')).toBe('/privacy');
+    expect(legalPath('terms', 'reklamacje')).toBe('/terms#reklamacje');
+
+    const [path, fragment] = legalPath('terms', 'reklamacje').split('#');
+    expect(parsePathRoute(path!, `#${fragment}`)).toEqual({ view: 'legal', doc: 'terms' });
+    expect(legalAnchor(`#${fragment}`)).toBe('reklamacje');
   });
 });
