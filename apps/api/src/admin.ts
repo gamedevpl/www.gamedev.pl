@@ -19,11 +19,21 @@ import type { Store, TelemetryEvent } from './store.js';
  * be an injection channel into whatever reads this next.
  */
 
-/** Widest window one request may scan. Each day is a separate Firestore query. */
+/** Widest window one request may ask for. Each day is a separate Firestore query. */
 const MAX_DAYS = 30;
 const DEFAULT_DAYS = 7;
 /** Per-partition read cap, matching the store's own default. */
 const MAX_EVENTS_PER_DAY = 1000;
+/**
+ * Documents one request may read in total, across every partition it touches.
+ *
+ * The window alone does not bound cost: 30 days at the per-day cap is 30,000 document
+ * reads for one click, and the widest window is exactly the one someone reaches for when
+ * a game looks wrong. Budgeting the total keeps a quiet month cheap — at a few dozen
+ * events a day the whole window costs about a thousand reads — and makes a busy one
+ * degrade by narrowing the window rather than by silently costing thirty times more.
+ */
+const MAX_EVENTS_PER_REQUEST = 5_000;
 
 const QuerySchema = z.object({
   days: z.coerce.number().int().min(1).max(MAX_DAYS).optional(),
@@ -37,9 +47,13 @@ export interface AdminRoutesOptions {
 }
 
 export interface HealthResponse {
-  /** Partitions actually scanned, most recent first. */
+  /**
+   * Partitions actually scanned, most recent first — not necessarily the ones asked
+   * for. A request that runs out of read budget reports the narrower window it really
+   * measured, so a range shown to a reader is never wider than the range behind it.
+   */
   days: string[];
-  /** True when any partition hit the read cap, so the numbers are a floor. */
+  /** True when any partition hit a cap, so every count below is a floor. */
   truncated: boolean;
   games: GameHealth[];
 }
@@ -65,19 +79,32 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
       return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid query' });
     }
 
-    const days = recentPartitions(parsed.data.days ?? DEFAULT_DAYS, now());
+    const requested = recentPartitions(parsed.data.days ?? DEFAULT_DAYS, now());
     const events: TelemetryEvent[] = [];
+    const scanned: string[] = [];
     let truncated = false;
 
-    for (const dateStr of days) {
-      const dayEvents = await store.listTelemetryEvents(dateStr, { limit: MAX_EVENTS_PER_DAY });
-      // A day at the cap means events were left unread, so every count below is a
-      // floor. Said out loud in the response rather than quietly under-reporting.
-      if (dayEvents.length >= MAX_EVENTS_PER_DAY) truncated = true;
+    // Newest day first, so exhausting the budget drops the oldest history rather than
+    // the data most likely to be asked about.
+    for (const dateStr of requested) {
+      const remaining = MAX_EVENTS_PER_REQUEST - events.length;
+      if (remaining <= 0) {
+        // Out of budget with days still unread: the window really scanned is narrower
+        // than the one asked for, and `days` below reports the narrower one so the
+        // range shown to the reader is never wider than the range measured.
+        truncated = true;
+        break;
+      }
+      const limit = Math.min(MAX_EVENTS_PER_DAY, remaining);
+      const dayEvents = await store.listTelemetryEvents(dateStr, { limit });
+      // A day at its cap means events were left unread, so every count is a floor.
+      // Said out loud in the response rather than quietly under-reporting.
+      if (dayEvents.length >= limit) truncated = true;
       events.push(...dayEvents);
+      scanned.push(dateStr);
     }
 
-    const body: HealthResponse = { days, truncated, games: summarizeGameHealth(events) };
+    const body: HealthResponse = { days: scanned, truncated, games: summarizeGameHealth(events) };
     return reply.status(200).send(body);
   });
 }
