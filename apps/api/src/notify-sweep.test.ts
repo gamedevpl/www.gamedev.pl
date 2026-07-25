@@ -77,7 +77,7 @@ describe('POST /api/internal/notify-sweep', () => {
     const list = await store.listNotifications('g:owner');
     expect(list).toHaveLength(1);
     expect(list[0].type).toBe('submission.published');
-    expect(list[0].link).toBe('#/play/sky-dodge');
+    expect(list[0].link).toBe('/play/sky-dodge');
 
     // Published is terminal — the submission drops out of the active set, so a
     // second sweep scans nothing and emits nothing.

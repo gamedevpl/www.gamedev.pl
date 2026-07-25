@@ -27,7 +27,7 @@ export function NavHeader({ activeSpecsCount, onNavigate }: NavHeaderProps) {
   return (
     <header className="app-header">
       <div className="logo-brand">
-        <a href="#/" className="logo">
+        <a href="/" className="logo">
           <img src={logo} alt={t('header.logoAlt')} width="36" height="32" />
           gamedev<span className="turquoise">.pl</span>
         </a>

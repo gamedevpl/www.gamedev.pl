@@ -35,7 +35,7 @@ export async function createPartySession(slug: string, maxPlayers: number): Prom
   return (await response.json()) as PartySession;
 }
 
-/** The absolute URL a phone opens after scanning. The token rides in the fragment. */
+/** Absolute URL a phone opens after scanning (`/join/<code>#<token>`). */
 export function joinUrl(session: PartySession): string {
   return `${window.location.origin}${session.joinPath}`;
 }

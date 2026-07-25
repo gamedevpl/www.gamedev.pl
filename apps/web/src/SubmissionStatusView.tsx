@@ -18,7 +18,7 @@ import {
   type SubmissionPreview,
   type SubmissionStatus,
 } from './submissionApi';
-import { draftHash, playHash, statusHash } from './router';
+import { draftPath, playPath, statusPath } from './router';
 import { formatDuration, formatRelativeTime } from './relativeTime';
 
 const TERMINAL_STATUSES = new Set<SubmissionStatus['status']>(['published', 'needs_changes', 'abandoned']);
@@ -150,7 +150,7 @@ export function SubmissionStatusView({
   const previewInFlightRef = useRef(false);
 
   const currentTrackingUrl = useMemo(
-    () => trackingUrl ?? new URL(statusHash(token), window.location.href).toString(),
+    () => trackingUrl ?? new URL(statusPath(token), window.location.href).toString(),
     [token, trackingUrl],
   );
 
@@ -232,8 +232,8 @@ export function SubmissionStatusView({
   const shareUrl = useMemo(() => {
     const slug = status?.slug ?? status?.preview?.slug;
     if (!slug) return null;
-    const hash = status?.status === 'published' ? playHash(slug) : draftHash(slug);
-    return new URL(hash, window.location.href).toString();
+    const path = status?.status === 'published' ? playPath(slug) : draftPath(slug);
+    return new URL(path, window.location.href).toString();
   }, [status?.slug, status?.preview?.slug, status?.status]);
 
   // Auto-load the live preview as soon as one is available, and silently refresh it
@@ -329,7 +329,7 @@ export function SubmissionStatusView({
             <p className="status-description">
               {isInvalidToken ? t('statusView.invalidTokenHelp') : t('statusView.fetchErrorHelp')}
             </p>
-            <a className="inline-link" href="#/">
+            <a className="inline-link" href="/">
               {t('statusView.backHome')}
             </a>
           </>
@@ -414,7 +414,7 @@ export function SubmissionStatusView({
             {previewError && !preview ? <p className="error">{previewError}</p> : null}
 
             <div className="status-footer-actions">
-              <a className="inline-link" href="#/">
+              <a className="inline-link" href="/">
                 {t('statusView.backHome')}
               </a>
               {!TERMINAL_STATUSES.has(status.status) ? <AbandonControl token={token} /> : null}

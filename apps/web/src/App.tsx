@@ -12,7 +12,7 @@ import { GameHealthView } from './GameHealthView';
 import { PixelIcon } from './PixelIcon';
 import { SubmissionStatusView } from './SubmissionStatusView';
 import { CreatorQA, type QAQuestion } from './CreatorQA';
-import { parseHashRoute, statusHash, playHash } from './router';
+import { parsePathRoute, statusPath, playPath } from './router';
 import { submitSpec, refineSpec, type SubmissionApiError } from './submissionApi';
 import { getSavedSpecs, saveSpec, type SavedSpec } from './mySpecs';
 import { useAuth } from './AuthContext';
@@ -31,7 +31,7 @@ type StageContent =
 export function App() {
   const { t, i18n } = useTranslation();
   const { user, loading: authLoading, privateBeta } = useAuth();
-  const [route, setRoute] = useState(() => parseHashRoute(window.location.hash));
+  const [route, setRoute] = useState(() => parsePathRoute(window.location.pathname, window.location.hash));
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   // Catalog state
@@ -74,13 +74,13 @@ export function App() {
   const [partyError, setPartyError] = useState<string | null>(null);
 
   useEffect(() => {
-    const handleHashChange = () => {
-      setRoute(parseHashRoute(window.location.hash));
+    const handlePopState = () => {
+      setRoute(parsePathRoute(window.location.pathname, window.location.hash));
     };
 
-    window.addEventListener('hashchange', handleHashChange);
+    window.addEventListener('popstate', handlePopState);
     return () => {
-      window.removeEventListener('hashchange', handleHashChange);
+      window.removeEventListener('popstate', handlePopState);
     };
   }, []);
 
@@ -93,7 +93,7 @@ export function App() {
   }, [stageContent]);
 
   // The URL is the source of truth for playing a *published* game: opening
-  // `#/play/<slug>` (via a click, a refresh, or a shared link) shows that game,
+  // `/play/<slug>` (via a click, a refresh, or a shared link) shows that game,
   // and navigating away from it closes the player. Generated/party stages are
   // ephemeral and are not represented in the route, so we only reconcile the
   // 'catalog' stage here and leave those untouched.
@@ -149,7 +149,7 @@ export function App() {
     // would just 401. Don't fetch (and don't render an error) until signed in.
     // Outside private beta, catalog reads stay public (owner decision).
     if (privateBeta && !user) return;
-    // Only the home page shows the gallery. On `#/play/<slug>` the theater covers the
+    // Only the home page shows the gallery. On `/play/<slug>` the theater covers the
     // whole viewport, so fetching the catalog (and, through it, every entry's media)
     // is work nobody can see — a direct game link should cost the game, and nothing
     // else. Leaving the route loads it, which is the first moment it's visible.
@@ -193,7 +193,7 @@ export function App() {
       return;
     }
     setPendingScrollTarget(sectionId);
-    navigateHash('#/');
+    navigate('/');
   };
 
   useEffect(() => {
@@ -313,7 +313,7 @@ export function App() {
       setQaQuestions([]);
       setPendingSpec(null);
 
-      window.location.hash = statusHash(response.token);
+      navigate(statusPath(response.token));
     } catch (err) {
       const message = err instanceof Error ? err.message : t('errors.generic');
       const category = err instanceof Error ? (err as SubmissionApiError).category : undefined;
@@ -345,18 +345,17 @@ export function App() {
     setPendingSpec(null);
   };
 
-  function navigateHash(hash: string) {
-    // Update the URL (the source of truth) and the route synchronously. The
-    // browser's hashchange event fires asynchronously and re-sets the same route,
-    // so this stays consistent while making navigation immediate (and testable).
-    window.location.hash = hash;
-    setRoute(parseHashRoute(hash));
+  function navigate(path: string) {
+    // Update the URL (the source of truth) and the route synchronously so
+    // navigation is immediate (and testable) without waiting for popstate.
+    window.history.pushState(null, '', path);
+    setRoute(parsePathRoute(window.location.pathname, window.location.hash));
   }
 
   function handlePlayGame(game: CatalogEntry) {
     // Published games are permalinked: drive play through the URL so a refresh or
     // a shared link reopens the same game. The route→stage effect opens the stage.
-    navigateHash(playHash(game.slug));
+    navigate(playPath(game.slug));
   }
 
   async function handlePlayTogether(game: CatalogEntry) {
@@ -399,7 +398,7 @@ export function App() {
         {route.view === 'health' ? (
           <GameHealthView />
         ) : route.view === 'draft' ? (
-          <DraftView slug={route.slug} onExit={() => navigateHash('#/')} />
+          <DraftView slug={route.slug} onExit={() => navigate('/')} />
         ) : route.view === 'status' ? (
           <SubmissionStatusView
             token={route.token}
@@ -409,7 +408,7 @@ export function App() {
             onRetry={(concept) => {
               setRetryPrompt(concept);
               setPendingScrollTarget('hero-prompt');
-              navigateHash('#/');
+              navigate('/');
             }}
           />
         ) : (
@@ -435,8 +434,8 @@ export function App() {
             {route.view !== 'play' && (
               <MyGamesRail
                 refreshKey={myGamesRefreshKey}
-                onOpenStatus={(token) => navigateHash(statusHash(token))}
-                onPlayPublished={(slug) => navigateHash(playHash(slug))}
+                onOpenStatus={(token) => navigate(statusPath(token))}
+                onPlayPublished={(slug) => navigate(playPath(slug))}
               />
             )}
 
@@ -485,7 +484,7 @@ export function App() {
                 title={stageContent.game.title}
                 badge={{ icon: 'gamepad', label: t('catalog.playingBadge', { defaultValue: 'Playing' }) }}
                 source={{ slug: stageContent.game.slug }}
-                onExit={() => navigateHash('#/')}
+                onExit={() => navigate('/')}
                 orientation={stageContent.game.orientation}
               />
             )}

@@ -45,7 +45,7 @@ describe('SubmissionStatusView', () => {
   afterEach(() => {
     document.body.innerHTML = '';
     localStorage.clear();
-    window.location.hash = '#/';
+    window.history.pushState(null, '', '/');
     vi.clearAllMocks();
   });
 
@@ -53,7 +53,7 @@ describe('SubmissionStatusView', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({ status: 'queued' });
     await i18n.changeLanguage('en');
-    window.location.hash = '#/status/queued-token';
+    window.history.pushState(null, '', '/status/queued-token');
 
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -95,7 +95,7 @@ describe('SubmissionStatusView', () => {
       ],
     });
     await i18n.changeLanguage('pl');
-    window.location.hash = '#/status/events-token';
+    window.history.pushState(null, '', '/status/events-token');
 
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -126,7 +126,7 @@ describe('SubmissionStatusView', () => {
     // costs the least.
     mockedGetSubmissionStatus.mockResolvedValue({ status: 'building' });
     await i18n.changeLanguage('en');
-    window.location.hash = '#/status/steer-token';
+    window.history.pushState(null, '', '/status/steer-token');
 
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -151,7 +151,7 @@ describe('SubmissionStatusView', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({ status: 'building' });
     await i18n.changeLanguage('en');
-    window.location.hash = '#/status/elapsed-token';
+    window.history.pushState(null, '', '/status/elapsed-token');
 
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -183,7 +183,7 @@ describe('SubmissionStatusView', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({ status: 'needs_changes' });
     await i18n.changeLanguage('en');
-    window.location.hash = '#/status/needs-changes';
+    window.history.pushState(null, '', '/status/needs-changes');
 
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -214,7 +214,7 @@ describe('SubmissionStatusView', () => {
         new Response(JSON.stringify({ slug: 'sky-dodge', title: 'Sky Dodge', html: '<canvas>published</canvas>' })),
       );
     await i18n.changeLanguage('en');
-    window.location.hash = '#/status/published-token';
+    window.history.pushState(null, '', '/status/published-token');
 
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -275,7 +275,7 @@ describe('SubmissionStatusView', () => {
       html: '<canvas></canvas>',
     });
     await i18n.changeLanguage('en');
-    window.location.hash = '#/status/building-token';
+    window.history.pushState(null, '', '/status/building-token');
 
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -329,7 +329,7 @@ describe('SubmissionStatusView', () => {
         html: `<canvas>${currentSha}</canvas>`,
       }));
       await i18n.changeLanguage('en');
-      window.location.hash = '#/status/refresh-token';
+      window.history.pushState(null, '', '/status/refresh-token');
 
       const container = document.createElement('div');
       document.body.appendChild(container);
@@ -398,7 +398,7 @@ describe('SubmissionStatusView', () => {
         html: '<canvas></canvas>',
       });
       await i18n.changeLanguage('en');
-      window.location.hash = '#/status/focus-token';
+      window.history.pushState(null, '', '/status/focus-token');
 
       const container = document.createElement('div');
       document.body.appendChild(container);
@@ -487,7 +487,7 @@ describe('SubmissionStatusView', () => {
     });
     mockedSubmitFeedback.mockResolvedValue({ ok: true, target: 'pull_request' });
     await i18n.changeLanguage('en');
-    window.location.hash = '#/status/feedback-token';
+    window.history.pushState(null, '', '/status/feedback-token');
 
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -558,7 +558,7 @@ describe('SubmissionStatusView', () => {
       html: '<canvas></canvas>',
     });
     await i18n.changeLanguage('en');
-    window.location.hash = '#/status/revisions-token';
+    window.history.pushState(null, '', '/status/revisions-token');
 
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -587,7 +587,7 @@ describe('SubmissionStatusView expectations & failures', () => {
   afterEach(() => {
     document.body.innerHTML = '';
     localStorage.clear();
-    window.location.hash = '#/';
+    window.history.pushState(null, '', '/');
     vi.clearAllMocks();
   });
 
@@ -685,7 +685,7 @@ describe('SubmissionStatusView expectations & failures', () => {
 describe('SubmissionStatusView stop & retry', () => {
   afterEach(() => {
     document.body.innerHTML = '';
-    window.location.hash = '#/';
+    window.history.pushState(null, '', '/');
     vi.clearAllMocks();
   });
 
@@ -783,7 +783,7 @@ describe('SubmissionStatusView stop & retry', () => {
       ],
     });
     await i18n.changeLanguage('en');
-    window.location.hash = '#/status/media-token';
+    window.history.pushState(null, '', '/status/media-token');
 
     const container = document.createElement('div');
     document.body.appendChild(container);

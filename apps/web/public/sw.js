@@ -84,8 +84,8 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil(
     (async () => {
       const clientList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-      // Prefer an already-open tab on our origin: focus it and hand it the target
-      // hash route, so a click doesn't spawn a duplicate tab.
+      // Prefer an already-open tab on our origin: focus it and navigate to the
+      // target URL, so a click doesn't spawn a duplicate tab.
       for (const client of clientList) {
         if ('focus' in client) {
           try {

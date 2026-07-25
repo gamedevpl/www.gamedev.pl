@@ -281,7 +281,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       },
     });
     // SPA fallback: any non-/api GET that isn't a real file returns index.html
-    // (the app is hash-routed, so this mainly covers a hard refresh on any path).
+    // so path deep links (`/play/<slug>`, `/status/<token>`, …) survive refresh.
     app.setNotFoundHandler((request, reply) => {
       if (request.method !== 'GET' || request.url.startsWith('/api')) {
         return reply.status(404).send({ error: 'not found' });

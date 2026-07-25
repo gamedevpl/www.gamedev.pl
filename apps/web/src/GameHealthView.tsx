@@ -134,7 +134,7 @@ export function GameHealthView() {
                     return (
                       <tr key={game.slug}>
                         <td className="health-slug">
-                          <a href={`#/play/${game.slug}`}>{game.slug}</a>
+                          <a href={`/play/${game.slug}`}>{game.slug}</a>
                         </td>
                         <td>
                           <span className={`health-badge health-badge--${badge.tone}`}>{badge.label}</span>

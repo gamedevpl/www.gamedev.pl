@@ -4,7 +4,7 @@ import { GameTheater } from './GameTheater';
 import { getDraftBySlug, type SubmissionApiError, type SubmissionPreview } from './submissionApi';
 
 /**
- * `#/draft/<slug>` — an in-progress game opened by permalink instead of by status
+ * `/draft/<slug>` — an in-progress game opened by permalink instead of by status
  * token. This is the shareable view: it can play the build, and nothing else. The
  * creator's own status page keeps the token, and with it the ability to request
  * changes; anyone they send this link to just gets to watch the game take shape.
@@ -47,7 +47,7 @@ export function DraftView({ slug, onExit }: { slug: string; onExit: () => void }
       <section className="panel status-panel">
         <h2 className="section-title">{t('draft.title')}</h2>
         <p className="error">{error}</p>
-        <a className="inline-link" href="#/">
+        <a className="inline-link" href="/">
           {t('statusView.backHome')}
         </a>
       </section>

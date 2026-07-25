@@ -1,7 +1,7 @@
 # Path routing — replace hashbang deep links
 
-> Status: **📋 Plan** — approved shape for implementation. No code change lands until
-> this doc's open decisions are settled (especially multiplayer join).
+> Status: **✅ Done** — path routing shipped (History API, no `#/` migration, hybrid join
+> `/join/<code>#<token>`).
 >
 > Goal: stop using `#/…` fragment routes. Deep links should be real paths
 > (`https://www.gamedev.pl/play/sky-dodge`), shareable, bookmarkable, and refreshable.
@@ -234,9 +234,9 @@ plans for consistency.
 
 ---
 
-## Decision checklist (fill before coding)
+## Decision checklist
 
-- [ ] Join shape: **A** hybrid / **B** full path / **C** hash island — default **A**
-- [ ] Keep custom History-API router (yes) vs adopt React Router (no, unless scope grows)
+- [x] Join shape: **A** hybrid (`/join/<code>#<token>`)
+- [x] Keep custom History-API router (no React Router)
 - [x] No `#/` migration / dual router (closed beta hard cutover)
 - [x] Notification storage: write paths only; no normalize-on-read

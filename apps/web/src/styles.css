@@ -3703,7 +3703,7 @@ body.player-open {
 }
 
 /* Operator telemetry view (docs/improvement-loop-plan.md IL-2). Reachable only at
-   #/health, and only renders for an admin — the API 404s everyone else. Styled plainly
+   /health, and only renders for an admin — the API 404s everyone else. Styled plainly
    on purpose: this is an instrument, not a product surface. */
 .health {
   max-width: 1100px;

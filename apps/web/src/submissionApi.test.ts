@@ -8,14 +8,14 @@ describe('submissionApi', () => {
 
   it('submits a spec and returns the tracking payload', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ token: 'abc123', statusUrl: 'https://www.gamedev.pl/next/#/status/abc123' })),
+      new Response(JSON.stringify({ token: 'abc123', statusUrl: 'https://www.gamedev.pl/status/abc123' })),
     );
 
     await expect(
       submitSpec({ title: 'Sky Dodge', concept: 'Dodge asteroids for as long as possible in a neon sky.' }),
     ).resolves.toEqual({
       token: 'abc123',
-      statusUrl: 'https://www.gamedev.pl/next/#/status/abc123',
+      statusUrl: 'https://www.gamedev.pl/status/abc123',
     });
   });
 

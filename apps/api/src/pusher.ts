@@ -23,7 +23,7 @@ export interface PushSubscriptionJSON {
 export interface PushPayload {
   title: string;
   body: string;
-  /** In-app hash route the notificationclick handler opens, e.g. `#/play/slug`. */
+  /** Absolute in-app URL the notificationclick handler opens, e.g. `https://…/play/slug`. */
   url: string;
   /** Stable tag so re-notifying the same event coalesces instead of stacking. */
   tag: string;
