@@ -1,8 +1,28 @@
 import type { GameProject } from '@gamedevpl/game-generator';
 import { findCredentialLikeStrings } from './credential-scan.js';
 
+/**
+ * What a game may spend on itself. The games repo enforces the same budget in
+ * `tools/validate.ts` (Check 4), and the two must agree: this cap decides whether a
+ * game can be *served*, so anything CI accepts and merges has to assemble here, or the
+ * game is published and unplayable.
+ */
+const GAME_BUDGET_BYTES = 200 * 1024;
+
+/**
+ * The GameKit touch layer — on-screen pad plus its shell CSS — is inlined into every
+ * assembled game whether the game asked for it or not, and costs 7,501 bytes. The games
+ * repo added exactly this allowance on top of the budget (`GAMEKIT_TOUCH_BYTES` in
+ * tools/validate.ts) rather than charging a platform feature to each author.
+ *
+ * Keep the two numbers equal. When only the games repo was raised, block-cascade and
+ * rooftop-dash passed CI, merged, and then 422'd on the play route, and a build sitting
+ * at 208,001 bytes could not be previewed by the creator watching it being made.
+ */
+const GAMEKIT_TOUCH_BYTES = 7_501;
+
 /** Combined html+js+css size cap. Generated code is served, not stored, so keep it modest. */
-export const MAX_PROJECT_BYTES = 200 * 1024;
+export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_TOUCH_BYTES;
 
 export class ProjectTooLargeError extends Error {}
 export class EmptyProjectError extends Error {}
