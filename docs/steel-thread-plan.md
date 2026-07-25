@@ -280,8 +280,8 @@ root · a database · search/tags/ratings · email notifications · i18n of game
 
 - One milestone per PR; keep the gate green; follow `.github/copilot-instructions.md` and
   `AGENTS.md` of whichever repo you're in.
-- Milestones M1–M3 are app-repo work on branch `the-new-gamedevpl`; M0/M4 are games-repo
-  work; M5 spans both.
+- Milestones M1–M3 are app-repo work on branch `the-new-gamedevpl` (historical — that branch
+  has since landed on `master` and been deleted); M0/M4 are games-repo work; M5 spans both.
 - 🔑-marked items need the owner — stop and ask rather than working around them.
 - If this plan conflicts with observed reality (an API changed, a workflow behaves
   differently), the observed reality wins: note the discrepancy in your PR and update this

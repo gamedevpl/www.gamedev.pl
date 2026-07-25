@@ -1,17 +1,15 @@
 # Copilot / coding-agent instructions
 
-You are working on the **`the-new-gamedevpl`** branch of gamedev.pl — a catalog, sandboxed
+You are working on the **`master`** branch of gamedev.pl — a catalog, sandboxed
 player, and spec-submission surface for agent-maintained browser games. Read
 [`docs/README.md`](../docs/README.md) first; the `docs/` folder is the **plan of record**. This
 file is the short actionable summary.
 
-> ⚠️ **`the-new-gamedevpl` is the repository's default branch — this is deliberate, not an
-> accident.** It exists so tools that implicitly work off "the default branch" (including
-> assigning a GitHub issue to this Copilot coding agent) land here rather than on `master`.
-> **Never open a PR against `master`, and never merge, rebase from, or otherwise pull `master`'s
-> history into this branch.** `master` is the previous hand-built games site, frozen in place —
-> unrelated to this rewrite. If a PR you're working on shows `master` as its base, that's a bug:
-> stop and retarget it to `the-new-gamedevpl` before continuing.
+> ⚠️ **`master` is the repository's default branch and the live product** — the closed beta at
+> `www.gamedev.pl` deploys from it. **Base every PR on `master`.** The rewrite formerly lived
+> on a separate `the-new-gamedevpl` branch; that branch has landed on `master` and been
+> deleted. Ignore any stale guidance that calls `master` "off-limits" or tells you to retarget
+> PRs away from it.
 
 ## What this is
 

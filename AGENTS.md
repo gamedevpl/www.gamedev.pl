@@ -9,10 +9,12 @@ Then [`docs/contributing-for-agents.md`](docs/contributing-for-agents.md) for th
 ## Fast facts
 
 - npm-workspaces monorepo: `apps/web`, `apps/api`, `packages/game-generator`, `infra/`, `docs/`.
-- Branch: `the-new-gamedevpl` — **also the repo's default branch, on purpose.** Product: a
-  catalog, sandboxed player, and spec-submission surface for an agent-maintained games repo.
-- **`master` is off-limits.** It's the previous hand-built games site, unrelated to this rewrite.
-  Never target a PR at `master`, and never merge/rebase `master`'s history into this branch.
+- Branch: `master` — **the repo's default branch and the live product.** The closed beta at
+  `https://www.gamedev.pl` deploys from it. Product: a catalog, sandboxed player, and
+  spec-submission surface for an agent-maintained games repo.
+- Target every PR at `master`. The rewrite formerly lived on the `the-new-gamedevpl` branch;
+  that branch has landed on `master` and been deleted, so ignore any stale guidance that calls
+  `master` "off-limits" — the previous hand-built games site survives only in early history.
 - **Safety invariant (never break):** generated games render only in an iframe with
   `sandbox="allow-scripts"` and **no `allow-same-origin`**.
 - **ESM only**, TypeScript strict, `.js` extensions in relative imports, Prettier + ESLint

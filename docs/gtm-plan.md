@@ -1,6 +1,6 @@
 # Go-to-market plan
 
-Status: v2, 2026-07-25. Supersedes the first draft after a competitive review of open-source, built-in-public products.
+Status: v3, 2026-07-25. v2 followed a competitive review of open-source built-in-public products; v3 corrects it for a hard constraint — there is no self-hostable game generator and none is planned, so the repo's audience for _running_ the code is contributors only.
 
 This is the plan for taking www.gamedev.pl from closed beta to a public, growing service — including growing the GitHub presence (stars, forks, followers) as a first-class goal. It assumes a marketing budget of roughly zero and takes seriously that the dominant cost is not marketing but COGS: every game creation is an expensive agent run, while every play is nearly free.
 
@@ -9,7 +9,7 @@ This is the plan for taking www.gamedev.pl from closed beta to a public, growing
 Assets:
 
 1. **The gamedev.pl domain and its community history.** Real brand equity in Poland with exactly the audience that will understand the product first. This is the unfair distribution advantage — not social media reach.
-2. **Every created game is a landing page.** A creator who shares their game does the marketing. The product has a built-in growth loop; the job is to remove friction from it, not to buy traffic.
+2. **Every created game is a landing page.** A creator who shares their game does the marketing. The product has a built-in growth loop; the job is to remove friction from it, not to buy traffic. Shared-link traffic arrives mostly on phones, and as of 2026-07-25 the whole catalog is thumb-playable — CI-enforced, with touch support derived from each game's source rather than self-declared — so the loop's biggest drop-off risk (link opens, game unplayable) is already closed.
 3. **Party mode is physically viral.** One screen plus N phones means every session demos the product to N people who did nothing but scan a code.
 4. **The platform repo is already open source** ([gamedevpl/www.gamedev.pl](https://github.com/gamedevpl/www.gamedev.pl), GPL-3.0) — but its metadata still describes the pre-rebirth static site.
 5. **The product is substantially built and operated by AI agents** — creation pipeline, QA gate, feedback loops through PR comments. The repo is a live documentary of a thing most developers have only read think-pieces about. This is a marketing asset, not just an implementation detail.
@@ -22,18 +22,19 @@ Structural constraint: **grow players faster than creators.** Players cost nothi
 
 Two positioning laws, learned from every comparable repo that broke 15k stars:
 
-1. **Be runnable, or be an alternative to something famous — ideally both.** Repos of hosted products that can't be self-run don't earn stars, no matter how clean the code. The successful pattern is: clone it, add your own API key, it works on your machine.
-2. **The category "AI builds software from a prompt" is in its gold-rush window right now**, and nobody has claimed the games corner of it. The AI-builder cohort went 0→20k stars in 12–24 months; the games-platform-on-mission path took a decade to reach the same place. Position as the former, keep the soul of the latter.
+1. **Be runnable, or be an alternative to something famous — ideally both.** Repos of hosted products that can't be self-run don't earn stars, no matter how clean the code.
+2. **The category "AI builds software from a prompt" is in its gold-rush window right now**, and nobody has claimed the games corner of it.
+
+**A hard constraint shapes how we can play these laws:** there is no self-hostable game generator, and none is planned — self-hosted agent execution was removed for legal reasons and is not a future phase (AGENTS.md). The only people who will ever run this stack are contributors to gamedev.pl itself. So the "utility" star lever is mostly unavailable, and the strategy leans on the other three reasons people star — **reference** (I can learn from this), **story** (I want to follow this), **identity** (this is my community's place) — with runnability rescoped to _contributor experience_. This is the lichess path (mission + community + story), accelerated by the AI-category tailwind, not the dyad path (clone-and-run).
 
 Therefore:
 
-- **Repo one-liner:** "Open-source AI game maker — describe a game, an agent builds it, play it in the browser with friends. Self-hostable alternative to Rosebud AI / Websim." Name the closed products people already know.
+- **Repo one-liner:** "The open-source AI game maker behind www.gamedev.pl — describe a game, an AI agent builds it, everyone plays it in the browser. Watch an AI dev team ship in public." Name the famous closed products (Rosebud AI, Websim) in the README body, honestly: the source is open, the hosted service is how you use it.
 - **Mission statement** for the heritage story: _the forever free place where anyone can make a game._ The domain taught a generation of Poles to make games; now it lets anyone. Honor, don't replace.
-- **People star for four reasons** — utility (I can run this), reference (I can learn from this), story (I want to follow this), identity (this is my community's place). Every stage below should serve at least two.
 
 **Never gate anything on starring** ("star to skip the waitlist"). Incentivized stars violate GitHub's inauthentic-activity rules, developers resent them, and they poison the metric. Soft asks only.
 
-Expectation calibration: with no category tailwind, three years of skilled build-in-public lands ~9k stars. With the tailwind and both positioning laws satisfied, 20k in 12–24 months is the observed optimistic case. Runnable-but-poorly-positioned lands ~3k. Positioning is the multiplier.
+Expectation calibration, updated for the constraint: the clone-and-run cohort's 20k-in-a-year curve is out of reach. The honest reference points are mission-driven platforms (lichess: ~18k over 14 years) and story-driven build-in-public (~9k over 3 years without a category tailwind). With the AI tailwind and the story executed well, low-thousands in year one is a good outcome and worth having; the compounding assets (watchers, contributors, community identity) matter more than the count.
 
 ---
 
@@ -48,13 +49,16 @@ Product/metrics:
 - Fix the first 60 seconds: land on the site → playing a good game with zero sign-in. Sign-in gates _creation_, never _play_.
 - Establish unit economics: cost per created game, cost per revision cycle. This number decides how fast the gates open in Stage 2.
 
-### Something to run — the defining deliverable of Stage 0
+### Something to run — the five-minute contributor loop
 
-**Bring-your-own-API-key local mode:** `pnpm dev` + an Anthropic key = a working local arcade where the agent builds a game on your machine, at your cost. This single capability re-categorizes the repo from "website code of someone's SaaS" to "open-source AI game maker you can run tonight" — the property shared by every high-star comparable. Forks follow from this too: people fork what they can run.
+The stack already boots with zero cloud config (`npm install && npm run dev`: in-memory store, mock provider, no keys). But a first-time contributor's first five minutes are an empty arcade with a red catalog error and a sign-in they can't complete. Three small changes close the gap, and every seam already exists in the code:
 
-Content for it without moving the privacy boundary: user games stay private, but 3–5 **owner-authored seed games** (arena-tag, tactics-duel, …) ship in-repo as `examples/` — enough for the local arcade to feel alive and to show what generated game code looks like.
+- **Bundled fixture catalog:** 2–3 owner-authored seed games (arena-tag, tactics-duel, …) served when the games-repo env is unset — lights up the arcade, theater, and party mode fully offline. User games stay private; the boundary doesn't move.
+- **Dev-only sign-in:** a non-prod button that mints a session (the auth layer already special-cases dev; the token-minting recipe already exists in tests).
+- **Mocked games-repo client:** the create flow exercises the issue lifecycle locally without the private repo or a PAT.
+- `.env.example` documenting that every var is optional in dev.
 
-This is real engineering work, which is why it belongs in the quiet period, not improvised during a launch spike.
+The goal is not self-hosting — it's that a potential contributor experiences the whole product loop before their coffee cools, because contributors are the only audience who will ever run this stack.
 
 ### Something to read — the engineering notebook
 
@@ -87,6 +91,7 @@ Deferred from Stage 0: CONTRIBUTING.md and prepared good-first-issues move to St
 Goal: 500–2,000 engaged users from communities where we have standing; first organic creator-share loop; the repo joins every message.
 
 - **Lead with the domain's story, carefully.** "The legendary gamedev.pl reborn — the forever free place where anyone can make a game, and it's open source" is a strong Polish tech-press pitch. Written as honoring the heritage, not replacing it. Small history page. PL + EN versions.
+- **The proof point for the press kit and every pitch:** _every game an AI builds here is guaranteed playable on your phone — and a machine checks that guarantee._ Touch support is derived from each game's source and enforced in CI, so this is a verifiable engineering claim, not marketing copy — the kind most AI-toy products cannot make. Lead with it whenever a journalist or skeptic asks "but is any of it actually good?"
 - **Waitlist with invite codes.** Every activated user gets 3 invites. Scarcity does two jobs: word-of-mouth and a throttle on creation costs. Never fully open registration while creation is expensive.
 - **Open the contribution funnel now that traffic exists:** CONTRIBUTING.md and ~10 good-first-issues, i18n-heavy — community translation is the proven first-PR magnet for a games platform, and the Polish community translating their own platform is the identity loop in miniature.
 - **The agent-fixes-issues showpiece.** An issue filed in the morning; an agent triages, reproduces, opens a PR referencing it; deployed by afternoon; GitHub notifies the reporter on close. For the reporter, "I reported a bug to an open-source project and an AI fixed it the same day" is shareable in a way no discount code is. Run the loop quietly for a few weeks first — an issue tracker full of stale agent failures tells the opposite story. Once proven, make it the centerpiece of build-in-public posts.
@@ -106,12 +111,12 @@ Goal: game pages become the acquisition engine; creation converts from play; lau
 
 - **Every game page is a real landing page:** playable instantly, OG image, "Made with a prompt on gamedev.pl — make your own" CTA, creator attribution. Engineering work, not marketing spend; highest-ROI item in this stage.
 - **Remix as the cheap on-ramp.** A remix (tweaking an existing game's prompt) is a smaller agent run than creation from scratch — cheaper for us, lower blank-page anxiety for the user.
-- **SEO compounding:** indexable catalog pages ("free browser games", "party games to play on phones", Polish equivalents). The PWA work (installability, offline) supports this funnel.
+- **SEO compounding:** indexable catalog pages ("free browser games", "party games to play on phones", Polish equivalents). The PWA work (installability, offline — in flight as of 2026-07-25) supports this funnel once shipped.
 - **Recurring prompt jam.** Weekly theme, winners featured on the homepage — a free content calendar, a retention hook, and a curation mechanism. Winners' games (with consent) go into a public showcase with the creator's name on github.com/gamedevpl; they share it, their followers arrive.
 - **Staggered English launch moments,** each weeks apart so every cost spike is survivable and each gets its own GitHub Trending window:
   1. **Show HN** — the biggest single star event. Title carries the alternative-positioning ("open-source AI game maker"); first comment links the repo and explains the architecture honestly, including the local mode. A front page typically converts to a few hundred stars in 24–48h — enough for GitHub Trending, which compounds for free.
   2. **Product Hunt.**
-  3. Targeted subreddits (r/WebGames, r/incremental_games, r/playmygame; r/selfhosted and r/LocalLLaMA now that local mode exists).
+  3. Targeted subreddits (r/WebGames, r/incremental_games, r/playmygame).
      Before each: lower quotas, confirm the waitlist absorbs overflow. A launch spike that burns the monthly budget in a day is the main failure mode of this stage.
 - **Extract the party-mode kit as a standalone MIT package** (relay + phone-controller client) if the Stage 0 deep-dive drew interest — useful outside the product, unserved by existing libraries, and a focused library can out-star the platform repo while funneling attention back. It also sidesteps the games-repo-must-stay-private constraint entirely.
 - **Submit to awesome-lists** (awesome-ai-agents, awesome-game-dev, self-hosted lists — local mode qualifies us) — slow drip, permanent.
@@ -132,7 +137,7 @@ Goal: game pages become the acquisition engine; creation converts from play; lau
 ## Metrics
 
 - **Product:** creator D7 return, players-per-session, share of players who try creating, cost per created game / per activated creator, signups from shared game links vs. own posts.
-- **GitHub:** star _velocity around events_ (Insights → Traffic shows which post converts), unique cloners and forks (the local-mode adoption signal), first-time contributors per month, issues filed by non-contributors (the beta-HQ signal). Ignore absolute follower counts in Stages 0–1; org followers lag repo activity by a long way.
+- **GitHub:** star _velocity around events_ (Insights → Traffic shows which post converts), first-time contributors per month (the contributor-loop signal), issues filed by non-contributors (the beta-HQ signal), watchers (the story signal). Ignore absolute follower counts in Stages 0–1; org followers lag repo activity by a long way. Forks will stay modest — only contributors run this stack — and that's expected, not a failure.
 
 ## Anti-goals
 
@@ -142,6 +147,7 @@ Goal: game pages become the acquisition engine; creation converts from play; lau
 - No fully open registration "because growth" — the invite gate is the cost control.
 - No incentivized stars, ever.
 - No publicly promising the agent-fixes-issues loop before it has worked quietly for weeks.
+- No promising "install the app", offline play, or iOS push in any launch copy until the PWA has actually shipped — as of 2026-07-25 there is no install path, iOS push is impossible without one (web push is desktop/Android only), and there is no app-store presence. Mobile claims in marketing stay limited to what is CI-enforced: every game plays with a thumb in the browser.
 - No raw user reports on public GitHub — the two-lane model exists so private data never lands in public issues.
 
 ## First-week checklist
@@ -150,7 +156,7 @@ Goal: game pages become the acquisition engine; creation converts from play; lau
 2. Audit the anonymous first-play flow — remove every click between landing and playing.
 3. Start the seed-catalog push toward 30–50 curated games.
 4. Rewrite the repo description/one-liner per Positioning; fix topics, homepage, social preview; pin the repo; enable Discussions. Ten minutes, permanent effect.
-5. Scope the BYO-key local mode and start it — the defining Stage 0 deliverable.
+5. Ship the five-minute contributor loop: fixture catalog, dev sign-in, mocked games-repo client, `.env.example`.
 6. README overhaul: pitch, prompt→game GIF, "built by AI agents" section, History section, docs index.
 7. Add `SECURITY.md`, enable private vulnerability reporting, land the two issue templates and the "Report on GitHub" prefilled link.
 8. Post the rebirth announcement as a Release + Discussion (notifies old-era watchers for free).
@@ -160,4 +166,4 @@ Goal: game pages become the acquisition engine; creation converts from play; lau
 
 ## One-sentence version
 
-Claim the open-source corner of "AI makes games" while the category window is open: make the repo runnable with your own key, let shared game pages, party mode, and an AI-team-shipping-in-public story do the marketing, keep creation invite-gated until each new creator is provably affordable — then charge for exactly the thing that costs money, while playing stays forever free.
+Claim the open-source corner of "AI makes games" while the category window is open: since only contributors will ever run the stack, win stars with the story (an AI dev team shipping in public), the community (gamedev.pl's heritage, GitHub as the beta's front door), and the reference material (the engineering notebook) — let shared game pages and party mode do the product marketing, keep creation invite-gated until each new creator is provably affordable, then charge for exactly the thing that costs money, while playing stays forever free.

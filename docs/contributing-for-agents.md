@@ -1,16 +1,18 @@
 # Contributing — Guide for Coding Agents
 
-For coding agents (GitHub Copilot, Claude Code, Codex) and humans picking up work on the
-**`the-new-gamedevpl`** branch. Read [`README.md`](./README.md) and
-[`architecture.md`](./architecture.md) first for context.
+For coding agents (GitHub Copilot, Claude Code, Codex) and humans picking up work on
+**`master`** — the repository's default branch and the live product. Read
+[`README.md`](./README.md) and [`architecture.md`](./architecture.md) first for context.
 
-> ⚠️ **`the-new-gamedevpl` is the repository's default branch, by deliberate choice** — so that
-> tools which implicitly target "the default branch" (e.g. assigning a GitHub issue to Copilot's
-> coding agent) land here rather than on `master`. `master` is the previous hand-built games
-> site and is **off-limits**: never open a PR against it, and never merge or rebase `master`'s
-> history into this branch. This was learned the hard way — an early Copilot task ran before the
-> default branch was switched, forked from `master`, and produced a PR that duplicated `apps/api`
-> from scratch instead of building on the real one (closed as PR #206).
+> ℹ️ **History:** the rewrite was built on a separate `the-new-gamedevpl` branch, deliberately
+> kept as the default so tools that implicitly target "the default branch" (e.g. assigning a
+> GitHub issue to Copilot's coding agent) landed there rather than on the old hand-built site
+> that lived on `master`. That branch has since landed on `master` and been deleted — target
+> every PR at `master`, and ignore any stale guidance calling `master` "off-limits"; the old
+> site survives only in early history. One lesson from that era still applies: forking from
+> the wrong base produces junk — an early Copilot task forked from the old `master` and opened
+> a PR that duplicated `apps/api` from scratch instead of building on the real one (closed as
+> PR #206).
 
 ## Where the current plan lives
 

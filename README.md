@@ -5,10 +5,11 @@ a coding agent implements it as **real runnable code** in a dedicated games repo
 reviewed build becomes playable in the browser. Players can later propose changes through the
 same spec-and-pull-request workflow.
 
-This branch (`the-new-gamedevpl`) contains a local proof of the player loop: **prompt →
-deterministic template → sandboxed iframe**, with no external services. The production catalog,
-games repository, spec submission, and deployment are not built yet. The previous hand-built
-games site lives on the `master` branch.
+The `master` branch (the default) is the live product: a closed beta runs at
+[www.gamedev.pl](https://www.gamedev.pl). Locally, the player loop still works fully offline:
+**prompt → deterministic template → sandboxed iframe**, with no external services. The rewrite
+formerly lived on the `the-new-gamedevpl` branch, which has since landed on `master` and been
+deleted; the previous hand-built games site survives only in the repo's early history.
 
 ## Repo layout
 
