@@ -54,6 +54,7 @@ submission flow are not built yet. The previous hand-built games site still live
 | [`mobile-app-plan.md`](./mobile-app-plan.md)                   | iOS/Android strategy: mobile web → PWA → Capacitor store apps; games touch contract                    |
 | [`notifications-plan.md`](./notifications-plan.md)             | Notify creators/players of transitions: detection sweep, per-user storage, in-app → email → push       |
 | [`creator-qa-plan.md`](./creator-qa-plan.md)                   | Clarifying-questions pass before spec freeze — raises the hit rate of the one-shot agent run           |
+| [`improvement-loop-plan.md`](./improvement-loop-plan.md)       | After publish: player signals → per-game scorecard → agent-assisted fixes and suggestions              |
 | [`risks-and-open-questions.md`](./risks-and-open-questions.md) | Active product blockers, security risks, and resolved architecture decisions                           |
 | [`contributing-for-agents.md`](./contributing-for-agents.md)   | How agents run, structure, and contribute to this branch                                               |
 
