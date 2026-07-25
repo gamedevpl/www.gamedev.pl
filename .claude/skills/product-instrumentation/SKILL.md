@@ -48,9 +48,28 @@ Events from inside a game iframe arrive as `postMessage` with `source: 'gdpl-pla
 side of this contract is `.github/skills/report-play-signals/SKILL.md` in that repo; if
 you change the vocabulary here, that skill must change in the same sitting.
 
+Visit telemetry is the second, separate stream — the funnel before and between games:
+
+- [apps/web/src/visitTelemetry.ts](../../../apps/web/src/visitTelemetry.ts) — per-tab
+  identity, acquisition capture, navigation subscription.
+- [apps/api/src/visit-telemetry.ts](../../../apps/api/src/visit-telemetry.ts) —
+  `POST /api/telemetry/visit`, schema and caps.
+- `VisitEvent` / `VISIT_COLLECTION` in [store.ts](../../../apps/api/src/store.ts).
+
+**The two streams must stay unjoinable.** A play event names a game and never a visit; a
+visit event names a visit and never a game. That is why `play_started` carries no slug —
+it answers "did this sitting play a second game" without making "which games did this tab
+play, in order" derivable. Adding a slug (or any shared key) to the visit stream breaks
+the privacy posture of both, so treat it as a design change, not a field addition.
+
+Route kinds are read through the app's own router (`parsePathRoute`), never re-derived
+from the URL. Routing has already changed shape once — hash fragments to real paths — and
+a private copy of the URL grammar survives that change by silently reporting `home` for
+every visit, including the shared game links this stream exists to count.
+
 Creator-side facts (submissions, build events, revision messages, publish times) live in
 Firestore via the store — they are identity-attached and that is fine; creators are
-signed in. Play telemetry is the anonymous half.
+signed in. Both telemetry streams are the anonymous half.
 
 ## Invariants (do not renegotiate these per-feature)
 
@@ -75,17 +94,28 @@ signed in. Play telemetry is the anonymous half.
 
 ## Known gaps (prefer closing one over inventing new metrics)
 
-Current state, audited 2026-07-25. When your task touches an adjacent flow, close the gap
-in the same change or flag it explicitly in the PR:
+Current state, audited 2026-07-25 and updated as gaps close. When your task touches an
+adjacent flow, close the gap in the same change or flag it explicitly in the PR:
 
-- **No landing/visit events at all** — questions 1–3 are currently unanswerable. Needs a
-  minimal page-level emitter (landing, catalog view, game opened from where) honoring the
-  invariants above.
-- **Session depth is unmeasurable** — session ids are per-game-open by design; a
-  visit-scoped ephemeral id (sessionStorage) is the sanctioned mechanism.
-- **No referrer/UTM capture** anywhere.
+- ~~No landing/visit events~~ — **closed**: `visit_started` / `route_viewed` /
+  `play_started` now cover questions 1–3.
+- ~~Session depth unmeasurable~~ — **closed**: visit-scoped ephemeral id in
+  `sessionStorage`; count `play_started` per `visitId`.
+- ~~No referrer/UTM capture~~ — **closed**: coarse referrer hostname plus filtered
+  `utm_source` / `utm_medium` / `utm_campaign` on `visit_started`.
+- **Two follow-ups the visit stream left open:**
+  - `visitEvents` needs its own Firestore TTL policy (`gcloud firestore fields ttls
+update expiresAt --collection-group=visitEvents`). A TTL policy is scoped per
+    collection group, so until it exists these rows never expire and the 90-day
+    retention promise covers only `playEvents`.
+  - `startVisitTracking` patches `history.pushState` to observe in-app navigation,
+    because `navigate()` fires no event. Replace with a `gdpl:navigate` window event
+    emitted by `App` when that lands, then delete the patch.
+- **Nothing reads the visit stream yet** — the events accumulate but no aggregate or
+  admin view exposes them. Closing a write gap without a read is only half the job.
 - **Creator funnel starts too late** — nothing is recorded before the submission
-  document exists; the prompt → sign-in → submit steps are dark.
+  document exists; the prompt → sign-in → submit steps are dark. The visit stream is the
+  natural home for the pre-submission steps (it is already anonymous and visit-scoped).
 - **Creator return is under-measured** — `lastLoginAt` only updates on sign-in, and
   sessions are long-lived; an authenticated `lastSeenAt` touch (daily granularity is
   enough) is missing.

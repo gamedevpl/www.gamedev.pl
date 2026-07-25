@@ -161,6 +161,34 @@ export interface TelemetryEvent {
 }
 
 /**
+ * A visit-level event: how a sitting went, never who had it.
+ *
+ * Separate from `TelemetryEvent` because the two answer different questions and must
+ * not be joinable. A play event names a game and not a visit; a visit event names a
+ * visit and never a game. Holding that line in the type is what stops "which games did
+ * this tab play, in order" from becoming derivable later by someone adding one
+ * innocuous-looking field.
+ */
+export interface VisitEvent {
+  /** Per-tab uuid from `sessionStorage`. Dies with the tab; never a uid. */
+  visitId: string;
+  type: 'visit_started' | 'route_viewed' | 'play_started';
+  /** Server-anchored instant, derived like `TelemetryEvent.at`. */
+  at: string;
+  /** Milliseconds from visit start — the trustworthy measure of within-visit timing. */
+  msSinceStart: number;
+  /** `visit_started`: the route kind the visit landed on. Never its parameters. */
+  entry?: string;
+  /** `route_viewed`: the route kind now shown. Never its parameters. */
+  route?: string;
+  /** `visit_started`: bare hostname of an external referrer. Never a full URL. */
+  referrer?: string;
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
+}
+
+/**
  * How long a raw play event is kept. Aggregates outlive it; the rows themselves do not.
  *
  * Ninety days is the promise docs/improvement-loop-plan.md makes, and until this
@@ -187,6 +215,16 @@ export const TELEMETRY_TTL_FIELD = 'expiresAt';
  * get separate groups.
  */
 export const TELEMETRY_COLLECTION = 'playEvents';
+/**
+ * Visit telemetry's collection group, separate from `playEvents` for the same reason
+ * that one is separate from `events`: a TTL policy is scoped to a group.
+ *
+ * ⚠️ Deploy note: a new group needs its own TTL policy (`gcloud firestore fields ttls
+ * update expiresAt --collection-group=visitEvents`). Until that policy exists these rows
+ * are written with an `expiresAt` nothing acts on — they accumulate rather than expire,
+ * which breaks the same retention promise `playEvents` keeps.
+ */
+export const VISIT_COLLECTION = 'visitEvents';
 
 /**
  * When a play event becomes deletable: its own event time plus the retention window.
@@ -297,6 +335,10 @@ export interface Store {
   appendTelemetryEvents(dateStr: string, events: TelemetryEvent[]): Promise<void>;
   /** One day's events for a game — the read the aggregation job (IL-2) will use. */
   listTelemetryEvents(dateStr: string, opts?: { slug?: string; limit?: number }): Promise<TelemetryEvent[]>;
+  /** Appends visit-level events to one day's partition. */
+  appendVisitEvents(dateStr: string, events: VisitEvent[]): Promise<void>;
+  /** One day's visit events — funnel, depth, and acquisition reads. */
+  listVisitEvents(dateStr: string, opts?: { visitId?: string; limit?: number }): Promise<VisitEvent[]>;
   /** Today's usage counters for a user, without incrementing anything. */
   getUsage(uid: string, dateStr: string): Promise<UsageCounters>;
   /** Most recently published submissions, newest first — the build-time sample. */
@@ -376,6 +418,8 @@ export class InMemoryStore implements Store {
   private waitlist = new Map<string, WaitlistEntry>();
   // yyyymmdd -> events recorded that day
   private telemetry = new Map<string, TelemetryEvent[]>();
+  // yyyymmdd -> visit events recorded that day
+  private visits = new Map<string, VisitEvent[]>();
   // uid -> (notificationId -> notification)
   private notifications = new Map<string, Map<string, StoredNotification>>();
   // uid -> (endpoint-hash -> subscription)
@@ -550,6 +594,19 @@ export class InMemoryStore implements Store {
   async listTelemetryEvents(dateStr: string, opts?: { slug?: string; limit?: number }): Promise<TelemetryEvent[]> {
     return (this.telemetry.get(dateStr) ?? [])
       .filter((event) => opts?.slug === undefined || event.slug === opts.slug)
+      .slice(0, opts?.limit ?? 1000)
+      .map((event) => ({ ...event }));
+  }
+
+  async appendVisitEvents(dateStr: string, events: VisitEvent[]): Promise<void> {
+    const existing = this.visits.get(dateStr) ?? [];
+    existing.push(...events.map((event) => ({ ...event })));
+    this.visits.set(dateStr, existing);
+  }
+
+  async listVisitEvents(dateStr: string, opts?: { visitId?: string; limit?: number }): Promise<VisitEvent[]> {
+    return (this.visits.get(dateStr) ?? [])
+      .filter((event) => opts?.visitId === undefined || event.visitId === opts.visitId)
       .slice(0, opts?.limit ?? 1000)
       .map((event) => ({ ...event }));
   }
@@ -952,6 +1009,31 @@ export class FirestoreStore implements Store {
 
   private telemetryCollection(dateStr: string) {
     return this.db.collection('telemetry').doc(dateStr).collection(TELEMETRY_COLLECTION);
+  }
+
+  private visitCollection(dateStr: string) {
+    return this.db.collection('telemetry').doc(dateStr).collection(VISIT_COLLECTION);
+  }
+
+  async appendVisitEvents(dateStr: string, events: VisitEvent[]): Promise<void> {
+    if (events.length === 0) return;
+    const collection = this.visitCollection(dateStr);
+    const batch = this.db.batch();
+    events.forEach((event) =>
+      batch.set(collection.doc(randomUUID()), { ...event, [TELEMETRY_TTL_FIELD]: telemetryExpiresAt(event.at) }),
+    );
+    await batch.commit();
+  }
+
+  async listVisitEvents(dateStr: string, opts?: { visitId?: string; limit?: number }): Promise<VisitEvent[]> {
+    const base = this.visitCollection(dateStr);
+    const query = opts?.visitId === undefined ? base : base.where('visitId', '==', opts.visitId);
+    const snap = await query.limit(opts?.limit ?? 1000).get();
+    return snap.docs.map((doc) => {
+      const event = doc.data();
+      delete event[TELEMETRY_TTL_FIELD];
+      return event as VisitEvent;
+    });
   }
 
   async appendTelemetryEvents(dateStr: string, events: TelemetryEvent[]): Promise<void> {

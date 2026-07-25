@@ -19,6 +19,7 @@ import { registerRefineRoute, type SpecRefiner } from './refine.js';
 import { InMemoryStore, type Store } from './store.js';
 import { registerSubmissionRoutes, type SubmissionRoutesOptions } from './submissions.js';
 import { registerTelemetryRoutes, type TelemetryRoutesOptions } from './telemetry.js';
+import { registerVisitTelemetryRoutes } from './visit-telemetry.js';
 import { createPublishedSlugGateFromEnv } from './published-slugs.js';
 
 const GenerateRequestSchema = z.object({
@@ -152,6 +153,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     store,
     ...(options.telemetryRoutes ?? { publishedSlugs: createPublishedSlugGateFromEnv() }),
   });
+
+  // Visit-level telemetry — the funnel before and between games. Same beta wall and the
+  // same anonymity rules; it records no game identity at all, so the two streams cannot
+  // be joined into one tab's browsing history.
+  await registerVisitTelemetryRoutes(app, { store });
 
   // Operator reads over that telemetry. Separate allowlist from the beta one: being
   // let into the closed beta is not the same as being allowed to read every game's

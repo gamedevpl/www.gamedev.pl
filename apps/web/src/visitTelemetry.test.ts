@@ -1,0 +1,250 @@
+import { describe, expect, it, vi } from 'vitest';
+import { parsePathRoute } from './router';
+import {
+  readVisitIdentity,
+  recordVisitEvent,
+  referrerDomain,
+  routeKind,
+  sanitizeUtm,
+  setVisitSessionForTesting,
+  utmFields,
+  VisitSession,
+  type WireVisitEvent,
+} from './visitTelemetry';
+
+function capture() {
+  const batches: { visitId: string; flushMsSinceStart: number; events: WireVisitEvent[] }[] = [];
+  return { batches, send: (body: (typeof batches)[number]) => void batches.push(body) };
+}
+
+describe('referrerDomain', () => {
+  it('reduces an external referrer to a bare hostname', () => {
+    expect(referrerDomain('https://news.ycombinator.com/item?id=123', 'www.gamedev.pl')).toBe('news.ycombinator.com');
+  });
+
+  it('strips www so one site groups as one row', () => {
+    expect(referrerDomain('https://www.reddit.com/r/webgames/', 'www.gamedev.pl')).toBe('reddit.com');
+  });
+
+  it('drops same-host referrers — internal navigation is not acquisition', () => {
+    expect(referrerDomain('https://www.gamedev.pl/#/play/arena-tag', 'www.gamedev.pl')).toBeUndefined();
+    expect(referrerDomain('https://gamedev.pl/', 'www.gamedev.pl')).toBeUndefined();
+  });
+
+  it('drops empty and unparseable referrers', () => {
+    expect(referrerDomain('', 'www.gamedev.pl')).toBeUndefined();
+    expect(referrerDomain('not a url', 'www.gamedev.pl')).toBeUndefined();
+  });
+
+  it('never carries the path or query of the referring page', () => {
+    const domain = referrerDomain('https://x.com/someone/status/1?token=secret', 'www.gamedev.pl');
+    expect(domain).toBe('x.com');
+    expect(domain).not.toContain('secret');
+  });
+});
+
+describe('sanitizeUtm', () => {
+  it('accepts and normalizes plain campaign values', () => {
+    expect(sanitizeUtm('  LinkedIn  ')).toBe('linkedin');
+    expect(sanitizeUtm('summer_jam-2026')).toBe('summer_jam-2026');
+  });
+
+  it('rejects values that could smuggle an address or markup into an aggregate', () => {
+    expect(sanitizeUtm('user@example.com')).toBeUndefined();
+    expect(sanitizeUtm('<script>')).toBeUndefined();
+    expect(sanitizeUtm('https://evil.example/path')).toBeUndefined();
+  });
+
+  it('returns nothing for absent or empty input', () => {
+    expect(sanitizeUtm(null)).toBeUndefined();
+    expect(sanitizeUtm('   ')).toBeUndefined();
+  });
+
+  it('caps length', () => {
+    expect(sanitizeUtm('a'.repeat(200))).toHaveLength(40);
+  });
+});
+
+describe('utmFields', () => {
+  it('reads the three grouping fields and omits the rest', () => {
+    expect(utmFields('?utm_source=linkedin&utm_medium=social&utm_campaign=beta&utm_term=ignored')).toEqual({
+      utmSource: 'linkedin',
+      utmMedium: 'social',
+      utmCampaign: 'beta',
+    });
+  });
+
+  it('omits fields entirely rather than sending empties', () => {
+    expect(utmFields('?utm_source=x')).toEqual({ utmSource: 'x' });
+    expect(utmFields('')).toEqual({});
+  });
+});
+
+describe('routeKind', () => {
+  it('maps known views to themselves', () => {
+    expect(routeKind('play')).toBe('play');
+    expect(routeKind('legal')).toBe('legal');
+  });
+
+  it('treats anything unrecognized as home', () => {
+    expect(routeKind('')).toBe('home');
+    expect(routeKind('nonsense')).toBe('home');
+  });
+});
+
+describe('route kinds follow the real router', () => {
+  // Routing moved from hash fragments to real paths (#230). An analytics module with
+  // its own copy of the URL grammar would have gone on reporting `home` for every
+  // visit after that change — including for shared game links, the one arrival this
+  // whole stream exists to count. These assert the delegation, not the grammar.
+  it.each([
+    ['/', 'home'],
+    ['/play/arena-tag', 'play'],
+    ['/draft/space-hop', 'draft'],
+    ['/privacy', 'legal'],
+    ['/terms', 'legal'],
+    ['/status/some-token', 'status'],
+    ['/health', 'health'],
+  ])('reads %s as %s', (pathname, expected) => {
+    expect(routeKind(parsePathRoute(pathname, '').view)).toBe(expected);
+  });
+
+  it('reduces a parameterized route to its kind, never its parameters', () => {
+    const route = parsePathRoute('/status/secret-capability-token', '');
+    const kind = routeKind(route.view);
+    expect(kind).toBe('status');
+    expect(JSON.stringify(kind)).not.toContain('secret');
+  });
+});
+
+describe('readVisitIdentity', () => {
+  it('mints and persists an identity on a first visit', () => {
+    const store = new Map<string, string>();
+    const storage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+    };
+    const identity = readVisitIdentity(storage, 1000);
+    expect(identity.isNew).toBe(true);
+    expect(identity.startedAt).toBe(1000);
+    expect(store.size).toBe(2);
+  });
+
+  it('reuses the stored identity and start time across a reload', () => {
+    const store = new Map<string, string>([
+      ['gdpl.visit.id', '11111111-1111-4111-8111-111111111111'],
+      ['gdpl.visit.startedAt', '500'],
+    ]);
+    const storage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+    };
+    const identity = readVisitIdentity(storage, 9000);
+    expect(identity.isNew).toBe(false);
+    expect(identity.visitId).toBe('11111111-1111-4111-8111-111111111111');
+    // The clock keeps running across the reload rather than restarting at zero.
+    expect(identity.startedAt).toBe(500);
+  });
+
+  it('falls back to an in-memory identity when storage throws', () => {
+    const storage = {
+      getItem: () => {
+        throw new Error('storage disabled');
+      },
+      setItem: () => {
+        throw new Error('storage disabled');
+      },
+    };
+    const identity = readVisitIdentity(storage, 42);
+    expect(identity.isNew).toBe(true);
+    expect(identity.visitId).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it('works with no storage at all', () => {
+    expect(readVisitIdentity(null, 7).isNew).toBe(true);
+  });
+});
+
+describe('VisitSession', () => {
+  it('stamps each event with its own elapsed time, not the flush time', () => {
+    const { batches, send } = capture();
+    let now = 1000;
+    const session = new VisitSession('v1', 1000, send, () => now);
+
+    session.record({ type: 'visit_started', entry: 'home' });
+    now = 4000;
+    session.record({ type: 'play_started' });
+    now = 5000;
+    session.flush();
+
+    expect(batches).toHaveLength(1);
+    expect(batches[0].events.map((e) => e.msSinceStart)).toEqual([0, 3000]);
+    expect(batches[0].flushMsSinceStart).toBe(4000);
+  });
+
+  it('flushes automatically once enough events are queued', () => {
+    const { batches, send } = capture();
+    const session = new VisitSession('v1', 0, send, () => 0);
+    for (let i = 0; i < 5; i += 1) session.record({ type: 'route_viewed', route: 'home' });
+    expect(batches).toHaveLength(1);
+    expect(batches[0].events).toHaveLength(5);
+  });
+
+  it('stops accepting events past the per-visit ceiling', () => {
+    const { send } = capture();
+    const session = new VisitSession('v1', 0, send, () => 0);
+    for (let i = 0; i < 250; i += 1) session.record({ type: 'play_started' });
+    expect(session.count).toBe(200);
+    expect(session.record({ type: 'play_started' })).toBe(false);
+  });
+
+  it('ignores events after close', () => {
+    const { batches, send } = capture();
+    const session = new VisitSession('v1', 0, send, () => 0);
+    session.record({ type: 'play_started' });
+    session.close();
+    expect(session.record({ type: 'play_started' })).toBe(false);
+    expect(batches).toHaveLength(1);
+  });
+
+  it('does not send an empty batch', () => {
+    const { batches, send } = capture();
+    new VisitSession('v1', 0, send, () => 0).flush();
+    expect(batches).toHaveLength(0);
+  });
+
+  it('never carries a game identity on a play event', () => {
+    const { batches, send } = capture();
+    const session = new VisitSession('v1', 0, send, () => 0);
+    session.record({ type: 'play_started' });
+    session.flush();
+    expect(Object.keys(batches[0].events[0])).toEqual(['type', 'msSinceStart']);
+  });
+});
+
+describe('recordVisitEvent', () => {
+  it('is a silent no-op when tracking was never started', () => {
+    setVisitSessionForTesting(null);
+    expect(() => recordVisitEvent({ type: 'play_started' })).not.toThrow();
+  });
+
+  it('reaches the installed session', () => {
+    const { batches, send } = capture();
+    const session = new VisitSession('v1', 0, send, () => 0);
+    setVisitSessionForTesting(session);
+    recordVisitEvent({ type: 'play_started' });
+    session.flush();
+    setVisitSessionForTesting(null);
+    expect(batches[0].events[0].type).toBe('play_started');
+  });
+});
+
+describe('sendVisitTelemetry', () => {
+  it('swallows a rejected request so telemetry never surfaces as a failure', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error('offline'));
+    vi.stubGlobal('fetch', fetchMock);
+    const { sendVisitTelemetry } = await import('./visitTelemetry');
+    expect(() => sendVisitTelemetry({ visitId: 'v1', flushMsSinceStart: 0, events: [] })).not.toThrow();
+    vi.unstubAllGlobals();
+  });
+});

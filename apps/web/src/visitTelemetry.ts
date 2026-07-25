@@ -1,0 +1,354 @@
+import { parsePathRoute } from './router';
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
+
+/**
+ * Visit telemetry, browser half.
+ *
+ * Play telemetry ([telemetry.ts](./telemetry.ts)) answers "how did this game do". It
+ * deliberately cannot answer "how did this visit go" — its session id is minted per
+ * game open, so two plays in one sitting are two unrelated rows, and nothing at all is
+ * recorded before a game opens. That leaves the first minute of every visit, the depth
+ * of a sitting, and where visitors came from entirely dark.
+ *
+ * This is the other half, kept deliberately thin:
+ *
+ * - **A visit is a tab, not a person.** The id lives in `sessionStorage`, so it dies
+ *   with the tab and never follows anyone between visits. Not a cookie, not
+ *   localStorage — those would make it an identifier, which is exactly what play
+ *   telemetry refuses to have and what this must not smuggle in through the back door.
+ * - **No game identity here.** `play_started` counts plays; it does not say which game.
+ *   Which game was played is play telemetry's business, and keeping the slug out means
+ *   these two streams cannot be joined into a browsing history for one tab.
+ * - **Acquisition is coarse by construction.** A referrer becomes a bare hostname or
+ *   nothing; UTM values are lowercased, length-capped, and character-filtered. Full
+ *   URLs and query strings are where personal data hides, so neither is ever sent.
+ */
+
+/** Where a visit is, coarsely. Route parameters (tokens, slugs) never travel. */
+export type VisitRouteKind = 'home' | 'play' | 'draft' | 'status' | 'join' | 'legal' | 'health';
+
+export type VisitEvent =
+  | {
+      type: 'visit_started';
+      entry: VisitRouteKind;
+      /** Bare hostname of the external referrer; absent means direct or internal. */
+      referrer?: string;
+      utmSource?: string;
+      utmMedium?: string;
+      utmCampaign?: string;
+    }
+  | { type: 'route_viewed'; route: VisitRouteKind }
+  /** A published game began playing. Intentionally carries no slug. */
+  | { type: 'play_started' };
+
+const FLUSH_AT = 5;
+const MAX_BATCH = 25;
+/** A tab that exceeds this is looping, not browsing. */
+const MAX_EVENTS_PER_VISIT = 200;
+const MAX_UTM_LENGTH = 40;
+const MAX_REFERRER_LENGTH = 80;
+/** Ceiling on a reported offset. Beyond this a visit is not a visit. */
+const MAX_VISIT_MS = 24 * 60 * 60 * 1000;
+
+const VISIT_ID_KEY = 'gdpl.visit.id';
+const VISIT_START_KEY = 'gdpl.visit.startedAt';
+
+export type WireVisitEvent = VisitEvent & { msSinceStart: number };
+
+export type VisitTelemetrySend = (body: {
+  visitId: string;
+  flushMsSinceStart: number;
+  events: WireVisitEvent[];
+}) => void;
+
+export const sendVisitTelemetry: VisitTelemetrySend = (body) => {
+  void fetch(`${API_BASE}/api/telemetry/visit`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    credentials: 'include',
+    keepalive: true,
+    body: JSON.stringify(body),
+  }).catch(() => {
+    /* telemetry is best-effort by design */
+  });
+};
+
+/**
+ * The external site a visit came from, reduced to a bare hostname.
+ *
+ * Same-host referrers are dropped rather than recorded: an internal navigation is not
+ * an acquisition, and counting it would make every funnel look like it had a huge
+ * "from gamedev.pl" channel. `www.` is stripped so one site groups as one row.
+ * Anything unparseable disappears — a referrer is never worth a broken event.
+ */
+export function referrerDomain(referrer: string, currentHost: string): string | undefined {
+  if (!referrer) return undefined;
+  let host: string;
+  try {
+    host = new URL(referrer).hostname;
+  } catch {
+    return undefined;
+  }
+  if (!host) return undefined;
+  const normalized = host.replace(/^www\./, '').toLowerCase();
+  const currentNormalized = currentHost.replace(/^www\./, '').toLowerCase();
+  if (!normalized || normalized === currentNormalized) return undefined;
+  return normalized.slice(0, MAX_REFERRER_LENGTH);
+}
+
+/**
+ * One UTM value, or nothing.
+ *
+ * Campaign parameters are attacker- and marketer-supplied strings that end up in a
+ * grouping key, so they are filtered to a conservative alphabet rather than escaped
+ * later: a value that cannot express punctuation cannot smuggle a URL, an email
+ * address, or markup into an aggregate someone reads.
+ */
+export function sanitizeUtm(value: string | null): string | undefined {
+  if (!value) return undefined;
+  const cleaned = value.trim().toLowerCase().slice(0, MAX_UTM_LENGTH);
+  if (!cleaned) return undefined;
+  return /^[a-z0-9._-]+$/.test(cleaned) ? cleaned : undefined;
+}
+
+/** The three UTM fields worth grouping by, read from a real query string. */
+export function utmFields(
+  search: string,
+): Pick<Extract<VisitEvent, { type: 'visit_started' }>, 'utmSource' | 'utmMedium' | 'utmCampaign'> {
+  const params = new URLSearchParams(search);
+  const utmSource = sanitizeUtm(params.get('utm_source'));
+  const utmMedium = sanitizeUtm(params.get('utm_medium'));
+  const utmCampaign = sanitizeUtm(params.get('utm_campaign'));
+  return {
+    ...(utmSource === undefined ? {} : { utmSource }),
+    ...(utmMedium === undefined ? {} : { utmMedium }),
+    ...(utmCampaign === undefined ? {} : { utmCampaign }),
+  };
+}
+
+/**
+ * The route's kind, with every parameter discarded.
+ *
+ * Status and join routes carry capability tokens; play and draft carry a slug.
+ * Reducing to the bare view name here is what guarantees none of them can reach the
+ * wire, rather than relying on each call site to remember.
+ */
+export function routeKind(view: string): VisitRouteKind {
+  switch (view) {
+    case 'play':
+    case 'draft':
+    case 'status':
+    case 'join':
+    case 'legal':
+    case 'health':
+      return view;
+    default:
+      return 'home';
+  }
+}
+
+/**
+ * The current route's kind, read through the app's own router.
+ *
+ * Deliberately delegating to `parsePathRoute` rather than matching the path here:
+ * routing has already changed shape once (hash fragments → real paths), and an
+ * analytics module with its own private copy of the URL grammar is exactly the thing
+ * that keeps reporting `home` for months after such a move without anyone noticing.
+ */
+export function currentRouteKind(): VisitRouteKind {
+  return routeKind(parsePathRoute(window.location.pathname, window.location.hash).view);
+}
+
+/**
+ * Reads (or mints) the visit identity for this tab.
+ *
+ * `startedAt` is stored beside the id because a reload resets `performance.now()` while
+ * the visit continues — without it, refreshing the page would restart the clock and
+ * "time from landing to first play" would be wrong for exactly the visitors who
+ * hesitated. Elapsed time is then a difference between two readings of one clock, and
+ * the server still anchors the absolute instant itself, so a wrong client clock can
+ * misreport its own duration (bounded by a clamp) and nothing else.
+ *
+ * Storage that throws — Safari private mode, storage disabled — falls back to an
+ * in-memory identity for this document. A visit measured slightly worse beats a page
+ * that fails to load.
+ */
+export function readVisitIdentity(
+  storage: Pick<Storage, 'getItem' | 'setItem'> | null,
+  now: number,
+): {
+  visitId: string;
+  startedAt: number;
+  isNew: boolean;
+} {
+  const fresh = { visitId: crypto.randomUUID(), startedAt: now, isNew: true };
+  if (!storage) return fresh;
+  try {
+    const existingId = storage.getItem(VISIT_ID_KEY);
+    const existingStart = Number(storage.getItem(VISIT_START_KEY));
+    if (existingId && Number.isFinite(existingStart) && existingStart > 0) {
+      return { visitId: existingId, startedAt: existingStart, isNew: false };
+    }
+    storage.setItem(VISIT_ID_KEY, fresh.visitId);
+    storage.setItem(VISIT_START_KEY, String(fresh.startedAt));
+    return fresh;
+  } catch {
+    return fresh;
+  }
+}
+
+/**
+ * Batches one visit's events. Free of React and of the DOM so the caps can be tested
+ * directly — a limit that only exists inside an effect is a limit nobody can prove.
+ */
+export class VisitSession {
+  private queue: WireVisitEvent[] = [];
+  private accepted = 0;
+  private closed = false;
+
+  constructor(
+    readonly visitId: string,
+    private readonly startedAt: number,
+    private readonly send: VisitTelemetrySend = sendVisitTelemetry,
+    private readonly clock: () => number = () => Date.now(),
+  ) {}
+
+  private elapsed(): number {
+    return Math.min(MAX_VISIT_MS, Math.max(0, Math.round(this.clock() - this.startedAt)));
+  }
+
+  get count(): number {
+    return this.accepted;
+  }
+
+  record(event: VisitEvent): boolean {
+    if (this.closed || this.accepted >= MAX_EVENTS_PER_VISIT) return false;
+    this.queue.push({ ...event, msSinceStart: this.elapsed() });
+    this.accepted += 1;
+    if (this.queue.length >= FLUSH_AT) this.flush();
+    return true;
+  }
+
+  flush(): void {
+    if (this.queue.length === 0) return;
+    const events = this.queue.splice(0, MAX_BATCH);
+    this.send({ visitId: this.visitId, flushMsSinceStart: this.elapsed(), events });
+  }
+
+  close(): void {
+    this.flush();
+    this.closed = true;
+  }
+}
+
+/**
+ * The one live session for this document.
+ *
+ * A singleton so distant call sites — the game player, most importantly — can report a
+ * visit-level fact without threading a session through their props. Absent tracking
+ * (tests, a standalone render) every report is a silent no-op, which is what keeps this
+ * out of the way of code that has nothing to do with measurement.
+ */
+let currentSession: VisitSession | null = null;
+
+export function recordVisitEvent(event: VisitEvent): void {
+  currentSession?.record(event);
+}
+
+/** Test seam: installs a session without touching the DOM. */
+export function setVisitSessionForTesting(session: VisitSession | null): void {
+  currentSession = session;
+}
+
+export interface StartVisitTrackingOptions {
+  send?: VisitTelemetrySend;
+  clock?: () => number;
+}
+
+/**
+ * Starts visit tracking for this document and returns a teardown.
+ *
+ * Mounted from the entry point rather than from a component: the first event has to be
+ * the visit itself, and a component tree that renders a route has already decided what
+ * the visit is by the time it mounts.
+ */
+export function startVisitTracking(options: StartVisitTrackingOptions = {}): () => void {
+  if (typeof window === 'undefined') return () => {};
+
+  const clock = options.clock ?? (() => Date.now());
+  let storage: Storage | null;
+  try {
+    storage = window.sessionStorage;
+  } catch {
+    // Safari private mode and hardened settings throw on access, not on use.
+    storage = null;
+  }
+
+  const identity = readVisitIdentity(storage, clock());
+  const session = new VisitSession(identity.visitId, identity.startedAt, options.send, clock);
+  currentSession = session;
+
+  if (identity.isNew) {
+    const referrer = referrerDomain(document.referrer ?? '', window.location.hostname);
+    session.record({
+      type: 'visit_started',
+      entry: currentRouteKind(),
+      ...(referrer === undefined ? {} : { referrer }),
+      ...utmFields(window.location.search),
+    });
+    // Sent immediately rather than batched: a visit nobody hears about is a hole in the
+    // denominator of every ratio downstream, and a bounced tab runs no cleanup.
+    session.flush();
+  }
+
+  let lastKind = currentRouteKind();
+  function onNavigation() {
+    const kind = currentRouteKind();
+    // Movement within one kind (game to game, clause to clause) is not a funnel step;
+    // how many games got played is `play_started`'s job, not this one's.
+    if (kind === lastKind) return;
+    lastKind = kind;
+    session.record({ type: 'route_viewed', route: kind });
+  }
+
+  /**
+   * In-app navigation is `history.pushState`, which fires no event of its own — so
+   * listening to `popstate` alone would record only back/forward and miss every
+   * forward journey through the app, which is the entire funnel. Wrapping pushState is
+   * what makes a navigation observable without every call site having to report itself.
+   *
+   * ⚠️ TEMPORARY. Patching a global from a telemetry module is a trap: it breaks
+   * mysteriously if anything else patches it too, and it makes this module's teardown
+   * responsible for a global it does not own. The agreed replacement is for `App`'s
+   * `navigate()` to emit a `gdpl:navigate` window event; when that exists, delete this
+   * patch and its teardown and subscribe to that instead. Until then the restore below
+   * is what keeps the damage bounded.
+   */
+  // Kept unbound so teardown can put the *same* function back. Restoring a bound copy
+  // would leave a foreign wrapper installed forever, which is how a "cleaned up"
+  // listener quietly survives into the next test or the next mount.
+  const originalPushState = window.history.pushState;
+  window.history.pushState = function patchedPushState(...args: Parameters<History['pushState']>) {
+    originalPushState.apply(window.history, args);
+    onNavigation();
+  };
+  // popstate for back/forward; hashchange because a join credential lives in the
+  // fragment and editing only the fragment fires neither of the other two.
+  window.addEventListener('popstate', onNavigation);
+  window.addEventListener('hashchange', onNavigation);
+
+  function onHide() {
+    if (document.visibilityState === 'hidden') session.flush();
+  }
+  document.addEventListener('visibilitychange', onHide);
+
+  return () => {
+    window.history.pushState = originalPushState;
+    window.removeEventListener('popstate', onNavigation);
+    window.removeEventListener('hashchange', onNavigation);
+    document.removeEventListener('visibilitychange', onHide);
+    session.close();
+    if (currentSession === session) currentSession = null;
+  };
+}

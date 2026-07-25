@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { isPlayTimeAccruing, TelemetrySession } from './telemetry';
+import { recordVisitEvent } from './visitTelemetry';
 
 // Message envelope tags. The host is the app; the player is the bridge script
 // that runs inside the sandboxed game iframe.
@@ -109,6 +110,10 @@ export function useGameTelemetry(slug: string, enabled: boolean, slots?: number)
 
     const session = new TelemetrySession(slug, crypto.randomUUID());
     session.record({ type: 'game_opened', ...(slots === undefined ? {} : { slots }) });
+    // The same moment, counted in the visit stream — deliberately without the slug, so
+    // depth ("did this sitting play a second game") is answerable while "which games did
+    // this tab play" stays unanswerable.
+    recordVisitEvent({ type: 'play_started' });
     // Sent immediately rather than batched. Every other event can afford to wait, but
     // a tab that is killed outright runs no cleanup and flushes nothing — and an open
     // we never hear about is a hole in the denominator of every ratio downstream.
