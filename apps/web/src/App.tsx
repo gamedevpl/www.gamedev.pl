@@ -50,6 +50,9 @@ export function App() {
   const [catalogStatus, setCatalogStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [catalogEntries, setCatalogEntries] = useState<CatalogEntry[]>([]);
+  // Bumped by the catalog Retry control so a failed load can be re-fetched without
+  // a full page reload (transient GitHub blips show up as 502s).
+  const [catalogReloadKey, setCatalogReloadKey] = useState(0);
 
   // Local storage saved specs
   const [savedSpecs, setSavedSpecs] = useState<SavedSpec[]>(() => getSavedSpecs());
@@ -179,6 +182,7 @@ export function App() {
     if (route.view !== 'home') return;
 
     let cancelled = false;
+    setCatalogStatus('loading');
 
     void fetchCatalog()
       .then((entries) => {
@@ -197,7 +201,11 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [user, privateBeta, route.view]);
+  }, [user, privateBeta, route.view, catalogReloadKey]);
+
+  const handleRetryCatalog = useCallback(() => {
+    setCatalogReloadKey((n) => n + 1);
+  }, []);
 
   // Bring the clarifying-questions panel into view when the refiner returns some.
   useEffect(() => {
@@ -545,10 +553,9 @@ export function App() {
               <GameTheater
                 key={stageContent.game.slug}
                 title={stageContent.game.title}
-                // The badge said "Playing", which the full-screen game already made
-                // obvious. Spending it on the AI disclosure instead puts that notice
-                // where someone is actually consuming the generated content.
-                badge={{ icon: 'sparkle', label: t('ai.generatedBadge') }}
+                // AI Act art. 50 needs a disclosure at the point of consumption; keep
+                // it short so the title stays the hero of the bar.
+                badge={{ icon: 'sparkle', label: t('ai.generatedShort') }}
                 source={{ slug: stageContent.game.slug }}
                 onExit={() => navigate('/')}
                 orientation={stageContent.game.orientation}
@@ -560,7 +567,7 @@ export function App() {
               <GameTheater
                 key={stageContent.game.html}
                 title={stageContent.game.title}
-                badge={{ icon: 'rocket', label: t('ai.generatedBadge') }}
+                badge={{ icon: 'rocket', label: t('ai.generatedShort') }}
                 source={{ html: stageContent.game.html }}
                 onExit={() => setStageContent(null)}
                 meta={
@@ -579,6 +586,7 @@ export function App() {
               catalogEntries={catalogEntries}
               onPlayGame={handlePlayGame}
               onPlayTogether={(game) => void handlePlayTogether(game)}
+              onRetryCatalog={handleRetryCatalog}
             />
           </>
         )}

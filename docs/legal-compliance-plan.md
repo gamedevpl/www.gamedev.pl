@@ -62,8 +62,10 @@ Design decisions worth knowing before editing:
   by the text that actually governs.
 - **The legal route renders before the closed-beta gate** in `App.tsx`. A privacy policy
   behind a login is not published, and the sign-in button is the moment of collection.
-- **The player badge now says "AI-generated game"** where it used to say "Playing" —
-  which the full-screen game already conveyed. The disclosure earns that space.
+- **The player badge is a short "AI" disclosure** (with a longer tooltip) where it used
+  to say "Playing" — which the full-screen game already conveyed. Art. 50 needs the
+  label at the point of consumption; it does not need a neon brand mark next to the
+  title.
 
 ## Launch blockers before opening beyond closed beta
 

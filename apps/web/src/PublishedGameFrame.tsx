@@ -2,6 +2,7 @@ import { useEffect, useState, type MutableRefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameFrame } from './GameFrame';
 import { fetchPublishedGame } from './catalog';
+import { PixelIcon } from './PixelIcon';
 import { useGameTelemetry } from './gamePlayer';
 
 type PublishedGameFrameProps = {
@@ -23,6 +24,9 @@ export function PublishedGameFrame({ slug, title, frameRef, embed, slots }: Publ
   const [html, setHtml] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [gameTitle, setGameTitle] = useState<string>(title);
+  // Bumped by the Retry control so a failed fetch can be re-attempted without
+  // leaving the theater (which would otherwise be the only way to try again).
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   // Starts only once the document is in hand, so a session means "a game was handed
   // to a player" rather than "a card was clicked". A fetch that never resolves is a
@@ -49,10 +53,17 @@ export function PublishedGameFrame({ slug, title, frameRef, embed, slots }: Publ
     return () => {
       cancelled = true;
     };
-  }, [slug, title]);
+  }, [slug, title, loadAttempt]);
 
   if (failed) {
-    return <p className="error">{t('catalog.gameLoadError')}</p>;
+    return (
+      <div className="load-error" role="alert">
+        <p className="error">{t('catalog.gameLoadError')}</p>
+        <button type="button" className="secondary-btn" onClick={() => setLoadAttempt((n) => n + 1)}>
+          <PixelIcon name="undo" size={13} /> {t('catalog.retry')}
+        </button>
+      </div>
+    );
   }
   if (html === null) {
     return <p className="catalog-state">{t('catalog.gameLoading')}</p>;

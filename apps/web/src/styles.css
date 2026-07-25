@@ -1469,15 +1469,21 @@ body.player-open {
   flex: 1 1 auto;
 }
 
+/* Quiet AI Act disclosure — present, not a neon brand mark next to the title. */
 .theater-badge {
-  background: rgba(0, 228, 172, 0.12);
-  border: 1px solid rgba(0, 228, 172, 0.3);
-  color: var(--turquoise);
-  font-size: 0.75rem;
-  font-weight: 700;
-  padding: 3px 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
   border-radius: 6px;
   text-transform: uppercase;
+  flex: none;
 }
 
 .theater-title {
@@ -1578,8 +1584,10 @@ body.player-open {
 }
 
 /* Icon + label, so the label can drop out on a narrow screen and leave a square,
-   thumb-sized icon button behind (each control carries its own aria-label). */
-.game-theater-actions button {
+   thumb-sized icon button behind (each control carries its own aria-label).
+   Include .report-btn (an <a>) so it sizes with the real buttons. */
+.game-theater-actions button,
+.game-theater-actions .report-btn {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -1614,12 +1622,14 @@ body.player-open {
     text-overflow: ellipsis;
   }
 
-  .game-theater-actions button .btn-label {
+  .game-theater-actions button .btn-label,
+  .game-theater-actions .report-btn .btn-label {
     display: none;
   }
 
   /* Sized for a thumb (Apple/Google both land on ~44px) rather than a cursor. */
-  .game-theater-actions button {
+  .game-theater-actions button,
+  .game-theater-actions .report-btn {
     min-width: 44px;
     min-height: 44px;
     justify-content: center;
@@ -1645,7 +1655,8 @@ body.player-open {
     font-size: 0.85rem;
   }
 
-  .game-theater-actions button {
+  .game-theater-actions button,
+  .game-theater-actions .report-btn {
     min-height: 36px;
     padding: 7px 9px;
   }
@@ -1675,6 +1686,27 @@ body.player-open {
 .error {
   color: var(--error);
   margin: 12px 0 0;
+}
+
+.load-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 160px;
+  padding: 24px 16px;
+  text-align: center;
+}
+
+.load-error .error {
+  margin: 0;
+  max-width: 36rem;
+}
+
+.game-viewport-container .load-error {
+  min-height: 100%;
 }
 
 /* SUBMISSION STATUS VIEW */
@@ -4088,7 +4120,9 @@ body.player-open {
   font-weight: 600;
 }
 
-/* AI-generation disclosures (AI Act art. 50) -------------------------------- */
+/* AI-generation disclosures (AI Act art. 50) --------------------------------
+   Matched to .genre-pill: same weight, no neon border — disclosure without
+   shouting over the preview. */
 
 .ai-pill {
   position: absolute;
@@ -4097,13 +4131,13 @@ body.player-open {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: #fff;
-  background: rgba(6, 10, 14, 0.82);
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(6, 10, 14, 0.72);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
-  border: 1px solid var(--turquoise-glow);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.04em;
   padding: 3px 8px;
   border-radius: 999px;
@@ -4148,13 +4182,33 @@ body.player-open {
   color: var(--turquoise);
 }
 
-/* The report control is an anchor styled as one of the theater's buttons, so it
-   has to opt into the same layout the real buttons get from .secondary-btn. */
+/* Quiet DSA art. 16 control: findable, not competing with Sound/Fullscreen/Exit. */
 .report-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
   text-decoration: none;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.report-btn:hover,
+.report-btn:focus-visible {
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  outline: none;
 }
 
 @media (max-width: 640px) {

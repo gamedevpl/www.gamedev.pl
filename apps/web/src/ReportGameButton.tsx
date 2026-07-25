@@ -37,14 +37,16 @@ export function ReportGameButton({ slug, title }: { slug: string; title: string 
     t('report.goodFaith'),
   ].join('\n');
 
+  // Quiet text control on purpose: DSA art. 16 needs a findable report path, but
+  // it must not compete with Sound / Fullscreen / Exit in the theater chrome.
   return (
     <a
-      className="secondary-btn report-btn"
+      className="report-btn"
       href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`}
       aria-label={t('report.action')}
       title={t('report.action')}
     >
-      <PixelIcon name="flag" size={13} />
+      <PixelIcon name="flag" size={12} />
       <span className="btn-label">{t('report.action')}</span>
     </a>
   );
