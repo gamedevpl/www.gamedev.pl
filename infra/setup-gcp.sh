@@ -72,8 +72,7 @@ gcloud secrets add-iam-policy-binding session-secret \
 # to a collection group rather than a path, and `submissions/{n}/events` holds durable
 # build history that must never expire.
 # `ttls list` reports only fields that already have a policy, so a name match is the
-# existence check. Matched with grep rather than `--filter`, whose `:` operator does not
-# match a slash-separated path reliably.
+# existence check. Verified against the live ACTIVE policy on 2026-07-25.
 echo "==> 6/6 Ensuring the 90-day TTL policy on telemetry playEvents.expiresAt"
 if gcloud firestore fields ttls list --project="$PROJECT_ID" --format="value(name)" 2>/dev/null |
   grep -q "collectionGroups/playEvents/fields/expiresAt"; then
