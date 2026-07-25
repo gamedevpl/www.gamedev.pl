@@ -200,8 +200,9 @@ registry gains FCM/APNs token rows alongside the web-push subscriptions it alrea
   - ✅ `HeroPromptSection` — media buttons no longer float over the textarea, example
     chips are one swipeable row instead of a 148px stack, and the wordmark stops
     colliding with the sign-in button on a 320px screen.
-  - 📋 `CreatorStudio`, `SubmissionStatusView`, `ClosedBetaSplash`, `AuthModal`, and the
-    `ArcadeCatalog` grid — never audited at 360px.
+  - 📋 `SubmissionStatusView`, `ClosedBetaSplash`, `AuthModal`, and the `ArcadeCatalog`
+    grid — never audited at 360px. (`CreatorStudio` was on this list until it was
+    deleted as dead code — it had not been mounted since the QA gate moved into `App`.)
 - ✅ Mobile play surface: `GameTheater` has wake-lock, the orientation nudge from catalog
   metadata, safe-area insets, and an on-screen close.
 - ✅ **Games touch contract** — built and CI-enforced; see the section above. 73 games,
