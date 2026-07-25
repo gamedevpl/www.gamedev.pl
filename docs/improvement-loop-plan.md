@@ -157,6 +157,16 @@ document.hasFocus()` is the correct gate — `hasFocus()` is true when focus
   corroborates it but never overrides it: a stalled game must not be able to
   bill itself play time, and a cheating game must not be able to either.
 
+  **A low `alive` frame count is not by itself a broken game.** Observed in the
+  first real sessions: a `brick-storm` session reported ~300 frames per 5s tick
+  throughout play, then `frames: 1` on the first tick after the machine had been
+  asleep for three hours. Browsers throttle or freeze background tabs, and
+  `performance.now()` does not advance across suspension — so that session's
+  offsets covered ~1330s while its wall clock covered ~3.5h. Two consequences for
+  IL-2: a near-zero `frames` reading immediately following a gap is a resume
+  artifact and must not count as a stall, and `max(msSinceOpen)` is _not_ session
+  wall-clock duration — summed `play_time` is the only honest duration measure.
+
 ### Why telemetry from inside the sandbox is untrusted
 
 A game (buggy or malicious) can emit garbage or floods. The shell enforces:
@@ -252,7 +262,7 @@ submissions/{issueNumber}/
 games/{slug}/
   scorecard/current    ← rolling aggregate doc (the ONLY thing agents read)
   votes/{uid}          ← { value: up|down, updatedAt }
-telemetry/{yyyy-mm-dd}/events/{id}   ← raw events, 90-day TTL, keyed by slug
+telemetry/{yyyy-mm-dd}/playEvents/{id}  ← raw events, 90-day TTL, keyed by slug
 suggestions/{id}       ← { slug, insight, proposedAction, evidence, status:
                            proposed|approved|rejected|issue-filed|merged|measured }
 ```
@@ -263,9 +273,14 @@ Notes on the shape:
   introduce after all — because it is the only place every playable game can be
   addressed. Player feedback stays under the submission, where the existing
   creator-feedback route already writes it and where a takedown removes it.
-- Raw telemetry is date-partitioned top-level so a TTL policy can expire it
-  wholesale, and so the aggregation job reads one day's partition rather than
-  fanning out across games.
+- Raw telemetry is date-partitioned top-level so the aggregation job reads one
+  day's partition rather than fanning out across games.
+- The subcollection is **`playEvents`**, not `events`. A Firestore TTL policy is
+  scoped to a _collection group_, not to a path, so calling it `events` would put
+  one retention rule over both ephemeral play data and the durable build history in
+  `submissions/{n}/events`. Each row carries an `expiresAt` Timestamp — dated from
+  the event's own `at`, not from write time, since a late flush may be back-dated
+  and retention is a promise about the play, not about our receipt of it.
 - `suggestions` is top-level because the babysitter queries it globally
   ("what is proposed anywhere, ranked by value") far more often than per game.
 
@@ -456,8 +471,15 @@ at all and feeds the only autonomous-eligible class.
   documented in its agent instructions so maintenance adds markers organically.
   The API already accepts `progress` / `score` / `end`, so landing it needs no
   app change.
-- 📋 A Firestore TTL policy on `telemetry/{yyyy-mm-dd}` — the 90-day retention this
-  plan promises is currently a documented intention, not an enforced one.
+- ✅ **90-day retention, enforced.** Every row is written with an `expiresAt`
+  Timestamp ([store.ts](../apps/api/src/store.ts) `telemetryExpiresAt`) and the TTL
+  policy is provisioned by [setup-gcp.sh](../infra/setup-gcp.sh) step 6/6. Until
+  this landed the 90 days was a documented intention that nothing enforced — worth
+  recording _why_ it was easy to miss: a TTL policy needs a Timestamp field, `at` is
+  an ISO string, so the promise was not merely unimplemented but **impossible**
+  against the schema as it stood. Rows written before the field existed are never
+  expired by the policy; at the time of the change that was 75 events in a single
+  day's partition.
 - Exit: health, funnel and votes visibly accumulating for live games.
 
 ### Phase IL-2 — Distill (aggregates + dashboard)

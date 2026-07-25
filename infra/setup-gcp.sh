@@ -13,27 +13,27 @@ PROJECT_ID="${PROJECT_ID:-gamedevpl}"
 REGION="${REGION:-europe-central2}"
 DEPLOYER_SA="${SA_NAME:-github-actions-deployer}@${PROJECT_ID}.iam.gserviceaccount.com"
 
-echo "==> 1/5 Enabling required GCP APIs"
+echo "==> 1/6 Enabling required GCP APIs"
 gcloud services enable run.googleapis.com cloudbuild.googleapis.com \
   artifactregistry.googleapis.com secretmanager.googleapis.com firestore.googleapis.com \
   aiplatform.googleapis.com \
   --project "$PROJECT_ID"
 
-echo "==> 2/5 Provisioning Firestore (Native Mode) in ${REGION}"
+echo "==> 2/6 Provisioning Firestore (Native Mode) in ${REGION}"
 if gcloud firestore databases describe --project "$PROJECT_ID" >/dev/null 2>&1; then
   echo "    Firestore database already exists."
 else
   gcloud firestore databases create --location="$REGION" --type=firestore-native --project="$PROJECT_ID"
 fi
 
-echo "==> 3/5 Granting datastore.user role to Deployer SA (${DEPLOYER_SA})"
+echo "==> 3/6 Granting datastore.user role to Deployer SA (${DEPLOYER_SA})"
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:${DEPLOYER_SA}" \
   --role="roles/datastore.user" \
   --condition=None \
   >/dev/null
 
-echo "==> 4/5 Ensuring Cloud Run runtime SA has datastore.user and aiplatform.user roles"
+echo "==> 4/6 Ensuring Cloud Run runtime SA has datastore.user and aiplatform.user roles"
 PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format="value(projectNumber)")
 RUN_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
@@ -48,7 +48,7 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --condition=None \
   >/dev/null
 
-echo "==> 5/5 Ensuring session-secret exists in Secret Manager and granting secretAccessor"
+echo "==> 5/6 Ensuring session-secret exists in Secret Manager and granting secretAccessor"
 if gcloud secrets describe session-secret --project "$PROJECT_ID" >/dev/null 2>&1; then
   echo "    Secret 'session-secret' already exists."
 else
@@ -62,5 +62,27 @@ gcloud secrets add-iam-policy-binding session-secret \
   --project="$PROJECT_ID" \
   >/dev/null
 
+# Raw play telemetry is kept for 90 days (docs/improvement-loop-plan.md IL-1). Firestore
+# enforces that with a TTL policy on the field the writer stamps — see
+# TELEMETRY_TTL_FIELD / TELEMETRY_COLLECTION in apps/api/src/store.ts. The policy names
+# must match those constants exactly: a policy pointed at the wrong field or collection
+# group is a silent no-op that deletes nothing and reports no error.
+#
+# The collection group is `playEvents`, deliberately not `events` — a TTL policy applies
+# to a collection group rather than a path, and `submissions/{n}/events` holds durable
+# build history that must never expire.
+echo "==> 6/6 Ensuring the 90-day TTL policy on telemetry playEvents.expiresAt"
+TTL_STATE="$(gcloud firestore fields ttls list --project="$PROJECT_ID" \
+  --filter="name:playEvents/fields/expiresAt" --format="value(ttlConfig.state)" 2>/dev/null || true)"
+if [ -n "$TTL_STATE" ]; then
+  echo "    TTL policy already present (state: ${TTL_STATE})."
+else
+  gcloud firestore fields ttls update expiresAt \
+    --collection-group=playEvents \
+    --project="$PROJECT_ID"
+  echo "    TTL policy created. It applies to documents written from now on; rows"
+  echo "    predating the field are never expired by it."
+fi
+
 echo ""
-echo "==> Done. Firestore database, IAM roles (datastore.user, aiplatform.user), and session-secret configured for project ${PROJECT_ID}."
+echo "==> Done. Firestore database, IAM roles (datastore.user, aiplatform.user), session-secret, and telemetry TTL configured for project ${PROJECT_ID}."

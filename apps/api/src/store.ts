@@ -160,6 +160,49 @@ export interface TelemetryEvent {
   outcome?: 'won' | 'lost' | 'quit';
 }
 
+/**
+ * How long a raw play event is kept. Aggregates outlive it; the rows themselves do not.
+ *
+ * Ninety days is the promise docs/improvement-loop-plan.md makes, and until this
+ * constant existed it was a promise nothing enforced — the collection simply grew.
+ */
+export const TELEMETRY_RETENTION_DAYS = 90;
+
+/**
+ * The Firestore field a TTL policy watches, and the collection group it lives in.
+ *
+ * Exported because the policy is applied out-of-band with `gcloud firestore fields
+ * ttls update`, and a policy naming a different field or group than the writer uses is
+ * a silent no-op — nothing deletes, and nobody notices until a privacy question is
+ * asked. Keeping both names in one place means the deploy note and the code cannot
+ * drift apart quietly.
+ */
+export const TELEMETRY_TTL_FIELD = 'expiresAt';
+/**
+ * Telemetry's own collection group, deliberately *not* `events`.
+ *
+ * A TTL policy is scoped to a collection group, not to a path, so sharing the name
+ * `events` with `submissions/{n}/events` would put one retention rule over both
+ * ephemeral play data and durable build history. They have opposite lifetimes, so they
+ * get separate groups.
+ */
+export const TELEMETRY_COLLECTION = 'playEvents';
+
+/**
+ * When a play event becomes deletable: its own event time plus the retention window.
+ *
+ * Anchored to `at` rather than to write time on purpose. `at` can be back-dated by up
+ * to six hours for a late flush, and retention is a promise about how long we keep data
+ * describing a play — not about how long after we happened to receive it.
+ */
+export function telemetryExpiresAt(at: string): Date {
+  const eventTime = Date.parse(at);
+  // An unparseable timestamp must not become an immortal row: fall back to now, which
+  // is never later than the event it stands in for.
+  const anchor = Number.isFinite(eventTime) ? eventTime : Date.now();
+  return new Date(anchor + TELEMETRY_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+}
+
 // Transactional creator events (docs/notifications-plan.md). Deliberately minimal —
 // queued/in_review are not notified. New types must pass the "would the user thank
 // us?" test before being added.
@@ -908,7 +951,7 @@ export class FirestoreStore implements Store {
   }
 
   private telemetryCollection(dateStr: string) {
-    return this.db.collection('telemetry').doc(dateStr).collection('events');
+    return this.db.collection('telemetry').doc(dateStr).collection(TELEMETRY_COLLECTION);
   }
 
   async appendTelemetryEvents(dateStr: string, events: TelemetryEvent[]): Promise<void> {
@@ -917,7 +960,11 @@ export class FirestoreStore implements Store {
     // inside Firestore's 500-write batch limit (the route caps a request long before).
     const collection = this.telemetryCollection(dateStr);
     const batch = this.db.batch();
-    events.forEach((event) => batch.set(collection.doc(randomUUID()), event));
+    events.forEach((event) =>
+      // `expiresAt` is written as a Date so the driver stores a real Timestamp: a TTL
+      // policy ignores a field of any other type, which would leave the row forever.
+      batch.set(collection.doc(randomUUID()), { ...event, [TELEMETRY_TTL_FIELD]: telemetryExpiresAt(event.at) }),
+    );
     await batch.commit();
   }
 
@@ -926,7 +973,12 @@ export class FirestoreStore implements Store {
     const base = this.telemetryCollection(dateStr);
     const query = opts?.slug === undefined ? base : base.where('slug', '==', opts.slug);
     const snap = await query.limit(opts?.limit ?? 1000).get();
-    return snap.docs.map((doc) => doc.data() as TelemetryEvent);
+    return snap.docs.map((doc) => {
+      // Retention plumbing stays out of the domain object, so a reader cannot mistake
+      // it for signal and the privacy field-allowlist stays exactly the event's fields.
+      const { [TELEMETRY_TTL_FIELD]: _expiresAt, ...event } = doc.data();
+      return event as TelemetryEvent;
+    });
   }
 
   async getUsage(uid: string, dateStr: string): Promise<UsageCounters> {
