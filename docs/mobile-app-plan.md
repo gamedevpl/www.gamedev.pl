@@ -1,11 +1,32 @@
 # Mobile app: design & phased plan (iOS + Android)
 
-> Status: **proposed** (2026-07-23). Goal: creators and players can create and play from
-> iOS and Android phones — without breaking the platform's two founding invariants:
-> games are sandboxed web content, and QR-party guests join with **zero installs**.
+> Status: **proposed** (2026-07-23), **reality-synced 2026-07-25**. Goal: creators and
+> players can create and play from iOS and Android phones — without breaking the
+> platform's two founding invariants: games are sandboxed web content, and QR-party
+> guests join with **zero installs**.
 > Builds on [`vision.md`](./vision.md), [`multiplayer-plan.md`](./multiplayer-plan.md),
 > [`notifications-plan.md`](./notifications-plan.md), and the M1 auth stack from
 > [`auth-and-usage-plan.md`](./auth-and-usage-plan.md).
+
+> **Progress since the first draft (2026-07-25).** The strategy below is unchanged; the
+> milestone boundaries have shifted because work landed out of the planned order:
+>
+> - ✅ **Web push is live** (desktop + Android), shipped via the notifications track, not
+>   M1. `apps/web/public/sw.js` (push-only worker), `apps/web/src/pushApi.ts`,
+>   `apps/api/src/push-routes.ts` / `pusher.ts`, VAPID wiring, and a **per-user push
+>   subscription registry** in `apps/api/src/store.ts` all exist and are verified in prod.
+>   This plan had scheduled push into M1 and the token registry into M2 — **both are now
+>   done**, so M1 shrinks to manifest + offline shell + install path, and M2's push work
+>   is registration/APNs only.
+> - ✅ **QR-party multiplayer shipped** (`apps/web/src/mp/`, `ControllerView` with
+>   wake-lock) — the M2 sequencing precondition is met, and the zero-install mobile-web
+>   controller path is proven, not hypothetical.
+> - 🚧 **A mobile/accessibility pass partly landed** on nav, catalog, and the creator
+>   flow (real `@media` breakpoints in `styles.css`); `GameTheater.tsx` exists as the
+>   full-viewport play surface M0 wanted.
+> - 📋 **The games touch contract is still entirely unbuilt** — no `touch`/`orientation`
+>   frontmatter, no catalog metadata, no CI smoke check, no agent-instruction rule. This
+>   is now the **critical unstarted M0 item**; everything else in M0 is cosmetic beside it.
 
 ## Problem
 
@@ -15,12 +36,17 @@ in a creator's pocket when their game finishes building
 ([`notifications-plan.md`](./notifications-plan.md)) — but nothing is actually built for
 them:
 
-- The web app has a viewport meta tag and nothing else: no responsive audit, no touch
-  affordances, no PWA manifest, no service worker, no install path.
-- Published games have **no touch-input contract**. An agent-built game that only reads
-  `keydown` is simply unplayable on a phone, and no CI check would notice.
-- The "your game is live!" push moment (the single highest-value notification) has no
-  delivery channel on iOS without either an installed PWA (iOS 16.4+) or a native app.
+- The web app has had a partial mobile pass (breakpoints on nav, catalog, and the creator
+  flow) but no full responsive audit, no mobile play affordances (`GameTheater` lacks
+  wake-lock / orientation / safe-area / on-screen back), and no PWA manifest, no offline
+  caching, no install path. There is a service worker (`sw.js`) but it is deliberately
+  **push-only** — it caches nothing and intercepts no fetches.
+- Published games still have **no touch-input contract**. An agent-built game that only
+  reads `keydown` is simply unplayable on a phone, and no CI check would notice. _This is
+  the single most important unbuilt item — see the progress note above._
+- The "your game is live!" push moment now **has** a delivery channel on desktop and
+  Android (web push shipped). The remaining gap is **iOS**, where push requires either an
+  installed PWA (iOS 16.4+) or a native app.
 - There is no store presence, which is how most players think apps are discovered.
 
 ## Constraints that shape the answer
@@ -129,35 +155,41 @@ This lands in M0 because _nothing else matters if the games themselves reject fi
 ### Push delivery
 
 Extends [`notifications-plan.md`](./notifications-plan.md)'s delivery phase rather than
-inventing a channel: the notifications doc's detection + storage layers stay identical;
-this plan adds **device token registry** (per-uid FCM/APNs/web-push tokens in Firestore)
-and makes `submission.published` the first push-delivered event. FCM can fan out to
-Android, iOS (via APNs), _and_ web push, so one delivery integration covers all three.
+inventing a channel. **Already built** (via the notifications track): the detection +
+storage layers, a per-user **web-push subscription registry** (`apps/api/src/store.ts`),
+and `submission.published` delivered over web push on desktop + Android. **Remaining**:
+native token registration on iOS/Android (APNs/FCM) inside the Capacitor shell — the same
+registry gains FCM/APNs token rows alongside the web-push subscriptions it already holds.
 
 ## Milestones
 
-### M0 — Mobile-web hardening 📋 (prerequisite for everything)
+### M0 — Mobile-web hardening 🚧 (prerequisite for everything; partly done)
 
-- Responsive pass over `App.tsx` surfaces: `NavHeader`, `ArcadeCatalog`, `CreatorStudio`,
-  `SubmissionStatusView`, `ClosedBetaSplash` — one column, thumb-sized targets,
-  safe-area insets, no horizontal scroll at 360 px.
-- Mobile play surface: fullscreen game route, orientation hint from catalog metadata,
-  wake-lock while playing, on-screen close/back that doesn't rely on browser chrome.
-- Games touch contract shipped (frontmatter, catalog badge/filter, agent instructions,
-  CI smoke check, retrofit PRs for seeded games).
+- 🚧 Responsive pass over `App.tsx` surfaces: `NavHeader`, `ArcadeCatalog`,
+  `CreatorStudio`, `SubmissionStatusView`, `ClosedBetaSplash` — one column, thumb-sized
+  targets, safe-area insets, no horizontal scroll at 360 px. _Started_ (nav, catalog,
+  creator flow have breakpoints); finish the audit across all surfaces.
+- 📋 Mobile play surface: `GameTheater` exists but is not mobile-hardened — add
+  orientation hint from catalog metadata, wake-lock while playing, safe-area insets, and
+  an on-screen close/back that doesn't rely on browser chrome.
+- 📋 **Games touch contract (the critical unstarted item)**: frontmatter, catalog
+  badge/filter, agent instructions, CI smoke check, retrofit PRs for seeded games.
+  **Nothing else in M0 matters if games reject fingers — do this first.**
 - Exit criterion: **on a real iPhone and a real Android phone, sign in, browse, play a
   touch game, submit a spec, and watch its status — comfortably.**
 
-### M1 — PWA 📋
+### M1 — PWA 📋 (push already done; only the shell remains)
 
-- Web app manifest (name, icons, `display: standalone`, theme `#1d2123`/`#00e4ac`),
-  service worker precaching the shell (never game bundles — they stay sandboxed and
-  cross-origin), offline fallback page, custom install prompt on Android, "Add to Home
-  Screen" hint on iOS.
-- Web-push registration behind the platform adapter + token registry endpoint
-  (`POST /api/push/tokens`); deliver `submission.published` via web push on Android.
+- 📋 Web app manifest (name, icons, `display: standalone`, theme `#1d2123`/`#00e4ac`),
+  a service worker that precaches the shell (extend the existing push-only `sw.js` — never
+  cache game bundles; they stay sandboxed and cross-origin), offline fallback page, custom
+  install prompt on Android, "Add to Home Screen" hint on iOS.
+- ✅ Web-push registration + per-user subscription registry + `submission.published`
+  delivered over web push on desktop/Android — **already shipped via the notifications
+  track**. M1 no longer owns any push work; it only makes the app installable so iOS gets
+  push too.
 - Exit criterion: **installed PWA opens to a rendered shell in under a second on a cold
-  API, and an Android creator gets a push when their game publishes.**
+  API** (the Android-push half of the original criterion is already met in the browser).
 
 ### M2 — Store apps (Capacitor) 📋
 
@@ -210,11 +242,13 @@ Android, iOS (via APNs), _and_ web push, so one delivery integration covers all 
 
 ## Sequencing note
 
-M0 is pure web + games-repo work and can start now; it also directly serves the
-closed-beta cohort ([`closed-beta-launch-plan.md`](./closed-beta-launch-plan.md)).
-M1 is small and independent. M2 should wait until after the public-beta content-safety
-gates are live (report action depends on the moderation queue) and until the QR-party
-v1 exists — the store apps are dramatically more compelling when "scan to join" is real.
+M0 is pure web + games-repo work and can start now; it also directly serves the live
+closed-beta cohort ([`closed-beta-launch-plan.md`](./closed-beta-launch-plan.md)). Within
+M0, the **games touch contract comes first** — it is the only item that gates whether
+phones can play at all. M1 is now small (manifest + offline shell; push is done) and
+independent. QR-party v1 **already exists**, so that M2 precondition is met; M2 still
+waits on the public-beta content-safety gates (the in-app report action depends on the
+moderation queue).
 
 ---
 
