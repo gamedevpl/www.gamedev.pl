@@ -477,9 +477,10 @@ at all and feeds the only autonomous-eligible class.
   this landed the 90 days was a documented intention that nothing enforced — worth
   recording _why_ it was easy to miss: a TTL policy needs a Timestamp field, `at` is
   an ISO string, so the promise was not merely unimplemented but **impossible**
-  against the schema as it stood. Rows written before the field existed are never
-  expired by the policy; at the time of the change that was 75 events in a single
-  day's partition.
+  against the schema as it stood. The policy is **`ACTIVE` in production** as of
+  2026-07-25 and every row in the database carries the field — the 75 pre-change
+  rows, which no policy could ever have expired, were deleted rather than left as a
+  partition quietly exempt from the promise.
 - Exit: health, funnel and votes visibly accumulating for live games.
 
 ### Phase IL-2 — Distill (aggregates + dashboard)
