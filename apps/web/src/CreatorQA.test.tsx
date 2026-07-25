@@ -132,6 +132,45 @@ describe('CreatorQA', () => {
     await act(async () => root.unmount());
   });
 
+  it('stays up and says so while the submission is in flight', async () => {
+    // The panel used to unmount the instant you approved, leaving blank space for as
+    // long as the API took to create the issue. It now reports its own progress.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(CreatorQA, {
+          questions: mockQuestions,
+          initialConcept: 'Dodge the falling rocks and survive as long as possible',
+          onSubmitWithConcept: vi.fn(),
+          onCancel: vi.fn(),
+          submitting: true,
+          error: 'Daily quota exceeded',
+        }),
+      );
+      await flushEffects();
+    });
+
+    const createBtns = container.querySelectorAll<HTMLButtonElement>('.btn-create-now');
+    expect(createBtns).toHaveLength(2);
+    for (const btn of createBtns) {
+      expect(btn.disabled).toBe(true);
+      expect(btn.textContent).toContain('Submitting');
+    }
+
+    // Walking away mid-flight would strand a submission the creator can't see.
+    expect(container.querySelector<HTMLButtonElement>('.btn-secondary')?.disabled).toBe(true);
+    // The error belongs where the creator is looking, not only up in the hero.
+    expect(container.querySelector('.qa-error')?.textContent).toBe('Daily quota exceeded');
+
+    await act(async () => root.unmount());
+  });
+
   it('labels the secondary action for what it does — dismiss, not submit', async () => {
     // It used to read "Skip Clarifications", which promises the thing the primary
     // button does. Whatever the wording becomes, it must not imply a submission.

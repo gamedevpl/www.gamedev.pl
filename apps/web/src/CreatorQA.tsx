@@ -19,9 +19,20 @@ interface CreatorQAProps {
   initialConcept: string;
   onSubmitWithConcept: (finalConcept: string) => void;
   onCancel?: () => void;
+  /** The submission is in flight; the panel stays up rather than vanishing into a gap. */
+  submitting?: boolean;
+  /** Shown here as well as in the hero, because this is where the creator is looking. */
+  error?: string | null;
 }
 
-export function CreatorQA({ questions, initialConcept, onSubmitWithConcept, onCancel }: CreatorQAProps) {
+export function CreatorQA({
+  questions,
+  initialConcept,
+  onSubmitWithConcept,
+  onCancel,
+  submitting = false,
+  error = null,
+}: CreatorQAProps) {
   const { t } = useTranslation();
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
   const [customText, setCustomText] = useState<Record<string, string>>({});
@@ -84,14 +95,14 @@ export function CreatorQA({ questions, initialConcept, onSubmitWithConcept, onCa
       </div>
 
       <div className="qa-actions qa-actions--top">
-        <button type="button" className="btn btn-primary btn-create-now" onClick={handleSubmit}>
-          <PixelIcon name="rocket" size={14} /> {t('qa.createNow')}
+        <button type="button" className="btn btn-primary btn-create-now" onClick={handleSubmit} disabled={submitting}>
+          <PixelIcon name="rocket" size={14} /> {submitting ? t('submit.submitting') : t('qa.createNow')}
         </button>
         {/* This dismisses the panel and drops the pending spec — it does *not* submit.
             It was labelled "skip clarifications", which reads as "create without
             answering"; that is what the primary button next to it already does. */}
         {onCancel && (
-          <button type="button" className="btn btn-secondary" onClick={onCancel}>
+          <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={submitting}>
             {t('qa.backToEditing')}
           </button>
         )}
@@ -153,9 +164,11 @@ export function CreatorQA({ questions, initialConcept, onSubmitWithConcept, onCa
         </div>
       ) : null}
 
+      {error && <p className="error qa-error">{error}</p>}
+
       <div className="qa-actions qa-actions--bottom">
-        <button type="button" className="btn btn-primary btn-create-now" onClick={handleSubmit}>
-          <PixelIcon name="rocket" size={14} /> {t('qa.createNow')}
+        <button type="button" className="btn btn-primary btn-create-now" onClick={handleSubmit} disabled={submitting}>
+          <PixelIcon name="rocket" size={14} /> {submitting ? t('submit.submitting') : t('qa.createNow')}
         </button>
       </div>
     </div>

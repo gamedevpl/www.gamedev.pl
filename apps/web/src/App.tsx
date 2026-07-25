@@ -308,6 +308,11 @@ export function App() {
 
       setSubmissionStatus('idle');
 
+      // Only now is the QA panel done: it stayed up, in its submitting state, for the
+      // whole call. A no-op when the spec never went through the gate.
+      setQaQuestions([]);
+      setPendingSpec(null);
+
       window.location.hash = statusHash(response.token);
     } catch (err) {
       const message = err instanceof Error ? err.message : t('errors.generic');
@@ -325,11 +330,14 @@ export function App() {
     }
   }
 
-  const handleQaComplete = (finalConcept: string) => {
+  // The panel stays mounted until the submission actually lands. Clearing it first
+  // dropped the creator into blank space for however long the API took to create the
+  // issue — they had just clicked a button and the page answered by deleting itself.
+  // On failure it stays up with the error, so the answers survive a retry.
+  const handleQaComplete = async (finalConcept: string) => {
     const spec = pendingSpec;
-    setQaQuestions([]);
-    setPendingSpec(null);
-    if (spec) void submitRefinedSpec(spec.title, finalConcept, spec.displayName);
+    if (!spec) return;
+    await submitRefinedSpec(spec.title, finalConcept, spec.displayName);
   };
 
   const handleQaCancel = () => {
@@ -439,6 +447,8 @@ export function App() {
                   initialConcept={pendingSpec.concept}
                   onSubmitWithConcept={handleQaComplete}
                   onCancel={handleQaCancel}
+                  submitting={submissionStatus === 'loading'}
+                  error={submissionError}
                 />
               </div>
             )}
