@@ -114,14 +114,20 @@ long-lived service-account key exists.
 
 Genuinely still open, in rough priority order:
 
-- 🔴 **Multiplayer is deployed with the wrong instance count.** [mp.ts](../apps/api/src/mp.ts)
-  states rooms are per-instance in-memory state and that Cloud Run **must** run with
-  `--max-instances 1` while multiplayer is enabled, or a guest lands on an instance
-  that does not hold the host's room. Both deploy paths set `--max-instances 4`
-  ([deploy-api.sh:158](../infra/deploy-api.sh#L158), [deploy.yml:122](../.github/workflows/deploy.yml#L122)).
-  Party mode is therefore expected to fail intermittently in production. Fix by
-  capping instances, or by taking one of the plan's §4.6 upgrade paths (separate
-  relay service / shared room state).
+- ✅ **The multiplayer instance-count mismatch is fixed** (2026-07-25). Both deploy
+  paths set `--max-instances 1`, which [mp.ts](../apps/api/src/mp.ts) requires while
+  multiplayer is enabled: rooms are per-instance in-memory state, so a guest
+  load-balanced onto a second container sees a valid room code as "no such room".
+  Before the fix it worked only because closed-beta traffic rarely warms a second
+  instance — the sort of defect that surfaces on a traffic bump and gets blamed on
+  the guest's wifi.
+- 🔴 **The cap is now the scaling ceiling for the whole API.** Catalog, submissions,
+  telemetry, and status polling all share the one container multiplayer needs.
+  Acceptable at closed-beta traffic, and must be resolved before the site opens:
+  split the relay into its own single-instance service, or move room state somewhere
+  shared ([multiplayer-plan.md](./multiplayer-plan.md) §4.6). Note that Cloud Run's
+  `--session-affinity` is not a fix — it is per-client and cannot map a guest onto
+  the host's instance.
 - 📋 Takedown operations, backups, and published-catalog rollback.
 - 📋 Observability beyond Cloud Run's defaults — no dashboards or alerting on the
   paths that now matter (submission failures, relay stalls, sweep health).
@@ -136,17 +142,17 @@ Genuinely still open, in rough priority order:
 Substantial work that never had a roadmap phase. Each has its own plan document,
 which is the authority on its detail:
 
-| Workstream                | Status                                                                                        | Plan                                                           |
-| ------------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| Closed beta launch        | ✅ live 2026-07-23 on www.gamedev.pl                                                          | [closed-beta-launch-plan.md](./closed-beta-launch-plan.md)     |
-| Auth, usage & quotas      | ✅ Google sign-in, per-user daily counters, waitlist/allowlist                                | [auth-and-usage-plan.md](./auth-and-usage-plan.md)             |
-| Content safety            | ✅ moderation on submission via the genai seam; beta allowlist as the interim outer safeguard | [content-safety-plan.md](./content-safety-plan.md)             |
-| Creator QA pass           | ✅ clarifying questions before spec freeze, now a hard precondition                           | [creator-qa-plan.md](./creator-qa-plan.md)                     |
-| Notifications             | ✅ in-app bell, email + unsubscribe, Web Push (desktop/Android), Cloud Scheduler sweep        | [notifications-plan.md](./notifications-plan.md)               |
-| Live agent build channel  | ✅ agent posts progress/screenshots and gets queued creator requests back                     | [agent-live-channel-plan.md](./agent-live-channel-plan.md)     |
-| Creator experience review | ✅ backlog from a real three-hour session, closed out                                         | [creator-experience-review.md](./creator-experience-review.md) |
-| Multiplayer party mode    | 🚧 relay + party module + seed games built; blocked on the instance-count issue above         | [multiplayer-plan.md](./multiplayer-plan.md)                   |
-| Mobile                    | 📋 mobile web → PWA → store apps                                                              | [mobile-app-plan.md](./mobile-app-plan.md)                     |
+| Workstream                | Status                                                                                         | Plan                                                           |
+| ------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Closed beta launch        | ✅ live 2026-07-23 on www.gamedev.pl                                                           | [closed-beta-launch-plan.md](./closed-beta-launch-plan.md)     |
+| Auth, usage & quotas      | ✅ Google sign-in, per-user daily counters, waitlist/allowlist                                 | [auth-and-usage-plan.md](./auth-and-usage-plan.md)             |
+| Content safety            | ✅ moderation on submission via the genai seam; beta allowlist as the interim outer safeguard  | [content-safety-plan.md](./content-safety-plan.md)             |
+| Creator QA pass           | ✅ clarifying questions before spec freeze, now a hard precondition                            | [creator-qa-plan.md](./creator-qa-plan.md)                     |
+| Notifications             | ✅ in-app bell, email + unsubscribe, Web Push (desktop/Android), Cloud Scheduler sweep         | [notifications-plan.md](./notifications-plan.md)               |
+| Live agent build channel  | ✅ agent posts progress/screenshots and gets queued creator requests back                      | [agent-live-channel-plan.md](./agent-live-channel-plan.md)     |
+| Creator experience review | ✅ backlog from a real three-hour session, closed out                                          | [creator-experience-review.md](./creator-experience-review.md) |
+| Multiplayer party mode    | 🚧 relay + party module + seed games built; the single-instance cap is its price (see Phase 5) | [multiplayer-plan.md](./multiplayer-plan.md)                   |
+| Mobile                    | 📋 mobile web → PWA → store apps                                                               | [mobile-app-plan.md](./mobile-app-plan.md)                     |
 
 ## Phase 6 — Improvement loop 📋
 

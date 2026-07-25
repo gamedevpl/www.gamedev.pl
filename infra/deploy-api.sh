@@ -148,6 +148,14 @@ if [ -n "$VAPID_SUBJECT" ]; then
 fi
 
 echo "==> Deploying to Cloud Run (scale-to-zero)"
+# --max-instances 1: DO NOT RAISE while multiplayer is enabled. Party rooms are
+# per-instance in-memory state (apps/api/src/mp.ts) — the host opens a room on
+# whichever container served it, and a phone scanning the QR is load-balanced
+# independently, so a second instance turns a valid room code into "no such room".
+# Intermittent, and therefore blamed on the guest's wifi. Cookie-based
+# --session-affinity does NOT help: it is per-client and cannot map a guest onto the
+# host's instance. To scale out again, first split the relay into its own service or
+# move room state somewhere shared (docs/multiplayer-plan.md §4.6).
 gcloud run deploy "$SERVICE" \
   --image "$IMAGE" \
   --region "$REGION" \
@@ -155,7 +163,7 @@ gcloud run deploy "$SERVICE" \
   --platform managed \
   --allow-unauthenticated \
   --min-instances 0 \
-  --max-instances 4 \
+  --max-instances 1 \
   --port 8080 \
   --set-env-vars "${ENV_VARS}" \
   ${SECRET_FLAGS[@]+"${SECRET_FLAGS[@]}"}
