@@ -33,8 +33,30 @@ const MAX_EVENTS_PER_SESSION = 400;
 const MAX_DISTINCT_LABELS = 20;
 const MAX_MESSAGE_LENGTH = 200;
 const MAX_LABEL_LENGTH = 40;
+/** Ceiling on a reported offset. Beyond this a session is not a session. */
+const MAX_SESSION_MS = 24 * 60 * 60 * 1000;
 
-export type TelemetrySend = (body: { slug: string; sessionId: string; events: TelemetryEvent[] }) => void;
+/**
+ * An event as it goes on the wire: the caller's event plus how long after the session
+ * opened it happened.
+ *
+ * This exists because server-assigned receipt time is not event time. Events are
+ * batched, so a flush can arrive minutes after the events in it — the first production
+ * session stamped four events at 09:42:01 that had actually happened around 09:36:30,
+ * collapsing 15 seconds of play onto one instant. Absolute time from the client can't
+ * be trusted, but *elapsed* time can: it is a duration from a monotonic clock, so
+ * skew, DST and a wrong system date cannot touch it, and the server still anchors it
+ * to a real instant using the flush's own offset.
+ */
+export type WireEvent = TelemetryEvent & { msSinceOpen: number };
+
+export type TelemetrySend = (body: {
+  slug: string;
+  sessionId: string;
+  /** Age of the session at flush time — the anchor that dates every event in it. */
+  flushMsSinceOpen: number;
+  events: WireEvent[];
+}) => void;
 
 /**
  * Posts a batch. `keepalive` is what makes the final flush survive the page going
@@ -61,16 +83,30 @@ export const sendTelemetry: TelemetrySend = (body) => {
  * an effect is a cap nobody can prove.
  */
 export class TelemetrySession {
-  private queue: TelemetryEvent[] = [];
+  private queue: WireEvent[] = [];
   private accepted = 0;
   private labels = new Set<string>();
   private closed = false;
+  private readonly openedAt: number;
 
   constructor(
     readonly slug: string,
     readonly sessionId: string,
     private readonly send: TelemetrySend = sendTelemetry,
-  ) {}
+    /**
+     * Monotonic millisecond source. `performance.now()` rather than `Date.now()` on
+     * purpose: it cannot jump when the system clock is corrected or the machine wakes
+     * from sleep, so an offset stays a real duration.
+     */
+    private readonly clock: () => number = () => performance.now(),
+  ) {
+    this.openedAt = clock();
+  }
+
+  /** Milliseconds since this session opened, clamped to something a session can be. */
+  private elapsed(): number {
+    return Math.min(MAX_SESSION_MS, Math.max(0, Math.round(this.clock() - this.openedAt)));
+  }
 
   /** Events accepted so far — what the caps are measured against. */
   get count(): number {
@@ -88,7 +124,9 @@ export class TelemetrySession {
     const normalized = this.normalize(event);
     if (!normalized) return false;
 
-    this.queue.push(normalized);
+    // Stamped at record time, not at flush time — the whole point is that the two are
+    // not the same instant.
+    this.queue.push({ ...normalized, msSinceOpen: this.elapsed() });
     this.accepted += 1;
     if (this.queue.length >= FLUSH_AT) this.flush();
     return true;
@@ -98,7 +136,7 @@ export class TelemetrySession {
   flush(): void {
     if (this.queue.length === 0) return;
     const events = this.queue.splice(0, MAX_BATCH);
-    this.send({ slug: this.slug, sessionId: this.sessionId, events });
+    this.send({ slug: this.slug, sessionId: this.sessionId, flushMsSinceOpen: this.elapsed(), events });
   }
 
   /** Final flush for the session; further events are ignored. */

@@ -24,13 +24,19 @@ import type { PublishedGame } from './catalog';
  * moved playback to a component that forgot to bring the session along.
  */
 
-type TelemetryBody = { slug: string; sessionId: string; events: { type: string }[] };
+type WireEvent = { type: string; msSinceOpen: number; slots?: number };
+type TelemetryBody = { slug: string; sessionId: string; flushMsSinceOpen: number; events: WireEvent[] };
 type FetchSpy = MockInstance<typeof globalThis.fetch>;
 
 function telemetryBodies(fetchSpy: FetchSpy): TelemetryBody[] {
   return fetchSpy.mock.calls
     .filter(([url]) => String(url).includes('/api/telemetry'))
     .map(([, init]) => JSON.parse(String(init?.body)) as TelemetryBody);
+}
+
+/** The event minus its timing offset, which every event carries and is asserted apart. */
+function payloads(events: WireEvent[]) {
+  return events.map(({ msSinceOpen: _ignored, ...event }) => event);
 }
 
 describe('PublishedGameFrame telemetry', () => {
@@ -59,7 +65,10 @@ describe('PublishedGameFrame telemetry', () => {
     const opened = telemetryBodies(fetchSpy);
     expect(opened).toHaveLength(1);
     expect(opened[0].slug).toBe('space-hop');
-    expect(opened[0].events).toEqual([{ type: 'game_opened' }]);
+    expect(payloads(opened[0].events)).toEqual([{ type: 'game_opened' }]);
+    // Every event carries its age within the session, so batching cannot lose timing.
+    expect(opened[0].events[0].msSinceOpen).toBeGreaterThanOrEqual(0);
+    expect(typeof opened[0].flushMsSinceOpen).toBe('number');
     // A per-open uuid, not anything stable across sessions.
     expect(opened[0].sessionId).toMatch(/^[0-9a-f-]{36}$/);
 
@@ -69,7 +78,7 @@ describe('PublishedGameFrame telemetry', () => {
 
     const all = telemetryBodies(fetchSpy);
     expect(all).toHaveLength(2);
-    expect(all[1].events).toEqual([{ type: 'game_closed' }]);
+    expect(payloads(all[1].events)).toEqual([{ type: 'game_closed' }]);
     expect(all[1].sessionId).toBe(opened[0].sessionId);
   });
 
@@ -80,7 +89,7 @@ describe('PublishedGameFrame telemetry', () => {
       root.render(<PublishedGameFrame slug="space-hop" title="Space Hop" embed slots={4} />);
     });
 
-    expect(telemetryBodies(fetchSpy)[0].events).toEqual([{ type: 'game_opened', slots: 4 }]);
+    expect(payloads(telemetryBodies(fetchSpy)[0].events)).toEqual([{ type: 'game_opened', slots: 4 }]);
     await act(async () => root.unmount());
   });
 
@@ -100,7 +109,7 @@ describe('PublishedGameFrame telemetry', () => {
       release({ slug: 'space-hop', title: 'Space Hop', html: '<html><body>game</body></html>' });
     });
 
-    expect(telemetryBodies(fetchSpy)[0].events).toEqual([{ type: 'game_opened' }]);
+    expect(payloads(telemetryBodies(fetchSpy)[0].events)).toEqual([{ type: 'game_opened' }]);
     await act(async () => root.unmount());
   });
 });

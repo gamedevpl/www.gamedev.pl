@@ -130,8 +130,20 @@ export interface TelemetryEvent {
   /** Ephemeral per-open id from the shell. Never a uid. */
   sessionId: string;
   type: TelemetryEventType;
-  /** Assigned server-side on receipt; client clocks are not trusted for ordering. */
+  /**
+   * When the event happened, anchored server-side.
+   *
+   * Derived from the flush's arrival time minus the event's own age within the session,
+   * so it is a real instant even though events are batched. Receipt time is the
+   * fallback when a client sends no offsets. Never a client wall-clock reading.
+   */
   at: string;
+  /**
+   * Milliseconds from session open to this event, from the browser's monotonic clock.
+   * The trustworthy measure of *within-session* timing — ordering and drop-off depend
+   * on it, since several events dated from one flush can share a rounded `at`.
+   */
+  msSinceOpen?: number;
   /** `play_time`: seconds of focused play this heartbeat covers. */
   seconds?: number;
   /** `alive`: animation frames observed since the previous tick. 0 means stalled. */

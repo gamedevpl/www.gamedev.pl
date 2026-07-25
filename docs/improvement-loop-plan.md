@@ -17,14 +17,26 @@
 > ([telemetry.ts](../apps/api/src/telemetry.ts)). Votes, written player feedback,
 > and the games-repo telemetry module are the rest of IL-1.
 >
-> **Not yet observed working in production.** The first deploy of the intake wrote
-> nothing at all: it gated on the submission document, which 34 of 42 catalog games
-> do not have, so every flush was accepted and silently discarded. Fixed the same
-> day by keying on the games-repo slug and gating on catalog membership
-> ([published-slugs.ts](../apps/api/src/published-slugs.ts)); the drop path now
-> counts and logs itself, because a silent branch is what hid the bug. The next real
-> play session on the live site is the thing that proves it — treat "capture works"
-> as unconfirmed until a row exists in `telemetry/{yyyymmdd}/events`.
+> **Capture is confirmed working in production** (2026-07-25). A real session on
+> `arena-tag` — a game with no submission document, the exact case that was broken —
+> recorded `game_opened`, `play_time` and three `alive` ticks at 60fps, with no player
+> identity on any row.
+>
+> Getting there took two fixes on the day it shipped, both worth remembering:
+>
+> 1. **The intake wrote nothing at all.** It gated on the submission document, which
+>    34 of 42 catalog games do not have, so every flush was accepted and silently
+>    discarded. Fixed by keying on the games-repo slug and gating on catalog
+>    membership ([published-slugs.ts](../apps/api/src/published-slugs.ts)). The drop
+>    path now counts and logs itself, because a deliberately silent branch is what hid
+>    this for a day.
+> 2. **Receipt time is not event time.** Events are batched, so the first real session
+>    stored four events as happening at 09:42:01 that had actually happened around
+>    09:36:30 — 15 seconds of play collapsed onto one instant 5.5 minutes late, which
+>    is precisely the timing IL-2's drop-off analysis is made of. Each event now
+>    carries `msSinceOpen` from the browser's monotonic clock, and the server dates it
+>    from the flush's arrival minus its own age. A duration is safe to accept where a
+>    wall-clock reading is not.
 
 ## Why
 
@@ -240,7 +252,7 @@ submissions/{issueNumber}/
 games/{slug}/
   scorecard/current    ← rolling aggregate doc (the ONLY thing agents read)
   votes/{uid}          ← { value: up|down, updatedAt }
-telemetry/{yyyymmdd}/events/{id}   ← raw events, 90-day TTL, keyed by slug
+telemetry/{yyyy-mm-dd}/events/{id}   ← raw events, 90-day TTL, keyed by slug
 suggestions/{id}       ← { slug, insight, proposedAction, evidence, status:
                            proposed|approved|rejected|issue-filed|merged|measured }
 ```
@@ -444,7 +456,7 @@ at all and feeds the only autonomous-eligible class.
   documented in its agent instructions so maintenance adds markers organically.
   The API already accepts `progress` / `score` / `end`, so landing it needs no
   app change.
-- 📋 A Firestore TTL policy on `telemetry/{yyyymmdd}` — the 90-day retention this
+- 📋 A Firestore TTL policy on `telemetry/{yyyy-mm-dd}` — the 90-day retention this
   plan promises is currently a documented intention, not an enforced one.
 - Exit: health, funnel and votes visibly accumulating for live games.
 

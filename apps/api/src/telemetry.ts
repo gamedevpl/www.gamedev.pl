@@ -38,11 +38,26 @@ const MAX_MESSAGE_LENGTH = 200;
 const MAX_LABEL_LENGTH = 40;
 /** Log every Nth unknown-slug drop: enough to notice a systemic problem, not a flood. */
 const DROP_LOG_INTERVAL = 25;
+/** Ceiling on a client-reported session age. Beyond this it is not a session. */
+const MAX_SESSION_MS = 24 * 60 * 60 * 1000;
+/**
+ * How far back an event may be dated from its flush. Bounds what a client can do with
+ * the offsets it supplies: at worst it back-dates its own events within this window,
+ * never into an arbitrary past partition.
+ */
+const MAX_BACKDATE_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * How long after its session opened an event happened. Optional so a browser still
+ * running the previous build keeps reporting instead of getting a 400 — its events
+ * simply fall back to receipt time, which is what every event used to get.
+ */
+const offsetField = { msSinceOpen: z.number().int().min(0).max(MAX_SESSION_MS).optional() };
 
 const EventSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('game_opened'), slots: z.number().int().min(1).max(8).optional() }),
-  z.object({ type: z.literal('play_time'), seconds: z.number().int().min(1).max(3600) }),
-  z.object({ type: z.literal('game_closed') }),
+  z.object({ type: z.literal('game_opened'), slots: z.number().int().min(1).max(8).optional(), ...offsetField }),
+  z.object({ type: z.literal('play_time'), seconds: z.number().int().min(1).max(3600), ...offsetField }),
+  z.object({ type: z.literal('game_closed'), ...offsetField }),
   z.object({
     type: z.literal('error'),
     message: z
@@ -50,8 +65,9 @@ const EventSchema = z.discriminatedUnion('type', [
       .trim()
       .min(1)
       .max(MAX_MESSAGE_LENGTH * 4),
+    ...offsetField,
   }),
-  z.object({ type: z.literal('alive'), frames: z.number().int().min(0).max(100_000) }),
+  z.object({ type: z.literal('alive'), frames: z.number().int().min(0).max(100_000), ...offsetField }),
   z.object({
     type: z.literal('progress'),
     label: z
@@ -59,9 +75,10 @@ const EventSchema = z.discriminatedUnion('type', [
       .trim()
       .min(1)
       .max(MAX_LABEL_LENGTH * 4),
+    ...offsetField,
   }),
-  z.object({ type: z.literal('score'), value: z.number().finite() }),
-  z.object({ type: z.literal('end'), outcome: z.enum(['won', 'lost', 'quit']) }),
+  z.object({ type: z.literal('score'), value: z.number().finite(), ...offsetField }),
+  z.object({ type: z.literal('end'), outcome: z.enum(['won', 'lost', 'quit']), ...offsetField }),
 ]);
 
 const RequestSchema = z.object({
@@ -74,6 +91,8 @@ const RequestSchema = z.object({
     // value from reaching a store lookup at all.
     .regex(/^[a-z0-9][a-z0-9-]*$/, 'invalid slug'),
   sessionId: z.string().trim().uuid('sessionId must be a uuid'),
+  /** Session age at flush time; anchors each event's offset to a real instant. */
+  flushMsSinceOpen: z.number().int().min(0).max(MAX_SESSION_MS).optional(),
   events: z.array(EventSchema).min(1).max(MAX_EVENTS_PER_REQUEST),
 });
 
@@ -157,9 +176,29 @@ export async function registerTelemetryRoutes(app: FastifyInstance, options: Tel
       return reply.status(202).send({ accepted: 0 });
     }
 
-    const at = new Date(currentTime).toISOString();
+    /**
+     * When did this event actually happen?
+     *
+     * The flush's arrival is a real instant we measured; the client tells us how old
+     * the session was at that moment and how old it was at each event. The difference
+     * is a duration, and subtracting it from the arrival time dates the event without
+     * trusting the client's clock for anything. Missing either offset — an older client
+     * — falls back to receipt time, the behaviour every event used to have.
+     */
+    const flushOffset = parsed.data.flushMsSinceOpen;
+    function eventTimeIso(msSinceOpen: number | undefined): string {
+      if (flushOffset === undefined || msSinceOpen === undefined) return new Date(currentTime).toISOString();
+      const backdateMs = Math.min(MAX_BACKDATE_MS, Math.max(0, flushOffset - msSinceOpen));
+      return new Date(currentTime - backdateMs).toISOString();
+    }
+
     const events: TelemetryEvent[] = parsed.data.events.slice(0, room).map((event) => {
-      const base = { slug: parsed.data.slug, sessionId: parsed.data.sessionId, at };
+      const base = {
+        slug: parsed.data.slug,
+        sessionId: parsed.data.sessionId,
+        at: eventTimeIso(event.msSinceOpen),
+        ...(event.msSinceOpen === undefined ? {} : { msSinceOpen: event.msSinceOpen }),
+      };
       switch (event.type) {
         case 'game_opened':
           return { ...base, type: event.type, ...(event.slots === undefined ? {} : { slots: event.slots }) };
@@ -184,8 +223,20 @@ export async function registerTelemetryRoutes(app: FastifyInstance, options: Tel
 
     sessionCounts.set(parsed.data.sessionId, { count: session.count + events.length, lastSeen: currentTime });
 
+    // Back-dating means one flush can straddle midnight, so events go to the partition
+    // their own timestamp names rather than all following the last one's.
+    const byDate = new Map<string, TelemetryEvent[]>();
+    events.forEach((event) => {
+      const dateStr = event.at.slice(0, 10);
+      const bucket = byDate.get(dateStr);
+      if (bucket) bucket.push(event);
+      else byDate.set(dateStr, [event]);
+    });
+
     try {
-      await store.appendTelemetryEvents(at.slice(0, 10), events);
+      for (const [dateStr, dateEvents] of byDate) {
+        await store.appendTelemetryEvents(dateStr, dateEvents);
+      }
     } catch (error) {
       // Telemetry is never worth failing a play session over. Log and swallow: the
       // client must not retry into a loop against a store that is already unhappy.

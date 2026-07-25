@@ -201,6 +201,126 @@ describe('POST /api/telemetry', () => {
     await app.close();
   });
 
+  describe('event timing', () => {
+    /**
+     * The production session that motivated offsets: `game_opened` flushed at once, then
+     * three events generated within the first 15 seconds but not flushed until 5.5
+     * minutes later, when the tab was hidden. Every one of them was stored as having
+     * happened at the flush instant.
+     */
+    it('dates events from their own offset rather than from the flush', async () => {
+      const app = await appWith(store);
+      await post(app, {
+        slug: 'space-hop',
+        sessionId,
+        flushMsSinceOpen: 345_000,
+        events: [
+          { type: 'alive', frames: 300, msSinceOpen: 5_000 },
+          { type: 'play_time', seconds: 15, msSinceOpen: 15_000 },
+        ],
+      });
+
+      const stored = await store.listTelemetryEvents(today());
+      const times = stored.map((event) => Date.parse(event.at));
+      // 10 seconds apart, as they were when they happened — not one shared instant.
+      expect(times[1] - times[0]).toBe(10_000);
+      // And both dated well before the flush that carried them.
+      expect(Date.now() - times[0]).toBeGreaterThanOrEqual(340_000);
+      expect(stored.map((event) => event.msSinceOpen)).toEqual([5_000, 15_000]);
+      await app.close();
+    });
+
+    it('falls back to receipt time for a client that sends no offsets', async () => {
+      const app = await appWith(store);
+      const before = Date.now();
+      await post(app, { slug: 'space-hop', sessionId, events: [{ type: 'game_opened' }] });
+
+      const [event] = await store.listTelemetryEvents(today());
+      expect(Date.parse(event.at)).toBeGreaterThanOrEqual(before);
+      expect(event.msSinceOpen).toBeUndefined();
+      await app.close();
+    });
+
+    it('refuses to backdate further than the cap, whatever the client claims', async () => {
+      const app = await appWith(store);
+      const before = Date.now();
+      await post(app, {
+        slug: 'space-hop',
+        sessionId,
+        // A client trying to write into an arbitrary past partition: it claims the
+        // session is a day old and that this event happened at the very start of it.
+        flushMsSinceOpen: 86_400_000,
+        events: [{ type: 'game_opened', msSinceOpen: 0 }],
+      });
+
+      const sixHours = 6 * 60 * 60 * 1000;
+      const [event] = await store.listTelemetryEvents(today());
+      // Clamped to exactly the cap, measured against a clock read before the request
+      // so the millisecond the request itself takes cannot fail the assertion.
+      expect(Date.parse(event.at)).toBeGreaterThanOrEqual(before - sixHours);
+      expect(Date.parse(event.at)).toBeLessThanOrEqual(Date.now() - sixHours + 1_000);
+      await app.close();
+    });
+
+    it('ignores an offset ordering that would date an event after its own flush', async () => {
+      const app = await appWith(store);
+      const before = Date.now();
+      await post(app, {
+        slug: 'space-hop',
+        sessionId,
+        flushMsSinceOpen: 1_000,
+        // Older than the flush is impossible; it must not become a future timestamp.
+        events: [{ type: 'game_opened', msSinceOpen: 60_000 }],
+      });
+
+      const [event] = await store.listTelemetryEvents(today());
+      expect(Date.parse(event.at)).toBeGreaterThanOrEqual(before);
+      expect(Date.parse(event.at)).toBeLessThanOrEqual(Date.now());
+      await app.close();
+    });
+
+    it('rejects an offset outside what a session can be', async () => {
+      const app = await appWith(store);
+      const res = await post(app, {
+        slug: 'space-hop',
+        sessionId,
+        events: [{ type: 'game_opened', msSinceOpen: -5 }],
+      });
+
+      expect(res.statusCode).toBe(400);
+      await app.close();
+    });
+
+    it('files a flush that straddles midnight into both days', async () => {
+      const app = await appWith(store);
+      // Anchor "now" just after midnight so a backdated event belongs to yesterday.
+      const justAfterMidnight = new Date();
+      justAfterMidnight.setUTCHours(0, 5, 0, 0);
+      const appAtMidnight = await buildApp({
+        store,
+        sessionSecret,
+        telemetryRoutes: { publishedSlugs: gateOver(['space-hop']), now: () => justAfterMidnight.getTime() },
+      });
+
+      await post(appAtMidnight, {
+        slug: 'space-hop',
+        sessionId,
+        flushMsSinceOpen: 600_000,
+        events: [
+          { type: 'game_opened', msSinceOpen: 0 }, // 23:55 yesterday
+          { type: 'game_closed', msSinceOpen: 600_000 }, // 00:05 today
+        ],
+      });
+
+      const todayStr = justAfterMidnight.toISOString().slice(0, 10);
+      const yesterdayStr = new Date(justAfterMidnight.getTime() - 86_400_000).toISOString().slice(0, 10);
+      expect((await store.listTelemetryEvents(yesterdayStr)).map((e) => e.type)).toEqual(['game_opened']);
+      expect((await store.listTelemetryEvents(todayStr)).map((e) => e.type)).toEqual(['game_closed']);
+      await appAtMidnight.close();
+      await app.close();
+    });
+  });
+
   /**
    * The regression that made this whole path a no-op in production for a day.
    *

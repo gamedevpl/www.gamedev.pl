@@ -1,13 +1,27 @@
 import { describe, expect, it, vi } from 'vitest';
-import { isPlayTimeAccruing, TelemetrySession, type TelemetryEvent } from './telemetry';
+import {
+  isPlayTimeAccruing,
+  TelemetrySession,
+  type TelemetryEvent,
+  type TelemetrySend,
+  type WireEvent,
+} from './telemetry';
+
+type Batch = { slug: string; sessionId: string; flushMsSinceOpen: number; events: WireEvent[] };
 
 function collector() {
-  const batches: { slug: string; sessionId: string; events: TelemetryEvent[] }[] = [];
-  return { batches, send: (body: { slug: string; sessionId: string; events: TelemetryEvent[] }) => batches.push(body) };
+  const batches: Batch[] = [];
+  const send: TelemetrySend = (body) => batches.push(body as Batch);
+  return { batches, send };
 }
 
-function newSession(send: ReturnType<typeof collector>['send']) {
-  return new TelemetrySession('space-hop', '00000000-0000-4000-8000-000000000000', send);
+function newSession(send: TelemetrySend, clock?: () => number) {
+  return new TelemetrySession('space-hop', '00000000-0000-4000-8000-000000000000', send, clock);
+}
+
+/** Drops the wire-only offset so assertions can stay about the event itself. */
+function payloads(events: WireEvent[]) {
+  return events.map(({ msSinceOpen: _ignored, ...event }) => event);
 }
 
 describe('TelemetrySession batching', () => {
@@ -31,7 +45,7 @@ describe('TelemetrySession batching', () => {
     session.record({ type: 'game_opened' });
     session.close();
     expect(batches).toHaveLength(1);
-    expect(batches[0].events).toEqual([{ type: 'game_opened' }]);
+    expect(payloads(batches[0].events)).toEqual([{ type: 'game_opened' }]);
 
     expect(session.record({ type: 'error', message: 'too late' })).toBe(false);
     expect(batches).toHaveLength(1);
@@ -75,7 +89,7 @@ describe('TelemetrySession caps', () => {
     expect(session.record({ type: 'error', message: '   ' })).toBe(false);
     session.close();
 
-    const [event] = batches[0].events;
+    const [event] = payloads(batches[0].events);
     expect(event).toEqual({ type: 'error', message: 'x'.repeat(200) });
   });
 
@@ -87,7 +101,7 @@ describe('TelemetrySession caps', () => {
     session.record({ type: 'game_opened', slots: 99 });
     session.close();
 
-    expect(batches[0].events).toEqual([
+    expect(payloads(batches[0].events)).toEqual([
       { type: 'play_time', seconds: 3600 },
       { type: 'game_opened', slots: 8 },
     ]);
@@ -102,6 +116,58 @@ describe('TelemetrySession caps', () => {
     expect(session.record({ type: 'play_time', seconds: 'lots' as unknown as number })).toBe(false);
     expect(session.record({ type: 'wat' as 'error', message: 'hi' } as TelemetryEvent)).toBe(false);
     expect(session.count).toBe(0);
+  });
+});
+
+describe('TelemetrySession timing', () => {
+  /** A controllable monotonic clock, standing in for performance.now(). */
+  function fakeClock(start = 5_000) {
+    const state = { ms: start };
+    return { state, clock: () => state.ms };
+  }
+
+  it('stamps each event with its own age, not the flush time', () => {
+    const { batches, send } = collector();
+    const { state, clock } = fakeClock();
+    const session = newSession(send, clock);
+
+    session.record({ type: 'game_opened' });
+    state.ms += 5_000;
+    session.record({ type: 'alive', frames: 300 });
+    state.ms += 10_000;
+    session.record({ type: 'play_time', seconds: 15 });
+    state.ms += 330_000; // the player tabs away five and a half minutes later
+    session.close();
+
+    expect(batches[0].events.map((event) => event.msSinceOpen)).toEqual([0, 5_000, 15_000]);
+    // The flush is far later than anything in it — the gap the offsets exist to record.
+    expect(batches[0].flushMsSinceOpen).toBe(345_000);
+  });
+
+  it('reports offsets from session open, so a late-starting session is not backdated', () => {
+    const { batches, send } = collector();
+    // A clock that is already far from zero: offsets are relative to construction.
+    const { state, clock } = fakeClock(1_234_567);
+    const session = newSession(send, clock);
+
+    state.ms += 250;
+    session.record({ type: 'game_opened' });
+    session.flush();
+
+    expect(batches[0].events[0].msSinceOpen).toBe(250);
+  });
+
+  it('never reports a negative offset if the clock misbehaves', () => {
+    const { batches, send } = collector();
+    const { state, clock } = fakeClock();
+    const session = newSession(send, clock);
+
+    state.ms -= 10_000;
+    session.record({ type: 'game_opened' });
+    session.flush();
+
+    expect(batches[0].events[0].msSinceOpen).toBe(0);
+    expect(batches[0].flushMsSinceOpen).toBe(0);
   });
 });
 
@@ -120,7 +186,12 @@ describe('sendTelemetry', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 202 }));
     const { sendTelemetry } = await import('./telemetry');
 
-    sendTelemetry({ slug: 'space-hop', sessionId: 'sid', events: [{ type: 'game_closed' }] });
+    sendTelemetry({
+      slug: 'space-hop',
+      sessionId: 'sid',
+      flushMsSinceOpen: 0,
+      events: [{ type: 'game_closed', msSinceOpen: 0 }],
+    });
 
     expect(fetchSpy).toHaveBeenCalledWith(
       expect.stringContaining('/api/telemetry'),
@@ -134,7 +205,12 @@ describe('sendTelemetry', () => {
     const { sendTelemetry } = await import('./telemetry');
 
     expect(() =>
-      sendTelemetry({ slug: 'space-hop', sessionId: 'sid', events: [{ type: 'game_closed' }] }),
+      sendTelemetry({
+        slug: 'space-hop',
+        sessionId: 'sid',
+        flushMsSinceOpen: 0,
+        events: [{ type: 'game_closed', msSinceOpen: 0 }],
+      }),
     ).not.toThrow();
     await Promise.resolve();
     fetchSpy.mockRestore();
