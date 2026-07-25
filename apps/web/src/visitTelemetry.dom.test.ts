@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
+import { NAVIGATE_EVENT, type NavigateEventDetail } from './router';
 import { startVisitTracking, type WireVisitEvent } from './visitTelemetry';
 
 /**
@@ -34,17 +35,28 @@ function trackerOver(startPath: string) {
   return { batches, events };
 }
 
+/**
+ * What `App`'s real `navigate()` does: push the URL, then announce it. Driving the
+ * test through this pair rather than `pushState` alone is what actually exercises the
+ * contract this module depends on — `pushState` by itself fires nothing in a real
+ * browser either.
+ */
+function navigate(path: string) {
+  window.history.pushState(null, '', path);
+  window.dispatchEvent(new CustomEvent<NavigateEventDetail>(NAVIGATE_EVENT, { detail: { path } }));
+}
+
 describe('startVisitTracking', () => {
   it('records the landing route a shared game link arrives on', () => {
     const { events } = trackerOver('/play/arena-tag');
     expect(events()).toEqual([expect.objectContaining({ type: 'visit_started', entry: 'play' })]);
   });
 
-  it('records in-app navigation, which is pushState and fires no event of its own', () => {
+  it('records in-app navigation announced via NAVIGATE_EVENT', () => {
     const { events } = trackerOver('/');
 
-    window.history.pushState(null, '', '/play/arena-tag');
-    window.history.pushState(null, '', '/privacy');
+    navigate('/play/arena-tag');
+    navigate('/privacy');
     teardown?.();
     teardown = null;
 
@@ -52,24 +64,52 @@ describe('startVisitTracking', () => {
     expect(routeViews(events()).map((event) => event.route)).toEqual(['play', 'legal']);
   });
 
-  it('does not count movement within one kind as a funnel step', () => {
+  it('re-reads the real URL rather than trusting the event detail', () => {
+    // A canonicalising redirect (`/ay` -> `/play/<slug>`) is exactly the case the
+    // contract calls out: the event's detail can lag the final URL. This module must
+    // still land on the true destination because it reads `window.location`, not
+    // `event.detail.path`.
     const { events } = trackerOver('/');
 
     window.history.pushState(null, '', '/play/arena-tag');
-    window.history.pushState(null, '', '/play/tactics-duel');
+    window.dispatchEvent(new CustomEvent<NavigateEventDetail>(NAVIGATE_EVENT, { detail: { path: '/ay/arena-tag' } }));
+    teardown?.();
+    teardown = null;
+
+    expect(routeViews(events()).map((event) => event.route)).toEqual(['play']);
+  });
+
+  it('also observes back/forward and fragment-only navigation', () => {
+    const { events } = trackerOver('/');
+
+    window.history.pushState(null, '', '/privacy');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    teardown?.();
+    teardown = null;
+
+    expect(routeViews(events()).map((event) => event.route)).toEqual(['legal']);
+  });
+
+  it('does not count movement within one kind as a funnel step', () => {
+    const { events } = trackerOver('/');
+
+    navigate('/play/arena-tag');
+    navigate('/play/tactics-duel');
     teardown?.();
     teardown = null;
 
     expect(events().filter((event) => event.type === 'route_viewed')).toHaveLength(1);
   });
 
-  it('restores the original pushState on teardown', () => {
-    const before = window.history.pushState;
-    trackerOver('/');
-    expect(window.history.pushState).not.toBe(before);
+  it('stops listening for navigation after teardown', () => {
+    const { events } = trackerOver('/');
+    const countBeforeTeardown = events().length;
+
     teardown?.();
     teardown = null;
-    expect(window.history.pushState).toBe(before);
+    navigate('/play/arena-tag');
+
+    expect(events()).toHaveLength(countBeforeTeardown);
   });
 
   it('starts one visit per tab, not one per page load', () => {

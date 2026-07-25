@@ -1,5 +1,12 @@
+import { webcrypto } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { parsePathRoute } from './router';
+
+// vitest's node environment does not expose the webcrypto global that a real browser
+// (and plain Node) provides, and `readVisitIdentity` relies on `crypto.randomUUID()`
+// exactly as the browser does. Polyfilling it here — not in the shipped module — keeps
+// production code assuming the real, always-present browser global.
+vi.stubGlobal('crypto', webcrypto);
 import {
   readVisitIdentity,
   recordVisitEvent,

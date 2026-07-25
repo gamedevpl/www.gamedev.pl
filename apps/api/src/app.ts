@@ -154,9 +154,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     ...(options.telemetryRoutes ?? { publishedSlugs: createPublishedSlugGateFromEnv() }),
   });
 
-  // Visit-level telemetry — the funnel before and between games. Same beta wall and the
-  // same anonymity rules; it records no game identity at all, so the two streams cannot
-  // be joined into one tab's browsing history.
+  // Visit-level telemetry — the funnel before and between games. Exempted from the
+  // private-beta wall below (unlike play telemetry): the whole point is the first
+  // minute of a visit, which for most visitors is *before* sign-in — during closed
+  // beta that is the "please sign in" splash itself. Walling it would silently zero
+  // out exactly the acquisition and drop-off signal this stream exists to capture.
+  // Safe to leave open: the handler never reads request.user and records nothing
+  // that identifies a visitor, so it costs nothing to admit from the open internet.
   await registerVisitTelemetryRoutes(app, { store });
 
   // Operator reads over that telemetry. Separate allowlist from the beta one: being
@@ -211,6 +215,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // room token (verified in the first frame, not here), and the room it opens
     // was created by an allowlisted host. Everything else stays walled.
     if (request.url.startsWith('/api/mp/ws')) return;
+    // Visit telemetry measures the arrival itself, which for most visitors during
+    // closed beta happens *before* sign-in — walling it would silently zero out the
+    // one funnel this stream exists to capture. It never reads request.user and
+    // records no identifying data, so admitting it from the open internet is free.
+    if (request.url.startsWith('/api/telemetry/visit')) return;
     if (!request.user) {
       return reply.status(401).send({ error: 'authentication required' });
     }

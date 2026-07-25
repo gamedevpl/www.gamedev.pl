@@ -1,4 +1,4 @@
-import { parsePathRoute } from './router';
+import { NAVIGATE_EVENT, parsePathRoute } from './router';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
@@ -313,28 +313,20 @@ export function startVisitTracking(options: StartVisitTrackingOptions = {}): () 
   }
 
   /**
-   * In-app navigation is `history.pushState`, which fires no event of its own — so
-   * listening to `popstate` alone would record only back/forward and miss every
-   * forward journey through the app, which is the entire funnel. Wrapping pushState is
-   * what makes a navigation observable without every call site having to report itself.
+   * Three signals, because no one of them sees every navigation:
    *
-   * ⚠️ TEMPORARY. Patching a global from a telemetry module is a trap: it breaks
-   * mysteriously if anything else patches it too, and it makes this module's teardown
-   * responsible for a global it does not own. The agreed replacement is for `App`'s
-   * `navigate()` to emit a `gdpl:navigate` window event; when that exists, delete this
-   * patch and its teardown and subscribe to that instead. Until then the restore below
-   * is what keeps the damage bounded.
+   * - `NAVIGATE_EVENT` — programmatic pushes, which the browser is silent about. The
+   *   app announces them so nothing has to patch `history` to find out.
+   * - `popstate` — back and forward.
+   * - `hashchange` — fragment-only edits (a join credential lives in the fragment).
+   *
+   * The event's `detail.path` is deliberately not read: `currentRouteKind()` re-reads
+   * `window.location`, which is the truth, and the event is dispatched after the URL
+   * has already changed. That keeps this correct even for navigations that carry state
+   * this module has never heard of — including the `/ay|/ai → /play` canonicalisation,
+   * which is a `replaceState` and announces nothing at all.
    */
-  // Kept unbound so teardown can put the *same* function back. Restoring a bound copy
-  // would leave a foreign wrapper installed forever, which is how a "cleaned up"
-  // listener quietly survives into the next test or the next mount.
-  const originalPushState = window.history.pushState;
-  window.history.pushState = function patchedPushState(...args: Parameters<History['pushState']>) {
-    originalPushState.apply(window.history, args);
-    onNavigation();
-  };
-  // popstate for back/forward; hashchange because a join credential lives in the
-  // fragment and editing only the fragment fires neither of the other two.
+  window.addEventListener(NAVIGATE_EVENT, onNavigation);
   window.addEventListener('popstate', onNavigation);
   window.addEventListener('hashchange', onNavigation);
 
@@ -344,7 +336,7 @@ export function startVisitTracking(options: StartVisitTrackingOptions = {}): () 
   document.addEventListener('visibilitychange', onHide);
 
   return () => {
-    window.history.pushState = originalPushState;
+    window.removeEventListener(NAVIGATE_EVENT, onNavigation);
     window.removeEventListener('popstate', onNavigation);
     window.removeEventListener('hashchange', onNavigation);
     document.removeEventListener('visibilitychange', onHide);

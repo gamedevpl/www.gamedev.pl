@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { InMemoryStore } from './store.js';
@@ -177,5 +177,43 @@ describe('POST /api/telemetry/visit', () => {
 
     expect(response.statusCode).toBe(202);
     expect(response.json()).toEqual({ accepted: 0 });
+  });
+});
+
+describe('POST /api/telemetry/visit under private beta', () => {
+  // The first minute of a visit — the entire point of this stream — happens *before*
+  // sign-in for most visitors: during closed beta that is the "please sign in" splash
+  // itself. If the beta wall ever swallowed this route the way it deliberately does
+  // play telemetry, every anonymous arrival would silently 401 (the client swallows
+  // the failure by design) and the acquisition funnel would read as "nobody visits"
+  // without anyone noticing. This is the regression test for that specific failure.
+  const previousPrivateBeta = process.env.PRIVATE_BETA;
+
+  beforeEach(() => {
+    process.env.PRIVATE_BETA = 'true';
+  });
+
+  afterEach(() => {
+    if (previousPrivateBeta === undefined) delete process.env.PRIVATE_BETA;
+    else process.env.PRIVATE_BETA = previousPrivateBeta;
+  });
+
+  it('accepts a visit_started event with no session at all', async () => {
+    const app = await buildApp({ store: new InMemoryStore(), sessionSecret });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/telemetry/visit',
+      // No auth headers: this is the anonymous, pre-sign-in visitor the wall must
+      // never see, because request.user is never read by this route.
+      payload: {
+        visitId,
+        flushMsSinceStart: 0,
+        events: [{ type: 'visit_started', entry: 'home', msSinceStart: 0 }],
+      },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toEqual({ accepted: 1 });
   });
 });
