@@ -2,6 +2,14 @@
 
 Status legend: ✅ done · 🚧 in progress · 📋 planned/not started · 🗃️ retired
 
+> Reality-synced 2026-07-25. The original Phase 1–5 plan is **complete and in
+> production**: https://www.gamedev.pl has been serving the new app in closed beta
+> since 2026-07-23, on Cloud Run (europe-west1) with a native domain mapping.
+> Phases below are kept for the record with what actually shipped, what shipped
+> _differently_, and what is genuinely still open. Several large workstreams
+> happened off this roadmap entirely — they are listed under
+> [Shipped off-roadmap](#shipped-off-roadmap).
+
 ## Phase 0 — Local player proof ✅
 
 The local `prompt → mock template → sandboxed iframe` slice is complete:
@@ -9,78 +17,156 @@ The local `prompt → mock template → sandboxed iframe` slice is complete:
 - npm workspaces with React/Vite, Fastify, and strict TypeScript.
 - `GameProject` plus a deterministic mock and three playable templates.
 - A self-contained bundle assembler and sandboxed iframe player.
-- Request validation, bundle size limits, credential-pattern scanning, localization, tests,
-  linting, and CI.
+- Request validation, bundle size limits, credential-pattern scanning, localization,
+  tests, linting, and CI.
 
-This loop remains a development preview. It is not the production creation model.
+The mock preview was **retained as a development-only route** — `createGenerator`
+accepts nothing but `mock` and throws on any other `LLM_PROVIDER`
+([generator.ts](../apps/api/src/generator.ts)). That closes Phase 2's open question.
 
 ## Retired direction — self-hosted generation 🗃️
 
-The container runner, auth proxy, job tokens, in-process orchestrator, `/api/jobs` endpoints,
-and container generator were removed. The app will not run coding agents on behalf of creators.
-Historical design and security notes remain in the repository for context, but this work is not
-scheduled and must not be treated as an incomplete phase.
+The container runner, auth proxy, job tokens, in-process orchestrator, `/api/jobs`
+endpoints, and container generator were removed. The app will not run coding agents
+on behalf of creators. Historical design and security notes remain in the repository
+for context, but this work is not scheduled and must not be treated as an incomplete
+phase.
 
-## Phase 1 — Dedicated games repository 📋
+## Phase 1 — Dedicated games repository ✅
 
 **Goal:** establish the source of truth and publishing contract for agent-maintained games.
 
-- Create the dedicated repository from [`games-repo-blueprint.md`](./games-repo-blueprint.md).
-- Add its agent instructions and issue templates.
-- Seed it from the three working templates in `packages/game-generator/templates`.
-- Implement static validation, bundle assembly, and catalog generation.
-- Add PR validation and main-branch publishing workflows.
-- Choose GitHub Pages or a separate bucket/CDN as the initial cookieless games origin.
-- Require human review as the initial moderation and merge gate.
+Done: the repository exists with agent instructions, issue templates, seeded games,
+static validation, bundle assembly (`tools/lib/assemble.ts`), catalog generation
+(`tools/catalog.mjs`), spec parsing (`tools/lib/spec.mjs`), PR validation, and
+main-branch publishing. Human review is the merge gate, and remains so.
 
-## Phase 2 — Catalog and player 📋
+**Shipped differently — the cookieless games origin decision was overtaken.** The
+plan was to pick GitHub Pages or a bucket/CDN. Instead, published games are fetched
+from the games repo by the API and served through the app
+([github-client.ts](../apps/api/src/github-client.ts) builds the catalog straight
+from `games/` directories rather than depending on a public `catalog.json`), then run
+in the sandboxed iframe via `srcDoc`. Isolation comes from
+`sandbox="allow-scripts"` with no `allow-same-origin` plus an opaque origin — not
+from a separate hostname. The upside is decisive: **the games repo can be private**,
+and unmerged PR previews are playable. The invariant to keep in mind is that the
+assembler and the games repo's own `tools/lib/assemble.ts` must stay in lockstep;
+`github-client.ts` says so at the module boundary.
+
+## Phase 2 — Catalog and player ✅
 
 **Goal:** turn this app from a mock generator demo into a useful game catalog.
 
-- Define and version the `catalog.json` contract.
-- Browse, filter, and select published games.
-- Load published bundles in the sandboxed iframe.
-- Add loading, unavailable-game, and validation-failure states.
-- Automate a regression test for the iframe sandbox invariant.
-- Decide whether to retain the prompt-based mock preview as a development-only route.
+Done: the catalog contract, browse/select, published bundles in the sandboxed iframe,
+loading/unavailable/failure states, and an automated regression test for the sandbox
+invariant ([GameFrame.sandbox.test.ts](../apps/web/src/GameFrame.sandbox.test.ts)).
 
-## Phase 3 — Spec submission and status 📋
+Grew well past the original scope: a full-screen theater ([GameTheater.tsx](../apps/web/src/GameTheater.tsx)),
+a host-injected player bridge that moves the game's title/description/sound chrome
+into the app header ([gamePlayer.ts](../apps/web/src/gamePlayer.ts)), web-side game
+i18n by rewriting `<html lang>`, keyboard focus handed to the game on load, direct
+play hash routes, shareable slug permalinks, and ETag-revalidated gallery media.
+
+## Phase 3 — Spec submission and status ✅
 
 **Goal:** let a creator commission a game without implying instant generation.
 
-- Design structured-frontmatter plus free-form spec input.
-- Add authentication or another reliable attribution mechanism.
-- Add consent/rights language, moderation, rate limits, and spam controls.
-- File a structured issue in the games repository with narrowly scoped credentials.
-- Surface lifecycle states such as submitted, under review, agent working, PR open, and
-  published.
-- Avoid exposing repository tokens to the browser or to submitted spec content.
+Done: structured spec input, Google sign-in as the attribution mechanism, moderation
+and rate limits and per-user daily quotas, structured issue filing with credentials
+that never reach the browser, and the full lifecycle surfaced (queued → in review →
+building → PR open → published / needs changes).
 
-## Phase 4 — Remix through spec changes 📋
+Also shipped here, beyond the original list: a clarifying-questions QA pass before
+spec freeze (now a hard precondition), spec refinement, a my-games rail, revision
+history, a localized build log, stop-a-build and retry-an-idea controls, today's
+allowance display, and creator steering before a draft exists.
+
+## Phase 4 — Remix through spec changes 🚧
 
 **Goal:** let a player propose a change while preserving review and ownership.
 
-- Capture a change request against the selected game's `SPEC.md`.
-- File a scoped issue or proposed spec change in the shared games repository.
-- Let a coding agent propose the matching spec and implementation diff through a PR.
-- Preview the candidate bundle in the same sandbox before merge.
-- Never auto-merge agent output.
+The **machinery is built and running, but only for the creator's own games.**
+`POST /api/submissions/:token/feedback` moderates and sanitizes the text, posts it
+to the PR as a fenced block explicitly marked as data-not-instructions, tags it for
+the relay workflow, and queues it into the agent inbox — which is exactly the
+"capture a change request → scoped issue → agent PR → preview in the same sandbox →
+never auto-merge" loop the phase describes.
+
+Still open, and this is the actual remaining work of the phase:
+
+- A **player**-facing (not owner-facing) change request against a published game's
+  `SPEC.md`. Today the token gates this to the submission's owner; "remix" appears in
+  the marketing copy but there is no player entry point.
+- Ownership and attribution rules for a remix that forks someone else's spec.
 
 See [`remix-to-pr.md`](./remix-to-pr.md).
 
-## Phase 5 — Production delivery 📋
+## Phase 5 — Production delivery ✅ (with a known-gaps list)
 
-**Goal:** deploy only the catalog, player, submission API, and static games pipeline actually
-required by the pivot.
+**Goal:** deploy only the catalog, player, submission API, and static games pipeline
+actually required by the pivot.
 
-- Choose the hosting platform after the games publishing contract exists.
-- Keep the app origin and games origin separate.
-- Use OIDC-based deployment credentials, protected environments, and pinned actions.
-- Add observability, takedown operations, backups, and rollback for published catalogs.
-- Introduce infrastructure as code only after these resources are decided.
+Done: Cloud Run in europe-west1 with a native domain mapping and an apex 301,
+app origin separate from game execution (opaque-origin sandbox, see Phase 1),
+and OIDC/Workload-Identity-Federation deployment credentials — `deploy.yml`
+requests `id-token: write` and authenticates via `workload_identity_provider`, so no
+long-lived service-account key exists.
+
+Genuinely still open, in rough priority order:
+
+- 🔴 **Multiplayer is deployed with the wrong instance count.** [mp.ts](../apps/api/src/mp.ts)
+  states rooms are per-instance in-memory state and that Cloud Run **must** run with
+  `--max-instances 1` while multiplayer is enabled, or a guest lands on an instance
+  that does not hold the host's room. Both deploy paths set `--max-instances 4`
+  ([deploy-api.sh:158](../infra/deploy-api.sh#L158), [deploy.yml:122](../.github/workflows/deploy.yml#L122)).
+  Party mode is therefore expected to fail intermittently in production. Fix by
+  capping instances, or by taking one of the plan's §4.6 upgrade paths (separate
+  relay service / shared room state).
+- 📋 Takedown operations, backups, and published-catalog rollback.
+- 📋 Observability beyond Cloud Run's defaults — no dashboards or alerting on the
+  paths that now matter (submission failures, relay stalls, sweep health).
+- 📋 Protected deployment environments; no `environment:` gate on `deploy.yml`.
+- 📋 Actions are pinned to major tags (`@v4`, `@v2`), not commit SHAs.
+- 📋 Infrastructure as code. Delivery is shell scripts plus `cloudbuild.yaml`; the
+  resources are now decided, so the original "IaC only after resources exist"
+  precondition is satisfied.
+
+## Shipped off-roadmap
+
+Substantial work that never had a roadmap phase. Each has its own plan document,
+which is the authority on its detail:
+
+| Workstream                | Status                                                                                        | Plan                                                           |
+| ------------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Closed beta launch        | ✅ live 2026-07-23 on www.gamedev.pl                                                          | [closed-beta-launch-plan.md](./closed-beta-launch-plan.md)     |
+| Auth, usage & quotas      | ✅ Google sign-in, per-user daily counters, waitlist/allowlist                                | [auth-and-usage-plan.md](./auth-and-usage-plan.md)             |
+| Content safety            | ✅ moderation on submission via the genai seam; beta allowlist as the interim outer safeguard | [content-safety-plan.md](./content-safety-plan.md)             |
+| Creator QA pass           | ✅ clarifying questions before spec freeze, now a hard precondition                           | [creator-qa-plan.md](./creator-qa-plan.md)                     |
+| Notifications             | ✅ in-app bell, email + unsubscribe, Web Push (desktop/Android), Cloud Scheduler sweep        | [notifications-plan.md](./notifications-plan.md)               |
+| Live agent build channel  | ✅ agent posts progress/screenshots and gets queued creator requests back                     | [agent-live-channel-plan.md](./agent-live-channel-plan.md)     |
+| Creator experience review | ✅ backlog from a real three-hour session, closed out                                         | [creator-experience-review.md](./creator-experience-review.md) |
+| Multiplayer party mode    | 🚧 relay + party module + seed games built; blocked on the instance-count issue above         | [multiplayer-plan.md](./multiplayer-plan.md)                   |
+| Mobile                    | 📋 mobile web → PWA → store apps                                                              | [mobile-app-plan.md](./mobile-app-plan.md)                     |
+
+## Phase 6 — Improvement loop 📋
+
+**Goal:** the loop currently ends at "published". Nothing is learned after a game
+ships — not whether anyone played it, not where they quit, not whether a revision
+helped. This is the first phase whose subject is the platform improving itself.
+
+Player signals (written feedback, thumbs, session telemetry, funnel) → a per-game
+scorecard → agent-assisted fixes and suggestions, with merge staying a human gate.
+See [`improvement-loop-plan.md`](./improvement-loop-plan.md); IL-1 is deliberately
+scoped to need no games-repo change at all.
 
 ## Next decision
 
-Phase 1 is the current product bottleneck. Catalog, submission, and deployment should not be
-built against an invented contract before the games repository and its published artifacts
-exist.
+The bottleneck moved. It is no longer building the pipeline — the pipeline works and
+creators are using it. It is that **the platform is blind after publish**, so every
+agent run is spent on creation and none on improving games that already have players.
+Phase 6's capture plane is the cheapest thing that changes that, and it produces
+value (creators see numbers, defects become visible) before any agent is involved.
+
+Two live items should be settled alongside it, because both are cheap and both are
+currently silent failures: the multiplayer instance-count mismatch, and alerting on
+the Copilot relay path that every agent hand-off depends on.
