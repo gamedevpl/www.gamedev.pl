@@ -21,29 +21,47 @@
 > - ✅ **QR-party multiplayer shipped** (`apps/web/src/mp/`, `ControllerView` with
 >   wake-lock) — the M2 sequencing precondition is met, and the zero-install mobile-web
 >   controller path is proven, not hypothetical.
-> - 🚧 **A mobile/accessibility pass partly landed** on nav, catalog, and the creator
->   flow (real `@media` breakpoints in `styles.css`); `GameTheater.tsx` exists as the
->   full-viewport play surface M0 wanted.
-> - 📋 **The games touch contract is still entirely unbuilt** — no `touch`/`orientation`
->   frontmatter, no catalog metadata, no CI smoke check, no agent-instruction rule. This
->   is now the **critical unstarted M0 item**; everything else in M0 is cosmetic beside it.
+> - ✅ **The games touch contract is built and CI-enforced.** An earlier revision of this
+>   note called it "entirely unbuilt, the critical unstarted M0 item" — that was wrong, and
+>   it stayed wrong long enough to misdirect planning, so the evidence is named here:
+>   `shared/modules/input.ts` gives every GameKit game an on-screen pad and action buttons,
+>   gated on `(pointer: coarse)` so desktop play and the deterministic capture harness are
+>   untouched; `tools/lib/touch.ts` classifies each game **from its code**, not its claims
+>   (`gamekit` | `native` | `controllers` | `none`); `tools/catalog.ts` emits `touch`
+>   (derived) and `orientation` (authored) per entry; `tools/validate.ts` Check 13 fails any
+>   keyboard-only game unless it explicitly declares `touch: none`, and also catches a
+>   SPEC.md that has drifted from the code. It runs in CI through `npm run check` in
+>   `.github/workflows/validate.yml`. **Current state: 73 games, none keyboard-only** —
+>   67 `gamekit`, 3 `controllers`, 3 `native`.
+> - ✅ **`GameTheater` is mobile-hardened** — `useScreenWakeLock` while playing, a rotate
+>   nudge driven by the catalog's `orientation`, an on-screen close that does not rely on
+>   browser chrome, and safe-area insets in `styles.css`. M0 listed all four as unstarted.
+> - 🚧 **The responsive audit is most of the way done.** The header is one 61px row on a
+>   phone (language, GitHub and sign-out moved into the menu, because five controls beside
+>   a logo cannot fit 360px at thumb size); every tap target is ≥44px at 320/360/375px;
+>   no field is under the 16px that makes iOS force-zoom on focus; the nine blurred panels
+>   carry `-webkit-backdrop-filter`, without which every iPhone below Safari 18 silently
+>   dropped the blur; and the hero prompt card no longer floats its media buttons over the
+>   textarea. Remaining surfaces are listed in M0.
 
 ## Problem
 
-Today the product is a desktop-shaped SPA. Phones already appear in the design twice —
-as QR-party controllers ([`multiplayer-plan.md`](./multiplayer-plan.md)) and as the device
-in a creator's pocket when their game finishes building
-([`notifications-plan.md`](./notifications-plan.md)) — but nothing is actually built for
-them:
+This section described the state at the first draft, when the product was a desktop-shaped
+SPA and phones appeared in the design twice — as QR-party controllers
+([`multiplayer-plan.md`](./multiplayer-plan.md)) and as the device in a creator's pocket
+when their game finishes building ([`notifications-plan.md`](./notifications-plan.md)) —
+with nothing built for them. Most of that has since been answered; what is left:
 
-- The web app has had a partial mobile pass (breakpoints on nav, catalog, and the creator
-  flow) but no full responsive audit, no mobile play affordances (`GameTheater` lacks
-  wake-lock / orientation / safe-area / on-screen back), and no PWA manifest, no offline
-  caching, no install path. There is a service worker (`sw.js`) but it is deliberately
-  **push-only** — it caches nothing and intercepts no fetches.
-- Published games still have **no touch-input contract**. An agent-built game that only
-  reads `keydown` is simply unplayable on a phone, and no CI check would notice. _This is
-  the single most important unbuilt item — see the progress note above._
+- The web app's responsive pass is well along (see the progress note) but not finished:
+  several surfaces have never been audited at 360px. `GameTheater` now has its wake-lock,
+  orientation nudge, safe-area insets and on-screen back. Still missing entirely: a PWA
+  manifest, offline caching, and any install path. There is a service worker (`sw.js`) but
+  it is deliberately **push-only** — it caches nothing and intercepts no fetches, and
+  `apps/web/public/` contains nothing else.
+- Published games **do** have a touch contract now, enforced in CI rather than by
+  convention. The residual gap is on the website, not in the games: the catalog carries a
+  derived `touch` value per game and the SPA ignores it — no badge, no filter. (It does
+  consume `orientation`.) A phone visitor is told nothing about what they can play.
 - The "your game is live!" push moment now **has** a delivery channel on desktop and
   Android (web push shipped). The remaining gap is **iOS**, where push requires either an
   installed PWA (iOS 16.4+) or a native app.
@@ -124,21 +142,32 @@ capability that differs by vehicle (sign-in method, push registration, QR scanni
 share, wake lock) goes behind one interface with a web implementation and a Capacitor
 implementation. Nothing else in the SPA may branch on platform.
 
-### The games touch contract (games-repo change)
+### The games touch contract (games-repo change) — ✅ built
 
 Playability on phones is a **published-game contract**, enforced where the other game
-contracts live ([`games-repo-blueprint.md`](./games-repo-blueprint.md)):
+contracts live ([`games-repo-blueprint.md`](./games-repo-blueprint.md)). As built, it is
+stricter than this plan originally specified in one important way: `touch` is **derived
+from each game's source**, not declared in its frontmatter, so a SPEC.md cannot claim a
+playability the code does not deliver.
 
-- `SPEC.md` frontmatter and `catalog.json` gain `mobile` metadata:
-  `touch: true|false`, `orientation: portrait|landscape|any`. The catalog UI badges and
-  filters on it; the player pre-rotates/fullscreens accordingly.
-- Games-repo agent instructions require touch controls for new games (on-screen
-  buttons or pointer events — `pointerdown`/`pointerup`, never keyboard-only).
-- CI validation gains a headless touch smoke check (dispatch pointer events, assert the
-  game reacts) — same style as the existing console-error check.
-- Existing seeded games get touch controls retrofitted as ordinary spec-change PRs.
+- ✅ `catalog.json` carries `touch: gamekit | native | controllers | none` (derived by
+  `tools/lib/touch.ts`) and `orientation: portrait | landscape | any` (authored — it is
+  design intent that no source reveals). `SPEC.md` may state `touch`, but only as an
+  assertion CI checks against the code.
+- ✅ Touch controls come from the platform, not per-game effort: `GameKit.createInput`
+  draws an on-screen pad and action buttons on any coarse-pointer device and synthesizes
+  them into the same key state the keyboard writes. A game asks `input.down('arrowleft')`
+  and never learns where the press came from — the same indirection the QR-party phone
+  controllers ride on.
+- ✅ CI enforcement is **fail-closed**: Check 13 in `tools/validate.ts` rejects a
+  keyboard-only game outright unless it declares `touch: none`, making desktop-only an
+  explicit, reviewable choice rather than an accident.
+- ✅ Retrofit is complete — 73 games, none keyboard-only.
+- 📋 Not done: the SPA ignores the `touch` value (no badge, no filter), and the games-repo
+  agent instructions carry no touch rule. The second matters less than it looks: CI
+  enforcement catches what instructions only request.
 
-This lands in M0 because _nothing else matters if the games themselves reject fingers_.
+This landed in M0 because _nothing else matters if the games themselves reject fingers_.
 
 ### Auth on each vehicle
 
@@ -163,20 +192,29 @@ registry gains FCM/APNs token rows alongside the web-push subscriptions it alrea
 
 ## Milestones
 
-### M0 — Mobile-web hardening 🚧 (prerequisite for everything; partly done)
+### M0 — Mobile-web hardening 🚧 (prerequisite for everything; nearly done)
 
-- 🚧 Responsive pass over `App.tsx` surfaces: `NavHeader`, `ArcadeCatalog`,
-  `CreatorStudio`, `SubmissionStatusView`, `ClosedBetaSplash` — one column, thumb-sized
-  targets, safe-area insets, no horizontal scroll at 360 px. _Started_ (nav, catalog,
-  creator flow have breakpoints); finish the audit across all surfaces.
-- 📋 Mobile play surface: `GameTheater` exists but is not mobile-hardened — add
-  orientation hint from catalog metadata, wake-lock while playing, safe-area insets, and
-  an on-screen close/back that doesn't rely on browser chrome.
-- 📋 **Games touch contract (the critical unstarted item)**: frontmatter, catalog
-  badge/filter, agent instructions, CI smoke check, retrofit PRs for seeded games.
-  **Nothing else in M0 matters if games reject fingers — do this first.**
-- Exit criterion: **on a real iPhone and a real Android phone, sign in, browse, play a
-  touch game, submit a spec, and watch its status — comfortably.**
+- 🚧 Responsive pass over `App.tsx` surfaces, at 320px as well as 360px — one column,
+  thumb-sized targets, safe-area insets, no horizontal scroll, no field under 16px.
+  - ✅ `NavHeader` — one row, ≥44px targets, overflow controls moved into the menu.
+  - ✅ `HeroPromptSection` — media buttons no longer float over the textarea, example
+    chips are one swipeable row instead of a 148px stack, and the wordmark stops
+    colliding with the sign-in button on a 320px screen.
+  - 📋 `CreatorStudio`, `SubmissionStatusView`, `ClosedBetaSplash`, `AuthModal`, and the
+    `ArcadeCatalog` grid — never audited at 360px.
+- ✅ Mobile play surface: `GameTheater` has wake-lock, the orientation nudge from catalog
+  metadata, safe-area insets, and an on-screen close.
+- ✅ **Games touch contract** — built and CI-enforced; see the section above. 73 games,
+  none keyboard-only.
+- 📋 Surface `touch` in the SPA: badge it in the catalog and let a phone visitor filter to
+  what their thumb can play. The data has been in `catalog.json` all along.
+- 🚧 Exit criterion: **on a real iPhone and a real Android phone, sign in, browse, play a
+  touch game, submit a spec, and watch its status — comfortably.** Partly met on
+  2026-07-25: the owner signed in, submitted a spec and answered the QA questions from an
+  iPhone SE, and reported the prompt card as too cluttered at that size (since fixed).
+  Still unverified on a real device: browsing the catalog, and **playing a touch game** —
+  the one thing no harness here can stand in for, since synthetic clicks never reach
+  sandboxed game code.
 
 ### M1 — PWA 📋 (push already done; only the shell remains)
 
@@ -219,8 +257,11 @@ registry gains FCM/APNs token rows alongside the web-push subscriptions it alrea
   store approval before approval exists.
 - **UGC review friction (1.2 / Play UGC)**: report/block must be visibly present at
   first submission — build it in M2 scope, not after rejection.
-- **Agent-built games regress on touch**: contract + CI smoke check in M0; catalog
-  filter hides `touch: false` games on phones rather than serving broken ones.
+- **Agent-built games regress on touch**: ✅ largely closed — Check 13 rejects a
+  keyboard-only game at CI, and because `touch` is derived from source rather than
+  declared, a regression cannot be papered over in frontmatter. The open half is the
+  catalog filter, which would let a phone visitor avoid a `touch: none` game rather than
+  be served a broken one; no such game exists today, so this is prevention, not triage.
 - **Cold-start latency reads as "app is broken" on mobile**: PWA shell cache (M1)
   plus honest skeleton/retry states; revisit min-instances only if telemetry says so.
 - **Capacitor WebView drift** (old Android System WebView versions): set a floor
@@ -242,13 +283,17 @@ registry gains FCM/APNs token rows alongside the web-push subscriptions it alrea
 
 ## Sequencing note
 
-M0 is pure web + games-repo work and can start now; it also directly serves the live
-closed-beta cohort ([`closed-beta-launch-plan.md`](./closed-beta-launch-plan.md)). Within
-M0, the **games touch contract comes first** — it is the only item that gates whether
-phones can play at all. M1 is now small (manifest + offline shell; push is done) and
-independent. QR-party v1 **already exists**, so that M2 precondition is met; M2 still
-waits on the public-beta content-safety gates (the in-app report action depends on the
-moderation queue).
+M0 is pure web + games-repo work and directly serves the live closed-beta cohort
+([`closed-beta-launch-plan.md`](./closed-beta-launch-plan.md)). Its gating item — the
+games touch contract — is **done**, so what remains is the tail of the responsive audit
+plus one small feature (surfacing `touch` in the catalog). The honest blocker on
+declaring M0 finished is not code: it is that the exit criterion requires real phones,
+and only part of it has been walked so far.
+
+M1 is now small (manifest + offline shell; push is done) and independent — and it is the
+only route to push on iOS, which needs an installed PWA. QR-party v1 **already exists**,
+so that M2 precondition is met; M2 still waits on the public-beta content-safety gates
+(the in-app report action depends on the moderation queue).
 
 ---
 
