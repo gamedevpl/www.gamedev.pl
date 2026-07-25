@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RoomClient, type RoomStatus } from './roomClient';
+import { useScreenWakeLock } from '../useScreenWakeLock';
 import type { InputKey, RoomPhase } from './protocol';
 
 type ControllerViewProps = { code: string; token: string };
@@ -65,22 +66,8 @@ export function ControllerView({ code, token }: ControllerViewProps) {
   }, [joined, code, token, nick]);
 
   // Keep the screen awake: a controller that sleeps mid-round is the most
-  // annoying failure this feature can have. Best-effort — unsupported browsers
-  // simply carry on.
-  useEffect(() => {
-    if (!joined) return;
-    let sentinel: { release: () => Promise<void> } | null = null;
-    const wakeLock = (navigator as Navigator & { wakeLock?: { request: (type: 'screen') => Promise<never> } }).wakeLock;
-    void wakeLock
-      ?.request('screen')
-      .then((lock) => {
-        sentinel = lock;
-      })
-      .catch(() => undefined);
-    return () => {
-      void sentinel?.release().catch(() => undefined);
-    };
-  }, [joined]);
+  // annoying failure this feature can have.
+  useScreenWakeLock(joined);
 
   const press = useCallback((key: InputKey, value: 0 | 1) => {
     const held = heldRef.current;

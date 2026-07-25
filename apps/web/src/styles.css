@@ -1384,9 +1384,12 @@ textarea:focus {
 }
 
 /* While the full-viewport player is open, lock page scroll so the fixed overlay is
-   the only thing on screen — no scrolling the hidden hero/catalog behind it. */
+   the only thing on screen — no scrolling the hidden hero/catalog behind it.
+   `overscroll-behavior: none` additionally kills pull-to-refresh: on a phone, a
+   downward swipe is a game input, not a request to reload the page mid-run. */
 body.player-open {
   overflow: hidden;
+  overscroll-behavior: none;
 }
 
 /* FULL VIEWPORT GAME THEATER MODE */
@@ -1403,17 +1406,33 @@ body.player-open {
   flex-direction: column;
   box-shadow: none;
   animation: fadeIn 0.2s ease-out;
+  /* Touch belongs to the game, not the browser: no double-tap zoom, no pinch, no
+     accidental text selection from a drag. Taps and clicks are unaffected. Games
+     are single-screen surfaces that handle their own gestures, so there is no
+     inner scrolling for this to take away. */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  /* Stop iOS from flashing a grey tap highlight over the game on every touch. */
+  -webkit-tap-highlight-color: transparent;
 }
 
+/* The safe-area insets below are what keep the bar's controls and the game itself
+   clear of a notch, a rounded corner, or the home indicator now that the page opts
+   into the full screen with viewport-fit=cover. They resolve to 0 everywhere else. */
 .game-theater-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 12px 24px;
+  padding-top: max(12px, env(safe-area-inset-top));
+  padding-left: max(24px, env(safe-area-inset-left));
+  padding-right: max(24px, env(safe-area-inset-right));
   background: rgba(18, 24, 30, 0.95);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--panel-border);
   width: 100%;
+  flex: none;
 }
 
 .game-theater-meta {
@@ -1476,12 +1495,18 @@ body.player-open {
 .game-viewport-container {
   flex: 1;
   width: 100%;
-  height: 100%;
+  /* `height: 100%` here would resolve against the stage and ignore the header bar,
+     overflowing the game off the bottom of a short (landscape phone) viewport.
+     `flex: 1` with min-height:0 gives it exactly the space the bar leaves. */
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   background: #000;
   overflow: hidden;
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
 .is-playing-full-viewport .game-frame {
@@ -1490,6 +1515,81 @@ body.player-open {
   border: none;
   border-radius: 0;
   box-shadow: none;
+  touch-action: none;
+}
+
+/* Icon + label, so the label can drop out on a narrow screen and leave a square,
+   thumb-sized icon button behind (each control carries its own aria-label). */
+.game-theater-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/* MOBILE GAME THEATER
+   Two independent squeezes. Narrow (portrait phone): the bar can't fit three
+   labelled buttons plus a description, so labels and secondary text go. Short
+   (landscape phone, ~380px tall): every pixel the bar takes is a pixel the game
+   doesn't get, so it shrinks to a thin strip. A landscape phone hits both. */
+@media (max-width: 768px) {
+  .game-theater-bar {
+    padding: 8px 12px;
+    padding-top: max(8px, env(safe-area-inset-top));
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+    gap: 8px;
+  }
+
+  /* The badge and description are context you already had on the way in; the
+     title alone identifies what's on screen. */
+  .theater-badge,
+  .theater-desc {
+    display: none;
+  }
+
+  .theater-title {
+    font-size: 0.95rem;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .game-theater-actions button .btn-label {
+    display: none;
+  }
+
+  /* Sized for a thumb (Apple/Google both land on ~44px) rather than a cursor. */
+  .game-theater-actions button {
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+    padding: 10px;
+  }
+
+  .game-theater-actions {
+    gap: 6px;
+  }
+
+  .sound-btn {
+    min-width: 44px;
+  }
+}
+
+@media (max-height: 430px) and (orientation: landscape) {
+  .game-theater-bar {
+    padding-top: max(4px, env(safe-area-inset-top));
+    padding-bottom: 4px;
+  }
+
+  .theater-title {
+    font-size: 0.85rem;
+  }
+
+  .game-theater-actions button {
+    min-height: 36px;
+    padding: 7px 9px;
+  }
 }
 
 .empty-stage {

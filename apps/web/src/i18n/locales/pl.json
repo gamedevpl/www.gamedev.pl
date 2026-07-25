@@ -83,7 +83,9 @@
   },
   "player": {
     "soundOn": "Dźwięk: Wł.",
-    "soundOff": "Dźwięk: Wył."
+    "soundOff": "Dźwięk: Wył.",
+    "fullscreen": "Pełny ekran",
+    "exitFullscreen": "Zamknij pełny ekran"
   },
   "catalog": {
     "title": "Gry",

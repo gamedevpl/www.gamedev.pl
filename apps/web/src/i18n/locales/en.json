@@ -83,7 +83,9 @@
   },
   "player": {
     "soundOn": "Sound: On",
-    "soundOff": "Sound: Off"
+    "soundOff": "Sound: Off",
+    "fullscreen": "Fullscreen",
+    "exitFullscreen": "Exit Fullscreen"
   },
   "catalog": {
     "title": "Games",
