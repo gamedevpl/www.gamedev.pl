@@ -2257,6 +2257,16 @@ body.player-open {
     padding: 6px 16px;
   }
 
+  /* iOS Safari force-zooms the page when a focused field is under 16px, and it
+     never zooms back out — you answer one QA question and spend the rest of the
+     visit scrolling sideways. 16px is the threshold, not a design choice. */
+  textarea,
+  input[type='text'],
+  input[type='email'],
+  .status-feedback-input {
+    font-size: 16px;
+  }
+
   .content {
     padding: 20px 12px 60px;
     width: 100%;
@@ -3099,6 +3109,14 @@ body.player-open {
   border-radius: 6px;
   color: #fff;
   font-size: 0.85rem;
+}
+
+/* Kept beside the rule it overrides rather than with the other mobile input
+   sizes — that block sits earlier in the file and loses on source order. */
+@media (max-width: 768px) {
+  .qa-custom-input input {
+    font-size: 16px;
+  }
 }
 
 .qa-preview {
