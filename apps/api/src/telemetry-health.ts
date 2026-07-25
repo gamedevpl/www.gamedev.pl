@@ -39,7 +39,16 @@ export interface GameHealth {
   totalPlaySeconds: number;
   /** Uncaught errors and unhandled rejections reported by the bridge. */
   errors: number;
-  /** Most frequent distinct messages, worst first. */
+  /**
+   * Most frequent distinct messages, worst first.
+   *
+   * **The one field here that is attacker-controlled.** Everything else is a number this
+   * service computed; a message is a string a game chose to emit, bounded to 200
+   * characters but otherwise arbitrary. Rendering it as text to an operator is safe
+   * (React escapes it). Feeding it to a coding agent is not — that is a prompt-injection
+   * channel, and IL-3 is the phase that will want to. Fence or summarize it there;
+   * never interpolate it into an agent's instructions.
+   */
   errorSamples: Array<{ message: string; count: number }>;
   /** Liveness ticks trusted for the frame stats below (see `resumeTicksIgnored`). */
   aliveTicks: number;

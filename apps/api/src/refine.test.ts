@@ -127,6 +127,97 @@ describe('POST /api/submissions/refine', () => {
     expect(res.json()).toEqual({ questions: [] });
     await testApp.close();
   });
+
+  it('serves a repeated spec from cache, spending neither quota nor a refiner call', async () => {
+    // Dismissing the panel and resubmitting, or double-clicking, used to cost a slot
+    // out of twenty for questions we had already written.
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:test-user' });
+    let refinerCalls = 0;
+    const countingRefiner = {
+      refine: async () => {
+        refinerCalls += 1;
+        return { questions: [{ id: 'style', question: 'Which style?', options: [{ label: 'Pixel' }] }] };
+      },
+    };
+    const testApp = await buildApp({
+      store,
+      sessionSecret,
+      specRefiner: countingRefiner,
+      contentChecker: new PatternChecker(),
+    });
+    const token = mintSessionToken('g:test-user', sessionSecret);
+    const payload = { title: 'Repeat Game', concept: 'The very same concept text submitted twice in a row' };
+
+    const first = await testApp.inject({
+      method: 'POST',
+      url: '/api/submissions/refine',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${token}` },
+      payload,
+    });
+    const second = await testApp.inject({
+      method: 'POST',
+      url: '/api/submissions/refine',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${token}` },
+      payload,
+    });
+
+    expect(first.json()).toEqual(second.json());
+    expect(refinerCalls).toBe(1);
+    expect((await store.getUsage('g:test-user', new Date().toISOString().slice(0, 10))).refines).toBe(1);
+
+    // A genuinely different concept is not a repeat, and must still be answered.
+    await testApp.inject({
+      method: 'POST',
+      url: '/api/submissions/refine',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${token}` },
+      payload: { ...payload, concept: 'A different concept entirely, deserving its own questions' },
+    });
+    expect(refinerCalls).toBe(2);
+
+    await testApp.close();
+  });
+
+  it('never caches a fail-open, so one slow call cannot pin an empty panel', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:test-user' });
+    let call = 0;
+    const flakyRefiner = {
+      // First call times out into the fail-open empty answer; the second succeeds.
+      refine: async () => {
+        call += 1;
+        return call === 1
+          ? { questions: [] }
+          : { questions: [{ id: 'style', question: 'Which style?', options: [{ label: 'Pixel' }] }] };
+      },
+    };
+    const testApp = await buildApp({
+      store,
+      sessionSecret,
+      specRefiner: flakyRefiner,
+      contentChecker: new PatternChecker(),
+    });
+    const token = mintSessionToken('g:test-user', sessionSecret);
+    const payload = { title: 'Flaky Game', concept: 'A concept whose first refine attempt times out on us' };
+
+    const first = await testApp.inject({
+      method: 'POST',
+      url: '/api/submissions/refine',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${token}` },
+      payload,
+    });
+    const second = await testApp.inject({
+      method: 'POST',
+      url: '/api/submissions/refine',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${token}` },
+      payload,
+    });
+
+    expect(first.json()).toEqual({ questions: [] });
+    expect(second.json().questions).toHaveLength(1);
+
+    await testApp.close();
+  });
 });
 
 describe('VertexSpecRefiner over a genaicode client', () => {
@@ -159,6 +250,9 @@ describe('VertexSpecRefiner over a genaicode client', () => {
       question: 'Question 0?',
       options: [{ label: 'A', detail: 'first' }],
       allowFreeText: true,
+      // Opposite default to allowFreeText: a question is single-choice unless the
+      // model explicitly says its options combine.
+      multiple: false,
     });
     expect(seen?.temperature).toBe(0.2);
     expect(seen?.prompt[0]?.text).toContain('Carrot Farm');
@@ -172,7 +266,7 @@ describe('VertexSpecRefiner over a genaicode client', () => {
 
     const result = await refiner.refine({ title: 'Game', concept: 'Concept' });
 
-    expect(result.questions).toEqual([{ id: 'q_0', question: '', options: [], allowFreeText: false }]);
+    expect(result.questions).toEqual([{ id: 'q_0', question: '', options: [], allowFreeText: false, multiple: false }]);
   });
 
   it('fails open when the call outruns its abort budget', async () => {

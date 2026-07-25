@@ -129,6 +129,53 @@ describe('GET /api/admin/telemetry/health', () => {
     await app.close();
   });
 
+  it('stops at the read budget and reports the narrower window it actually measured', async () => {
+    // Six days of 1000 events each: 6000 events against a 5000 budget, so the oldest
+    // day is never read. 30 days at the per-day cap would be 30,000 reads for a click.
+    const days = Array.from({ length: 6 }, (_, index) =>
+      new Date(Date.now() - index * 86_400_000).toISOString().slice(0, 10),
+    );
+    for (const dateStr of days) {
+      await store.appendTelemetryEvents(
+        dateStr,
+        Array.from({ length: 1000 }, (_, index) =>
+          event({ type: 'alive', frames: 300, sessionId: `s-${dateStr}-${index}`, at: `${dateStr}T10:00:00.000Z` }),
+        ),
+      );
+    }
+    const app = await appWith(store);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/admin/telemetry/health?days=6',
+      headers: authHeaders('g:boss'),
+    });
+
+    const body = res.json() as HealthResponse;
+    // Five days fit the budget; the sixth is dropped rather than read.
+    expect(body.days).toEqual(days.slice(0, 5));
+    expect(body.truncated).toBe(true);
+    // The window shown is the window measured — never wider.
+    expect(body.days).not.toContain(days[5]);
+    await app.close();
+  });
+
+  it('does not claim truncation when the whole window fits', async () => {
+    await store.appendTelemetryEvents(today, [event({ type: 'game_opened', msSinceOpen: 0 })]);
+    const app = await appWith(store);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/admin/telemetry/health?days=30',
+      headers: authHeaders('g:boss'),
+    });
+
+    const body = res.json() as HealthResponse;
+    expect(body.truncated).toBe(false);
+    expect(body.days).toHaveLength(30);
+    await app.close();
+  });
+
   it('scans several day partitions and merges a session that spans them', async () => {
     const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
     await store.appendTelemetryEvents(yesterday, [

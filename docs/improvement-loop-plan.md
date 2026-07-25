@@ -501,9 +501,20 @@ at all and feeds the only autonomous-eligible class.
   is not something a beta tester needs confirmed.
 
   It computes on read rather than from a stored aggregate: one equality-free query
-  per day partition, capped at 1000 events each, with `truncated` in the response so
-  a capped day is reported as a floor instead of silently under-counting. That is
-  cheap at current volume and defers the scheduler until volume argues for it.
+  per day partition, capped at 1000 events each **and 5000 across the whole request**,
+  with `truncated` in the response so a capped scan reads as a floor instead of
+  silently under-counting. The total budget is the load-bearing one — the window alone
+  does not bound cost, and 30 days at the per-day cap would be 30,000 reads for a
+  single click on exactly the view someone opens when a game looks wrong. When the
+  budget runs out the response reports the _narrower window it actually measured_, so
+  a range shown to a reader is never wider than the range behind it. Cheap at current
+  volume; defers the scheduler until volume argues for it.
+
+  Worth being straight about what does and does not protect this: the endpoint is
+  named in the public JS bundle and the repo is public, so the 404 is obscurity, not
+  concealment. The control is the `ADMIN_UIDS` check, which runs before any query. The
+  deeper reason it is safe to expose is that the data has no player identity in it to
+  leak — not redacted at read time, never written at all.
 
 - Daily aggregation job (Cloud Scheduler → internal endpoint, same pattern as
   the notify sweep) → `scorecard/current`.
@@ -518,6 +529,12 @@ at all and feeds the only autonomous-eligible class.
 - Suggestion inbox UI; Approve → structured improvement issue (evidence-fenced)
   → Copilot **via the relay**, with a stall alert on `issue-filed` → no PR.
 - Measurement records written at merge; 14-day post-change comparison.
+- ⚠️ **`errorSamples` is the one attacker-controlled field in the health data.** Every
+  other number in a scorecard is computed by this service; an error message is a
+  string a game chose to emit. It is safe rendered as text to an operator and unsafe
+  interpolated into an agent's instructions — this is the phase that will want to do
+  exactly that. Fence or summarize it; the "evidence in, never raw text in" principle
+  above is what this concretely means in practice.
 - Exit: first player-evidence-driven improvement merged and measured.
 
 ### Phase IL-4 — Bounded autonomy
