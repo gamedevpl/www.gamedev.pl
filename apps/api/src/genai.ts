@@ -1,11 +1,12 @@
 import { genaicode, type GenAIClient } from 'genaicode';
 import { vertexAI } from 'genaicode/providers';
 
-// Single place where this app talks to Vertex AI. Both LLM call sites (content
-// moderation and spec refinement) used to hand-roll the same GoogleAuth dance,
-// endpoint-URL construction, and candidate-unwrapping; genaicode collapses that
-// into a provider + request builder, so the only thing left here is resolving
-// *our* env-var contract (VERTEX_*) into provider options.
+// Single place where this app talks to Vertex AI. The three LLM call sites
+// (content moderation, spec refinement, and build-log translation) used to
+// hand-roll the same GoogleAuth dance, endpoint-URL construction, and
+// candidate-unwrapping; genaicode collapses that into a provider + request
+// builder, so the only thing left here is resolving *our* env-var contract
+// (VERTEX_*) into provider options.
 type VertexProviderOptions = NonNullable<Parameters<typeof vertexAI>[0]>;
 
 export type VertexGenerationConfig = VertexProviderOptions['generationConfig'];
