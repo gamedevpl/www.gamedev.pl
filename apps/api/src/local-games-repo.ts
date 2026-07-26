@@ -136,10 +136,36 @@ export function createLocalGamesFetch(options: LocalGamesRepoOptions): typeof fe
     }
 
     // --- GraphQL --------------------------------------------------------------
-    // Only findLinkedPR uses GraphQL. Locally no agent ever opens a pull request, so
-    // reporting "no linked PR" is the truthful answer and keeps the status page in its
-    // queued state instead of inventing a build that isn't happening.
+    // findLinkedPR asks about an issue's timeline; catalog asks for Blob text by
+    // expression. Locally no agent ever opens a pull request, so the timeline
+    // answer is always empty. Catalog expressions are answered from disk so the
+    // GraphQL path exercised in production is the same one local/fixtures use.
     if (pathname === '/graphql') {
+      const payload = init?.body ? (JSON.parse(String(init.body)) as { query?: string }) : {};
+      const query = payload.query ?? '';
+
+      if (query.includes('object(expression:')) {
+        const repository: Record<string, { text: string } | null> = {};
+        const aliasPattern = /(\w+)\s*:\s*object\(expression:\s*"([^"]+)"\)/g;
+        for (const match of query.matchAll(aliasPattern)) {
+          const alias = match[1];
+          const expression = match[2];
+          const colon = expression.indexOf(':');
+          const repoPath = colon >= 0 ? expression.slice(colon + 1) : expression;
+          const absolutePath = resolveInside(rootDir, repoPath);
+          if (!absolutePath) {
+            repository[alias] = null;
+            continue;
+          }
+          try {
+            repository[alias] = { text: await readFile(absolutePath, 'utf8') };
+          } catch {
+            repository[alias] = null;
+          }
+        }
+        return jsonResponse({ data: { repository } });
+      }
+
       return jsonResponse({ data: { repository: { issue: { timelineItems: { nodes: [] } } } } });
     }
 

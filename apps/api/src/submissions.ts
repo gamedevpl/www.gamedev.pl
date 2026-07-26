@@ -469,11 +469,20 @@ export async function registerSubmissionRoutes(
 
   // The catalog and published games are read through the authenticated GitHub
   // API (not public Pages), so the games repo can be private. Both are cached:
-  // the catalog briefly (it gates the publishing→published transition), games
-  // longer (a published game only changes on a new merge to main).
-  const catalogTtlMs = 60_000;
+  // the catalog for minutes (membership only changes on a merge to main; the
+  // previous 60s TTL forced a cold-start rebuild far too often), games longer so
+  // a published game only changes on a new merge to main.
+  const catalogTtlMs = 10 * 60_000;
   let catalogCache: { expiresAt: number; entries: CatalogGameEntry[] } | null = null;
   let catalogRefresh: Promise<CatalogGameEntry[]> | null = null;
+  /**
+   * Last time isSlugPublished forced a cache bypass. Status polls for a
+   * just-merged game that isn't in the catalog yet would otherwise rebuild the
+   * catalog on every poll for the whole publishing window. `null` means never
+   * forced — so the first miss is always allowed through.
+   */
+  let lastCatalogForceRefreshAt: number | null = null;
+  const catalogForceRefreshCooldownMs = 15_000;
   const gameTtlMs = 5 * 60_000;
   const gameCache = new Map<string, { expiresAt: number; value: { slug: string; title: string; html: string } }>();
   const gamesRateLimitWindowMs = 60 * 1000;
@@ -498,11 +507,11 @@ export async function registerSubmissionRoutes(
   const mediaCache = new Map<string, { expiresAt: number; etag: string; contentType: string; body: Buffer }>();
 
   // The cache-cold path is the dangerous one: with min-instances 0, a fresh
-  // instance takes a page load's several catalog-touching requests at once, and
-  // each miss fanning out into a SPEC.md read per game is what trips GitHub's
-  // secondary rate limit. So misses coalesce into one in-flight refresh, and a
-  // failed refresh falls back to the last catalog this instance built — for
-  // data that changes only on a merge, briefly stale beats a visitor-facing 502.
+  // instance takes a page load's several catalog-touching requests at once.
+  // getCatalog itself is now a handful of GraphQL round-trips (not ~2N Contents
+  // reads), but misses still coalesce into one in-flight refresh, and a failed
+  // refresh falls back to the last catalog this instance built — for data that
+  // changes only on a merge, briefly stale beats a visitor-facing 502.
   async function getCatalogEntries(client: GitHubClient, forceFresh = false): Promise<CatalogGameEntry[]> {
     if (!forceFresh && catalogCache && catalogCache.expiresAt > now()) {
       return catalogCache.entries;
@@ -529,11 +538,30 @@ export async function registerSubmissionRoutes(
     }
   }
 
-  async function isSlugPublished(client: GitHubClient, slug: string): Promise<boolean> {
+  async function isSlugPublished(
+    client: GitHubClient,
+    slug: string,
+    options: { refreshOnMiss?: boolean } = {},
+  ): Promise<boolean> {
     let entries = await getCatalogEntries(client);
-    if (!entries.some((entry) => entry.slug === slug && entry.status === 'published')) {
-      entries = await getCatalogEntries(client, true);
+    if (entries.some((entry) => entry.slug === slug && entry.status === 'published')) {
+      return true;
     }
+    // A miss after a warm cache is usually "this draft was never published" —
+    // forcing a refresh there was how status polling stampeded GitHub. Only the
+    // publishing→published transition (merged PR, slug not yet visible) opts in,
+    // and even then at most once per cooldown window.
+    if (!options.refreshOnMiss) {
+      return false;
+    }
+    if (
+      lastCatalogForceRefreshAt !== null &&
+      now() - lastCatalogForceRefreshAt < catalogForceRefreshCooldownMs
+    ) {
+      return false;
+    }
+    lastCatalogForceRefreshAt = now();
+    entries = await getCatalogEntries(client, true);
     return entries.some((entry) => entry.slug === slug && entry.status === 'published');
   }
 
@@ -550,7 +578,9 @@ export async function registerSubmissionRoutes(
   ): Promise<{ status: SubmissionStatusResponse; linkedPr: LinkedPullRequest | null }> {
     const issue = await client.getIssueState(issueNumber);
     const linkedPr = await client.findLinkedPR(issueNumber);
-    const status = await deriveStatus(issue.state, linkedPr, (slug) => isSlugPublished(client, slug));
+    const status = await deriveStatus(issue.state, linkedPr, (slug) =>
+      isSlugPublished(client, slug, { refreshOnMiss: true }),
+    );
     return { status, linkedPr };
   }
 
