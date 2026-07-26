@@ -8,6 +8,7 @@ import {
   parsePathRoute,
   playPath,
   statusPath,
+  studioPath,
 } from './router.js';
 
 describe('parsePathRoute', () => {
@@ -73,6 +74,13 @@ describe('parsePathRoute', () => {
     expect(parsePathRoute('/health/brick-storm')).toEqual({ view: 'notFound' });
   });
 
+  it('parses the creator studio route', () => {
+    expect(parsePathRoute('/studio')).toEqual({ view: 'studio' });
+    expect(parsePathRoute('/studio/abc%2Ftoken')).toEqual({ view: 'studio', token: 'abc/token' });
+    // Trailing slash is not a studio deep-link.
+    expect(parsePathRoute('/studio/')).toEqual({ view: 'notFound' });
+  });
+
   it('maps unknown paths to notFound', () => {
     expect(parsePathRoute('/nope')).toEqual({ view: 'notFound' });
     expect(parsePathRoute('/this/does/not/exist')).toEqual({ view: 'notFound' });
@@ -125,6 +133,12 @@ describe('path builders', () => {
 
   it('percent-encodes status tokens', () => {
     expect(statusPath('a b')).toBe('/status/a%20b');
+  });
+
+  it('builds a studio path that round-trips', () => {
+    expect(studioPath()).toBe('/studio');
+    expect(studioPath('tok')).toBe('/studio/tok');
+    expect(parsePathRoute(studioPath('a b'))).toEqual({ view: 'studio', token: 'a b' });
   });
 
   it('builds a hybrid join path that round-trips', () => {

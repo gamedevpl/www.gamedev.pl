@@ -50,9 +50,11 @@ type MyGamesRailProps = {
   refreshKey?: number;
   onOpenStatus: (token: string) => void;
   onPlayPublished: (slug: string) => void;
+  /** Opens the full creator control panel. */
+  onOpenStudio?: () => void;
 };
 
-export function MyGamesRail({ refreshKey = 0, onOpenStatus, onPlayPublished }: MyGamesRailProps) {
+export function MyGamesRail({ refreshKey = 0, onOpenStatus, onPlayPublished, onOpenStudio }: MyGamesRailProps) {
   const { t, i18n } = useTranslation();
   const [items, setItems] = useState<RailItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -146,12 +148,19 @@ export function MyGamesRail({ refreshKey = 0, onOpenStatus, onPlayPublished }: M
         <h2 className="section-title">
           <PixelIcon name="folder" size={18} /> {t('myGames.title')}
         </h2>
-        {liveCount > 0 ? (
-          <span className="status-live">
-            <span className="live-dot" aria-hidden="true" />
-            {t('myGames.liveCount', { count: liveCount })}
-          </span>
-        ) : null}
+        <div className="my-games-header-actions">
+          {liveCount > 0 ? (
+            <span className="status-live">
+              <span className="live-dot" aria-hidden="true" />
+              {t('myGames.liveCount', { count: liveCount })}
+            </span>
+          ) : null}
+          {onOpenStudio ? (
+            <button type="button" className="secondary-btn my-games-studio-btn" onClick={onOpenStudio}>
+              <PixelIcon name="wrench" size={12} /> {t('myGames.openStudio')}
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <ul className="my-games-list">

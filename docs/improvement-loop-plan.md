@@ -435,18 +435,18 @@ autonomous-class changes keep regressing, tighten the router.
 The surfaces to hang this on already exist, which changes the build cost
 considerably:
 
-- **Game dashboard** — the natural extension of the my-games rail
-  ([MyGamesRail.tsx](../apps/web/src/MyGamesRail.tsx)) and the status view
-  ([SubmissionStatusView.tsx](../apps/web/src/SubmissionStatusView.tsx)), which
-  already renders per-submission build history. A published game's card gains a
-  scorecard panel: funnel bars, progression drop-off, vote trend, feedback themes
-  with expandable moderated quotes.
-- **Suggestion inbox** — cards with insight → evidence → proposed change →
+- ✅ **Game dashboard / Creator Studio** (`/studio`) — control panel over the
+  creator's own submissions: shelf list, overview (status / abandon), play-health
+  scorecard (`GET /api/me/studio/health`, same aggregator as the operator view but
+  filtered to owned slugs), draft feedback, and post-publish improve
+  (`POST /api/submissions/:token/improve` → games-repo issue with `improvement`
+  label). Linked from the nav and the home-page my-games rail.
+- 📋 **Suggestion inbox** — cards with insight → evidence → proposed change →
   [Approve → files issue] / [Dismiss with reason]. Dismissal reasons feed router
   tuning. Approval reuses the feedback-comment path that already works.
-- **Autonomy toggle** per game: `digest only` / `suggest` (default) /
+- 📋 **Autonomy toggle** per game: `digest only` / `suggest` (default) /
   `auto-fix defects` / `auto-tune within spec`.
-- **Digest** — a batched notification, not a new channel. `NotificationType`
+- 📋 **Digest** — a batched notification, not a new channel. `NotificationType`
   gains `game.digest` (weekly, per creator, batched across their games) and
   `game.suggestion`; both must pass the existing "would the user thank us?" test
   recorded in [store.ts](../apps/api/src/store.ts). Delivery is the shipped
@@ -454,6 +454,8 @@ considerably:
   [notifications-plan.md](./notifications-plan.md) already reserves
   `submission.feedback_reply` for this loop; wire into that plan rather than
   around it.
+- 📋 **Player feedback panel** — stubbed in the studio ("coming soon"); waits on
+  IL-1 thumbs + written player feedback capture.
 
 ## Abuse and safety notes
 
@@ -661,6 +663,8 @@ at all and feeds the only autonomous-eligible class.
     heading. Cost is bounded by a per-sweep call budget, and when that budget binds the
     result says so — otherwise "no themes" would silently mean "we stopped looking".
 - 📋 Scorecard panel on the game dashboard; digest notification type + weekly batch.
+  ✅ Creator Studio (`/studio`) ships the scorecard panel + improve prompt for the
+  creator's own games; digest / suggestion inbox remain open.
 - Exit: a creator can answer "is my game working, where do players drop off,
   what do they say" without any agent involvement.
 

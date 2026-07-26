@@ -34,7 +34,7 @@
     "statusOnline": "Sieć Agentów Online",
     "navPrompt": "Stwórz Grę",
     "navArcade": "Arcade",
-    "navStudio": "Moje Projekty",
+    "navStudio": "Studio",
     "navMyGames": "Moje Gry",
     "navFeed": "Strumień Agentów",
     "mySpecs": "Moje Aktywne Specyfikacje ({{count}})"
@@ -151,6 +151,64 @@
     "remixHeader": "Remiksowanie: {{title}}",
     "remixHint": "Tworzysz wariant specyfikacji na podstawie istniejącej gry."
   },
+  "studioPanel": {
+    "title": "Studio Twórcy",
+    "subtitle": "Zarządzaj grami, sprawdzaj jak się grają i proś o ulepszenia.",
+    "signInHint": "Zaloguj się, aby zobaczyć zlecone gry i ich statystyki.",
+    "backHome": "Wróć na start",
+    "loading": "Ładujemy Twoje gry…",
+    "loadError": "Nie udało się wczytać studia. Spróbuj za chwilę.",
+    "empty": "Nie zleciłeś jeszcze żadnej gry.",
+    "createFirst": "Stwórz pierwszą grę",
+    "shelfAria": "Twoje gry",
+    "tabs": {
+      "overview": "Przegląd",
+      "stats": "Statystyki",
+      "improve": "Ulepsz",
+      "feedback": "Opinie graczy"
+    },
+    "overview": {
+      "status": "Status",
+      "created": "Utworzono",
+      "published": "Opublikowano",
+      "sessions": "Ostatnia gra",
+      "play": "gry",
+      "openBuild": "Otwórz build",
+      "abandon": "Zatrzymaj build",
+      "abandonConfirm": "Potwierdź zatrzymanie"
+    },
+    "stats": {
+      "noSlug": "Statystyki pojawią się, gdy gra otrzyma slug roboczy lub publikacyjny.",
+      "range": "Zmierzone {{from}} → {{to}}",
+      "truncated": "Dzień osiągnął limit odczytów — te liczby to dolna granica, nie suma.",
+      "empty": "Brak sesji w tym oknie.",
+      "sessions": "Sesje",
+      "bounces": "Odjścia",
+      "medianPlay": "Mediana gry",
+      "totalPlay": "Łączny czas",
+      "errors": "Błędy",
+      "stallRate": "Zacięcia",
+      "medianFps": "Mediana FPS",
+      "errorSamples": "Częste błędy"
+    },
+    "improve": {
+      "titleDraft": "Poproś o zmianę w wersji roboczej",
+      "titlePublished": "Poproś o ulepszenie",
+      "hintDraft": "Opisz, co zmienić. Agent buildu podejmie to na otwartym pull requeście.",
+      "hintPublished": "Opisz, jak ulepszyć żywą grę. Otworzy to nowe zgłoszenie w repozytorium gier dla agenta.",
+      "placeholder": "np. Poziom drugi jest za trudny — dodaj checkpoint i spowolnij przeszkody…",
+      "submit": "Wyślij prośbę",
+      "sending": "Wysyłanie…",
+      "sent": "Wysłano",
+      "quota": "Dzienny limit ulepszeń wyczerpany. Spróbuj jutro.",
+      "rejected": "Tej prośby nie udało się przyjąć. Przeformułuj i spróbuj ponownie.",
+      "error": "Nie udało się teraz wysłać prośby. Spróbuj ponownie."
+    },
+    "feedback": {
+      "title": "Opinie graczy — wkrótce",
+      "body": "Komentarze graczy i tematy głosów pojawią się tu, gdy capture będzie gotowy. Statystyki powyżej już pokazują, jak przebiegają sesje."
+    }
+  },
   "submit": {
     "title": "Zgłoś nową specyfikację gry",
     "description": "Opisz w co chcesz zagrać. Autonomiczny agent zrealizuje Twój pomysł jako Pull Request na GitHubie.",
@@ -196,7 +254,8 @@
     "liveCount": "w trakcie: {{count}}",
     "checking": "Sprawdzam…",
     "play": "Zagraj",
-    "open": "Otwórz"
+    "open": "Otwórz",
+    "openStudio": "Studio"
   },
   "draft": {
     "title": "Gra w budowie",

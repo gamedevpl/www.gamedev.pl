@@ -7,12 +7,21 @@ import { NavHeader } from './NavHeader.js';
 import { HeroPromptSection } from './HeroPromptSection.js';
 import { ArcadeCatalog } from './ArcadeCatalog.js';
 import { MyGamesRail } from './MyGamesRail.js';
+import { CreatorStudioView } from './CreatorStudioView.js';
 import { DraftView } from './DraftView.js';
 import { GameHealthView } from './GameHealthView.js';
 import { PixelIcon } from './PixelIcon.js';
 import { SubmissionStatusView } from './SubmissionStatusView.js';
 import { CreatorQA, type QAQuestion } from './CreatorQA.js';
-import { canonicalPlayPath, NAVIGATE_EVENT, parsePathRoute, statusPath, playPath, type AppRoute } from './router.js';
+import {
+  canonicalPlayPath,
+  NAVIGATE_EVENT,
+  parsePathRoute,
+  statusPath,
+  playPath,
+  studioPath,
+  type AppRoute,
+} from './router.js';
 import { LegalPage } from './LegalPage.js';
 import { ContactPage } from './ContactPage.js';
 import { NotFoundPage } from './NotFoundPage.js';
@@ -501,6 +510,7 @@ export function App() {
           activeSpecsCount={savedSpecs.length}
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
+          onStudio={() => navigate(studioPath())}
         />
         <main className="content">
           <LegalPage doc={route.doc} onBack={() => navigate('/')} />
@@ -557,11 +567,22 @@ export function App() {
 
   return (
     <div className="app">
-      <NavHeader activeSpecsCount={savedSpecs.length} onNavigate={handleNavigateSection} onHome={() => navigate('/')} />
+      <NavHeader
+        activeSpecsCount={savedSpecs.length}
+        onNavigate={handleNavigateSection}
+        onHome={() => navigate('/')}
+        onStudio={() => navigate(studioPath())}
+      />
 
       <main className="content">
         {route.view === 'health' ? (
           <GameHealthView />
+        ) : route.view === 'studio' ? (
+          <CreatorStudioView
+            selectedToken={route.token}
+            onNavigate={navigate}
+            onPlay={(slug) => navigate(playPath(slug))}
+          />
         ) : route.view === 'draft' ? (
           <DraftView slug={route.slug} onExit={() => navigate('/')} onDraftTitle={setDraftTitle} />
         ) : route.view === 'status' ? (
@@ -601,6 +622,7 @@ export function App() {
                 refreshKey={myGamesRefreshKey}
                 onOpenStatus={(token) => navigate(statusPath(token))}
                 onPlayPublished={(slug) => navigate(playPath(slug))}
+                onOpenStudio={() => navigate(studioPath())}
               />
             )}
 

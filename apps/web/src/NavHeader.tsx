@@ -13,9 +13,11 @@ type NavHeaderProps = {
   onNavigate: (sectionId: string) => void;
   /** In-app home navigation (avoids a full reload / beforeunload while a game is open). */
   onHome: () => void;
+  /** Opens the creator control panel. */
+  onStudio: () => void;
 };
 
-export function NavHeader({ activeSpecsCount, onNavigate, onHome }: NavHeaderProps) {
+export function NavHeader({ activeSpecsCount, onNavigate, onHome, onStudio }: NavHeaderProps) {
   const { t } = useTranslation();
   const { user, logout } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -100,6 +102,17 @@ export function NavHeader({ activeSpecsCount, onNavigate, onHome }: NavHeaderPro
                 <PixelIcon name="folder" size={14} /> {t('header.navMyGames')}
                 {activeSpecsCount > 0 && <span className="specs-count-badge">{activeSpecsCount}</span>}
               </button>
+              {user ? (
+                <button
+                  className="nav-link"
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    onStudio();
+                  }}
+                >
+                  <PixelIcon name="wrench" size={14} /> {t('header.navStudio')}
+                </button>
+              ) : null}
 
               {/* Controls that live in the header bar on a desktop but cannot fit
                   beside it on a phone. Hidden above the mobile breakpoint, where

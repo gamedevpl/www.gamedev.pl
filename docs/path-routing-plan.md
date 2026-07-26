@@ -69,6 +69,8 @@ Same path shapes, without the `#`:
 | `/draft/<slug>`   | `{ view: 'draft', slug }`                    |
 | `/status/<token>` | `{ view: 'status', token }`                  |
 | `/health`         | `{ view: 'health' }`                         |
+| `/studio`         | `{ view: 'studio' }`                         |
+| `/studio/<token>` | `{ view: 'studio', token }` — deep-link      |
 | `/join/<code>/…`  | `{ view: 'join', code, token }` — see § Join |
 
 No `/game/` segment — everything playable is a game; `/play` (and the `/ay` /

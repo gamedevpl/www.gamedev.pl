@@ -34,7 +34,7 @@
     "statusOnline": "Agent Network Online",
     "navPrompt": "Create Game",
     "navArcade": "Arcade",
-    "navStudio": "My Projects",
+    "navStudio": "Studio",
     "navMyGames": "My Games",
     "navFeed": "Agent Stream",
     "mySpecs": "My Active Specs ({{count}})"
@@ -151,6 +151,64 @@
     "remixHeader": "Remixing: {{title}}",
     "remixHint": "You are creating a new spec variant based on this existing game."
   },
+  "studioPanel": {
+    "title": "Creator Studio",
+    "subtitle": "Manage your games, check how they play, and ask for improvements.",
+    "signInHint": "Sign in to see the games you commissioned and their play stats.",
+    "backHome": "Back home",
+    "loading": "Loading your games…",
+    "loadError": "Could not load your studio right now. Try again in a moment.",
+    "empty": "You have not commissioned a game yet.",
+    "createFirst": "Create your first game",
+    "shelfAria": "Your games",
+    "tabs": {
+      "overview": "Overview",
+      "stats": "Stats",
+      "improve": "Improve",
+      "feedback": "Player feedback"
+    },
+    "overview": {
+      "status": "Status",
+      "created": "Created",
+      "published": "Published",
+      "sessions": "Recent play",
+      "play": "played",
+      "openBuild": "Open build",
+      "abandon": "Stop build",
+      "abandonConfirm": "Confirm stop"
+    },
+    "stats": {
+      "noSlug": "Stats appear once this game has a draft or published slug.",
+      "range": "Measured {{from}} → {{to}}",
+      "truncated": "A day hit the read cap, so these counts are a floor rather than a total.",
+      "empty": "No play sessions in this window yet.",
+      "sessions": "Sessions",
+      "bounces": "Bounces",
+      "medianPlay": "Median play",
+      "totalPlay": "Total play",
+      "errors": "Errors",
+      "stallRate": "Stall rate",
+      "medianFps": "Median FPS",
+      "errorSamples": "Frequent errors"
+    },
+    "improve": {
+      "titleDraft": "Request a change on the draft",
+      "titlePublished": "Request an improvement",
+      "hintDraft": "Describe what to change. The build agent will pick this up on the open pull request.",
+      "hintPublished": "Describe how the live game should improve. This opens a new games-repo issue for an agent to work on.",
+      "placeholder": "e.g. Level two spikes too hard — add a checkpoint and slow the obstacles…",
+      "submit": "Send request",
+      "sending": "Sending…",
+      "sent": "Sent",
+      "quota": "Daily improvement quota reached. Try again tomorrow.",
+      "rejected": "That request could not be accepted. Please rephrase and try again.",
+      "error": "Could not send the request right now. Please try again."
+    },
+    "feedback": {
+      "title": "Player feedback — coming soon",
+      "body": "Written player comments and vote themes will land here once capture ships. Your play stats above already show how sessions go."
+    }
+  },
   "submit": {
     "title": "Submit a new game spec",
     "description": "Describe what you want to play. An autonomous coding agent will implement it as a pull request on GitHub.",
@@ -196,7 +254,8 @@
     "liveCount": "{{count}} in progress",
     "checking": "Checking…",
     "play": "Play",
-    "open": "Open"
+    "open": "Open",
+    "openStudio": "Studio"
   },
   "draft": {
     "title": "A game in the making",

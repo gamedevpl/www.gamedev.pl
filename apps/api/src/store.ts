@@ -187,6 +187,8 @@ export interface UsageCounters {
   refines: number;
   feedback: number;
   playerFeedback: number;
+  /** Creator-requested improvements on already-published games (studio control panel). */
+  improvements: number;
 }
 
 /**
@@ -795,7 +797,15 @@ export function compareScorecards(a: Scorecard, b: Scorecard): number {
 
 /** A zeroed counter set — the shape every usage read falls back to. */
 function emptyUsageCounters(): UsageCounters {
-  return { submissions: 0, previews: 0, mocks: 0, refines: 0, feedback: 0, playerFeedback: 0 };
+  return {
+    submissions: 0,
+    previews: 0,
+    mocks: 0,
+    refines: 0,
+    feedback: 0,
+    playerFeedback: 0,
+    improvements: 0,
+  };
 }
 
 /** Newest first, with the id as a stable tie-break for same-millisecond events. */

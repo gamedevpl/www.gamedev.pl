@@ -41,6 +41,8 @@ export type MySubmission = {
   lastKnownStatus: SubmissionState | null;
   /** Present once known, so a published card can link straight to the game. */
   slug: string | null;
+  /** Set when the game has published — optional on older API responses. */
+  publishedAt?: string;
 };
 
 /** The build steps an agent can report. Rendered from our own translated copy. */

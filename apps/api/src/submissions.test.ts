@@ -1404,6 +1404,75 @@ describe('submission feedback route', () => {
   });
 });
 
+describe('POST /api/submissions/:token/improve', () => {
+  it('opens an improvement issue for a published game the caller owns', async () => {
+    const { githubClient, createIssue } = createGithubClientStub({ issueNumber: 501 });
+    const store = new InMemoryStore();
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
+    await store.createSubmission(123, 'g:test-user', 'Sky Dodge');
+    await store.setSubmissionSlug(123, 'sky-dodge');
+    await store.setSubmissionPublishedAt(123, '2026-07-20T00:00:00.000Z');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(123, secret)}/improve`,
+      headers: authHeaders,
+      payload: { feedback: 'Make level two less punishing and add a checkpoint.' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ok: true, issueNumber: 501, slug: 'sky-dodge' });
+    expect(createIssue).toHaveBeenCalledTimes(1);
+    const issue = createIssue.mock.calls[0]![0];
+    expect(issue.title).toContain('Sky Dodge');
+    expect(issue.labels).toEqual(['improvement']);
+    expect(issue.body).toContain('sky-dodge');
+    expect(issue.body).toContain('Make level two less punishing and add a checkpoint.');
+    expect(issue.body).toContain('```text');
+
+    await app.close();
+  });
+
+  it('refuses unpublished games — those still use the draft feedback path', async () => {
+    const { githubClient, createIssue } = createGithubClientStub({});
+    const store = new InMemoryStore();
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
+    await store.createSubmission(123, 'g:test-user', 'Not live yet');
+    await store.setSubmissionSlug(123, 'not-live-yet');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(123, secret)}/improve`,
+      headers: authHeaders,
+      payload: { feedback: 'Please polish the jump feeling a bit more.' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(createIssue).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('refuses someone else’s published game even with a valid token', async () => {
+    const { githubClient, createIssue } = createGithubClientStub({});
+    const store = new InMemoryStore();
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
+    await store.createSubmission(123, 'g:someone-else', 'Not yours');
+    await store.setSubmissionSlug(123, 'not-yours');
+    await store.setSubmissionPublishedAt(123, '2026-07-20T00:00:00.000Z');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(123, secret)}/improve`,
+      headers: authHeaders,
+      payload: { feedback: 'Please polish the jump feeling a bit more.' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(createIssue).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
 describe('GET /api/submissions/mine', () => {
   it('lists the creator’s own submissions, newest first, with working status tokens', async () => {
     const { githubClient } = createGithubClientStub({});

@@ -5116,3 +5116,267 @@ body.player-open {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* CREATOR CONTROL PANEL (/studio) */
+.studio-panel {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+
+.studio-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.studio-panel-header h1 {
+  margin: 0 0 0.35rem;
+  font-size: 1.75rem;
+  font-weight: 700;
+}
+
+.studio-panel-header p {
+  margin: 0;
+  color: var(--muted);
+  max-width: 36rem;
+}
+
+.studio-layout {
+  display: grid;
+  grid-template-columns: minmax(200px, 280px) 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.studio-shelf {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 0.5rem;
+}
+
+.studio-shelf-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.studio-shelf-item {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 0.75rem 0.85rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.studio-shelf-item:hover {
+  background: var(--panel-card);
+}
+
+.studio-shelf-item.is-active {
+  background: var(--panel-card);
+  border-color: rgba(0, 228, 172, 0.35);
+}
+
+.studio-shelf-title {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.studio-shelf-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.studio-detail {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 1.25rem;
+  min-width: 0;
+}
+
+.studio-detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.studio-detail-head h2 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.studio-slug {
+  color: var(--turquoise);
+  font-size: 0.85rem;
+}
+
+.studio-empty,
+.studio-empty-state {
+  color: var(--muted);
+  padding: 1.5rem 0;
+}
+
+.studio-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.studio-error {
+  color: var(--error);
+}
+
+.studio-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1rem;
+  margin: 0 0 1.25rem;
+}
+
+.studio-facts dt {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-bottom: 0.2rem;
+}
+
+.studio-facts dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.studio-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.studio-actions .is-danger {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+.studio-stats-range {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.studio-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 1rem;
+  margin: 1rem 0 0;
+}
+
+.studio-stat-grid dt {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.studio-stat-grid dd {
+  margin: 0.2rem 0 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.studio-error-samples {
+  margin-top: 1.5rem;
+}
+
+.studio-error-samples h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.studio-error-samples ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.studio-error-samples li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  background: var(--panel-card);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.studio-error-samples code {
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+
+.studio-improve h3 {
+  margin: 0 0 0.35rem;
+}
+
+.studio-improve p {
+  margin: 0 0 0.75rem;
+  color: var(--muted);
+}
+
+.studio-coming-soon {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  color: var(--muted);
+  padding: 0.5rem 0 1rem;
+}
+
+.studio-coming-soon h3 {
+  margin: 0;
+  color: var(--text);
+}
+
+.studio-coming-soon p {
+  margin: 0;
+  max-width: 36rem;
+}
+
+.my-games-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.my-games-studio-btn {
+  padding: 0.35rem 0.7rem;
+  font-size: 0.8rem;
+}
+
+@media (max-width: 800px) {
+  .studio-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .studio-panel-header {
+    flex-direction: column;
+  }
+}

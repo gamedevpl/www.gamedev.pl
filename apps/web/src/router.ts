@@ -20,6 +20,8 @@ export type AppRoute =
   // renders nothing unless the API recognises the caller as an admin, and the API
   // answers 404 to everyone else.
   | { view: 'health' }
+  // Creator control panel: own games, play health, improve prompts.
+  | { view: 'studio'; token?: string }
   // Privacy policy and terms. Reachable without a session — someone deciding whether
   // to sign in has to be able to read what signing in would mean first.
   | { view: 'legal'; doc: LegalDocId }
@@ -87,6 +89,15 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
     return { view: 'health' };
   }
 
+  if (normalizedPath === '/studio') {
+    return { view: 'studio' };
+  }
+
+  const studioMatch = normalizedPath.match(/^\/studio\/([^/]+)$/);
+  if (studioMatch?.[1]) {
+    return { view: 'studio', token: decodeURIComponent(studioMatch[1]) };
+  }
+
   // Hybrid join: /join/<code>#<token> — credential stays out of the request line.
   const joinMatch = normalizedPath.match(/^\/join\/([A-Z0-9]{6})$/);
   if (joinMatch?.[1] && fragment && /^[A-Za-z0-9_-]+$/.test(fragment)) {
@@ -118,6 +129,11 @@ export function canonicalPlayPath(pathname: string): string | null {
 
 export function draftPath(slug: string): string {
   return `/draft/${encodeURIComponent(slug)}`;
+}
+
+/** Creator control panel. Optional token deep-links into one game on the shelf. */
+export function studioPath(token?: string): string {
+  return token ? `/studio/${encodeURIComponent(token)}` : '/studio';
 }
 
 /** QR / share URL path+fragment for a multiplayer lobby guest. */
