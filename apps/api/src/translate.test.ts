@@ -91,11 +91,14 @@ describe('VertexTranslator over a genaicode client', () => {
     });
 
     expect(await translator.translate(['feat: add player jump'], 'pl')).toEqual(['Dodano skok gracza']);
+    expect(seen).toBeDefined();
     expect(seen?.temperature).toBe(0);
     expect(seen?.signal).toBeInstanceOf(AbortSignal);
-    expect(seen?.prompt[0]?.text).toContain('Polish');
-    expect(seen?.prompt[0]?.text).toContain('feat: add player jump');
-    expect(seen?.prompt[0]?.text).toContain('Return ONLY a JSON array of strings');
+    // Concatenate parts so this stays valid if genaicode splits the prompt later.
+    const promptText = (seen?.prompt ?? []).map((part) => part.text ?? '').join('');
+    expect(promptText).toContain('Polish');
+    expect(promptText).toContain('feat: add player jump');
+    expect(promptText).toContain('Return ONLY a JSON array of strings');
   });
 
   it('maps non-string JSON array entries to empty strings and keeps source text', async () => {
