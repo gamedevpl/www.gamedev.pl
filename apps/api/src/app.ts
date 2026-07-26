@@ -20,6 +20,7 @@ import { InMemoryStore, type Store } from './store.js';
 import { registerSubmissionRoutes, type SubmissionRoutesOptions } from './submissions.js';
 import { registerTelemetryRoutes, type TelemetryRoutesOptions } from './telemetry.js';
 import { registerVisitTelemetryRoutes } from './visit-telemetry.js';
+import { registerVoteRoutes, type VoteRoutesOptions } from './votes.js';
 import { createPublishedSlugGateFromEnv } from './published-slugs.js';
 import { registerRateLimit } from './rate-limit.js';
 import { isKnownSpaShellPath, looksLikeStaticAsset } from './spa-paths.js';
@@ -43,6 +44,8 @@ export interface BuildAppOptions {
   multiplayerRoutes?: MultiplayerRoutesOptions;
   /** Seams for play-session telemetry; defaults to a live catalog-backed slug gate. */
   telemetryRoutes?: Omit<TelemetryRoutesOptions, 'store'>;
+  /** Seams for game votes; defaults to a live catalog-backed slug gate. */
+  voteRoutes?: Omit<VoteRoutesOptions, 'store'>;
   // Private beta allowlist — uids (comma-separated) allowed to sign in and access gated routes
   betaAllowedUids?: string;
   // Private beta allowlist — Google-verified emails (comma-separated, case-insensitive)
@@ -172,6 +175,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // Safe to leave open: the handler never reads request.user and records nothing
   // that identifies a visitor, so it costs nothing to admit from the open internet.
   await registerVisitTelemetryRoutes(app, { store });
+
+  // Thumbs up/down (docs/improvement-loop-plan.md, signal source #2). Casting or
+  // clearing a vote needs a session (request.user), same as push subscriptions; the
+  // count read does not, so a shared game link shows real numbers to a visitor who
+  // has never signed in. `/api/games/` is already exempt from the beta wall below,
+  // for the same reason play itself is: it is what a game link has to work through.
+  await registerVoteRoutes(app, {
+    store,
+    ...(options.voteRoutes ?? { publishedSlugs: createPublishedSlugGateFromEnv() }),
+  });
 
   // Operator reads over that telemetry. Separate allowlist from the beta one: being
   // let into the closed beta is not the same as being allowed to read every game's

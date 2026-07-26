@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { Firestore } from '@google-cloud/firestore';
+import { Firestore, type DocumentData } from '@google-cloud/firestore';
 import type { BuildEvent, SubmissionStatus } from './submission-status.js';
 
 export interface User {
@@ -326,6 +326,21 @@ export interface PushSubscriptionRecord {
   createdAt: string;
 }
 
+/**
+ * A game's thumbs up/down (docs/improvement-loop-plan.md, signal source #2).
+ *
+ * Keyed by uid so a repeat vote is a revision, not a second ballot — the plan calls
+ * this "low-risk but gameable"; dedupe by uid closes the cheap version of gaming it
+ * (spamming one account), not the expensive one (many accounts), which nothing short
+ * of identity verification closes and which this feature does not attempt.
+ */
+export type VoteValue = 'up' | 'down';
+
+export interface GameVoteCounts {
+  up: number;
+  down: number;
+}
+
 export type WaitlistStatus = 'pending' | 'approved' | 'rejected';
 
 export interface WaitlistEntry {
@@ -445,6 +460,17 @@ export interface Store {
   listPushSubscriptions(uid: string): Promise<PushSubscriptionRecord[]>;
   /** Remove a subscription (client unsubscribe, or pruning a dead endpoint). */
   deletePushSubscription(uid: string, endpoint: string): Promise<void>;
+  /** A user's current vote on a game, or null if they have not voted. */
+  getVote(slug: string, uid: string): Promise<VoteValue | null>;
+  /**
+   * Casts or changes a vote. Repeating the same value is a no-op; voting the other way
+   * flips it. Returns the game's updated aggregate counts.
+   */
+  castVote(slug: string, uid: string, value: VoteValue): Promise<GameVoteCounts>;
+  /** Removes a user's vote. Returns the game's updated aggregate counts. */
+  clearVote(slug: string, uid: string): Promise<GameVoteCounts>;
+  /** A game's aggregate vote counts — the public read, no uid involved. */
+  getVoteCounts(slug: string): Promise<GameVoteCounts>;
 }
 
 // Stable doc id for a subscription: a hash of its endpoint URL. Endpoints are long
@@ -480,6 +506,8 @@ export class InMemoryStore implements Store {
   private notifications = new Map<string, Map<string, StoredNotification>>();
   // uid -> (endpoint-hash -> subscription)
   private pushSubs = new Map<string, Map<string, PushSubscriptionRecord>>();
+  // slug -> (uid -> value)
+  private votes = new Map<string, Map<string, VoteValue>>();
 
   async getUser(uid: string): Promise<User | null> {
     const user = this.users.get(uid);
@@ -869,6 +897,32 @@ export class InMemoryStore implements Store {
 
   async deletePushSubscription(uid: string, endpoint: string): Promise<void> {
     this.pushSubs.get(uid)?.delete(pushSubscriptionId(endpoint));
+  }
+
+  private voteCounts(slug: string): GameVoteCounts {
+    const counts: GameVoteCounts = { up: 0, down: 0 };
+    for (const value of this.votes.get(slug)?.values() ?? []) counts[value] += 1;
+    return counts;
+  }
+
+  async getVote(slug: string, uid: string): Promise<VoteValue | null> {
+    return this.votes.get(slug)?.get(uid) ?? null;
+  }
+
+  async castVote(slug: string, uid: string, value: VoteValue): Promise<GameVoteCounts> {
+    const forGame = this.votes.get(slug) ?? new Map<string, VoteValue>();
+    forGame.set(uid, value);
+    this.votes.set(slug, forGame);
+    return this.voteCounts(slug);
+  }
+
+  async clearVote(slug: string, uid: string): Promise<GameVoteCounts> {
+    this.votes.get(slug)?.delete(uid);
+    return this.voteCounts(slug);
+  }
+
+  async getVoteCounts(slug: string): Promise<GameVoteCounts> {
+    return this.voteCounts(slug);
   }
 
   // Test/inspection only — not part of the Store interface. Production code never
@@ -1374,5 +1428,65 @@ export class FirestoreStore implements Store {
 
   async deletePushSubscription(uid: string, endpoint: string): Promise<void> {
     await this.pushSubRef(uid, endpoint).delete();
+  }
+
+  private gameRef(slug: string) {
+    return this.db.collection('games').doc(slug);
+  }
+
+  private voteRef(slug: string, uid: string) {
+    return this.gameRef(slug).collection('votes').doc(uid);
+  }
+
+  private static readVoteCounts(data: DocumentData | undefined): GameVoteCounts {
+    return { up: (data?.votesUp as number | undefined) ?? 0, down: (data?.votesDown as number | undefined) ?? 0 };
+  }
+
+  async getVote(slug: string, uid: string): Promise<VoteValue | null> {
+    const snap = await this.voteRef(slug, uid).get();
+    return snap.exists ? ((snap.data()?.value as VoteValue | undefined) ?? null) : null;
+  }
+
+  async castVote(slug: string, uid: string, value: VoteValue): Promise<GameVoteCounts> {
+    const gameRef = this.gameRef(slug);
+    const voteRef = this.voteRef(slug, uid);
+    return await this.db.runTransaction(async (transaction) => {
+      const gameSnap = await transaction.get(gameRef);
+      const voteSnap = await transaction.get(voteRef);
+      const counts = FirestoreStore.readVoteCounts(gameSnap.data());
+      const previous = voteSnap.exists ? (voteSnap.data()?.value as VoteValue | undefined) : undefined;
+
+      // Repeating the same vote must not double-count it; only a genuine change
+      // touches the tally.
+      if (previous !== value) {
+        if (previous) counts[previous] = Math.max(0, counts[previous] - 1);
+        counts[value] += 1;
+        transaction.set(gameRef, { votesUp: counts.up, votesDown: counts.down }, { merge: true });
+      }
+      transaction.set(voteRef, { value, updatedAt: new Date().toISOString() });
+      return counts;
+    });
+  }
+
+  async clearVote(slug: string, uid: string): Promise<GameVoteCounts> {
+    const gameRef = this.gameRef(slug);
+    const voteRef = this.voteRef(slug, uid);
+    return await this.db.runTransaction(async (transaction) => {
+      const gameSnap = await transaction.get(gameRef);
+      const voteSnap = await transaction.get(voteRef);
+      const counts = FirestoreStore.readVoteCounts(gameSnap.data());
+      if (!voteSnap.exists) return counts;
+
+      const previous = voteSnap.data()?.value as VoteValue | undefined;
+      if (previous) counts[previous] = Math.max(0, counts[previous] - 1);
+      transaction.delete(voteRef);
+      transaction.set(gameRef, { votesUp: counts.up, votesDown: counts.down }, { merge: true });
+      return counts;
+    });
+  }
+
+  async getVoteCounts(slug: string): Promise<GameVoteCounts> {
+    const snap = await this.gameRef(slug).get();
+    return FirestoreStore.readVoteCounts(snap.data());
   }
 }

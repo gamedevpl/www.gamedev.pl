@@ -89,7 +89,13 @@
     "fullscreen": "Fullscreen",
     "exitFullscreen": "Exit Fullscreen",
     "rotateLandscape": "Turn your phone sideways to play",
-    "rotatePortrait": "Hold your phone upright to play"
+    "rotatePortrait": "Hold your phone upright to play",
+    "vote": {
+      "groupLabel": "Rate this game",
+      "up": "Vote up",
+      "down": "Vote down",
+      "signInToVote": "Sign in to vote"
+    }
   },
   "catalog": {
     "title": "Games",

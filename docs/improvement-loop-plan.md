@@ -463,8 +463,15 @@ at all and feeds the only autonomous-eligible class.
   50 events/request, 400/session, 120 flushes/minute/IP, server-assigned
   timestamps, published games only, and **nothing that identifies a player** — no
   uid, no IP, no user agent stored.
-- 📋 **Thumbs up/down**: endpoints + `submissions/{n}/votes`, control in the player
-  header next to the existing sound toggle.
+- ✅ **Thumbs up/down** (2026-07-26): `POST`/`DELETE /api/games/:slug/vote` and the
+  public `GET /api/games/:slug/votes` ([votes.ts](../apps/api/src/votes.ts)), backed
+  by `games/{slug}/votes/{uid}` — matching the Data model section below, not the
+  `submissions/{n}/votes` this bullet originally named, since `submissions` cannot
+  address the ~95% of the catalog with no submission document (the same reason
+  telemetry is keyed by slug). Casting needs a session; reading counts does not, so
+  a shared game link shows real numbers to a visitor who has never signed in. In
+  the player header next to sound/fullscreen, gated on the same published-slug
+  condition as the report control.
 - 📋 **Written player feedback**: the sibling endpoint above, plus a minimal
   post-play prompt.
 - 📋 **`shared/modules/telemetry.js`** in the games repo (opt-in via `GAME.json`),
