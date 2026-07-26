@@ -76,6 +76,30 @@ describe('player feedback route', () => {
     await app.close();
   });
 
+  it('rejects text that only clears the minimum before sanitization, without spending quota', async () => {
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      playerFeedbackRoutes: { publishedSlugs: slugGate(['brick-storm']) },
+    });
+
+    // Ten asterisks clear the schema's raw-text minimum, survive moderation, and
+    // sanitize to the empty string — the stored record would be blank.
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/games/brick-storm/feedback',
+      headers: authHeaders('g:alice'),
+      payload: { text: '**********' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(await store.listPlayerFeedback('brick-storm')).toEqual([]);
+
+    // The rejection must not have burned the player's daily allowance.
+    const usage = await store.getUsage('g:alice', new Date().toISOString().slice(0, 10));
+    expect(usage.playerFeedback).toBe(0);
+    await app.close();
+  });
+
   it('rejects content that fails moderation with 422 and stores nothing', async () => {
     const app = await buildApp({
       store,

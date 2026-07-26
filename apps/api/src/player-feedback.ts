@@ -44,11 +44,14 @@ const ParamsSchema = z.object({
   slug: z.string().trim().min(1).max(80).regex(SLUG_PATTERN, 'invalid slug'),
 });
 
+/** Enforced twice: on the raw body, and again on the sanitized text actually stored. */
+const MIN_FEEDBACK_LENGTH = 10;
+
 const FeedbackRequestSchema = z.object({
   text: z
     .string()
     .trim()
-    .min(10, 'feedback must be at least 10 characters')
+    .min(MIN_FEEDBACK_LENGTH, `feedback must be at least ${MIN_FEEDBACK_LENGTH} characters`)
     .max(2000, 'feedback must be at most 2000 characters'),
 });
 
@@ -120,7 +123,23 @@ export async function registerPlayerFeedbackRoutes(
         return reply.status(404).send({ error: 'game not found' });
       }
 
-      // 1. Content moderation before spending any quota.
+      // 1. Sanitize, then re-check the length of what would actually be stored.
+      //
+      // The schema's minimum runs on the raw text, and `sanitizeCreatorText` is
+      // destructive — it strips HTML tags and markdown punctuation — so input that
+      // clears the raw minimum can sanitize down to nothing. Ten asterisks are the
+      // trivial case: they pass the schema, survive moderation, and would otherwise
+      // spend a day's quota to store an empty row. Validating the sanitized result
+      // is what makes the minimum a promise about the stored record rather than
+      // about the request body.
+      const sanitized = sanitizeCreatorText(body.data.text, { singleLine: false });
+      if (sanitized.length < MIN_FEEDBACK_LENGTH) {
+        return reply.status(400).send({ error: `feedback must be at least ${MIN_FEEDBACK_LENGTH} characters` });
+      }
+
+      // 2. Content moderation before spending any quota. Runs on the raw text: the
+      // sanitizer removes markup, and moderation's PII/term patterns should see what
+      // the player actually typed, not a version with characters already stripped out.
       const moderation = await contentChecker.checkFields([body.data.text]);
       if (!moderation.allowed) {
         return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
@@ -128,12 +147,12 @@ export async function registerPlayerFeedbackRoutes(
 
       const currentTime = now();
 
-      // 2. Coarse per-IP rate limit.
+      // 3. Coarse per-IP rate limit.
       if (isRateLimited(feedbackByIp, request.ip, currentTime, maxPerWindow, rateLimitWindowMs)) {
         return reply.status(429).send({ error: 'too many feedback requests, please try again later' });
       }
 
-      // 3. Daily per-user quota, separate from the creator `feedback` counter — a
+      // 4. Daily per-user quota, separate from the creator `feedback` counter — a
       // creator sending build revisions and a player leaving play feedback should
       // not compete for the same budget.
       const dateStr = new Date(currentTime).toISOString().slice(0, 10);
@@ -150,7 +169,6 @@ export async function registerPlayerFeedbackRoutes(
         return reply.status(429).send({ error: 'daily feedback quota exceeded' });
       }
 
-      const sanitized = sanitizeCreatorText(body.data.text, { singleLine: false });
       await store.addPlayerFeedback(params.data.slug, request.user.uid, sanitized);
 
       return reply.send({ ok: true });
