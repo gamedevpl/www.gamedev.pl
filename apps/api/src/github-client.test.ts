@@ -347,8 +347,13 @@ describe('getCatalog', () => {
   it('publishes a game whose entry claims no status, and honours a withdrawal', async () => {
     // The games repo stopped authoring `status` — merging a game publishes it, and a
     // spec speaks up only to withdraw itself. An entry with no status must therefore
-    // reach visitors, or retiring the field would empty the site. `/api/catalog` keeps
-    // only `published`, so `archived` surviving verbatim is what takes a game off it.
+    // resolve to `published`, or retiring the field would empty the site.
+    //
+    // Withdrawal is decided one layer up, not here: `getCatalog` reports every game
+    // it read, and the `/api/catalog` route is what keeps only `published`. So
+    // `archived`/`disabled` surviving this call *verbatim* is exactly what lets that
+    // filter drop them — flattening them to `published` here would put them back on
+    // the site. Hence the assertions below expect all four entries back.
     const committed = [
       { slug: 'silent', title: 'Silent' },
       { slug: 'retired', title: 'Retired', status: 'archived' },

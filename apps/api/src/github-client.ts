@@ -920,10 +920,12 @@ function parseCommittedCatalog(raw: string): CatalogGameEntry[] | null {
     if (typeof candidate.slug !== 'string' || !SAFE_MEDIA_NAME.test(candidate.slug)) continue;
     if (typeof candidate.title !== 'string' || candidate.title.length === 0) continue;
 
-    // Same status coercion as the SPEC-derived path. The games repo now emits only
-    // `published`/`archived`/`disabled`, so this is a no-op for a current artifact —
-    // kept because it also has to read artifacts written before that change, where
-    // the value was a `draft` the field's own repo never acted on.
+    // Same status coercion as the SPEC-derived path, and a no-op for a current
+    // artifact: it is SPEC.md that made `status` optional, while the generator still
+    // writes one of `published`/`archived`/`disabled` onto every row. The coercion
+    // stays because this also reads artifacts it did not just generate — ones written
+    // before that change, carrying a `draft` the field's own repo never acted on, and
+    // ones with the key absent entirely, which must publish rather than vanish.
     const rawStatus = typeof candidate.status === 'string' ? candidate.status : '';
     const status = rawStatus === 'archived' || rawStatus === 'disabled' ? rawStatus : 'published';
 
