@@ -1,9 +1,40 @@
 # Creator Q&A: clarifying-questions flow before generation
 
-> Status: plan (2026-07-23, owner approved shape + sequencing). Builds AFTER
-> content-safety slice 1/1b — it reuses the Vertex AI plumbing slice 1b creates.
-> The regex safety layer (slice 1) remains the only hard prerequisite for going
-> public; this feature is UX polish on top, not a launch gate.
+> Status: **shipped** (planned 2026-07-23, verified working in production
+> 2026-07-25). Built on the Vertex AI plumbing from content-safety slice 1b, as
+> sequenced below. The sections that follow are the plan as approved; see
+> [What shipped](#what-shipped) for where the implementation diverged.
+
+## What shipped
+
+Live and verified against real Vertex: questions come back in the creator's
+locale, chips and free text combine into one answer, plural questions accept
+several chips, and a mid-round reload resumes the same questions instead of
+spending a second refine call.
+
+Two divergences from the plan below:
+
+- **No style swatches.** The plan called for a curated static visual-style
+  question rendered as swatches. The model turns out to ask about style only
+  when the prompt leaves it open, and phrases it in the creator's own terms —
+  a fixed question would have fired on prompts that had already answered it.
+  Style arrives as ordinary text chips like every other dimension.
+- **Questions can be multi-select.** Not in the plan. The model marks a
+  question `multiple: true` when the dimensions are additive ("which of these
+  should the game have?"), and the panel then lets several chips combine.
+
+### Fail-open is silent — watch the success log, not the error rate
+
+This layer degrades to the plain submit flow on any failure, which is the right
+behavior and also means a total outage looks exactly like "this prompt was
+already specific enough". It was dead in production twice without a single
+error surfacing to a creator: first a retired Vertex model, then a 5s abort
+budget against a call whose real latency is 4–9s warm and worse cold.
+
+So liveness is measured from the success side. `spec refine complete` logs
+`questionCount` and `durationMs` on every answered call, and each submission
+records `clarificationCount` — how many answers it was actually built from.
+A quiet error log proves nothing here; a flat `clarificationCount` does.
 
 ## Why
 
