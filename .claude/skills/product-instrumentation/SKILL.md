@@ -141,10 +141,13 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
   - Depth events take **no continuity check**, unlike `alive`. That check exists because a
     frame counter is meaningless without the interval it covers; an ending is a discrete
     thing a player did, and a slept machine does not fabricate one.
-- **`progress` landmarks are emitted by no game yet** — the vocabulary, the cap, and the
-  read-side funnel all exist and are tested, but labels are per-game and GameKit cannot
-  guess them. This is the one depth signal still dark, and unlike the others it cannot be
-  closed platform-wide: it needs games to name their own landmarks.
+- **`progress` landmarks are emitted by 13 of ~82 games so far** (2026-07-26) — the
+  vocabulary, the cap, and the read-side funnel all exist and are tested, but labels are
+  per-game and GameKit cannot guess them. Unlike the other depth signals this one cannot
+  be closed by a platform-wide change: coverage grows only as maintenance touches a game
+  and adds its landmarks (see the games repo's `report-play-signals` skill), so most of
+  the catalog stays dark on this signal indefinitely — that is expected, not a bug to fix
+  in one pass.
 - **Build economics are duration-only** — submission→publish timestamps and build events
   exist; revision-cycle counts are derivable; keep it that way as builds evolve.
 

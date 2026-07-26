@@ -1,12 +1,15 @@
 # Game Improvement Loop: feedback-driven, agent-assisted iteration
 
-> Status: 🚧 **IL-1's capture path is built** (2026-07-25); IL-2 onward is still
-> design. Revised the same day against the shipped platform (first drafted
-> 2026-07-23) — everything the first draft listed as a dependency is now live:
-> catalog, player, submission → Copilot → PR → publish, notifications (in-app +
-> email + push), and a live agent channel. The revision matters because three of
-> the original design decisions were made against a platform that no longer
-> exists — see [What changed](#what-changed-since-the-first-draft).
+> Status: ✅ **IL-1 (Capture) is complete** (2026-07-26); IL-2's read path
+> (operator health view, votes, creator return, `end`/`score`/`progress` depth
+> reads) is also live, and IL-2's remaining pieces (scheduled aggregation,
+> feedback-theme extraction, the creator-facing scorecard) and IL-3 onward are
+> still design. Revised against the shipped platform (first drafted 2026-07-23) —
+> everything the first draft listed as a dependency is now live: catalog, player,
+> submission → Copilot → PR → publish, notifications (in-app + email + push), and
+> a live agent channel. The revision matters because three of the original design
+> decisions were made against a platform that no longer exists — see
+> [What changed](#what-changed-since-the-first-draft).
 >
 > **Built so far:** the player bridge reports uncaught errors and animation-frame
 > liveness ([gamePlayer.ts](../apps/web/src/gamePlayer.ts)); a play session reports
@@ -14,10 +17,14 @@
 > ([telemetry.ts](../apps/web/src/telemetry.ts), mounted in
 > [PublishedGameFrame.tsx](../apps/web/src/PublishedGameFrame.tsx)); and
 > `POST /api/telemetry` validates, caps, and stores them unattributed
-> ([telemetry.ts](../apps/api/src/telemetry.ts)). Votes and `end`/`score` depth
-> events have since shipped too (2026-07-26) — see the phased-plan checklist
-> below for the current state. Written player feedback and per-game `progress`
-> markers are what remains of IL-1.
+> ([telemetry.ts](../apps/api/src/telemetry.ts)). Votes, `end`/`score` depth
+> events, and written player feedback
+> ([player-feedback.ts](../apps/api/src/player-feedback.ts)) have since shipped
+> too (2026-07-26) — see the phased-plan checklist below for the current state.
+> Per-game `progress` markers are the one item that stays perpetually partial by
+> design: 13 of ~82 games call `GameKit.progress` as of 2026-07-26, growing one
+> game at a time as maintenance touches them, since a landmark name is per-game
+> knowledge no platform-wide change can supply.
 >
 > **Capture is confirmed working in production** (2026-07-25). A real session on
 > `arena-tag` — a game with no submission document, the exact case that was broken —
@@ -141,10 +148,15 @@ So telemetry is an **extension of an existing message contract**, not a new one:
   `GameKit.score(value)` is exposed for the games whose `snapshot()` never carried
   a numeric score to report one anyway.
 
-  `GameKit.progress(label)` is exposed the same way, but **nothing calls it yet**
-  — a landmark is per-game knowledge ("level-2", "boss") that GameKit cannot guess,
-  so unlike `end`/`score` this one genuinely needs each game's own maintenance
-  work, not a platform-wide change. See
+  `GameKit.progress(label)` is exposed the same way. Unlike `end`/`score` it could
+  not land platform-wide — a landmark is per-game knowledge ("level-2", "boss")
+  that GameKit cannot guess — so it grows one game's maintenance at a time.
+  **13 of ~82 games call it as of 2026-07-26** (`breach-protocol`, `brick-storm`,
+  `cover-runner`, `dojo-showdown`, `flashlight-tag`, `lane-clash`, `last-bot-standing`,
+  `party-karts`, `party-realm`, `pixel-invasion`, `quiz-night-party`, `rock-blaster`,
+  `street-brawl-coop`) — most of the catalog is still dark on this one signal, and
+  closing the rest is exactly the "touch it, add a marker" maintenance this section
+  describes, not a single follow-up task. See
   [report-play-signals](https://github.com/gamedevpl/www.gamedev.pl-games/blob/main/.github/skills/report-play-signals/SKILL.md)
   in the games repo for the emission contract, and
   [product-instrumentation](../.claude/skills/product-instrumentation/SKILL.md)
@@ -511,13 +523,16 @@ at all and feeds the only autonomous-eligible class.
   correction above the code sample earlier in this doc. GameKit's existing
   `report()` funnel emits both automatically, so all 83 games gained it in one
   change with no per-game opt-in.
-- 📋 **`progress` markers**, per game, in the games repo. The vocabulary, the
+- 🚧 **`progress` markers**, per game, in the games repo. The vocabulary, the
   session cap, and the read-side funnel ([telemetry-health.ts](../apps/api/src/telemetry-health.ts)
   `progressLabels`) all exist and are tested — `GameKit.progress(label)` is
-  callable today — but no game calls it, since a landmark name is per-game
-  knowledge GameKit cannot supply. Documented in the games repo's own
-  `report-play-signals` skill so maintenance adds markers organically; this is
-  the one item on this list that a platform-wide change cannot close.
+  callable today, and **13 of ~82 games call it** as of 2026-07-26 (see the list
+  above), added a few at a time by maintenance touching those games rather than
+  by one platform-wide change (`GameKit` cannot guess a landmark name). Documented
+  in the games repo's own `report-play-signals` skill so coverage keeps growing
+  organically; the remaining catalog stays dark on this one signal until each
+  game is next touched — this is the one item on this list a platform-wide
+  change cannot close in a single stroke.
 - ✅ **90-day retention, enforced.** Every row is written with an `expiresAt`
   Timestamp ([store.ts](../apps/api/src/store.ts) `telemetryExpiresAt`) and the TTL
   policy is provisioned by [setup-gcp.sh](../infra/setup-gcp.sh) step 6/6. Until
