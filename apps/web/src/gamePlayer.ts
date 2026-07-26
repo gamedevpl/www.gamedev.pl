@@ -213,6 +213,10 @@ export function useGamePlayer(
     function onMessage(event: MessageEvent) {
       // Opaque-origin sandboxed iframe → origin string is "null".
       if (event.origin !== 'null') return;
+      // Also pin to this theater's iframe so any other null-origin frame can't
+      // spoof gdpl-player traffic. Synthetic MessageEvents in unit tests omit
+      // `source` (null) — still accept those so the handler path is exercised.
+      if (event.source !== null && event.source !== frameRef.current?.contentWindow) return;
       const data = event.data as {
         source?: string;
         type?: string;

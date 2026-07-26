@@ -20,7 +20,7 @@ const BRIDGE_SOURCE = (() => {
   const startMarker = '<script>';
   const endMarker = '</script>';
   const start = html.indexOf(startMarker);
-  const end = html.indexOf(endMarker);
+  const end = start < 0 ? -1 : html.indexOf(endMarker, start + startMarker.length);
   if (start < 0 || end < 0) throw new Error('embedGameHtml stopped injecting a script — the bridge contract changed');
   return html.slice(start + startMarker.length, end);
 })();

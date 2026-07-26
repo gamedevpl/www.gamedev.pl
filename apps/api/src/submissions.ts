@@ -1133,7 +1133,10 @@ export async function registerSubmissionRoutes(
   // an OIDC token; we derive the current status of every still-active submission and
   // emit on transition, reusing the exact same derivation + idempotent emit. No
   // session — the wall exempts /api/internal and the handler verifies OIDC itself.
-  app.post('/api/internal/notify-sweep', { config: { rateLimit: { max: 30, timeWindow: '1 hour' } } }, async (request, reply) => {
+  // Cloud Scheduler hits this every 2–5 minutes (docs/notifications-plan.md N1),
+  // and retries on transient failures; 30/hour sits on that cadence with no headroom.
+  // OIDC already authenticates the caller — this IP ceiling is only a runaway guard.
+  app.post('/api/internal/notify-sweep', { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } }, async (request, reply) => {
     if (!(await internalAuthVerifier.verify(request.headers.authorization))) {
       return reply.status(401).send({ error: 'unauthorized' });
     }
