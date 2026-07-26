@@ -55,23 +55,69 @@ const BRIDGE = `(function(){
     }
     return best;
   }
-  // Capture must run inside the opaque-origin frame — the parent cannot read the
-  // canvas. Downscale so a 4K buffer does not blow the creator-prompt payload.
-  function capturePng(){
-    var c=largestCanvas();
-    if(!c||!c.width||!c.height)return null;
+  function encodeScaled(source,srcW,srcH){
+    var max=1280,scale=Math.min(1,max/Math.max(srcW,srcH));
+    if(scale>=1){
+      try{return source.toDataURL('image/png').split(',')[1]||null;}catch(err){return null;}
+    }
+    var off=document.createElement('canvas');
+    off.width=Math.max(1,Math.round(srcW*scale));
+    off.height=Math.max(1,Math.round(srcH*scale));
+    var ctx=off.getContext('2d');
+    if(!ctx)return null;
     try{
-      var max=1280,scale=Math.min(1,max/Math.max(c.width,c.height));
-      if(scale<1){
-        var off=document.createElement('canvas');
-        off.width=Math.max(1,Math.round(c.width*scale));
-        off.height=Math.max(1,Math.round(c.height*scale));
-        var ctx=off.getContext('2d');
-        if(!ctx)return null;
-        ctx.drawImage(c,0,0,off.width,off.height);
-        return off.toDataURL('image/png').split(',')[1]||null;
+      ctx.drawImage(source,0,0,off.width,off.height);
+      return off.toDataURL('image/png').split(',')[1]||null;
+    }catch(err){return null;}
+  }
+  // Full viewport composite inside the opaque-origin frame (parent cannot screenshot
+  // across sandbox). Draws every visible canvas/video/img in layout order on top of
+  // the page background. DOM text chrome is not rasterized — games that paint UI on
+  // canvas are covered; HTML overlays are not. Capture must run *before* the pause
+  // overlay is shown so the veil is not in the shot.
+  function capturePng(){
+    try{
+      var vw=Math.max(1,window.innerWidth||document.documentElement.clientWidth||1);
+      var vh=Math.max(1,window.innerHeight||document.documentElement.clientHeight||1);
+      var max=1280,scale=Math.min(1,max/Math.max(vw,vh));
+      var out=document.createElement('canvas');
+      out.width=Math.max(1,Math.round(vw*scale));
+      out.height=Math.max(1,Math.round(vh*scale));
+      var ctx=out.getContext('2d');
+      if(!ctx){
+        var only=largestCanvas();
+        return only&&only.width&&only.height?encodeScaled(only,only.width,only.height):null;
       }
-      return c.toDataURL('image/png').split(',')[1]||null;
+      var bg='#0b1018';
+      try{
+        var bodyBg=getComputedStyle(document.body).backgroundColor;
+        if(bodyBg&&bodyBg!=='transparent'&&bodyBg!=='rgba(0, 0, 0, 0)')bg=bodyBg;
+      }catch(err){}
+      ctx.fillStyle=bg;
+      ctx.fillRect(0,0,out.width,out.height);
+      var nodes=document.querySelectorAll('canvas,video,img');
+      var drew=false;
+      for(var i=0;i<nodes.length;i++){
+        var node=nodes[i];
+        if(node.id==='gdpl-pause-overlay')continue;
+        var rect=node.getBoundingClientRect();
+        if(rect.width<1||rect.height<1)continue;
+        try{
+          var st=getComputedStyle(node);
+          if(st.display==='none'||st.visibility==='hidden'||Number(st.opacity)===0)continue;
+        }catch(err){}
+        try{
+          ctx.drawImage(node,rect.left*scale,rect.top*scale,rect.width*scale,rect.height*scale);
+          drew=true;
+        }catch(err){}
+      }
+      if(!drew){
+        var fallback=largestCanvas();
+        return fallback&&fallback.width&&fallback.height
+          ?encodeScaled(fallback,fallback.width,fallback.height)
+          :null;
+      }
+      return out.toDataURL('image/png').split(',')[1]||null;
     }catch(err){return null;}
   }
   function showOverlay(){
@@ -83,16 +129,24 @@ const BRIDGE = `(function(){
     document.documentElement.appendChild(overlay);
   }
   function hideOverlay(){if(overlay){overlay.remove();overlay=null;}}
-  function sendSnapshot(reason){
-    post({type:'snapshot',reason:reason,paused:paused,png:capturePng(),aliveFrames:lastAlive});
+  function sendSnapshot(reason,png){
+    post({
+      type:'snapshot',
+      reason:reason,
+      paused:paused,
+      png:png===undefined?capturePng():png,
+      aliveFrames:lastAlive
+    });
   }
   function setPaused(next){
     if(next===paused){if(next)sendSnapshot('pause');return;}
     paused=next;
     if(paused){
-      showOverlay();
+      // Snapshot first — then veil — so the overlay never lands in the PNG.
+      var png=capturePng();
       document.dispatchEvent(new CustomEvent('gdpl-pause'));
-      sendSnapshot('pause');
+      showOverlay();
+      sendSnapshot('pause',png);
     }else{
       hideOverlay();
       document.dispatchEvent(new CustomEvent('gdpl-resume'));
@@ -344,10 +398,9 @@ export type PlaytestSnapshot = {
 /**
  * Creator Studio playtest controls over the player bridge.
  *
- * The sandbox has no `allow-same-origin`, so the parent cannot read the canvas —
- * pause/capture must ask the injected bridge, which replies with a PNG + a few
- * live health fields. The host also accumulates error/progress/`alive` messages
- * for the duration of the playtest so a prompt can carry more than one frame.
+ * The sandbox has no `allow-same-origin`, so the parent cannot screenshot the
+ * frame — pause/capture asks the injected bridge, which replies with a full
+ * viewport composite (canvases / videos / images) plus live health fields.
  */
 export function useCreatorPlaytest(
   frameRef: MutableRefObject<HTMLIFrameElement | null>,

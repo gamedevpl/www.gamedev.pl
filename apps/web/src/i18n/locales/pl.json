@@ -190,8 +190,8 @@
       "errorCount": "{{count}} błędów",
       "promptTitle": "Co tu zmienić?",
       "promptHint": "Notatka idzie do agenta buildu (szkic) albo otwiera zgłoszenie ulepszenia (opublikowane). Wstrzymana klatka i sygnały sesji jadą jako dane.",
-      "shotCaption": "Klatka z momentu wstrzymania",
-      "noShot": "Nie udało się przechwycić canvas — sam tekst i tak zostanie wysłany.",
+      "shotCaption": "Widok z momentu wstrzymania",
+      "noShot": "Nie udało się przechwycić widoku — sam tekst i tak zostanie wysłany.",
       "placeholder": "np. Kolec przy prawej krawędzi jest niesprawiedliwy — dodaj checkpoint tuż przed nim…",
       "submit": "Wyślij z tym momentem"
     },

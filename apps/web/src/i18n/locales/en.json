@@ -181,7 +181,7 @@
       "abandonConfirm": "Confirm stop"
     },
     "playtest": {
-      "hint": "Play the game, pause on a moment worth changing, and send a request with that frame and live instrumentation attached.",
+      "hint": "Play the game, pause on a moment worth changing, and send a request with that viewport and live instrumentation attached.",
       "loading": "Loading the playable build…",
       "loadError": "No playable build is ready yet. Check the Build tab and try again once a preview exists.",
       "pause": "Pause & note",
@@ -189,9 +189,9 @@
       "played": "{{seconds}}s played",
       "errorCount": "{{count}} errors",
       "promptTitle": "What should change here?",
-      "promptHint": "Your note goes to the build agent (draft) or opens an improvement issue (published). The paused frame and session signals ride along as data.",
-      "shotCaption": "Frame captured at pause",
-      "noShot": "No canvas frame was captured — the text request will still send.",
+      "promptHint": "Your note goes to the build agent (draft) or opens an improvement issue (published). The paused viewport and session signals ride along as data.",
+      "shotCaption": "Viewport captured at pause",
+      "noShot": "No viewport frame was captured — the text request will still send.",
       "placeholder": "e.g. The spike on the right edge is unfair — add a checkpoint just before it…",
       "submit": "Send with this moment"
     },
