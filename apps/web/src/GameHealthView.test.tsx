@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
 import { GameHealthView } from './GameHealthView';
-import type { GameHealth, HealthResponse, VisitFunnel, VisitsResponse } from './healthApi';
+import type { GameHealth, HealthResponse, VisitFunnel, VisitsResponse , CreatorsResponse } from './healthApi';
 
 /**
  * The operator view's job is to make one thing obvious: which published game is broken.
@@ -46,8 +46,22 @@ const EMPTY_FUNNEL: VisitFunnel = {
   campaigns: [],
 };
 
+const EMPTY_CREATORS: CreatorsResponse = {
+  sampled: 0,
+  metrics: {
+    published: 0,
+    eligibleForReturn: 0,
+    returnedWithin7Days: 0,
+    d7ReturnRate: null,
+    medianBuildMinutes: null,
+    p90BuildMinutes: null,
+    creators: 0,
+    gamesPerCreator: null,
+  },
+};
+
 /**
- * Answers both admin endpoints the view fetches in parallel.
+ * Answers every admin endpoint the view fetches in parallel.
  *
  * Two details this has to get right, both learned by getting them wrong. A `Response`
  * body is single-use, so every call needs a *freshly constructed* one — sharing one
@@ -58,10 +72,15 @@ const EMPTY_FUNNEL: VisitFunnel = {
 function respondWith(body: HealthResponse | null, status = 200, funnel?: VisitsResponse) {
   const visitsBody: VisitsResponse | null =
     body === null ? null : (funnel ?? { days: body.days, truncated: body.truncated, funnel: EMPTY_FUNNEL });
+  const creatorsBody: CreatorsResponse | null = body === null ? null : EMPTY_CREATORS;
 
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const url = String(input);
-    const payload = url.includes('/telemetry/visits') ? visitsBody : body;
+    const payload = url.includes('/telemetry/visits')
+      ? visitsBody
+      : url.includes('/telemetry/creators')
+        ? creatorsBody
+        : body;
     return payload === null ? new Response(null, { status }) : new Response(JSON.stringify(payload), { status: 200 });
   }) as MockInstance<typeof globalThis.fetch>;
 }

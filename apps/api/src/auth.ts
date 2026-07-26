@@ -3,7 +3,7 @@ import cookie from '@fastify/cookie';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { OAuth2Client } from 'google-auth-library';
 import { z } from 'zod';
-import type { Store, User } from './store.js';
+import { withActiveDay, type Store, type User } from './store.js';
 
 export const SESSION_COOKIE_NAME = 'gamedev_session';
 export const DEFAULT_SESSION_DURATION_SECONDS = 12 * 60 * 60; // 12 hours
@@ -230,6 +230,23 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
     if (user) {
       request.user = user;
       request.needsSessionRenewal = needsRenewal;
+
+      /**
+       * Record that this account was active today.
+       *
+       * `lastLoginAt` cannot stand in for this: sessions last weeks, so a creator who
+       * comes back every day still shows a single login and reads as never returning.
+       * `withActiveDay` returns null when today is already the newest entry, so the
+       * common case costs no write at all — and a failure here must never turn a
+       * working request into an error, hence the swallow.
+       */
+      const today = new Date().toISOString().slice(0, 10);
+      const activeDays = withActiveDay(user.activeDays, today);
+      if (activeDays) {
+        void store.upsertUser({ uid: user.uid, activeDays }).catch(() => {
+          /* activity history is best-effort, like every other measurement */
+        });
+      }
     }
   });
 

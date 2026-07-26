@@ -2,11 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   fetchGameHealth,
   fetchVisitFunnel,
+  fetchCreatorMetrics,
   type GameHealth,
   type HealthResponse,
   type VisitsResponse,
+  type CreatorsResponse,
 } from './healthApi';
 import { VisitFunnelPanel } from './VisitFunnelPanel';
+import { CreatorMetricsPanel } from './CreatorMetricsPanel';
 
 /**
  * Operator view over play telemetry (docs/improvement-loop-plan.md IL-2).
@@ -49,6 +52,7 @@ export function GameHealthView() {
   const [days, setDays] = useState(7);
   const [data, setData] = useState<HealthResponse | null>(null);
   const [visits, setVisits] = useState<VisitsResponse | null>(null);
+  const [creators, setCreators] = useState<CreatorsResponse | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'forbidden' | 'error'>('loading');
 
   useEffect(() => {
@@ -56,8 +60,8 @@ export function GameHealthView() {
     setState('loading');
     // Both panels share one window, so they are fetched together and fail together:
     // showing a 30-day funnel above a 7-day table would be worse than showing neither.
-    Promise.all([fetchGameHealth(days), fetchVisitFunnel(days)])
-      .then(([health, funnel]) => {
+    Promise.all([fetchGameHealth(days), fetchVisitFunnel(days), fetchCreatorMetrics()])
+      .then(([health, funnel, creatorMetrics]) => {
         if (cancelled) return;
         if (!health) {
           setState('forbidden');
@@ -65,6 +69,7 @@ export function GameHealthView() {
         }
         setData(health);
         setVisits(funnel);
+        setCreators(creatorMetrics);
         setState('ready');
       })
       .catch(() => {
@@ -111,6 +116,13 @@ export function GameHealthView() {
 
       {state === 'loading' && <p className="health-empty">Reading telemetry…</p>}
       {state === 'error' && <p className="health-empty">Could not read telemetry.</p>}
+
+      {/*
+        Guarded on `metrics` rather than just truthiness: these three reads share one
+        Promise.all and one error state, so a creators payload of an unexpected shape
+        would otherwise blank the game-health table too.
+      */}
+      {state === 'ready' && creators?.metrics && <CreatorMetricsPanel data={creators} />}
 
       {state === 'ready' && visits && <VisitFunnelPanel data={visits} />}
 

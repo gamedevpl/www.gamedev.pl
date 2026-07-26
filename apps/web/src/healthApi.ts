@@ -72,3 +72,30 @@ export async function fetchVisitFunnel(days: number): Promise<VisitsResponse | n
   }
   return (await res.json()) as VisitsResponse;
 }
+
+export interface CreatorMetrics {
+  published: number;
+  eligibleForReturn: number;
+  returnedWithin7Days: number;
+  /** Null when no creator's 7-day window has elapsed yet. */
+  d7ReturnRate: number | null;
+  medianBuildMinutes: number | null;
+  p90BuildMinutes: number | null;
+  creators: number;
+  gamesPerCreator: number | null;
+}
+
+export interface CreatorsResponse {
+  sampled: number;
+  metrics: CreatorMetrics;
+}
+
+/** Same 404-means-not-for-you contract as the other operator reads. */
+export async function fetchCreatorMetrics(): Promise<CreatorsResponse | null> {
+  const res = await fetch(`${API_BASE}/api/admin/telemetry/creators`, { credentials: 'include' });
+  if (res.status === 404 || res.status === 401) return null;
+  if (!res.ok) {
+    throw new Error(`Creators request failed (${res.status})`);
+  }
+  return (await res.json()) as CreatorsResponse;
+}

@@ -14,6 +14,33 @@ export interface User {
   locale?: string;
   /** Global one-click email kill switch — set by the unsubscribe endpoint. */
   emailUnsubscribedAt?: string | null;
+  /**
+   * Recent days (`yyyy-mm-dd`) on which this account made an authenticated request,
+   * newest first and capped at `ACTIVE_DAYS_KEPT`.
+   *
+   * A list rather than a `lastSeenAt` instant because the question is "did this creator
+   * come back within 7 days of publishing", and a single latest-seen timestamp cannot
+   * answer it: someone who returned on day 2 and again on day 30 looks identical to
+   * someone who only ever returned on day 30. Days rather than timestamps keeps it to
+   * one write per account per day instead of one per request.
+   */
+  activeDays?: string[];
+}
+
+/** How much return history a user document carries. Two weeks covers a D7 question. */
+export const ACTIVE_DAYS_KEPT = 14;
+
+/**
+ * Adds `dateStr` to a user's activity list, newest first, or returns null when it is
+ * already the most recent entry.
+ *
+ * Returning null is what makes this cheap: the caller skips the write entirely, so a
+ * creator refreshing all afternoon costs one write, not hundreds.
+ */
+export function withActiveDay(existing: string[] | undefined, dateStr: string): string[] | null {
+  const days = existing ?? [];
+  if (days[0] === dateStr) return null;
+  return [dateStr, ...days.filter((day) => day !== dateStr)].slice(0, ACTIVE_DAYS_KEPT);
 }
 
 export interface SubmissionRecord {

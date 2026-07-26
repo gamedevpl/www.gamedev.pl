@@ -2,7 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { recentPartitions, summarizeGameHealth, type GameHealth } from './telemetry-health.js';
 import { summarizeVisitFunnel, type VisitFunnel } from './visit-funnel.js';
-import type { Store, TelemetryEvent, VisitEvent } from './store.js';
+import { summarizeCreatorMetrics, type CreatorMetrics } from './creator-metrics.js';
+import type { Store, TelemetryEvent, User, VisitEvent } from './store.js';
 
 /**
  * Operator-only reads over play telemetry (docs/improvement-loop-plan.md IL-2).
@@ -65,6 +66,20 @@ export interface VisitsResponse {
   truncated: boolean;
   funnel: VisitFunnel;
 }
+
+export interface CreatorsResponse {
+  /** Published submissions sampled, newest first. Bounded like every other read here. */
+  sampled: number;
+  metrics: CreatorMetrics;
+}
+
+/**
+ * How many recently published submissions the creator view reads.
+ *
+ * Each one costs a user lookup on top of its own document, so this is the knob that
+ * keeps an operator page view a few dozen reads rather than unbounded.
+ */
+const MAX_SUBMISSIONS_SAMPLED = 100;
 
 export function isAdmin(uid: string | undefined, adminUids: Set<string> | undefined): boolean {
   return uid !== undefined && adminUids !== undefined && adminUids.has(uid);
@@ -158,6 +173,35 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
     );
 
     const body: VisitsResponse = { days: scanned, truncated, funnel: summarizeVisitFunnel(events) };
+    return reply.status(200).send(body);
+  });
+
+  /**
+   * Creator return and build economics — the two numbers Stage 0 gates on.
+   *
+   * Unlike the other two reads this one is not windowed by day: it samples the most
+   * recently published submissions, because a D7 question is about what happened after
+   * a publish, not about what happened inside a chosen week.
+   */
+  app.get('/api/admin/telemetry/creators', async (request, reply) => {
+    if (!isAdmin(request.user?.uid, adminUids)) {
+      return reply.status(404).send({ error: 'not found' });
+    }
+
+    const submissions = await store.listRecentlyPublished(MAX_SUBMISSIONS_SAMPLED);
+
+    // One lookup per distinct owner, not per submission: a prolific creator would
+    // otherwise be fetched once per game they published.
+    const usersByUid = new Map<string, User>();
+    for (const uid of new Set(submissions.map((submission) => submission.ownerUid))) {
+      const user = await store.getUser(uid);
+      if (user) usersByUid.set(uid, user);
+    }
+
+    const body: CreatorsResponse = {
+      sampled: submissions.length,
+      metrics: summarizeCreatorMetrics(submissions, usersByUid, now()),
+    };
     return reply.status(200).send(body);
   });
 }
