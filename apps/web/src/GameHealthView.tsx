@@ -216,7 +216,7 @@ export function GameHealthView() {
                           {game.progressLabels.length === 0 ? (
                             '—'
                           ) : (
-                            <details className="health-errors">
+                            <details className="health-disclosure">
                               <summary>{game.progressLabels.length}</summary>
                               <ul>
                                 {game.progressLabels.map((landmark) => (
@@ -236,7 +236,7 @@ export function GameHealthView() {
                           {game.errors === 0 ? (
                             '—'
                           ) : (
-                            <details className="health-errors">
+                            <details className="health-disclosure health-errors">
                               <summary>{game.errors}</summary>
                               <ul>
                                 {game.errorSamples.map((sample) => (

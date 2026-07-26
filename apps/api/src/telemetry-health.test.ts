@@ -326,6 +326,52 @@ describe('summarizeGameHealth depth signals', () => {
   });
 
   /**
+   * `progress` is hostile input: a single session could name hundreds of distinct
+   * throwaway labels within its 400-event budget and drown out every real landmark in
+   * the tally for the whole game. Caps how many *new* labels one session can contribute.
+   */
+  it('stops one session from flooding the progress tally with distinct labels', () => {
+    const flood = session(
+      'g',
+      'attacker',
+      '2026-07-26T10:00:00.000Z',
+      Array.from({ length: 100 }, (_, index) => ({
+        type: 'progress' as const,
+        label: `spam-${index}`,
+        msSinceOpen: 1_000 + index,
+      })),
+    );
+    const real = session('g', 'real-player', '2026-07-26T11:00:00.000Z', [
+      { type: 'progress', label: 'level-1', msSinceOpen: 1_000 },
+    ]);
+
+    const row = summarizeGameHealth([...flood, ...real]).find((game) => game.slug === 'g');
+
+    // The flood contributed at most the per-session cap's worth of distinct labels, not
+    // all 100 — and the real player's landmark is still visible among them.
+    const totalDistinctLabels = row!.progressLabels.length;
+    expect(totalDistinctLabels).toBeLessThanOrEqual(21);
+    expect(row!.progressLabels.some((landmark) => landmark.label === 'level-1')).toBe(true);
+  });
+
+  it('keeps counting an already-tracked label past the per-session cap', () => {
+    const events = session('g', 's1', '2026-07-26T10:00:00.000Z', [
+      { type: 'game_opened', msSinceOpen: 0 },
+      ...Array.from({ length: 25 }, (_, index) => ({
+        type: 'progress' as const,
+        label: `l${index}`,
+        msSinceOpen: index + 1,
+      })),
+      // The 21st distinct label was dropped, but a repeat of one already tracked (l0)
+      // still counts — the cap bounds distinct labels, not total progress events.
+      { type: 'progress', label: 'l0', msSinceOpen: 100 },
+    ]);
+
+    const row = summarizeGameHealth(events).find((game) => game.slug === 'g');
+    expect(row!.progressLabels.find((landmark) => landmark.label === 'l0')?.sessions).toBe(1);
+  });
+
+  /**
    * Most of the catalog predates the GameKit change that emits endings, and a game whose
    * snapshot never reaches a terminal state still emits none. Those rows must read as
    * "no evidence", which the view renders as a dash — never as a game nobody finishes.

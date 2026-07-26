@@ -3860,12 +3860,19 @@ body.player-open {
   color: var(--muted);
 }
 
-.health-errors summary {
+.health-disclosure summary {
   cursor: pointer;
+  color: var(--text);
+}
+
+/* The error count is the one disclosure whose summary should read as a warning; every
+   other use of .health-disclosure (e.g. the progress funnel) is neutral information, not
+   a fault, and must not borrow the error color. */
+.health-errors summary {
   color: var(--error);
 }
 
-.health-errors ul {
+.health-disclosure ul {
   margin: 0.5rem 0 0;
   padding-left: 1rem;
   text-align: left;

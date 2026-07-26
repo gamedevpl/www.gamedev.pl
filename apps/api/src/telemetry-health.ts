@@ -29,10 +29,20 @@ const MAX_ERROR_SAMPLES = 5;
  * Distinct progress landmarks surfaced per game.
  *
  * A cap rather than a full list because the label vocabulary belongs to the game, not to
- * us: the shell bounds how many distinct labels one *session* may report, but a game
- * played across many sessions can still name more landmarks than a table can show.
+ * us: a game played across many sessions can name more landmarks than a table can show.
  */
 const MAX_PROGRESS_LABELS = 8;
+/**
+ * Distinct labels tracked *per session*, before ranking.
+ *
+ * `progress` is hostile input like everything else from a game: the write path bounds a
+ * label's length (40 chars) and a session's *total* event count (400, in telemetry.ts)
+ * but nothing bounds how many of those events name a *new* label. Without this, one
+ * session emitting hundreds of distinct throwaway labels would out-populate every real
+ * landmark in the tally for the whole game. The session's other numbers are still real,
+ * so only its labels past this point are ignored, not the session itself.
+ */
+const MAX_TRACKED_LABELS_PER_SESSION = 20;
 
 export interface GameHealth {
   slug: string;
@@ -264,7 +274,9 @@ export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
           case 'progress': {
             const label = event.label;
             if (typeof label !== 'string' || label.length === 0) break;
-            state.labels.add(label);
+            if (state.labels.size < MAX_TRACKED_LABELS_PER_SESSION || state.labels.has(label)) {
+              state.labels.add(label);
+            }
             break;
           }
           default:
