@@ -84,7 +84,7 @@ describe('document title follows navigation', () => {
       await flushEffects();
       await flushEffects();
     });
-    expect(document.title).toBe('Sky Dodge — Gamedev.pl');
+    expect(document.title).toBe('Play Sky Dodge — Gamedev.pl');
 
     await act(async () => {
       window.history.pushState(null, '', '/status/tok-abc');
@@ -139,7 +139,7 @@ describe('document title follows navigation', () => {
       await flushEffects();
     });
 
-    expect(document.title).toBe('Coin Catcher — Gamedev.pl');
+    expect(document.title).toBe('Status · Coin Catcher — Gamedev.pl');
 
     await act(async () => {
       root.unmount();

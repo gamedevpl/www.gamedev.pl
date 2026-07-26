@@ -409,6 +409,9 @@
     "status": "Twoja gra jest w trakcie tworzenia",
     "draft": "Gra w trakcie tworzenia",
     "join": "Dołącz do gry",
-    "health": "Stan gier"
+    "health": "Stan gier",
+    "playNamed": "Graj: {{title}}",
+    "draftNamed": "Szkic: {{title}}",
+    "statusNamed": "Status · {{title}}"
   }
 }

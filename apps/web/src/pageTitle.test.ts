@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  brandedNamedTitle,
   brandedPageTitle,
   humanizeSlug,
   resolveDocumentTitle,
@@ -14,6 +15,9 @@ const copy: DocumentTitleCopy = {
   health: 'Game health',
   privacy: 'Privacy Policy',
   terms: 'Terms of Service',
+  playNamed: 'Play {{title}}',
+  draftNamed: 'Draft {{title}}',
+  statusNamed: 'Status · {{title}}',
 };
 
 describe('brandedPageTitle', () => {
@@ -24,6 +28,21 @@ describe('brandedPageTitle', () => {
   it('falls back to the brand alone for blank input', () => {
     expect(brandedPageTitle('')).toBe('Gamedev.pl');
     expect(brandedPageTitle('   ')).toBe('Gamedev.pl');
+  });
+});
+
+describe('brandedNamedTitle', () => {
+  it('prefixes a user-supplied name before branding', () => {
+    expect(brandedNamedTitle('Play {{title}}', 'Sky Dodge')).toBe('Play Sky Dodge — Gamedev.pl');
+  });
+
+  it('cannot spoof a legal page title', () => {
+    expect(brandedNamedTitle('Play {{title}}', 'Privacy Policy')).toBe(
+      'Play Privacy Policy — Gamedev.pl',
+    );
+    expect(brandedNamedTitle('Play {{title}}', 'Privacy Policy')).not.toBe(
+      brandedPageTitle('Privacy Policy'),
+    );
   });
 });
 
@@ -39,18 +58,18 @@ describe('resolveDocumentTitle', () => {
     expect(resolveDocumentTitle({ view: 'home' }, { copy })).toBe(copy.home);
   });
 
-  it('prefers an open stage title on home', () => {
+  it('prefixes an open stage title on home', () => {
     expect(resolveDocumentTitle({ view: 'home' }, { copy, stageTitle: 'Circus Cat' })).toBe(
-      'Circus Cat — Gamedev.pl',
+      'Play Circus Cat — Gamedev.pl',
     );
   });
 
-  it('uses the play title when known, otherwise humanizes the slug', () => {
+  it('prefixes the play title when known, otherwise humanizes the slug', () => {
     expect(
       resolveDocumentTitle({ view: 'play', slug: 'sky-dodge' }, { copy, playTitle: 'Sky Dodge' }),
-    ).toBe('Sky Dodge — Gamedev.pl');
+    ).toBe('Play Sky Dodge — Gamedev.pl');
     expect(resolveDocumentTitle({ view: 'play', slug: 'sky-dodge' }, { copy })).toBe(
-      'Sky Dodge — Gamedev.pl',
+      'Play Sky Dodge — Gamedev.pl',
     );
   });
 
@@ -63,7 +82,7 @@ describe('resolveDocumentTitle', () => {
     );
     expect(
       resolveDocumentTitle({ view: 'status', token: 'tok' }, { copy, statusTitle: 'Coin Catcher' }),
-    ).toBe('Coin Catcher — Gamedev.pl');
+    ).toBe('Status · Coin Catcher — Gamedev.pl');
     expect(resolveDocumentTitle({ view: 'join', code: 'K7M3QP', token: 't' }, { copy })).toBe(
       'Join the game — Gamedev.pl',
     );

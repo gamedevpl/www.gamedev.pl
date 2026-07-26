@@ -12,6 +12,17 @@ export function brandedPageTitle(page: string): string {
   return trimmed ? `${trimmed} — ${SITE_BRAND}` : SITE_BRAND;
 }
 
+/**
+ * Apply a `{{title}}` template then brand it. User-supplied names (game titles)
+ * must go through a prefixed template — never `brandedPageTitle(rawName)` alone —
+ * so a game called "Privacy Policy" cannot spoof the legal tab title.
+ */
+export function brandedNamedTitle(template: string, title: string): string {
+  const trimmed = title.trim();
+  if (!trimmed) return SITE_BRAND;
+  return brandedPageTitle(template.replace(/\{\{\s*title\s*\}\}/g, trimmed));
+}
+
 export type DocumentTitleCopy = {
   /** Full home title, e.g. "Gamedev.pl — Describe a game, play it". */
   home: string;
@@ -21,6 +32,12 @@ export type DocumentTitleCopy = {
   health: string;
   privacy: string;
   terms: string;
+  /** Prefixed template for a playable game name, e.g. "Play {{title}}". */
+  playNamed: string;
+  /** Prefixed template for a draft's real name, e.g. "Draft {{title}}". */
+  draftNamed: string;
+  /** Prefixed template for a tracked submission name, e.g. "Status · {{title}}". */
+  statusNamed: string;
 };
 
 export type DocumentTitleContext = {
@@ -40,13 +57,17 @@ export type DocumentTitleContext = {
 export function resolveDocumentTitle(route: AppRoute, ctx: DocumentTitleContext): string {
   switch (route.view) {
     case 'home':
-      return ctx.stageTitle ? brandedPageTitle(ctx.stageTitle) : ctx.copy.home;
+      return ctx.stageTitle
+        ? brandedNamedTitle(ctx.copy.playNamed, ctx.stageTitle)
+        : ctx.copy.home;
     case 'play':
-      return brandedPageTitle(ctx.playTitle?.trim() || humanizeSlug(route.slug));
+      return brandedNamedTitle(ctx.copy.playNamed, ctx.playTitle?.trim() || humanizeSlug(route.slug));
     case 'draft':
       return brandedPageTitle(ctx.copy.draft);
     case 'status':
-      return brandedPageTitle(ctx.statusTitle?.trim() || ctx.copy.status);
+      return ctx.statusTitle?.trim()
+        ? brandedNamedTitle(ctx.copy.statusNamed, ctx.statusTitle)
+        : brandedPageTitle(ctx.copy.status);
     case 'join':
       return brandedPageTitle(ctx.copy.join);
     case 'health':

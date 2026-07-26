@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameTheater } from './GameTheater';
-import { brandedPageTitle } from './pageTitle';
+import { brandedNamedTitle } from './pageTitle';
 import { getDraftBySlug, type SubmissionApiError, type SubmissionPreview } from './submissionApi';
 
 /**
@@ -16,10 +16,11 @@ export function DraftView({ slug, onExit }: { slug: string; onExit: () => void }
   const [error, setError] = useState<string | null>(null);
 
   // App sets a generic draft title from the route; replace it with the real name
-  // once the preview loads so the tab matches the theater chrome.
+  // once the preview loads so the tab matches the theater chrome. Always prefix —
+  // a draft named "Privacy Policy" must not look like the legal page.
   useEffect(() => {
-    if (draft?.title) document.title = brandedPageTitle(draft.title);
-  }, [draft?.title]);
+    if (draft?.title) document.title = brandedNamedTitle(t('pageTitle.draftNamed'), draft.title);
+  }, [draft?.title, t]);
 
   useEffect(() => {
     let cancelled = false;
