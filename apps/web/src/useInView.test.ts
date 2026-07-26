@@ -133,4 +133,66 @@ describe('useInView', () => {
       root.unmount();
     });
   });
+
+  it('keeps a single observer alive when once is false and visibility toggles', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const onChange = vi.fn();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(Probe, { onChange, once: false }));
+      await flushEffects();
+    });
+
+    expect(observers).toHaveLength(1);
+    const target = container.querySelector('[data-testid="target"]')!;
+    const observer = observers[0]!;
+
+    await act(async () => {
+      observer.callback(
+        [
+          {
+            isIntersecting: true,
+            target,
+            intersectionRatio: 1,
+            time: 0,
+            boundingClientRect: {} as DOMRectReadOnly,
+            intersectionRect: {} as DOMRectReadOnly,
+            rootBounds: null,
+          },
+        ],
+        observer as unknown as IntersectionObserver,
+      );
+      await flushEffects();
+    });
+    expect(onChange).toHaveBeenLastCalledWith(true);
+    expect(observers).toHaveLength(1);
+    expect(observer.disconnect).not.toHaveBeenCalled();
+
+    await act(async () => {
+      observer.callback(
+        [
+          {
+            isIntersecting: false,
+            target,
+            intersectionRatio: 0,
+            time: 0,
+            boundingClientRect: {} as DOMRectReadOnly,
+            intersectionRect: {} as DOMRectReadOnly,
+            rootBounds: null,
+          },
+        ],
+        observer as unknown as IntersectionObserver,
+      );
+      await flushEffects();
+    });
+    expect(onChange).toHaveBeenLastCalledWith(false);
+    expect(observers).toHaveLength(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

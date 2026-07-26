@@ -20,7 +20,7 @@ export function useInView<T extends Element = HTMLElement>(
 
   useEffect(() => {
     const el = ref.current;
-    if (!el || (once && inView)) return;
+    if (!el) return;
 
     // jsdom and very old browsers: load eagerly rather than strand media forever.
     if (typeof IntersectionObserver === 'undefined') {
@@ -36,6 +36,8 @@ export function useInView<T extends Element = HTMLElement>(
             continue;
           }
           setInView(true);
+          // Sticky mode: stop observing after the first hit so we don't churn
+          // and don't unload media when the card scrolls away.
           if (once) observer.disconnect();
         }
       },
@@ -44,7 +46,10 @@ export function useInView<T extends Element = HTMLElement>(
 
     observer.observe(el);
     return () => observer.disconnect();
-  }, [rootMargin, once, inView]);
+    // Intentionally omit `inView`: the observer callback owns that state. Putting
+    // it in deps would tear down and recreate the observer on every toggle when
+    // `once` is false.
+  }, [rootMargin, once]);
 
   return { ref, inView };
 }
