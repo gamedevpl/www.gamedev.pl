@@ -149,9 +149,10 @@ those accounts are excluded from creator metrics, so agent traffic does not move
 product numbers.
 
 Storage is one new Firestore collection, `accessTokens`, keyed by token id. No composite
-index is required. Optionally add a **TTL policy on `expiresAt`** so expired records
-self-clean — expired tokens are already refused at authentication, so this is housekeeping
-rather than a control.
+index is required. Expired tokens are already refused at authentication. Do **not** point
+a Firestore TTL policy at `expiresAt` as stored today — that field is an ISO string, and
+TTL only deletes on Timestamp/Date values (a no-op policy otherwise). Self-cleaning would
+need a dedicated Timestamp field or an operator sweep; it is hygiene, not a control.
 
 ## How to deploy manually
 

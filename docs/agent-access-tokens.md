@@ -1,6 +1,6 @@
 # Personal access tokens — how an agent authenticates without a browser
 
-✅ **Implemented.** Status: shipped on `master`.
+> Status: ✅ **Implemented on this branch** — pending merge to `master`.
 
 ## The problem
 
@@ -154,9 +154,11 @@ issuing a credential is an admission decision in itself.
 ## Operational notes
 
 - **Firestore:** one new collection, `accessTokens`, keyed by token id. No index needed —
-  the hot path is a point read, and listing filters by `uid` and sorts in memory. Consider
-  a TTL policy on `expiresAt` so expired records self-clean; expired tokens are already
-  refused at auth, so the policy is hygiene, not security.
+  the hot path is a point read, and listing filters by `uid` and sorts in memory.
+  Expired tokens are already refused at auth. A Firestore TTL policy would **not**
+  self-clean these rows today: `expiresAt` is stored as an ISO string, and TTL only
+  watches Timestamp/Date fields (telemetry writes `expiresAt` as a `Date` for that
+  reason). Housekeeping would need a separate Timestamp field, or a sweep.
 - **Auditing:** every record carries `createdByUid` (an admin uid, or `cli:<user>`) and a
   day-resolution `lastUsedAt`, so you can see who issued a token and whether anything
   still uses it before revoking.
