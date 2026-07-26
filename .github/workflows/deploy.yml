@@ -161,13 +161,33 @@ jobs:
           # means the beta wall regressed and every shared game link now leads strangers to
           # a sign-in screen; anything else non-200 means we are about to promote a revision
           # that cannot show the arcade at all. Both are worth failing the deploy for.
-          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${CANDIDATE_URL}/api/catalog")
+          STATUS_CODE=$(curl -s -o /tmp/smoke-catalog.json -w "%{http_code}" "${CANDIDATE_URL}/api/catalog")
           if [ "$STATUS_CODE" -eq 401 ]; then
             echo "Smoke test failed: /api/catalog answered 401 — play must stay public to anonymous visitors"
             exit 1
           fi
           if [ "$STATUS_CODE" -ne 200 ]; then
             echo "Smoke test failed: expected 200 for anonymous /api/catalog (got ${STATUS_CODE})"
+            exit 1
+          fi
+
+          # Catalog can be green while every play route 502s (the assembler fans out into
+          # GitHub + esbuild; catalog.json is one Contents read). Fail the deploy if a
+          # published game cannot actually be assembled — that is the product.
+          PLAY_SLUG=$(jq -r '([.[] | select(.status == "published") | .slug] | first) // empty' /tmp/smoke-catalog.json)
+          if [ -z "$PLAY_SLUG" ]; then
+            echo "Smoke test failed: catalog has no published slug to play-test"
+            exit 1
+          fi
+          STATUS_CODE=$(curl -s -o /tmp/smoke-game.json -w "%{http_code}" "${CANDIDATE_URL}/api/games/${PLAY_SLUG}")
+          if [ "$STATUS_CODE" -ne 200 ]; then
+            echo "Smoke test failed: /api/games/${PLAY_SLUG} returned ${STATUS_CODE}"
+            head -c 500 /tmp/smoke-game.json; echo
+            exit 1
+          fi
+          if ! jq -e '.html | type == "string" and length > 0' /tmp/smoke-game.json >/dev/null; then
+            echo "Smoke test failed: /api/games/${PLAY_SLUG} response missing html"
+            head -c 500 /tmp/smoke-game.json; echo
             exit 1
           fi
 
