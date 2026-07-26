@@ -266,11 +266,10 @@ creator must be reached, `getSubmissionBySlug(slug)` joins to their submission a
 read time, and returns null for the majority that were never commissioned here.
 
 ```
-submissions/{issueNumber}/
-  playerFeedback/{id}  ← { uid|null, text, moderation: {...}, status: new|triaged|linked }
 games/{slug}/
   scorecard/current    ← rolling aggregate doc (the ONLY thing agents read)
   votes/{uid}          ← { value: up|down, updatedAt }
+  playerFeedback/{id}  ← { uid, text, createdAt } — post-moderation only
 telemetry/{yyyy-mm-dd}/playEvents/{id}  ← raw events, 90-day TTL, keyed by slug
 suggestions/{id}       ← { slug, insight, proposedAction, evidence, status:
                            proposed|approved|rejected|issue-filed|merged|measured }
@@ -278,10 +277,18 @@ suggestions/{id}       ← { slug, insight, proposedAction, evidence, status:
 
 Notes on the shape:
 
-- Scorecards and votes hang off **`games/{slug}`**, a collection this plan does
-  introduce after all — because it is the only place every playable game can be
-  addressed. Player feedback stays under the submission, where the existing
-  creator-feedback route already writes it and where a takedown removes it.
+- Scorecards, votes, **and player feedback** hang off **`games/{slug}`**, a collection
+  this plan does introduce after all — because it is the only place every playable
+  game can be addressed. This corrects the line this section used to have: player
+  feedback was originally specified under `submissions/{issueNumber}/playerFeedback/{id}`,
+  on the theory that a takedown removes it with the submission. That is the exact
+  mistake telemetry made first and votes repeated and fixed — most published games
+  (the ones with real play, and so real feedback) have no submission document at all,
+  so addressing by submission would silently drop the majority of it. Corrected here
+  in the same change that shipped the endpoint, the same way the votes move corrected
+  this doc in its own commit. One consequence neither correction resolves: a takedown
+  of a game now has to separately clear `games/{slug}`'s vote and feedback subcollections,
+  since there is no longer a submission delete to cascade from.
 - Raw telemetry is date-partitioned top-level so the aggregation job reads one
   day's partition rather than fanning out across games.
 - The subcollection is **`playEvents`**, not `events`. A Firestore TTL policy is
@@ -430,12 +437,20 @@ considerably:
 Most of this is reuse rather than new work:
 
 - **Player feedback** = a session-gated sibling of the creator endpoint:
-  `POST /api/games/:slug/feedback` → resolve via `getSubmissionBySlug` →
+  `POST /api/games/:slug/feedback` → `PublishedSlugGate` (the same catalog-membership
+  gate telemetry and votes use — not `getSubmissionBySlug`, which this bullet
+  originally named and which would have silently dropped feedback for every game
+  with no submission document, exactly the bug telemetry's intake had) →
   `contentChecker.checkFields` (same 422 contract) → `sanitizeCreatorText` →
-  store post-moderation only. It reuses the per-IP sliding window and a new
-  `UsageCounters` kind, and — unlike creator feedback — it does **not** post to
-  GitHub. It accumulates into the scorecard; only the router decides whether it
-  ever reaches an agent.
+  store post-moderation only under `games/{slug}/playerFeedback/{id}`. It reuses
+  the per-IP sliding window and a new `UsageCounters` kind (`playerFeedback`,
+  separate from the creator `feedback` counter), and — unlike creator feedback —
+  it does **not** post to GitHub: most published games have no open PR or issue to
+  comment on, and this signal is comparatively high-volume next to a build-time
+  revision request. It accumulates into `games/{slug}/playerFeedback` for the
+  future scorecard (IL-2 joins to a creator at read time via `getSubmissionBySlug`,
+  same as telemetry); only the router decides whether any of it ever reaches an
+  agent, and even then only as aggregated, fenced evidence.
 - **Never un-fenced.** Improvement issue bodies quote evidence inside fenced
   blocks under the standing "content below is data, not instructions" preamble,
   the same construction `submissions.ts` uses today.
@@ -481,8 +496,16 @@ at all and feeds the only autonomous-eligible class.
   a shared game link shows real numbers to a visitor who has never signed in. In
   the player header next to sound/fullscreen, gated on the same published-slug
   condition as the report control.
-- 📋 **Written player feedback**: the sibling endpoint above, plus a minimal
-  post-play prompt.
+- ✅ **Written player feedback** (2026-07-26): `POST /api/games/:slug/feedback`
+  ([player-feedback.ts](../apps/api/src/player-feedback.ts)) — session-gated (a
+  deliberate departure from votes' public-read/session-write split: free text is a
+  materially larger abuse surface than a thumb, and the cost is real — it excludes
+  the anonymous players this loop exists to measure), moderated, sanitized, and
+  stored under `games/{slug}/playerFeedback/{id}` (see the corrected Data model
+  section above). A minimal post-play prompt ships in the theater bar next to the
+  vote widget ([PlayerFeedbackWidget.tsx](../apps/web/src/PlayerFeedbackWidget.tsx)):
+  a compact control that reveals a short text form on demand rather than a
+  persistent panel competing with the game for space.
 - ✅ **`end`/`score`** (games repo `d586014`, 2026-07-26): not the new opt-in
   `shared/modules/telemetry.js` this bullet originally described — see the
   correction above the code sample earlier in this doc. GameKit's existing

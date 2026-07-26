@@ -95,6 +95,16 @@
       "up": "Vote up",
       "down": "Vote down",
       "signInToVote": "Sign in to vote"
+    },
+    "feedback": {
+      "action": "Leave feedback",
+      "signInToLeave": "Sign in to leave feedback",
+      "placeholder": "What worked, what didn't, where did you get stuck…",
+      "submit": "Send feedback",
+      "sending": "Sending…",
+      "sent": "Thanks — the creator will see this.",
+      "quota": "You've sent a lot of feedback today — please try again tomorrow.",
+      "error": "We couldn't send that right now. Please try again in a moment."
     }
   },
   "catalog": {

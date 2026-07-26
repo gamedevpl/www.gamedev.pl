@@ -144,6 +144,7 @@ export interface UsageCounters {
   mocks: number;
   refines: number;
   feedback: number;
+  playerFeedback: number;
 }
 
 /**
@@ -341,6 +342,30 @@ export interface GameVoteCounts {
   down: number;
 }
 
+/**
+ * Free-text feedback from someone who played the game (docs/improvement-loop-plan.md,
+ * signal source #1).
+ *
+ * Keyed by **slug**, not by the submission that built the game — `games/{slug}/playerFeedback/{id}`,
+ * matching `games/{slug}/votes/{uid}`. The plan originally put this under
+ * `submissions/{issueNumber}/playerFeedback/{id}` on the theory that a takedown removes it
+ * with the submission; that repeats the exact mistake telemetry and votes both made and
+ * corrected, since most published games (the ones with real play, i.e. real feedback) have
+ * no submission document at all. Corrected here in the same change, like the votes move.
+ *
+ * Only accepted (post-moderation) text is ever written — a rejected submission is never
+ * persisted in any form, so there is nothing here to review or reverse. No `expiresAt`:
+ * unlike raw play/visit events, this is moderated, low-volume, uid-attributed content
+ * meant to be read repeatedly (feedback-theme extraction, IL-2), so it follows the votes
+ * precedent rather than the telemetry 90-day TTL.
+ */
+export interface PlayerFeedbackRecord {
+  id: string;
+  uid: string;
+  text: string;
+  createdAt: string;
+}
+
 export type WaitlistStatus = 'pending' | 'approved' | 'rejected';
 
 export interface WaitlistEntry {
@@ -471,6 +496,10 @@ export interface Store {
   clearVote(slug: string, uid: string): Promise<GameVoteCounts>;
   /** A game's aggregate vote counts — the public read, no uid involved. */
   getVoteCounts(slug: string): Promise<GameVoteCounts>;
+  /** Appends one already-moderated, already-sanitized feedback row. Returns it with its id. */
+  addPlayerFeedback(slug: string, uid: string, text: string): Promise<PlayerFeedbackRecord>;
+  /** A game's feedback, newest first. No consumer yet (IL-2 theme extraction is next); exists now so capture is verifiable. */
+  listPlayerFeedback(slug: string): Promise<PlayerFeedbackRecord[]>;
 }
 
 // Stable doc id for a subscription: a hash of its endpoint URL. Endpoints are long
@@ -482,7 +511,7 @@ export function pushSubscriptionId(endpoint: string): string {
 
 /** A zeroed counter set — the shape every usage read falls back to. */
 function emptyUsageCounters(): UsageCounters {
-  return { submissions: 0, previews: 0, mocks: 0, refines: 0, feedback: 0 };
+  return { submissions: 0, previews: 0, mocks: 0, refines: 0, feedback: 0, playerFeedback: 0 };
 }
 
 /** Newest first, with the id as a stable tie-break for same-millisecond events. */
@@ -508,6 +537,8 @@ export class InMemoryStore implements Store {
   private pushSubs = new Map<string, Map<string, PushSubscriptionRecord>>();
   // slug -> (uid -> value)
   private votes = new Map<string, Map<string, VoteValue>>();
+  // slug -> feedback rows, newest last (reversed on read)
+  private playerFeedback = new Map<string, PlayerFeedbackRecord[]>();
 
   async getUser(uid: string): Promise<User | null> {
     const user = this.users.get(uid);
@@ -749,13 +780,7 @@ export class InMemoryStore implements Store {
     }
 
     const key = `${uid}:${dateStr}`;
-    const currentCounters: UsageCounters = this.usage.get(key) ?? {
-      submissions: 0,
-      previews: 0,
-      mocks: 0,
-      refines: 0,
-      feedback: 0,
-    };
+    const currentCounters: UsageCounters = this.usage.get(key) ?? emptyUsageCounters();
     const currentVal = currentCounters[action] ?? 0;
 
     if (currentVal >= limit) {
@@ -923,6 +948,18 @@ export class InMemoryStore implements Store {
 
   async getVoteCounts(slug: string): Promise<GameVoteCounts> {
     return this.voteCounts(slug);
+  }
+
+  async addPlayerFeedback(slug: string, uid: string, text: string): Promise<PlayerFeedbackRecord> {
+    const record: PlayerFeedbackRecord = { id: randomUUID(), uid, text, createdAt: new Date().toISOString() };
+    const forGame = this.playerFeedback.get(slug) ?? [];
+    forGame.push(record);
+    this.playerFeedback.set(slug, forGame);
+    return record;
+  }
+
+  async listPlayerFeedback(slug: string): Promise<PlayerFeedbackRecord[]> {
+    return [...(this.playerFeedback.get(slug) ?? [])].reverse();
   }
 
   // Test/inspection only — not part of the Store interface. Production code never
@@ -1438,6 +1475,10 @@ export class FirestoreStore implements Store {
     return this.gameRef(slug).collection('votes').doc(uid);
   }
 
+  private feedbackCollection(slug: string) {
+    return this.gameRef(slug).collection('playerFeedback');
+  }
+
   private static readVoteCounts(data: DocumentData | undefined): GameVoteCounts {
     return { up: (data?.votesUp as number | undefined) ?? 0, down: (data?.votesDown as number | undefined) ?? 0 };
   }
@@ -1488,5 +1529,18 @@ export class FirestoreStore implements Store {
   async getVoteCounts(slug: string): Promise<GameVoteCounts> {
     const snap = await this.gameRef(slug).get();
     return FirestoreStore.readVoteCounts(snap.data());
+  }
+
+  async addPlayerFeedback(slug: string, uid: string, text: string): Promise<PlayerFeedbackRecord> {
+    const createdAt = new Date().toISOString();
+    const ref = this.feedbackCollection(slug).doc();
+    const record: PlayerFeedbackRecord = { id: ref.id, uid, text, createdAt };
+    await ref.set({ uid, text, createdAt });
+    return record;
+  }
+
+  async listPlayerFeedback(slug: string): Promise<PlayerFeedbackRecord[]> {
+    const snap = await this.feedbackCollection(slug).orderBy('createdAt', 'desc').get();
+    return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<PlayerFeedbackRecord, 'id'>) }));
   }
 }

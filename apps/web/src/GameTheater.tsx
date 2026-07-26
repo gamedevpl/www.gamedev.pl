@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { GameFrame } from './GameFrame';
 import { PublishedGameFrame } from './PublishedGameFrame';
 import { PixelIcon, type PixelIconName } from './PixelIcon';
+import { PlayerFeedbackWidget } from './PlayerFeedbackWidget';
 import { ReportGameButton } from './ReportGameButton';
 import { VoteWidget } from './VoteWidget';
 import { useGamePlayer } from './gamePlayer';
@@ -178,6 +179,7 @@ export function GameTheater({ title, badge, source, onExit, meta, orientation = 
             </button>
           )}
           {reportSlug && <VoteWidget slug={reportSlug} />}
+          {reportSlug && <PlayerFeedbackWidget slug={reportSlug} />}
           {reportSlug && <ReportGameButton slug={reportSlug} title={displayTitle} />}
           <button
             className="secondary-btn exit-btn"
