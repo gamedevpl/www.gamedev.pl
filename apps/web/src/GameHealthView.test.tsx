@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
 import { GameHealthView } from './GameHealthView';
-import type { GameHealth, HealthResponse } from './healthApi';
+import type { GameHealth, HealthResponse, VisitFunnel, VisitsResponse } from './healthApi';
 
 /**
  * The operator view's job is to make one thing obvious: which published game is broken.
@@ -31,12 +31,46 @@ function game(partial: Partial<GameHealth> & { slug: string }): GameHealth {
   };
 }
 
-function respondWith(body: HealthResponse | null, status = 200) {
-  return vi
-    .spyOn(globalThis, 'fetch')
-    .mockResolvedValue(
-      body === null ? new Response(null, { status }) : new Response(JSON.stringify(body), { status: 200 }),
-    ) as MockInstance<typeof globalThis.fetch>;
+function emptyFunnel(overrides: Partial<VisitFunnel> = {}): VisitFunnel {
+  return {
+    visits: 0,
+    bounces: 0,
+    visitsWithPlay: 0,
+    plays: 0,
+    depth: [],
+    medianPlaysPerPlayingVisit: 0,
+    timeToFirstPlay: [],
+    medianSecondsToFirstPlay: 0,
+    entries: [],
+    referrers: [],
+    campaigns: [],
+    ...overrides,
+  };
+}
+
+/**
+ * The page fetches health and visits in parallel for the same window. A single
+ * mockResolvedValue Response is consumed by the first reader and leaves the second
+ * as a thrown "body already used" — which is exactly how these tests started
+ * failing once the visit funnel landed beside game health.
+ */
+function respondWith(health: HealthResponse | null, status = 200, visits?: VisitsResponse | null) {
+  const visitsBody =
+    visits === undefined
+      ? health === null
+        ? null
+        : ({ days: health.days, truncated: health.truncated, funnel: emptyFunnel() } satisfies VisitsResponse)
+      : visits;
+
+  return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    const url = String(input);
+    if (url.includes('/api/admin/telemetry/visits')) {
+      if (visitsBody === null) return new Response(null, { status });
+      return new Response(JSON.stringify(visitsBody), { status: 200 });
+    }
+    if (health === null) return new Response(null, { status });
+    return new Response(JSON.stringify(health), { status: 200 });
+  }) as MockInstance<typeof globalThis.fetch>;
 }
 
 describe('GameHealthView', () => {
@@ -145,14 +179,18 @@ describe('GameHealthView', () => {
     const fetchSpy = respondWith({ days: ['2026-07-25'], truncated: false, games: [] });
 
     const root = await render();
-    expect(String(fetchSpy.mock.calls[0][0])).toContain('days=7');
+    const initialUrls = fetchSpy.mock.calls.map((call) => String(call[0]));
+    expect(initialUrls.some((url) => url.includes('/health?days=7'))).toBe(true);
+    expect(initialUrls.some((url) => url.includes('/visits?days=7'))).toBe(true);
 
     const monthButton = [...container.querySelectorAll('button')].find((node) => node.textContent === '30d');
     await act(async () => {
       monthButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    expect(String(fetchSpy.mock.calls[1][0])).toContain('days=30');
+    const laterUrls = fetchSpy.mock.calls.map((call) => String(call[0]));
+    expect(laterUrls.some((url) => url.includes('/health?days=30'))).toBe(true);
+    expect(laterUrls.some((url) => url.includes('/visits?days=30'))).toBe(true);
     await act(async () => root.unmount());
   });
 });
