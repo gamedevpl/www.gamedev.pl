@@ -40,3 +40,23 @@ jobs:
       - run: npm run type-check
       - run: npm run test
       - run: npm run build
+
+  # Cross-repo lockstep with gamedevpl/www.gamedev.pl-games (issue #247). The unit
+  # tests above already pin this repo's half + a GameKit-shaped fixture; this job
+  # fetches the live assemble/validate sources when GAMES_REPO_TOKEN is configured.
+  games_repo_contract:
+    name: Games-repo contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Check games-repo assemble / Check 4 / music contract
+        env:
+          GAMES_REPO: gamedevpl/www.gamedev.pl-games
+          GAMES_PUBLISHED_REF: main
+          GAMES_REPO_TOKEN: ${{ secrets.GAMES_REPO_TOKEN }}
+        run: npm run contract:games-repo

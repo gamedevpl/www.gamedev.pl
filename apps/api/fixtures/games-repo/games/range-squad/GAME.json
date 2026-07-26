@@ -1,0 +1,9 @@
+{
+  "engine": {
+    "modules": ["input", "collision", "world", "drawing", "actors", "gfx", "effects", "audio"]
+  },
+  "audio": {
+    "sounds": ["shot"],
+    "music": "march"
+  }
+}

@@ -9,6 +9,7 @@
     "start": "node dist/server.js",
     "type-check": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "contract:games-repo": "tsx scripts/check-games-repo-contract.ts",
     "beta:approve": "tsx scripts/beta-approve.ts",
     "beta:invite": "tsx scripts/beta-invite.ts"
   },

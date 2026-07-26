@@ -1,0 +1,138 @@
+/**
+ * Serve-time contract shared with the games repo's assembler / Check 4.
+ *
+ * The games repo (`tools/lib/assemble.ts`, `tools/validate.ts`) is the other
+ * half of this lockstep. A stale copy here 502s every published game while
+ * catalog/media still look fine (issue #247). CI re-checks the live games repo
+ * when `GAMES_REPO_TOKEN` is set (`npm run contract:games-repo`).
+ */
+
+/** Canonical GameKit module order — must match games-repo `GAME_KIT_MODULES`. */
+export const GAME_KIT_MODULES = [
+  'input',
+  'collision',
+  'world',
+  'ai',
+  'gameplay',
+  'drawing',
+  'actors',
+  'gfx',
+  'effects',
+  'audio',
+  'party',
+] as const;
+
+export type GameKitModuleName = (typeof GAME_KIT_MODULES)[number];
+
+/** Author-facing budget — games-repo Check 4 `GAME_BUDGET_BYTES`. */
+export const GAME_BUDGET_BYTES = 200 * 1024;
+
+/**
+ * Sum of GameKit platform allowances outside the author budget (touch, restart,
+ * music, touch hint, progress, universal input, pointer poll, draw surface).
+ * Together with {@link GAME_BUDGET_BYTES} this is the 242 KiB serve cap.
+ */
+export const GAMEKIT_PLATFORM_BYTES = 42 * 1024;
+
+/** Combined html+js+css size cap — must match games-repo `MAX_BUNDLE_BYTES`. */
+export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
+
+/**
+ * Music embedding contract (games-repo `tools/lib/assemble.ts`):
+ * - `GAME.json` → `audio.music` is a single track-name string
+ * - `shared/audio/music.json` → read only the `tracks` map
+ * - inject `window.__GAME_AUDIO_MUSIC__ = "<name>"` and a one-entry tracks object
+ */
+export const MUSIC_CONTRACT = {
+  manifestField: 'music',
+  manifestFieldType: 'string',
+  catalogPath: 'shared/audio/music.json',
+  catalogTracksKey: 'tracks',
+  windowMusicName: '__GAME_AUDIO_MUSIC__',
+  windowTracksName: '__GAME_MUSIC_TRACKS__',
+} as const;
+
+/** Pull the `GAME_KIT_MODULES = [ ... ]` array literal out of games-repo assemble source. */
+export function extractGameKitModules(assembleSource: string): string[] {
+  const match = assembleSource.match(/GAME_KIT_MODULES\s*=\s*\[([\s\S]*?)\]/);
+  if (!match) {
+    throw new Error('games-repo assemble source has no GAME_KIT_MODULES array');
+  }
+  const modules = [...match[1].matchAll(/['"]([a-z0-9-]+)['"]/g)].map((entry) => entry[1]);
+  if (modules.length === 0) {
+    throw new Error('games-repo GAME_KIT_MODULES array is empty');
+  }
+  return modules;
+}
+
+/**
+ * Resolve `MAX_BUNDLE_BYTES = <expr>` from games-repo validate source, substituting
+ * simple `const NAME = number | number * number` definitions from the same file.
+ */
+export function extractMaxBundleBytes(validateSource: string): number {
+  const assign = validateSource.match(/MAX_BUNDLE_BYTES\s*=\s*([^;]+);/);
+  if (!assign) {
+    throw new Error('games-repo validate source has no MAX_BUNDLE_BYTES assignment');
+  }
+  return evaluateByteExpression(assign[1], validateSource);
+}
+
+/** Confirm games-repo assemble still implements the music injection contract. */
+export function extractMusicContractSignals(assembleSource: string): {
+  injectsMusicName: boolean;
+  readsTracksKey: boolean;
+  readsMusicJson: boolean;
+} {
+  return {
+    injectsMusicName: new RegExp(`${MUSIC_CONTRACT.windowMusicName}\\s*=`).test(assembleSource),
+    readsTracksKey: new RegExp(`\\b${MUSIC_CONTRACT.catalogTracksKey}\\b`).test(assembleSource),
+    readsMusicJson: /music\.json/.test(assembleSource),
+  };
+}
+
+function evaluateByteExpression(expression: string, source: string): number {
+  const rawDefs = [...source.matchAll(/(?:const|let|var)\s+([A-Z][A-Z0-9_]*)\s*=\s*([^;]+);/g)].map((match) => [
+    match[1],
+    match[2].trim(),
+  ]) as Array<[string, string]>;
+
+  // Resolve consts iteratively so `MAX = BUDGET + TOUCH + …` works when the
+  // addends are themselves `200 * 1024` / `7_501` style definitions.
+  const definitions = new Map<string, number>();
+  let progress = true;
+  while (progress) {
+    progress = false;
+    for (const [name, rhs] of rawDefs) {
+      if (definitions.has(name)) continue;
+      const value = tryEvalArithmetic(rhs, definitions);
+      if (value !== null) {
+        definitions.set(name, value);
+        progress = true;
+      }
+    }
+  }
+
+  const result = tryEvalArithmetic(expression.trim(), definitions);
+  if (result === null || result <= 0) {
+    throw new Error(`cannot evaluate games-repo budget expression: ${expression.trim()}`);
+  }
+  return result;
+}
+
+function tryEvalArithmetic(expression: string, definitions: Map<string, number>): number | null {
+  // Substitute longest names first so GAMEKIT_TOUCH_BYTES does not clobber
+  // GAMEKIT_TOUCH_HINT_BYTES, then strip numeric separators (7_501 → 7501).
+  let replaced = expression;
+  const namesLongestFirst = [...definitions.keys()].sort((a, b) => b.length - a.length);
+  for (const name of namesLongestFirst) {
+    replaced = replaced.replace(new RegExp(`\\b${name}\\b`, 'g'), String(definitions.get(name)));
+  }
+  while (/(\d)_(\d)/.test(replaced)) {
+    replaced = replaced.replace(/(\d)_(\d)/g, '$1$2');
+  }
+  if (!/^[\d\s*+\-()/]+$/.test(replaced)) {
+    return null;
+  }
+  const result = Function(`"use strict"; return (${replaced});`)() as number;
+  return Number.isFinite(result) ? result : null;
+}
