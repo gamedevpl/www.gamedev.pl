@@ -206,7 +206,10 @@ export async function registerAgentChannelRoutes(
     };
   }
 
-  app.post('/api/agent/build/progress', async (request, reply) => {
+  // IP ceilings sit above the per-build limiters inside each handler. Agents
+  // share a Cloud Run egress IP, so these are generous; the build-keyed checks
+  // remain the real abuse control.
+  app.post('/api/agent/build/progress', { config: { rateLimit: { max: 300, timeWindow: '1 hour' } } }, async (request, reply) => {
     const resolved = await resolveBuild(request, reply);
     if (!resolved) return reply;
     const { issueNumber, record } = resolved;
@@ -268,7 +271,7 @@ export async function registerAgentChannelRoutes(
    * must actually start with a PNG signature, because everything downstream serves it
    * back to a browser as an image.
    */
-  app.post('/api/agent/build/shot', async (request, reply) => {
+  app.post('/api/agent/build/shot', { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } }, async (request, reply) => {
     const resolved = await resolveBuild(request, reply);
     if (!resolved) return reply;
     const { issueNumber, record } = resolved;
@@ -327,7 +330,7 @@ export async function registerAgentChannelRoutes(
 
   // Collect without reporting. Deliberately does NOT mark messages delivered — an
   // agent that reads a request and then crashes must not lose it. Acking is explicit.
-  app.get('/api/agent/build/inbox', async (request, reply) => {
+  app.get('/api/agent/build/inbox', { config: { rateLimit: { max: 600, timeWindow: '1 hour' } } }, async (request, reply) => {
     const resolved = await resolveBuild(request, reply);
     if (!resolved) return reply;
     const { issueNumber, record } = resolved;
@@ -339,7 +342,7 @@ export async function registerAgentChannelRoutes(
     return reply.send(await channelState(issueNumber, record));
   });
 
-  app.post('/api/agent/build/inbox/ack', async (request, reply) => {
+  app.post('/api/agent/build/inbox/ack', { config: { rateLimit: { max: 600, timeWindow: '1 hour' } } }, async (request, reply) => {
     const resolved = await resolveBuild(request, reply);
     if (!resolved) return reply;
     const { issueNumber, record } = resolved;

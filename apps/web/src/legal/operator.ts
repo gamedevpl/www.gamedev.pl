@@ -50,7 +50,10 @@ export const CONTACT_EMAIL = 'admin@gamedev.pl';
  * publish — a home address on a public site is a real personal-safety trade-off, and
  * a registered business address (JDG) or a virtual office solves it. Every surface
  * that renders this omits the line when it is empty rather than printing a
- * placeholder, so the site is never live with "TODO" on a legal page.
+ * placeholder, so the site is never live with "TODO" on a legal page. Today both
+ * LegalPage and SiteFooter leave these out entirely (empty constants made the
+ * conditionals always-false under CodeQL); when a value is published here, add
+ * the corresponding line back on those surfaces.
  */
 export const OPERATOR_ADDRESS = '';
 

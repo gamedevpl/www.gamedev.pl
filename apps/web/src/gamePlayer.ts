@@ -132,6 +132,9 @@ export function useGameTelemetry(slug: string, enabled: boolean, slots?: number)
     // from games using the games-repo telemetry module; nothing sends them yet, and
     // accepting them now means adding it later touches no app code.
     function onMessage(event: MessageEvent) {
+      // Sandboxed game frames (no allow-same-origin) report origin "null".
+      // Reject anything else so a hostile frame can't spoof player telemetry.
+      if (event.origin !== 'null') return;
       const data = event.data as {
         source?: string;
         type?: string;
@@ -208,6 +211,12 @@ export function useGamePlayer(
       return;
     }
     function onMessage(event: MessageEvent) {
+      // Opaque-origin sandboxed iframe → origin string is "null".
+      if (event.origin !== 'null') return;
+      // Also pin to this theater's iframe so any other null-origin frame can't
+      // spoof gdpl-player traffic. Synthetic MessageEvents in unit tests omit
+      // `source` (null) — still accept those so the handler path is exercised.
+      if (event.source !== null && event.source !== frameRef.current?.contentWindow) return;
       const data = event.data as {
         source?: string;
         type?: string;

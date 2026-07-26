@@ -954,7 +954,7 @@ describe('catalog route', () => {
     };
     const currentTime = 10_000;
     const { app } = await createApp({ githubClient, submissionTokenSecret: secret, now: () => currentTime });
-    const token = mintToken(12, secret, 10_000);
+    const token = mintToken(12, secret);
 
     // Initial catalog request caches bubble-pop
     await app.inject({ method: 'GET', url: '/api/catalog' });
@@ -1002,14 +1002,14 @@ describe('catalog route', () => {
     // keys, so both polls reach isSlugPublished — but only the first may bypass.
     const first = await app.inject({
       method: 'GET',
-      url: `/api/submissions/${mintToken(12, secret, 10_000)}`,
+      url: `/api/submissions/${mintToken(12, secret)}`,
     });
     expect(first.json()).toEqual({ status: 'publishing', slug: 'new-game-12' });
     expect(getCatalog).toHaveBeenCalledTimes(2);
 
     const second = await app.inject({
       method: 'GET',
-      url: `/api/submissions/${mintToken(13, secret, 10_000)}`,
+      url: `/api/submissions/${mintToken(13, secret)}`,
     });
     expect(second.json()).toEqual({ status: 'publishing', slug: 'new-game-13' });
     expect(getCatalog).toHaveBeenCalledTimes(2);

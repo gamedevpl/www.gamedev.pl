@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { bugReportUrl, ISSUES_URL, REPO_URL } from './github';
-import { OPERATOR_ADDRESS, OPERATOR_LEGAL_NAME, OPERATOR_TAX_ID } from './legal/operator';
+import { OPERATOR_LEGAL_NAME } from './legal/operator';
 import { legalPath } from './router';
 import { currentVisitId } from './visitTelemetry';
 
@@ -14,8 +14,9 @@ import { currentVisitId } from './visitTelemetry';
  *
  * The electronic contact address lives in the legal documents (linked below), not as
  * a second prominent line under the brand — Contact in the nav opens the GitHub
- * issue tracker instead. `OPERATOR_ADDRESS` and `OPERATOR_TAX_ID` render only when
- * set — see the note in legal/operator.ts about publishing a home address.
+ * issue tracker instead. Address and tax id stay in legal/operator.ts until the
+ * operator publishes them; rendering empty constants was a CodeQL false-positive
+ * (js/trivial-conditional) and is omitted until those values are non-empty.
  */
 export function SiteFooter() {
   const { t } = useTranslation();
@@ -30,8 +31,6 @@ export function SiteFooter() {
               the two happen to read the same; the day a registered entity is published
               this line becomes that entity instead of quietly disagreeing with it. */}
           <p className="site-footer__brand">{OPERATOR_LEGAL_NAME}</p>
-          {OPERATOR_ADDRESS && <p className="site-footer__operator">{OPERATOR_ADDRESS}</p>}
-          {OPERATOR_TAX_ID && <p className="site-footer__operator">NIP: {OPERATOR_TAX_ID}</p>}
         </div>
 
         <nav className="site-footer__links" aria-label={t('footer.legalNav')}>

@@ -245,6 +245,7 @@ describe('catalog playback', () => {
     await act(async () => {
       window.dispatchEvent(
         new MessageEvent('message', {
+          origin: 'null',
           data: { source: 'gdpl-player', type: 'meta', title: 'Football 3D Lite', desc: 'Score a goal', muted: false },
         }),
       );

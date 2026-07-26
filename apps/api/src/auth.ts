@@ -93,7 +93,7 @@ export function mintSessionToken(
   return `${encodedPayload}.${signature}`;
 }
 
-export function verifySessionToken(
+export function readSessionToken(
   token: string,
   secret: string,
   prevSecret?: string,
@@ -206,7 +206,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
     if (!cookieToken) return { user: null, needsRenewal: false };
 
     try {
-      const { uid, exp } = verifySessionToken(cookieToken, effectiveSessionSecret, sessionSecretPrev);
+      const { uid, exp } = readSessionToken(cookieToken, effectiveSessionSecret, sessionSecretPrev);
       const user = await store.getUser(uid);
       if (!user) {
         return { user: null, needsRenewal: false };
@@ -263,7 +263,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
     }
   });
 
-  app.post('/api/auth/google', async (request, reply) => {
+  app.post('/api/auth/google', { config: { rateLimit: { max: maxAuthRequestsPerWindow, timeWindow: authRateLimitWindowMs } } }, async (request, reply) => {
     if (!isAuthConfigured) {
       return reply.status(503).send({ error: 'authentication is not configured' });
     }
@@ -335,7 +335,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
   // the auth rate limiter since it's the same abuse surface (unauthenticated
   // Google-token verification). Re-verifies the token server-side rather than
   // trusting any client-asserted identity.
-  app.post('/api/waitlist', async (request, reply) => {
+  app.post('/api/waitlist', { config: { rateLimit: { max: maxAuthRequestsPerWindow, timeWindow: authRateLimitWindowMs } } }, async (request, reply) => {
     if (!isAuthConfigured) {
       return reply.status(503).send({ error: 'authentication is not configured' });
     }

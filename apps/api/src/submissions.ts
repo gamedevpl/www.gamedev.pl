@@ -817,7 +817,7 @@ export async function registerSubmissionRoutes(
    * Ownership is checked against the store, not just the token: abandoning is
    * destructive, so holding a shared link must not be enough.
    */
-  app.post('/api/submissions/:token/abandon', async (request, reply) => {
+  app.post('/api/submissions/:token/abandon', { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } }, async (request, reply) => {
     if (!githubClient || !submissionTokenSecret) {
       return reply.status(503).send({ error: 'submissions are not configured' });
     }
@@ -952,7 +952,7 @@ export async function registerSubmissionRoutes(
     return refresh;
   }
 
-  app.get('/api/submissions/:token', async (request, reply) => {
+  app.get('/api/submissions/:token', { config: { rateLimit: { max: maxStatusChecksPerWindow, timeWindow: statusRateLimitWindowMs } } }, async (request, reply) => {
     if (!githubClient || !submissionTokenSecret) {
       return reply.status(503).send({ error: 'submissions are not configured' });
     }
@@ -1017,7 +1017,7 @@ export async function registerSubmissionRoutes(
   // agent iterates on) — or on the issue if no PR exists yet. Creator text is
   // sanitized and fenced as data, never as instructions to the agent (same privacy/
   // injection boundary as the original spec). A published game can't be revised here.
-  app.post('/api/submissions/:token/feedback', async (request, reply) => {
+  app.post('/api/submissions/:token/feedback', { config: { rateLimit: { max: maxFeedbackPerWindow, timeWindow: feedbackRateLimitWindowMs } } }, async (request, reply) => {
     if (!githubClient || !submissionTokenSecret) {
       return reply.status(503).send({ error: 'submissions are not configured' });
     }
@@ -1133,7 +1133,10 @@ export async function registerSubmissionRoutes(
   // an OIDC token; we derive the current status of every still-active submission and
   // emit on transition, reusing the exact same derivation + idempotent emit. No
   // session — the wall exempts /api/internal and the handler verifies OIDC itself.
-  app.post('/api/internal/notify-sweep', async (request, reply) => {
+  // Cloud Scheduler hits this every 2–5 minutes (docs/notifications-plan.md N1),
+  // and retries on transient failures; 30/hour sits on that cadence with no headroom.
+  // OIDC already authenticates the caller — this IP ceiling is only a runaway guard.
+  app.post('/api/internal/notify-sweep', { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } }, async (request, reply) => {
     if (!(await internalAuthVerifier.verify(request.headers.authorization))) {
       return reply.status(401).send({ error: 'unauthorized' });
     }
@@ -1227,7 +1230,7 @@ export async function registerSubmissionRoutes(
   // sandboxed, opaque-origin iframe on the client, so the human merge is a curation
   // gate, not the safety boundary. A preview is only reachable by the token holder for
   // that specific submission, and only resolves the PR cross-linked to their issue.
-  app.get('/api/submissions/:token/preview', async (request, reply) => {
+  app.get('/api/submissions/:token/preview', { config: { rateLimit: { max: maxPreviewsPerWindow, timeWindow: previewRateLimitWindowMs } } }, async (request, reply) => {
     if (!githubClient || !submissionTokenSecret) {
       return reply.status(503).send({ error: 'submissions are not configured' });
     }
@@ -1264,7 +1267,7 @@ export async function registerSubmissionRoutes(
    * from the manifest at the same commit as the bytes, so only files that build's own
    * metadata declares can be served, and only for the token that owns it.
    */
-  app.get('/api/submissions/:token/media/:filename', async (request, reply) => {
+  app.get('/api/submissions/:token/media/:filename', { config: { rateLimit: { max: maxMediaPerWindow, timeWindow: gamesRateLimitWindowMs } } }, async (request, reply) => {
     if (!githubClient || !submissionTokenSecret) {
       return reply.status(503).send({ error: 'submissions are not configured' });
     }
@@ -1343,7 +1346,7 @@ export async function registerSubmissionRoutes(
   });
 
   /** A screenshot the agent pushed over the channel, before it committed anything. */
-  app.get('/api/submissions/:token/shot/:id', async (request, reply) => {
+  app.get('/api/submissions/:token/shot/:id', { config: { rateLimit: { max: maxMediaPerWindow, timeWindow: gamesRateLimitWindowMs } } }, async (request, reply) => {
     if (!submissionTokenSecret || !store) {
       return reply.status(503).send({ error: 'submissions are not configured' });
     }

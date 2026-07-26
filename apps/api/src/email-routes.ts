@@ -24,7 +24,7 @@ a{color:#0a7d76}</style></head>
 export async function registerEmailRoutes(app: FastifyInstance, options: EmailRoutesOptions): Promise<void> {
   const secret = options.unsubscribeSecret ?? process.env.SESSION_SECRET;
 
-  app.get('/api/email/unsubscribe', async (request, reply) => {
+  app.get('/api/email/unsubscribe', { config: { rateLimit: { max: 30, timeWindow: '1 hour' } } }, async (request, reply) => {
     const token = (request.query as { token?: string }).token;
     if (!secret || !token) {
       return reply.type('text/html').status(400).send(page('Invalid link', 'This unsubscribe link is not valid.'));

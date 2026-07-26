@@ -1,5 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
+export { readBearerToken } from './bearer.js';
+
 /**
  * Build-channel tokens (docs/agent-live-channel-plan.md §1).
  *
@@ -66,13 +68,8 @@ export function verifyAgentToken(token: string, secret: string): number {
 }
 
 /**
- * Pulls the token out of `Authorization: Bearer …`. The agent channel takes its
- * credential from a header rather than the path (unlike the creator-facing status
- * routes) because these calls come from scripts and CI-ish environments where URLs
- * end up in shell history and access logs.
+ * `readBearerToken` lives in `bearer.ts` and is re-exported above. The agent channel
+ * takes its credential from a header rather than the path (unlike the creator-facing
+ * status routes) because these calls come from scripts and CI-ish environments where
+ * URLs end up in shell history and access logs.
  */
-export function readBearerToken(header: string | undefined): string | null {
-  if (!header) return null;
-  const match = /^Bearer\s+(.+)$/i.exec(header.trim());
-  return match?.[1]?.trim() || null;
-}
