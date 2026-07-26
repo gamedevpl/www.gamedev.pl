@@ -52,10 +52,10 @@ describe('SiteFooter project links', () => {
   it('sends Contact to the GitHub issues list, not a mailto', () => {
     render();
 
-    const contact = links().find((a) => a.textContent === 'Contact' || a.textContent === 'Kontakt');
+    const contact = links().find((a) => a.href === 'https://github.com/gamedevpl/www.gamedev.pl/issues');
     expect(contact).toBeDefined();
-    expect(contact?.href).toBe('https://github.com/gamedevpl/www.gamedev.pl/issues');
     expect(contact?.rel).toContain('noopener');
+    expect(links().some((a) => a.href.startsWith('mailto:'))).toBe(false);
     expect(container.textContent).not.toContain('admin@gamedev.pl');
   });
 
