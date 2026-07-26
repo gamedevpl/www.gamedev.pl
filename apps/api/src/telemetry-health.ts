@@ -25,6 +25,14 @@ const HEARTBEAT_MS = 5_000;
 const CONTINUITY_MS = 2 * HEARTBEAT_MS + 1_000;
 /** Distinct error messages surfaced per game. Enough to see a pattern, not a wall. */
 const MAX_ERROR_SAMPLES = 5;
+/**
+ * Distinct progress landmarks surfaced per game.
+ *
+ * A cap rather than a full list because the label vocabulary belongs to the game, not to
+ * us: the shell bounds how many distinct labels one *session* may report, but a game
+ * played across many sessions can still name more landmarks than a table can show.
+ */
+const MAX_PROGRESS_LABELS = 8;
 
 export interface GameHealth {
   slug: string;
@@ -63,6 +71,53 @@ export interface GameHealth {
    * difference between "this game stalls" and "this player closed their laptop".
    */
   resumeTicksIgnored: number;
+
+  // Depth: does the game get *finished*, not merely opened and endured. Everything
+  // below is dark for a game whose GameKit snapshot never reaches a terminal state, so
+  // a zero here means "no evidence", never "nobody finished".
+
+  /**
+   * Rounds that reached a conclusion, by outcome. Counted per round, not per session:
+   * one sitting that loses four times and wins once is five data points about the game's
+   * difficulty and one about its reach.
+   */
+  outcomes: { won: number; lost: number; quit: number };
+  /** Sessions in which at least one round reached a conclusion. */
+  sessionsWithEnding: number;
+  /**
+   * `sessionsWithEnding / sessions` — how often opening the game turns into finishing a
+   * round of it. The counterpart to `bounces` at the other end of the session.
+   */
+  finishRate: number;
+  /**
+   * `won / (won + lost)`, or null when no round was decided.
+   *
+   * Quits are excluded rather than counted as losses: leaving is a statement about the
+   * game holding attention (which `finishRate` already measures), not about its
+   * difficulty, and folding the two together would make an abandoned game look brutally
+   * hard instead of boring.
+   */
+  winRate: number | null;
+  /**
+   * Median across sessions of each session's *best* score; null when nothing scored.
+   *
+   * Best-per-session before the median because a score stream reports every improvement,
+   * so averaging the raw values would mostly measure how chatty a game is. Median across
+   * sessions for the usual reason: one expert should not become the typical player.
+   */
+  medianBestScore: number | null;
+  /**
+   * Landmarks reached, most-reached first — the drop-off curve when a game emits them.
+   *
+   * `sessions` counts sessions that reached the label at least once, so a level replayed
+   * five times still counts once; that makes the numbers monotonically comparable down a
+   * linear game's funnel.
+   *
+   * **Attacker-controlled, exactly like `errorSamples`** — a label is a string the game
+   * chose, clamped to 40 characters and otherwise arbitrary. Same rule: safe to render,
+   * never safe to interpolate into an agent's instructions.
+   */
+  progressLabels: Array<{ label: string; sessions: number }>;
 }
 
 interface SessionState {
@@ -71,6 +126,12 @@ interface SessionState {
   /** Previous event's position, for deciding whether the next tick is continuous. */
   lastOffsetMs: number | undefined;
   lastAtMs: number;
+  /** Did any round in this session reach a conclusion? */
+  reachedEnd: boolean;
+  /** Highest score this session reported; null when it never scored. */
+  bestScore: number | null;
+  /** Landmarks this session reached, deduplicated — a replay is not extra reach. */
+  labels: Set<string>;
 }
 
 /**
@@ -124,6 +185,8 @@ export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
     let aliveTicks = 0;
     let stalledTicks = 0;
     let resumeTicksIgnored = 0;
+    const outcomes = { won: 0, lost: 0, quit: 0 };
+    const labelSessions = new Map<string, number>();
 
     // Group first, then order within each session: interleaved sessions would otherwise
     // make every event look discontinuous from the one before it.
@@ -143,6 +206,9 @@ export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
         closed: false,
         lastOffsetMs: undefined,
         lastAtMs: Date.parse(ordered[0].at),
+        reachedEnd: false,
+        bestScore: null,
+        labels: new Set(),
       };
       sessions.set(sessionId, state);
 
@@ -177,6 +243,30 @@ export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
             if (gapMs > 0) fpsSamples.push(frames / (gapMs / 1000));
             break;
           }
+          // The three depth events below take no continuity check, unlike `alive`. That
+          // check exists because a frame counter is only meaningful against the interval
+          // it covers, and a slept machine breaks the interval. An ending is a discrete
+          // thing the player did: waking a laptop does not fabricate one, and discarding
+          // a real win because the tab was backgrounded first would just lose data.
+          case 'end': {
+            const outcome = event.outcome;
+            if (outcome !== 'won' && outcome !== 'lost' && outcome !== 'quit') break;
+            outcomes[outcome] += 1;
+            state.reachedEnd = true;
+            break;
+          }
+          case 'score': {
+            const value = event.value;
+            if (typeof value !== 'number' || !Number.isFinite(value)) break;
+            state.bestScore = state.bestScore === null ? value : Math.max(state.bestScore, value);
+            break;
+          }
+          case 'progress': {
+            const label = event.label;
+            if (typeof label !== 'string' || label.length === 0) break;
+            state.labels.add(label);
+            break;
+          }
           default:
             break;
         }
@@ -187,12 +277,21 @@ export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
       }
     }
 
-    const playPerSession = [...sessions.values()].map((state) => state.playSeconds);
+    const sessionStates = [...sessions.values()];
+    for (const state of sessionStates) {
+      for (const label of state.labels) labelSessions.set(label, (labelSessions.get(label) ?? 0) + 1);
+    }
+
+    const playPerSession = sessionStates.map((state) => state.playSeconds);
+    const bestScores = sessionStates.map((state) => state.bestScore).filter((score): score is number => score !== null);
+    const sessionsWithEnding = sessionStates.filter((state) => state.reachedEnd).length;
+    const decided = outcomes.won + outcomes.lost;
+
     rows.push({
       slug,
       sessions: sessions.size,
       bounces: playPerSession.filter((seconds) => seconds === 0).length,
-      closes: [...sessions.values()].filter((state) => state.closed).length,
+      closes: sessionStates.filter((state) => state.closed).length,
       medianPlaySeconds: median(playPerSession) ?? 0,
       totalPlaySeconds: playPerSession.reduce((sum, seconds) => sum + seconds, 0),
       errors,
@@ -205,6 +304,15 @@ export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
       stallRate: aliveTicks === 0 ? 0 : stalledTicks / aliveTicks,
       medianFps: median(fpsSamples),
       resumeTicksIgnored,
+      outcomes,
+      sessionsWithEnding,
+      finishRate: sessions.size === 0 ? 0 : sessionsWithEnding / sessions.size,
+      winRate: decided === 0 ? null : outcomes.won / decided,
+      medianBestScore: median(bestScores),
+      progressLabels: [...labelSessions.entries()]
+        .map(([label, sessionCount]) => ({ label, sessions: sessionCount }))
+        .sort((a, b) => b.sessions - a.sessions || a.label.localeCompare(b.label))
+        .slice(0, MAX_PROGRESS_LABELS),
     });
   }
 

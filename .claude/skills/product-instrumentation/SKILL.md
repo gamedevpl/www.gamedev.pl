@@ -121,7 +121,7 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
   `submission_created`. Steps dedupe per visit (a rung means "this visit got this far"),
   and the aggregate dedupes again so a replayed flush cannot inflate one. Adding a rung
   means touching the enum in `visitTelemetry.ts`, the zod enum in `visit-telemetry.ts`,
-  and `CREATE_STEPS` in `visit-funnel.ts` — the order in `CREATE_STEPS` *is* the funnel's
+  and `CREATE_STEPS` in `visit-funnel.ts` — the order in `CREATE_STEPS` _is_ the funnel's
   meaning.
 - ~~Creator return is under-measured~~ — **closed 2026-07-26**: `User.activeDays` (a
   capped list of `yyyy-mm-dd`, touched once per account per day from the auth hook)
@@ -129,9 +129,22 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
   rather than a `lastSeenAt` instant if you extend this — a single timestamp cannot tell
   "returned on day 2 and day 30" from "returned only on day 30", which is the whole
   question. Build duration median/p90 ships alongside it, covering question 7.
-- **Games emit no depth events** — the host listens for `progress`/`score`/`end` but no
-  GameKit module sends them, so per-game drop-off and completion are dark. The fix
-  belongs in the games repo's shared GameKit (once, platform-wide), not per game.
+- ~~Games emit no depth events~~ — **closed 2026-07-26**, both halves. GameKit's shared
+  `report` funnel emits `end` on the transition into a terminal snapshot state (and the
+  round's `score` with it), so all 83 games gained it in one change; `summarizeGameHealth`
+  turns those into `finishRate`, `winRate`, `medianBestScore` and a `progressLabels`
+  funnel, rendered as four columns on the operator page. Two rules that came out of it:
+  - **A game that emits nothing and a game nobody finishes produce identical rows.** The
+    view renders `—`, never `0%`, when a game reported no endings at all — and no verdict
+    badge reads off finish rate, because "nobody finishes this" is not yet supportable.
+    Any future depth metric inherits this: absence of evidence renders as absence.
+  - Depth events take **no continuity check**, unlike `alive`. That check exists because a
+    frame counter is meaningless without the interval it covers; an ending is a discrete
+    thing a player did, and a slept machine does not fabricate one.
+- **`progress` landmarks are emitted by no game yet** — the vocabulary, the cap, and the
+  read-side funnel all exist and are tested, but labels are per-game and GameKit cannot
+  guess them. This is the one depth signal still dark, and unlike the others it cannot be
+  closed platform-wide: it needs games to name their own landmarks.
 - **Build economics are duration-only** — submission→publish timestamps and build events
   exist; revision-cycle counts are derivable; keep it that way as builds evolve.
 

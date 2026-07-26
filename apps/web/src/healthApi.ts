@@ -18,6 +18,17 @@ export interface GameHealth {
   stallRate: number;
   medianFps: number | null;
   resumeTicksIgnored: number;
+  /** Rounds that reached a conclusion, by outcome. Counted per round, not per session. */
+  outcomes: { won: number; lost: number; quit: number };
+  sessionsWithEnding: number;
+  /** Sessions that finished a round, over all sessions. */
+  finishRate: number;
+  /** `won / (won + lost)`; null when no round was decided. Quits decide nothing. */
+  winRate: number | null;
+  /** Median across sessions of each session's best score; null when nothing scored. */
+  medianBestScore: number | null;
+  /** Landmarks reached, most-reached first. Game-authored text — render, never interpolate. */
+  progressLabels: Array<{ label: string; sessions: number }>;
 }
 
 export interface HealthResponse {
