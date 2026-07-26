@@ -123,9 +123,12 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
   means touching the enum in `visitTelemetry.ts`, the zod enum in `visit-telemetry.ts`,
   and `CREATE_STEPS` in `visit-funnel.ts` — the order in `CREATE_STEPS` *is* the funnel's
   meaning.
-- **Creator return is under-measured** — `lastLoginAt` only updates on sign-in, and
-  sessions are long-lived; an authenticated `lastSeenAt` touch (daily granularity is
-  enough) is missing.
+- ~~Creator return is under-measured~~ — **closed 2026-07-26**: `User.activeDays` (a
+  capped list of `yyyy-mm-dd`, touched once per account per day from the auth hook)
+  plus `summarizeCreatorMetrics` behind `GET /api/admin/telemetry/creators`. Use a list
+  rather than a `lastSeenAt` instant if you extend this — a single timestamp cannot tell
+  "returned on day 2 and day 30" from "returned only on day 30", which is the whole
+  question. Build duration median/p90 ships alongside it, covering question 7.
 - **Games emit no depth events** — the host listens for `progress`/`score`/`end` but no
   GameKit module sends them, so per-game drop-off and completion are dark. The fix
   belongs in the games repo's shared GameKit (once, platform-wide), not per game.
