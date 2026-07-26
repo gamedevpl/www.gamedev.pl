@@ -109,6 +109,8 @@
     "pausePreview": "Pause preview",
     "gameMoments": "Gameplay moments from {{title}}",
     "viewMoment": "View {{moment}} from {{title}}",
+    "keyboardOnly": "Keyboard only",
+    "keyboardOnlyTooltip": "This game has no touch controls — it needs a keyboard.",
     "play": "Play Game",
     "playingBadge": "Playing",
     "remix": "Remix Game"

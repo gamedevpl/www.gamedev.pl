@@ -18,6 +18,16 @@ export interface CatalogMultiplayer {
 /** The orientation a game was designed for; 'any' unless its spec says otherwise. */
 export type CatalogOrientation = 'any' | 'portrait' | 'landscape';
 
+/**
+ * How a game can be driven by a finger. Unlike everything else on an entry this is
+ * derived from the game's own source by the games repo's build (`inferTouchSupport`),
+ * never authored in a spec — a spec cannot claim playability the code doesn't have.
+ * `gamekit` = GameKit's on-screen pad, `native` = the game draws its own touch input,
+ * `controllers` = playable only with phones as controllers on a second screen,
+ * `none` = keyboard only. null when the API served a catalog without the field.
+ */
+export type CatalogTouch = 'gamekit' | 'native' | 'controllers' | 'none';
+
 export interface CatalogEntry {
   slug: string;
   title: string;
@@ -27,6 +37,7 @@ export interface CatalogEntry {
   media: CatalogMedia | null;
   multiplayer: CatalogMultiplayer | null;
   orientation: CatalogOrientation;
+  touch: CatalogTouch | null;
 }
 
 /** A published game assembled by the API, ready for the sandboxed iframe's srcDoc. */
@@ -85,6 +96,17 @@ function parseCatalogOrientation(value: unknown): CatalogOrientation {
   return value === 'portrait' || value === 'landscape' ? value : 'any';
 }
 
+const CATALOG_TOUCH_VALUES = new Set<string>(['gamekit', 'native', 'controllers', 'none']);
+
+/**
+ * null rather than a guess when the field is missing or unrecognised: the UI only
+ * warns a phone visitor off a game it *knows* is keyboard-only, so an absent value
+ * has to mean "unknown", never "fine" and never "broken".
+ */
+function parseCatalogTouch(value: unknown): CatalogTouch | null {
+  return typeof value === 'string' && CATALOG_TOUCH_VALUES.has(value) ? (value as CatalogTouch) : null;
+}
+
 async function readApiErrorMessage(response: Response, fallback: string): Promise<string> {
   try {
     const body = (await response.clone().json()) as { error?: unknown };
@@ -112,10 +134,11 @@ export async function fetchCatalog(): Promise<CatalogEntry[]> {
     .filter(
       (
         entry,
-      ): entry is Omit<CatalogEntry, 'media' | 'multiplayer' | 'orientation'> & {
+      ): entry is Omit<CatalogEntry, 'media' | 'multiplayer' | 'orientation' | 'touch'> & {
         media?: unknown;
         multiplayer?: unknown;
         orientation?: unknown;
+        touch?: unknown;
       } =>
         typeof entry === 'object' &&
         entry !== null &&
@@ -131,6 +154,7 @@ export async function fetchCatalog(): Promise<CatalogEntry[]> {
       media: parseCatalogMedia(entry.media),
       multiplayer: parseCatalogMultiplayer((entry as { multiplayer?: unknown }).multiplayer),
       orientation: parseCatalogOrientation(entry.orientation),
+      touch: parseCatalogTouch(entry.touch),
     }));
 }
 

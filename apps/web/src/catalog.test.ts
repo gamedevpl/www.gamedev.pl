@@ -39,6 +39,7 @@ describe('catalog helpers', () => {
         },
         multiplayer: null,
         orientation: 'any',
+        touch: null,
       },
     ]);
     // The catalog is served by our own API, not public GitHub Pages.
@@ -60,6 +61,27 @@ describe('catalog helpers', () => {
 
     const entries = await fetchCatalog();
     expect(entries.map((entry) => entry.orientation)).toEqual(['landscape', 'portrait', 'any', 'any']);
+  });
+
+  it('keeps a known touch class and treats anything else as unknown', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          { slug: 'a', title: 'A', genre: '', controls: '', status: 'published', touch: 'gamekit' },
+          { slug: 'b', title: 'B', genre: '', controls: '', status: 'published', touch: 'native' },
+          { slug: 'c', title: 'C', genre: '', controls: '', status: 'published', touch: 'controllers' },
+          { slug: 'd', title: 'D', genre: '', controls: '', status: 'published', touch: 'none' },
+          { slug: 'e', title: 'E', genre: '', controls: '', status: 'published', touch: 'swipe' },
+          // A catalog served from the SPEC-derived fallback has no touch at all. It
+          // must read as unknown, never as 'none' — that would badge every card with
+          // a keyboard-only warning the moment the fast path is unavailable.
+          { slug: 'f', title: 'F', genre: '', controls: '', status: 'published' },
+        ]),
+      ),
+    );
+
+    const entries = await fetchCatalog();
+    expect(entries.map((entry) => entry.touch)).toEqual(['gamekit', 'native', 'controllers', 'none', null, null]);
   });
 
   it('keeps well-formed multiplayer metadata and drops malformed metadata', async () => {

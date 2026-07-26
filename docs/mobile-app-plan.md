@@ -36,13 +36,14 @@
 > - ✅ **`GameTheater` is mobile-hardened** — `useScreenWakeLock` while playing, a rotate
 >   nudge driven by the catalog's `orientation`, an on-screen close that does not rely on
 >   browser chrome, and safe-area insets in `styles.css`. M0 listed all four as unstarted.
-> - 🚧 **The responsive audit is most of the way done.** The header is one 61px row on a
->   phone (language, GitHub and sign-out moved into the menu, because five controls beside
->   a logo cannot fit 360px at thumb size); every tap target is ≥44px at 320/360/375px;
->   no field is under the 16px that makes iOS force-zoom on focus; the nine blurred panels
->   carry `-webkit-backdrop-filter`, without which every iPhone below Safari 18 silently
->   dropped the blur; and the hero prompt card no longer floats its media buttons over the
->   textarea. Remaining surfaces are listed in M0.
+> - ✅ **The responsive audit is done.** The header is one 61px row on a phone (language,
+>   GitHub and sign-out moved into the menu, because five controls beside a logo cannot
+>   fit 360px at thumb size); every tap target is ≥44px at 320/360/375px in both locales,
+>   with no element overlapping another on any of the 83 catalog cards; no field is under
+>   the 16px that makes iOS force-zoom on focus; the nine blurred panels carry
+>   `-webkit-backdrop-filter`, without which every iPhone below Safari 18 silently dropped
+>   the blur; and the hero prompt card no longer floats its media buttons over the
+>   textarea. What M0 still waits on is a real device, not more code.
 
 ## Problem
 
@@ -52,16 +53,17 @@ SPA and phones appeared in the design twice — as QR-party controllers
 when their game finishes building ([`notifications-plan.md`](./notifications-plan.md)) —
 with nothing built for them. Most of that has since been answered; what is left:
 
-- The web app's responsive pass is well along (see the progress note) but not finished:
-  several surfaces have never been audited at 360px. `GameTheater` now has its wake-lock,
+- The web app's responsive pass is finished (see the progress note); every surface has
+  been audited at 320/360/375px in both locales. `GameTheater` now has its wake-lock,
   orientation nudge, safe-area insets and on-screen back. Still missing entirely: a PWA
   manifest, offline caching, and any install path. There is a service worker (`sw.js`) but
   it is deliberately **push-only** — it caches nothing and intercepts no fetches, and
   `apps/web/public/` contains nothing else.
-- Published games **do** have a touch contract now, enforced in CI rather than by
-  convention. The residual gap is on the website, not in the games: the catalog carries a
-  derived `touch` value per game and the SPA ignores it — no badge, no filter. (It does
-  consume `orientation`.) A phone visitor is told nothing about what they can play.
+- Published games have a touch contract, enforced in CI rather than by convention, and
+  the website now reads it: the derived `touch` value travels from the games repo's
+  committed `catalog.json` through `/api/catalog` to a **Keyboard only** badge on the
+  card. No game triggers it today, which is the point — CI will not let a keyboard-only
+  game through unlabelled, so the badge is the thing that catches the first one.
 - The "your game is live!" push moment now **has** a delivery channel on desktop and
   Android (web push shipped). The remaining gap is **iOS**, where push requires either an
   installed PWA (iOS 16.4+) or a native app.
@@ -192,7 +194,7 @@ registry gains FCM/APNs token rows alongside the web-push subscriptions it alrea
 
 ## Milestones
 
-### M0 — Mobile-web hardening 🚧 (prerequisite for everything; nearly done)
+### M0 — Mobile-web hardening 🚧 (every build item done; awaiting a real-device pass)
 
 - ✅ Responsive pass over `App.tsx` surfaces, at 320px as well as 360px — one column,
   thumb-sized targets, safe-area insets, no horizontal scroll, no field under 16px.
@@ -216,32 +218,60 @@ registry gains FCM/APNs token rows alongside the web-push subscriptions it alrea
     markup, one measured 52px and the other 36px — no CSS difference found to explain
     it) and the "Stop this build" / "Yes, stop it" / "Keep building" controls (14px)
     are now ≥44px.
-  - 🚧 `ArcadeCatalog` — fixed a real production bug found in the process: the AI
-    Act disclosure badge (`.ai-pill`, landed the same day) and the preview-toggle
-    button both claimed the same `top:10px; left:10px`, so the mandatory disclosure
-    was drawn on top of "Watch preview" on every card with a video — live on prod
-    before this fix. Not yet done: `preview-toggle` (116×28) and the `catalog-moment`
-    screenshot-picker thumbnails (42×26) are real, tappable controls under 44px.
+  - ✅ `ArcadeCatalog` — four real bugs, three of them live on prod before this pass.
+    (1) The AI Act disclosure badge (`.ai-pill`) and the preview-toggle button both
+    claimed `top:10px; left:10px`, so the mandatory disclosure was drawn on top of
+    "Watch preview" on every card with a video. (2) The preview toggle (116×28) and
+    the `catalog-moment` screenshot thumbnails (42×26) were under the tap floor; the
+    toggle is now a 44px icon-only button on a finger (its label moves to
+    `aria-label`, because at 44px tall the labelled pill is 127px wide — 145px in
+    Polish — and reached the thumbnails across the card), and the thumbnails are
+    48×44. (3) The genre chip is agent-authored and right-anchored, so a long one
+    ("arcade racing (pseudo-3d)") grew leftwards over the preview toggle on 9 of 83
+    cards at desktop width; it now truncates at 40% of the card. (4) At ≤360px the
+    card is only 296×167 and could not hold all of it: a two-line title climbed under
+    the badge column and the AI disclosure landed on the first word of the title. The
+    badges sit in a row there, and the frame picker — the one item that is a
+    convenience rather than information — is dropped below 360px.
+  - ✅ `SiteFooter` — the four footer nav links, one of which is the DSA
+    illegal-content report route, were 15px tall. Now ≥44px on a finger. The links
+    inside the operator and AI-notice _sentences_ stay inline: there is no way to
+    give a word in a paragraph a 44px box without wrecking the paragraph.
 - ✅ Mobile play surface: `GameTheater` has wake-lock, the orientation nudge from catalog
   metadata, safe-area insets, and an on-screen close.
 - ✅ **Games touch contract** — built and CI-enforced; see the section above. 73 games,
   none keyboard-only. A phone can now also restart a finished game (GameKit's on-screen
   "Play again"), closing the one real gap a player reported from a device.
-- 📋 Surface `touch` in the SPA: **corrected 2026-07-26** — this is not a small tweak.
-  `catalog.json` is a gitignored build artifact the API never reads; production's
-  catalog is reconstructed live from each game's `SPEC.md` frontmatter, which never
-  carries `touch` (deliberately — it is derived from source, not authored, so a spec
-  can't claim playability the code doesn't have). Badging it means either the API
-  fetches and classifies `game.ts` per game, or the games repo commits a small derived
-  sidecar the API can read, mirroring the existing `media/metadata.json` pattern.
+- ✅ Surface `touch` in the SPA. Two earlier notes here were wrong in opposite
+  directions and are both retracted: this was never a one-line badge, and it was not
+  the plumbing job the 2026-07-26 correction described either. The games repo already
+  commits `catalog.json` with a derived `touch` per game, and `getCatalog` in
+  `github-client.ts` already reads it as the fast path (falling back to the SPEC.md
+  fan-out for a ref that predates the artifact) — so the value reaches `/api/catalog`
+  today. The missing half was purely web-side: `catalog.ts` now parses it, and a card
+  shows a red **Keyboard only** pill when a game's own source says a finger cannot
+  drive it.
+  - Only `none` gets a badge. `gamekit`/`native` are nearly every game, so labelling
+    them would put a pill on almost every card to announce that it works normally,
+    and `controllers` already announces itself through the party badge.
+  - No filter. `validate.ts` Check 13 fails any keyboard-only game that doesn't
+    declare `touch: none`, and none do — a "playable on this device" control would
+    today be a switch that never removes a card. The badge is what pays off the day
+    the first one lands; a filter can follow it, not precede it.
+  - An absent or unrecognised value parses to `null`, never `'none'`: the badge is a
+    warning, so the SPEC-derived fallback path must not make every card show one.
 - 🚧 Exit criterion: **on a real iPhone and a real Android phone, sign in, browse, play a
-  touch game, submit a spec, and watch its status — comfortably.** Partly met on
+  touch game, submit a spec, and watch its status — comfortably.** This is the only
+  open item in M0, and it is the one item no agent can close. Partly met on
   2026-07-25: the owner signed in, submitted a spec, answered the QA questions, and
   played games from an iPhone SE, and reported two real bugs from that pass — a
   cluttered prompt card and games with no way to restart on a phone — both since fixed
-  and confirmed live. **Still open: catalog browsing and general play on a real device**
-  have not been re-verified since. Everything else in this list has been driven in a
-  browser pane at 320/360/375px, which is a stand-in for a phone, not a phone.
+  and confirmed live. **Still open: catalog browsing and general play on a real
+  device** have not been re-verified since, and the catalog card is precisely what
+  changed most on 2026-07-26. Everything in the list above has been driven in a
+  browser pane at 320/360/375px in both locales, which is a stand-in for a phone, not
+  a phone: it has a mouse, so `(pointer: coarse)` never matched, and every touch rule
+  here was verified through its `max-width` half.
 
 ### M1 — PWA 📋 (push already done; only the shell remains)
 

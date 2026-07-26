@@ -1012,6 +1012,9 @@ button:disabled {
 }
 
 .preview-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   padding: 7px 10px;
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 999px;
@@ -1074,10 +1077,113 @@ button:disabled {
   border-color: var(--turquoise);
 }
 
+/* "Keyboard only", from the catalog's derived `touch` class. Hidden by default and
+   revealed only for a finger below — on a mouse it is not a warning, it is a
+   description of the normal case. Warning-coloured rather than neutral because it
+   is the one badge on a card that says "don't tap Play". */
+.touch-warning-pill {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  color: var(--error);
+  background: rgba(6, 10, 14, 0.86);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 107, 107, 0.55);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+/* The two overlay controls on a card are sized for a mouse: the preview toggle is a
+   28px pill and each moment thumbnail is 42x26. Both are real tap targets, so on a
+   finger they grow to the 44px iOS HIG floor. Gated rather than applied everywhere
+   because at grid density a 44px pill and four 44px thumbnails on top of every
+   preview is a lot of furniture for a pointer that doesn't need it. Both conditions
+   are listed: `pointer: coarse` catches a large tablet, the width catches a phone
+   (and a narrow desktop window, harmlessly). */
+@media (pointer: coarse), (max-width: 768px) {
+  /* Icon-only, because the labelled pill at 44px tall is 127px wide in English and
+     wider in Polish — enough to reach the moment thumbnails on the far side of a
+     351px card. A round 44px button clears them at every label length. */
+  .preview-toggle {
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+  }
+
+  .preview-toggle .btn-label {
+    display: none;
+  }
+
+  .catalog-moment {
+    width: 48px;
+    height: 44px;
+  }
+
+  /* A 320px card is only 167px tall, and the row growing from 26px to 44px pushed
+     its bottom edge into the title. Tuck it up against the genre chip instead: the
+     free band runs from that chip's bottom (29px) to the title's top (79px on the
+     shortest card), and 33px puts the row inside it with the narrowest card as the
+     binding case — every wider card has more room below. */
+  .catalog-moments {
+    top: 33px;
+  }
+
+  .touch-warning-pill {
+    display: inline-flex;
+  }
+}
+
+/* Below 360px the card is a 296x167 box already carrying a 44px preview toggle, the
+   AI disclosure, a genre chip, a title that wraps to two lines, and a 44px Play
+   button. Two things give way rather than fight over it. */
+@media (max-width: 360px) {
+  /* The frame picker is the only thing on the card that is a convenience rather than
+     information, and at thumb size it covers the gameplay it is advertising — so the
+     smallest phones lose it instead of gaining four more 44px boxes stacked on the
+     art. It comes back above 360px, where the taller card has the room. */
+  .catalog-moments {
+    display: none;
+  }
+
+  /* Side by side, not stacked: at 44px the toggle made this column 68px tall, and a
+     title that wrapped to two lines climbed under it — the AI disclosure ended up
+     drawn over the first word of the title, which is exactly the thing a mandatory
+     disclosure must never do. A row ends 103px in, which clears both a two-line title
+     below it and the genre chip, which the 40% cap keeps to the right of that. */
+  .catalog-badges-top-left {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  /* A card carrying the keyboard-only warning has a third badge in that row, which
+     at 320px reaches across to where the genre chip starts. Genre is the least
+     important thing on a card — the art and the title say more — and it is the only
+     other claimant on that corner, so on the rare card that has to warn somebody, it
+     is what gives way. Scoped with :has() so every other card keeps its chip. */
+  .catalog-media:has(.touch-warning-pill) .genre-pill {
+    display: none;
+  }
+}
+
 .genre-pill {
   position: absolute;
   top: 10px;
   right: 10px;
+  /* The genre is agent-authored and runs as long as it likes ("arcade racing
+     (pseudo-3d)"). Right-anchored, it grew leftwards across the card until it was
+     drawn over the preview toggle in the opposite corner — visible on 9 of 83 cards
+     at desktop width. 40% leaves room for the toggle at its longest (the Polish
+     "Obejrzyj podgląd") on the narrowest card the grid produces. */
+  max-width: 40%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   color: #fff;
   background: rgba(6, 10, 14, 0.82);
   -webkit-backdrop-filter: blur(8px);
@@ -3832,6 +3938,22 @@ body.player-open {
 .site-footer a:focus-visible {
   color: var(--turquoise);
   border-bottom-color: var(--turquoise);
+}
+
+/* These four are navigation, not prose — and one of them is the DSA illegal-content
+   report route, which has to be reachable on the device most people browse from. At
+   15px tall they were the last sub-thumb controls on the page. Only the nav list is
+   grown: the links inside the operator and AI-notice sentences stay inline, because
+   there is no way to give a word in a paragraph a 44px box without wrecking the
+   paragraph, and an inline link is not what the guideline is about. */
+@media (pointer: coarse), (max-width: 768px) {
+  .site-footer__links a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 
 .site-footer__ai,

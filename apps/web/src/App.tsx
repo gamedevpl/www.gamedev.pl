@@ -191,6 +191,9 @@ export function App() {
         // nagging someone to rotate for a game whose spec we haven't read yet.
         // The effect above swaps in the real entry once the catalog lands.
         orientation: 'any',
+        // Same reasoning: unknown, not "keyboard only". The badge is a warning, and
+        // a deep link is no reason to show one.
+        touch: null,
       };
       setStageContent({ type: 'catalog', game: initialGame });
       document.getElementById('stage')?.scrollIntoView?.({ behavior: 'smooth' });
