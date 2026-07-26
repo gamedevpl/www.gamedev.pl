@@ -111,8 +111,11 @@ update expiresAt --collection-group=visitEvents`). A TTL policy is scoped per
   - `startVisitTracking` patches `history.pushState` to observe in-app navigation,
     because `navigate()` fires no event. Replace with a `gdpl:navigate` window event
     emitted by `App` when that lands, then delete the patch.
-- **Nothing reads the visit stream yet** — the events accumulate but no aggregate or
-  admin view exposes them. Closing a write gap without a read is only half the job.
+- ~~Nothing reads the visit stream~~ — **closed 2026-07-26**: `summarizeVisitFunnel`
+  ([visit-funnel.ts](../../../apps/api/src/visit-funnel.ts)) behind
+  `GET /api/admin/telemetry/visits`, rendered by `VisitFunnelPanel` beside game health
+  on the operator page. Both admin reads share one partition-scan budget, so the two
+  views cannot drift in how they report truncation.
 - **Creator funnel starts too late** — nothing is recorded before the submission
   document exists; the prompt → sign-in → submit steps are dark. The visit stream is the
   natural home for the pre-submission steps (it is already anonymous and visit-scoped).
