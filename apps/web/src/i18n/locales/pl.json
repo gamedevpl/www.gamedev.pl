@@ -181,7 +181,7 @@
       "abandonConfirm": "Potwierdź zatrzymanie"
     },
     "playtest": {
-      "hint": "Zagraj, wstrzymaj w momencie wartym zmiany i wyślij prośbę z tą klatką oraz sygnałami z sesji.",
+      "hint": "Zagraj, wstrzymaj w momencie wartym zmiany i wyślij prośbę z tym widokiem oraz sygnałami z sesji.",
       "loading": "Ładujemy grywalny build…",
       "loadError": "Nie ma jeszcze grywalnego buildu. Sprawdź zakładkę Build i spróbuj, gdy pojawi się podgląd.",
       "pause": "Wstrzymaj i zanotuj",
@@ -189,7 +189,7 @@
       "played": "{{seconds}}s gry",
       "errorCount": "{{count}} błędów",
       "promptTitle": "Co tu zmienić?",
-      "promptHint": "Notatka idzie do agenta buildu (szkic) albo otwiera zgłoszenie ulepszenia (opublikowane). Wstrzymana klatka i sygnały sesji jadą jako dane.",
+      "promptHint": "Notatka idzie do agenta buildu (szkic) albo otwiera zgłoszenie ulepszenia (opublikowane). Wstrzymany widok i sygnały sesji jadą jako dane.",
       "shotCaption": "Widok z momentu wstrzymania",
       "noShot": "Nie udało się przechwycić widoku — sam tekst i tak zostanie wysłany.",
       "placeholder": "np. Kolec przy prawej krawędzi jest niesprawiedliwy — dodaj checkpoint tuż przed nim…",

@@ -19,6 +19,29 @@ import { submitImprovement, type StudioGame } from './studioApi';
  * canvas (no allow-same-origin) — capture runs inside the player bridge.
  */
 
+/** Tiny canvas toy used only when DEV_SEED_STUDIO left no real preview HTML. */
+const DEV_PLAYTEST_HTML = `<!doctype html><html><head><meta charset="utf-8"><title>Studio playtest</title>
+<style>html,body{margin:0;height:100%;background:#0b1018;overflow:hidden}canvas{display:block;width:100%;height:100%}</style>
+</head><body><canvas id="game"></canvas>
+<script>
+(function(){
+  var c=document.getElementById('game'),x=c.getContext('2d'),t=0;
+  function resize(){c.width=innerWidth;c.height=innerHeight;}
+  addEventListener('resize',resize);resize();
+  (function loop(){
+    t+=0.02;x.fillStyle='#0b1018';x.fillRect(0,0,c.width,c.height);
+    for(var i=0;i<12;i++){
+      var a=t+i*0.5,r=40+i*8;
+      x.beginPath();
+      x.arc(c.width/2+Math.cos(a)*r,c.height/2+Math.sin(a*1.3)*r,6,0,Math.PI*2);
+      x.fillStyle='hsl('+(i*28+t*40)+' 70% 55%)';x.fill();
+    }
+    x.fillStyle='#9fe870';x.font='600 16px system-ui';x.fillText('Studio playtest demo',16,28);
+    requestAnimationFrame(loop);
+  })();
+})();
+</script></body></html>`;
+
 type StudioPlaytestPanelProps = {
   game: StudioGame;
   published: boolean;
@@ -81,6 +104,13 @@ export function StudioPlaytestPanel({ game, published }: StudioPlaytestPanelProp
       })
       .catch(() => {
         if (cancelled) return;
+        // Local Studio seed has submissions but no games-repo HTML. Fall back to a
+        // tiny canvas toy in Vite so Pause & note can still be exercised offline.
+        if (import.meta.env.DEV) {
+          setHtml(DEV_PLAYTEST_HTML);
+          setLoading(false);
+          return;
+        }
         setLoadError(t('studioPanel.playtest.loadError'));
         setLoading(false);
       });
