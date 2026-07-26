@@ -336,6 +336,11 @@
     "contents": "Spis treści",
     "effective": "Obowiązuje od {{date}}"
   },
+  "notFound": {
+    "title": "Nie znaleziono strony",
+    "copy": "Ten link nie prowadzi nigdzie na gamedev.pl. Może być literówka, albo strona została przeniesiona.",
+    "home": "Wróć do katalogu"
+  },
   "footer": {
     "legalNav": "Informacje prawne",
     "reportIllegal": "Zgłoś nielegalne treści",
@@ -410,6 +415,7 @@
     "draft": "Gra w trakcie tworzenia",
     "join": "Dołącz do gry",
     "health": "Telemetria",
+    "notFound": "Nie znaleziono strony",
     "playNamed": "Graj: {{title}}",
     "draftNamed": "Szkic: {{title}}",
     "statusNamed": "Status · {{title}}"

@@ -336,6 +336,11 @@
     "contents": "Contents",
     "effective": "In effect since {{date}}"
   },
+  "notFound": {
+    "title": "Page not found",
+    "copy": "That link doesn't go anywhere on gamedev.pl. It may be mistyped, or the page may have moved.",
+    "home": "Back to the catalog"
+  },
   "footer": {
     "legalNav": "Legal information",
     "reportIllegal": "Report illegal content",
@@ -410,6 +415,7 @@
     "draft": "A game in the making",
     "join": "Join the game",
     "health": "Telemetry",
+    "notFound": "Page not found",
     "playNamed": "Play {{title}}",
     "draftNamed": "Draft {{title}}",
     "statusNamed": "Status · {{title}}"

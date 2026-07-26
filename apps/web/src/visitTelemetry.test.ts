@@ -113,6 +113,7 @@ describe('route kinds follow the real router', () => {
     ['/terms', 'legal'],
     ['/status/some-token', 'status'],
     ['/health', 'health'],
+    ['/nope', 'notFound'],
   ])('reads %s as %s', (pathname, expected) => {
     expect(routeKind(parsePathRoute(pathname, '').view)).toBe(expected);
   });

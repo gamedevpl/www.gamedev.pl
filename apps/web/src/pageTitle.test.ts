@@ -15,6 +15,7 @@ const copy: DocumentTitleCopy = {
   health: 'Telemetry',
   privacy: 'Privacy Policy',
   terms: 'Terms of Service',
+  notFound: 'Page not found',
   playNamed: 'Play {{title}}',
   draftNamed: 'Draft {{title}}',
   statusNamed: 'Status · {{title}}',
@@ -86,5 +87,6 @@ describe('resolveDocumentTitle', () => {
     expect(resolveDocumentTitle({ view: 'health' }, { copy })).toBe('Telemetry — Gamedev.pl');
     expect(resolveDocumentTitle({ view: 'legal', doc: 'privacy' }, { copy })).toBe('Privacy Policy — Gamedev.pl');
     expect(resolveDocumentTitle({ view: 'legal', doc: 'terms' }, { copy })).toBe('Terms of Service — Gamedev.pl');
+    expect(resolveDocumentTitle({ view: 'notFound' }, { copy })).toBe('Page not found — Gamedev.pl');
   });
 });

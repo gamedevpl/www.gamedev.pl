@@ -75,7 +75,15 @@ No `/game/` segment — everything playable is a game; `/play` (and the `/ay` /
 `/ai` aliases) is enough. Emitters always write `/play/<slug>`.
 
 Slug validation stays as today: lowercase kebab-case only
-(`^[a-z0-9]+(?:-[a-z0-9]+)*$`). Unknown / invalid paths → home (same as today).
+(`^[a-z0-9]+(?:-[a-z0-9]+)*$`). Unknown / invalid paths → `{ view: 'notFound' }`
+(a dedicated 404 page — not a silent redirect to home).
+
+**HTTP status (proper 404, not soft):** the document request for an unknown path
+answers **404** while still serving `index.html`, so crawlers and `curl -I` see a
+real miss and the SPA can still render `NotFoundPage`. Known deep links
+(`/play/<slug>`, `/status/<token>`, `/join/<code>`, …) stay **200**. Missing
+extension-bearing files (`/assets/…`, `/sw.js`) stay hard 404s without the HTML
+shell. See `apps/api/src/spa-paths.ts` (also wired into Vite for local dev).
 
 **Reserved:** anything under `/api/*` is the API. Do not add SPA routes that collide with
 static files (`/assets/*`, `/icons/*`, `/sw.js`, `/offline.html`, …).
@@ -101,9 +109,11 @@ This keeps the existing `AppRoute` type and all the stage/theater effects that k
 
 ### Vite / Cloud Run
 
-- **Dev:** Vite already serves `index.html` for unmatched paths; no config change expected.
-- **Prod:** SPA fallback already exists. Update the comment that claims the app is
-  hash-routed; behaviour stays "non-`/api` GET → `index.html`".
+- **Dev:** Vite plugin `spa-proper-404` mirrors production status codes (known deep
+  links → 200, unknown → 404 + shell).
+- **Prod:** Fastify `setNotFoundHandler` uses `isKnownSpaShellPath` /
+  `looksLikeStaticAsset` (`apps/api/src/spa-paths.ts`) so unknown paths are proper
+  HTTP 404s with `index.html`, not soft 200s.
 - **Canonical host redirect** already preserves path + query (`canonical-host.test.ts`).
 
 ---

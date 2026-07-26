@@ -22,7 +22,10 @@ export type AppRoute =
   | { view: 'health' }
   // Privacy policy and terms. Reachable without a session — someone deciding whether
   // to sign in has to be able to read what signing in would mean first.
-  | { view: 'legal'; doc: LegalDocId };
+  | { view: 'legal'; doc: LegalDocId }
+  // Unknown / invalid path. Kept as its own view so a typo or stale bookmark shows a
+  // real 404 instead of silently dumping the visitor on the home catalog.
+  | { view: 'notFound' };
 
 // Game slugs are lowercase kebab-case (matches the games-repo catalog); keep the
 // route pattern strict so arbitrary path segments can't masquerade as a play route.
@@ -34,7 +37,7 @@ const PLAY_PREFIX_PATTERN = /^\/(play|ay|ai)\/([^/]+)$/;
 
 /**
  * Parse the SPA route from pathname (+ optional hash for the join credential).
- * Unknown / invalid paths fall back to home.
+ * Unknown / invalid paths become `notFound` (not home) so the URL stays visible.
  */
 export function parsePathRoute(pathname: string, hash = ''): AppRoute {
   const normalizedPath = pathname.startsWith('/') ? pathname : `/${pathname}`;
@@ -83,7 +86,7 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
     return { view: 'join', code: joinMatch[1], token: fragment };
   }
 
-  return { view: 'home' };
+  return { view: 'notFound' };
 }
 
 export function statusPath(token: string): string {

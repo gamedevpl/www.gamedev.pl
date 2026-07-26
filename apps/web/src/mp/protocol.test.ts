@@ -73,11 +73,11 @@ describe('join route', () => {
     });
   });
 
-  it('falls back home for malformed join links', () => {
-    expect(parsePathRoute('/join/lower1', '#token')).toEqual({ view: 'home' });
-    expect(parsePathRoute('/join/TOOLONG9', '#token')).toEqual({ view: 'home' });
-    expect(parsePathRoute('/join/K7M3QP')).toEqual({ view: 'home' });
-    expect(parsePathRoute('/join/K7M3QP/tok/en')).toEqual({ view: 'home' });
+  it('maps malformed join links to notFound', () => {
+    expect(parsePathRoute('/join/lower1', '#token')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/join/TOOLONG9', '#token')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/join/K7M3QP')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/join/K7M3QP/tok/en')).toEqual({ view: 'notFound' });
   });
 
   it('still parses the existing routes', () => {
