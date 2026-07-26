@@ -17,8 +17,8 @@ describe('parsePathRoute', () => {
     expect(parsePathRoute('/')).toEqual({ view: 'home' });
   });
 
-  it('parses a status token', () => {
-    expect(parsePathRoute('/status/abc123')).toEqual({ view: 'status', token: 'abc123' });
+  it('parses a status token into Creator Studio (legacy alias)', () => {
+    expect(parsePathRoute('/status/abc123')).toEqual({ view: 'studio', token: 'abc123' });
   });
 
   it('parses a published-game permalink', () => {
@@ -131,8 +131,8 @@ describe('path builders', () => {
     expect(parsePathRoute(draftPath('space-runner'))).toEqual({ view: 'draft', slug: 'space-runner' });
   });
 
-  it('percent-encodes status tokens', () => {
-    expect(statusPath('a b')).toBe('/status/a%20b');
+  it('percent-encodes status tokens into studio paths', () => {
+    expect(statusPath('a b')).toBe('/studio/a%20b');
   });
 
   it('builds a studio path that round-trips', () => {

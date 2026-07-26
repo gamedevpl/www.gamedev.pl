@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+<<<<<<< HEAD
 import { generateGame, type GeneratedGame, type GenerateGameApiError } from './api.js';
 import { fetchCatalog, type CatalogEntry } from './catalog.js';
 import { GameTheater } from './GameTheater.js';
@@ -13,6 +14,20 @@ import { GameHealthView } from './GameHealthView.js';
 import { PixelIcon } from './PixelIcon.js';
 import { SubmissionStatusView } from './SubmissionStatusView.js';
 import { CreatorQA, type QAQuestion } from './CreatorQA.js';
+=======
+import { generateGame, type GeneratedGame, type GenerateGameApiError } from './api';
+import { fetchCatalog, type CatalogEntry } from './catalog';
+import { GameTheater } from './GameTheater';
+import { NavHeader } from './NavHeader';
+import { HeroPromptSection } from './HeroPromptSection';
+import { ArcadeCatalog } from './ArcadeCatalog';
+import { MyGamesRail } from './MyGamesRail';
+import { CreatorStudioView } from './CreatorStudioView';
+import { DraftView } from './DraftView';
+import { GameHealthView } from './GameHealthView';
+import { PixelIcon } from './PixelIcon';
+import { CreatorQA, type QAQuestion } from './CreatorQA';
+>>>>>>> ce57e9b6 (feat(studio): unify build status + playtest pause-and-prompt)
 import {
   canonicalPlayPath,
   NAVIGATE_EVENT,
@@ -119,13 +134,14 @@ export function App() {
         ? (catalogEntries.find((game) => game.slug === route.slug)?.title ??
           (stageContent?.type === 'catalog' && stageContent.game.slug === route.slug ? stageContent.game.title : null))
         : null;
-    const statusTitle =
-      route.view === 'status' ? (savedSpecs.find((spec) => spec.token === route.token)?.title ?? null) : null;
+    const studioTitle =
+      route.view === 'studio' && route.token
+        ? (savedSpecs.find((spec) => spec.token === route.token)?.title ?? null)
+        : null;
 
     return resolveDocumentTitle(route, {
       copy: {
         home: t('pageTitle.home'),
-        status: t('pageTitle.status'),
         draft: t('pageTitle.draft'),
         join: t('pageTitle.join'),
         health: t('pageTitle.health'),
@@ -135,10 +151,10 @@ export function App() {
         notFound: t('pageTitle.notFound'),
         playNamed: t('pageTitle.playNamed'),
         draftNamed: t('pageTitle.draftNamed'),
-        statusNamed: t('pageTitle.statusNamed'),
+        studioNamed: t('pageTitle.studioNamed'),
       },
       playTitle,
-      statusTitle,
+      studioTitle,
       draftTitle: route.view === 'draft' ? draftTitle : null,
       // Only surface ephemeral theaters while still on home — `/play/<slug>` already
       // carries its own title via playTitle, and leaving home must restore the home title.
@@ -582,21 +598,13 @@ export function App() {
             selectedToken={route.token}
             onNavigate={navigate}
             onPlay={(slug) => navigate(playPath(slug))}
+            onRetryConcept={(concept) => {
+              setRetryPrompt(concept);
+              setPendingScrollTarget('hero-prompt');
+            }}
           />
         ) : route.view === 'draft' ? (
           <DraftView slug={route.slug} onExit={() => navigate('/')} onDraftTitle={setDraftTitle} />
-        ) : route.view === 'status' ? (
-          <SubmissionStatusView
-            token={route.token}
-            submittedTitle={savedSpecs.find((spec) => spec.token === route.token)?.title}
-            submittedConcept={savedSpecs.find((spec) => spec.token === route.token)?.concept}
-            submittedAt={savedSpecs.find((spec) => spec.token === route.token)?.createdAt}
-            onRetry={(concept) => {
-              setRetryPrompt(concept);
-              setPendingScrollTarget('hero-prompt');
-              navigate('/');
-            }}
-          />
         ) : (
           <>
             <div id="hero-prompt">

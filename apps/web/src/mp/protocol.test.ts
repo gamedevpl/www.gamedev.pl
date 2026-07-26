@@ -82,6 +82,6 @@ describe('join route', () => {
 
   it('still parses the existing routes', () => {
     expect(parsePathRoute('/')).toEqual({ view: 'home' });
-    expect(parsePathRoute('/status/abc')).toEqual({ view: 'status', token: 'abc' });
+    expect(parsePathRoute('/status/abc')).toEqual({ view: 'studio', token: 'abc' });
   });
 });

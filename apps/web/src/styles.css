@@ -5359,6 +5359,100 @@ body.player-open {
   max-width: 36rem;
 }
 
+.studio-build .status-panel.is-embedded {
+  box-shadow: none;
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+
+.studio-playtest-hint,
+.studio-muted {
+  color: var(--muted);
+  margin: 0 0 0.75rem;
+}
+
+.studio-playtest-stage {
+  position: relative;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #0b1018;
+  min-height: 280px;
+  aspect-ratio: 16 / 10;
+}
+
+.studio-playtest-stage .game-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+
+.studio-playtest-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border-top: 1px solid var(--panel-border);
+  background: var(--panel-card);
+}
+
+.studio-playtest-meta {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.studio-playtest-prompt {
+  margin-top: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.studio-playtest-prompt h3 {
+  margin: 0;
+}
+
+.studio-playtest-prompt > p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.studio-playtest-shot {
+  margin: 0;
+  max-width: 22rem;
+}
+
+.studio-playtest-shot img {
+  display: block;
+  width: 100%;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: #000;
+}
+
+.studio-playtest-shot figcaption {
+  margin-top: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.studio-playtest-errors {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.studio-playtest-errors code {
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
 .my-games-header-actions {
   display: flex;
   align-items: center;

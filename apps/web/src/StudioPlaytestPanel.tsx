@@ -1,0 +1,214 @@
+import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { fetchPublishedGame } from './catalog';
+import { GameFrame } from './GameFrame';
+import { useCreatorPlaytest, type PlaytestInstrumentation } from './gamePlayer';
+import { PixelIcon } from './PixelIcon';
+import {
+  getSubmissionPreview,
+  submitFeedback,
+  type FeedbackContext,
+  type SubmissionApiError,
+} from './submissionApi';
+import { submitImprovement, type StudioGame } from './studioApi';
+
+/**
+ * Creator Studio playtest: play the draft/live build, pause on a moment worth
+ * talking about, and send a change request with the paused frame + a small
+ * instrumentation digest attached. The parent cannot screenshot the sandboxed
+ * canvas (no allow-same-origin) — capture runs inside the player bridge.
+ */
+
+type StudioPlaytestPanelProps = {
+  game: StudioGame;
+  published: boolean;
+};
+
+function toContext(
+  pngBase64: string | null | undefined,
+  instrumentation: PlaytestInstrumentation,
+): FeedbackContext | undefined {
+  const hasShot = Boolean(pngBase64);
+  const hasSignals =
+    instrumentation.playSeconds > 0 ||
+    instrumentation.lastAliveFrames != null ||
+    instrumentation.errors.length > 0 ||
+    instrumentation.progress.length > 0;
+  if (!hasShot && !hasSignals) return undefined;
+  return {
+    ...(pngBase64 ? { screenshotPng: pngBase64 } : {}),
+    instrumentation: {
+      playSeconds: instrumentation.playSeconds,
+      lastAliveFrames: instrumentation.lastAliveFrames,
+      errors: instrumentation.errors,
+      progress: instrumentation.progress,
+    },
+  };
+}
+
+export function StudioPlaytestPanel({ game, published }: StudioPlaytestPanelProps) {
+  const { t } = useTranslation();
+  const frameRef = useRef<HTMLIFrameElement | null>(null);
+  const [html, setHtml] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [text, setText] = useState('');
+  const [sendState, setSendState] = useState<'idle' | 'sending' | 'sent'>('idle');
+  const [sendError, setSendError] = useState<string | null>(null);
+
+  const active = Boolean(html);
+  const { paused, snapshot, instrumentation, pause, resume, clearSnapshot } = useCreatorPlaytest(
+    frameRef,
+    active,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    setHtml(null);
+    setLoadError(null);
+    setLoading(true);
+    clearSnapshot();
+
+    const load = published && game.slug
+      ? fetchPublishedGame(game.slug).then((doc) => doc.html)
+      : getSubmissionPreview(game.token).then((preview) => preview.html);
+
+    load
+      .then((documentHtml) => {
+        if (cancelled) return;
+        setHtml(documentHtml);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setLoadError(t('studioPanel.playtest.loadError'));
+        setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [game.token, game.slug, published, t, clearSnapshot]);
+
+  const attachedPng = snapshot?.pngBase64 ?? null;
+  const trimmed = text.trim();
+
+  const send = async () => {
+    if (trimmed.length < 10) return;
+    setSendState('sending');
+    setSendError(null);
+    const context = toContext(attachedPng, snapshot?.instrumentation ?? instrumentation);
+    try {
+      if (published) {
+        await submitImprovement(game.token, trimmed, context);
+      } else {
+        await submitFeedback(game.token, trimmed, context);
+      }
+      setSendState('sent');
+      setText('');
+      clearSnapshot();
+      if (paused) resume();
+    } catch (err) {
+      const apiErr = err as SubmissionApiError;
+      const message = err instanceof Error ? err.message : '';
+      if (message === 'content_rejected') {
+        setSendError(t('errors.contentRejected.other'));
+      } else if (message.includes('quota')) {
+        setSendError(t('studioPanel.improve.quota'));
+      } else if (apiErr.status === 429 || message.includes('too many')) {
+        setSendError(t('studioPanel.improve.rateLimit'));
+      } else {
+        setSendError(t('studioPanel.improve.error'));
+      }
+      setSendState('idle');
+    }
+  };
+
+  return (
+    <div className="studio-playtest">
+      <p className="studio-playtest-hint">{t('studioPanel.playtest.hint')}</p>
+
+      {loading ? <p className="studio-muted">{t('studioPanel.playtest.loading')}</p> : null}
+      {loadError ? <p className="error">{loadError}</p> : null}
+
+      {html ? (
+        <div className={`studio-playtest-stage${paused ? ' is-paused' : ''}`}>
+          <GameFrame frameRef={frameRef} title={game.title} html={html} embed />
+          <div className="studio-playtest-controls">
+            {paused ? (
+              <button type="button" className="secondary-btn" onClick={resume}>
+                <PixelIcon name="play" size={12} /> {t('studioPanel.playtest.resume')}
+              </button>
+            ) : (
+              <button type="button" className="primary-btn" onClick={pause}>
+                <PixelIcon name="pause" size={12} /> {t('studioPanel.playtest.pause')}
+              </button>
+            )}
+            <span className="studio-playtest-meta">
+              {t('studioPanel.playtest.played', { seconds: instrumentation.playSeconds })}
+              {instrumentation.errors.length > 0
+                ? ` · ${t('studioPanel.playtest.errorCount', { count: instrumentation.errors.length })}`
+                : null}
+            </span>
+          </div>
+        </div>
+      ) : null}
+
+      {(paused || snapshot) && (
+        <div className="studio-playtest-prompt">
+          <h3>{t('studioPanel.playtest.promptTitle')}</h3>
+          <p>{t('studioPanel.playtest.promptHint')}</p>
+
+          {attachedPng ? (
+            <figure className="studio-playtest-shot">
+              <img src={`data:image/png;base64,${attachedPng}`} alt="" />
+              <figcaption>{t('studioPanel.playtest.shotCaption')}</figcaption>
+            </figure>
+          ) : (
+            <p className="studio-muted">{t('studioPanel.playtest.noShot')}</p>
+          )}
+
+          {(snapshot?.instrumentation ?? instrumentation).errors.length > 0 ? (
+            <ul className="studio-playtest-errors">
+              {(snapshot?.instrumentation ?? instrumentation).errors.slice(-3).map((error) => (
+                <li key={error}>
+                  <code>{error}</code>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          <textarea
+            className="status-feedback-input"
+            value={text}
+            onChange={(event) => {
+              setText(event.target.value);
+              if (sendState === 'sent') setSendState('idle');
+            }}
+            placeholder={t('studioPanel.playtest.placeholder')}
+            rows={3}
+            maxLength={2000}
+          />
+          <div className="status-feedback-actions">
+            <button
+              type="button"
+              className="primary-btn"
+              onClick={() => void send()}
+              disabled={sendState === 'sending' || trimmed.length < 10}
+            >
+              {sendState === 'sending'
+                ? t('studioPanel.improve.sending')
+                : t('studioPanel.playtest.submit')}
+            </button>
+            {sendState === 'sent' ? (
+              <span className="status-feedback-sent">
+                <PixelIcon name="check" size={13} /> {t('studioPanel.improve.sent')}
+              </span>
+            ) : null}
+          </div>
+          {sendError ? <p className="error">{sendError}</p> : null}
+        </div>
+      )}
+    </div>
+  );
+}

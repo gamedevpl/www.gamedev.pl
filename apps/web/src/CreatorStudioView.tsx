@@ -5,13 +5,15 @@ import { AuthModal } from './AuthModal';
 import type { GameHealth } from './healthApi';
 import { PixelIcon, type PixelIconName } from './PixelIcon';
 import { formatRelativeTime } from './relativeTime';
-import { statusPath, studioPath } from './router';
+import { studioPath } from './router';
 import {
   abandonSubmission,
   submitFeedback,
   type SubmissionApiError,
   type SubmissionState,
 } from './submissionApi';
+import { StudioPlaytestPanel } from './StudioPlaytestPanel';
+import { SubmissionStatusView } from './SubmissionStatusView';
 import {
   fetchStudioGames,
   fetchStudioHealth,
@@ -23,9 +25,9 @@ import {
 /**
  * Creator control panel (docs/improvement-loop-plan.md IL-2 creator surface).
  *
- * One place to see owned games, read play health, revise a draft, or request an
- * improvement on a live game. Player-feedback analysis is stubbed — capture for
- * that signal is still planned (IL-1 thumbs / written feedback).
+ * One place for the whole creator loop: shelf of owned games, the draft Build
+ * (former status / "dev studio" page), playtest-with-pause prompting, play
+ * health, and post-publish improve. Player-feedback analysis is stubbed.
  */
 
 const STATUS_ICONS: Record<SubmissionState, PixelIconName> = {
@@ -40,14 +42,21 @@ const STATUS_ICONS: Record<SubmissionState, PixelIconName> = {
 
 const WINDOWS = [1, 7, 30];
 
-type StudioTab = 'overview' | 'stats' | 'improve' | 'feedback';
+type StudioTab = 'overview' | 'build' | 'playtest' | 'stats' | 'improve' | 'feedback';
 
 type CreatorStudioViewProps = {
   /** Deep-link into a specific game when present. */
   selectedToken?: string;
   onNavigate: (path: string) => void;
   onPlay: (slug: string) => void;
+  /** Loads a failed/abandoned concept back into the home hero prompt. */
+  onRetryConcept?: (concept: string) => void;
 };
+
+function defaultTabFor(game: StudioGame | null): StudioTab {
+  if (!game) return 'overview';
+  return isPublished(game) ? 'overview' : 'build';
+}
 
 function formatSeconds(seconds: number): string {
   if (seconds < 60) return `${Math.round(seconds)}s`;
@@ -69,7 +78,12 @@ function isPublished(game: StudioGame): boolean {
   return Boolean(game.publishedAt && game.slug) || game.lastKnownStatus === 'published';
 }
 
-export function CreatorStudioView({ selectedToken, onNavigate, onPlay }: CreatorStudioViewProps) {
+export function CreatorStudioView({
+  selectedToken,
+  onNavigate,
+  onPlay,
+  onRetryConcept,
+}: CreatorStudioViewProps) {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const [authOpen, setAuthOpen] = useState(false);
@@ -130,9 +144,22 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay }: Creator
   );
   const selectedHealth = selectedGame ? healthFor(selectedGame, healthRows) : null;
 
+  useEffect(() => {
+    if (selectedGame) {
+      setTab((current) => {
+        // Keep the user on a tab that still exists for this game.
+        if (current === 'build' && isPublished(selectedGame)) return 'overview';
+        if (current === 'stats' && !isPublished(selectedGame)) return 'build';
+        if (current === 'feedback' && !isPublished(selectedGame)) return 'improve';
+        return current;
+      });
+    }
+  }, [selectedGame]);
+
   function selectGame(token: string) {
+    const next = games.find((game) => game.token === token) ?? null;
     setSelected(token);
-    setTab('overview');
+    setTab(defaultTabFor(next));
     onNavigate(studioPath(token));
   }
 
@@ -223,9 +250,17 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay }: Creator
                 {(
                   [
                     ['overview', 'studioPanel.tabs.overview'],
-                    ['stats', 'studioPanel.tabs.stats'],
+                    ...(!isPublished(selectedGame)
+                      ? ([['build', 'studioPanel.tabs.build']] as const)
+                      : []),
+                    ['playtest', 'studioPanel.tabs.playtest'],
+                    ...(isPublished(selectedGame)
+                      ? ([['stats', 'studioPanel.tabs.stats']] as const)
+                      : []),
                     ['improve', 'studioPanel.tabs.improve'],
-                    ['feedback', 'studioPanel.tabs.feedback'],
+                    ...(isPublished(selectedGame)
+                      ? ([['feedback', 'studioPanel.tabs.feedback']] as const)
+                      : []),
                   ] as const
                 ).map(([id, labelKey]) => (
                   <button
@@ -246,7 +281,8 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay }: Creator
                   <OverviewTab
                     game={selectedGame}
                     health={selectedHealth}
-                    onOpenStatus={() => onNavigate(statusPath(selectedGame.token))}
+                    onOpenBuild={() => setTab('build')}
+                    onOpenPlaytest={() => setTab('playtest')}
                     onPlay={() => selectedGame.slug && onPlay(selectedGame.slug)}
                     onRemoved={(token) => {
                       setGames((prev) => prev.filter((game) => game.token !== token));
@@ -254,6 +290,27 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay }: Creator
                       onNavigate(studioPath());
                     }}
                   />
+                ) : null}
+
+                {tab === 'build' && !isPublished(selectedGame) ? (
+                  <div className="studio-build">
+                    <SubmissionStatusView
+                      token={selectedGame.token}
+                      embedded
+                      onRetry={
+                        onRetryConcept
+                          ? (concept) => {
+                              onRetryConcept(concept);
+                              onNavigate('/');
+                            }
+                          : undefined
+                      }
+                    />
+                  </div>
+                ) : null}
+
+                {tab === 'playtest' ? (
+                  <StudioPlaytestPanel game={selectedGame} published={isPublished(selectedGame)} />
                 ) : null}
 
                 {tab === 'stats' ? (
@@ -288,13 +345,15 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay }: Creator
 function OverviewTab({
   game,
   health,
-  onOpenStatus,
+  onOpenBuild,
+  onOpenPlaytest,
   onPlay,
   onRemoved,
 }: {
   game: StudioGame;
   health: GameHealth | null;
-  onOpenStatus: () => void;
+  onOpenBuild: () => void;
+  onOpenPlaytest: () => void;
   onPlay: () => void;
   onRemoved: (token: string) => void;
 }) {
@@ -355,17 +414,19 @@ function OverviewTab({
             <PixelIcon name="play" size={12} /> {t('myGames.play')}
           </button>
         ) : (
-          <button type="button" className="primary-btn" onClick={onOpenStatus}>
-            <PixelIcon name="eye" size={12} /> {t('studioPanel.overview.openBuild')}
+          <button type="button" className="primary-btn" onClick={onOpenBuild}>
+            <PixelIcon name="wrench" size={12} /> {t('studioPanel.overview.openBuild')}
           </button>
         )}
-
+        <button type="button" className="secondary-btn" onClick={onOpenPlaytest}>
+          <PixelIcon name="play" size={12} /> {t('studioPanel.overview.playtest')}
+        </button>
         {!published && game.lastKnownStatus !== 'abandoned' ? (
           <button
             type="button"
-            className={`secondary-btn${abandonArmed ? ' is-danger' : ''}`}
-            disabled={abandoning}
+            className="ghost-btn"
             onClick={() => void handleAbandon()}
+            disabled={abandoning}
           >
             {abandonArmed ? t('studioPanel.overview.abandonConfirm') : t('studioPanel.overview.abandon')}
           </button>

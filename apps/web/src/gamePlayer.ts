@@ -44,14 +44,69 @@ const BRIDGE = `(function(){
   addEventListener('unhandledrejection',function(e){
     var r=e&&e.reason;post({type:'error',message:String((r&&r.message)||r||'unhandled rejection').slice(0,200)});
   });
-  var frames=0;
+  var frames=0,paused=false,overlay=null,lastAlive=0;
   if('requestAnimationFrame'in window){(function tick(){frames++;requestAnimationFrame(tick);})();}
-  setInterval(function(){post({type:'alive',frames:frames});frames=0;},5000);
+  setInterval(function(){lastAlive=frames;post({type:'alive',frames:frames});frames=0;},5000);
+  function largestCanvas(){
+    var best=null,area=0,list=document.querySelectorAll('canvas');
+    for(var i=0;i<list.length;i++){
+      var c=list[i],a=(c.width||0)*(c.height||0);
+      if(a>area){area=a;best=c;}
+    }
+    return best;
+  }
+  // Capture must run inside the opaque-origin frame — the parent cannot read the
+  // canvas. Downscale so a 4K buffer does not blow the creator-prompt payload.
+  function capturePng(){
+    var c=largestCanvas();
+    if(!c||!c.width||!c.height)return null;
+    try{
+      var max=1280,scale=Math.min(1,max/Math.max(c.width,c.height));
+      if(scale<1){
+        var off=document.createElement('canvas');
+        off.width=Math.max(1,Math.round(c.width*scale));
+        off.height=Math.max(1,Math.round(c.height*scale));
+        var ctx=off.getContext('2d');
+        if(!ctx)return null;
+        ctx.drawImage(c,0,0,off.width,off.height);
+        return off.toDataURL('image/png').split(',')[1]||null;
+      }
+      return c.toDataURL('image/png').split(',')[1]||null;
+    }catch(err){return null;}
+  }
+  function showOverlay(){
+    if(overlay)return;
+    overlay=document.createElement('div');
+    overlay.id='gdpl-pause-overlay';
+    overlay.setAttribute('aria-hidden','true');
+    overlay.style.cssText='position:fixed;inset:0;z-index:2147483647;background:rgba(6,10,18,.55);pointer-events:all;';
+    document.documentElement.appendChild(overlay);
+  }
+  function hideOverlay(){if(overlay){overlay.remove();overlay=null;}}
+  function sendSnapshot(reason){
+    post({type:'snapshot',reason:reason,paused:paused,png:capturePng(),aliveFrames:lastAlive});
+  }
+  function setPaused(next){
+    if(next===paused){if(next)sendSnapshot('pause');return;}
+    paused=next;
+    if(paused){
+      showOverlay();
+      document.dispatchEvent(new CustomEvent('gdpl-pause'));
+      sendSnapshot('pause');
+    }else{
+      hideOverlay();
+      document.dispatchEvent(new CustomEvent('gdpl-resume'));
+      post({type:'resumed'});
+    }
+  }
   addEventListener('message',function(e){
     var m=e.data||{};
     if(m.source!=='${HOST}')return;
     if(m.type==='hello'){sendMeta();}
     else if(m.type==='setSound'){var s=el('sound-toggle');if(s&&isMuted()!==!!m.muted){s.click();}sendSound();}
+    else if(m.type==='pause'){setPaused(true);}
+    else if(m.type==='resume'){setPaused(false);}
+    else if(m.type==='capture'){sendSnapshot('capture');}
   });
   addEventListener('keydown',function(e){
     // Report only — the game keeps its own Escape handling (pause menus etc).
@@ -270,3 +325,134 @@ export function useGamePlayer(
 
   return { meta, muted, toggleSound };
 }
+
+/** Instrumentation gathered while a creator playtests inside Studio. */
+export type PlaytestInstrumentation = {
+  playSeconds: number;
+  lastAliveFrames: number | null;
+  errors: string[];
+  progress: string[];
+};
+
+export type PlaytestSnapshot = {
+  pngBase64: string | null;
+  paused: boolean;
+  reason: 'pause' | 'capture' | string;
+  instrumentation: PlaytestInstrumentation;
+};
+
+/**
+ * Creator Studio playtest controls over the player bridge.
+ *
+ * The sandbox has no `allow-same-origin`, so the parent cannot read the canvas —
+ * pause/capture must ask the injected bridge, which replies with a PNG + a few
+ * live health fields. The host also accumulates error/progress/`alive` messages
+ * for the duration of the playtest so a prompt can carry more than one frame.
+ */
+export function useCreatorPlaytest(
+  frameRef: MutableRefObject<HTMLIFrameElement | null>,
+  active: boolean,
+) {
+  const [paused, setPaused] = useState(false);
+  const [snapshot, setSnapshot] = useState<PlaytestSnapshot | null>(null);
+  const [instrumentation, setInstrumentation] = useState<PlaytestInstrumentation>({
+    playSeconds: 0,
+    lastAliveFrames: null,
+    errors: [],
+    progress: [],
+  });
+  const startedAtRef = useRef<number | null>(null);
+  const instrumentationRef = useRef(instrumentation);
+  instrumentationRef.current = instrumentation;
+
+  useEffect(() => {
+    if (!active) {
+      setPaused(false);
+      setSnapshot(null);
+      setInstrumentation({ playSeconds: 0, lastAliveFrames: null, errors: [], progress: [] });
+      startedAtRef.current = null;
+      return;
+    }
+    startedAtRef.current = performance.now();
+
+    function onMessage(event: MessageEvent) {
+      const data = event.data as {
+        source?: string;
+        type?: string;
+        message?: string;
+        frames?: number;
+        label?: string;
+        png?: string | null;
+        paused?: boolean;
+        reason?: string;
+        aliveFrames?: number;
+      };
+      if (!data || data.source !== PLAYER) return;
+
+      if (data.type === 'error' && data.message) {
+        setInstrumentation((prev) => ({
+          ...prev,
+          errors: [...prev.errors, String(data.message)].slice(-10),
+        }));
+        return;
+      }
+      if (data.type === 'alive') {
+        setInstrumentation((prev) => ({
+          ...prev,
+          lastAliveFrames: Number(data.frames ?? 0),
+          playSeconds: startedAtRef.current
+            ? Math.max(0, Math.round((performance.now() - startedAtRef.current) / 1000))
+            : prev.playSeconds,
+        }));
+        return;
+      }
+      if (data.type === 'progress' && data.label) {
+        setInstrumentation((prev) => ({
+          ...prev,
+          progress: [...prev.progress, String(data.label)].slice(-20),
+        }));
+        return;
+      }
+      if (data.type === 'snapshot') {
+        const live: PlaytestInstrumentation = {
+          ...instrumentationRef.current,
+          playSeconds: startedAtRef.current
+            ? Math.max(0, Math.round((performance.now() - startedAtRef.current) / 1000))
+            : instrumentationRef.current.playSeconds,
+          lastAliveFrames:
+            typeof data.aliveFrames === 'number' ? data.aliveFrames : instrumentationRef.current.lastAliveFrames,
+        };
+        setInstrumentation(live);
+        setPaused(Boolean(data.paused));
+        setSnapshot({
+          pngBase64: typeof data.png === 'string' && data.png.length > 0 ? data.png : null,
+          paused: Boolean(data.paused),
+          reason: data.reason ?? 'capture',
+          instrumentation: live,
+        });
+        return;
+      }
+      if (data.type === 'resumed') {
+        setPaused(false);
+      }
+    }
+
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [active]);
+
+  const post = useCallback(
+    (message: Record<string, unknown>) => {
+      frameRef.current?.contentWindow?.postMessage({ source: HOST, ...message }, '*');
+    },
+    [frameRef],
+  );
+
+  const pause = useCallback(() => post({ type: 'pause' }), [post]);
+  const resume = useCallback(() => post({ type: 'resume' }), [post]);
+  const capture = useCallback(() => post({ type: 'capture' }), [post]);
+  const clearSnapshot = useCallback(() => setSnapshot(null), []);
+
+  return { paused, snapshot, instrumentation, pause, resume, capture, clearSnapshot };
+}
+

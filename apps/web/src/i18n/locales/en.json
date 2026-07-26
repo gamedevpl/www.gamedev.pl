@@ -163,6 +163,8 @@
     "shelfAria": "Your games",
     "tabs": {
       "overview": "Overview",
+      "build": "Build",
+      "playtest": "Playtest",
       "stats": "Stats",
       "improve": "Improve",
       "feedback": "Player feedback"
@@ -174,8 +176,24 @@
       "sessions": "Recent play",
       "play": "played",
       "openBuild": "Open build",
+      "playtest": "Playtest & prompt",
       "abandon": "Stop build",
       "abandonConfirm": "Confirm stop"
+    },
+    "playtest": {
+      "hint": "Play the game, pause on a moment worth changing, and send a request with that frame and live instrumentation attached.",
+      "loading": "Loading the playable build…",
+      "loadError": "No playable build is ready yet. Check the Build tab and try again once a preview exists.",
+      "pause": "Pause & note",
+      "resume": "Resume",
+      "played": "{{seconds}}s played",
+      "errorCount": "{{count}} errors",
+      "promptTitle": "What should change here?",
+      "promptHint": "Your note goes to the build agent (draft) or opens an improvement issue (published). The paused frame and session signals ride along as data.",
+      "shotCaption": "Frame captured at pause",
+      "noShot": "No canvas frame was captured — the text request will still send.",
+      "placeholder": "e.g. The spike on the right edge is unfair — add a checkpoint just before it…",
+      "submit": "Send with this moment"
     },
     "stats": {
       "noSlug": "Stats appear once this game has a draft or published slug.",
@@ -531,6 +549,7 @@
     "contact": "Contact",
     "playNamed": "Play {{title}}",
     "draftNamed": "Draft {{title}}",
-    "statusNamed": "Status · {{title}}"
+    "statusNamed": "Status · {{title}}",
+    "studioNamed": "Studio · {{title}}"
   }
 }

@@ -263,19 +263,36 @@ export async function getQuota(): Promise<{ submissions: { used: number; limit: 
 /**
  * Relays post-play "here's what to change" feedback to the build agent. The API
  * posts it as a comment on the agent's open PR (or the issue) so it iterates.
+ * Optional playtest context (paused-frame PNG + instrumentation) rides along as
+ * fenced data — see Creator Studio's Playtest tab.
  */
-export async function submitFeedback(token: string, feedback: string): Promise<{ ok: boolean; target: string }> {
+export type FeedbackContext = {
+  screenshotPng?: string;
+  instrumentation?: {
+    playSeconds?: number;
+    lastAliveFrames?: number | null;
+    errors?: string[];
+    progress?: string[];
+  };
+};
+
+export async function submitFeedback(
+  token: string,
+  feedback: string,
+  context?: FeedbackContext,
+): Promise<{ ok: boolean; target: string; shotId?: string }> {
   const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/feedback`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ feedback }),
+    credentials: 'include',
+    body: JSON.stringify({ feedback, ...(context ? { context } : {}) }),
   });
 
   if (!response.ok) {
     await throwResponseError(response);
   }
 
-  return (await response.json()) as { ok: boolean; target: string };
+  return (await response.json()) as { ok: boolean; target: string; shotId?: string };
 }
 
 export async function refineSpec(input: { title: string; concept: string; locale?: string }): Promise<{

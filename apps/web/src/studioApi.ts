@@ -1,5 +1,5 @@
 import type { GameHealth } from './healthApi';
-import type { SubmissionState } from './submissionApi';
+import type { FeedbackContext, SubmissionState } from './submissionApi';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
@@ -55,20 +55,22 @@ export async function fetchStudioHealth(days: number): Promise<StudioHealthRespo
 
 /**
  * Files a post-publish improvement issue. Draft revisions still use
- * {@link submitFeedback} on the open PR.
+ * {@link submitFeedback} on the open PR. Optional playtest context attaches a
+ * paused-frame screenshot + instrumentation digest (Creator Studio Playtest).
  */
 export async function submitImprovement(
   token: string,
   feedback: string,
-): Promise<{ ok: boolean; issueNumber: number; slug: string }> {
+  context?: FeedbackContext,
+): Promise<{ ok: boolean; issueNumber: number; slug: string; shotId?: string }> {
   const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/improve`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ feedback }),
+    body: JSON.stringify({ feedback, ...(context ? { context } : {}) }),
   });
   if (!response.ok) {
     await throwResponseError(response);
   }
-  return (await response.json()) as { ok: boolean; issueNumber: number; slug: string };
+  return (await response.json()) as { ok: boolean; issueNumber: number; slug: string; shotId?: string };
 }

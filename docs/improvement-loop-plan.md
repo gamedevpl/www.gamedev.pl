@@ -436,11 +436,20 @@ The surfaces to hang this on already exist, which changes the build cost
 considerably:
 
 - ✅ **Game dashboard / Creator Studio** (`/studio`) — control panel over the
-  creator's own submissions: shelf list, overview (status / abandon), play-health
-  scorecard (`GET /api/me/studio/health`, same aggregator as the operator view but
-  filtered to owned slugs), draft feedback, and post-publish improve
+  creator's own submissions: shelf list, **Build** (the former `/status` "dev
+  studio" — timeline, live preview, agent activity, draft feedback), **Playtest**
+  (play → pause → prompt with canvas frame + instrumentation attached), overview,
+  play-health scorecard (`GET /api/me/studio/health`), and post-publish improve
   (`POST /api/submissions/:token/improve` → games-repo issue with `improvement`
-  label). Linked from the nav and the home-page my-games rail.
+  label). Legacy `/status/:token` URLs resolve into Studio. Linked from the nav
+  and the home-page my-games rail.
+- 📋 **Pause-and-prompt enrichment** — first cut ships: bridge `pause` / `resume` /
+  `capture`, host accumulates error/alive/progress during the playtest, feedback
+  and improve accept optional `context.screenshotPng` + `instrumentation` (fenced
+  as data; PNG stored as a creator playtest shot). True game-loop pause still
+  needs games-repo cooperation (`gdpl-pause` CustomEvent); today the overlay +
+  frame capture freeze the *moment* for the prompt even when the sim keeps
+  ticking under the veil.
 - 📋 **Suggestion inbox** — cards with insight → evidence → proposed change →
   [Approve → files issue] / [Dismiss with reason]. Dismissal reasons feed router
   tuning. Approval reuses the feedback-comment path that already works.

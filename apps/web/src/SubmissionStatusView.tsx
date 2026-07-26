@@ -20,9 +20,15 @@ import {
   type SubmissionApiError,
   type SubmissionPreview,
   type SubmissionStatus,
+<<<<<<< HEAD
 } from './submissionApi.js';
 import { draftPath, playPath, statusPath } from './router.js';
 import { formatDuration, formatRelativeTime } from './relativeTime.js';
+=======
+} from './submissionApi';
+import { draftPath, playPath, statusPath, studioPath } from './router';
+import { formatDuration, formatRelativeTime } from './relativeTime';
+>>>>>>> ce57e9b6 (feat(studio): unify build status + playtest pause-and-prompt)
 
 const TERMINAL_STATUSES = new Set<SubmissionStatus['status']>(['published', 'needs_changes', 'abandoned']);
 /** Statuses that halt the linear timeline rather than sitting on a step of it. */
@@ -119,6 +125,12 @@ type SubmissionStatusViewProps = {
   trackingUrl?: string;
   /** Sends the creator home with this idea loaded, ready to edit and resubmit. */
   onRetry?: (concept: string) => void;
+  /**
+   * When true, this view is nested inside Creator Studio (the Build tab). The
+   * outer studio chrome already names the game — skip the page-level heading /
+   * save-link lecture and point share URLs at `/studio/:token`.
+   */
+  embedded?: boolean;
 };
 
 export function SubmissionStatusView({
@@ -128,6 +140,7 @@ export function SubmissionStatusView({
   submittedAt,
   trackingUrl,
   onRetry,
+  embedded = false,
 }: SubmissionStatusViewProps) {
   const { t, i18n } = useTranslation();
   const [status, setStatus] = useState<SubmissionStatus | null>(null);
@@ -153,8 +166,10 @@ export function SubmissionStatusView({
   const previewInFlightRef = useRef(false);
 
   const currentTrackingUrl = useMemo(
-    () => trackingUrl ?? new URL(statusPath(token), window.location.href).toString(),
-    [token, trackingUrl],
+    () =>
+      trackingUrl ??
+      new URL(embedded ? studioPath(token) : statusPath(token), window.location.href).toString(),
+    [token, trackingUrl, embedded],
   );
 
   useEffect(() => {
@@ -299,10 +314,34 @@ export function SubmissionStatusView({
 
   return (
     <>
-      <section className="panel status-panel">
-        <div className="status-heading">
-          <h2 className="section-title">{submittedTitle ?? t('statusView.title')}</h2>
-          {status && !TERMINAL_STATUSES.has(status.status) ? (
+      <section className={`panel status-panel${embedded ? ' is-embedded' : ''}`}>
+        {!embedded ? (
+          <>
+            <div className="status-heading">
+              <h2 className="section-title">{submittedTitle ?? t('statusView.title')}</h2>
+              {status && !TERMINAL_STATUSES.has(status.status) ? (
+                <span className="status-live">
+                  <span className="live-dot" aria-hidden="true" />
+                  {t('statusView.live')}
+                  {submittedAt ? (
+                    <>
+                      {' · '}
+                      <ElapsedTimer since={submittedAt} running />
+                    </>
+                  ) : null}
+                </span>
+              ) : null}
+            </div>
+            {submittedConcept ? <p className="status-brief">“{submittedConcept}”</p> : null}
+            <p className="status-note">
+              {t('statusView.saveLink')}{' '}
+              <a className="inline-link" href={currentTrackingUrl}>
+                {currentTrackingUrl}
+              </a>
+            </p>
+          </>
+        ) : status && !TERMINAL_STATUSES.has(status.status) ? (
+          <div className="status-heading status-heading-embedded">
             <span className="status-live">
               <span className="live-dot" aria-hidden="true" />
               {t('statusView.live')}
@@ -313,15 +352,8 @@ export function SubmissionStatusView({
                 </>
               ) : null}
             </span>
-          ) : null}
-        </div>
-        {submittedConcept ? <p className="status-brief">“{submittedConcept}”</p> : null}
-        <p className="status-note">
-          {t('statusView.saveLink')}{' '}
-          <a className="inline-link" href={currentTrackingUrl}>
-            {currentTrackingUrl}
-          </a>
-        </p>
+          </div>
+        ) : null}
         {shareUrl ? <ShareLink url={shareUrl} /> : null}
 
         {loading ? (
@@ -332,9 +364,11 @@ export function SubmissionStatusView({
             <p className="status-description">
               {isInvalidToken ? t('statusView.invalidTokenHelp') : t('statusView.fetchErrorHelp')}
             </p>
-            <a className="inline-link" href="/">
-              {t('statusView.backHome')}
-            </a>
+            {!embedded ? (
+              <a className="inline-link" href="/">
+                {t('statusView.backHome')}
+              </a>
+            ) : null}
           </>
         ) : status ? (
           <>
