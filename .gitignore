@@ -13,3 +13,4 @@ coverage
 .env.local
 *.tsbuildinfo
 .vite
+/gitleaks

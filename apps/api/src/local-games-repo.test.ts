@@ -8,7 +8,7 @@ describe('local games repo', () => {
     const catalog = await client.getCatalog('main');
     const slugs = catalog.map((entry) => entry.slug).sort();
 
-    expect(slugs).toEqual(['odd-one-out', 'pixel-dodge']);
+    expect(slugs).toEqual(['odd-one-out', 'pixel-dodge', 'range-squad']);
     expect(catalog.every((entry) => entry.status === 'published')).toBe(true);
     expect(catalog.find((entry) => entry.slug === 'pixel-dodge')?.title).toBe('Pixel Dodge');
   });
@@ -24,6 +24,23 @@ describe('local games repo', () => {
     // The shared shell is prepended to the game's own stylesheet.
     expect(sources?.styleCss).toContain('.wrap');
     expect(sources?.indexHtml).toContain('id="game"');
+  });
+
+  it('assembles a GameKit-shaped fixture with gfx/actors/audio.music (contract regression)', async () => {
+    // range-squad mirrors the post-draw-surface production shape that 502'd when
+    // GAME_KIT_MODULES / music drifted (issue #247). Going through the real local
+    // bundler means a stale allow-list or music contract fails `npm test` offline.
+    const sources = await client.getGameSources('main', 'range-squad');
+
+    expect(sources).not.toBeNull();
+    expect(sources?.title).toBe('Range Squad');
+    expect(sources?.gameJs).toContain('GameKit.gfx = true');
+    expect(sources?.gameJs).toContain('GameKit.actors = true');
+    expect(sources?.gameJs).toContain('window.__GAME_AUDIO_MUSIC__ = "march";');
+    expect(sources?.gameJs).toContain('window.__GAME_MUSIC_TRACKS__');
+    expect(sources?.gameJs).toContain('"march"');
+    expect(sources?.gameJs).not.toContain('import ');
+    expect(() => new Function(sources?.gameJs ?? '')).not.toThrow();
   });
 
   it('returns null for a game that does not exist', async () => {
