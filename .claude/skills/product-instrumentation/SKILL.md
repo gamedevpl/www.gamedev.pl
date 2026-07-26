@@ -116,9 +116,13 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
   `GET /api/admin/telemetry/visits`, rendered by `VisitFunnelPanel` beside game health
   on the operator page. Both admin reads share one partition-scan budget, so the two
   views cannot drift in how they report truncation.
-- **Creator funnel starts too late** — nothing is recorded before the submission
-  document exists; the prompt → sign-in → submit steps are dark. The visit stream is the
-  natural home for the pre-submission steps (it is already anonymous and visit-scoped).
+- ~~Creator funnel starts too late~~ — **closed 2026-07-26**: `create_step` on the visit
+  stream records `prompt_started` → `spec_submitted` → `signin_required` → `qa_shown` →
+  `submission_created`. Steps dedupe per visit (a rung means "this visit got this far"),
+  and the aggregate dedupes again so a replayed flush cannot inflate one. Adding a rung
+  means touching the enum in `visitTelemetry.ts`, the zod enum in `visit-telemetry.ts`,
+  and `CREATE_STEPS` in `visit-funnel.ts` — the order in `CREATE_STEPS` *is* the funnel's
+  meaning.
 - **Creator return is under-measured** — `lastLoginAt` only updates on sign-in, and
   sessions are long-lived; an authenticated `lastSeenAt` touch (daily granularity is
   enough) is missing.
