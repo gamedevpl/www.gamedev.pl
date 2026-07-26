@@ -37,12 +37,8 @@ describe('brandedNamedTitle', () => {
   });
 
   it('cannot spoof a legal page title', () => {
-    expect(brandedNamedTitle('Play {{title}}', 'Privacy Policy')).toBe(
-      'Play Privacy Policy — Gamedev.pl',
-    );
-    expect(brandedNamedTitle('Play {{title}}', 'Privacy Policy')).not.toBe(
-      brandedPageTitle('Privacy Policy'),
-    );
+    expect(brandedNamedTitle('Play {{title}}', 'Privacy Policy')).toBe('Play Privacy Policy — Gamedev.pl');
+    expect(brandedNamedTitle('Play {{title}}', 'Privacy Policy')).not.toBe(brandedPageTitle('Privacy Policy'));
   });
 });
 
@@ -65,39 +61,30 @@ describe('resolveDocumentTitle', () => {
   });
 
   it('prefixes the play title when known, otherwise humanizes the slug', () => {
-    expect(
-      resolveDocumentTitle({ view: 'play', slug: 'sky-dodge' }, { copy, playTitle: 'Sky Dodge' }),
-    ).toBe('Play Sky Dodge — Gamedev.pl');
-    expect(resolveDocumentTitle({ view: 'play', slug: 'sky-dodge' }, { copy })).toBe(
+    expect(resolveDocumentTitle({ view: 'play', slug: 'sky-dodge' }, { copy, playTitle: 'Sky Dodge' })).toBe(
       'Play Sky Dodge — Gamedev.pl',
     );
+    expect(resolveDocumentTitle({ view: 'play', slug: 'sky-dodge' }, { copy })).toBe('Play Sky Dodge — Gamedev.pl');
   });
 
   it('titles draft / status / join / health / legal routes', () => {
     expect(resolveDocumentTitle({ view: 'draft', slug: 'space-runner' }, { copy })).toBe(
       'A game in the making — Gamedev.pl',
     );
-    expect(
-      resolveDocumentTitle(
-        { view: 'draft', slug: 'space-runner' },
-        { copy, draftTitle: 'Space Runner' },
-      ),
-    ).toBe('Draft Space Runner — Gamedev.pl');
+    expect(resolveDocumentTitle({ view: 'draft', slug: 'space-runner' }, { copy, draftTitle: 'Space Runner' })).toBe(
+      'Draft Space Runner — Gamedev.pl',
+    );
     expect(resolveDocumentTitle({ view: 'status', token: 'tok' }, { copy })).toBe(
       'Your game is in the works — Gamedev.pl',
     );
-    expect(
-      resolveDocumentTitle({ view: 'status', token: 'tok' }, { copy, statusTitle: 'Coin Catcher' }),
-    ).toBe('Status · Coin Catcher — Gamedev.pl');
+    expect(resolveDocumentTitle({ view: 'status', token: 'tok' }, { copy, statusTitle: 'Coin Catcher' })).toBe(
+      'Status · Coin Catcher — Gamedev.pl',
+    );
     expect(resolveDocumentTitle({ view: 'join', code: 'K7M3QP', token: 't' }, { copy })).toBe(
       'Join the game — Gamedev.pl',
     );
     expect(resolveDocumentTitle({ view: 'health' }, { copy })).toBe('Telemetry — Gamedev.pl');
-    expect(resolveDocumentTitle({ view: 'legal', doc: 'privacy' }, { copy })).toBe(
-      'Privacy Policy — Gamedev.pl',
-    );
-    expect(resolveDocumentTitle({ view: 'legal', doc: 'terms' }, { copy })).toBe(
-      'Terms of Service — Gamedev.pl',
-    );
+    expect(resolveDocumentTitle({ view: 'legal', doc: 'privacy' }, { copy })).toBe('Privacy Policy — Gamedev.pl');
+    expect(resolveDocumentTitle({ view: 'legal', doc: 'terms' }, { copy })).toBe('Terms of Service — Gamedev.pl');
   });
 });

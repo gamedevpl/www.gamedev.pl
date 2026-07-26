@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { bugReportUrl, REPO_URL } from './github';
+import { bugReportUrl, ISSUES_URL, REPO_URL } from './github';
+
+describe('github links', () => {
+  it('points the issues list at the same repo', () => {
+    expect(ISSUES_URL).toBe(`${REPO_URL}/issues`);
+  });
+});
 
 describe('bugReportUrl', () => {
   it('targets the bug report template', () => {

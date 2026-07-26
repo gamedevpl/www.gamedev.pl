@@ -1,36 +1,45 @@
 // @vitest-environment jsdom
 
 import { act } from 'react';
-import { createRoot } from 'react-dom/client';
+import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { SiteFooter } from './SiteFooter';
+import i18n from './i18n';
 import { setVisitSessionForTesting, VisitSession } from './visitTelemetry';
 
 /**
  * The footer carries two different reporting routes that look alike and must not be
  * confused: "report illegal content" is the legal notice-and-action path, and "report a
- * bug" goes to the issue tracker. These check that the project links are present and that
- * the bug link carries the visit id, which is what lets a public issue be diagnosed without
- * anyone pasting session details into it.
+ * bug" goes to the issue tracker. Contact opens the issues list for general outreach;
+ * the electronic address stays in the legal documents, not under the brand. These check
+ * that the project links are present and that the bug link carries the visit id, which
+ * is what lets a public issue be diagnosed without anyone pasting session details into it.
  */
 
 let container: HTMLDivElement;
+let root: Root | null = null;
 
-beforeEach(() => {
+beforeEach(async () => {
+  (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  await i18n.changeLanguage('en');
   container = document.createElement('div');
   document.body.appendChild(container);
 });
 
 afterEach(() => {
+  act(() => {
+    root?.unmount();
+  });
+  root = null;
   setVisitSessionForTesting(null);
   container.remove();
 });
 
 function render(): void {
-  const root = createRoot(container);
+  root = createRoot(container);
   act(() => {
-    root.render(<SiteFooter />);
+    root!.render(<SiteFooter />);
   });
 }
 
@@ -46,6 +55,16 @@ describe('SiteFooter project links', () => {
     expect(repoLink).toBeDefined();
     // Leaving the site: opened in a new tab, and without handing over the referrer opener.
     expect(repoLink?.rel).toContain('noopener');
+  });
+
+  it('sends Contact to the GitHub issues list, not a mailto', () => {
+    render();
+
+    const contact = links().find((a) => a.href === 'https://github.com/gamedevpl/www.gamedev.pl/issues');
+    expect(contact).toBeDefined();
+    expect(contact?.rel).toContain('noopener');
+    expect(links().some((a) => a.href.startsWith('mailto:'))).toBe(false);
+    expect(container.textContent).not.toContain('admin@gamedev.pl');
   });
 
   it('prefills the bug report with the current visit id and page', () => {

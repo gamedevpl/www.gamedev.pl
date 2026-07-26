@@ -105,14 +105,10 @@ export function App() {
     const playTitle =
       route.view === 'play'
         ? (catalogEntries.find((game) => game.slug === route.slug)?.title ??
-          (stageContent?.type === 'catalog' && stageContent.game.slug === route.slug
-            ? stageContent.game.title
-            : null))
+          (stageContent?.type === 'catalog' && stageContent.game.slug === route.slug ? stageContent.game.title : null))
         : null;
     const statusTitle =
-      route.view === 'status'
-        ? (savedSpecs.find((spec) => spec.token === route.token)?.title ?? null)
-        : null;
+      route.view === 'status' ? (savedSpecs.find((spec) => spec.token === route.token)?.title ?? null) : null;
 
     return resolveDocumentTitle(route, {
       copy: {

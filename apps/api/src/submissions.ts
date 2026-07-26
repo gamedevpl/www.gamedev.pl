@@ -554,10 +554,7 @@ export async function registerSubmissionRoutes(
     if (!options.refreshOnMiss) {
       return false;
     }
-    if (
-      lastCatalogForceRefreshAt !== null &&
-      now() - lastCatalogForceRefreshAt < catalogForceRefreshCooldownMs
-    ) {
+    if (lastCatalogForceRefreshAt !== null && now() - lastCatalogForceRefreshAt < catalogForceRefreshCooldownMs) {
       return false;
     }
     lastCatalogForceRefreshAt = now();

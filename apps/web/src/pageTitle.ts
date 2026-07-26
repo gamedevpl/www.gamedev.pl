@@ -59,9 +59,7 @@ export type DocumentTitleContext = {
 export function resolveDocumentTitle(route: AppRoute, ctx: DocumentTitleContext): string {
   switch (route.view) {
     case 'home':
-      return ctx.stageTitle
-        ? brandedNamedTitle(ctx.copy.playNamed, ctx.stageTitle)
-        : ctx.copy.home;
+      return ctx.stageTitle ? brandedNamedTitle(ctx.copy.playNamed, ctx.stageTitle) : ctx.copy.home;
     case 'play':
       return brandedNamedTitle(ctx.copy.playNamed, ctx.playTitle?.trim() || humanizeSlug(route.slug));
     case 'draft':
