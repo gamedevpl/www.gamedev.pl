@@ -183,7 +183,7 @@
       "truncated": "Dzień osiągnął limit odczytów — te liczby to dolna granica, nie suma.",
       "empty": "Brak sesji w tym oknie.",
       "sessions": "Sesje",
-      "bounces": "Odjścia",
+      "bounces": "Odejścia",
       "medianPlay": "Mediana gry",
       "totalPlay": "Łączny czas",
       "errors": "Błędy",
@@ -201,6 +201,7 @@
       "sending": "Wysyłanie…",
       "sent": "Wysłano",
       "quota": "Dzienny limit ulepszeń wyczerpany. Spróbuj jutro.",
+      "rateLimit": "Zbyt wiele próśb naraz. Poczekaj chwilę i spróbuj ponownie.",
       "rejected": "Tej prośby nie udało się przyjąć. Przeformułuj i spróbuj ponownie.",
       "error": "Nie udało się teraz wysłać prośby. Spróbuj ponownie."
     },

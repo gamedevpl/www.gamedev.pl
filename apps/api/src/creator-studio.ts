@@ -143,8 +143,9 @@ export async function registerCreatorStudioRoutes(
    * Per-game play health for the creator's own published slugs only.
    *
    * Same aggregator as the operator view — one definition of "sessions / bounces /
-   * stalls" — filtered to games this uid owns. Games without a slug (never reached
-   * a draft PR) contribute no health row; that is correct, not missing data.
+   * stalls" — filtered to games this uid owns and has published. Draft-only slugs
+   * are playable via share links but are not yet "live" funnel subjects, so they
+   * stay out of the scorecard.
    */
   app.get('/api/me/studio/health', async (request, reply) => {
     if (!requireUser(request, reply)) return;
@@ -158,7 +159,7 @@ export async function registerCreatorStudioRoutes(
     const slugs = [
       ...new Set(
         records
-          .filter((record) => !record.abandonedAt && record.slug)
+          .filter((record) => !record.abandonedAt && record.slug && record.publishedAt)
           .map((record) => record.slug as string),
       ),
     ];

@@ -495,8 +495,10 @@ function ImproveTab({ game }: { game: StudioGame }) {
     } catch (err) {
       const apiErr = err as StudioApiError | SubmissionApiError;
       const message = apiErr.message ?? '';
-      if (apiErr.status === 429 || message.includes('quota')) {
+      if (message.includes('quota')) {
         setError(t('studioPanel.improve.quota'));
+      } else if (apiErr.status === 429 || message.includes('too many')) {
+        setError(t('studioPanel.improve.rateLimit'));
       } else if (apiErr.status === 422) {
         setError(t('studioPanel.improve.rejected'));
       } else {

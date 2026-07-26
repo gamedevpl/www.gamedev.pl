@@ -15,6 +15,7 @@ import { createGenerator } from './generator.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { registerContactRoutes, type ContactRoutesOptions } from './contact.js';
 import { registerEmailRoutes } from './email-routes.js';
+import { resolveLocalGamesDir } from './local-games-repo.js';
 import { registerMultiplayerRoutes, type MultiplayerRoutesOptions } from './mp.js';
 import { registerNotificationRoutes } from './notifications.js';
 import { registerPlayerFeedbackRoutes, type PlayerFeedbackRoutesOptions } from './player-feedback.js';
@@ -244,15 +245,21 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   // Creator control panel (docs/improvement-loop-plan.md IL-2 creator surface). Own
   // shelf + per-game health for games this uid owns — not the operator catalog view.
-  // Token secret mirrors registerSubmissionRoutes so studio deep-links verify there.
+  // Secret resolution must stay byte-for-byte with registerSubmissionRoutes, or studio
+  // deep-link tokens will fail verification on the status/improve routes.
   const nodeEnv = process.env.NODE_ENV;
-  const githubConfigured = Boolean(options.submissionRoutes?.githubToken ?? process.env.GITHUB_TOKEN);
+  const githubToken = options.submissionRoutes?.githubToken ?? process.env.GITHUB_TOKEN;
+  const localGames =
+    nodeEnv !== 'production' &&
+    nodeEnv !== 'test' &&
+    !githubToken &&
+    !options.submissionRoutes?.githubClient
+      ? await resolveLocalGamesDir()
+      : null;
   const submissionTokenSecret =
     options.submissionRoutes?.submissionTokenSecret ??
     process.env.SUBMISSION_TOKEN_SECRET ??
-    (nodeEnv !== 'production' && nodeEnv !== 'test' && !githubConfigured
-      ? 'local-development-submission-secret'
-      : undefined);
+    (localGames ? 'local-development-submission-secret' : undefined);
   await registerCreatorStudioRoutes(app, {
     store,
     mintStatusToken: submissionTokenSecret

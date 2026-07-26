@@ -201,6 +201,7 @@
       "sending": "Sending…",
       "sent": "Sent",
       "quota": "Daily improvement quota reached. Try again tomorrow.",
+      "rateLimit": "Too many requests just now. Please wait a moment and try again.",
       "rejected": "That request could not be accepted. Please rephrase and try again.",
       "error": "Could not send the request right now. Please try again."
     },
