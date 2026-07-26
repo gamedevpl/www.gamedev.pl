@@ -539,14 +539,11 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
               errors: [{ text: `game runtime dependency is forbidden: "${args.path}"` }],
             }));
             builder.onLoad({ filter: /.*/, namespace: 'github-game-source' }, async (args) => {
-              if (!loadedPaths.has(args.path)) {
-                if (loadedPaths.size >= MAX_GAME_MODULES) {
-                  return { errors: [{ text: `game exceeds ${MAX_GAME_MODULES} TypeScript modules` }] };
-                }
-                loadedPaths.add(args.path);
-              }
               // Prefer the resolved file; if an extensionless import pointed at a
               // directory, fall back to its index.ts (same rule TypeScript uses).
+              // Count the *actual* source path once — not the synthetic `dir.ts`
+              // plus `dir/index.ts` — so directory imports don't burn two slots
+              // toward MAX_GAME_MODULES.
               let loadedPath = args.path;
               let source = await readRawFile(loadedPath.slice(1), ref);
               if (source === null && loadedPath.endsWith('.ts')) {
@@ -556,16 +553,21 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
                   if (indexSource !== null) {
                     loadedPath = indexPath;
                     source = indexSource;
-                    loadedPaths.add(indexPath);
                   }
                 }
               }
               if (source === null) {
                 return { errors: [{ text: `game module not found: ${args.path}` }] };
               }
-              sourceBytes += Buffer.byteLength(source, 'utf8');
-              if (sourceBytes > MAX_GAME_SOURCE_BYTES) {
-                return { errors: [{ text: `game TypeScript exceeds ${MAX_GAME_SOURCE_BYTES} bytes` }] };
+              if (!loadedPaths.has(loadedPath)) {
+                if (loadedPaths.size >= MAX_GAME_MODULES) {
+                  return { errors: [{ text: `game exceeds ${MAX_GAME_MODULES} TypeScript modules` }] };
+                }
+                loadedPaths.add(loadedPath);
+                sourceBytes += Buffer.byteLength(source, 'utf8');
+                if (sourceBytes > MAX_GAME_SOURCE_BYTES) {
+                  return { errors: [{ text: `game TypeScript exceeds ${MAX_GAME_SOURCE_BYTES} bytes` }] };
+                }
               }
               return {
                 contents: source,
