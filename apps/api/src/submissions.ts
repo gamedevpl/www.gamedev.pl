@@ -301,6 +301,10 @@ export async function registerSubmissionRoutes(
   // Keyed by `${issueNumber}:${locale}` — the response body is localized, so two
   // languages must not share an entry.
   const statusCache = new Map<string, CachedStatus>();
+  // In-flight refreshes, same keys. A status page polls on a timer, so several
+  // watchers of one build land together; without this each miss launched its own
+  // fan-out of GitHub reads, multiplying the burst that gets the token limited.
+  const statusRefreshes = new Map<string, Promise<SubmissionStatusResponse>>();
   const translator = options.translator ?? createTranslatorFromEnv();
 
   // Agent progress events are read on every poll but change rarely, so they get a
@@ -863,6 +867,61 @@ export async function registerSubmissionRoutes(
     });
   });
 
+  /**
+   * Derives one submission's status from GitHub and caches it.
+   *
+   * Concurrent callers for the same key share a single refresh: the work is several
+   * GitHub reads, and the whole point is not to issue them more than once per key.
+   * Everything with a side effect lives in here rather than in the route, so a
+   * coalesced poll observes a transition exactly once no matter how many watchers
+   * were waiting on it.
+   */
+  async function refreshStatus(
+    issueNumber: number,
+    locale: string,
+    cacheKey: string,
+    token: string,
+  ): Promise<SubmissionStatusResponse> {
+    const existing = statusRefreshes.get(cacheKey);
+    if (existing) return existing;
+
+    const refresh = (async () => {
+      const { status: derived, linkedPr } = await deriveSubmissionStatusWithPr(githubClient!, issueNumber);
+      const withNote = await attachProgressNote(githubClient!, derived, linkedPr);
+      const status = await localizeStatus(withNote, locale);
+      statusCache.set(cacheKey, { value: status, expiresAt: now() + 60_000 });
+
+      // Opportunistic detection (docs/notifications-plan.md N1): a poll that
+      // observes a transition emits the owner's notification inline, so it lands
+      // instantly while they're watching. The Cloud Scheduler sweep is the
+      // closed-tab backstop; both converge on the same idempotent emit. Best
+      // effort — a notify failure must never break the status response.
+      if (store) {
+        try {
+          const record = await store.getSubmission(issueNumber);
+          if (record) {
+            // Learn the game's slug here (the only place we see it regularly) so an
+            // in-progress game becomes addressable by slug, like a published one.
+            const slug = status.slug ?? status.preview?.slug;
+            if (slug && record.slug !== slug) {
+              await store.setSubmissionSlug(issueNumber, slug);
+            }
+            await notifyOnTransition(buildNotifyDeps(), record, status, token);
+          }
+        } catch (notifyError) {
+          app.log.error({ err: notifyError }, 'notification emit on status poll failed');
+        }
+      }
+
+      return status;
+    })().finally(() => {
+      statusRefreshes.delete(cacheKey);
+    });
+
+    statusRefreshes.set(cacheKey, refresh);
+    return refresh;
+  }
+
   app.get('/api/submissions/:token', async (request, reply) => {
     if (!githubClient || !submissionTokenSecret) {
       return reply.status(503).send({ error: 'submissions are not configured' });
@@ -903,39 +962,24 @@ export async function registerSubmissionRoutes(
       }
     }
 
+    let status: SubmissionStatusResponse;
     try {
-      const { status: derived, linkedPr } = await deriveSubmissionStatusWithPr(githubClient, issueNumber);
-      const withNote = await attachProgressNote(githubClient, derived, linkedPr);
-      const status = await localizeStatus(withNote, locale);
-      statusCache.set(cacheKey, { value: status, expiresAt: currentTime + 60_000 });
-
-      // Opportunistic detection (docs/notifications-plan.md N1): a poll that
-      // observes a transition emits the owner's notification inline, so it lands
-      // instantly while they're watching. The Cloud Scheduler sweep is the
-      // closed-tab backstop; both converge on the same idempotent emit. Best
-      // effort — a notify failure must never break the status response.
-      if (store) {
-        try {
-          const record = await store.getSubmission(issueNumber);
-          if (record) {
-            // Learn the game's slug here (the only place we see it regularly) so an
-            // in-progress game becomes addressable by slug, like a published one.
-            const slug = status.slug ?? status.preview?.slug;
-            if (slug && record.slug !== slug) {
-              await store.setSubmissionSlug(issueNumber, slug);
-            }
-            await notifyOnTransition(buildNotifyDeps(), record, status, token);
-          }
-        } catch (notifyError) {
-          request.log.error({ err: notifyError }, 'notification emit on status poll failed');
-        }
-      }
-
-      return reply.send(await attachBuildEvents(status, issueNumber, locale));
+      status = await refreshStatus(issueNumber, locale, cacheKey, token);
     } catch (error) {
+      // The refresh is several GitHub reads, and GitHub rate-limits the whole token
+      // at once — so this throws in bursts, for everyone watching a build, exactly
+      // when builds are being watched. A creator mid-build would rather see progress
+      // from a minute ago than the page breaking, and the next poll is seconds away.
+      const lastKnown = statusCache.get(cacheKey);
+      if (lastKnown) {
+        request.log.warn({ err: error, issueNumber }, 'status refresh failed; serving last known status');
+        return reply.send(await attachBuildEvents(lastKnown.value, issueNumber, locale));
+      }
       request.log.error({ err: error }, 'failed to resolve submission status');
       return reply.status(502).send({ error: 'failed to load submission status' });
     }
+
+    return reply.send(await attachBuildEvents(status, issueNumber, locale));
   });
 
   // Post-play revision loop: the token holder relays "here's what to change" after

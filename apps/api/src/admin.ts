@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { recentPartitions, summarizeGameHealth, type GameHealth } from './telemetry-health.js';
-import type { Store, TelemetryEvent } from './store.js';
+import { summarizeVisitFunnel, type VisitFunnel } from './visit-funnel.js';
+import type { Store, TelemetryEvent, VisitEvent } from './store.js';
 
 /**
  * Operator-only reads over play telemetry (docs/improvement-loop-plan.md IL-2).
@@ -58,8 +59,51 @@ export interface HealthResponse {
   games: GameHealth[];
 }
 
+export interface VisitsResponse {
+  /** Partitions actually scanned, most recent first — same contract as `HealthResponse`. */
+  days: string[];
+  truncated: boolean;
+  funnel: VisitFunnel;
+}
+
 export function isAdmin(uid: string | undefined, adminUids: Set<string> | undefined): boolean {
   return uid !== undefined && adminUids !== undefined && adminUids.has(uid);
+}
+
+/**
+ * Reads a window of daily partitions under one shared document budget.
+ *
+ * Both telemetry streams need the identical walk — newest day first, per-day cap, and a
+ * total cap so the widest window (exactly the one someone reaches for when something
+ * looks wrong) cannot turn one click into tens of thousands of reads. Sharing it means
+ * the two views cannot drift into reporting truncation differently.
+ */
+async function scanPartitions<T>(
+  days: string[],
+  read: (dateStr: string, limit: number) => Promise<T[]>,
+): Promise<{ events: T[]; scanned: string[]; truncated: boolean }> {
+  const events: T[] = [];
+  const scanned: string[] = [];
+  let truncated = false;
+
+  for (const dateStr of days) {
+    const remaining = MAX_EVENTS_PER_REQUEST - events.length;
+    if (remaining <= 0) {
+      // Out of budget with days still unread: the window really scanned is narrower
+      // than the one asked for, and `days` reports the narrower one so the range shown
+      // to the reader is never wider than the range measured.
+      truncated = true;
+      break;
+    }
+    const limit = Math.min(MAX_EVENTS_PER_DAY, remaining);
+    const dayEvents = await read(dateStr, limit);
+    // A day at its cap means events were left unread, so every count is a floor.
+    if (dayEvents.length >= limit) truncated = true;
+    events.push(...dayEvents);
+    scanned.push(dateStr);
+  }
+
+  return { events, scanned, truncated };
 }
 
 export async function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOptions): Promise<void> {
@@ -79,32 +123,41 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
       return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid query' });
     }
 
-    const requested = recentPartitions(parsed.data.days ?? DEFAULT_DAYS, now());
-    const events: TelemetryEvent[] = [];
-    const scanned: string[] = [];
-    let truncated = false;
-
     // Newest day first, so exhausting the budget drops the oldest history rather than
     // the data most likely to be asked about.
-    for (const dateStr of requested) {
-      const remaining = MAX_EVENTS_PER_REQUEST - events.length;
-      if (remaining <= 0) {
-        // Out of budget with days still unread: the window really scanned is narrower
-        // than the one asked for, and `days` below reports the narrower one so the
-        // range shown to the reader is never wider than the range measured.
-        truncated = true;
-        break;
-      }
-      const limit = Math.min(MAX_EVENTS_PER_DAY, remaining);
-      const dayEvents = await store.listTelemetryEvents(dateStr, { limit });
-      // A day at its cap means events were left unread, so every count is a floor.
-      // Said out loud in the response rather than quietly under-reporting.
-      if (dayEvents.length >= limit) truncated = true;
-      events.push(...dayEvents);
-      scanned.push(dateStr);
-    }
+    const requested = recentPartitions(parsed.data.days ?? DEFAULT_DAYS, now());
+    const { events, scanned, truncated } = await scanPartitions<TelemetryEvent>(requested, (dateStr, limit) =>
+      store.listTelemetryEvents(dateStr, { limit }),
+    );
 
     const body: HealthResponse = { days: scanned, truncated, games: summarizeGameHealth(events) };
+    return reply.status(200).send(body);
+  });
+
+  /**
+   * The visit funnel — the read half of the stream captured since 2026-07-25.
+   *
+   * Same operator gate as game health, and for a stronger reason: this view is about
+   * how people arrive rather than how one game behaves, so it is the closest thing the
+   * service has to a business dashboard. It still returns only aggregates, and the
+   * underlying rows carry no identity to leak.
+   */
+  app.get('/api/admin/telemetry/visits', async (request, reply) => {
+    if (!isAdmin(request.user?.uid, adminUids)) {
+      return reply.status(404).send({ error: 'not found' });
+    }
+
+    const parsed = QuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid query' });
+    }
+
+    const requested = recentPartitions(parsed.data.days ?? DEFAULT_DAYS, now());
+    const { events, scanned, truncated } = await scanPartitions<VisitEvent>(requested, (dateStr, limit) =>
+      store.listVisitEvents(dateStr, { limit }),
+    );
+
+    const body: VisitsResponse = { days: scanned, truncated, funnel: summarizeVisitFunnel(events) };
     return reply.status(200).send(body);
   });
 }

@@ -7,10 +7,14 @@
 ![Stars](https://img.shields.io/github/stars/gamedevpl/www.gamedev.pl?style=flat-square)
 ![License](https://img.shields.io/github/license/gamedevpl/www.gamedev.pl?style=flat-square)
 
-You write a few sentences about a game you want. A coding agent asks what it needs to know,
-writes it as **real, unconstrained code**, and opens a pull request. When the build passes, the
-game is in the arcade — playable instantly, no install, no account. Bring friends: some games
-turn phones into controllers around one shared screen.
+![Six games from the catalog, each built by an AI agent from a written description](./docs/media/demo.gif)
+
+You write a few sentences about a game you want. An agent asks what it needs to know, then
+builds it — actual code, not a template with the numbers changed. When it is ready it appears
+in the arcade, where anyone can play it in a browser: no install, no account. Bring friends —
+some games turn phones into controllers around one shared screen.
+
+_Every game above was built this way._
 
 This repository is the platform that does all of that, and it is open source.
 
