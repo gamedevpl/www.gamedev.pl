@@ -125,7 +125,7 @@ describe('POST /api/telemetry/visit', () => {
         { type: 'route_viewed', route: 'notFound', msSinceStart: 10 },
       ],
     });
-    expect(response.statusCode).toBe(204);
+    expect(response.statusCode).toBe(202);
     const events = await store.listVisitEvents(today(), { visitId });
     expect(events.map((event) => event.type)).toEqual(['visit_started', 'route_viewed']);
     expect(events[0]).toMatchObject({ type: 'visit_started', entry: 'notFound' });
