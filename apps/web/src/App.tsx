@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { generateGame, type GeneratedGame, type GenerateGameApiError } from './api';
 import { fetchCatalog, type CatalogEntry } from './catalog';
@@ -15,6 +15,8 @@ import { CreatorQA, type QAQuestion } from './CreatorQA';
 import { canonicalPlayPath, NAVIGATE_EVENT, parsePathRoute, statusPath, playPath, type AppRoute } from './router';
 import { LegalPage } from './LegalPage';
 import { SiteFooter } from './SiteFooter';
+import { resolveDocumentTitle } from './pageTitle';
+import { useDocumentTitle } from './useDocumentTitle';
 
 /** Read the current URL into an AppRoute, rewriting `/ay|/ai/<slug>` → `/play/<slug>`. */
 function readLocationRoute(): AppRoute {
@@ -92,6 +94,42 @@ export function App() {
 
   // Multiplayer lobby state
   const [partyError, setPartyError] = useState<string | null>(null);
+
+  // Tab title follows the route (and any known game/submission name). Child views
+  // may refine it further once async data lands — e.g. DraftView with the real title.
+  const documentTitle = useMemo(() => {
+    const stageTitle = stageContent ? stageContent.game.title : null;
+    const playTitle =
+      route.view === 'play'
+        ? (catalogEntries.find((game) => game.slug === route.slug)?.title ??
+          (stageContent?.type === 'catalog' && stageContent.game.slug === route.slug
+            ? stageContent.game.title
+            : null))
+        : null;
+    const statusTitle =
+      route.view === 'status'
+        ? (savedSpecs.find((spec) => spec.token === route.token)?.title ?? null)
+        : null;
+
+    return resolveDocumentTitle(route, {
+      copy: {
+        home: t('pageTitle.home'),
+        status: t('pageTitle.status'),
+        draft: t('pageTitle.draft'),
+        join: t('pageTitle.join'),
+        health: t('pageTitle.health'),
+        privacy: t('legal.privacy'),
+        terms: t('legal.terms'),
+      },
+      playTitle,
+      statusTitle,
+      // Only surface ephemeral theaters while still on home — `/play/<slug>` already
+      // carries its own title via playTitle, and leaving home must restore the home title.
+      stageTitle: route.view === 'home' ? stageTitle : null,
+    });
+  }, [route, stageContent, catalogEntries, savedSpecs, t]);
+
+  useDocumentTitle(documentTitle);
 
   useEffect(() => {
     // popstate covers back/forward (and path changes via history API). hashchange

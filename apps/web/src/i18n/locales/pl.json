@@ -403,5 +403,12 @@
       "unreachable": "Utracono połączenie z pokojem.",
       "rate_limited": "Zbyt wiele sygnałów — połączenie zamknięte."
     }
+  },
+  "pageTitle": {
+    "home": "Gamedev.pl — Opisz grę, zagraj w nią",
+    "status": "Twoja gra jest w trakcie tworzenia",
+    "draft": "Gra w trakcie tworzenia",
+    "join": "Dołącz do gry",
+    "health": "Stan gier"
   }
 }

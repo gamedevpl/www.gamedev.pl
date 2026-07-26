@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameTheater } from './GameTheater';
+import { brandedPageTitle } from './pageTitle';
 import { getDraftBySlug, type SubmissionApiError, type SubmissionPreview } from './submissionApi';
 
 /**
@@ -13,6 +14,12 @@ export function DraftView({ slug, onExit }: { slug: string; onExit: () => void }
   const { t } = useTranslation();
   const [draft, setDraft] = useState<SubmissionPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // App sets a generic draft title from the route; replace it with the real name
+  // once the preview loads so the tab matches the theater chrome.
+  useEffect(() => {
+    if (draft?.title) document.title = brandedPageTitle(draft.title);
+  }, [draft?.title]);
 
   useEffect(() => {
     let cancelled = false;
