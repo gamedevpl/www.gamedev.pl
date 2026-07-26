@@ -117,8 +117,11 @@ interface GameManifest {
 interface ParsedGameManifest {
   modules: string[];
   sounds: string[];
-  /** Track ids from GAME.json; only populated when the audio module is selected. */
-  music: string[];
+  /**
+   * Selected BGM track id from GAME.json (`audio.music` string). Null when the
+   * audio module is off. Matches games-repo `tools/lib/assemble.ts`.
+   */
+  music: string | null;
 }
 
 function isKebabCaseName(value: unknown): value is string {
@@ -144,7 +147,7 @@ function parseGameManifest(source: string): ParsedGameManifest {
   }
 
   if (!modules.includes('audio')) {
-    return { modules, sounds: [], music: [] };
+    return { modules, sounds: [], music: null };
   }
 
   const sounds = manifest.audio?.sounds;
@@ -157,10 +160,10 @@ function parseGameManifest(source: string): ParsedGameManifest {
     throw new Error('game manifest contains invalid audio sounds');
   }
 
-  // Games-repo assemble requires `audio.music` whenever the audio module is on —
-  // the shared catalog is embedded as __GAME_AUDIO_MUSIC__ / __GAME_MUSIC_TRACKS__.
+  // Games-repo assemble: `audio.music` is a single track name string. Injected as
+  // `window.__GAME_AUDIO_MUSIC__ = "<name>"` with only that entry from music.json.
   const music = manifest.audio?.music;
-  if (!Array.isArray(music) || new Set(music).size !== music.length || !music.every(isKebabCaseName)) {
+  if (!isKebabCaseName(music)) {
     throw new Error('game manifest contains invalid audio music');
   }
 
@@ -168,25 +171,24 @@ function parseGameManifest(source: string): ParsedGameManifest {
 }
 
 /**
- * Shared music catalog (`shared/audio/music.json`). Shape mirrors the games repo
- * assembler: a `music` map of embeddable assets plus a `tracks` map of playback
- * descriptors. Both are frozen onto `window` for GameKit.audio.
+ * Shared music catalog (`shared/audio/music.json`). The games-repo assembler only
+ * reads the `tracks` map — each value is the playback descriptor for one BGM id.
  */
-function parseMusicCatalog(source: string): { music: unknown; tracks: unknown } {
+function parseMusicTracks(source: string): Record<string, unknown> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(source);
   } catch {
     throw new Error('shared audio music catalog is not valid JSON');
   }
-  if (!parsed || typeof parsed !== 'object') {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new Error('shared audio music catalog is invalid');
   }
-  const catalog = parsed as { music?: unknown; tracks?: unknown };
-  if (catalog.music === undefined || catalog.tracks === undefined) {
-    throw new Error('shared audio music catalog is missing music or tracks');
+  const tracks = (parsed as { tracks?: unknown }).tracks;
+  if (!tracks || typeof tracks !== 'object' || Array.isArray(tracks)) {
+    throw new Error('shared audio music catalog is missing tracks');
   }
-  return { music: catalog.music, tracks: catalog.tracks };
+  return tracks as Record<string, unknown>;
 }
 
 export interface CatalogMediaScreenshot {
@@ -837,28 +839,22 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         );
       }
 
-      // Music lives in one shared catalog (not per-game WAV reads). Embed it whenever
-      // the audio module is on — same contract as tools/lib/assemble.ts.
-      if (manifest.modules.includes('audio')) {
+      // Music: games-repo assemble reads only `tracks` from music.json, then injects
+      // the selected name plus a one-entry map — not the whole catalog.
+      if (manifest.music !== null) {
         const musicSource = await readRawFile('shared/audio/music.json', ref);
         if (musicSource === null) {
           return null;
         }
-        const musicCatalog = parseMusicCatalog(musicSource);
-        if (
-          musicCatalog.tracks &&
-          typeof musicCatalog.tracks === 'object' &&
-          !Array.isArray(musicCatalog.tracks)
-        ) {
-          const trackIds = new Set(Object.keys(musicCatalog.tracks as Record<string, unknown>));
-          for (const trackId of manifest.music) {
-            if (!trackIds.has(trackId)) {
-              throw new Error(`game manifest music track not in catalog: ${trackId}`);
-            }
-          }
+        const tracks = parseMusicTracks(musicSource);
+        const track = tracks[manifest.music];
+        if (track === undefined) {
+          throw new Error(`game manifest music track not in catalog: ${manifest.music}`);
         }
-        assetChunks.push(`window.__GAME_AUDIO_MUSIC__ = Object.freeze(${JSON.stringify(musicCatalog.music)});`);
-        assetChunks.push(`window.__GAME_MUSIC_TRACKS__ = Object.freeze(${JSON.stringify(musicCatalog.tracks)});`);
+        assetChunks.push(`window.__GAME_AUDIO_MUSIC__ = ${JSON.stringify(manifest.music)};`);
+        assetChunks.push(
+          `window.__GAME_MUSIC_TRACKS__ = Object.freeze(${JSON.stringify({ [manifest.music]: track })});`,
+        );
       }
 
       const assetsJs = assetChunks.length > 0 ? `${assetChunks.join('\n')}\n` : '';

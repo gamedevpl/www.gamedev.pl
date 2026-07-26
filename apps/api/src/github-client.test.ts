@@ -476,7 +476,7 @@ describe('getGameSources', () => {
         'games/coin-catcher/GAME.json',
         JSON.stringify({
           engine: { modules: ['input', 'audio'] },
-          audio: { sounds: ['ui-toggle', 'coin'], music: ['menu-theme'] },
+          audio: { sounds: ['ui-toggle', 'coin'], music: 'menu-theme' },
         }),
       ],
       ['shared/game-shell.css', '.shell { display: grid; }'],
@@ -488,8 +488,10 @@ describe('getGameSources', () => {
       [
         'shared/audio/music.json',
         JSON.stringify({
-          music: { 'menu-theme': 'data:audio/mpeg;base64,AAA=' },
-          tracks: { 'menu-theme': { loop: true } },
+          tracks: {
+            'menu-theme': { loop: true, data: 'data:audio/mpeg;base64,AAA=' },
+            'other-theme': { loop: false, data: 'data:audio/mpeg;base64,BBB=' },
+          },
         }),
       ],
     ]);
@@ -508,10 +510,10 @@ describe('getGameSources', () => {
     expect(sources?.styleCss).toBe('.shell { display: grid; }\n.game { color: gold; }');
     expect(sources?.gameJs).toContain('"ui-toggle":"data:audio/wav;base64,AQI="');
     expect(sources?.gameJs).toContain('"coin":"data:audio/wav;base64,AwQ="');
-    expect(sources?.gameJs).toContain('window.__GAME_AUDIO_MUSIC__');
-    expect(sources?.gameJs).toContain('window.__GAME_MUSIC_TRACKS__');
-    expect(sources?.gameJs).toContain('"menu-theme":"data:audio/mpeg;base64,AAA="');
-    expect(sources?.gameJs).toContain('"loop":true');
+    // Games-repo contract: selected name as a string, plus a one-entry tracks map.
+    expect(sources?.gameJs).toContain('window.__GAME_AUDIO_MUSIC__ = "menu-theme";');
+    expect(sources?.gameJs).toContain('window.__GAME_MUSIC_TRACKS__ = Object.freeze({"menu-theme":{"loop":true,"data":"data:audio/mpeg;base64,AAA="}});');
+    expect(sources?.gameJs).not.toContain('other-theme');
     expect(sources?.gameJs.indexOf('window.GameKit =')).toBeLessThan(
       sources?.gameJs.indexOf('GameKit.createInput') ?? 0,
     );
@@ -536,7 +538,7 @@ describe('getGameSources', () => {
         'games/squad/GAME.json',
         JSON.stringify({
           engine: { modules: ['input', 'collision', 'world', 'drawing', 'actors', 'gfx', 'effects', 'audio'] },
-          audio: { sounds: ['shot'], music: [] },
+          audio: { sounds: ['shot'], music: 'battle' },
         }),
       ],
       ['shared/game-shell.css', '.shell {}'],
@@ -550,7 +552,7 @@ describe('getGameSources', () => {
       ['shared/modules/effects.ts', 'GameKit.effects = true;'],
       ['shared/modules/audio.ts', 'GameKit.audio = true;'],
       ['shared/audio/assets/shot.wav', new Uint8Array([9])],
-      ['shared/audio/music.json', JSON.stringify({ music: {}, tracks: {} })],
+      ['shared/audio/music.json', JSON.stringify({ tracks: { battle: { loop: true } } })],
     ]);
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
       const pathname = new URL(String(input)).pathname;
@@ -582,7 +584,7 @@ describe('getGameSources', () => {
         'games/legacy/GAME.json',
         // "sprite" is not in GAME_KIT_MODULES — this is what production was throwing on
         // when games selected `gfx` against a stale allow-list.
-        JSON.stringify({ engine: { modules: ['input', 'sprite', 'audio'] }, audio: { sounds: ['a'], music: [] } }),
+        JSON.stringify({ engine: { modules: ['input', 'sprite', 'audio'] }, audio: { sounds: ['a'], music: 'x' } }),
       ],
       ['shared/game-shell.css', '.shell{}'],
       ['shared/modules/core.ts', 'window.GameKit = {};'],
