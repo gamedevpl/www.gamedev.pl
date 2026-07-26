@@ -22,6 +22,7 @@ import { registerTelemetryRoutes, type TelemetryRoutesOptions } from './telemetr
 import { registerVisitTelemetryRoutes } from './visit-telemetry.js';
 import { createPublishedSlugGateFromEnv } from './published-slugs.js';
 import { registerRateLimit } from './rate-limit.js';
+import { isKnownSpaShellPath, looksLikeStaticAsset } from './spa-paths.js';
 
 const GenerateRequestSchema = z.object({
   prompt: z.string().trim().min(1, 'prompt is required').max(500, 'prompt is too long'),
@@ -301,13 +302,19 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         }
       },
     });
-    // SPA fallback: any non-/api GET that isn't a real file returns index.html
-    // so path deep links (`/play/<slug>`, `/status/<token>`, …) survive refresh.
+    // SPA shell: known deep links (`/play/<slug>`, …) keep HTTP 200 so refresh
+    // works; everything else gets a *proper* HTTP 404 with the same `index.html`
+    // so crawlers/tools see a real miss while the client can still render NotFound.
+    // Missing extension-bearing files stay hard 404s (never the HTML shell).
     app.setNotFoundHandler((request, reply) => {
       if (request.method !== 'GET' || request.url.startsWith('/api')) {
         return reply.status(404).send({ error: 'not found' });
       }
-      return reply.sendFile('index.html');
+      if (looksLikeStaticAsset(request.url)) {
+        return reply.status(404).send({ error: 'not found' });
+      }
+      const status = isKnownSpaShellPath(request.url) ? 200 : 404;
+      return reply.status(status).type('text/html').sendFile('index.html');
     });
   }
 

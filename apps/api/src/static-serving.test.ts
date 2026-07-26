@@ -71,10 +71,25 @@ describe('static web serving', () => {
     expect(res.headers['cache-control']).toBe('no-cache');
   });
 
-  it('SPA fallback serves index.html with no-cache for unknown paths', async () => {
-    const res = await app.inject({ method: 'GET', url: '/some/spa/route' });
+  it('serves known SPA deep links as 200 + index.html', async () => {
+    const res = await app.inject({ method: 'GET', url: '/play/sky-dodge' });
     expect(res.statusCode).toBe(200);
     expect(res.headers['cache-control']).toBe('no-cache');
+    expect(res.headers['content-type']).toMatch(/text\/html/);
     expect(res.body).toContain('gamedev.pl shell');
+  });
+
+  it('serves unknown paths as a proper HTTP 404 with the SPA shell', async () => {
+    const res = await app.inject({ method: 'GET', url: '/some/spa/route' });
+    expect(res.statusCode).toBe(404);
+    expect(res.headers['cache-control']).toBe('no-cache');
+    expect(res.headers['content-type']).toMatch(/text\/html/);
+    expect(res.body).toContain('gamedev.pl shell');
+  });
+
+  it('keeps missing static assets as hard 404s, not the HTML shell', async () => {
+    const res = await app.inject({ method: 'GET', url: '/assets/missing-AbCd.js' });
+    expect(res.statusCode).toBe(404);
+    expect(res.body).not.toContain('gamedev.pl shell');
   });
 });
