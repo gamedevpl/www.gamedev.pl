@@ -1,0 +1,162 @@
+// @vitest-environment jsdom
+
+import { act, createElement } from 'react';
+import { createRoot } from 'react-dom/client';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ArcadeCatalog } from './ArcadeCatalog';
+import type { CatalogEntry } from './catalog';
+import i18n from './i18n';
+
+type ObserverInstance = {
+  callback: IntersectionObserverCallback;
+  observe: ReturnType<typeof vi.fn>;
+  disconnect: ReturnType<typeof vi.fn>;
+  targets: Element[];
+};
+
+let observers: ObserverInstance[];
+
+function installIntersectionObserverMock() {
+  observers = [];
+  class MockIntersectionObserver {
+    callback: IntersectionObserverCallback;
+    observe = vi.fn((target: Element) => {
+      this.targets.push(target);
+    });
+    disconnect = vi.fn();
+    unobserve = vi.fn();
+    targets: Element[] = [];
+    root = null;
+    rootMargin = '';
+    thresholds = [];
+
+    constructor(callback: IntersectionObserverCallback) {
+      this.callback = callback;
+      observers.push(this);
+    }
+
+    takeRecords(): IntersectionObserverEntry[] {
+      return [];
+    }
+  }
+
+  vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
+}
+
+function intersect(observer: ObserverInstance, target: Element, isIntersecting: boolean) {
+  observer.callback(
+    [
+      {
+        isIntersecting,
+        target,
+        intersectionRatio: isIntersecting ? 1 : 0,
+        time: 0,
+        boundingClientRect: {} as DOMRectReadOnly,
+        intersectionRect: {} as DOMRectReadOnly,
+        rootBounds: null,
+      },
+    ],
+    observer as unknown as IntersectionObserver,
+  );
+}
+
+const entries: CatalogEntry[] = [
+  {
+    slug: 'above-fold',
+    title: 'Above Fold',
+    genre: 'Arcade',
+    controls: 'Arrow keys',
+    status: 'published',
+    media: {
+      screenshots: [
+        { name: 'opening', file: 'opening.png' },
+        { name: 'mid', file: 'mid.png' },
+      ],
+      video: 'gameplay.mp4',
+    },
+    multiplayer: null,
+    orientation: 'any',
+  },
+  {
+    slug: 'below-fold',
+    title: 'Below Fold',
+    genre: 'Puzzle',
+    controls: 'Mouse',
+    status: 'published',
+    media: {
+      screenshots: [
+        { name: 'opening', file: 'opening.png' },
+        { name: 'win', file: 'win.png' },
+      ],
+      video: 'preview.mp4',
+    },
+    multiplayer: null,
+    orientation: 'any',
+  },
+];
+
+async function flushEffects() {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
+describe('ArcadeCatalog lazy media', () => {
+  beforeEach(async () => {
+    installIntersectionObserverMock();
+    await i18n.changeLanguage('en');
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('does not attach image or video sources until a card enters the viewport', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(ArcadeCatalog, {
+          catalogStatus: 'ready',
+          catalogError: null,
+          catalogEntries: entries,
+          onPlayGame: vi.fn(),
+          onPlayTogether: vi.fn(),
+          onRetryCatalog: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    expect(container.querySelectorAll('.catalog-card')).toHaveLength(2);
+    expect(container.querySelectorAll('video')).toHaveLength(0);
+    expect(container.querySelectorAll('img.catalog-preview')).toHaveLength(0);
+    expect(container.querySelectorAll('.catalog-moment')).toHaveLength(0);
+    expect(observers).toHaveLength(2);
+
+    const firstMedia = container.querySelectorAll('.catalog-media')[0]!;
+    await act(async () => {
+      intersect(observers[0]!, firstMedia, true);
+      await flushEffects();
+    });
+
+    const preview = container.querySelector<HTMLVideoElement>('video.catalog-preview');
+    expect(preview?.getAttribute('src')).toBe('/api/games/above-fold/media/gameplay.mp4');
+    expect(preview?.getAttribute('poster')).toBe('/api/games/above-fold/media/opening.png');
+    expect(container.querySelectorAll('.catalog-moment')).toHaveLength(2);
+
+    // The second card still has no media srcs — it never intersected.
+    expect(container.querySelectorAll('video')).toHaveLength(1);
+    expect(container.querySelectorAll('.catalog-moment img')).toHaveLength(2);
+    const momentSrcs = [...container.querySelectorAll<HTMLImageElement>('.catalog-moment img')].map((img) => img.src);
+    expect(momentSrcs.every((src) => src.includes('/api/games/above-fold/'))).toBe(true);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+});
