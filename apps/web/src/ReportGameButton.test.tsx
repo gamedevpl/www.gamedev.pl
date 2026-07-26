@@ -26,16 +26,14 @@ beforeEach(async () => {
   document.body.appendChild(container);
 });
 
-afterEach(async () => {
-  // Unmount before jsdom tears the document down — otherwise React's scheduler can
-  // still commit after `window` is gone and Vitest reports an unhandled
-  // "window is not defined" even though every assertion passed.
-  if (root) {
-    await act(async () => {
-      root?.unmount();
-    });
-    root = null;
-  }
+afterEach(() => {
+  // Unmount before removing the host — otherwise React can still commit after jsdom
+  // tears the environment down and Vitest fails the suite with "window is not defined"
+  // even though every assertion already passed.
+  act(() => {
+    root?.unmount();
+  });
+  root = null;
   container.remove();
 });
 

@@ -3,16 +3,35 @@ import { useTranslation } from 'react-i18next';
 import { GameTheater } from './GameTheater';
 import { getDraftBySlug, type SubmissionApiError, type SubmissionPreview } from './submissionApi';
 
+type DraftViewProps = {
+  slug: string;
+  onExit: () => void;
+  /**
+   * Reports the draft's real name (or null while loading / on error) so App can
+   * own `document.title` as the single writer — avoids stale titles when the
+   * slug changes or the language switches mid-view.
+   */
+  onDraftTitle?: (title: string | null) => void;
+};
+
 /**
  * `/draft/<slug>` — an in-progress game opened by permalink instead of by status
  * token. This is the shareable view: it can play the build, and nothing else. The
  * creator's own status page keeps the token, and with it the ability to request
  * changes; anyone they send this link to just gets to watch the game take shape.
  */
-export function DraftView({ slug, onExit }: { slug: string; onExit: () => void }) {
+export function DraftView({ slug, onExit, onDraftTitle }: DraftViewProps) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState<SubmissionPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    onDraftTitle?.(draft?.title ?? null);
+  }, [draft?.title, onDraftTitle]);
+
+  useEffect(() => {
+    return () => onDraftTitle?.(null);
+  }, [onDraftTitle]);
 
   useEffect(() => {
     let cancelled = false;

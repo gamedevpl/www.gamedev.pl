@@ -31,46 +31,43 @@ function game(partial: Partial<GameHealth> & { slug: string }): GameHealth {
   };
 }
 
-function emptyFunnel(overrides: Partial<VisitFunnel> = {}): VisitFunnel {
-  return {
-    visits: 0,
-    bounces: 0,
-    visitsWithPlay: 0,
-    plays: 0,
-    depth: [],
-    medianPlaysPerPlayingVisit: 0,
-    timeToFirstPlay: [],
-    medianSecondsToFirstPlay: 0,
-    entries: [],
-    referrers: [],
-    campaigns: [],
-    ...overrides,
-  };
-}
+const EMPTY_FUNNEL: VisitFunnel = {
+  visits: 0,
+  bounces: 0,
+  visitsWithPlay: 0,
+  plays: 0,
+  depth: [],
+  medianPlaysPerPlayingVisit: 0,
+  timeToFirstPlay: [],
+  medianSecondsToFirstPlay: 0,
+  entries: [],
+  referrers: [],
+  campaigns: [],
+};
 
 /**
- * The page fetches health and visits in parallel for the same window. A single
- * mockResolvedValue Response is consumed by the first reader and leaves the second
- * as a thrown "body already used" — which is exactly how these tests started
- * failing once the visit funnel landed beside game health.
+ * Answers both admin endpoints the view fetches in parallel.
+ *
+ * Two details this has to get right, both learned by getting them wrong. A `Response`
+ * body is single-use, so every call needs a *freshly constructed* one — sharing one
+ * instance makes the second `.json()` throw and the whole view fall into its error
+ * state. And the two endpoints must be told apart by URL, since `Promise.all` means a
+ * funnel payload answering the health request would fail just as silently.
  */
-function respondWith(health: HealthResponse | null, status = 200, visits?: VisitsResponse | null) {
-  const visitsBody =
-    visits === undefined
-      ? health === null
-        ? null
-        : ({ days: health.days, truncated: health.truncated, funnel: emptyFunnel() } satisfies VisitsResponse)
-      : visits;
+function respondWith(body: HealthResponse | null, status = 200, funnel?: VisitsResponse) {
+  const visitsBody: VisitsResponse | null =
+    body === null ? null : (funnel ?? { days: body.days, truncated: body.truncated, funnel: EMPTY_FUNNEL });
 
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const url = String(input);
-    if (url.includes('/api/admin/telemetry/visits')) {
-      if (visitsBody === null) return new Response(null, { status });
-      return new Response(JSON.stringify(visitsBody), { status: 200 });
-    }
-    if (health === null) return new Response(null, { status });
-    return new Response(JSON.stringify(health), { status: 200 });
+    const payload = url.includes('/telemetry/visits') ? visitsBody : body;
+    return payload === null ? new Response(null, { status }) : new Response(JSON.stringify(payload), { status: 200 });
   }) as MockInstance<typeof globalThis.fetch>;
+}
+
+/** The health-endpoint calls only — the view also fetches the funnel on every window. */
+function healthCalls(fetchSpy: MockInstance<typeof globalThis.fetch>) {
+  return fetchSpy.mock.calls.map(([input]) => String(input)).filter((url) => url.includes('/telemetry/health'));
 }
 
 describe('GameHealthView', () => {
@@ -179,18 +176,20 @@ describe('GameHealthView', () => {
     const fetchSpy = respondWith({ days: ['2026-07-25'], truncated: false, games: [] });
 
     const root = await render();
-    const initialUrls = fetchSpy.mock.calls.map((call) => String(call[0]));
-    expect(initialUrls.some((url) => url.includes('/health?days=7'))).toBe(true);
-    expect(initialUrls.some((url) => url.includes('/visits?days=7'))).toBe(true);
+    expect(healthCalls(fetchSpy)[0]).toContain('days=7');
 
     const monthButton = [...container.querySelectorAll('button')].find((node) => node.textContent === '30d');
     await act(async () => {
       monthButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    const laterUrls = fetchSpy.mock.calls.map((call) => String(call[0]));
-    expect(laterUrls.some((url) => url.includes('/health?days=30'))).toBe(true);
-    expect(laterUrls.some((url) => url.includes('/visits?days=30'))).toBe(true);
+    expect(healthCalls(fetchSpy)[1]).toContain('days=30');
+    // Both panels share the window, so the funnel must follow it too — a 7-day funnel
+    // above a 30-day table would be a quietly wrong page.
+    const visitCalls = fetchSpy.mock.calls
+      .map(([input]) => String(input))
+      .filter((url) => url.includes('/telemetry/visits'));
+    expect(visitCalls.some((url) => url.includes('days=30'))).toBe(true);
     await act(async () => root.unmount());
   });
 });

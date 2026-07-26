@@ -403,5 +403,15 @@
       "unreachable": "Lost connection to the lobby.",
       "rate_limited": "Too many inputs — connection closed."
     }
+  },
+  "pageTitle": {
+    "home": "Gamedev.pl — Describe a game, play it",
+    "status": "Your game is in the works",
+    "draft": "A game in the making",
+    "join": "Join the game",
+    "health": "Telemetry",
+    "playNamed": "Play {{title}}",
+    "draftNamed": "Draft {{title}}",
+    "statusNamed": "Status · {{title}}"
   }
 }
