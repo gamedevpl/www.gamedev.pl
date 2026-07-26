@@ -194,28 +194,54 @@ registry gains FCM/APNs token rows alongside the web-push subscriptions it alrea
 
 ### M0 — Mobile-web hardening 🚧 (prerequisite for everything; nearly done)
 
-- 🚧 Responsive pass over `App.tsx` surfaces, at 320px as well as 360px — one column,
+- ✅ Responsive pass over `App.tsx` surfaces, at 320px as well as 360px — one column,
   thumb-sized targets, safe-area insets, no horizontal scroll, no field under 16px.
+  Every surface has now been driven at 360px, most through a real signed-in session
+  (`/api/auth/dev`, local-only) rather than props stubs. (`CreatorStudio` was on this
+  list until it was deleted as dead code — it had not been mounted since the QA gate
+  moved into `App`.)
   - ✅ `NavHeader` — one row, ≥44px targets, overflow controls moved into the menu.
   - ✅ `HeroPromptSection` — media buttons no longer float over the textarea, example
     chips are one swipeable row instead of a 148px stack, and the wordmark stops
     colliding with the sign-in button on a 320px screen.
-  - 📋 `SubmissionStatusView`, `ClosedBetaSplash`, `AuthModal`, and the `ArcadeCatalog`
-    grid — never audited at 360px. (`CreatorStudio` was on this list until it was
-    deleted as dead code — it had not been mounted since the QA gate moved into `App`.)
+  - ✅ `AuthModal` — was rendering off the top of the screen (the header's
+    `backdrop-filter` made it the containing block for the modal's `position: fixed`
+    backdrop); portalled to `document.body`.
+  - ✅ `SketchModal` — every control (palette, size, action buttons) was under 44px;
+    all now meet the floor.
+  - ✅ `ClosedBetaSplash` — clean at 320/360. Google's own sign-in widget renders at
+    40px (their "large" preset, the largest available); not actionable without
+    deviating from their branding rules, and 4px under the floor is not worth it.
+  - ✅ `SubmissionStatusView` — the QA panel's two "Create Now" buttons (identical
+    markup, one measured 52px and the other 36px — no CSS difference found to explain
+    it) and the "Stop this build" / "Yes, stop it" / "Keep building" controls (14px)
+    are now ≥44px.
+  - 🚧 `ArcadeCatalog` — fixed a real production bug found in the process: the AI
+    Act disclosure badge (`.ai-pill`, landed the same day) and the preview-toggle
+    button both claimed the same `top:10px; left:10px`, so the mandatory disclosure
+    was drawn on top of "Watch preview" on every card with a video — live on prod
+    before this fix. Not yet done: `preview-toggle` (116×28) and the `catalog-moment`
+    screenshot-picker thumbnails (42×26) are real, tappable controls under 44px.
 - ✅ Mobile play surface: `GameTheater` has wake-lock, the orientation nudge from catalog
   metadata, safe-area insets, and an on-screen close.
 - ✅ **Games touch contract** — built and CI-enforced; see the section above. 73 games,
-  none keyboard-only.
-- 📋 Surface `touch` in the SPA: badge it in the catalog and let a phone visitor filter to
-  what their thumb can play. The data has been in `catalog.json` all along.
+  none keyboard-only. A phone can now also restart a finished game (GameKit's on-screen
+  "Play again"), closing the one real gap a player reported from a device.
+- 📋 Surface `touch` in the SPA: **corrected 2026-07-26** — this is not a small tweak.
+  `catalog.json` is a gitignored build artifact the API never reads; production's
+  catalog is reconstructed live from each game's `SPEC.md` frontmatter, which never
+  carries `touch` (deliberately — it is derived from source, not authored, so a spec
+  can't claim playability the code doesn't have). Badging it means either the API
+  fetches and classifies `game.ts` per game, or the games repo commits a small derived
+  sidecar the API can read, mirroring the existing `media/metadata.json` pattern.
 - 🚧 Exit criterion: **on a real iPhone and a real Android phone, sign in, browse, play a
   touch game, submit a spec, and watch its status — comfortably.** Partly met on
-  2026-07-25: the owner signed in, submitted a spec and answered the QA questions from an
-  iPhone SE, and reported the prompt card as too cluttered at that size (since fixed).
-  Still unverified on a real device: browsing the catalog, and **playing a touch game** —
-  the one thing no harness here can stand in for, since synthetic clicks never reach
-  sandboxed game code.
+  2026-07-25: the owner signed in, submitted a spec, answered the QA questions, and
+  played games from an iPhone SE, and reported two real bugs from that pass — a
+  cluttered prompt card and games with no way to restart on a phone — both since fixed
+  and confirmed live. **Still open: catalog browsing and general play on a real device**
+  have not been re-verified since. Everything else in this list has been driven in a
+  browser pane at 320/360/375px, which is a stand-in for a phone, not a phone.
 
 ### M1 — PWA 📋 (push already done; only the shell remains)
 
