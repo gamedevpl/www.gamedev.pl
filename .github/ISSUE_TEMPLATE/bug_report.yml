@@ -27,7 +27,7 @@ body:
     attributes:
       label: Where?
       description: The page or game you were on.
-      placeholder: https://www.gamedev.pl/#/play/arena-tag
+      placeholder: https://www.gamedev.pl/play/arena-tag
     validations:
       required: false
 
