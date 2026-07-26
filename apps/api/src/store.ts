@@ -229,10 +229,13 @@ export const TELEMETRY_COLLECTION = 'playEvents';
  * Visit telemetry's collection group, separate from `playEvents` for the same reason
  * that one is separate from `events`: a TTL policy is scoped to a group.
  *
- * ⚠️ Deploy note: a new group needs its own TTL policy (`gcloud firestore fields ttls
- * update expiresAt --collection-group=visitEvents`). Until that policy exists these rows
- * are written with an `expiresAt` nothing acts on — they accumulate rather than expire,
- * which breaks the same retention promise `playEvents` keeps.
+ * Its policy is live (created 2026-07-26) and [setup-gcp.sh](../../../infra/setup-gcp.sh)
+ * step 6/6 now provisions every group in one loop rather than naming `playEvents` alone.
+ *
+ * ⚠️ **Adding a third stream? Add its group to that loop in the same change.** A group
+ * without a policy still writes `expiresAt` — nothing errors, nothing expires, and the
+ * retention promise quietly stops covering it. That is exactly how this one shipped
+ * uncovered for a day.
  */
 export const VISIT_COLLECTION = 'visitEvents';
 

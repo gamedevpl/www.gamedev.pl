@@ -62,32 +62,41 @@ gcloud secrets add-iam-policy-binding session-secret \
   --project="$PROJECT_ID" \
   >/dev/null
 
-# Raw play telemetry is kept for 90 days (docs/improvement-loop-plan.md IL-1). Firestore
-# enforces that with a TTL policy on the field the writer stamps — see
-# TELEMETRY_TTL_FIELD / TELEMETRY_COLLECTION in apps/api/src/store.ts. The policy names
-# must match those constants exactly: a policy pointed at the wrong field or collection
-# group is a silent no-op that deletes nothing and reports no error.
+# Telemetry is kept for 90 days (docs/improvement-loop-plan.md IL-1). Firestore enforces
+# that with a TTL policy on the field the writer stamps — see TELEMETRY_TTL_FIELD,
+# TELEMETRY_COLLECTION and VISIT_COLLECTION in apps/api/src/store.ts. The names must match
+# those constants exactly: a policy pointed at the wrong field or collection group is a
+# silent no-op that deletes nothing and reports no error.
 #
-# The collection group is `playEvents`, deliberately not `events` — a TTL policy applies
-# to a collection group rather than a path, and `submissions/{n}/events` holds durable
+# **One policy per collection group, and that is the whole reason this is a loop.** A TTL
+# policy is scoped to a group rather than a path, so every new telemetry stream needs its
+# own — `playEvents` did not cover `visitEvents` when that stream landed, and the rows
+# accumulated with an `expiresAt` nothing acted on. Add the group here in the same change
+# that adds the stream, or the retention promise silently stops covering it.
+#
+# The groups are deliberately not named `events`: `submissions/{n}/events` holds durable
 # build history that must never expire.
+#
 # `ttls list` reports only fields that already have a policy, so a name match is the
-# existence check. Verified against the live ACTIVE policy on 2026-07-25.
-echo "==> 6/6 Ensuring the 90-day TTL policy on telemetry playEvents.expiresAt"
-if gcloud firestore fields ttls list --project="$PROJECT_ID" --format="value(name)" 2>/dev/null |
-  grep -q "collectionGroups/playEvents/fields/expiresAt"; then
-  echo "    TTL policy already present."
-else
-  # --enable-ttl is required and is what makes the field the collection group's TTL
-  # field. No --expiration-offset: `expiresAt` is already the absolute deadline, so the
-  # row expires exactly at the value the writer computed.
-  gcloud firestore fields ttls update expiresAt \
-    --collection-group=playEvents \
-    --enable-ttl \
-    --project="$PROJECT_ID"
-  echo "    TTL policy created. It applies to documents carrying the field; rows written"
-  echo "    before it existed are never expired by it."
-fi
+# existence check. Verified against the live ACTIVE playEvents policy on 2026-07-25.
+TELEMETRY_GROUPS="playEvents visitEvents"
+echo "==> 6/6 Ensuring the 90-day TTL policy on each telemetry collection group"
+EXISTING_TTLS="$(gcloud firestore fields ttls list --project="$PROJECT_ID" --format="value(name)" 2>/dev/null || true)"
+for GROUP in $TELEMETRY_GROUPS; do
+  if printf '%s\n' "$EXISTING_TTLS" | grep -q "collectionGroups/${GROUP}/fields/expiresAt"; then
+    echo "    ${GROUP}.expiresAt: already present."
+  else
+    # --enable-ttl is required and is what makes the field the group's TTL field. No
+    # --expiration-offset: `expiresAt` is already the absolute deadline, so a row expires
+    # exactly at the value the writer computed.
+    gcloud firestore fields ttls update expiresAt \
+      --collection-group="$GROUP" \
+      --enable-ttl \
+      --project="$PROJECT_ID"
+    echo "    ${GROUP}.expiresAt: created. It applies to documents carrying the field;"
+    echo "    rows written before it existed are never expired by it."
+  fi
+done
 
 echo ""
 echo "==> Done. Firestore database, IAM roles (datastore.user, aiplatform.user), session-secret, and telemetry TTL configured for project ${PROJECT_ID}."
