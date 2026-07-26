@@ -898,7 +898,7 @@ const CATALOG_TOUCH_VALUES = new Set<CatalogGameTouch>(['gamekit', 'native', 'co
  * media filenames it vouches for become servable URLs, and this process must
  * not extend more trust to a repo file than to any other remote input.
  * Returns null when the payload is not a catalog at all (fall back to the
- * SPEC-derived fan-out); individual malformed entries are just skipped.
+ * GraphQL fan-out); individual malformed entries are just skipped.
  */
 function parseCommittedCatalog(raw: string): CatalogGameEntry[] | null {
   let body: unknown;
@@ -942,6 +942,14 @@ function parseCommittedCatalog(raw: string): CatalogGameEntry[] | null {
         ? { touch: touch as CatalogGameTouch }
         : {}),
     });
+  }
+
+  // Rows present but none usable means this is not the schema we understand — a
+  // field rename in the games repo, say. Serving the resulting empty array would
+  // blank every game on the site; fall through to the fan-out instead. An
+  // artifact that is genuinely `[]` still returns an empty catalog, as it should.
+  if (body.length > 0 && entries.length === 0) {
+    return null;
   }
   return entries;
 }

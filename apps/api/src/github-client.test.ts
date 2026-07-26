@@ -344,6 +344,41 @@ describe('getCatalog', () => {
     ]);
   });
 
+  it('falls back rather than blanking the site when no committed entry is usable', async () => {
+    // A schema change in the games repo (a renamed field, say) would leave a valid
+    // JSON array whose every row fails validation. Serving that as an empty catalog
+    // would hide all games; the fan-out must take over instead.
+    const base = catalogFetchImpl(['bubble-pop'], {
+      'games/bubble-pop/SPEC.md': specMd({ title: 'Bubble Pop Rush', status: 'published' }),
+      'games/bubble-pop/media/metadata.json': null,
+    });
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes('/contents/catalog.json')) {
+        return new Response(JSON.stringify([{ id: 'renamed-field' }, 'garbage']), { status: 200 });
+      }
+      return base(input, init);
+    }) as unknown as typeof fetch;
+
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+    const catalog = await client.getCatalog('main');
+
+    expect(catalog).toHaveLength(1);
+    expect(catalog[0].slug).toBe('bubble-pop');
+  });
+
+  it('treats a genuinely empty artifact as an empty catalog, not a failure', async () => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes('/contents/catalog.json')) {
+        return new Response('[]', { status: 200 });
+      }
+      throw new Error('unexpected request: the fan-out must not run');
+    }) as unknown as typeof fetch;
+
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+    expect(await client.getCatalog('main')).toEqual([]);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it('falls back to the GraphQL fan-out when catalog.json is not valid JSON', async () => {
     const base = catalogFetchImpl(['bubble-pop'], {
       'games/bubble-pop/SPEC.md': specMd({ title: 'Bubble Pop Rush', status: 'published' }),
