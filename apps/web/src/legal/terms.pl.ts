@@ -264,6 +264,15 @@ export const termsPl: LegalDocument = {
         {
           kind: 'p',
           text:
+            'Niezależnie od powyższego: w zakresie, w jakim Usługodawcy przysługują jakiekolwiek prawa do kodu gry ' +
+            'wygenerowanego na podstawie Twojego opisu, Usługodawca udziela Ci nieodpłatnej, niewyłącznej, ' +
+            'nieograniczonej terytorialnie i bezterminowej licencji na korzystanie z tego kodu w dowolnym celu, ' +
+            'w tym komercyjnym, wraz z prawem do jego modyfikowania i dalszego udostępniania. Licencja ta nie ' +
+            'obejmuje nazwy ani logo gamedev.pl, a także treści pochodzących od osób trzecich.',
+        },
+        {
+          kind: 'p',
+          text:
             'Możesz grać w gry opublikowane w Serwisie na własny użytek. Repozytorium gier nie jest obecnie ' +
             'publiczne; jeśli Usługodawca udostępni je na licencji otwartej, poinformuje o tym w Serwisie.',
         },
