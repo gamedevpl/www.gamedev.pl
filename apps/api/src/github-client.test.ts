@@ -1,5 +1,22 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createGitHubClient } from './github-client.js';
+import { createGitHubClient, resolveGameTypeScriptPath } from './github-client.js';
+
+describe('resolveGameTypeScriptPath', () => {
+  it.each([
+    ['./runtime.ts', '/games/foo/game/runtime.ts'],
+    ['./runtime.js', '/games/foo/game/runtime.ts'],
+    ['./runtime', '/games/foo/game/runtime.ts'],
+    ['../util.js', '/games/foo/util.ts'],
+  ])('maps %s under the game directory', (specifier, expected) => {
+    expect(resolveGameTypeScriptPath('/games/foo/game', specifier)).toBe(expected);
+  });
+
+  it('rejects bare package imports and non-TS assets', () => {
+    expect(resolveGameTypeScriptPath('/games/foo', 'lodash')).toBeNull();
+    expect(resolveGameTypeScriptPath('/games/foo', './levels.json')).toBeNull();
+    expect(resolveGameTypeScriptPath('/games/foo', './sprite.png')).toBeNull();
+  });
+});
 
 const repo = 'gamedevpl/www.gamedev.pl-games';
 
@@ -449,7 +466,7 @@ describe('getGameMedia', () => {
 });
 
 describe('getGameSources', () => {
-  it('bundles selected GameKit modules, audio assets, and shared shell styles before the game', async () => {
+  it('bundles selected GameKit modules, audio assets, music catalog, and shared shell styles', async () => {
     const files = new Map<string, string | Uint8Array>([
       ['games/coin-catcher/index.html', '<canvas id="game"></canvas>'],
       ['games/coin-catcher/game.ts', 'const game: { update(): void } = { update() {} }; GameKit.mount(game);'],
@@ -457,7 +474,10 @@ describe('getGameSources', () => {
       ['games/coin-catcher/SPEC.md', specMd({ title: 'Coin Catcher' })],
       [
         'games/coin-catcher/GAME.json',
-        JSON.stringify({ engine: { modules: ['input', 'audio'] }, audio: { sounds: ['ui-toggle', 'coin'] } }),
+        JSON.stringify({
+          engine: { modules: ['input', 'audio'] },
+          audio: { sounds: ['ui-toggle', 'coin'], music: ['menu-theme'] },
+        }),
       ],
       ['shared/game-shell.css', '.shell { display: grid; }'],
       ['shared/modules/core.ts', 'const version: number = 1; window.GameKit = { mount() {} };'],
@@ -465,6 +485,13 @@ describe('getGameSources', () => {
       ['shared/modules/audio.ts', 'GameKit.createAudio = function (): void {};'],
       ['shared/audio/assets/ui-toggle.wav', new Uint8Array([1, 2])],
       ['shared/audio/assets/coin.wav', new Uint8Array([3, 4])],
+      [
+        'shared/audio/music.json',
+        JSON.stringify({
+          music: { 'menu-theme': 'data:audio/mpeg;base64,AAA=' },
+          tracks: { 'menu-theme': { loop: true } },
+        }),
+      ],
     ]);
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
       const pathname = new URL(String(input)).pathname;
@@ -481,6 +508,10 @@ describe('getGameSources', () => {
     expect(sources?.styleCss).toBe('.shell { display: grid; }\n.game { color: gold; }');
     expect(sources?.gameJs).toContain('"ui-toggle":"data:audio/wav;base64,AQI="');
     expect(sources?.gameJs).toContain('"coin":"data:audio/wav;base64,AwQ="');
+    expect(sources?.gameJs).toContain('window.__GAME_AUDIO_MUSIC__');
+    expect(sources?.gameJs).toContain('window.__GAME_MUSIC_TRACKS__');
+    expect(sources?.gameJs).toContain('"menu-theme":"data:audio/mpeg;base64,AAA="');
+    expect(sources?.gameJs).toContain('"loop":true');
     expect(sources?.gameJs.indexOf('window.GameKit =')).toBeLessThan(
       sources?.gameJs.indexOf('GameKit.createInput') ?? 0,
     );
@@ -495,14 +526,101 @@ describe('getGameSources', () => {
     expect(() => new Function(sources?.gameJs ?? '')).not.toThrow();
   });
 
-  it('bundles a game-local TypeScript module graph from GitHub', async () => {
+  it('accepts the post-draw-surface module order including gfx and actors', async () => {
+    const files = new Map<string, string | Uint8Array>([
+      ['games/squad/index.html', '<canvas id="game"></canvas>'],
+      ['games/squad/game.ts', 'GameKit.mount({ ok: true });'],
+      ['games/squad/style.css', '.game {}'],
+      ['games/squad/SPEC.md', specMd({ title: 'Squad' })],
+      [
+        'games/squad/GAME.json',
+        JSON.stringify({
+          engine: { modules: ['input', 'collision', 'world', 'drawing', 'actors', 'gfx', 'effects', 'audio'] },
+          audio: { sounds: ['shot'], music: [] },
+        }),
+      ],
+      ['shared/game-shell.css', '.shell {}'],
+      ['shared/modules/core.ts', 'window.GameKit = { mount() {} };'],
+      ['shared/modules/input.ts', 'GameKit.input = true;'],
+      ['shared/modules/collision.ts', 'GameKit.collision = true;'],
+      ['shared/modules/world.ts', 'GameKit.world = true;'],
+      ['shared/modules/drawing.ts', 'GameKit.drawing = true;'],
+      ['shared/modules/actors.ts', 'GameKit.actors = true;'],
+      ['shared/modules/gfx.ts', 'GameKit.gfx = true;'],
+      ['shared/modules/effects.ts', 'GameKit.effects = true;'],
+      ['shared/modules/audio.ts', 'GameKit.audio = true;'],
+      ['shared/audio/assets/shot.wav', new Uint8Array([9])],
+      ['shared/audio/music.json', JSON.stringify({ music: {}, tracks: {} })],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const requestedPath = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+      const value = files.get(requestedPath);
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    const sources = await client.getGameSources('main', 'squad');
+
+    expect(sources?.gameJs).toContain('GameKit.gfx = true');
+    expect(sources?.gameJs).toContain('GameKit.actors = true');
+    expect(sources?.gameJs).toContain('GameKit.world = true');
+    expect(sources?.gameJs.indexOf('GameKit.world = true')).toBeLessThan(sources?.gameJs.indexOf('GameKit.gfx = true') ?? 0);
+    expect(() => new Function(sources?.gameJs ?? '')).not.toThrow();
+  });
+
+  it('rejects a GAME.json that still uses a pre-draw-surface module list as incomplete order', async () => {
+    // modules that omit required ordering relative to the canonical list are fine
+    // as a subset — but unknown names must throw (the live 502 root cause).
+    const files = new Map<string, string>([
+      ['games/legacy/index.html', '<canvas></canvas>'],
+      ['games/legacy/game.ts', 'GameKit.mount({});'],
+      ['games/legacy/style.css', '.g{}'],
+      ['games/legacy/SPEC.md', specMd({ title: 'Legacy' })],
+      [
+        'games/legacy/GAME.json',
+        // "sprite" is not in GAME_KIT_MODULES — this is what production was throwing on
+        // when games selected `gfx` against a stale allow-list.
+        JSON.stringify({ engine: { modules: ['input', 'sprite', 'audio'] }, audio: { sounds: ['a'], music: [] } }),
+      ],
+      ['shared/game-shell.css', '.shell{}'],
+      ['shared/modules/core.ts', 'window.GameKit = {};'],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const requestedPath = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+      const value = files.get(requestedPath);
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    await expect(client.getGameSources('main', 'legacy')).rejects.toThrow('invalid engine modules');
+  });
+
+  it.each([
+    {
+      label: '.ts suffix',
+      entry: "import { startGame } from './game/runtime.ts'; startGame();",
+      runtimeImport: "import type { Score } from './model.ts'; export function startGame(): void { const score: Score = { value: 3 }; GameKit.mount({ score }); }",
+    },
+    {
+      // TypeScript's Node ESM convention — import path says .js, source file is .ts.
+      label: '.js suffix',
+      entry: "import { startGame } from './game/runtime.js'; startGame();",
+      runtimeImport: "import type { Score } from './model.js'; export function startGame(): void { const score: Score = { value: 3 }; GameKit.mount({ score }); }",
+    },
+    {
+      label: 'extensionless',
+      entry: "import { startGame } from './game/runtime'; startGame();",
+      runtimeImport: "import type { Score } from './model'; export function startGame(): void { const score: Score = { value: 3 }; GameKit.mount({ score }); }",
+    },
+  ])('bundles a game-local TypeScript module graph from GitHub ($label)', async ({ entry, runtimeImport }) => {
     const files = new Map<string, string | Uint8Array>([
       ['games/modular/index.html', '<canvas id="game"></canvas>'],
-      ['games/modular/game.ts', "import { startGame } from './game/runtime.ts'; startGame();"],
-      [
-        'games/modular/game/runtime.ts',
-        "import type { Score } from './model.ts'; export function startGame(): void { const score: Score = { value: 3 }; GameKit.mount({ score }); }",
-      ],
+      ['games/modular/game.ts', entry],
+      ['games/modular/game/runtime.ts', runtimeImport],
       ['games/modular/game/model.ts', 'export type Score = { value: number };'],
       ['games/modular/style.css', '.game { color: gold; }'],
       ['games/modular/SPEC.md', specMd({ title: 'Modular Game' })],
@@ -529,9 +647,37 @@ describe('getGameSources', () => {
     expect(() => new Function(sources?.gameJs ?? '')).not.toThrow();
   });
 
+  it('resolves an extensionless directory import to index.ts', async () => {
+    const files = new Map<string, string | Uint8Array>([
+      ['games/modular/index.html', '<canvas id="game"></canvas>'],
+      // Import a subdirectory (not `./game`, which would collide with this entry file).
+      ['games/modular/game.ts', "import { startGame } from './lib'; startGame();"],
+      ['games/modular/lib/index.ts', 'export function startGame(): void { GameKit.mount({ ok: true }); }'],
+      ['games/modular/style.css', '.game { color: gold; }'],
+      ['games/modular/SPEC.md', specMd({ title: 'Modular Game' })],
+      ['games/modular/GAME.json', JSON.stringify({ engine: { modules: [] } })],
+      ['shared/game-shell.css', '.shell { display: grid; }'],
+      ['shared/modules/core.ts', 'window.GameKit = { mount() {} };'],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const requestedPath = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+      const value = files.get(requestedPath);
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    const sources = await client.getGameSources('main', 'modular');
+
+    expect(sources?.gameJs).toContain('ok: true');
+    expect(() => new Function(sources?.gameJs ?? '')).not.toThrow();
+  });
+
   it.each([
     ["import '../other-game/runtime.ts';", 'game imports must be TypeScript files inside'],
     ["import 'some-package';", 'game runtime dependency is forbidden'],
+    ["import './levels.json';", 'game imports must be TypeScript files inside'],
   ])('rejects an unsafe game import: %s', async (entrySource, expectedError) => {
     const files = new Map<string, string>([
       ['games/unsafe/index.html', '<canvas id="game"></canvas>'],

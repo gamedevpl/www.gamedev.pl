@@ -63,17 +63,69 @@ export interface GameSources {
 }
 
 // Canonical order must match the games repo's tools/lib/assemble.ts — the two
-// lists are independent copies and a mismatch silently breaks bundling.
-const GAME_KIT_MODULES = ['input', 'collision', 'drawing', 'effects', 'audio', 'party'] as const;
+// lists are independent copies and a mismatch silently breaks bundling
+// (issue #247: a stale list 502s every published game at serve time).
+const GAME_KIT_MODULES = [
+  'input',
+  'collision',
+  'world',
+  'ai',
+  'gameplay',
+  'drawing',
+  'actors',
+  'gfx',
+  'effects',
+  'audio',
+  'party',
+] as const;
 const MAX_GAME_MODULES = 64;
 const MAX_GAME_SOURCE_BYTES = 200 * 1024;
 
-interface GameManifest {
-  engine?: { modules?: unknown };
-  audio?: { sounds?: unknown };
+/**
+ * Maps a relative import specifier onto a `.ts` source path.
+ *
+ * The games repo authors TypeScript the way TypeScript ESM projects do: an import
+ * may write `./foo.ts`, `./foo.js` (emit path — source is still `foo.ts`), or `./foo`.
+ * The play-time bundler has to accept all three or every modular game 502s while the
+ * games repo's own assemble (which resolves the same way) stays green.
+ *
+ * Returns null when the specifier is not a relative TypeScript module path.
+ */
+export function resolveGameTypeScriptPath(resolveDir: string, specifier: string): string | null {
+  if (!specifier.startsWith('./') && !specifier.startsWith('../')) {
+    return null;
+  }
+  const resolvedPath = path.posix.resolve(resolveDir, specifier);
+  if (resolvedPath.endsWith('.ts')) {
+    return resolvedPath;
+  }
+  if (resolvedPath.endsWith('.js')) {
+    return `${resolvedPath.slice(0, -'.js'.length)}.ts`;
+  }
+  // Extensionless — only accept bare paths (no other extension). `./foo.json` stays rejected.
+  if (path.posix.extname(resolvedPath) !== '') {
+    return null;
+  }
+  return `${resolvedPath}.ts`;
 }
 
-function parseGameManifest(source: string): { modules: string[]; sounds: string[] } {
+interface GameManifest {
+  engine?: { modules?: unknown };
+  audio?: { sounds?: unknown; music?: unknown };
+}
+
+interface ParsedGameManifest {
+  modules: string[];
+  sounds: string[];
+  /** Track ids from GAME.json; only populated when the audio module is selected. */
+  music: string[];
+}
+
+function isKebabCaseName(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-z0-9][a-z0-9-]*$/.test(value);
+}
+
+function parseGameManifest(source: string): ParsedGameManifest {
   const manifest = JSON.parse(source) as GameManifest;
   const modules = manifest.engine?.modules;
   if (
@@ -91,19 +143,50 @@ function parseGameManifest(source: string): { modules: string[]; sounds: string[
     throw new Error('game manifest engine modules are duplicated or out of order');
   }
 
-  const sounds = manifest.audio?.sounds;
   if (!modules.includes('audio')) {
-    return { modules, sounds: [] };
+    return { modules, sounds: [], music: [] };
   }
+
+  const sounds = manifest.audio?.sounds;
   if (
     !Array.isArray(sounds) ||
     sounds.length === 0 ||
     new Set(sounds).size !== sounds.length ||
-    sounds.some((soundName) => typeof soundName !== 'string' || !/^[a-z0-9][a-z0-9-]*$/.test(soundName))
+    !sounds.every(isKebabCaseName)
   ) {
     throw new Error('game manifest contains invalid audio sounds');
   }
-  return { modules, sounds };
+
+  // Games-repo assemble requires `audio.music` whenever the audio module is on —
+  // the shared catalog is embedded as __GAME_AUDIO_MUSIC__ / __GAME_MUSIC_TRACKS__.
+  const music = manifest.audio?.music;
+  if (!Array.isArray(music) || new Set(music).size !== music.length || !music.every(isKebabCaseName)) {
+    throw new Error('game manifest contains invalid audio music');
+  }
+
+  return { modules, sounds, music };
+}
+
+/**
+ * Shared music catalog (`shared/audio/music.json`). Shape mirrors the games repo
+ * assembler: a `music` map of embeddable assets plus a `tracks` map of playback
+ * descriptors. Both are frozen onto `window` for GameKit.audio.
+ */
+function parseMusicCatalog(source: string): { music: unknown; tracks: unknown } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(source);
+  } catch {
+    throw new Error('shared audio music catalog is not valid JSON');
+  }
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error('shared audio music catalog is invalid');
+  }
+  const catalog = parsed as { music?: unknown; tracks?: unknown };
+  if (catalog.music === undefined || catalog.tracks === undefined) {
+    throw new Error('shared audio music catalog is missing music or tracks');
+  }
+  return { music: catalog.music, tracks: catalog.tracks };
 }
 
 export interface CatalogMediaScreenshot {
@@ -437,13 +520,18 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
           name: 'github-game-modules',
           setup(builder) {
             builder.onResolve({ filter: /^\./ }, (args) => {
-              const resolvedPath = path.posix.resolve(args.resolveDir, args.path);
-              if (!resolvedPath.startsWith(`${gameRoot}/`) || !resolvedPath.endsWith('.ts')) {
+              // Games-repo TypeScript follows normal ESM habits: relative imports may
+              // carry a `.ts` suffix, a `.js` suffix (TypeScript's Node ESM convention
+              // — the source file is still `.ts`), or no suffix at all. Map all three
+              // onto a path under the game directory before the sandbox check; anything
+              // that escapes the game root is rejected.
+              const sourcePath = resolveGameTypeScriptPath(args.resolveDir, args.path);
+              if (!sourcePath || !sourcePath.startsWith(`${gameRoot}/`)) {
                 return {
                   errors: [{ text: `game imports must be TypeScript files inside ${gameRoot}` }],
                 };
               }
-              return { path: resolvedPath, namespace: 'github-game-source' };
+              return { path: sourcePath, namespace: 'github-game-source' };
             });
             builder.onResolve({ filter: /^[^.]/ }, (args) => ({
               errors: [{ text: `game runtime dependency is forbidden: "${args.path}"` }],
@@ -455,7 +543,21 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
                 }
                 loadedPaths.add(args.path);
               }
-              const source = await readRawFile(args.path.slice(1), ref);
+              // Prefer the resolved file; if an extensionless import pointed at a
+              // directory, fall back to its index.ts (same rule TypeScript uses).
+              let loadedPath = args.path;
+              let source = await readRawFile(loadedPath.slice(1), ref);
+              if (source === null && loadedPath.endsWith('.ts')) {
+                const indexPath = `${loadedPath.slice(0, -'.ts'.length)}/index.ts`;
+                if (indexPath.startsWith(`${gameRoot}/`)) {
+                  const indexSource = await readRawFile(indexPath.slice(1), ref);
+                  if (indexSource !== null) {
+                    loadedPath = indexPath;
+                    source = indexSource;
+                    loadedPaths.add(indexPath);
+                  }
+                }
+              }
               if (source === null) {
                 return { errors: [{ text: `game module not found: ${args.path}` }] };
               }
@@ -466,7 +568,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
               return {
                 contents: source,
                 loader: 'ts',
-                resolveDir: path.posix.dirname(args.path),
+                resolveDir: path.posix.dirname(loadedPath),
               };
             });
           },
@@ -728,10 +830,38 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       }
 
       const assetEntries = audioAssets.filter((asset): asset is [string, string] => asset !== null);
-      const assetsJs =
-        assetEntries.length > 0
-          ? `window.__GAME_AUDIO_ASSETS__ = Object.freeze(${JSON.stringify(Object.fromEntries(assetEntries))});\n`
-          : '';
+      const assetChunks: string[] = [];
+      if (assetEntries.length > 0) {
+        assetChunks.push(
+          `window.__GAME_AUDIO_ASSETS__ = Object.freeze(${JSON.stringify(Object.fromEntries(assetEntries))});`,
+        );
+      }
+
+      // Music lives in one shared catalog (not per-game WAV reads). Embed it whenever
+      // the audio module is on — same contract as tools/lib/assemble.ts.
+      if (manifest.modules.includes('audio')) {
+        const musicSource = await readRawFile('shared/audio/music.json', ref);
+        if (musicSource === null) {
+          return null;
+        }
+        const musicCatalog = parseMusicCatalog(musicSource);
+        if (
+          musicCatalog.tracks &&
+          typeof musicCatalog.tracks === 'object' &&
+          !Array.isArray(musicCatalog.tracks)
+        ) {
+          const trackIds = new Set(Object.keys(musicCatalog.tracks as Record<string, unknown>));
+          for (const trackId of manifest.music) {
+            if (!trackIds.has(trackId)) {
+              throw new Error(`game manifest music track not in catalog: ${trackId}`);
+            }
+          }
+        }
+        assetChunks.push(`window.__GAME_AUDIO_MUSIC__ = Object.freeze(${JSON.stringify(musicCatalog.music)});`);
+        assetChunks.push(`window.__GAME_MUSIC_TRACKS__ = Object.freeze(${JSON.stringify(musicCatalog.tracks)});`);
+      }
+
+      const assetsJs = assetChunks.length > 0 ? `${assetChunks.join('\n')}\n` : '';
       const transpiledSources = await Promise.all(
         [coreTs, ...availableModuleSources].map(async (source) => {
           const result = await transform(source, {

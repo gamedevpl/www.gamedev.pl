@@ -17,7 +17,10 @@ describe('the size cap', () => {
    * assertion.
    */
   it('matches the budget the games repo enforces in Check 4', () => {
-    const gamesRepoCap = 200 * 1024 + 7_501;
+    // 200 KiB author budget + 42 KiB GameKit platform allowances (touch, restart,
+    // music, touch hint, progress, universal input, pointer poll, draw surface) —
+    // see issue #247. If this fails because the games repo moved, move this to match.
+    const gamesRepoCap = 242 * 1024;
     expect(MAX_PROJECT_BYTES).toBe(gamesRepoCap);
   });
 
