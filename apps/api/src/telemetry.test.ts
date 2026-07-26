@@ -184,7 +184,11 @@ describe('POST /api/telemetry', () => {
     await app.close();
   });
 
-  it('is behind the private-beta wall like every other data route', async () => {
+  // Play is open to anonymous visitors, so this intake has to be too: walling it would
+  // measure only the signed-in minority and silently under-report every published game's
+  // health. Safe to admit because the handler never reads request.user, is IP-rate-limited
+  // and session-capped, and drops events for anything that is not a published slug.
+  it('accepts play events without a session, even in private-beta mode', async () => {
     const app = await buildApp({
       store,
       sessionSecret,
@@ -197,7 +201,8 @@ describe('POST /api/telemetry', () => {
       payload: { slug: 'space-hop', sessionId, events: [{ type: 'game_opened' }] },
     });
 
-    expect(res.statusCode).toBe(401);
+    expect(res.statusCode).not.toBe(401);
+    expect(res.statusCode).toBe(202);
     await app.close();
   });
 

@@ -46,7 +46,7 @@ type StageContent =
 
 export function App() {
   const { t, i18n } = useTranslation();
-  const { user, loading: authLoading, privateBeta } = useAuth();
+  const { user, loading: authLoading, privateBeta, waitlistStatus } = useAuth();
   const [route, setRoute] = useState(() => readLocationRoute());
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
@@ -218,10 +218,8 @@ export function App() {
   }, [stageContent]);
 
   useEffect(() => {
-    // In private-beta mode /api/catalog requires a session — an anonymous fetch
-    // would just 401. Don't fetch (and don't render an error) until signed in.
-    // Outside private beta, catalog reads stay public (owner decision).
-    if (privateBeta && !user) return;
+    // The catalog is public in every mode now: playing does not require a session, so an
+    // anonymous fetch succeeds and the arcade renders for a first-time visitor.
     // Only the home page shows the gallery. On `/play/<slug>` the theater covers the
     // whole viewport, so fetching the catalog (and, through it, every entry's media)
     // is work nobody can see — a direct game link should cost the game, and nothing
@@ -525,7 +523,12 @@ export function App() {
     return <AppLoadingScreen />;
   }
 
-  if (privateBeta && !user) {
+  // Anonymous visitors browse and play — a shared game link has to work for someone who has
+  // never signed in. The splash is no longer the whole site; it is the answer to one specific
+  // moment: you tried to sign in and the closed beta refused you. It owns the waitlist join,
+  // which is why that moment renders it rather than a bare error. `waitlistStatus` is only
+  // ever set from a refused sign-in (or a completed join), so 'unknown' means "hasn't asked".
+  if (privateBeta && !user && waitlistStatus !== 'unknown') {
     return <ClosedBetaSplash />;
   }
 

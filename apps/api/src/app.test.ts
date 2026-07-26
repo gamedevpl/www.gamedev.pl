@@ -191,9 +191,49 @@ describe('private beta gate', () => {
     await openApp.close();
   });
 
-  it('catalog requires a session in private-beta mode', async () => {
+  // Playing is public even in private-beta mode: a shared game link has to work for someone
+  // who has never signed in. These assert the *wall*, not the handler — 503/404 means the
+  // request reached the route and failed on configuration, which is the point; 401 would
+  // mean the wall turned it away.
+  it('catalog is reachable without a session in private-beta mode', async () => {
     const app = await buildApp({ betaAllowedUids: ownerUid });
     const res = await app.inject({ method: 'GET', url: '/api/catalog' });
+    expect(res.statusCode).not.toBe(401);
+    expect([200, 404, 503]).toContain(res.statusCode);
+    await app.close();
+  });
+
+  it('a published game is reachable without a session in private-beta mode', async () => {
+    const app = await buildApp({ betaAllowedUids: ownerUid });
+    const res = await app.inject({ method: 'GET', url: '/api/games/some-slug' });
+    expect(res.statusCode).not.toBe(401);
+    await app.close();
+  });
+
+  it('play telemetry is reachable without a session, so anonymous play is still measured', async () => {
+    const app = await buildApp({ betaAllowedUids: ownerUid });
+    const res = await app.inject({ method: 'POST', url: '/api/telemetry', payload: {} });
+    // 400 (validation) not 401 (wall).
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  // The other half of the decision: opening play must not open anything that spends money
+  // or exposes work the owner has not merged.
+  it('drafts stay walled — unmerged work is not published content', async () => {
+    const app = await buildApp({ betaAllowedUids: ownerUid });
+    const res = await app.inject({ method: 'GET', url: '/api/drafts/some-slug' });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('creating a game stays walled', async () => {
+    const app = await buildApp({ betaAllowedUids: ownerUid });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      payload: { title: 'Game idea', concept: 'A concept long enough to pass the schema checks.' },
+    });
     expect(res.statusCode).toBe(401);
     await app.close();
   });
