@@ -101,6 +101,13 @@ describe('document title follows navigation', () => {
     expect(document.title).toBe('Telemetry — Gamedev.pl');
 
     await act(async () => {
+      window.history.pushState(null, '', '/this-page-does-not-exist');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+      await flushEffects();
+    });
+    expect(document.title).toBe('Page not found — Gamedev.pl');
+
+    await act(async () => {
       window.history.pushState(null, '', '/');
       window.dispatchEvent(new PopStateEvent('popstate'));
       await flushEffects();

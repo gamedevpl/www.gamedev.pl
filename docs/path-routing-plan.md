@@ -75,7 +75,8 @@ No `/game/` segment — everything playable is a game; `/play` (and the `/ay` /
 `/ai` aliases) is enough. Emitters always write `/play/<slug>`.
 
 Slug validation stays as today: lowercase kebab-case only
-(`^[a-z0-9]+(?:-[a-z0-9]+)*$`). Unknown / invalid paths → home (same as today).
+(`^[a-z0-9]+(?:-[a-z0-9]+)*$`). Unknown / invalid paths → `{ view: 'notFound' }`
+(a dedicated 404 page — not a silent redirect to home).
 
 **Reserved:** anything under `/api/*` is the API. Do not add SPA routes that collide with
 static files (`/assets/*`, `/icons/*`, `/sw.js`, `/offline.html`, …).

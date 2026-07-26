@@ -28,22 +28,22 @@ describe('parsePathRoute', () => {
   it('accepts /ay and /ai as play aliases', () => {
     expect(parsePathRoute('/ay/sky-dodge')).toEqual({ view: 'play', slug: 'sky-dodge' });
     expect(parsePathRoute('/ai/sky-dodge')).toEqual({ view: 'play', slug: 'sky-dodge' });
-    expect(parsePathRoute('/ay/-bad')).toEqual({ view: 'home' });
-    expect(parsePathRoute('/ai/')).toEqual({ view: 'home' });
+    expect(parsePathRoute('/ay/-bad')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/ai/')).toEqual({ view: 'notFound' });
   });
 
   it('rejects non-slug play paths', () => {
-    expect(parsePathRoute('/play/Kotek W Cyrku')).toEqual({ view: 'home' });
-    expect(parsePathRoute('/play/..%2Fadmin')).toEqual({ view: 'home' });
-    expect(parsePathRoute('/play/a/b')).toEqual({ view: 'home' });
-    expect(parsePathRoute('/play/-bad')).toEqual({ view: 'home' });
-    expect(parsePathRoute('/play/')).toEqual({ view: 'home' });
+    expect(parsePathRoute('/play/Kotek W Cyrku')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/play/..%2Fadmin')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/play/a/b')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/play/-bad')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/play/')).toEqual({ view: 'notFound' });
   });
 
   it('parses a draft permalink and rejects non-slugs', () => {
     expect(parsePathRoute('/draft/space-runner')).toEqual({ view: 'draft', slug: 'space-runner' });
-    expect(parsePathRoute('/draft/..%2Fadmin')).toEqual({ view: 'home' });
-    expect(parsePathRoute('/draft/')).toEqual({ view: 'home' });
+    expect(parsePathRoute('/draft/..%2Fadmin')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/draft/')).toEqual({ view: 'notFound' });
   });
 
   it('parses a hybrid join link (code in path, token in fragment)', () => {
@@ -59,22 +59,23 @@ describe('parsePathRoute', () => {
     });
   });
 
-  it('falls back home for malformed join links', () => {
-    expect(parsePathRoute('/join/lower1', '#token')).toEqual({ view: 'home' });
-    expect(parsePathRoute('/join/TOOLONG9', '#token')).toEqual({ view: 'home' });
-    expect(parsePathRoute('/join/K7M3QP')).toEqual({ view: 'home' });
-    expect(parsePathRoute('/join/K7M3QP/tok/en')).toEqual({ view: 'home' });
-    expect(parsePathRoute('/join/K7M3QP/abc-DEF_123')).toEqual({ view: 'home' });
+  it('maps malformed join links to notFound', () => {
+    expect(parsePathRoute('/join/lower1', '#token')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/join/TOOLONG9', '#token')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/join/K7M3QP')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/join/K7M3QP/tok/en')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/join/K7M3QP/abc-DEF_123')).toEqual({ view: 'notFound' });
   });
 
   it('parses the unlisted health route', () => {
     expect(parsePathRoute('/health')).toEqual({ view: 'health' });
     // Trailing segments are not the health view.
-    expect(parsePathRoute('/health/brick-storm')).toEqual({ view: 'home' });
+    expect(parsePathRoute('/health/brick-storm')).toEqual({ view: 'notFound' });
   });
 
-  it('falls back to home for unknown paths', () => {
-    expect(parsePathRoute('/nope')).toEqual({ view: 'home' });
+  it('maps unknown paths to notFound', () => {
+    expect(parsePathRoute('/nope')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/this/does/not/exist')).toEqual({ view: 'notFound' });
   });
 
   it('parses the legal routes', () => {

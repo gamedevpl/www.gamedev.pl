@@ -116,6 +116,22 @@ describe('POST /api/telemetry/visit', () => {
     expect(response.statusCode).toBe(400);
   });
 
+  it('accepts the SPA notFound route kind', async () => {
+    const response = await post(app, {
+      visitId,
+      flushMsSinceStart: 0,
+      events: [
+        { type: 'visit_started', entry: 'notFound', msSinceStart: 0 },
+        { type: 'route_viewed', route: 'notFound', msSinceStart: 10 },
+      ],
+    });
+    expect(response.statusCode).toBe(204);
+    const events = await store.listVisitEvents(today(), { visitId });
+    expect(events.map((event) => event.type)).toEqual(['visit_started', 'route_viewed']);
+    expect(events[0]).toMatchObject({ type: 'visit_started', entry: 'notFound' });
+    expect(events[1]).toMatchObject({ type: 'route_viewed', route: 'notFound' });
+  });
+
   it('rejects acquisition values that could carry personal data', async () => {
     const response = await post(app, {
       visitId,

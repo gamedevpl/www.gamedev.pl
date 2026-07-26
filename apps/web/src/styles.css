@@ -3848,6 +3848,47 @@ body.player-open {
 
 /* Legal documents ---------------------------------------------------------- */
 
+.not-found {
+  max-width: 28rem;
+  margin: 4rem auto 2rem;
+  text-align: center;
+  padding: 0 1rem;
+}
+
+.not-found__code {
+  margin: 0 0 0.5rem;
+  font-size: clamp(3.5rem, 12vw, 5.5rem);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: var(--turquoise);
+  opacity: 0.85;
+}
+
+.not-found__title {
+  margin: 0 0 0.75rem;
+  font-size: clamp(1.4rem, 4vw, 1.85rem);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.not-found__copy {
+  margin: 0 0 1.75rem;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.not-found__home {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.7rem 1.25rem;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .legal-page {
   max-width: 52rem;
   margin: 0 auto;
