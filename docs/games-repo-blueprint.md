@@ -189,10 +189,13 @@ everything, unverified". Agents anchor hard on existing examples.
 
 ## 8. Open questions
 
-- **Where do bundles publish to?** GitHub Pages on the games repo is the zero-infrastructure
-  option and gives a distinct origin immediately. A bucket/CDN is the scalable one. Pages first.
-- **Repo visibility.** Public makes the growth-engine story work and lets anyone read specs;
-  it also means submitted spec text is public immediately, which sharpens the moderation need.
+- ~~**Where do bundles publish to?**~~ **Resolved: nowhere.** Neither Pages nor a bucket is
+  used. The API reads sources from the repo and assembles each game on demand, which keeps the
+  repo private and makes unmerged PR builds playable. The sandbox provides the isolation a
+  distinct origin was going to.
+- ~~**Repo visibility.**~~ **Resolved: private.** Public would have made submitted spec text
+  public the moment it was written, which sharpened the moderation problem for no gain once
+  the API became the games origin.
 - **Who merges?** Agent PRs need a human gate at least initially — especially since PR review is
   the moderation point in the issue-first flow.
 - **Attribution and rights** for creator-submitted specs: what the submitter is agreeing to.

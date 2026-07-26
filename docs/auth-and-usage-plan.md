@@ -1,8 +1,14 @@
 # Auth & per-user usage: plan (v2 — rethought)
 
-> Status: **M1 code built, awaiting GCP OAuth console setup & live verification** (2026-07-23). Goal: no anonymous
-> interaction with the system; every submission attributable to a signed-in user; per-user
-> usage accounting and quotas. Basic-Auth stays as outer wall until live verification & M3.
+> Status: ✅ **Live in production** (verified 2026-07-26). Google sign-in, sessions, the
+> closed-beta allowlist and per-user daily quotas all run on the deployed service. Goal, as
+> achieved: no anonymous interaction with the system; every submission attributable to a
+> signed-in user; per-user usage accounting and quotas.
+>
+> The HTTP Basic Auth outer wall this plan assumed is **gone** — access is gated by
+> `PRIVATE_BETA` and the allowlist instead (see [`deployment.md`](./deployment.md)). Locally,
+> where real Google OAuth is unavailable, `POST /api/auth/dev` mints a session for a synthetic
+> account; it answers 404 in production (see [`local-development.md`](./local-development.md)).
 
 ## What changed in the rethink (v1 → v2)
 
@@ -32,7 +38,10 @@
    owner may want a fully walled beta. Both are one `requireSession` line at M2 — decide
    then, with Basic-Auth still up in the meantime either way.
 
-## Where we are
+## Where we were when this was written (2026-07-23)
+
+<!-- Kept as the starting point the plan reasoned from. Every "today" below refers to that
+     date, not to now: auth, quotas, Firestore and the PRIVATE_BETA gate are all live. -->
 
 - One Cloud Run service (`gamedev-app`) serves the React SPA + Fastify API same-origin.
 - Access boundary today: site-wide HTTP Basic Auth (one shared credential — no identity).

@@ -6,7 +6,13 @@
 > _why_ and [`games-repo-blueprint.md`](./games-repo-blueprint.md) for the games repo's
 > internal contract. This document is the _how do we ship it_.
 >
-> **Live deployment (as of 2026-07-22):**
+> ⚠️ **The deployment snapshot below is historical and no longer describes production.**
+> The service moved to `europe-west1`, the custom domain went live, and the Basic Auth wall
+> was replaced by the `PRIVATE_BETA` gate. For current deployment facts always read
+> [`deployment.md`](./deployment.md) — the rest of this document is kept as the record of how
+> the first end-to-end thread was shipped.
+>
+> **Live deployment (as it stood on 2026-07-22):**
 >
 > - **URL:** `https://gamedev-app-334141807880.europe-central2.run.app` (GCP project
 >   `gamedevpl`, region `europe-central2`, Cloud Run service `gamedev-app`, scale-to-zero).
@@ -256,10 +262,9 @@ Copilot opened a PR from it (verified with throwaway issues, since closed).
   games cross-origin, a seed game plays in an `iframe sandbox="allow-scripts"`, `/api/health`
   works same-origin. **Access is gated by HTTP Basic Auth** (`site-basic-auth` secret) as a
   temporary lock; credentials are held by the owner (not in the repo).
-- 🟡 **Submissions pending one secret:** `submission-token-secret` (HMAC) is set, but
-  `github-token` (a fine-grained PAT — Issues rw + PRs r + Contents r on the games repo) is
-  **not** yet created, so submission routes still return 503. Add it and redeploy to enable
-  the full loop:
+- ✅ **Submissions enabled since then.** `github-token` was created and wired, so submission
+  routes no longer 503 and the full loop runs in production. The instructions below are how it
+  was done, kept for when the token needs rotating:
   `printf '%s' "<PAT>" | gcloud secrets create github-token --data-file=- --replication-policy=automatic --project gamedevpl`
   then grant the runtime SA `roles/secretmanager.secretAccessor` on it and rerun the deploy.
 
