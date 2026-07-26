@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { fetchGameHealth, type GameHealth, type HealthResponse } from './healthApi';
+import {
+  fetchGameHealth,
+  fetchVisitFunnel,
+  type GameHealth,
+  type HealthResponse,
+  type VisitsResponse,
+} from './healthApi';
+import { VisitFunnelPanel } from './VisitFunnelPanel';
 
 /**
  * Operator view over play telemetry (docs/improvement-loop-plan.md IL-2).
@@ -41,19 +48,23 @@ function verdict(game: GameHealth): { label: string; tone: 'bad' | 'warn' | 'ok'
 export function GameHealthView() {
   const [days, setDays] = useState(7);
   const [data, setData] = useState<HealthResponse | null>(null);
+  const [visits, setVisits] = useState<VisitsResponse | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'forbidden' | 'error'>('loading');
 
   useEffect(() => {
     let cancelled = false;
     setState('loading');
-    fetchGameHealth(days)
-      .then((response) => {
+    // Both panels share one window, so they are fetched together and fail together:
+    // showing a 30-day funnel above a 7-day table would be worse than showing neither.
+    Promise.all([fetchGameHealth(days), fetchVisitFunnel(days)])
+      .then(([health, funnel]) => {
         if (cancelled) return;
-        if (!response) {
+        if (!health) {
           setState('forbidden');
           return;
         }
-        setData(response);
+        setData(health);
+        setVisits(funnel);
         setState('ready');
       })
       .catch(() => {
@@ -82,7 +93,8 @@ export function GameHealthView() {
   return (
     <section className="health">
       <header className="health-header">
-        <h1>Game health</h1>
+        {/* The page now carries both streams, so the title names neither. */}
+        <h1>Telemetry</h1>
         <div className="health-windows">
           {WINDOWS.map((window) => (
             <button
@@ -100,8 +112,11 @@ export function GameHealthView() {
       {state === 'loading' && <p className="health-empty">Reading telemetry…</p>}
       {state === 'error' && <p className="health-empty">Could not read telemetry.</p>}
 
+      {state === 'ready' && visits && <VisitFunnelPanel data={visits} />}
+
       {state === 'ready' && data && (
         <>
+          <h2 className="health-section-title">Game health</h2>
           <p className="health-summary">
             {totals.games} game{totals.games === 1 ? '' : 's'} played · {totals.sessions} session
             {totals.sessions === 1 ? '' : 's'} · {formatSeconds(totals.playSeconds)} of play

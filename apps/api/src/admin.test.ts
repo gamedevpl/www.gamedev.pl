@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
-import { InMemoryStore, type TelemetryEvent } from './store.js';
-import type { HealthResponse } from './admin.js';
+import { InMemoryStore, type TelemetryEvent, type VisitEvent } from './store.js';
+import type { HealthResponse, VisitsResponse } from './admin.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
 
@@ -198,5 +198,67 @@ describe('GET /api/admin/telemetry/health', () => {
     expect(body.games[0].sessions).toBe(1);
     expect(body.games[0].totalPlaySeconds).toBe(15);
     await app.close();
+  });
+});
+
+describe('GET /api/admin/telemetry/visits', () => {
+  let store: InMemoryStore;
+
+  beforeEach(async () => {
+    store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    await store.upsertUser({ uid: 'g:player' });
+  });
+
+  function visitEvent(partial: Partial<VisitEvent> & { visitId: string; type: VisitEvent['type'] }): VisitEvent {
+    return { at: `${today}T10:00:00.000Z`, msSinceStart: 0, ...partial } as VisitEvent;
+  }
+
+  it('summarizes the funnel for an admin', async () => {
+    await store.appendVisitEvents(today, [
+      visitEvent({ visitId: 'v1', type: 'visit_started', entry: 'play', referrer: 'news.ycombinator.com' }),
+      visitEvent({ visitId: 'v1', type: 'play_started', msSinceStart: 4_000 }),
+      visitEvent({ visitId: 'v2', type: 'visit_started', entry: 'home' }),
+    ]);
+
+    const app = await appWith(store);
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/admin/telemetry/visits',
+      headers: authHeaders('g:boss'),
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as VisitsResponse;
+    expect(body.funnel).toMatchObject({ visits: 2, bounces: 1, visitsWithPlay: 1, plays: 1 });
+    expect(body.funnel.referrers).toContainEqual({ referrer: 'news.ycombinator.com', visits: 1, plays: 1 });
+    expect(body.days).toContain(today);
+  });
+
+  it('is invisible to a signed-in non-admin', async () => {
+    const app = await appWith(store);
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/admin/telemetry/visits',
+      headers: authHeaders('g:player'),
+    });
+    // 404 rather than 403: a beta tester should not learn the surface exists.
+    expect(response.statusCode).toBe(404);
+  });
+
+  it('is invisible to an anonymous caller', async () => {
+    const app = await appWith(store);
+    const response = await app.inject({ method: 'GET', url: '/api/admin/telemetry/visits' });
+    expect(response.statusCode).toBe(404);
+  });
+
+  it('rejects an out-of-range window', async () => {
+    const app = await appWith(store);
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/admin/telemetry/visits?days=999',
+      headers: authHeaders('g:boss'),
+    });
+    expect(response.statusCode).toBe(400);
   });
 });
