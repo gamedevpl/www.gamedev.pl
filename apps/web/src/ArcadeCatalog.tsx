@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { catalogMediaUrl, type CatalogEntry } from './catalog';
 import { PixelIcon } from './PixelIcon';
+import { useInView } from './useInView';
 
 type ArcadeCatalogProps = {
   catalogStatus: 'loading' | 'ready' | 'error';
@@ -30,13 +31,17 @@ function CatalogCard({
 }) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
+  // Defer preview media until the card is near the viewport — below-fold cards
+  // must not fetch posters/videos on initial home load.
+  const { ref: mediaRef, inView } = useInView<HTMLDivElement>({ rootMargin: '200px 0px', once: true });
   const [selectedScreenshot, setSelectedScreenshot] = useState(0);
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
   const [isPreviewPinned, setIsPreviewPinned] = useState(false);
   const screenshots = entry.media?.screenshots ?? [];
   const selected = screenshots[selectedScreenshot] ?? screenshots[0];
-  const posterUrl = selected ? catalogMediaUrl(entry.slug, selected.file) : undefined;
-  const videoUrl = entry.media?.video ? catalogMediaUrl(entry.slug, entry.media.video) : null;
+  const posterUrl = selected && inView ? catalogMediaUrl(entry.slug, selected.file) : undefined;
+  const videoUrl = entry.media?.video && inView ? catalogMediaUrl(entry.slug, entry.media.video) : null;
+  const hasVideo = Boolean(entry.media?.video);
 
   function playPreview() {
     const video = videoRef.current;
@@ -76,31 +81,32 @@ function CatalogCard({
   return (
     <article className="catalog-card">
       <div
+        ref={mediaRef}
         className="catalog-media"
-        tabIndex={videoUrl ? 0 : undefined}
+        tabIndex={hasVideo ? 0 : undefined}
         onPointerEnter={
-          videoUrl
+          hasVideo
             ? (event) => {
                 if (event.pointerType === 'mouse') playPreview();
               }
             : undefined
         }
         onPointerLeave={
-          videoUrl
+          hasVideo
             ? (event) => {
                 if (event.pointerType === 'mouse' && !isPreviewPinned) pausePreview(true);
               }
             : undefined
         }
         onFocus={
-          videoUrl
+          hasVideo
             ? (event) => {
                 if (event.target === event.currentTarget) playPreview();
               }
             : undefined
         }
         onBlur={
-          videoUrl
+          hasVideo
             ? (event) => {
                 if (!event.currentTarget.contains(event.relatedTarget)) {
                   setIsPreviewPinned(false);
@@ -126,7 +132,13 @@ function CatalogCard({
             onPause={() => setIsPreviewPlaying(false)}
           />
         ) : posterUrl ? (
-          <img className="catalog-preview" src={posterUrl} alt={t('catalog.previewImage', { title: entry.title })} />
+          <img
+            className="catalog-preview"
+            src={posterUrl}
+            alt={t('catalog.previewImage', { title: entry.title })}
+            loading="lazy"
+            decoding="async"
+          />
         ) : (
           <div className="catalog-preview-fallback" aria-hidden="true">
             <span>{entry.title.charAt(0)}</span>
@@ -142,8 +154,14 @@ function CatalogCard({
             one and can wrap; a magic number here would work in one locale and not
             the other. */}
         <div className="catalog-badges-top-left">
-          {videoUrl && (
-            <button type="button" className="preview-toggle" aria-pressed={isPreviewPlaying} onClick={togglePreview}>
+          {hasVideo && (
+            <button
+              type="button"
+              className="preview-toggle"
+              aria-pressed={isPreviewPlaying}
+              disabled={!inView}
+              onClick={togglePreview}
+            >
               {isPreviewPlaying ? (
                 <>
                   <PixelIcon name="pause" size={11} /> {t('catalog.pausePreview')}
@@ -167,7 +185,7 @@ function CatalogCard({
 
         <span className="genre-pill">{entry.genre}</span>
 
-        {screenshots.length > 1 && (
+        {inView && screenshots.length > 1 && (
           <div className="catalog-moments" aria-label={t('catalog.gameMoments', { title: entry.title })}>
             {screenshots.slice(0, 4).map((screenshot, index) => (
               <button
@@ -178,7 +196,7 @@ function CatalogCard({
                 aria-pressed={index === selectedScreenshot}
                 onClick={() => selectScreenshot(index)}
               >
-                <img src={catalogMediaUrl(entry.slug, screenshot.file)} alt="" loading="lazy" />
+                <img src={catalogMediaUrl(entry.slug, screenshot.file)} alt="" loading="lazy" decoding="async" />
               </button>
             ))}
           </div>
