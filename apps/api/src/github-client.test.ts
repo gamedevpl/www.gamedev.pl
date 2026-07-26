@@ -344,6 +344,36 @@ describe('getCatalog', () => {
     ]);
   });
 
+  it('publishes a game whose entry claims no status, and honours a withdrawal', async () => {
+    // The games repo stopped authoring `status` — merging a game publishes it, and a
+    // spec speaks up only to withdraw itself. An entry with no status must therefore
+    // reach visitors, or retiring the field would empty the site. `/api/catalog` keeps
+    // only `published`, so `archived` surviving verbatim is what takes a game off it.
+    const committed = [
+      { slug: 'silent', title: 'Silent' },
+      { slug: 'retired', title: 'Retired', status: 'archived' },
+      { slug: 'off', title: 'Off', status: 'disabled' },
+      // A stale artifact written before the change still carries the old default.
+      { slug: 'legacy', title: 'Legacy', status: 'draft' },
+    ];
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes('/contents/catalog.json')) {
+        return new Response(JSON.stringify(committed), { status: 200 });
+      }
+      throw new Error('unexpected request');
+    }) as unknown as typeof fetch;
+
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+    const catalog = await client.getCatalog('main');
+
+    expect(catalog.map((entry) => [entry.slug, entry.status])).toEqual([
+      ['silent', 'published'],
+      ['retired', 'archived'],
+      ['off', 'disabled'],
+      ['legacy', 'published'],
+    ]);
+  });
+
   it('falls back rather than blanking the site when no committed entry is usable', async () => {
     // A schema change in the games repo (a renamed field, say) would leave a valid
     // JSON array whose every row fails validation. Serving that as an empty catalog
