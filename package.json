@@ -2,6 +2,10 @@
   "name": "gamedev-pl",
   "version": "0.0.0",
   "private": true,
+  "// engines": "Node 20.19 is the floor because jsdom's dependency chain require()s an ESM-only package, which throws ERR_REQUIRE_ESM before require(esm) was unflagged. On Node 18 that surfaces as ~10 unrelated-looking test failures across DOM and API suites, which reads as a broken repo rather than a wrong runtime. CI uses Node 20.",
+  "engines": {
+    "node": ">=20.19"
+  },
   "workspaces": [
     "packages/*",
     "apps/*"
