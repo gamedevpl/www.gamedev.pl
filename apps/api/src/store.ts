@@ -83,6 +83,16 @@ export interface SubmissionRecord {
    */
   lastNotifiedStatus?: SubmissionStatus;
   /**
+   * The last status actually derived from GitHub, recorded on every derivation.
+   *
+   * Distinct from `lastNotifiedStatus`, which only moves when a *notification* is
+   * emitted — `queued` and `publishing` map to no event at all, and `in_review`
+   * shares one with `building`, so a submission can sit at `lastNotifiedStatus:
+   * 'building'` while it is really being play-tested. Fine for deciding whether to
+   * ping someone; wrong for showing them what their game is doing.
+   */
+  lastStatus?: SubmissionStatus;
+  /**
    * The language the creator submitted in. Told to the agent over the build channel
    * so it can write its progress updates in that language directly — which beats
    * machine-translating them afterwards, and costs us nothing.
@@ -335,6 +345,8 @@ export interface Store {
   createSubmission(issueNumber: number, ownerUid: string, title: string): Promise<SubmissionRecord>;
   getSubmission(issueNumber: number): Promise<SubmissionRecord | null>;
   setSubmissionNotifiedStatus(issueNumber: number, status: SubmissionStatus): Promise<void>;
+  /** Records the status last derived from GitHub, whether or not it notified anyone. */
+  setSubmissionLastStatus(issueNumber: number, status: SubmissionStatus): Promise<void>;
   /** Records the game directory a submission is building, once it is known. */
   setSubmissionSlug(issueNumber: number, slug: string): Promise<void>;
   /** Stamps the moment a submission was first seen published (for build-time stats). */
@@ -519,6 +531,11 @@ export class InMemoryStore implements Store {
   async setSubmissionNotifiedStatus(issueNumber: number, status: SubmissionStatus): Promise<void> {
     const sub = this.submissions.get(issueNumber);
     if (sub) this.submissions.set(issueNumber, { ...sub, lastNotifiedStatus: status });
+  }
+
+  async setSubmissionLastStatus(issueNumber: number, status: SubmissionStatus): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (sub) this.submissions.set(issueNumber, { ...sub, lastStatus: status });
   }
 
   async setSubmissionSlug(issueNumber: number, slug: string): Promise<void> {
@@ -936,6 +953,10 @@ export class FirestoreStore implements Store {
       .collection('submissions')
       .doc(String(issueNumber))
       .set({ lastNotifiedStatus: status }, { merge: true });
+  }
+
+  async setSubmissionLastStatus(issueNumber: number, status: SubmissionStatus): Promise<void> {
+    await this.db.collection('submissions').doc(String(issueNumber)).set({ lastStatus: status }, { merge: true });
   }
 
   async setSubmissionSlug(issueNumber: number, slug: string): Promise<void> {

@@ -890,9 +890,14 @@ export async function registerSubmissionRoutes(
           token: mintToken(record.issueNumber, submissionTokenSecret),
           title: record.title,
           createdAt: record.createdAt,
-          // Last status we notified on — a cheap hint so the rail can render before
-          // the live per-game status polls come back.
-          lastKnownStatus: record.lastNotifiedStatus ?? null,
+          // The last derived status, kept current by the two-minute sweep. This is
+          // what the rail renders — it used to be a hint the rail immediately went
+          // and re-derived per card, six GitHub fan-outs every thirty seconds from
+          // one open tab, which is what was rate-limiting the whole token.
+          // lastNotifiedStatus is the fallback for records written before this.
+          lastKnownStatus: record.lastStatus ?? record.lastNotifiedStatus ?? null,
+          // So a published card can offer Play without deriving the slug itself.
+          slug: record.slug ?? null,
         })),
     });
   });
@@ -935,6 +940,11 @@ export async function registerSubmissionRoutes(
             const slug = status.slug ?? status.preview?.slug;
             if (slug && record.slug !== slug) {
               await store.setSubmissionSlug(issueNumber, slug);
+            }
+            // Record the derived status itself, so the games rail can render from
+            // the store instead of deriving all six of its cards from GitHub.
+            if (record.lastStatus !== status.status) {
+              await store.setSubmissionLastStatus(issueNumber, status.status);
             }
             await notifyOnTransition(buildNotifyDeps(), record, status, token);
           }
@@ -1149,6 +1159,12 @@ export async function registerSubmissionRoutes(
     for (const record of active) {
       try {
         const status = await deriveSubmissionStatus(githubClient, record.issueNumber);
+        // Every two minutes, for exactly the submissions still in flight — which is
+        // what lets the rail stop deriving its own. Recorded whether or not the
+        // transition is one anybody gets notified about.
+        if (record.lastStatus !== status.status) {
+          await store.setSubmissionLastStatus(record.issueNumber, status.status);
+        }
         const statusToken = mintToken(record.issueNumber, submissionTokenSecret);
         const result = await notifyOnTransition(buildNotifyDeps(), record, status, statusToken);
         if (result.emitted) emitted += 1;

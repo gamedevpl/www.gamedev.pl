@@ -11,6 +11,14 @@ import { getSubmissionStatus, listMySubmissions, type SubmissionState } from './
  * common complaint about the creation flow. Ownership is server-side, so this also
  * works on a device that never held the link; locally saved specs are merged in so
  * an anonymous-era submission (or one made before the API listed it) still shows up.
+ *
+ * The whole rail costs exactly one request. It used to take the list and then derive
+ * every card's status individually, six in parallel every thirty seconds — each of
+ * those a couple of GitHub reads against one shared token. A single creator with a
+ * few builds open was enough to trip GitHub's rate limit, which took out the status
+ * page and the catalog with it. The statuses now come from the store, kept current
+ * by the two-minute notify sweep: a glance can be two minutes old, and the status
+ * page is still live to the second for the build actually being watched.
  */
 
 const STATUS_ICONS: Record<SubmissionState, PixelIconName> = {
@@ -24,7 +32,7 @@ const STATUS_ICONS: Record<SubmissionState, PixelIconName> = {
 };
 
 const LIVE_STATUSES = new Set<SubmissionState>(['queued', 'building', 'in_review', 'publishing']);
-/** How many games get a live status fetch on load — one request each, so keep it small. */
+/** How many games the rail shows. One list request covers all of them. */
 const MAX_TRACKED = 6;
 /** Refresh cadence for the rail. Slower than the status page: this is a glance, not a watch. */
 const REFRESH_MS = 30_000;
@@ -63,16 +71,19 @@ export function MyGamesRail({ refreshKey = 0, onOpenStatus, onPlayPublished }: M
       }));
 
       let merged = local;
+      const listedByServer = new Set<string>();
       try {
         const remote = await listMySubmissions();
         const byToken = new Map(local.map((item) => [item.token, item]));
         for (const submission of remote) {
           const existing = byToken.get(submission.token);
+          listedByServer.add(submission.token);
           byToken.set(submission.token, {
             token: submission.token,
             title: existing?.title ?? submission.title,
             createdAt: existing?.createdAt ?? Date.parse(submission.createdAt),
             status: submission.lastKnownStatus,
+            slug: submission.slug ?? undefined,
           });
         }
         merged = [...byToken.values()];
@@ -81,14 +92,23 @@ export function MyGamesRail({ refreshKey = 0, onOpenStatus, onPlayPublished }: M
       }
 
       merged.sort((a, b) => b.createdAt - a.createdAt);
-      const visible = merged.slice(0, MAX_TRACKED);
+      // A build the creator stopped is gone from their shelf, not greyed out on it.
+      // (The API already omits them; this covers a locally saved spec.)
+      const visible = merged.filter((item) => item.status !== 'abandoned').slice(0, MAX_TRACKED);
       if (cancelled) return;
       setItems(visible);
       setLoading(false);
 
-      // Resolve each game's real state. Failures leave the cheap hint in place.
+      // Anything the server did not list has no stored status to render: a spec saved
+      // locally before the API tracked ownership, or the whole list failing because
+      // the creator is signed out. A status token is its own capability, so those can
+      // still be resolved one by one. For a signed-in creator this set is empty, which
+      // is the point — the six server-listed cards no longer each derive from GitHub.
+      const unlisted = visible.filter((item) => !listedByServer.has(item.token));
+      if (unlisted.length === 0) return;
+
       const resolved = await Promise.all(
-        visible.map(async (item) => {
+        unlisted.map(async (item) => {
           try {
             const status = await getSubmissionStatus(item.token, i18n.language);
             return { ...item, status: status.status, slug: status.slug };
@@ -97,8 +117,10 @@ export function MyGamesRail({ refreshKey = 0, onOpenStatus, onPlayPublished }: M
           }
         }),
       );
-      // A build the creator stopped is gone from their shelf, not greyed out on it.
-      if (!cancelled) setItems(resolved.filter((item) => item.status !== 'abandoned'));
+      const byToken = new Map(resolved.map((item) => [item.token, item]));
+      if (!cancelled) {
+        setItems(visible.map((item) => byToken.get(item.token) ?? item).filter((item) => item.status !== 'abandoned'));
+      }
     }
 
     void load();

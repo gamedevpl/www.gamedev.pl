@@ -37,7 +37,10 @@ export type MySubmission = {
   token: string;
   title: string;
   createdAt: string;
+  /** Last status derived server-side, refreshed by the two-minute sweep. */
   lastKnownStatus: SubmissionState | null;
+  /** Present once known, so a published card can link straight to the game. */
+  slug: string | null;
 };
 
 /** The build steps an agent can report. Rendered from our own translated copy. */

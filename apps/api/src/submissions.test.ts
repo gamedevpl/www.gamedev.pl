@@ -1426,6 +1426,47 @@ describe('GET /api/submissions/mine', () => {
     await app.close();
   });
 
+  /**
+   * The rail renders straight from this list rather than deriving a status per card,
+   * so what it carries has to be right — a stale or missing status here is now visible
+   * on the home page instead of being immediately overwritten by a live fetch.
+   */
+  it('prefers the derived status over the one notifications happened to record', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const store = new InMemoryStore();
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
+
+    await store.createSubmission(21, 'g:test-user', 'In review now');
+    // in_review shares its notification event with building, so this is exactly the
+    // case where lastNotifiedStatus lags the truth and must not win.
+    await store.setSubmissionNotifiedStatus(21, 'building');
+    await store.setSubmissionLastStatus(21, 'in_review');
+    await store.setSubmissionSlug(21, 'in-review-now');
+
+    const res = await app.inject({ method: 'GET', url: '/api/submissions/mine', headers: authHeaders });
+    const submissions = res.json().submissions as Array<{ lastKnownStatus: unknown; slug: unknown }>;
+    expect(submissions[0]!.lastKnownStatus).toBe('in_review');
+    expect(submissions[0]!.slug).toBe('in-review-now');
+
+    await app.close();
+  });
+
+  it('falls back to the notified status for records written before lastStatus existed', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const store = new InMemoryStore();
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
+
+    await store.createSubmission(22, 'g:test-user', 'Old record');
+    await store.setSubmissionNotifiedStatus(22, 'published');
+
+    const res = await app.inject({ method: 'GET', url: '/api/submissions/mine', headers: authHeaders });
+    const submissions = res.json().submissions as Array<{ lastKnownStatus: unknown; slug: unknown }>;
+    expect(submissions[0]!.lastKnownStatus).toBe('published');
+    expect(submissions[0]!.slug).toBeNull();
+
+    await app.close();
+  });
+
   it('requires a session', async () => {
     const { githubClient } = createGithubClientStub({});
     const { app } = await createApp({ githubClient, submissionTokenSecret: secret });

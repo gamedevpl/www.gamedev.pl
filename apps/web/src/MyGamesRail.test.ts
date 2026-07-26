@@ -46,24 +46,36 @@ describe('MyGamesRail', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     mockedListMySubmissions.mockResolvedValue([
-      { token: 'tok-a', title: 'Circus Cat', createdAt: '2026-01-02T00:00:00Z', lastKnownStatus: null },
-      { token: 'tok-b', title: 'Space Runner', createdAt: '2026-01-01T00:00:00Z', lastKnownStatus: 'building' },
+      {
+        token: 'tok-a',
+        title: 'Circus Cat',
+        createdAt: '2026-01-02T00:00:00Z',
+        lastKnownStatus: 'published',
+        slug: 'circus-cat',
+      },
+      {
+        token: 'tok-b',
+        title: 'Space Runner',
+        createdAt: '2026-01-01T00:00:00Z',
+        lastKnownStatus: 'building',
+        slug: null,
+      },
     ]);
-    mockedGetSubmissionStatus.mockImplementation(async (token: string) =>
-      token === 'tok-a' ? { status: 'published', slug: 'circus-cat' } : { status: 'building' },
-    );
 
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = await renderRail(container);
 
     const cards = [...container.querySelectorAll('.my-game-card')].map((node) => node.textContent ?? '');
-    // Newest first, and the live status wins over the stored hint.
+    // Newest first, rendered from the list alone.
     expect(cards).toHaveLength(2);
     expect(cards[0]).toContain('Circus Cat');
     expect(cards[0]).toContain('Live!');
     expect(cards[1]).toContain('Writing code');
     expect(container.textContent).toContain('1 in progress');
+    // The whole rail is one request. Deriving a status per card is what rate-limited
+    // the GitHub token and took the status page and catalog down with it.
+    expect(mockedGetSubmissionStatus).not.toHaveBeenCalled();
 
     await act(async () => {
       root.unmount();
