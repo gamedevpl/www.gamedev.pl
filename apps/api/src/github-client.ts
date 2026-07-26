@@ -141,7 +141,16 @@ export interface CatalogGameEntry {
    * uses it to nudge a phone that is held the wrong way round.
    */
   orientation: CatalogGameOrientation;
+  /**
+   * Touch playability class, derived from each game's *code* by the games repo's
+   * own build (it runs inferTouchSupport over the sources). Nothing readable from
+   * SPEC.md can reproduce it, so it is present only when the catalog came from the
+   * committed catalog.json artifact — the GraphQL fallback below leaves it absent.
+   */
+  touch?: CatalogGameTouch;
 }
+
+export type CatalogGameTouch = 'gamekit' | 'native' | 'controllers' | 'none';
 
 export type CatalogGameOrientation = 'any' | 'portrait' | 'landscape';
 
@@ -769,6 +778,20 @@ ${gameJs}`;
         throw new Error(`invalid published ref "${ref}"`);
       }
 
+      // Fast path: the games repo commits a website-ready catalog.json at its root,
+      // held fresh by its own validate gate. One read answers the whole catalog, and
+      // it is the only source that can carry `touch` — a value derived from each
+      // game's code, which no amount of SPEC.md reading here can reproduce.
+      // The GraphQL fan-out below stays as the fallback for refs without the
+      // artifact (older commits, and PR branches during a build).
+      const committed = await readRawFile('catalog.json', ref);
+      if (committed !== null) {
+        const entries = parseCommittedCatalog(committed);
+        if (entries !== null) {
+          return entries;
+        }
+      }
+
       const listing = await requestJson<Array<{ name: string; type: string }>>(
         `https://api.github.com/repos/${repo}/contents/games?ref=${encodeURIComponent(ref)}`,
       );
@@ -862,6 +885,119 @@ ${gameJs}`;
       return entries;
     },
   };
+}
+
+const SAFE_MEDIA_NAME = /^[a-z0-9][a-z0-9-]*$/;
+const SAFE_MEDIA_PNG = /^[a-z0-9][a-z0-9-]*\.png$/;
+const SAFE_MEDIA_MP4 = /^[a-z0-9][a-z0-9-]*\.mp4$/;
+const CATALOG_TOUCH_VALUES = new Set<CatalogGameTouch>(['gamekit', 'native', 'controllers', 'none']);
+
+/**
+ * Parses the games repo's committed catalog.json into catalog entries. The file
+ * is CI-validated at the source, but everything is still re-checked here — the
+ * media filenames it vouches for become servable URLs, and this process must
+ * not extend more trust to a repo file than to any other remote input.
+ * Returns null when the payload is not a catalog at all (fall back to the
+ * GraphQL fan-out); individual malformed entries are just skipped.
+ */
+function parseCommittedCatalog(raw: string): CatalogGameEntry[] | null {
+  let body: unknown;
+  try {
+    body = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(body)) {
+    return null;
+  }
+
+  const entries: CatalogGameEntry[] = [];
+  for (const item of body) {
+    if (typeof item !== 'object' || item === null) continue;
+    const candidate = item as Record<string, unknown>;
+    if (typeof candidate.slug !== 'string' || !SAFE_MEDIA_NAME.test(candidate.slug)) continue;
+    if (typeof candidate.title !== 'string' || candidate.title.length === 0) continue;
+
+    // Same status coercion as the SPEC-derived path: the games repo uses
+    // draft/in-progress/published, and only an explicit archived/disabled
+    // takes a merged game off the site.
+    const rawStatus = typeof candidate.status === 'string' ? candidate.status : '';
+    const status = rawStatus === 'archived' || rawStatus === 'disabled' ? rawStatus : 'published';
+
+    const orientationRaw = typeof candidate.orientation === 'string' ? candidate.orientation.trim().toLowerCase() : '';
+    const touch = candidate.touch;
+
+    entries.push({
+      slug: candidate.slug,
+      title: candidate.title,
+      genre: typeof candidate.genre === 'string' ? candidate.genre : '',
+      controls: typeof candidate.controls === 'string' ? candidate.controls : '',
+      status,
+      media: parseCommittedMedia(candidate.media),
+      multiplayer: parseCommittedMultiplayer(candidate.multiplayer),
+      orientation: GAME_ORIENTATIONS.has(orientationRaw as CatalogGameOrientation)
+        ? (orientationRaw as CatalogGameOrientation)
+        : 'any',
+      ...(typeof touch === 'string' && CATALOG_TOUCH_VALUES.has(touch as CatalogGameTouch)
+        ? { touch: touch as CatalogGameTouch }
+        : {}),
+    });
+  }
+
+  // Rows present but none usable means this is not the schema we understand — a
+  // field rename in the games repo, say. Serving the resulting empty array would
+  // blank every game on the site; fall through to the fan-out instead. An
+  // artifact that is genuinely `[]` still returns an empty catalog, as it should.
+  if (body.length > 0 && entries.length === 0) {
+    return null;
+  }
+  return entries;
+}
+
+/** The committed catalog carries media already in website shape, unlike per-game metadata.json. */
+function parseCommittedMedia(value: unknown): CatalogGameMedia | null {
+  if (typeof value !== 'object' || value === null) {
+    return null;
+  }
+  const media = value as { screenshots?: unknown; video?: unknown };
+  const screenshots = (Array.isArray(media.screenshots) ? media.screenshots : [])
+    .filter(
+      (shot): shot is { name: string; file: string } =>
+        typeof shot === 'object' &&
+        shot !== null &&
+        typeof (shot as { name?: unknown }).name === 'string' &&
+        SAFE_MEDIA_NAME.test((shot as { name: string }).name) &&
+        typeof (shot as { file?: unknown }).file === 'string' &&
+        SAFE_MEDIA_PNG.test((shot as { file: string }).file),
+    )
+    .slice(0, 8)
+    .map((shot) => ({ name: shot.name, file: shot.file }));
+  const video = typeof media.video === 'string' && SAFE_MEDIA_MP4.test(media.video) ? media.video : null;
+  return screenshots.length > 0 || video ? { screenshots, video } : null;
+}
+
+function parseCommittedMultiplayer(value: unknown): CatalogGameMultiplayer | null {
+  if (typeof value !== 'object' || value === null) {
+    return null;
+  }
+  const multiplayer = value as { mode?: unknown; minPlayers?: unknown; maxPlayers?: unknown };
+  if (
+    multiplayer.mode !== 'controllers' ||
+    typeof multiplayer.minPlayers !== 'number' ||
+    typeof multiplayer.maxPlayers !== 'number' ||
+    !Number.isInteger(multiplayer.minPlayers) ||
+    !Number.isInteger(multiplayer.maxPlayers)
+  ) {
+    return null;
+  }
+  if (
+    multiplayer.minPlayers < 2 ||
+    multiplayer.maxPlayers < multiplayer.minPlayers ||
+    multiplayer.maxPlayers > MAX_MULTIPLAYER_SLOTS
+  ) {
+    return null;
+  }
+  return { mode: 'controllers', minPlayers: multiplayer.minPlayers, maxPlayers: multiplayer.maxPlayers };
 }
 
 function parseGameMedia(metadataJson: string | null): CatalogGameMedia | null {
