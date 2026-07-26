@@ -445,7 +445,10 @@ describe('SubmissionStatusView', () => {
       // bridge — so that's the path exercised here.
       await act(async () => {
         window.dispatchEvent(
-          new MessageEvent('message', { data: { source: 'gdpl-player', type: 'key', key: 'Escape' } }),
+          new MessageEvent('message', {
+            origin: 'null',
+            data: { source: 'gdpl-player', type: 'key', key: 'Escape' },
+          }),
         );
         await flushEffects();
       });

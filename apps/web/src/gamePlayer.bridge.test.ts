@@ -44,8 +44,9 @@ function runBridge(bodyHtml = '') {
 
   const received: BridgeMessage[] = [];
   const listener = (event: MessageEvent) => {
-    // jsdom iframes share this window's origin; production sandboxed frames use "null".
-    if (event.origin !== window.location.origin && event.origin !== 'null') return;
+    // Production sandboxed frames use origin "null". jsdom's iframe postMessage
+    // reports "" here; accept both so the harness still sees bridge traffic.
+    if (event.origin !== 'null' && event.origin !== '') return;
     received.push(event.data as BridgeMessage);
   };
   window.addEventListener('message', listener);
