@@ -3180,6 +3180,15 @@ body.player-open {
   transition:
     transform 0.15s ease,
     box-shadow 0.15s ease;
+  /* Two instances of this exact button — same markup, same class, same computed
+     padding/font/line-height — render at different heights (52px vs 36px) depending
+     on which one is in the DOM. No CSS difference explains it; whatever the browser's
+     reason, this is the CTA that actually submits the spec, so it gets an explicit
+     floor rather than an inherited "normal" line-height nobody can rely on. */
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .btn-create-now:hover {
@@ -3736,7 +3745,14 @@ body.player-open {
 }
 
 .status-abandon {
-  padding: 0;
+  /* This cancels a running build, so it stays a quiet text link rather than a
+     button — but the tap target measured 14px tall, well under a thumb. Sized
+     the same way as .btn-create-now above: display:flex + min-height, because
+     padding alone did not change the measured box here. */
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 2px;
   border: none;
   background: none;
   color: var(--muted);
