@@ -245,7 +245,7 @@ export async function registerRefineRoute(app: FastifyInstance, options: RefineR
 
   const cacheKey = (data: { title: string; concept: string; locale?: string }) =>
     createHash('sha256')
-      .update(`${data.locale ?? 'en'} ${data.title} ${data.concept}`)
+      .update(`${data.locale ?? 'en'}\x00${data.title}\x00${data.concept}`)
       .digest('hex');
 
   const readCache = (key: string, now: number): RefineResponse | null => {
