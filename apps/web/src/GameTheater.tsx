@@ -146,8 +146,8 @@ export function GameTheater({ title, badge, source, onExit, meta, orientation = 
     >
       <div className="game-theater-bar">
         <div className="game-theater-meta">
-          <span className="theater-badge">
-            <PixelIcon name={badge.icon} size={13} /> {badge.label}
+          <span className="theater-badge" title={t('ai.generatedTooltip')}>
+            <PixelIcon name={badge.icon} size={12} /> {badge.label}
           </span>
           <h2 className="theater-title">{displayTitle}</h2>
           {player.meta?.desc ? <span className="theater-desc">{player.meta.desc}</span> : meta}

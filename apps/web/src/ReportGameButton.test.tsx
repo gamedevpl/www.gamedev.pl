@@ -45,6 +45,12 @@ describe('ReportGameButton', () => {
     expect(href.startsWith(`mailto:${CONTACT_EMAIL}?`)).toBe(true);
   });
 
+  it('renders as a quiet control rather than a primary theater button', () => {
+    const { link } = draw('space-dash', 'Space Dash');
+    expect(link.classList.contains('report-btn')).toBe(true);
+    expect(link.classList.contains('secondary-btn')).toBe(false);
+  });
+
   it('pre-fills all four elements a valid notice needs', () => {
     const { body } = draw('space-dash', 'Space Dash');
     // Where the content is — the one element the reporter should never have to look up.

@@ -9,6 +9,7 @@ type ArcadeCatalogProps = {
   catalogEntries: CatalogEntry[];
   onPlayGame: (game: CatalogEntry) => void;
   onPlayTogether: (game: CatalogEntry) => void;
+  onRetryCatalog: () => void;
 };
 
 function humanizeMoment(name: string): string {
@@ -217,6 +218,7 @@ export function ArcadeCatalog({
   catalogEntries,
   onPlayGame,
   onPlayTogether,
+  onRetryCatalog,
 }: ArcadeCatalogProps) {
   const { t } = useTranslation();
 
@@ -229,7 +231,12 @@ export function ArcadeCatalog({
       {catalogStatus === 'loading' ? (
         <p className="catalog-state">{t('catalog.loading')}</p>
       ) : catalogStatus === 'error' ? (
-        <p className="error">{t('catalog.error', { message: catalogError ?? t('errors.generic') })}</p>
+        <div className="load-error" role="alert">
+          <p className="error">{t('catalog.error', { message: catalogError ?? t('errors.generic') })}</p>
+          <button type="button" className="secondary-btn" onClick={onRetryCatalog}>
+            <PixelIcon name="undo" size={13} /> {t('catalog.retry')}
+          </button>
+        </div>
       ) : catalogEntries.length === 0 ? (
         <p className="catalog-state">{t('catalog.empty')}</p>
       ) : (

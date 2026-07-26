@@ -85,11 +85,21 @@ function parseCatalogOrientation(value: unknown): CatalogOrientation {
   return value === 'portrait' || value === 'landscape' ? value : 'any';
 }
 
+async function readApiErrorMessage(response: Response, fallback: string): Promise<string> {
+  try {
+    const body = (await response.clone().json()) as { error?: unknown };
+    if (typeof body?.error === 'string' && body.error.trim()) return body.error;
+  } catch {
+    // Non-JSON error bodies fall through to the status-based fallback.
+  }
+  return fallback;
+}
+
 export async function fetchCatalog(): Promise<CatalogEntry[]> {
   const response = await fetch(`${API_BASE}/api/catalog`);
 
   if (!response.ok) {
-    throw new Error(`Catalog request failed (${response.status} ${response.statusText || 'Unknown error'})`);
+    throw new Error(await readApiErrorMessage(response, `Catalog request failed (${response.status})`));
   }
 
   const body = (await response.json()) as unknown;
@@ -128,7 +138,7 @@ export async function fetchPublishedGame(slug: string): Promise<PublishedGame> {
   const response = await fetch(`${API_BASE}/api/games/${encodeURIComponent(slug)}`);
 
   if (!response.ok) {
-    throw new Error(`Game request failed (${response.status} ${response.statusText || 'Unknown error'})`);
+    throw new Error(await readApiErrorMessage(response, `Game request failed (${response.status})`));
   }
 
   const body = (await response.json()) as PublishedGame;

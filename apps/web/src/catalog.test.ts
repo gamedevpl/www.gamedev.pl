@@ -96,4 +96,12 @@ describe('catalog helpers', () => {
       '/api/games/space%20runner/media/opening%20image.png',
     );
   });
+
+  it('surfaces the API error body when the catalog request fails', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ error: 'failed to load catalog' }), { status: 502, statusText: '' }),
+    );
+
+    await expect(fetchCatalog()).rejects.toThrow('failed to load catalog');
+  });
 });
