@@ -1605,3 +1605,84 @@ describe('GET /api/me/quota', () => {
     await app.close();
   });
 });
+
+/**
+ * The status page polls, so several watchers of one build arrive together, and a
+ * refresh is several GitHub reads against a token GitHub limits as a whole. Measured
+ * in production before this existed: 28–58% of status polls returned 502 during the
+ * hours people were actually watching builds.
+ */
+describe('status route under GitHub pressure', () => {
+  it('coalesces concurrent cache misses into a single derivation', async () => {
+    let release!: (state: { state: 'open' | 'closed' }) => void;
+    const getIssueState = vi.fn(() => new Promise<{ state: 'open' | 'closed' }>((resolve) => (release = resolve)));
+    const githubClient = { ...createGithubClientStub({}).githubClient, getIssueState };
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
+    const token = mintToken(123, secret);
+
+    const polls = Promise.all([
+      app.inject({ method: 'GET', url: `/api/submissions/${token}` }),
+      app.inject({ method: 'GET', url: `/api/submissions/${token}` }),
+      app.inject({ method: 'GET', url: `/api/submissions/${token}` }),
+    ]);
+    await vi.waitFor(() => expect(getIssueState).toHaveBeenCalled());
+    release({ state: 'open' });
+    const responses = await polls;
+
+    expect(getIssueState).toHaveBeenCalledTimes(1);
+    for (const response of responses) expect(response.statusCode).toBe(200);
+
+    await app.close();
+  });
+
+  it('keeps the two locales apart while coalescing', async () => {
+    const { githubClient, getIssueState } = createGithubClientStub({});
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
+    const token = mintToken(123, secret);
+
+    await Promise.all([
+      app.inject({ method: 'GET', url: `/api/submissions/${token}?locale=en` }),
+      app.inject({ method: 'GET', url: `/api/submissions/${token}?locale=pl` }),
+    ]);
+
+    // Two keys, so two refreshes — a shared one would hand a Polish reader English.
+    expect(getIssueState).toHaveBeenCalledTimes(2);
+
+    await app.close();
+  });
+
+  it('serves the last known status when a refresh fails', async () => {
+    const { githubClient, getIssueState } = createGithubClientStub({});
+    let currentTime = 10_000;
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret, now: () => currentTime });
+    const token = mintToken(123, secret);
+
+    const warm = await app.inject({ method: 'GET', url: `/api/submissions/${token}` });
+    expect(warm.statusCode).toBe(200);
+
+    currentTime += 60_001;
+    getIssueState.mockRejectedValueOnce(new Error('github request failed with status 403'));
+    const stale = await app.inject({ method: 'GET', url: `/api/submissions/${token}` });
+    expect(stale.statusCode).toBe(200);
+    expect(stale.json()).toEqual(warm.json());
+
+    // The failure must not wedge anything: the next poll refreshes normally.
+    currentTime += 60_001;
+    const recovered = await app.inject({ method: 'GET', url: `/api/submissions/${token}` });
+    expect(recovered.statusCode).toBe(200);
+    expect(getIssueState).toHaveBeenCalledTimes(3);
+
+    await app.close();
+  });
+
+  it('still 502s when it fails with nothing cached to fall back on', async () => {
+    const { githubClient, getIssueState } = createGithubClientStub({});
+    getIssueState.mockRejectedValue(new Error('github request failed with status 403'));
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
+
+    const response = await app.inject({ method: 'GET', url: `/api/submissions/${mintToken(123, secret)}` });
+    expect(response.statusCode).toBe(502);
+
+    await app.close();
+  });
+});
