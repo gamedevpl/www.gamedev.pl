@@ -935,6 +935,54 @@ describe('catalog route', () => {
 
     await app.close();
   });
+
+  it('coalesces concurrent cache-miss requests into a single catalog fetch', async () => {
+    let release!: (entries: CatalogGameEntry[]) => void;
+    const getCatalog = vi.fn(() => new Promise<CatalogGameEntry[]>((resolve) => (release = resolve)));
+    const githubClient = { ...createGithubClientStub({}).githubClient, getCatalog };
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
+
+    const requests = Promise.all([
+      app.inject({ method: 'GET', url: '/api/catalog' }),
+      app.inject({ method: 'GET', url: '/api/catalog' }),
+      app.inject({ method: 'GET', url: '/api/catalog' }),
+    ]);
+    await vi.waitFor(() => expect(getCatalog).toHaveBeenCalled());
+    release([catalogEntry('bubble-pop')]);
+    const responses = await requests;
+
+    expect(getCatalog).toHaveBeenCalledTimes(1);
+    for (const res of responses) {
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toHaveLength(1);
+    }
+
+    await app.close();
+  });
+
+  it('serves the last known catalog when a refresh fails', async () => {
+    const { githubClient, getCatalog } = createGithubClientStub({ catalog: [catalogEntry('bubble-pop')] });
+    let currentTime = 10_000;
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret, now: () => currentTime });
+
+    const warm = await app.inject({ method: 'GET', url: '/api/catalog' });
+    expect(warm.statusCode).toBe(200);
+
+    currentTime += 60_001;
+    getCatalog.mockRejectedValueOnce(new Error('boom'));
+    const stale = await app.inject({ method: 'GET', url: '/api/catalog' });
+    expect(stale.statusCode).toBe(200);
+    expect(stale.json()).toEqual(warm.json());
+    expect(getCatalog).toHaveBeenCalledTimes(2);
+
+    // The failure must not wedge the cache: the next request refreshes normally.
+    currentTime += 60_001;
+    const recovered = await app.inject({ method: 'GET', url: '/api/catalog' });
+    expect(recovered.statusCode).toBe(200);
+    expect(getCatalog).toHaveBeenCalledTimes(3);
+
+    await app.close();
+  });
 });
 
 describe('published game media route', () => {

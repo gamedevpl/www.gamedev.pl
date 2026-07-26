@@ -468,6 +468,7 @@ export async function registerSubmissionRoutes(
   // longer (a published game only changes on a new merge to main).
   const catalogTtlMs = 60_000;
   let catalogCache: { expiresAt: number; entries: CatalogGameEntry[] } | null = null;
+  let catalogRefresh: Promise<CatalogGameEntry[]> | null = null;
   const gameTtlMs = 5 * 60_000;
   const gameCache = new Map<string, { expiresAt: number; value: { slug: string; title: string; html: string } }>();
   const gamesRateLimitWindowMs = 60 * 1000;
@@ -491,14 +492,36 @@ export async function registerSubmissionRoutes(
   const maxCachedMediaEntries = 400;
   const mediaCache = new Map<string, { expiresAt: number; etag: string; contentType: string; body: Buffer }>();
 
+  // The cache-cold path is the dangerous one: with min-instances 0, a fresh
+  // instance takes a page load's several catalog-touching requests at once, and
+  // each miss fanning out into a SPEC.md read per game is what trips GitHub's
+  // secondary rate limit. So misses coalesce into one in-flight refresh, and a
+  // failed refresh falls back to the last catalog this instance built — for
+  // data that changes only on a merge, briefly stale beats a visitor-facing 502.
   async function getCatalogEntries(client: GitHubClient, forceFresh = false): Promise<CatalogGameEntry[]> {
-    const currentTime = now();
-    if (!forceFresh && catalogCache && catalogCache.expiresAt > currentTime) {
+    if (!forceFresh && catalogCache && catalogCache.expiresAt > now()) {
       return catalogCache.entries;
     }
-    const entries = await client.getCatalog(publishedRef);
-    catalogCache = { entries, expiresAt: currentTime + catalogTtlMs };
-    return entries;
+
+    catalogRefresh ??= client
+      .getCatalog(publishedRef)
+      .then((entries) => {
+        catalogCache = { entries, expiresAt: now() + catalogTtlMs };
+        return entries;
+      })
+      .finally(() => {
+        catalogRefresh = null;
+      });
+
+    try {
+      return await catalogRefresh;
+    } catch (error) {
+      if (catalogCache) {
+        app.log.warn({ err: error }, 'catalog refresh failed; serving last known entries');
+        return catalogCache.entries;
+      }
+      throw error;
+    }
   }
 
   async function isSlugPublished(client: GitHubClient, slug: string): Promise<boolean> {
