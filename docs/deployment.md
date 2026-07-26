@@ -127,6 +127,32 @@ previews the rendered email with no Firestore write and no send. See
 [`.claude/skills/managing-beta-participants`](../.claude/skills/managing-beta-participants) for
 the full access model.
 
+## Issuing agent access tokens
+
+Coding agents authenticate to the deployed site with personal access tokens
+([`agent-access-tokens.md`](./agent-access-tokens.md)). Deliberately **no new deployment
+config**: no Secret Manager entry, no Cloud Run env var, nothing to rotate at the
+infrastructure level. The only prerequisite is that `ADMIN_UIDS` already contains your uid,
+which it must for the operator telemetry views anyway.
+
+Issue one the same way you approve a beta tester — from a shell with gcloud credentials for
+the project:
+
+```bash
+npm run token:mint   -w @gamedevpl/api -- bot:e2e --name "claude cloud vm"
+npm run token:list   -w @gamedevpl/api -- bot:e2e
+npm run token:revoke -w @gamedevpl/api -- <tokenId>
+```
+
+The token prints once and is never recoverable. It creates a `bot:` account on first mint;
+those accounts are excluded from creator metrics, so agent traffic does not move the
+product numbers.
+
+Storage is one new Firestore collection, `accessTokens`, keyed by token id. No composite
+index is required. Optionally add a **TTL policy on `expiresAt`** so expired records
+self-clean — expired tokens are already refused at authentication, so this is housekeeping
+rather than a control.
+
 ## How to deploy manually
 
 [`apps/api/Dockerfile`](../apps/api/Dockerfile) is a multi-stage image built from the repo root

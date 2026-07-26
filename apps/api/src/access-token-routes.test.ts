@@ -1,0 +1,400 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+import { generateAccessToken } from './access-token.js';
+import { MAX_TOKENS_PER_UID } from './access-token-service.js';
+import { buildApp } from './app.js';
+import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
+import { InMemoryStore } from './store.js';
+
+/**
+ * Every test here drives the **fully assembled app** (`buildApp`), never the route
+ * plugin alone. That is deliberate: this repo has a cross-cutting private-beta wall
+ * that lives in `app.ts`, and a previous route shipped green unit tests while the wall
+ * 401'd it in production. A credential whose entire purpose is getting through that
+ * wall has to be tested against it.
+ */
+
+const sessionSecret = 'dev-session-secret-change-me';
+
+function sessionHeaders(uid: string) {
+  return { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken(uid, sessionSecret)}` };
+}
+
+function bearer(token: string) {
+  return { authorization: `Bearer ${token}` };
+}
+
+function appWith(store: InMemoryStore, extra: { betaAllowedUids?: string } = {}) {
+  return buildApp({ store, sessionSecret, adminUids: 'g:boss', ...extra });
+}
+
+async function mintFor(app: Awaited<ReturnType<typeof buildApp>>, uid: string, name = 'agent vm') {
+  const res = await app.inject({
+    method: 'POST',
+    url: '/api/admin/access-tokens',
+    headers: sessionHeaders('g:boss'),
+    payload: { uid, name },
+  });
+  return res;
+}
+
+describe('POST /api/admin/access-tokens', () => {
+  let store: InMemoryStore;
+
+  beforeEach(async () => {
+    store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    await store.upsertUser({ uid: 'g:friend' });
+  });
+
+  it('mints a token for a new bot account and creates that account', async () => {
+    const app = await appWith(store);
+    const res = await mintFor(app, 'bot:e2e');
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json();
+    expect(body.token).toMatch(/^gdpl_pat_[0-9a-f]{16}_[A-Za-z0-9_-]{43}$/);
+    expect(body.uid).toBe('bot:e2e');
+    expect(body.accountCreated).toBe(true);
+    expect(body.createdByUid).toBe('g:boss');
+    expect(Date.parse(body.expiresAt)).toBeGreaterThan(Date.now());
+
+    // The account is now an ordinary standard-tier user.
+    const user = await store.getUser('bot:e2e');
+    expect(user?.tier).toBe('standard');
+  });
+
+  it('never returns or stores the secret hash alongside the token', async () => {
+    const app = await appWith(store);
+    const body = (await mintFor(app, 'bot:e2e')).json();
+
+    expect(body.secretHash).toBeUndefined();
+    const stored = await store.getAccessToken(body.tokenId);
+    expect(stored?.secretHash).toBeTruthy();
+    expect(body.token).not.toContain(stored?.secretHash);
+  });
+
+  it('mints for an existing human account without claiming to create it', async () => {
+    const app = await appWith(store);
+    const res = await mintFor(app, 'g:friend');
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json().accountCreated).toBe(false);
+  });
+
+  it('refuses to invent a non-bot account, so a mistyped g: uid cannot spring into being', async () => {
+    const app = await appWith(store);
+    const res = await mintFor(app, 'g:typoed-sub');
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain('bot:');
+    expect(await store.getUser('g:typoed-sub')).toBeNull();
+  });
+
+  it('refuses a blocked account', async () => {
+    await store.upsertUser({ uid: 'g:banned', tier: 'blocked' });
+    const app = await appWith(store);
+
+    const res = await mintFor(app, 'g:banned');
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('caps how many tokens one account may hold', async () => {
+    const app = await appWith(store);
+    for (let i = 0; i < MAX_TOKENS_PER_UID; i++) {
+      expect((await mintFor(app, 'bot:e2e', `token ${i}`)).statusCode).toBe(201);
+    }
+
+    const res = await mintFor(app, 'bot:e2e', 'one too many');
+    expect(res.statusCode).toBe(409);
+  });
+
+  it.each([
+    ['a non-admin session', () => sessionHeaders('g:friend')],
+    ['no credential at all', () => ({})],
+  ])('answers 404 for %s', async (_label, headers) => {
+    const app = await appWith(store);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/admin/access-tokens',
+      headers: headers(),
+      payload: { uid: 'bot:e2e', name: 'nope' },
+    });
+
+    // 404, not 403 — the operator surface does not confirm its own existence.
+    expect(res.statusCode).toBe(404);
+  });
+
+  it.each([
+    ['missing name', { uid: 'bot:e2e' }],
+    ['empty name', { uid: 'bot:e2e', name: '' }],
+    ['invalid uid', { uid: 'bad uid!', name: 'x' }],
+    ['expiry beyond the cap', { uid: 'bot:e2e', name: 'x', expiresInDays: 400 }],
+  ])('rejects an invalid mint request (%s)', async (_label, payload) => {
+    const app = await appWith(store);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/admin/access-tokens',
+      headers: sessionHeaders('g:boss'),
+      payload,
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe('authenticating with a personal access token', () => {
+  let store: InMemoryStore;
+
+  beforeEach(async () => {
+    store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+  });
+
+  it('authenticates a walled route through the private-beta wall', async () => {
+    // The whole point of the feature: an agent with no browser, no Google account and
+    // no place on the beta allowlist still reaches an authenticated route — because an
+    // admin issued it a credential, which is an admission decision in itself.
+    const app = await appWith(store, { betaAllowedUids: 'g:boss' });
+    const { token } = (await mintFor(app, 'bot:e2e')).json();
+
+    const res = await app.inject({ method: 'GET', url: '/api/notifications', headers: bearer(token) });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('identifies itself as the account it was issued to', async () => {
+    const app = await appWith(store);
+    const { token } = (await mintFor(app, 'bot:e2e')).json();
+
+    const res = await app.inject({ method: 'GET', url: '/api/auth/me', headers: bearer(token) });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().user.uid).toBe('bot:e2e');
+    // A user payload must never carry credential material.
+    expect(JSON.stringify(res.json())).not.toContain('secretHash');
+  });
+
+  it('cannot mint another token — a leaked credential cannot renew itself', async () => {
+    const app = await appWith(store);
+    // Issued to an account that IS an admin, so only the auth method can be what stops it.
+    const { token } = (await mintFor(app, 'g:boss')).json();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/admin/access-tokens',
+      headers: bearer(token),
+      payload: { uid: 'bot:sneaky', name: 'escalation' },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(await store.getUser('bot:sneaky')).toBeNull();
+  });
+
+  it('cannot read operator telemetry even when issued to an admin', async () => {
+    const app = await appWith(store);
+    const { token } = (await mintFor(app, 'g:boss')).json();
+
+    for (const url of ['/api/admin/telemetry/health', '/api/admin/telemetry/visits', '/api/admin/telemetry/creators']) {
+      const res = await app.inject({ method: 'GET', url, headers: bearer(token) });
+      expect(res.statusCode, url).toBe(404);
+    }
+  });
+
+  it('rejects a token whose secret is wrong for a real id', async () => {
+    const app = await appWith(store);
+    const { tokenId } = (await mintFor(app, 'bot:e2e')).json();
+    const forged = `gdpl_pat_${tokenId}_${'A'.repeat(43)}`;
+
+    const res = await app.inject({ method: 'GET', url: '/api/auth/me', headers: bearer(forged) });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('rejects an expired token', async () => {
+    const { token, tokenId, secretHash } = generateAccessToken();
+    await store.upsertUser({ uid: 'bot:e2e' });
+    await store.createAccessToken({
+      tokenId,
+      uid: 'bot:e2e',
+      secretHash,
+      name: 'stale',
+      createdAt: new Date(Date.now() - 200 * 86_400_000).toISOString(),
+      createdByUid: 'g:boss',
+      expiresAt: new Date(Date.now() - 86_400_000).toISOString(),
+    });
+    const app = await appWith(store);
+
+    const res = await app.inject({ method: 'GET', url: '/api/auth/me', headers: bearer(token) });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('rejects a revoked token immediately', async () => {
+    const app = await appWith(store);
+    const { token, tokenId } = (await mintFor(app, 'bot:e2e')).json();
+    expect((await app.inject({ method: 'GET', url: '/api/auth/me', headers: bearer(token) })).statusCode).toBe(200);
+
+    const revoked = await app.inject({
+      method: 'DELETE',
+      url: `/api/admin/access-tokens/${tokenId}`,
+      headers: sessionHeaders('g:boss'),
+    });
+    expect(revoked.statusCode).toBe(200);
+
+    const res = await app.inject({ method: 'GET', url: '/api/auth/me', headers: bearer(token) });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('rejects a token for an account that no longer exists', async () => {
+    const { token, tokenId, secretHash } = generateAccessToken();
+    await store.createAccessToken({
+      tokenId,
+      uid: 'bot:ghost',
+      secretHash,
+      name: 'orphan',
+      createdAt: new Date().toISOString(),
+      createdByUid: 'g:boss',
+      expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+    });
+    const app = await appWith(store);
+
+    const res = await app.inject({ method: 'GET', url: '/api/auth/me', headers: bearer(token) });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it.each([
+    ['a JWT-shaped bearer', 'eyJhbGciOiJSUzI1NiJ9.body.sig'],
+    ['a build-channel token', 'MTIzLmFiYzEyMw'],
+    ['garbage', 'not-a-token'],
+    ['our prefix but malformed', 'gdpl_pat_short_secret'],
+  ])('ignores %s without erroring', async (_label, credential) => {
+    const app = await appWith(store);
+    const res = await app.inject({ method: 'GET', url: '/api/auth/me', headers: bearer(credential) });
+
+    // Unauthenticated, never a 500 — other bearer schemes on this API must pass through
+    // to the handlers that understand them.
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('prefers a browser session over a token when both are present', async () => {
+    const app = await appWith(store);
+    const { token } = (await mintFor(app, 'bot:e2e')).json();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/auth/me',
+      headers: { ...sessionHeaders('g:boss'), ...bearer(token) },
+    });
+
+    expect(res.json().user.uid).toBe('g:boss');
+  });
+
+  it('exchanges for a session cookie so a real browser can be driven', async () => {
+    const app = await appWith(store, { betaAllowedUids: 'g:boss' });
+    const { token } = (await mintFor(app, 'bot:e2e')).json();
+
+    const res = await app.inject({ method: 'POST', url: '/api/auth/session', headers: bearer(token) });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().user.uid).toBe('bot:e2e');
+
+    const setCookie = res.headers['set-cookie'];
+    const cookie = Array.isArray(setCookie) ? setCookie[0] : setCookie;
+    expect(cookie).toContain(`${SESSION_COOKIE_NAME}=`);
+    expect(cookie).toContain('HttpOnly');
+
+    // The cookie must actually work on a walled route, exactly as a browser would use it.
+    const followUp = await app.inject({
+      method: 'GET',
+      url: '/api/notifications',
+      headers: { cookie: String(cookie).split(';')[0] as string },
+    });
+    expect(followUp.statusCode).toBe(200);
+  });
+
+  it.each([
+    ['a browser session', () => sessionHeaders('g:boss')],
+    ['no credential', () => ({})],
+  ])('refuses to mint a session from %s', async (_label, headers) => {
+    const app = await appWith(store);
+    const res = await app.inject({ method: 'POST', url: '/api/auth/session', headers: headers() });
+
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('records last use so a stale token can be spotted before revoking it', async () => {
+    const app = await appWith(store);
+    const { token, tokenId } = (await mintFor(app, 'bot:e2e')).json();
+    expect((await store.getAccessToken(tokenId))?.lastUsedAt).toBeUndefined();
+
+    await app.inject({ method: 'GET', url: '/api/auth/me', headers: bearer(token) });
+
+    expect((await store.getAccessToken(tokenId))?.lastUsedAt).toBeTruthy();
+  });
+
+  it('does not count a bot request as a human active day', async () => {
+    // `activeDays` feeds the creator-return metric; an agent on a cron would otherwise
+    // report perfect retention for an account that is not a person.
+    const app = await appWith(store);
+    const { token } = (await mintFor(app, 'bot:e2e')).json();
+
+    await app.inject({ method: 'GET', url: '/api/auth/me', headers: bearer(token) });
+
+    expect((await store.getUser('bot:e2e'))?.activeDays).toBeUndefined();
+  });
+});
+
+describe('GET/DELETE /api/admin/access-tokens', () => {
+  let store: InMemoryStore;
+
+  beforeEach(async () => {
+    store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    await store.upsertUser({ uid: 'g:friend' });
+  });
+
+  it('lists an account’s tokens without any credential material', async () => {
+    const app = await appWith(store);
+    await mintFor(app, 'bot:e2e', 'first');
+    await mintFor(app, 'bot:e2e', 'second');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/admin/access-tokens?uid=bot:e2e',
+      headers: sessionHeaders('g:boss'),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const { tokens } = res.json();
+    expect(tokens).toHaveLength(2);
+    expect(res.payload).not.toContain('secretHash');
+    expect(tokens.every((entry: { expired: boolean }) => entry.expired === false)).toBe(true);
+  });
+
+  it('answers 404 when revoking a token that does not exist', async () => {
+    const app = await appWith(store);
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/api/admin/access-tokens/${'a'.repeat(16)}`,
+      headers: sessionHeaders('g:boss'),
+    });
+
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('rejects a malformed token id', async () => {
+    const app = await appWith(store);
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/api/admin/access-tokens/not-hex',
+      headers: sessionHeaders('g:boss'),
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it.each([
+    ['listing', 'GET' as const, '/api/admin/access-tokens?uid=bot:e2e'],
+    ['revoking', 'DELETE' as const, `/api/admin/access-tokens/${'a'.repeat(16)}`],
+  ])('hides %s from a non-admin', async (_label, method, url) => {
+    const app = await appWith(store);
+    const res = await app.inject({ method, url, headers: sessionHeaders('g:friend') });
+
+    expect(res.statusCode).toBe(404);
+  });
+});

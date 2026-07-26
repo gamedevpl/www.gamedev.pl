@@ -64,6 +64,27 @@ boundary.
   CORS must not become the production submission policy.
 - Never return repository credentials or upstream error details to clients.
 
+### 5. Programmatic callers (personal access tokens)
+
+Coding agents authenticate with tokens issued to real accounts
+([`agent-access-tokens.md`](./agent-access-tokens.md)) rather than through any bypass
+route. The properties that keep this inside the threat model:
+
+- A token authenticates **as an account** — same tier, quota, and walls. It grants nothing
+  a session for that account would not.
+- **Issuance requires an admin session.** A token-authenticated request is refused by every
+  operator surface, so a leaked token cannot mint another or read across other people's
+  games.
+- Only `sha256(secret)` is stored, in its own collection, never on the user document that
+  gets serialized to browsers.
+- Revocation is a delete and takes effect on the next request — no redeploy, unlike
+  rotating a shared secret.
+- Expiry is mandatory (90 days default, 365 max), and the token format is registered in the
+  generated-game credential scanner.
+
+Do not add an unauthenticated route that mints sessions, and do not rename one to look like
+something else. If a bypass is ever genuinely required, it must be named for what it is.
+
 ## Mechanical games-repo gate
 
 Before publication, each game must pass the checks in
@@ -90,3 +111,5 @@ credentials operated by gamedev.pl. Historical details are available in Git hist
 - Agent-authored changes require review and validation; they are never auto-merged.
 - Production credentials never enter game bundles, public specs, untrusted PR jobs, or the
   browser.
+- Authentication has no bypass route in production. Programmatic callers use tokens issued
+  to real accounts, and issuing one always requires a human at an admin session.

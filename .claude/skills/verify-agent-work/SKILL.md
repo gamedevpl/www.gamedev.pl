@@ -172,6 +172,48 @@ transition (the game-over overlay floods the canvas dark). The definitive proof 
 playing the _published_ game on the live site, where a foregrounded real-user tab runs rAF
 normally.
 
+## Verifying behind sign-in (you don't need the owner's Gmail)
+
+Most authenticated flows can't be checked from a cloud VM by logging in — there is no
+browser session and no Google account, and driving Google's login UI with Playwright does
+not work (automation walls, CAPTCHA, datacenter IPs). Two working paths, in order of
+preference:
+
+**Local — for verifying a change.** Run the app and mint a dev session. No credentials, no
+cloud, in-memory store:
+
+```bash
+npm run dev
+curl -X POST http://localhost:5173/api/auth/dev -c cookies.txt   # session for dev:local
+```
+
+This is enough for almost all verification. It exercises real routes, real walls, and the
+real SPA. What it does **not** prove: anything about production data, the real generation
+pipeline, or deployed config.
+
+**Deployed — for verifying production behaviour.** Use a personal access token
+(`docs/agent-access-tokens.md`), issued by the repo owner and supplied as
+`GAMEDEV_ACCESS_TOKEN`:
+
+```bash
+curl -H "Authorization: Bearer $GAMEDEV_ACCESS_TOKEN" https://www.gamedev.pl/api/auth/me
+# driving a real browser? the SPA uses cookies, so exchange the token first:
+curl -si -X POST https://www.gamedev.pl/api/auth/session \
+  -H "Authorization: Bearer $GAMEDEV_ACCESS_TOKEN" | grep -i set-cookie
+```
+
+Rules that matter:
+
+- **Never commit the token, and never paste it into a game, issue, PR, or log.** It is in
+  the generated-game credential scanner, so an embedded one fails assembly — but that is a
+  backstop, not permission to be careless.
+- **A token acts as a real account against real data.** Anything you create is real: use a
+  `bot:` account, and clean up what you make.
+- **A token deliberately cannot reach operator surfaces or mint another token.** A 404 from
+  `/api/admin/*` with a valid token is correct behaviour, not a bug to route around.
+- **Exchange once, reuse the cookie.** `/api/auth/session` shares the auth rate limiter
+  (20/hour/IP).
+
 ## Verify claims, don't relay them
 
 If an agent reports "all tests pass" or "I verified X", reproduce it. Report what **you**

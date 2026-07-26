@@ -1,9 +1,9 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { recentPartitions, summarizeGameHealth, type GameHealth } from './telemetry-health.js';
 import { summarizeVisitFunnel, type VisitFunnel } from './visit-funnel.js';
 import { summarizeCreatorMetrics, type CreatorMetrics } from './creator-metrics.js';
-import type { Store, TelemetryEvent, User, VisitEvent } from './store.js';
+import { BOT_UID_PREFIX, type Store, type TelemetryEvent, type User, type VisitEvent } from './store.js';
 
 /**
  * Operator-only reads over play telemetry (docs/improvement-loop-plan.md IL-2).
@@ -86,6 +86,19 @@ export function isAdmin(uid: string | undefined, adminUids: Set<string> | undefi
 }
 
 /**
+ * Admin *and* signed in with a browser session rather than a personal access token.
+ *
+ * Every operator surface takes this stricter test. A PAT is a long-lived credential that
+ * lives in CI config and agent VMs — environments where a human is not watching — so it
+ * may act as its user but never see across other people's games, and never mint another
+ * token. That keeps the blast radius of a leaked token inside one account, which is the
+ * property the whole design rests on (docs/agent-access-tokens.md).
+ */
+export function isAdminSession(request: FastifyRequest, adminUids: Set<string> | undefined): boolean {
+  return request.authMethod === 'session' && isAdmin(request.user?.uid, adminUids);
+}
+
+/**
  * Reads a window of daily partitions under one shared document budget.
  *
  * Both telemetry streams need the identical walk — newest day first, per-day cap, and a
@@ -129,7 +142,7 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
     // 404 rather than 403 for a signed-in non-admin: the existence of an operator
     // surface is not something a beta tester needs confirmed. An unauthenticated
     // request gets the same answer, so probing tells nobody anything.
-    if (!isAdmin(request.user?.uid, adminUids)) {
+    if (!isAdminSession(request, adminUids)) {
       return reply.status(404).send({ error: 'not found' });
     }
 
@@ -158,7 +171,7 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
    * underlying rows carry no identity to leak.
    */
   app.get('/api/admin/telemetry/visits', async (request, reply) => {
-    if (!isAdmin(request.user?.uid, adminUids)) {
+    if (!isAdminSession(request, adminUids)) {
       return reply.status(404).send({ error: 'not found' });
     }
 
@@ -184,11 +197,16 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
    * a publish, not about what happened inside a chosen week.
    */
   app.get('/api/admin/telemetry/creators', async (request, reply) => {
-    if (!isAdmin(request.user?.uid, adminUids)) {
+    if (!isAdminSession(request, adminUids)) {
       return reply.status(404).send({ error: 'not found' });
     }
 
-    const submissions = await store.listRecentlyPublished(MAX_SUBMISSIONS_SAMPLED);
+    // Automation accounts are excluded: these two numbers are about whether *people*
+    // come back and what their builds cost, and a bot account driven by a test suite
+    // would report flawless retention for a creator who does not exist.
+    const submissions = (await store.listRecentlyPublished(MAX_SUBMISSIONS_SAMPLED)).filter(
+      (submission) => !submission.ownerUid.startsWith(BOT_UID_PREFIX),
+    );
 
     // One lookup per distinct owner, not per submission: a prolific creator would
     // otherwise be fetched once per game they published.
