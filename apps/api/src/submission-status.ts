@@ -177,6 +177,28 @@ export interface SubmissionPublishedResponse extends SubmissionStatusResponseBas
 
 export type SubmissionStatusResponse = SubmissionStatusResponseBase | SubmissionPublishedResponse;
 
+/**
+ * How many QA answers the creator appended to a concept.
+ *
+ * The block is written by CreatorQA (`## Creator clarifications`, then one `- ` line
+ * per answered question) — an English marker regardless of the creator's language, so
+ * this does not need to know which locale asked the questions.
+ *
+ * Deliberately reads the *raw* concept: `sanitizeCreatorText` strips `#`, so by the
+ * time the text is sanitized the heading is indistinguishable from a line the creator
+ * typed themselves. Counting here measures what the creator actually answered, rather
+ * than trusting a number the client could send.
+ */
+export function countCreatorClarifications(rawConcept: string): number {
+  const marker = rawConcept.indexOf('## Creator clarifications');
+  if (marker === -1) return 0;
+  return rawConcept
+    .slice(marker)
+    .split('\n')
+    .slice(1)
+    .filter((line) => line.trimStart().startsWith('- ')).length;
+}
+
 export function sanitizeCreatorText(raw: string, options: { singleLine: boolean }): string {
   const withoutHtml = raw.replace(/<[^>]+>/g, ' ');
   const withoutMarkdownLinks = withoutHtml
