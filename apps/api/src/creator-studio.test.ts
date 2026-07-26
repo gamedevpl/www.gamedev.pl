@@ -88,9 +88,13 @@ describe('GET /api/me/studio/health', () => {
     await store.upsertUser({ uid: 'g:creator' });
   });
 
-  it('summarizes play only for the creator’s own slugs', async () => {
+  it('summarizes play only for the creator’s own published slugs', async () => {
     await store.createSubmission(10, 'g:creator', 'Sky Dodge');
     await store.setSubmissionSlug(10, 'sky-dodge');
+    await store.setSubmissionPublishedAt(10, `${today}T12:00:00.000Z`);
+    // Draft-only slug must not appear in the published scorecard.
+    await store.createSubmission(11, 'g:creator', 'Still drafting');
+    await store.setSubmissionSlug(11, 'still-drafting');
     await store.appendTelemetryEvents(today, [
       event({ type: 'game_opened', msSinceOpen: 0 }),
       event({ type: 'play_time', seconds: 20, msSinceOpen: 20_000, at: `${today}T10:00:20.000Z` }),
@@ -105,6 +109,20 @@ describe('GET /api/me/studio/health', () => {
         slug: 'someone-elses-game',
         sessionId: 's2',
         seconds: 99,
+        msSinceOpen: 20_000,
+        at: `${today}T10:00:20.000Z`,
+      }),
+      event({
+        type: 'game_opened',
+        slug: 'still-drafting',
+        sessionId: 's3',
+        msSinceOpen: 0,
+      }),
+      event({
+        type: 'play_time',
+        slug: 'still-drafting',
+        sessionId: 's3',
+        seconds: 40,
         msSinceOpen: 20_000,
         at: `${today}T10:00:20.000Z`,
       }),

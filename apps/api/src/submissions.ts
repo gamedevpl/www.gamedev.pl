@@ -1309,13 +1309,25 @@ export async function registerSubmissionRoutes(
     if (!githubClient || !submissionTokenSecret) {
       return reply.status(503).send({ error: 'submissions are not configured' });
     }
-    if (!checkUserAccess(request, reply)) {
-      return;
-    }
     if (!store) {
       return reply.status(503).send({ error: 'submissions are not configured' });
     }
 
+<<<<<<< HEAD
+=======
+    // Rate-limit before any authorization. CodeQL's missing-rate-limiting check
+    // requires the limiter to dominate auth on sensitive write routes; probing with
+    // forged tokens must also not burn store/LLM budget.
+    const currentTime = now();
+    if (isRateLimited(improvementsByIp, request.ip, currentTime, maxImprovementsPerWindow, improvementRateLimitWindowMs)) {
+      return reply.status(429).send({ error: 'too many improvement requests, please try again later' });
+    }
+
+    if (!checkUserAccess(request, reply)) {
+      return;
+    }
+
+>>>>>>> c98b691a (fix(studio): rate-limit improve before auth; fix health test)
     const token = z.string().parse((request.params as { token?: string }).token);
     let issueNumber: number;
     try {
