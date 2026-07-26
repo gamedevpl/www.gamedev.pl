@@ -8,16 +8,11 @@
 // an injectable interface so tests never hit Google.
 
 import { OAuth2Client } from 'google-auth-library';
+import { readBearerToken } from './bearer.js';
 
 export interface InternalAuthVerifier {
   /** Resolve true only for a valid scheduler OIDC token in the Authorization header. */
   verify(authorizationHeader: string | undefined): Promise<boolean>;
-}
-
-function extractBearer(header: string | undefined): string | null {
-  if (!header) return null;
-  const match = /^Bearer\s+(.+)$/i.exec(header.trim());
-  return match?.[1] ?? null;
 }
 
 export interface OidcVerifierOptions {
@@ -35,7 +30,7 @@ export class OidcInternalAuthVerifier implements InternalAuthVerifier {
   }
 
   async verify(header: string | undefined): Promise<boolean> {
-    const token = extractBearer(header);
+    const token = readBearerToken(header);
     if (!token) return false;
     try {
       const ticket = await this.client.verifyIdToken({ idToken: token, audience: this.opts.audience });

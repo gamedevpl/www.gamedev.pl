@@ -5,7 +5,7 @@ import {
   mintSessionToken,
   registerAuthPlugin,
   SESSION_COOKIE_NAME,
-  verifySessionToken,
+  readSessionToken,
   type GoogleAuthVerifier,
 } from './auth.js';
 import { InMemoryStore } from './store.js';
@@ -33,26 +33,26 @@ describe('Session Token Minting & Verification', () => {
 
   it('mints and verifies a valid token', () => {
     const token = mintSessionToken('g:user1', secret, 3600);
-    const verified = verifySessionToken(token, secret);
+    const verified = readSessionToken(token, secret);
     expect(verified.uid).toBe('g:user1');
     expect(verified.exp).toBeGreaterThan(Math.floor(Date.now() / 1000));
   });
 
   it('verifies token minted with previous secret when prevSecret supplied', () => {
     const token = mintSessionToken('g:user2', prevSecret, 3600);
-    const verified = verifySessionToken(token, secret, prevSecret);
+    const verified = readSessionToken(token, secret, prevSecret);
     expect(verified.uid).toBe('g:user2');
   });
 
   it('rejects expired tokens', () => {
     const token = mintSessionToken('g:user1', secret, -10); // expired 10 seconds ago
-    expect(() => verifySessionToken(token, secret)).toThrow(InvalidSessionError);
+    expect(() => readSessionToken(token, secret)).toThrow(InvalidSessionError);
   });
 
   it('rejects forged/tampered tokens', () => {
     const token = mintSessionToken('g:user1', secret, 3600);
     const tampered = token.slice(0, -5) + 'xxxxx';
-    expect(() => verifySessionToken(tampered, secret)).toThrow(InvalidSessionError);
+    expect(() => readSessionToken(tampered, secret)).toThrow(InvalidSessionError);
   });
 });
 

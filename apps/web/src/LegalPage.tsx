@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { legalDocument, type LegalBlock, type LegalDocId } from './legal';
 import { renderInline } from './legal/inline';
-import { OPERATOR_ADDRESS, OPERATOR_LEGAL_NAME, OPERATOR_TAX_ID } from './legal/operator';
+import { OPERATOR_LEGAL_NAME } from './legal/operator';
 import { legalAnchor, legalPath } from './router';
 import { PixelIcon } from './PixelIcon';
 
@@ -110,9 +110,8 @@ export function LegalPage({ doc, onBack }: { doc: LegalDocId; onBack: () => void
       ))}
 
       <footer className="legal-footer">
-        {OPERATOR_LEGAL_NAME && <p className="legal-operator">{OPERATOR_LEGAL_NAME}</p>}
-        {OPERATOR_ADDRESS && <p>{OPERATOR_ADDRESS}</p>}
-        {OPERATOR_TAX_ID && <p>NIP: {OPERATOR_TAX_ID}</p>}
+        {OPERATOR_LEGAL_NAME ? <p className="legal-operator">{OPERATOR_LEGAL_NAME}</p> : null}
+        {/* Address and tax id render once published — see legal/operator.ts. */}
         <p>
           <a href={legalPath(doc === 'privacy' ? 'terms' : 'privacy')}>
             {doc === 'privacy' ? t('legal.terms') : t('legal.privacy')}

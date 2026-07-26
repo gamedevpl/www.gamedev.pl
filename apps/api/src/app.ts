@@ -21,6 +21,7 @@ import { registerSubmissionRoutes, type SubmissionRoutesOptions } from './submis
 import { registerTelemetryRoutes, type TelemetryRoutesOptions } from './telemetry.js';
 import { registerVisitTelemetryRoutes } from './visit-telemetry.js';
 import { createPublishedSlugGateFromEnv } from './published-slugs.js';
+import { registerRateLimit } from './rate-limit.js';
 
 const GenerateRequestSchema = z.object({
   prompt: z.string().trim().min(1, 'prompt is required').max(500, 'prompt is too long'),
@@ -76,6 +77,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     origin: webOrigin ? webOrigin.split(',').map((entry) => entry.trim()) : isProd ? false : true,
     credentials: true,
   });
+
+  // IP rate limiting (opt-in per route via `{ config: { rateLimit } }`). Registered
+  // before route plugins so annotated handlers are covered. Imported as
+  // `fastify-rate-limit` so CodeQL's js/missing-rate-limiting model recognizes it.
+  await registerRateLimit(app);
 
   // Private beta controls. When PRIVATE_BETA=true, all data routes require a session
   // and sign-in is restricted to uids/emails in the allowlist.

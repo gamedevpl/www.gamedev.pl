@@ -15,9 +15,14 @@ import { embedGameHtml } from './gamePlayer';
 
 const BRIDGE_SOURCE = (() => {
   const html = embedGameHtml('<html><head></head><body><canvas id="game"></canvas></body></html>');
-  const match = html.match(/<script>([\s\S]*?)<\/script>/);
-  if (!match) throw new Error('embedGameHtml stopped injecting a script — the bridge contract changed');
-  return match[1];
+  // Index-based extract — avoid HTML-tag regexes (js/bad-tag-filter). The bridge
+  // inject is a single exact `<script>…</script>` pair from embedGameHtml.
+  const startMarker = '<script>';
+  const endMarker = '</script>';
+  const start = html.indexOf(startMarker);
+  const end = html.indexOf(endMarker);
+  if (start < 0 || end < 0) throw new Error('embedGameHtml stopped injecting a script — the bridge contract changed');
+  return html.slice(start + startMarker.length, end);
 })();
 
 type BridgeMessage = { source?: string; type?: string; message?: string; frames?: number };
@@ -38,7 +43,11 @@ function runBridge(bodyHtml = '') {
   frameWindow.document.body.innerHTML = bodyHtml;
 
   const received: BridgeMessage[] = [];
-  const listener = (event: MessageEvent) => received.push(event.data as BridgeMessage);
+  const listener = (event: MessageEvent) => {
+    // jsdom iframes share this window's origin; production sandboxed frames use "null".
+    if (event.origin !== window.location.origin && event.origin !== 'null') return;
+    received.push(event.data as BridgeMessage);
+  };
   window.addEventListener('message', listener);
 
   // Runs in the frame's realm, so the bridge's `parent` is this window — exactly the
