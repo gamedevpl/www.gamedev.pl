@@ -94,9 +94,12 @@ export function App() {
 
   // Multiplayer lobby state
   const [partyError, setPartyError] = useState<string | null>(null);
+  // Draft's real name, reported by DraftView once the preview loads. Cleared on
+  // unmount / slug change so the generic draft label returns while the next one loads.
+  const [draftTitle, setDraftTitle] = useState<string | null>(null);
 
-  // Tab title follows the route (and any known game/submission name). Child views
-  // may refine it further once async data lands — e.g. DraftView with the real title.
+  // Tab title follows the route (and any known game/submission/draft name). App is
+  // the single writer — children report names upward rather than touching document.title.
   const documentTitle = useMemo(() => {
     const stageTitle = stageContent ? stageContent.game.title : null;
     const playTitle =
@@ -126,11 +129,12 @@ export function App() {
       },
       playTitle,
       statusTitle,
+      draftTitle: route.view === 'draft' ? draftTitle : null,
       // Only surface ephemeral theaters while still on home — `/play/<slug>` already
       // carries its own title via playTitle, and leaving home must restore the home title.
       stageTitle: route.view === 'home' ? stageTitle : null,
     });
-  }, [route, stageContent, catalogEntries, savedSpecs, t]);
+  }, [route, stageContent, catalogEntries, savedSpecs, draftTitle, t]);
 
   useDocumentTitle(documentTitle);
 
@@ -508,7 +512,7 @@ export function App() {
         {route.view === 'health' ? (
           <GameHealthView />
         ) : route.view === 'draft' ? (
-          <DraftView slug={route.slug} onExit={() => navigate('/')} />
+          <DraftView slug={route.slug} onExit={() => navigate('/')} onDraftTitle={setDraftTitle} />
         ) : route.view === 'status' ? (
           <SubmissionStatusView
             token={route.token}

@@ -98,7 +98,7 @@ describe('document title follows navigation', () => {
       window.dispatchEvent(new PopStateEvent('popstate'));
       await flushEffects();
     });
-    expect(document.title).toBe('Game health — Gamedev.pl');
+    expect(document.title).toBe('Telemetry — Gamedev.pl');
 
     await act(async () => {
       window.history.pushState(null, '', '/');

@@ -12,7 +12,7 @@ const copy: DocumentTitleCopy = {
   status: 'Your game is in the works',
   draft: 'A game in the making',
   join: 'Join the game',
-  health: 'Game health',
+  health: 'Telemetry',
   privacy: 'Privacy Policy',
   terms: 'Terms of Service',
   playNamed: 'Play {{title}}',
@@ -77,6 +77,12 @@ describe('resolveDocumentTitle', () => {
     expect(resolveDocumentTitle({ view: 'draft', slug: 'space-runner' }, { copy })).toBe(
       'A game in the making — Gamedev.pl',
     );
+    expect(
+      resolveDocumentTitle(
+        { view: 'draft', slug: 'space-runner' },
+        { copy, draftTitle: 'Space Runner' },
+      ),
+    ).toBe('Draft Space Runner — Gamedev.pl');
     expect(resolveDocumentTitle({ view: 'status', token: 'tok' }, { copy })).toBe(
       'Your game is in the works — Gamedev.pl',
     );
@@ -86,7 +92,7 @@ describe('resolveDocumentTitle', () => {
     expect(resolveDocumentTitle({ view: 'join', code: 'K7M3QP', token: 't' }, { copy })).toBe(
       'Join the game — Gamedev.pl',
     );
-    expect(resolveDocumentTitle({ view: 'health' }, { copy })).toBe('Game health — Gamedev.pl');
+    expect(resolveDocumentTitle({ view: 'health' }, { copy })).toBe('Telemetry — Gamedev.pl');
     expect(resolveDocumentTitle({ view: 'legal', doc: 'privacy' }, { copy })).toBe(
       'Privacy Policy — Gamedev.pl',
     );

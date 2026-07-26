@@ -1,8 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameTheater } from './GameTheater';
-import { brandedNamedTitle } from './pageTitle';
 import { getDraftBySlug, type SubmissionApiError, type SubmissionPreview } from './submissionApi';
+
+type DraftViewProps = {
+  slug: string;
+  onExit: () => void;
+  /**
+   * Reports the draft's real name (or null while loading / on error) so App can
+   * own `document.title` as the single writer — avoids stale titles when the
+   * slug changes or the language switches mid-view.
+   */
+  onDraftTitle?: (title: string | null) => void;
+};
 
 /**
  * `/draft/<slug>` — an in-progress game opened by permalink instead of by status
@@ -10,17 +20,18 @@ import { getDraftBySlug, type SubmissionApiError, type SubmissionPreview } from 
  * creator's own status page keeps the token, and with it the ability to request
  * changes; anyone they send this link to just gets to watch the game take shape.
  */
-export function DraftView({ slug, onExit }: { slug: string; onExit: () => void }) {
+export function DraftView({ slug, onExit, onDraftTitle }: DraftViewProps) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState<SubmissionPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // App sets a generic draft title from the route; replace it with the real name
-  // once the preview loads so the tab matches the theater chrome. Always prefix —
-  // a draft named "Privacy Policy" must not look like the legal page.
   useEffect(() => {
-    if (draft?.title) document.title = brandedNamedTitle(t('pageTitle.draftNamed'), draft.title);
-  }, [draft?.title, t]);
+    onDraftTitle?.(draft?.title ?? null);
+  }, [draft?.title, onDraftTitle]);
+
+  useEffect(() => {
+    return () => onDraftTitle?.(null);
+  }, [onDraftTitle]);
 
   useEffect(() => {
     let cancelled = false;

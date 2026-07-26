@@ -46,6 +46,8 @@ export type DocumentTitleContext = {
   playTitle?: string | null;
   /** Known title for a `/status/<token>` submission (from localStorage, if any). */
   statusTitle?: string | null;
+  /** Real draft name once `/draft/<slug>` finishes loading; null while pending. */
+  draftTitle?: string | null;
   /** Title of an ephemeral theater open on the home route (generated / party). */
   stageTitle?: string | null;
 };
@@ -63,7 +65,9 @@ export function resolveDocumentTitle(route: AppRoute, ctx: DocumentTitleContext)
     case 'play':
       return brandedNamedTitle(ctx.copy.playNamed, ctx.playTitle?.trim() || humanizeSlug(route.slug));
     case 'draft':
-      return brandedPageTitle(ctx.copy.draft);
+      return ctx.draftTitle?.trim()
+        ? brandedNamedTitle(ctx.copy.draftNamed, ctx.draftTitle)
+        : brandedPageTitle(ctx.copy.draft);
     case 'status':
       return ctx.statusTitle?.trim()
         ? brandedNamedTitle(ctx.copy.statusNamed, ctx.statusTitle)

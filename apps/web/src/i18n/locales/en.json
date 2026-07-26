@@ -409,7 +409,7 @@
     "status": "Your game is in the works",
     "draft": "A game in the making",
     "join": "Join the game",
-    "health": "Game health",
+    "health": "Telemetry",
     "playNamed": "Play {{title}}",
     "draftNamed": "Draft {{title}}",
     "statusNamed": "Status · {{title}}"

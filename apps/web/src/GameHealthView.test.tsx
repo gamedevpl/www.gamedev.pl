@@ -5,12 +5,16 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
 import { GameHealthView } from './GameHealthView';
-import type { GameHealth, HealthResponse } from './healthApi';
+import type { GameHealth, HealthResponse, VisitsResponse } from './healthApi';
 
 /**
  * The operator view's job is to make one thing obvious: which published game is broken.
  * These check that the numbers survive the trip to the screen, and — the part worth
  * guarding — that a non-admin is told nothing at all.
+ *
+ * The view fetches health + visits together (Promise.all). The mock must return a
+ * fresh Response per call: a shared body can only be .json()'d once, which would
+ * fail the second request and surface as "Could not read telemetry."
  */
 
 function game(partial: Partial<GameHealth> & { slug: string }): GameHealth {
@@ -31,12 +35,37 @@ function game(partial: Partial<GameHealth> & { slug: string }): GameHealth {
   };
 }
 
+function emptyVisits(days: string[]): VisitsResponse {
+  return {
+    days,
+    truncated: false,
+    funnel: {
+      visits: 0,
+      bounces: 0,
+      visitsWithPlay: 0,
+      plays: 0,
+      depth: [],
+      medianPlaysPerPlayingVisit: 0,
+      timeToFirstPlay: [],
+      medianSecondsToFirstPlay: 0,
+      entries: [],
+      referrers: [],
+      campaigns: [],
+    },
+  };
+}
+
 function respondWith(body: HealthResponse | null, status = 200) {
-  return vi
-    .spyOn(globalThis, 'fetch')
-    .mockResolvedValue(
-      body === null ? new Response(null, { status }) : new Response(JSON.stringify(body), { status: 200 }),
-    ) as MockInstance<typeof globalThis.fetch>;
+  return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    const url = String(input);
+    if (body === null) {
+      return new Response(null, { status });
+    }
+    if (url.includes('/api/admin/telemetry/visits')) {
+      return new Response(JSON.stringify(emptyVisits(body.days)), { status: 200 });
+    }
+    return new Response(JSON.stringify(body), { status: 200 });
+  }) as MockInstance<typeof globalThis.fetch>;
 }
 
 describe('GameHealthView', () => {
@@ -152,7 +181,10 @@ describe('GameHealthView', () => {
       monthButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    expect(String(fetchSpy.mock.calls[1][0])).toContain('days=30');
+    // Health + visits fire in parallel each window; any post-click URL with days=30
+    // proves the window control re-triggered the pair.
+    const urls = fetchSpy.mock.calls.map((call) => String(call[0]));
+    expect(urls.some((url) => url.includes('days=30'))).toBe(true);
     await act(async () => root.unmount());
   });
 });
