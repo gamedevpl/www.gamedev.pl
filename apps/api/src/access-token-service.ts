@@ -1,5 +1,7 @@
-import { generateAccessToken } from './access-token.js';
+import { generateAccessToken, isAccessTokenExpired } from './access-token.js';
 import { BOT_UID_PREFIX, type AccessTokenRecord, type Store } from './store.js';
+
+export { isAccessTokenExpired } from './access-token.js';
 
 /**
  * The rules for issuing a personal access token, in one place
@@ -15,7 +17,7 @@ export const MAX_TOKENS_PER_UID = 10;
 export const DEFAULT_EXPIRY_DAYS = 90;
 export const MAX_EXPIRY_DAYS = 365;
 
-export type MintFailureReason = 'unknown_uid' | 'blocked' | 'too_many_tokens';
+export type MintFailureReason = 'unknown_uid' | 'blocked' | 'too_many_tokens' | 'invalid_expiry';
 
 export class MintAccessTokenError extends Error {
   constructor(
@@ -47,6 +49,19 @@ export async function mintAccessTokenFor(store: Store, params: MintAccessTokenPa
   const { uid, name, createdByUid } = params;
   const nowMs = params.nowMs ?? Date.now();
   const expiresInDays = params.expiresInDays ?? DEFAULT_EXPIRY_DAYS;
+
+  // Enforced here (not only at the HTTP boundary) so the CLI cannot mint a
+  // token that outlives the documented max, or a zero/negative window.
+  if (
+    !Number.isInteger(expiresInDays) ||
+    expiresInDays < 1 ||
+    expiresInDays > MAX_EXPIRY_DAYS
+  ) {
+    throw new MintAccessTokenError(
+      'invalid_expiry',
+      `expiresInDays must be an integer from 1 to ${MAX_EXPIRY_DAYS}`,
+    );
+  }
 
   const existing = await store.getUser(uid);
 
@@ -118,6 +133,6 @@ export function toPublicAccessToken(record: AccessTokenRecord, nowMs: number): P
     createdByUid: record.createdByUid,
     expiresAt: record.expiresAt,
     lastUsedAt: record.lastUsedAt,
-    expired: Date.parse(record.expiresAt) <= nowMs,
+    expired: isAccessTokenExpired(record.expiresAt, nowMs),
   };
 }

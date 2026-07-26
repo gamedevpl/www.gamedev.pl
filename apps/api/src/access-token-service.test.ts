@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { parseAccessToken, verifyTokenSecret } from './access-token.js';
+import { isAccessTokenExpired, parseAccessToken, verifyTokenSecret } from './access-token.js';
 import {
   DEFAULT_EXPIRY_DAYS,
+  MAX_EXPIRY_DAYS,
   MAX_TOKENS_PER_UID,
   MintAccessTokenError,
   mintAccessTokenFor,
@@ -55,6 +56,38 @@ describe('mintAccessTokenFor', () => {
       nowMs: NOW,
     });
     expect(Date.parse(explicit.record.expiresAt)).toBe(NOW + 86_400_000);
+  });
+
+  it('refuses expiry outside 1..MAX_EXPIRY_DAYS so the CLI cannot outrun the HTTP cap', async () => {
+    await expect(
+      mintAccessTokenFor(store, {
+        uid: 'bot:e2e',
+        name: 'x',
+        createdByUid: 'cli:owner',
+        expiresInDays: MAX_EXPIRY_DAYS + 1,
+        nowMs: NOW,
+      }),
+    ).rejects.toMatchObject({ reason: 'invalid_expiry' });
+
+    await expect(
+      mintAccessTokenFor(store, {
+        uid: 'bot:e2e',
+        name: 'x',
+        createdByUid: 'cli:owner',
+        expiresInDays: 0,
+        nowMs: NOW,
+      }),
+    ).rejects.toMatchObject({ reason: 'invalid_expiry' });
+
+    await expect(
+      mintAccessTokenFor(store, {
+        uid: 'bot:e2e',
+        name: 'x',
+        createdByUid: 'cli:owner',
+        expiresInDays: 1.5,
+        nowMs: NOW,
+      }),
+    ).rejects.toMatchObject({ reason: 'invalid_expiry' });
   });
 
   it('creates a bot account but refuses to invent any other namespace', async () => {
@@ -130,5 +163,23 @@ describe('toPublicAccessToken', () => {
     expect(fresh.expired).toBe(false);
 
     expect(toPublicAccessToken(record, NOW + 2 * 86_400_000).expired).toBe(true);
+  });
+
+  it('treats a malformed expiresAt as expired (fail closed)', () => {
+    expect(isAccessTokenExpired('not-a-date', NOW)).toBe(true);
+    expect(
+      toPublicAccessToken(
+        {
+          tokenId: 'a'.repeat(16),
+          uid: 'bot:e2e',
+          secretHash: 'b'.repeat(64),
+          name: 'x',
+          createdAt: new Date(NOW).toISOString(),
+          createdByUid: 'cli:owner',
+          expiresAt: 'garbage',
+        },
+        NOW,
+      ).expired,
+    ).toBe(true);
   });
 });

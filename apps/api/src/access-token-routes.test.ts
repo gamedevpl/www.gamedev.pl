@@ -225,6 +225,24 @@ describe('authenticating with a personal access token', () => {
     expect(res.statusCode).toBe(401);
   });
 
+  it('rejects a token whose stored expiresAt is unparseable', async () => {
+    const { token, tokenId, secretHash } = generateAccessToken();
+    await store.upsertUser({ uid: 'bot:e2e' });
+    await store.createAccessToken({
+      tokenId,
+      uid: 'bot:e2e',
+      secretHash,
+      name: 'corrupt',
+      createdAt: new Date().toISOString(),
+      createdByUid: 'g:boss',
+      expiresAt: 'not-a-date',
+    });
+    const app = await appWith(store);
+
+    const res = await app.inject({ method: 'GET', url: '/api/auth/me', headers: bearer(token) });
+    expect(res.statusCode).toBe(401);
+  });
+
   it('rejects a revoked token immediately', async () => {
     const app = await appWith(store);
     const { token, tokenId } = (await mintFor(app, 'bot:e2e')).json();

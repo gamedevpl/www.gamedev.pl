@@ -1597,6 +1597,9 @@ export class FirestoreStore implements Store {
   }
 
   async touchAccessToken(tokenId: string, at: string): Promise<void> {
-    await this.db.collection('accessTokens').doc(tokenId).set({ lastUsedAt: at }, { merge: true });
+    // `update` (not merge-set): a revoked token's doc is gone, and merge-set
+    // would resurrect a partial record that later auth reads crash on. Missing
+    // docs throw; callers already treat touch as best-effort.
+    await this.db.collection('accessTokens').doc(tokenId).update({ lastUsedAt: at });
   }
 }

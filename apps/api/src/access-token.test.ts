@@ -53,7 +53,9 @@ describe('access token verification', () => {
   it.each([
     ['empty', ''],
     ['prefix only', 'gdpl_pat_'],
-    ['wrong prefix', 'ghp_0123456789abcdef0123456789abcdef01234567'],
+    // Deliberately not github-pat-shaped: a realistic `ghp_…` fixture trips
+    // gitleaks even when allowlisted for this file's history.
+    ['wrong prefix', 'not_a_gamedev_pat_abcdefghijklmnop'],
     ['id too short', `${ACCESS_TOKEN_PREFIX}abc_${'a'.repeat(43)}`],
     ['id not hex', `${ACCESS_TOKEN_PREFIX}${'z'.repeat(16)}_${'a'.repeat(43)}`],
     ['secret too short', `${ACCESS_TOKEN_PREFIX}${'a'.repeat(16)}_short`],

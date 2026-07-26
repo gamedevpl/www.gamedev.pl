@@ -3,7 +3,12 @@ import cookie from '@fastify/cookie';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { OAuth2Client } from 'google-auth-library';
 import { z } from 'zod';
-import { looksLikeAccessToken, parseAccessToken, verifyTokenSecret } from './access-token.js';
+import {
+  isAccessTokenExpired,
+  looksLikeAccessToken,
+  parseAccessToken,
+  verifyTokenSecret,
+} from './access-token.js';
 import { readBearerToken } from './bearer.js';
 import { withActiveDay, type Store, type User } from './store.js';
 
@@ -260,7 +265,9 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
     const record = await store.getAccessToken(tokenId);
     if (!record) return null;
     if (!verifyTokenSecret(secret, record.secretHash)) return null;
-    if (Date.parse(record.expiresAt) <= Date.now()) return null;
+    // Fail closed on corrupt/missing expiresAt (NaN from Date.parse would
+    // otherwise read as "not expired").
+    if (isAccessTokenExpired(record.expiresAt, Date.now())) return null;
 
     const user = await store.getUser(record.uid);
     if (!user) return null;

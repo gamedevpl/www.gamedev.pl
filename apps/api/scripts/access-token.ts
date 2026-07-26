@@ -14,7 +14,13 @@
 // Writes to whatever project your credentials point at. There is no dev/prod switch here,
 // so check `gcloud config get-value project` before minting against the live site.
 
-import { mintAccessTokenFor, MintAccessTokenError, toPublicAccessToken } from '../src/access-token-service.js';
+import {
+  DEFAULT_EXPIRY_DAYS,
+  MAX_EXPIRY_DAYS,
+  mintAccessTokenFor,
+  MintAccessTokenError,
+  toPublicAccessToken,
+} from '../src/access-token-service.js';
 import { FirestoreStore } from '../src/store.js';
 
 function usage(): never {
@@ -41,15 +47,22 @@ async function mint(store: FirestoreStore, args: string[]): Promise<void> {
   if (!uid || !name) usage();
 
   const expiresInDays = daysRaw ? Number(daysRaw) : undefined;
-  if (daysRaw && (!Number.isInteger(expiresInDays) || (expiresInDays ?? 0) <= 0)) {
-    console.error(`--days must be a positive integer, got "${daysRaw}"`);
+  if (
+    daysRaw &&
+    (!Number.isInteger(expiresInDays) ||
+      (expiresInDays ?? 0) < 1 ||
+      (expiresInDays ?? 0) > MAX_EXPIRY_DAYS)
+  ) {
+    console.error(`--days must be an integer from 1 to ${MAX_EXPIRY_DAYS}, got "${daysRaw}"`);
     process.exit(1);
   }
 
   if (args.includes('--dry-run')) {
     const existing = await store.getUser(uid);
     console.log(`[dry-run] would mint a token named "${name}" for ${uid}`);
-    console.log(`[dry-run] account ${existing ? 'exists' : 'would be CREATED'}; expiry ${expiresInDays ?? 90} days`);
+    console.log(
+      `[dry-run] account ${existing ? 'exists' : 'would be CREATED'}; expiry ${expiresInDays ?? DEFAULT_EXPIRY_DAYS} days`,
+    );
     return;
   }
 

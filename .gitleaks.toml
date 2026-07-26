@@ -12,6 +12,9 @@ paths = [
   # The credential scanner's own tests — they contain deliberately FAKE keys
   # (e.g. a bogus "BEGIN RSA PRIVATE KEY" fixture) to prove the scanner trips.
   '''apps/api/src/credential-scan\.test\.ts''',
+  # Access-token unit tests once used a bogus github-pat-shaped string as a
+  # "wrong prefix" fixture (still in git history). Not a real secret.
+  '''apps/api/src/access-token\.test\.ts''',
   # 2015-era CSS with a base64-embedded webfont (git history only) — older
   # gitleaks rules misread the font bytes as an AWS access token.
   '''app/css/fontello-embedded\.css''',

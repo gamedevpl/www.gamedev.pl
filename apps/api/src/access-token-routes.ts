@@ -50,6 +50,7 @@ const FAILURE_STATUS: Record<MintFailureReason, number> = {
   unknown_uid: 400,
   blocked: 403,
   too_many_tokens: 409,
+  invalid_expiry: 400,
 };
 
 export interface AccessTokenRoutesOptions {

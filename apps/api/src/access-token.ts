@@ -100,3 +100,13 @@ export function verifyTokenSecret(secret: string, expectedHash: string): boolean
 export function describeAccessToken(tokenId: string): string {
   return `${ACCESS_TOKEN_PREFIX}${tokenId}_…`;
 }
+
+/**
+ * Fail closed on unparseable expiry timestamps. `Date.parse` returns NaN for
+ * garbage, and `NaN <= now` is false — which would otherwise treat a corrupt
+ * Firestore record as immortal.
+ */
+export function isAccessTokenExpired(expiresAt: string, nowMs: number): boolean {
+  const expiresMs = Date.parse(expiresAt);
+  return !Number.isFinite(expiresMs) || expiresMs <= nowMs;
+}
