@@ -15,6 +15,10 @@ function specMd(frontmatter: Record<string, string>): string {
 function catalogFetchImpl(dirs: string[], files: Record<string, string | null>): typeof fetch {
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
+    if (url.includes('/contents/catalog.json')) {
+      // No committed artifact on this ref — exercises the GraphQL fallback below.
+      return new Response('not found', { status: 404 });
+    }
     if (url.includes('/contents/games?')) {
       return new Response(
         JSON.stringify([
@@ -89,9 +93,10 @@ describe('getCatalog', () => {
         orientation: 'any',
       },
     ]);
-    // One directory listing + one GraphQL chunk — not one Contents read per file.
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
-    expect(String(vi.mocked(fetchImpl).mock.calls[1]?.[0])).toContain('/graphql');
+    // Artifact probe + one directory listing + one GraphQL chunk — not one
+    // Contents read per file.
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(String(vi.mocked(fetchImpl).mock.calls[2]?.[0])).toContain('/graphql');
   });
 
   it('strips quotes from frontmatter values and skips games without a title', async () => {
@@ -210,10 +215,153 @@ describe('getCatalog', () => {
 
     const catalog = await client.getCatalog('main');
     expect(catalog).toHaveLength(35);
-    // 1 listing + 2 GraphQL chunks (chunk size 30).
-    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    // 1 artifact probe + 1 listing + 2 GraphQL chunks (chunk size 30).
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
     const graphqlCalls = vi.mocked(fetchImpl).mock.calls.filter((call) => String(call[0]).includes('/graphql'));
     expect(graphqlCalls).toHaveLength(2);
+  });
+
+  it('serves the committed catalog.json in a single request when present', async () => {
+    const committed = [
+      {
+        slug: 'bubble-pop',
+        title: 'Bubble Pop Rush',
+        genre: 'arcade',
+        controls: 'Mouse to aim and pop',
+        status: 'published',
+        touch: 'gamekit',
+        orientation: 'portrait',
+        multiplayer: null,
+        media: { screenshots: [{ name: 'opening', file: 'opening.png' }], video: 'gameplay.mp4' },
+      },
+      {
+        slug: 'arena-tag',
+        title: 'Arena Tag',
+        genre: 'party',
+        controls: 'D-pad',
+        status: 'draft',
+        touch: 'controllers',
+        orientation: 'any',
+        multiplayer: { mode: 'controllers', minPlayers: 2, maxPlayers: 4 },
+        media: null,
+      },
+    ];
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/contents/catalog.json')) {
+        return new Response(JSON.stringify(committed), { status: 200 });
+      }
+      throw new Error(`unexpected request: ${url}`);
+    }) as unknown as typeof fetch;
+
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+    const catalog = await client.getCatalog('main');
+
+    // The whole point: no listing, no GraphQL, no per-game reads.
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(catalog).toEqual([
+      {
+        slug: 'bubble-pop',
+        title: 'Bubble Pop Rush',
+        genre: 'arcade',
+        controls: 'Mouse to aim and pop',
+        status: 'published',
+        touch: 'gamekit',
+        orientation: 'portrait',
+        multiplayer: null,
+        media: { screenshots: [{ name: 'opening', file: 'opening.png' }], video: 'gameplay.mp4' },
+      },
+      {
+        slug: 'arena-tag',
+        title: 'Arena Tag',
+        genre: 'party',
+        controls: 'D-pad',
+        // draft coerces exactly like the GraphQL path: merged means visible.
+        status: 'published',
+        touch: 'controllers',
+        orientation: 'any',
+        multiplayer: { mode: 'controllers', minPlayers: 2, maxPlayers: 4 },
+        media: null,
+      },
+    ]);
+  });
+
+  it('carries touch, which no SPEC-derived path can produce', async () => {
+    // The regression this guards: touch is computed from each game's code by the
+    // games repo. Losing it here silently tells phone visitors nothing.
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes('/contents/catalog.json')) {
+        return new Response(
+          JSON.stringify([{ slug: 'thumbly', title: 'Thumbly', status: 'published', touch: 'native' }]),
+          { status: 200 },
+        );
+      }
+      throw new Error('unexpected request');
+    }) as unknown as typeof fetch;
+
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+    expect((await client.getCatalog('main'))[0]?.touch).toBe('native');
+  });
+
+  it('re-validates committed entries instead of trusting the artifact', async () => {
+    const committed = [
+      // Unsafe media filename, unknown touch class, out-of-range player bounds and
+      // a bogus orientation: each must be dropped without dropping the game.
+      {
+        slug: 'sneaky',
+        title: 'Sneaky',
+        status: 'published',
+        touch: 'telepathy',
+        orientation: 'SIDEWAYS',
+        multiplayer: { mode: 'controllers', minPlayers: 2, maxPlayers: 99 },
+        media: { screenshots: [{ name: 'opening', file: '../../etc/passwd.png' }], video: null },
+      },
+      // Not a game entry at all.
+      { slug: 'No Slug!', title: 'Bad' },
+      'garbage',
+    ];
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes('/contents/catalog.json')) {
+        return new Response(JSON.stringify(committed), { status: 200 });
+      }
+      throw new Error('unexpected request');
+    }) as unknown as typeof fetch;
+
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+    const catalog = await client.getCatalog('main');
+
+    expect(catalog).toEqual([
+      {
+        slug: 'sneaky',
+        title: 'Sneaky',
+        genre: '',
+        controls: '',
+        status: 'published',
+        orientation: 'any',
+        multiplayer: null,
+        media: null,
+      },
+    ]);
+  });
+
+  it('falls back to the GraphQL fan-out when catalog.json is not valid JSON', async () => {
+    const base = catalogFetchImpl(['bubble-pop'], {
+      'games/bubble-pop/SPEC.md': specMd({ title: 'Bubble Pop Rush', status: 'published' }),
+      'games/bubble-pop/media/metadata.json': null,
+    });
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes('/contents/catalog.json')) {
+        return new Response('<<not json>>', { status: 200 });
+      }
+      return base(input, init);
+    }) as unknown as typeof fetch;
+
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+    const catalog = await client.getCatalog('main');
+
+    expect(catalog).toHaveLength(1);
+    expect(catalog[0].slug).toBe('bubble-pop');
+    expect(catalog[0].touch).toBeUndefined();
   });
 });
 
