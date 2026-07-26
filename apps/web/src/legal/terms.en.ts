@@ -252,6 +252,14 @@ export const termsEn: LegalDocument = {
         {
           kind: 'p',
           text:
+            'Regardless of the above: to the extent the Provider holds any rights in the game code generated from ' +
+            'your description, the Provider grants you a free, non-exclusive, worldwide and perpetual licence to ' +
+            'use that code for any purpose, including commercially, together with the right to modify it and pass ' +
+            'it on. This licence does not cover the gamedev.pl name or logo, or third-party material.',
+        },
+        {
+          kind: 'p',
+          text:
             'You may play games published in the Service for your own use. The games repository is not currently ' +
             'public; should the Provider release it under an open licence, it will announce this in the Service.',
         },

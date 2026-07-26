@@ -42,7 +42,7 @@
   "hero": {
     "mainTitle": "Zamień dowolny pomysł w grywalną grę",
     "mainSubtitle": "Wpisz w co chcesz zagrać lub co stworzyć. Agenty AI napiszą kod, przetestują i opublikują grę na żywo.",
-    "bigPromptPlaceholder": "Wpisz w co chcesz zagrać lub co stworzyć... (np. mario, strzelanka kosmiczna, unikaj spadających skał)",
+    "bigPromptPlaceholder": "Wpisz w co chcesz zagrać lub co stworzyć... (np. platformówka, strzelanka kosmiczna, unikaj spadających skał)",
     "buildGameButton": "Stwórz Moją Grę",
     "instantMockButton": "Szybki Lokalny Podgląd",
     "smartFoundTitle": "Znaleziono pasującą grę: {{title}}",
