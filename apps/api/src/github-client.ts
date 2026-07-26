@@ -867,6 +867,8 @@ ${gameJs}`;
         if (!title) {
           continue;
         }
+        // A spec with no status is published — merging it is what publishes it.
+        // Only an explicit archived/disabled withdraws a game from the site.
         const rawStatus = frontmatter.status ?? '';
         const status = rawStatus === 'archived' || rawStatus === 'disabled' ? rawStatus : 'published';
         const mediaMetadata = status === 'published' ? (files.get(`games/${slug}/media/metadata.json`) ?? null) : null;
@@ -918,9 +920,12 @@ function parseCommittedCatalog(raw: string): CatalogGameEntry[] | null {
     if (typeof candidate.slug !== 'string' || !SAFE_MEDIA_NAME.test(candidate.slug)) continue;
     if (typeof candidate.title !== 'string' || candidate.title.length === 0) continue;
 
-    // Same status coercion as the SPEC-derived path: the games repo uses
-    // draft/in-progress/published, and only an explicit archived/disabled
-    // takes a merged game off the site.
+    // Same status coercion as the SPEC-derived path, and a no-op for a current
+    // artifact: it is SPEC.md that made `status` optional, while the generator still
+    // writes one of `published`/`archived`/`disabled` onto every row. The coercion
+    // stays because this also reads artifacts it did not just generate — ones written
+    // before that change, carrying a `draft` the field's own repo never acted on, and
+    // ones with the key absent entirely, which must publish rather than vanish.
     const rawStatus = typeof candidate.status === 'string' ? candidate.status : '';
     const status = rawStatus === 'archived' || rawStatus === 'disabled' ? rawStatus : 'published';
 
