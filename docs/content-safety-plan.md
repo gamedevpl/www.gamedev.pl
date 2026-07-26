@@ -1,10 +1,18 @@
 # Content safety: layered safeguards for prompts and generated games
 
-> Status: plan (2026-07-23). Owner requirement: no content that could be considered
-> inappropriate — safeguards at every stage, with basic filtering + feedback on the
-> website prompt. **Sequencing rule: `PRIVATE_BETA` must not flip to `false` until
-> Layer 1 and Layer 4 are live.** The beta allowlist is itself the interim safeguard:
-> today only trusted, identified accounts can submit at all.
+> Status: 🚧 **Layer 1 is live; the later layers are still design** (verified 2026-07-26).
+> Submitted specs are moderated before an agent ever sees them:
+> [`createDefaultContentChecker`](../apps/api/src/moderation.ts) returns the Vertex-backed
+> checker whenever `NODE_ENV=production`, so moderation is on in prod by construction rather
+> than by a flag someone must remember to set. Outside production it falls back to a pattern
+> checker. A retired Vertex model therefore fails closed and takes creation down with it —
+> the model id is env-tunable for exactly that reason.
+>
+> Owner requirement: no content that could be considered inappropriate — safeguards at every
+> stage, with basic filtering + feedback on the website prompt. **Sequencing rule:
+> `PRIVATE_BETA` must not flip to `false` until Layer 1 and Layer 4 are live.** The beta
+> allowlist is still the interim safeguard: today only trusted, identified accounts can
+> submit at all.
 
 ## Principles
 
@@ -98,9 +106,9 @@ classifier quality ever needs it.
 
 - Provisioning (idempotent, add to `infra/setup-gcp.sh`): enable
   `aiplatform.googleapis.com`; grant `roles/aiplatform.user` to the runtime SA.
-- Region: `europe-central2` may not serve Gemini — pin the client to a serving
-  region (e.g. `europe-west1`) or the global endpoint; env-tunable
-  (`VERTEX_REGION`).
+- Region: **resolved** — the client defaults to the **global endpoint**
+  (`location: 'global'`), where the Gemini 3 family is served. Still env-tunable via
+  `VERTEX_REGION` if a specific region is ever needed.
 - `moderation.ts` seam: `interface ContentChecker { check(text): Promise<Verdict> }`
   with two implementations — `PatternChecker` (L1 regex, always on, also the
   fallback) and `VertexChecker` (prompted Gemini classifier). Verdict =

@@ -916,7 +916,7 @@ describe('catalog route', () => {
     await app.close();
   });
 
-  it('caches the catalog for 60 seconds', async () => {
+  it('caches the catalog for 10 minutes', async () => {
     const { githubClient, getCatalog } = createGithubClientStub({ catalog: [catalogEntry('bubble-pop')] });
     let currentTime = 10_000;
     const { app } = await createApp({ githubClient, submissionTokenSecret: secret, now: () => currentTime });
@@ -925,14 +925,14 @@ describe('catalog route', () => {
     await app.inject({ method: 'GET', url: '/api/catalog' });
     expect(getCatalog).toHaveBeenCalledTimes(1);
 
-    currentTime += 60_001;
+    currentTime += 10 * 60_000 + 1;
     await app.inject({ method: 'GET', url: '/api/catalog' });
     expect(getCatalog).toHaveBeenCalledTimes(2);
 
     await app.close();
   });
 
-  it('bypasses catalog cache when querying a submission status for a slug missing in cache', async () => {
+  it('bypasses catalog cache when a merged submission is missing from the warm catalog', async () => {
     let catalog = [catalogEntry('bubble-pop')];
     const getCatalog = vi.fn(async () => catalog);
     const getIssueState = vi.fn(async () => 'open' as const);
@@ -968,6 +968,65 @@ describe('catalog route', () => {
     expect(statusRes.statusCode).toBe(200);
     expect(statusRes.json()).toEqual({ status: 'published', slug: 'new-game' });
     expect(getCatalog).toHaveBeenCalledTimes(2);
+
+    await app.close();
+  });
+
+  it('rate-limits catalog force-refreshes across publishing submissions', async () => {
+    const catalog = [catalogEntry('bubble-pop')];
+    const getCatalog = vi.fn(async () => catalog);
+    const getIssueState = vi.fn(async () => 'open' as const);
+    const findLinkedPR = vi.fn(async (issueNumber: number) => ({
+      number: issueNumber,
+      state: 'MERGED' as const,
+      merged: true,
+      isDraft: false,
+      titleHasWip: false,
+      changedFiles: [`games/new-game-${issueNumber}/index.html`],
+      headRefOid: 'sha-1',
+      body: '',
+    }));
+    const githubClient = {
+      ...createGithubClientStub({}).githubClient,
+      getCatalog,
+      getIssueState,
+      findLinkedPR,
+    };
+    const currentTime = 10_000;
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret, now: () => currentTime });
+
+    await app.inject({ method: 'GET', url: '/api/catalog' });
+    expect(getCatalog).toHaveBeenCalledTimes(1);
+
+    // Two just-merged games, neither in the catalog yet. Distinct status-cache
+    // keys, so both polls reach isSlugPublished — but only the first may bypass.
+    const first = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(12, secret, 10_000)}`,
+    });
+    expect(first.json()).toEqual({ status: 'publishing', slug: 'new-game-12' });
+    expect(getCatalog).toHaveBeenCalledTimes(2);
+
+    const second = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(13, secret, 10_000)}`,
+    });
+    expect(second.json()).toEqual({ status: 'publishing', slug: 'new-game-13' });
+    expect(getCatalog).toHaveBeenCalledTimes(2);
+
+    await app.close();
+  });
+
+  it('does not force-refresh the catalog when an unknown play slug misses', async () => {
+    const { githubClient, getCatalog } = createGithubClientStub({ catalog: [catalogEntry('bubble-pop')] });
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
+
+    await app.inject({ method: 'GET', url: '/api/catalog' });
+    expect(getCatalog).toHaveBeenCalledTimes(1);
+
+    const res = await app.inject({ method: 'GET', url: '/api/games/not-a-game' });
+    expect(res.statusCode).toBe(404);
+    expect(getCatalog).toHaveBeenCalledTimes(1);
 
     await app.close();
   });
@@ -1015,7 +1074,7 @@ describe('catalog route', () => {
     const warm = await app.inject({ method: 'GET', url: '/api/catalog' });
     expect(warm.statusCode).toBe(200);
 
-    currentTime += 60_001;
+    currentTime += 10 * 60_000 + 1;
     getCatalog.mockRejectedValueOnce(new Error('boom'));
     const stale = await app.inject({ method: 'GET', url: '/api/catalog' });
     expect(stale.statusCode).toBe(200);
@@ -1023,7 +1082,7 @@ describe('catalog route', () => {
     expect(getCatalog).toHaveBeenCalledTimes(2);
 
     // The failure must not wedge the cache: the next request refreshes normally.
-    currentTime += 60_001;
+    currentTime += 10 * 60_000 + 1;
     const recovered = await app.inject({ method: 'GET', url: '/api/catalog' });
     expect(recovered.statusCode).toBe(200);
     expect(getCatalog).toHaveBeenCalledTimes(3);

@@ -39,8 +39,6 @@ abuse before repository credentials are exposed through an API.
 
 | #   | Question                                                                                     |
 | --- | -------------------------------------------------------------------------------------------- |
-| Q1  | Where will the dedicated games repository live, and who can merge agent PRs?                 |
-| Q2  | GitHub Pages or bucket/CDN for the first separate games origin?                              |
 | Q3  | What exact frontmatter fields and catalog schema are version 1?                              |
 | Q4  | How are submissions attributed, consented, moderated, rate-limited, and tracked?             |
 | Q5  | Which issue/PR states become creator-visible statuses?                                       |
@@ -59,6 +57,13 @@ abuse before repository credentials are exposed through an API.
 - The auth proxy, job tokens, container runner, and in-process orchestrator were removed.
 - The earlier credential-exfiltration and subscription-compute blockers dissolved with that
   removal; they are not active implementation tasks.
+- **(was Q1) The games repository is `gamedevpl/www.gamedev.pl-games`, and it is private.**
+  The owner merges agent PRs; that review is the moderation point of the issue-first flow.
+- **(was Q2) There is no separate public games origin.** Games are read from the private repo
+  and assembled by the API ([`apps/api/src/github-client.ts`](../apps/api/src/github-client.ts)),
+  not published to Pages or a CDN. This is what lets the games repo stay private and makes
+  unmerged PR builds playable as previews. The sandbox — not a separate origin — is what
+  isolates game code.
 
 ## Safety invariants
 

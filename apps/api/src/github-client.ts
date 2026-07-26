@@ -238,9 +238,11 @@ export interface GitHubClient {
   getGameMediaManifest(ref: string, slug: string): Promise<CatalogGameMedia | null>;
   /**
    * Builds the game catalog straight from the repo: lists `games/` directories
-   * on `ref` and reads each game's SPEC.md frontmatter. Replaces the old
-   * dependency on the public GitHub Pages `catalog.json` so the games repo can
-   * be private. Games with a missing or unparseable SPEC.md are skipped.
+   * on `ref`, then reads each game's SPEC.md (and media metadata) in a small
+   * number of GraphQL round-trips. Replaces both the old public Pages
+   * `catalog.json` and the previous per-file Contents-API fan-out, so the games
+   * repo can stay private without a rate-limit storm. Games with a missing or
+   * unparseable SPEC.md are skipped.
    */
   getCatalog(ref: string): Promise<CatalogGameEntry[]>;
 }
@@ -264,18 +266,22 @@ function parseRepo(repo: string): { owner: string; name: string } {
   return { owner, name };
 }
 
-// A single catalog render or game-source assembly fans out into a dozen-plus
-// `Promise.all`'d contents-API calls (see getCatalog/getGameSources below); several
-// of those in flight at once from concurrent polls is what tripped GitHub's
-// secondary rate limit (403s across every route sharing this token) and surfaced
-// as a 502 storm to visitors. Capping concurrency and backing off on a rate-limit
-// response turns that into slower-but-working instead of a cascading outage.
+// Game-source assembly still fans out into several Contents-API reads per game;
+// catalog used to do the same per game (× N games) and that stampede is what
+// tripped GitHub's secondary rate limit. Catalog now batches through GraphQL
+// (see getCatalog). The gate still matters for source assembly, media, and the
+// few remaining REST calls — capping concurrency and backing off on a rate-limit
+// response turns a burst into slower-but-working instead of a cascading outage.
 const MAX_CONCURRENT_GITHUB_REQUESTS = 6;
 const MAX_RATE_LIMIT_RETRIES = 3;
 const RETRY_BASE_DELAY_MS = 300;
 // A GitHub-supplied Retry-After longer than this would just eat the request's own
 // timeout budget — better to fail fast than hold the connection open pointlessly.
 const MAX_RETRY_AFTER_MS = 4000;
+// How many games' SPEC.md + media metadata to pull in one GraphQL query. Large
+// enough that ~80 games fit in a handful of round-trips; small enough to stay
+// well under GitHub's query complexity / payload ceilings.
+const CATALOG_GRAPHQL_CHUNK_SIZE = 30;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -757,6 +763,12 @@ ${gameJs}`;
     },
 
     async getCatalog(ref) {
+      // Refs appear inside GraphQL string literals below — keep the charset tight so
+      // a misconfigured GAMES_PUBLISHED_REF cannot break out of the expression.
+      if (!/^[A-Za-z0-9._/-]+$/.test(ref)) {
+        throw new Error(`invalid published ref "${ref}"`);
+      }
+
       const listing = await requestJson<Array<{ name: string; type: string }>>(
         `https://api.github.com/repos/${repo}/contents/games?ref=${encodeURIComponent(ref)}`,
       );
@@ -766,35 +778,88 @@ ${gameJs}`;
         .map((entry) => entry.name)
         .sort();
 
-      const entries = await Promise.all(
-        slugs.map(async (slug): Promise<CatalogGameEntry | null> => {
-          const specMd = await readRawFile(`games/${slug}/SPEC.md`, ref);
-          if (specMd === null) {
-            return null;
-          }
-          const frontmatter = parseSpecFrontmatter(specMd);
-          const title = frontmatter.title;
-          if (!title) {
-            return null;
-          }
-          const rawStatus = frontmatter.status ?? '';
-          const status = rawStatus === 'archived' || rawStatus === 'disabled' ? rawStatus : 'published';
-          const mediaMetadata =
-            status === 'published' ? await readRawFile(`games/${slug}/media/metadata.json`, ref) : null;
-          return {
-            slug,
-            title,
-            genre: frontmatter.genre ?? '',
-            controls: frontmatter.controls ?? '',
-            status,
-            media: parseGameMedia(mediaMetadata),
-            multiplayer: parseMultiplayer(frontmatter),
-            orientation: parseOrientation(frontmatter),
-          };
-        }),
-      );
+      // One Contents listing + a handful of GraphQL chunks replaces the old
+      // ~2N Contents reads (SPEC.md + metadata.json per game). At ~80 games that
+      // fan-out was what exhausted the shared token and 502'd catalog + drafts.
+      const files = new Map<string, string | null>();
+      for (let offset = 0; offset < slugs.length; offset += CATALOG_GRAPHQL_CHUNK_SIZE) {
+        const chunk = slugs.slice(offset, offset + CATALOG_GRAPHQL_CHUNK_SIZE);
+        const fields = chunk
+          .map((slug, index) => {
+            const i = offset + index;
+            // slug is already restricted to [a-z0-9-] above — safe to interpolate.
+            return `
+              spec_${i}: object(expression: "${ref}:games/${slug}/SPEC.md") {
+                ... on Blob { text }
+              }
+              media_${i}: object(expression: "${ref}:games/${slug}/media/metadata.json") {
+                ... on Blob { text }
+              }
+            `;
+          })
+          .join('\n');
 
-      return entries.filter((entry): entry is CatalogGameEntry => entry !== null);
+        const response = await requestJson<
+          GraphQLResponse<{
+            repository: Record<string, { text: string } | null> | null;
+          }>
+        >('https://api.github.com/graphql', {
+          method: 'POST',
+          body: JSON.stringify({
+            query: `
+              query CatalogChunk($owner: String!, $name: String!) {
+                repository(owner: $owner, name: $name) {
+                  ${fields}
+                }
+              }
+            `,
+            variables: { owner, name },
+          }),
+        });
+
+        if (response.errors?.length) {
+          throw new Error(response.errors[0]?.message ?? 'github graphql catalog request failed');
+        }
+
+        const repository = response.data?.repository;
+        if (!repository) {
+          throw new Error('github graphql catalog request returned no repository');
+        }
+
+        for (const [index, slug] of chunk.entries()) {
+          const i = offset + index;
+          files.set(`games/${slug}/SPEC.md`, repository[`spec_${i}`]?.text ?? null);
+          files.set(`games/${slug}/media/metadata.json`, repository[`media_${i}`]?.text ?? null);
+        }
+      }
+
+      const entries: CatalogGameEntry[] = [];
+      for (const slug of slugs) {
+        const specMd = files.get(`games/${slug}/SPEC.md`) ?? null;
+        if (specMd === null) {
+          continue;
+        }
+        const frontmatter = parseSpecFrontmatter(specMd);
+        const title = frontmatter.title;
+        if (!title) {
+          continue;
+        }
+        const rawStatus = frontmatter.status ?? '';
+        const status = rawStatus === 'archived' || rawStatus === 'disabled' ? rawStatus : 'published';
+        const mediaMetadata = status === 'published' ? (files.get(`games/${slug}/media/metadata.json`) ?? null) : null;
+        entries.push({
+          slug,
+          title,
+          genre: frontmatter.genre ?? '',
+          controls: frontmatter.controls ?? '',
+          status,
+          media: parseGameMedia(mediaMetadata),
+          multiplayer: parseMultiplayer(frontmatter),
+          orientation: parseOrientation(frontmatter),
+        });
+      }
+
+      return entries;
     },
   };
 }

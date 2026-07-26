@@ -27,9 +27,9 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
-  // Unmount before dropping the container — a concurrent commit after jsdom tears
-  // down shows up as an unhandled "window is not defined" that fails the suite even
-  // when every assertion passed.
+  // Unmount before removing the host — otherwise React can still commit after jsdom
+  // tears the environment down and Vitest fails the suite with "window is not defined"
+  // even though every assertion already passed.
   act(() => {
     root?.unmount();
   });

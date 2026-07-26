@@ -116,11 +116,11 @@ flowchart TD
 
 2. **Publish Pipeline**:
    - A GitHub Actions workflow runs static validation on PRs (enforcing game size caps, checking for console errors headlessly, verifying the offline-only rule, and screening for credential leaks).
-   - Upon merge to `main`, the pipeline builds game bundles and compiles a single `/catalog.json`, publishing them to a separate, cookieless origin (e.g., GitHub Pages on the games repo or a CDN bucket).
+   - Merging to the default branch is what publishes a game. **As built, no bundle is pushed to a public origin** — the original plan of compiling `/catalog.json` onto GitHub Pages or a CDN bucket was dropped so the games repo could stay private.
 
 3. **The gamedev.pl Application**:
-   - **Static Catalog**: Fetches `/catalog.json` from the games origin and displays games cleanly by category, author, and controls.
-   - **Static Player**: Renders the selected game inside the sandboxed iframe, loading the published asset URL directly.
+   - **Catalog**: Built by the API straight from `SPEC.md` frontmatter in the games repo, so there is no `catalog.json` artifact to keep in sync.
+   - **Player**: The API reads a game's sources, bundles them into one self-contained document, and the app renders that in the sandboxed iframe. Isolation comes from the sandbox, not from a separate origin — which also makes unmerged PR builds playable as previews.
    - **Spec Submission**: Captures prompt descriptions from creators and routes them through the Fastify API (holding a scoped GitHub Token) to open structured issue templates on the games repo, triggering the agent workflow.
 
 This architecture keeps the `www.gamedev.pl` platform nearly static, decoupling agent runtime infrastructure completely while maintaining a robust, cookieless security boundary. For more details on the concrete directory structures and CI checks, see [`games-repo-blueprint.md`](./games-repo-blueprint.md).

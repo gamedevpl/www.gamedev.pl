@@ -1,10 +1,11 @@
 # Closed-beta splash + sign-in waitlist
 
-> Status: plan (2026-07-23, owner approved). Depends on the P0 shell fix
-> (beta wall gates only `/api/` paths — the static shell must load for
-> anonymous visitors). Splash = part of that fix's UX completion; waitlist =
-> small increment slotted after the dependency security bumps, before the
-> content-safety slices.
+> Status: ✅ **Shipped** (verified 2026-07-26). An anonymous visitor to www.gamedev.pl gets
+> the splash and can join the waitlist; the beta wall gates `/api/` paths while the static
+> shell still loads. See [`apps/web/src/ClosedBetaSplash.tsx`](../apps/web/src/ClosedBetaSplash.tsx)
+> and the waitlist routes in [`apps/api/src/auth.ts`](../apps/api/src/auth.ts).
+>
+> Originally planned 2026-07-23 (owner approved), depending on the P0 shell fix.
 
 ## Splash (the signed-out state)
 

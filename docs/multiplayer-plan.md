@@ -1,7 +1,14 @@
 # Multiplayer games — design & implementation plan
 
-Status: **in progress** (M1 building). Revised 2026-07-23 after reading the actual games-repo
-runtime — the first draft assumed an architecture this project no longer has. See
+Status: ✅ **Shipped and live** (verified 2026-07-26). Party mode runs in production: one
+shared screen, phones as controllers, with `arena-tag` and `tactics-duel` in the catalog.
+The relay lives in [`apps/api/src/mp.ts`](../apps/api/src/mp.ts) and keeps rooms **in the
+memory of one process**, which is why the service deploys with `--max-instances 1` — see
+[`deployment.md`](./deployment.md). Raising that cap requires moving room state out of
+process first.
+
+Revised 2026-07-23 after reading the actual games-repo runtime — the first draft assumed an
+architecture this project no longer has. See
 [§8 Plan revisions](#8-plan-revisions-what-changed-from-the-first-draft) for what changed and why.
 
 ---

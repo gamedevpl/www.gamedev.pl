@@ -103,14 +103,14 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
   `sessionStorage`; count `play_started` per `visitId`.
 - ~~No referrer/UTM capture~~ — **closed**: coarse referrer hostname plus filtered
   `utm_source` / `utm_medium` / `utm_campaign` on `visit_started`.
-- **Two follow-ups the visit stream left open:**
-  - `visitEvents` needs its own Firestore TTL policy (`gcloud firestore fields ttls
-update expiresAt --collection-group=visitEvents`). A TTL policy is scoped per
-    collection group, so until it exists these rows never expire and the 90-day
-    retention promise covers only `playEvents`.
-  - `startVisitTracking` patches `history.pushState` to observe in-app navigation,
-    because `navigate()` fires no event. Replace with a `gdpl:navigate` window event
-    emitted by `App` when that lands, then delete the patch.
+- **Follow-ups the visit stream left open:**
+  - ~~`visitEvents` needs its own Firestore TTL policy~~ — **closed 2026-07-26**: the
+    policy is live, and [infra/setup-gcp.sh](../../../infra/setup-gcp.sh) step 6/6 now
+    loops over every telemetry collection group instead of naming `playEvents` alone.
+    **A new stream must add its group to that loop in the same change** — a group with
+    no policy still writes `expiresAt`, nothing errors, and nothing expires.
+  - ~~`startVisitTracking` patches `history.pushState`~~ — **closed**: `App` emits a
+    `gdpl:navigate` event (`5fe02928`) and the listener uses it (`79dd4026`).
 - ~~Nothing reads the visit stream~~ — **closed 2026-07-26**: `summarizeVisitFunnel`
   ([visit-funnel.ts](../../../apps/api/src/visit-funnel.ts)) behind
   `GET /api/admin/telemetry/visits`, rendered by `VisitFunnelPanel` beside game health

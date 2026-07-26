@@ -1,12 +1,29 @@
 # Deployment
 
-> **Status: ✅ Automated via GitHub Actions (`deploy.yml`).** The app (web + API) runs as **one Cloud Run
-> service** at `https://gamedev-app-334141807880.europe-central2.run.app` (GCP project
-> `gamedevpl`, region `europe-central2`, service `gamedev-app`, scale-to-zero). The live
-> `www.gamedev.pl` GitHub Pages site is **not touched**. **The app is currently locked behind
-> HTTP Basic Auth** (a temporary "not public yet" gate — see below). Browse/play is live;
-> **submissions are pending the `github-token` secret** (submission routes return 503 until
-> it is added — see below). See [`steel-thread-plan.md`](./steel-thread-plan.md) §M5.
+> **Status: ✅ Live in closed beta at [www.gamedev.pl](https://www.gamedev.pl)**, deployed
+> automatically by GitHub Actions (`deploy.yml`) on every push to `master`.
+>
+> The app (web + API) runs as **one Cloud Run service**: project `gamedevpl`, region
+> **`europe-west1`**, service `gamedev-app`, scale-to-zero with **`--max-instances 1`**. The
+> custom domain is a native Cloud Run domain mapping; the apex `gamedev.pl` 301-redirects to
+> `www`. The old GitHub Pages site no longer serves this domain — it survives only in this
+> repo's early history.
+>
+> **Access is gated by `PRIVATE_BETA=true`**, not by HTTP Basic Auth: anonymous visitors get
+> the splash, and data routes require a session on the beta allowlist. Browse, play, and
+> **submissions are all live** — the `github-token` secret exists, so submission routes no
+> longer 503.
+
+<!-- Verified against the running service on 2026-07-26: region, URL, env, scale and secrets
+     all read back from `gcloud run services describe`. If you change any of it, re-read
+     rather than trusting this block. -->
+
+**Ground truth, if you need to check rather than trust this page:**
+
+```bash
+gcloud run services describe gamedev-app --region europe-west1 --project gamedevpl
+gcloud secrets list --project gamedevpl
+```
 
 ## Automated CD Pipeline (`.github/workflows/deploy.yml`)
 
@@ -26,18 +43,21 @@ account (`<project-number>-compute@developer.gserviceaccount.com`) needs
 `roles/secretmanager.secretAccessor` on each. `deploy.yml` and `infra/deploy-api.sh` wire whichever exist into
 a single `--set-secrets` list.
 
-| Secret                    | Purpose                                                                | State (2026-07-22)      |
-| ------------------------- | ---------------------------------------------------------------------- | ----------------------- |
-| `site-basic-auth`         | `"user:password"` → `SITE_BASIC_AUTH`; locks the whole app (web + API) | ✅ set (app is private) |
-| `submission-token-secret` | HMAC key for the stateless status token → `SUBMISSION_TOKEN_SECRET`    | ✅ set                  |
-| `github-token`            | Fine-grained PAT (Issues rw + PRs r + Contents r, games repo only)     | ❌ **not yet created**  |
+| Secret                    | Purpose                                                             | State (2026-07-26)       |
+| ------------------------- | ------------------------------------------------------------------- | ------------------------ |
+| `github-token`            | Fine-grained PAT (Issues rw + PRs r + Contents r, games repo only)  | ✅ set — submissions on  |
+| `submission-token-secret` | HMAC key for the stateless status token → `SUBMISSION_TOKEN_SECRET` | ✅ set                   |
+| `session-secret`          | HMAC key for session cookies → `SESSION_SECRET`                     | ✅ set                   |
+| `resend-api-key`          | Outbound email → `RESEND_API_KEY` (see below)                       | ✅ set                   |
+| `vapid-private-key`       | Web push signing → `VAPID_PRIVATE_KEY`                              | ✅ set                   |
+| `site-basic-auth`         | Former "not public yet" lock → `SITE_BASIC_AUTH`                    | ⚠️ exists but **unused** |
 
-- **Enable submissions:** create `github-token`, grant the runtime SA accessor on it, and
-  redeploy. Both `github-token` and `submission-token-secret` must be present for submissions
-  to leave 503.
-- **Remove the access lock (make public):** `gcloud secrets delete site-basic-auth` and
-  redeploy (or deploy without wiring it). Basic Auth over HTTPS is a stopgap; a domain +
-  proper auth is a later decision.
+`site-basic-auth` is a leftover: the running revision does not wire it, and the site answers
+without an auth challenge. Access is controlled by `PRIVATE_BETA` and the beta allowlist
+instead. Delete the secret when you are sure nothing references it.
+
+**Opening the site to everyone** is a config change, not a code change: set `PRIVATE_BETA=false`
+on the service (and clear the allowlists if you want). Nothing needs redeploying from source.
 
 ## Outbound email (Resend)
 
@@ -112,10 +132,17 @@ the full access model.
 [`apps/api/Dockerfile`](../apps/api/Dockerfile) is a multi-stage image built from the repo root
 (monorepo context). It builds both the API and the static web bundle, and the Fastify server
 serves that bundle from the same origin (`WEB_DIST_DIR`), so the browser makes only same-origin
-requests to `/api` — no CORS, no second service, and the Pages site is never involved.
+requests to `/api` — no CORS and no second service.
 
-[`infra/deploy-api.sh`](../infra/deploy-api.sh) can be used to manually trigger Cloud Build, push to
-Artifact Registry, and deploy to Cloud Run with `--min-instances 0` (scale-to-zero) from a local environment.
+[`infra/deploy-api.sh`](../infra/deploy-api.sh) can be used to manually trigger Cloud Build, push
+to Artifact Registry, and deploy to Cloud Run from a local environment. It deploys with
+`--min-instances 0` (scale-to-zero) and `--max-instances 1`.
+
+**Why `--max-instances 1`:** the multiplayer relay keeps party-mode lobbies in the memory of a
+single process ([`apps/api/src/mp.ts`](../apps/api/src/mp.ts)). A second instance would put a
+phone controller and the screen it controls in different processes, and the lobby would appear
+empty. Raising the cap therefore requires moving that state out of process first — it is not a
+knob to turn under load.
 
 ## Infrastructure
 

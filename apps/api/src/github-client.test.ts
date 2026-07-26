@@ -8,51 +8,65 @@ function specMd(frontmatter: Record<string, string>): string {
   return ['---', ...lines, '---', '', '## Concept', 'A game.'].join('\n');
 }
 
+/**
+ * Answers the catalog's Contents listing + GraphQL chunk pattern. `files` maps
+ * repo-relative paths to text (or null for a missing blob).
+ */
+function catalogFetchImpl(dirs: string[], files: Record<string, string | null>): typeof fetch {
+  return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.includes('/contents/games?')) {
+      return new Response(
+        JSON.stringify([
+          ...dirs.map((name) => ({ name, type: 'dir' as const })),
+          { name: 'README.md', type: 'file' as const },
+          { name: 'Bad Name!', type: 'dir' as const },
+        ]),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    }
+    if (url.includes('/graphql')) {
+      const payload = init?.body ? (JSON.parse(String(init.body)) as { query?: string }) : {};
+      const query = payload.query ?? '';
+      const repository: Record<string, { text: string } | null> = {};
+      for (const match of query.matchAll(/(\w+)\s*:\s*object\(expression:\s*"([^"]+)"\)/g)) {
+        const alias = match[1];
+        const expression = match[2];
+        const colon = expression.indexOf(':');
+        const repoPath = colon >= 0 ? expression.slice(colon + 1) : expression;
+        const text = Object.prototype.hasOwnProperty.call(files, repoPath) ? files[repoPath] : null;
+        repository[alias] = text === null || text === undefined ? null : { text };
+      }
+      return new Response(JSON.stringify({ data: { repository } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    throw new Error(`unexpected request: ${url}`);
+  }) as unknown as typeof fetch;
+}
+
 describe('getCatalog', () => {
   it('builds catalog entries from games/ directories and SPEC.md frontmatter', async () => {
-    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.includes('/contents/games?')) {
-        return new Response(
-          JSON.stringify([
-            { name: 'bubble-pop', type: 'dir' },
-            { name: 'zig-zag', type: 'dir' },
-            { name: 'README.md', type: 'file' },
-            { name: 'Bad Name!', type: 'dir' },
-          ]),
-          { status: 200, headers: { 'content-type': 'application/json' } },
-        );
-      }
-      if (url.includes('/contents/games/bubble-pop/SPEC.md')) {
-        return new Response(
-          specMd({
-            title: 'Bubble Pop Rush',
-            slug: 'bubble-pop',
-            status: 'published',
-            genre: 'arcade',
-            controls: 'Mouse to aim and pop',
-          }),
-          { status: 200 },
-        );
-      }
-      if (url.includes('/contents/games/bubble-pop/media/metadata.json')) {
-        return new Response(
-          JSON.stringify({
-            captures: {
-              opening: { file: 'opening.png', frame: 0 },
-              'first-bubbles': { file: 'first-bubbles.png', frame: 55 },
-            },
-            video: { file: 'gameplay.mp4' },
-          }),
-          { status: 200 },
-        );
-      }
-      if (url.includes('/contents/games/zig-zag/SPEC.md')) {
-        // Missing SPEC.md — the game is skipped rather than failing the catalog.
-        return new Response('not found', { status: 404 });
-      }
-      throw new Error(`unexpected request: ${url}`);
-    }) as unknown as typeof fetch;
+    const fetchImpl = catalogFetchImpl(['bubble-pop', 'zig-zag'], {
+      'games/bubble-pop/SPEC.md': specMd({
+        title: 'Bubble Pop Rush',
+        slug: 'bubble-pop',
+        status: 'published',
+        genre: 'arcade',
+        controls: 'Mouse to aim and pop',
+      }),
+      'games/bubble-pop/media/metadata.json': JSON.stringify({
+        captures: {
+          opening: { file: 'opening.png', frame: 0 },
+          'first-bubbles': { file: 'first-bubbles.png', frame: 55 },
+        },
+        video: { file: 'gameplay.mp4' },
+      }),
+      // Missing SPEC.md — the game is skipped rather than failing the catalog.
+      'games/zig-zag/SPEC.md': null,
+      'games/zig-zag/media/metadata.json': null,
+    });
 
     const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
     const catalog = await client.getCatalog('main');
@@ -75,31 +89,18 @@ describe('getCatalog', () => {
         orientation: 'any',
       },
     ]);
+    // One directory listing + one GraphQL chunk — not one Contents read per file.
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(String(vi.mocked(fetchImpl).mock.calls[1]?.[0])).toContain('/graphql');
   });
 
   it('strips quotes from frontmatter values and skips games without a title', async () => {
-    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.includes('/contents/games?')) {
-        return new Response(
-          JSON.stringify([
-            { name: 'quoted', type: 'dir' },
-            { name: 'untitled', type: 'dir' },
-          ]),
-          { status: 200, headers: { 'content-type': 'application/json' } },
-        );
-      }
-      if (url.includes('/contents/games/quoted/SPEC.md')) {
-        return new Response(specMd({ title: '"Quoted Title"', status: 'published' }), { status: 200 });
-      }
-      if (url.includes('/contents/games/quoted/media/metadata.json')) {
-        return new Response('not found', { status: 404 });
-      }
-      if (url.includes('/contents/games/untitled/SPEC.md')) {
-        return new Response(specMd({ status: 'published' }), { status: 200 });
-      }
-      throw new Error(`unexpected request: ${url}`);
-    }) as unknown as typeof fetch;
+    const fetchImpl = catalogFetchImpl(['quoted', 'untitled'], {
+      'games/quoted/SPEC.md': specMd({ title: '"Quoted Title"', status: 'published' }),
+      'games/quoted/media/metadata.json': null,
+      'games/untitled/SPEC.md': specMd({ status: 'published' }),
+      'games/untitled/media/metadata.json': null,
+    });
 
     const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
     const catalog = await client.getCatalog('main');
@@ -150,24 +151,12 @@ describe('getCatalog', () => {
       vague: { title: 'Vague', status: 'published', multiplayer: 'controllers' },
     };
 
-    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.includes('/contents/games?')) {
-        return new Response(JSON.stringify(Object.keys(specs).map((name) => ({ name, type: 'dir' }))), {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        });
-      }
-      for (const [name, frontmatter] of Object.entries(specs)) {
-        if (url.includes(`/contents/games/${name}/SPEC.md`)) {
-          return new Response(specMd(frontmatter), { status: 200 });
-        }
-      }
-      if (url.includes('/media/metadata.json')) {
-        return new Response('not found', { status: 404 });
-      }
-      throw new Error(`unexpected request: ${url}`);
-    }) as unknown as typeof fetch;
+    const files: Record<string, string | null> = {};
+    for (const [name, frontmatter] of Object.entries(specs)) {
+      files[`games/${name}/SPEC.md`] = specMd(frontmatter);
+      files[`games/${name}/media/metadata.json`] = null;
+    }
+    const fetchImpl = catalogFetchImpl(Object.keys(specs), files);
 
     const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
     const catalog = await client.getCatalog('main');
@@ -191,24 +180,12 @@ describe('getCatalog', () => {
       silent: { title: 'Silent', status: 'published' },
     };
 
-    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.includes('/contents/games?')) {
-        return new Response(JSON.stringify(Object.keys(specs).map((name) => ({ name, type: 'dir' }))), {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        });
-      }
-      for (const [name, frontmatter] of Object.entries(specs)) {
-        if (url.includes(`/contents/games/${name}/SPEC.md`)) {
-          return new Response(specMd(frontmatter), { status: 200 });
-        }
-      }
-      if (url.includes('/media/metadata.json')) {
-        return new Response('not found', { status: 404 });
-      }
-      throw new Error(`unexpected request: ${url}`);
-    }) as unknown as typeof fetch;
+    const files: Record<string, string | null> = {};
+    for (const [name, frontmatter] of Object.entries(specs)) {
+      files[`games/${name}/SPEC.md`] = specMd(frontmatter);
+      files[`games/${name}/media/metadata.json`] = null;
+    }
+    const fetchImpl = catalogFetchImpl(Object.keys(specs), files);
 
     const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
     const catalog = await client.getCatalog('main');
@@ -219,6 +196,24 @@ describe('getCatalog', () => {
     expect(bySlug.shouty).toBe('landscape');
     expect(bySlug.typo).toBe('any');
     expect(bySlug.silent).toBe('any');
+  });
+
+  it('batches large catalogs into multiple GraphQL chunks instead of per-file Contents reads', async () => {
+    const slugs = Array.from({ length: 35 }, (_, i) => `game-${String(i).padStart(2, '0')}`);
+    const files: Record<string, string | null> = {};
+    for (const slug of slugs) {
+      files[`games/${slug}/SPEC.md`] = specMd({ title: slug, status: 'published' });
+      files[`games/${slug}/media/metadata.json`] = null;
+    }
+    const fetchImpl = catalogFetchImpl(slugs, files);
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    const catalog = await client.getCatalog('main');
+    expect(catalog).toHaveLength(35);
+    // 1 listing + 2 GraphQL chunks (chunk size 30).
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    const graphqlCalls = vi.mocked(fetchImpl).mock.calls.filter((call) => String(call[0]).includes('/graphql'));
+    expect(graphqlCalls).toHaveLength(2);
   });
 });
 

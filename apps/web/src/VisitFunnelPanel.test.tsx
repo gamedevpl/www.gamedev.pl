@@ -32,12 +32,22 @@ function funnel(overrides: Partial<VisitFunnel> = {}): VisitFunnel {
 }
 
 function render(data: VisitsResponse): string {
+  (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   const host = document.createElement('div');
   document.body.append(host);
+  const root = createRoot(host);
   act(() => {
-    createRoot(host).render(createElement(VisitFunnelPanel, { data }));
+    root.render(createElement(VisitFunnelPanel, { data }));
   });
-  return host.textContent ?? '';
+  const text = host.textContent ?? '';
+  // Unmount before the next case (or suite teardown) so React cannot commit after
+  // jsdom has already torn `window` down — that surfaces as an unhandled
+  // "window is not defined" with every assertion still green.
+  act(() => {
+    root.unmount();
+  });
+  host.remove();
+  return text;
 }
 
 function response(overrides: Partial<VisitFunnel> = {}): VisitsResponse {
