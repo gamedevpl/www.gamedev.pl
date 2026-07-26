@@ -37,6 +37,24 @@ function percent(rate: number): string {
 }
 
 /**
+ * Rounds this game was seen to conclude — the test for whether its depth columns mean
+ * anything at all.
+ *
+ * Zero is ambiguous by nature: a game that emits no endings and a game nobody ever
+ * finishes produce identical rows. Most of the catalog is still the former, so the
+ * columns below render `—` (no evidence) rather than `0%` (a damning claim) whenever this
+ * is zero. It is also why no verdict badge reads off finish rate: "nobody finishes this"
+ * is not a conclusion the data supports yet.
+ */
+function roundsEnded(game: GameHealth): number {
+  return game.outcomes.won + game.outcomes.lost + game.outcomes.quit;
+}
+
+function formatScore(value: number): string {
+  return Math.abs(value) >= 10_000 ? value.toLocaleString('en-US') : `${Math.round(value * 100) / 100}`;
+}
+
+/**
  * A game's headline state. Errors outrank stalls because an uncaught exception is a
  * fact about one session, while a stall rate needs several ticks before it means much.
  */
@@ -87,6 +105,7 @@ export function GameHealthView() {
       sessions: games.reduce((sum, game) => sum + game.sessions, 0),
       playSeconds: games.reduce((sum, game) => sum + game.totalPlaySeconds, 0),
       erroring: games.filter((game) => game.errors > 0).length,
+      rounds: games.reduce((sum, game) => sum + roundsEnded(game), 0),
     };
   }, [data]);
 
@@ -132,6 +151,12 @@ export function GameHealthView() {
           <p className="health-summary">
             {totals.games} game{totals.games === 1 ? '' : 's'} played · {totals.sessions} session
             {totals.sessions === 1 ? '' : 's'} · {formatSeconds(totals.playSeconds)} of play
+            {totals.rounds > 0 && (
+              <>
+                {' '}
+                · {totals.rounds} round{totals.rounds === 1 ? '' : 's'} finished
+              </>
+            )}
             {totals.erroring > 0 && <> · {totals.erroring} erroring</>}
           </p>
           {data.truncated && (
@@ -150,6 +175,10 @@ export function GameHealthView() {
                     <th>Sessions</th>
                     <th>Bounced</th>
                     <th>Median play</th>
+                    <th>Finished</th>
+                    <th>Won</th>
+                    <th>Best score</th>
+                    <th>Progress</th>
                     <th>FPS</th>
                     <th>Stalled</th>
                     <th>Errors</th>
@@ -158,6 +187,7 @@ export function GameHealthView() {
                 <tbody>
                   {data.games.map((game) => {
                     const badge = verdict(game);
+                    const ended = roundsEnded(game);
                     return (
                       <tr key={game.slug}>
                         <td className="health-slug">
@@ -169,6 +199,35 @@ export function GameHealthView() {
                         <td>{game.sessions}</td>
                         <td>{game.bounces > 0 ? `${game.bounces}` : '—'}</td>
                         <td>{game.medianPlaySeconds > 0 ? formatSeconds(game.medianPlaySeconds) : '—'}</td>
+                        <td title={ended === 0 ? undefined : `${game.sessionsWithEnding} of ${game.sessions} sessions`}>
+                          {ended === 0 ? '—' : percent(game.finishRate)}
+                        </td>
+                        <td
+                          title={
+                            game.winRate === null
+                              ? undefined
+                              : `${game.outcomes.won} won, ${game.outcomes.lost} lost, ${game.outcomes.quit} quit`
+                          }
+                        >
+                          {game.winRate === null ? '—' : percent(game.winRate)}
+                        </td>
+                        <td>{game.medianBestScore === null ? '—' : formatScore(game.medianBestScore)}</td>
+                        <td>
+                          {game.progressLabels.length === 0 ? (
+                            '—'
+                          ) : (
+                            <details className="health-disclosure">
+                              <summary>{game.progressLabels.length}</summary>
+                              <ul>
+                                {game.progressLabels.map((landmark) => (
+                                  <li key={landmark.label}>
+                                    <span className="health-error-count">{landmark.sessions}×</span> {landmark.label}
+                                  </li>
+                                ))}
+                              </ul>
+                            </details>
+                          )}
+                        </td>
                         <td>{game.medianFps === null ? '—' : Math.round(game.medianFps)}</td>
                         <td title={`${game.stalledTicks} of ${game.aliveTicks} ticks`}>
                           {game.aliveTicks === 0 ? '—' : percent(game.stallRate)}
@@ -177,7 +236,7 @@ export function GameHealthView() {
                           {game.errors === 0 ? (
                             '—'
                           ) : (
-                            <details className="health-errors">
+                            <details className="health-disclosure health-errors">
                               <summary>{game.errors}</summary>
                               <ul>
                                 {game.errorSamples.map((sample) => (
@@ -203,7 +262,9 @@ export function GameHealthView() {
             {data.games.some((game) => game.resumeTicksIgnored > 0) && (
               <> ({data.games.reduce((sum, game) => sum + game.resumeTicksIgnored, 0)} discarded in this window)</>
             )}
-            . Window: {data.days[data.days.length - 1]} → {data.days[0]}.
+            . A dash under Finished, Won or Best score means the game reported no endings at all — most of the catalog
+            predates the GameKit that sends them — not that nobody got there. Window: {data.days[data.days.length - 1]}{' '}
+            → {data.days[0]}.
           </p>
         </>
       )}

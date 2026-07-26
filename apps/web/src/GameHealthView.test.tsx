@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
 import { GameHealthView } from './GameHealthView';
-import type { GameHealth, HealthResponse, VisitFunnel, VisitsResponse , CreatorsResponse } from './healthApi';
+import type { GameHealth, HealthResponse, VisitFunnel, VisitsResponse, CreatorsResponse } from './healthApi';
 
 /**
  * The operator view's job is to make one thing obvious: which published game is broken.
@@ -27,6 +27,13 @@ function game(partial: Partial<GameHealth> & { slug: string }): GameHealth {
     stallRate: 0,
     medianFps: 60,
     resumeTicksIgnored: 0,
+    // Default to a game that reports no depth — the majority of the catalog.
+    outcomes: { won: 0, lost: 0, quit: 0 },
+    sessionsWithEnding: 0,
+    finishRate: 0,
+    winRate: null,
+    medianBestScore: null,
+    progressLabels: [],
     ...partial,
   };
 }
@@ -189,6 +196,82 @@ describe('GameHealthView', () => {
     const root = await render();
 
     expect(container.textContent).toContain('3 discarded');
+    await act(async () => root.unmount());
+  });
+
+  it('shows how often a game gets finished and won', async () => {
+    respondWith({
+      days: ['2026-07-26'],
+      truncated: false,
+      games: [
+        game({
+          slug: 'brick-storm',
+          sessions: 4,
+          outcomes: { won: 3, lost: 9, quit: 0 },
+          sessionsWithEnding: 2,
+          finishRate: 0.5,
+          winRate: 0.25,
+          medianBestScore: 1200,
+        }),
+      ],
+    });
+
+    const root = await render();
+
+    const text = container.textContent ?? '';
+    expect(text).toContain('50%');
+    expect(text).toContain('25%');
+    expect(text).toContain('1200');
+    expect(text).toContain('12 rounds finished');
+    await act(async () => root.unmount());
+  });
+
+  /**
+   * The distinction the whole depth column set rests on. A game that emits no endings
+   * must not be rendered as a game nobody finishes — that would libel most of the
+   * catalog, which predates the GameKit change that sends them.
+   */
+  it('renders a game that reports no endings as unknown, not as unfinished', async () => {
+    respondWith({
+      days: ['2026-07-26'],
+      truncated: false,
+      games: [game({ slug: 'quiet-game', sessions: 5 })],
+    });
+
+    const root = await render();
+
+    // Read the depth cells directly rather than scanning the page text: `0%` appears
+    // legitimately in the Stalled column, so a text search would pass for the wrong reason.
+    const headers = [...container.querySelectorAll('th')].map((node) => node.textContent);
+    const cells = [...container.querySelectorAll('tbody td')].map((node) => node.textContent);
+    for (const column of ['Finished', 'Won', 'Best score']) {
+      expect(cells[headers.indexOf(column)]).toBe('—');
+    }
+
+    const text = container.textContent ?? '';
+    expect(text).toContain('reported no endings at all');
+    expect(text).not.toContain('rounds finished');
+    await act(async () => root.unmount());
+  });
+
+  it('lists progress landmarks behind a disclosure', async () => {
+    respondWith({
+      days: ['2026-07-26'],
+      truncated: false,
+      games: [
+        game({
+          slug: 'leveller',
+          progressLabels: [
+            { label: 'level-1', sessions: 9 },
+            { label: 'level-2', sessions: 2 },
+          ],
+        }),
+      ],
+    });
+
+    const root = await render();
+
+    expect(container.textContent).toContain('level-2');
     await act(async () => root.unmount());
   });
 

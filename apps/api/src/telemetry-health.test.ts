@@ -200,6 +200,222 @@ describe('summarizeGameHealth', () => {
   });
 });
 
+describe('summarizeGameHealth depth signals', () => {
+  it('counts outcomes per round and reach per session', () => {
+    // One sitting, five rounds: four losses and a win. That is five facts about how hard
+    // the game is and one about whether anyone gets that far.
+    const events = session('tough', 's1', '2026-07-26T10:00:00.000Z', [
+      { type: 'game_opened', msSinceOpen: 0 },
+      { type: 'end', outcome: 'lost', msSinceOpen: 10_000 },
+      { type: 'end', outcome: 'lost', msSinceOpen: 20_000 },
+      { type: 'end', outcome: 'lost', msSinceOpen: 30_000 },
+      { type: 'end', outcome: 'lost', msSinceOpen: 40_000 },
+      { type: 'end', outcome: 'won', msSinceOpen: 50_000 },
+    ]);
+
+    const [row] = summarizeGameHealth(events);
+    expect(row.outcomes).toEqual({ won: 1, lost: 4, quit: 0 });
+    expect(row.sessionsWithEnding).toBe(1);
+    expect(row.finishRate).toBe(1);
+    expect(row.winRate).toBeCloseTo(1 / 5);
+  });
+
+  it('measures finish rate against every session, not only the ones that finished', () => {
+    const finished = session('g', 's1', '2026-07-26T10:00:00.000Z', [
+      { type: 'game_opened', msSinceOpen: 0 },
+      { type: 'end', outcome: 'won', msSinceOpen: 30_000 },
+    ]);
+    const abandoned = healthySession('g', 's2', '2026-07-26T11:00:00.000Z', 30);
+    const bounced = session('g', 's3', '2026-07-26T12:00:00.000Z', [{ type: 'game_opened', msSinceOpen: 0 }]);
+
+    const [row] = summarizeGameHealth([...finished, ...abandoned, ...bounced]);
+    expect(row.sessions).toBe(3);
+    expect(row.sessionsWithEnding).toBe(1);
+    expect(row.finishRate).toBeCloseTo(1 / 3);
+  });
+
+  /**
+   * A quit is a statement about attention, which `finishRate` already measures. Folding
+   * it into `winRate` would make an abandoned game read as a punishingly hard one.
+   */
+  it('leaves quits out of the win rate rather than scoring them as losses', () => {
+    const events = session('g', 's1', '2026-07-26T10:00:00.000Z', [
+      { type: 'game_opened', msSinceOpen: 0 },
+      { type: 'end', outcome: 'won', msSinceOpen: 10_000 },
+      { type: 'end', outcome: 'quit', msSinceOpen: 20_000 },
+      { type: 'end', outcome: 'quit', msSinceOpen: 30_000 },
+    ]);
+
+    const [row] = summarizeGameHealth(events);
+    expect(row.outcomes).toEqual({ won: 1, lost: 0, quit: 2 });
+    expect(row.winRate).toBe(1);
+  });
+
+  it('reports no win rate at all when nothing was decided', () => {
+    const events = session('g', 's1', '2026-07-26T10:00:00.000Z', [
+      { type: 'game_opened', msSinceOpen: 0 },
+      { type: 'end', outcome: 'quit', msSinceOpen: 10_000 },
+    ]);
+
+    const [row] = summarizeGameHealth(events);
+    // Null, not 0: nobody losing is not the same as everybody losing.
+    expect(row.winRate).toBeNull();
+  });
+
+  it('takes each session best before the median, so a chatty score stream does not sink it', () => {
+    // Two sessions that report every improvement. Averaging the raw values would mostly
+    // measure how often the game calls score(); the best-per-session is the achievement.
+    const a = session('scorer', 's1', '2026-07-26T10:00:00.000Z', [
+      { type: 'game_opened', msSinceOpen: 0 },
+      { type: 'score', value: 10, msSinceOpen: 1_000 },
+      { type: 'score', value: 40, msSinceOpen: 2_000 },
+      { type: 'score', value: 100, msSinceOpen: 3_000 },
+    ]);
+    const b = session('scorer', 's2', '2026-07-26T11:00:00.000Z', [
+      { type: 'game_opened', msSinceOpen: 0 },
+      { type: 'score', value: 10, msSinceOpen: 1_000 },
+      { type: 'score', value: 200, msSinceOpen: 2_000 },
+    ]);
+
+    const [row] = summarizeGameHealth([...a, ...b]);
+    expect(row.medianBestScore).toBe(150);
+  });
+
+  it('keeps a session best even when the score goes down again', () => {
+    const events = session('g', 's1', '2026-07-26T10:00:00.000Z', [
+      { type: 'game_opened', msSinceOpen: 0 },
+      { type: 'score', value: 90, msSinceOpen: 1_000 },
+      // A round ended and the next one restarted the counter. The session still reached 90.
+      { type: 'end', outcome: 'lost', msSinceOpen: 2_000 },
+      { type: 'score', value: 5, msSinceOpen: 3_000 },
+    ]);
+
+    const [row] = summarizeGameHealth(events);
+    expect(row.medianBestScore).toBe(90);
+  });
+
+  it('treats a zero score as a result rather than a missing one', () => {
+    const events = session('g', 's1', '2026-07-26T10:00:00.000Z', [
+      { type: 'game_opened', msSinceOpen: 0 },
+      { type: 'score', value: 0, msSinceOpen: 1_000 },
+    ]);
+
+    const [row] = summarizeGameHealth(events);
+    expect(row.medianBestScore).toBe(0);
+  });
+
+  it('counts a landmark once per session however often it is replayed', () => {
+    const grinder = session('g', 's1', '2026-07-26T10:00:00.000Z', [
+      { type: 'game_opened', msSinceOpen: 0 },
+      { type: 'progress', label: 'level-1', msSinceOpen: 1_000 },
+      { type: 'progress', label: 'level-1', msSinceOpen: 2_000 },
+      { type: 'progress', label: 'level-1', msSinceOpen: 3_000 },
+      { type: 'progress', label: 'level-2', msSinceOpen: 4_000 },
+    ]);
+    const quitter = session('g', 's2', '2026-07-26T11:00:00.000Z', [
+      { type: 'game_opened', msSinceOpen: 0 },
+      { type: 'progress', label: 'level-1', msSinceOpen: 1_000 },
+    ]);
+
+    const [row] = summarizeGameHealth([...grinder, ...quitter]);
+    // Reach down the funnel, most-reached first — 2 of 2 got to level 1, 1 of 2 past it.
+    expect(row.progressLabels).toEqual([
+      { label: 'level-1', sessions: 2 },
+      { label: 'level-2', sessions: 1 },
+    ]);
+  });
+
+  /**
+   * `progress` is hostile input: a single session could name hundreds of distinct
+   * throwaway labels within its 400-event budget and drown out every real landmark in
+   * the tally for the whole game. Caps how many *new* labels one session can contribute.
+   */
+  it('stops one session from flooding the progress tally with distinct labels', () => {
+    const flood = session(
+      'g',
+      'attacker',
+      '2026-07-26T10:00:00.000Z',
+      Array.from({ length: 100 }, (_, index) => ({
+        type: 'progress' as const,
+        label: `spam-${index}`,
+        msSinceOpen: 1_000 + index,
+      })),
+    );
+    const real = session('g', 'real-player', '2026-07-26T11:00:00.000Z', [
+      { type: 'progress', label: 'level-1', msSinceOpen: 1_000 },
+    ]);
+
+    const row = summarizeGameHealth([...flood, ...real]).find((game) => game.slug === 'g');
+
+    // The flood contributed at most the per-session cap's worth of distinct labels, not
+    // all 100 — and the real player's landmark is still visible among them.
+    const totalDistinctLabels = row!.progressLabels.length;
+    expect(totalDistinctLabels).toBeLessThanOrEqual(21);
+    expect(row!.progressLabels.some((landmark) => landmark.label === 'level-1')).toBe(true);
+  });
+
+  it('keeps counting an already-tracked label past the per-session cap', () => {
+    const events = session('g', 's1', '2026-07-26T10:00:00.000Z', [
+      { type: 'game_opened', msSinceOpen: 0 },
+      ...Array.from({ length: 25 }, (_, index) => ({
+        type: 'progress' as const,
+        label: `l${index}`,
+        msSinceOpen: index + 1,
+      })),
+      // The 21st distinct label was dropped, but a repeat of one already tracked (l0)
+      // still counts — the cap bounds distinct labels, not total progress events.
+      { type: 'progress', label: 'l0', msSinceOpen: 100 },
+    ]);
+
+    const row = summarizeGameHealth(events).find((game) => game.slug === 'g');
+    expect(row!.progressLabels.find((landmark) => landmark.label === 'l0')?.sessions).toBe(1);
+  });
+
+  /**
+   * Most of the catalog predates the GameKit change that emits endings, and a game whose
+   * snapshot never reaches a terminal state still emits none. Those rows must read as
+   * "no evidence", which the view renders as a dash — never as a game nobody finishes.
+   */
+  it('reports absent depth as absent rather than as failure', () => {
+    const [row] = summarizeGameHealth(healthySession('quiet', 's1', '2026-07-26T10:00:00.000Z', 60));
+
+    expect(row.outcomes).toEqual({ won: 0, lost: 0, quit: 0 });
+    expect(row.sessionsWithEnding).toBe(0);
+    expect(row.finishRate).toBe(0);
+    expect(row.winRate).toBeNull();
+    expect(row.medianBestScore).toBeNull();
+    expect(row.progressLabels).toEqual([]);
+  });
+
+  it('does not discard an ending reported after a sleep the way it discards a tick', () => {
+    const events: TelemetryEvent[] = [
+      { slug: 'g', sessionId: 's1', type: 'game_opened', msSinceOpen: 0, at: '2026-07-26T10:00:00.000Z' },
+      // Same frozen-monotonic-clock shape that makes an `alive` tick untrustworthy. A win
+      // is not a sampling interval, so it survives.
+      { slug: 'g', sessionId: 's1', type: 'end', outcome: 'won', msSinceOpen: 5_000, at: '2026-07-26T13:00:00.000Z' },
+    ];
+
+    const [row] = summarizeGameHealth(events);
+    expect(row.outcomes.won).toBe(1);
+    expect(row.finishRate).toBe(1);
+  });
+
+  it('keeps depth per game rather than pooling it across the catalog', () => {
+    const winner = session('easy', 's1', '2026-07-26T10:00:00.000Z', [
+      { type: 'game_opened', msSinceOpen: 0 },
+      { type: 'end', outcome: 'won', msSinceOpen: 10_000 },
+    ]);
+    const loser = session('brutal', 's2', '2026-07-26T10:00:00.000Z', [
+      { type: 'game_opened', msSinceOpen: 0 },
+      { type: 'end', outcome: 'lost', msSinceOpen: 10_000 },
+    ]);
+
+    const rows = summarizeGameHealth([...winner, ...loser]);
+    expect(rows.find((row) => row.slug === 'easy')?.winRate).toBe(1);
+    expect(rows.find((row) => row.slug === 'brutal')?.winRate).toBe(0);
+  });
+});
+
 describe('recentPartitions', () => {
   it('names the last N day partitions, most recent first', () => {
     const now = Date.parse('2026-07-25T09:00:00.000Z');
