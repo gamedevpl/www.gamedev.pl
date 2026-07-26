@@ -182,7 +182,7 @@ export interface TelemetryEvent {
 export interface VisitEvent {
   /** Per-tab uuid from `sessionStorage`. Dies with the tab; never a uid. */
   visitId: string;
-  type: 'visit_started' | 'route_viewed' | 'play_started';
+  type: 'visit_started' | 'route_viewed' | 'play_started' | 'create_step';
   /** Server-anchored instant, derived like `TelemetryEvent.at`. */
   at: string;
   /** Milliseconds from visit start — the trustworthy measure of within-visit timing. */
@@ -191,6 +191,8 @@ export interface VisitEvent {
   entry?: string;
   /** `route_viewed`: the route kind now shown. Never its parameters. */
   route?: string;
+  /** `create_step`: which step of the creation funnel this visit reached. */
+  step?: string;
   /** `visit_started`: bare hostname of an external referrer. Never a full URL. */
   referrer?: string;
   utmSource?: string;

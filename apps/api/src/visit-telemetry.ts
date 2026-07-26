@@ -32,6 +32,18 @@ const MAX_BACKDATE_MS = 6 * 60 * 60 * 1000;
 
 const RouteKindSchema = z.enum(['home', 'play', 'draft', 'status', 'join', 'legal', 'health']);
 /**
+ * Creation-funnel steps. A closed enum rather than a free string, for the same reason
+ * every other field here is bounded: this reaches a grouping key, and the endpoint is
+ * open to anyone who can reach the site.
+ */
+const CreateStepSchema = z.enum([
+  'prompt_started',
+  'spec_submitted',
+  'signin_required',
+  'qa_shown',
+  'submission_created',
+]);
+/**
  * Acquisition strings are re-validated here rather than trusted from the client. The
  * browser filters them for cleanliness; this filters them because a value that reaches a
  * grouping key must not be able to carry punctuation, markup, or an address.
@@ -61,6 +73,7 @@ const EventSchema = z.discriminatedUnion('type', [
   }),
   z.object({ type: z.literal('route_viewed'), route: RouteKindSchema, ...offsetField }),
   z.object({ type: z.literal('play_started'), ...offsetField }),
+  z.object({ type: z.literal('create_step'), step: CreateStepSchema, ...offsetField }),
 ]);
 
 const RequestSchema = z.object({
@@ -153,6 +166,8 @@ export async function registerVisitTelemetryRoutes(
           };
         case 'route_viewed':
           return { ...base, type: event.type, route: event.route };
+        case 'create_step':
+          return { ...base, type: event.type, step: event.step };
         default:
           return { ...base, type: 'play_started' };
       }

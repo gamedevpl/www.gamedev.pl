@@ -132,6 +132,27 @@ describe('POST /api/telemetry/visit', () => {
     expect(utm.statusCode).toBe(400);
   });
 
+  it('records a creation step and rejects one outside the enum', async () => {
+    const ok = await post(app, {
+      visitId,
+      flushMsSinceStart: 0,
+      events: [{ type: 'create_step', step: 'signin_required', msSinceStart: 0 }],
+    });
+    expect(ok.statusCode).toBe(202);
+    expect((await store.listVisitEvents(today()))[0]).toMatchObject({
+      type: 'create_step',
+      step: 'signin_required',
+    });
+
+    // A closed enum, like every other field that reaches a grouping key.
+    const bad = await post(app, {
+      visitId,
+      flushMsSinceStart: 0,
+      events: [{ type: 'create_step', step: 'gave_us_money', msSinceStart: 0 }],
+    });
+    expect(bad.statusCode).toBe(400);
+  });
+
   it('rejects an oversized batch', async () => {
     const response = await post(app, {
       visitId,

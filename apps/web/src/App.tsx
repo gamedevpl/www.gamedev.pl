@@ -31,6 +31,7 @@ import { getSavedSpecs, saveSpec, type SavedSpec } from './mySpecs';
 import { clearPendingQa, loadPendingQa, savePendingQa, type PendingQaAnswers } from './pendingQa';
 import { useAuth } from './AuthContext';
 import { AuthModal } from './AuthModal';
+import { recordCreateStep } from './visitTelemetry';
 import { ClosedBetaSplash } from './ClosedBetaSplash';
 import { AppLoadingScreen } from './AppLoadingScreen';
 import { ControllerView } from './mp/ControllerView';
@@ -323,6 +324,9 @@ export function App() {
   // answered; a clean spec (or a refiner error — fail-open) submits straight through.
   async function handleSubmitSpec(title: string, concept: string, displayName: string = '') {
     if (!user) {
+      // The wall between "wrote an idea" and "made an account". Everything before this
+      // is anonymous, so this is the only place that drop-off is visible at all.
+      recordCreateStep('signin_required');
       setIsAuthModalOpen(true);
       return;
     }
@@ -341,6 +345,7 @@ export function App() {
         locale: i18n.language,
       });
       if (questions.length > 0) {
+        recordCreateStep('qa_shown');
         const spec = { title: trimmedTitle, concept: trimmedConcept, displayName: displayName.trim() };
         setPendingSpec(spec);
         setQaQuestions(questions);
@@ -381,6 +386,7 @@ export function App() {
       setMyGamesRefreshKey((key) => key + 1);
 
       setSubmissionStatus('idle');
+      recordCreateStep('submission_created');
 
       // Only now is the QA panel done: it stayed up, in its submitting state, for the
       // whole call. A no-op when the spec never went through the gate.

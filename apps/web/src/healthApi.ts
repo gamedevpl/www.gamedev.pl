@@ -51,6 +51,8 @@ export interface VisitFunnel {
   entries: Array<{ entry: string; visits: number; plays: number }>;
   referrers: Array<{ referrer: string; visits: number; plays: number }>;
   campaigns: Array<{ source?: string; medium?: string; campaign?: string; visits: number; plays: number }>;
+  /** Creation funnel in step order, every step present even at zero. */
+  creating: Array<{ step: string; visits: number }>;
 }
 
 export interface VisitsResponse {

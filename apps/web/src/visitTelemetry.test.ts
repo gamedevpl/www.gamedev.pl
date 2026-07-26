@@ -9,6 +9,7 @@ import { parsePathRoute } from './router';
 vi.stubGlobal('crypto', webcrypto);
 import {
   readVisitIdentity,
+  recordCreateStep,
   recordVisitEvent,
   referrerDomain,
   routeKind,
@@ -243,6 +244,50 @@ describe('recordVisitEvent', () => {
     session.flush();
     setVisitSessionForTesting(null);
     expect(batches[0].events[0].type).toBe('play_started');
+  });
+});
+
+describe('recordCreateStep', () => {
+  it('records each funnel step once per visit', () => {
+    const { batches, send } = capture();
+    const session = new VisitSession('v1', 0, send, () => 0);
+    setVisitSessionForTesting(session);
+
+    recordCreateStep('prompt_started');
+    // Every keystroke calls this; only the first may count, or the top of the funnel
+    // becomes a keystroke counter.
+    recordCreateStep('prompt_started');
+    recordCreateStep('spec_submitted');
+    session.flush();
+    setVisitSessionForTesting(null);
+
+    expect(batches[0].events).toEqual([
+      expect.objectContaining({ type: 'create_step', step: 'prompt_started' }),
+      expect.objectContaining({ type: 'create_step', step: 'spec_submitted' }),
+    ]);
+  });
+
+  it('is a silent no-op when tracking was never started', () => {
+    setVisitSessionForTesting(null);
+    expect(() => recordCreateStep('prompt_started')).not.toThrow();
+  });
+
+  it('starts a fresh set of steps for a new session', () => {
+    const first = capture();
+    const firstSession = new VisitSession('v1', 0, first.send, () => 0);
+    setVisitSessionForTesting(firstSession);
+    recordCreateStep('prompt_started');
+    firstSession.flush();
+
+    const second = capture();
+    const secondSession = new VisitSession('v2', 0, second.send, () => 0);
+    setVisitSessionForTesting(secondSession);
+    recordCreateStep('prompt_started');
+    secondSession.flush();
+    setVisitSessionForTesting(null);
+
+    // The second visit must record its own start; dedupe is per visit, not global.
+    expect(second.batches[0].events).toHaveLength(1);
   });
 });
 

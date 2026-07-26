@@ -40,7 +40,30 @@ export type VisitEvent =
     }
   | { type: 'route_viewed'; route: VisitRouteKind }
   /** A published game began playing. Intentionally carries no slug. */
-  | { type: 'play_started' };
+  | { type: 'play_started' }
+  /** A step of the creation funnel was reached. Carries no prompt text, ever. */
+  | { type: 'create_step'; step: CreateStep };
+
+/**
+ * The creation funnel, in the order a creator meets it.
+ *
+ * `signin_required` is the one that matters most: it is the wall an anonymous visitor
+ * hits after writing their idea, and the only place the drop-off between "wanted to
+ * make a game" and "made an account" is visible at all. Everything before it happens
+ * with no session, which is exactly why these live in the anonymous visit stream
+ * rather than alongside the signed-in submission record.
+ */
+export type CreateStep =
+  /** First keystroke in the prompt box — intent, before anything is committed. */
+  | 'prompt_started'
+  /** Pressed the button with real content. Wanting a game, not yet allowed one. */
+  | 'spec_submitted'
+  /** The sign-in wall appeared because there was no session. */
+  | 'signin_required'
+  /** The QA gate returned clarifying questions instead of building immediately. */
+  | 'qa_shown'
+  /** A submission actually reached the games repo. */
+  | 'submission_created';
 
 const FLUSH_AT = 5;
 const MAX_BATCH = 25;
@@ -265,9 +288,28 @@ export function currentVisitId(): string | null {
   return currentSession?.visitId ?? null;
 }
 
+/**
+ * Steps already recorded for the live visit, so each is counted once.
+ *
+ * A funnel step means "this visit got this far", not "this happened again": a creator
+ * who types, hesitates, retypes and submits twice is one visit that reached submit, and
+ * counting every keystroke would make the top of the funnel enormous and meaningless.
+ * Deduping in the recorder rather than at each call site means a new call site cannot
+ * get it wrong.
+ */
+let recordedSteps = new Set<CreateStep>();
+
+export function recordCreateStep(step: CreateStep): void {
+  if (!currentSession || recordedSteps.has(step)) return;
+  recordedSteps.add(step);
+  currentSession.record({ type: 'create_step', step });
+}
+
 /** Test seam: installs a session without touching the DOM. */
 export function setVisitSessionForTesting(session: VisitSession | null): void {
   currentSession = session;
+  // Otherwise one test's steps would silence the next test's identical steps.
+  recordedSteps = new Set();
 }
 
 export interface StartVisitTrackingOptions {
@@ -297,6 +339,9 @@ export function startVisitTracking(options: StartVisitTrackingOptions = {}): () 
   const identity = readVisitIdentity(storage, clock());
   const session = new VisitSession(identity.visitId, identity.startedAt, options.send, clock);
   currentSession = session;
+  // A reload continues the visit but re-runs this module, so the funnel would silently
+  // stop deduping across it if these were not cleared with the session that owns them.
+  recordedSteps = new Set();
 
   if (identity.isNew) {
     const referrer = referrerDomain(document.referrer ?? '', window.location.hostname);

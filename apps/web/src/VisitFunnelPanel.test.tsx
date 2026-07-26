@@ -27,6 +27,7 @@ function funnel(overrides: Partial<VisitFunnel> = {}): VisitFunnel {
     entries: [],
     referrers: [],
     campaigns: [],
+    creating: [],
     ...overrides,
   };
 }

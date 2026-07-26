@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { recordCreateStep } from './visitTelemetry';
 import type { CatalogEntry } from './catalog.js';
 import { SketchModal } from './SketchModal.js';
 import { PixelIcon } from './PixelIcon.js';
@@ -278,6 +279,9 @@ export function HeroPromptSection({
     }
 
     const autoTitle = trimmed.slice(0, 40).trim() || 'My Visual AI Game';
+    // Recorded here rather than in the handler: this is the visitor asking for a game,
+    // which happens whether or not they turn out to be signed in.
+    recordCreateStep('spec_submitted');
     onSubmitSpec(autoTitle, finalPrompt);
   };
 
@@ -299,7 +303,12 @@ export function HeroPromptSection({
               className="big-prompt-input"
               autoFocus
               value={promptText}
-              onChange={(e) => setPromptText(e.target.value)}
+              onChange={(e) => {
+                // Intent, recorded once per visit: the top of the creation funnel is
+                // "someone started writing an idea", not "someone loaded the page".
+                if (e.target.value.trim()) recordCreateStep('prompt_started');
+                setPromptText(e.target.value);
+              }}
               placeholder={t('hero.bigPromptPlaceholder')}
               rows={2}
               onKeyDown={(e) => {

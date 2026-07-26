@@ -101,6 +101,40 @@ describe('summarizeVisitFunnel', () => {
     expect(funnel.campaigns).toEqual([{ source: 'linkedin', campaign: 'beta', visits: 2, plays: 1 }]);
   });
 
+  it('reports the creation funnel in step order, zeroes included', () => {
+    const step = (visitId: string, step: string): VisitEvent =>
+      ({ visitId, type: 'create_step', at: '2026-07-26T10:00:00.000Z', msSinceStart: 0, step }) as VisitEvent;
+
+    const funnel = summarizeVisitFunnel([
+      started('a'),
+      step('a', 'prompt_started'),
+      step('a', 'spec_submitted'),
+      step('a', 'signin_required'),
+      started('b'),
+      step('b', 'prompt_started'),
+      started('c'),
+    ]);
+
+    // Every rung present even when nobody reached it — a missing rung reads as
+    // "nothing to see" when it is exactly where everyone stopped.
+    expect(funnel.creating).toEqual([
+      { step: 'prompt_started', visits: 2 },
+      { step: 'spec_submitted', visits: 1 },
+      { step: 'signin_required', visits: 1 },
+      { step: 'qa_shown', visits: 0 },
+      { step: 'submission_created', visits: 0 },
+    ]);
+  });
+
+  it('counts a repeated step once per visit', () => {
+    const step = (visitId: string, step: string): VisitEvent =>
+      ({ visitId, type: 'create_step', at: '2026-07-26T10:00:00.000Z', msSinceStart: 0, step }) as VisitEvent;
+
+    // A duplicated or replayed flush must not inflate a rung.
+    const funnel = summarizeVisitFunnel([started('a'), step('a', 'prompt_started'), step('a', 'prompt_started')]);
+    expect(funnel.creating[0]).toEqual({ step: 'prompt_started', visits: 1 });
+  });
+
   it('survives a window with no events at all', () => {
     const funnel = summarizeVisitFunnel([]);
     expect(funnel).toMatchObject({ visits: 0, bounces: 0, plays: 0, medianPlaysPerPlayingVisit: 0 });

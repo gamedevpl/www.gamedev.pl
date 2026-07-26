@@ -53,10 +53,32 @@ export interface VisitFunnel {
   referrers: Array<{ referrer: string; visits: number; plays: number }>;
   /** Campaign attribution, most common first. Only visits carrying UTM values appear. */
   campaigns: Array<{ source?: string; medium?: string; campaign?: string; visits: number; plays: number }>;
+  /**
+   * The creation funnel, always in step order and always with every step present —
+   * including zeroes.
+   *
+   * Emitting absent steps as zero rather than omitting them is the point: a funnel with
+   * a missing rung reads as "nothing to see", when the interesting case is exactly the
+   * step where everyone stopped.
+   */
+  creating: Array<{ step: CreateStep; visits: number }>;
 }
+
+/** Step order is the funnel's meaning, so it is declared once and reused. */
+export const CREATE_STEPS = [
+  'prompt_started',
+  'spec_submitted',
+  'signin_required',
+  'qa_shown',
+  'submission_created',
+] as const;
+
+export type CreateStep = (typeof CREATE_STEPS)[number];
 
 interface VisitRollup {
   started: boolean;
+  /** Creation steps this visit reached. A Set, so a repeated step counts once. */
+  steps: Set<string>;
   entry?: string;
   referrer?: string;
   utmSource?: string;
@@ -85,7 +107,7 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
   const visits = new Map<string, VisitRollup>();
 
   for (const event of events) {
-    const rollup = visits.get(event.visitId) ?? { started: false, plays: 0 };
+    const rollup = visits.get(event.visitId) ?? { started: false, plays: 0, steps: new Set<string>() };
 
     if (event.type === 'visit_started') {
       rollup.started = true;
@@ -94,6 +116,10 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       rollup.utmSource = event.utmSource;
       rollup.utmMedium = event.utmMedium;
       rollup.utmCampaign = event.utmCampaign;
+    } else if (event.type === 'create_step') {
+      // The client already dedupes, but a Set here means a replayed or duplicated
+      // flush cannot inflate a funnel rung either.
+      if (event.step) rollup.steps.add(event.step);
     } else if (event.type === 'play_started') {
       rollup.plays += 1;
       // Earliest wins: a flush can deliver events out of order, and "time to first
@@ -174,5 +200,9 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
     entries: rank(byEntry, (entry, value) => ({ entry, ...value })),
     referrers: rank(byReferrer, (referrer, value) => ({ referrer, ...value })),
     campaigns: rank(byCampaign, (_key, value) => value),
+    creating: CREATE_STEPS.map((step) => ({
+      step,
+      visits: rollups.filter((rollup) => rollup.steps.has(step)).length,
+    })),
   };
 }
