@@ -1000,10 +1000,18 @@ button:disabled {
   letter-spacing: 0.12em;
 }
 
-.preview-toggle {
+.catalog-badges-top-left {
   position: absolute;
   left: 10px;
   top: 10px;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.preview-toggle {
   padding: 7px 10px;
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 999px;
@@ -4091,9 +4099,6 @@ body.player-open {
 /* AI-generation disclosures (AI Act art. 50) -------------------------------- */
 
 .ai-pill {
-  position: absolute;
-  top: 10px;
-  left: 10px;
   display: inline-flex;
   align-items: center;
   gap: 4px;

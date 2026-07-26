@@ -12,6 +12,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["--yes", "serve", "--no-clipboard", "-l", "4178", "apps/web/dist"],
       "port": 4178
+    },
+    {
+      "name": "dev-local-fixtures",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["-u", "GITHUB_TOKEN", "npm", "run", "dev"],
+      "port": 5173
     }
   ]
 }
