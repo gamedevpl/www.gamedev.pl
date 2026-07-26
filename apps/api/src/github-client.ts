@@ -63,17 +63,72 @@ export interface GameSources {
 }
 
 // Canonical order must match the games repo's tools/lib/assemble.ts — the two
-// lists are independent copies and a mismatch silently breaks bundling.
-const GAME_KIT_MODULES = ['input', 'collision', 'drawing', 'effects', 'audio', 'party'] as const;
+// lists are independent copies and a mismatch silently breaks bundling
+// (issue #247: a stale list 502s every published game at serve time).
+const GAME_KIT_MODULES = [
+  'input',
+  'collision',
+  'world',
+  'ai',
+  'gameplay',
+  'drawing',
+  'actors',
+  'gfx',
+  'effects',
+  'audio',
+  'party',
+] as const;
 const MAX_GAME_MODULES = 64;
 const MAX_GAME_SOURCE_BYTES = 200 * 1024;
 
-interface GameManifest {
-  engine?: { modules?: unknown };
-  audio?: { sounds?: unknown };
+/**
+ * Maps a relative import specifier onto a `.ts` source path.
+ *
+ * The games repo authors TypeScript the way TypeScript ESM projects do: an import
+ * may write `./foo.ts`, `./foo.js` (emit path — source is still `foo.ts`), or `./foo`.
+ * The play-time bundler has to accept all three or every modular game 502s while the
+ * games repo's own assemble (which resolves the same way) stays green.
+ *
+ * Returns null when the specifier is not a relative TypeScript module path.
+ */
+export function resolveGameTypeScriptPath(resolveDir: string, specifier: string): string | null {
+  if (!specifier.startsWith('./') && !specifier.startsWith('../')) {
+    return null;
+  }
+  const resolvedPath = path.posix.resolve(resolveDir, specifier);
+  if (resolvedPath.endsWith('.ts')) {
+    return resolvedPath;
+  }
+  if (resolvedPath.endsWith('.js')) {
+    return `${resolvedPath.slice(0, -'.js'.length)}.ts`;
+  }
+  // Extensionless — only accept bare paths (no other extension). `./foo.json` stays rejected.
+  if (path.posix.extname(resolvedPath) !== '') {
+    return null;
+  }
+  return `${resolvedPath}.ts`;
 }
 
-function parseGameManifest(source: string): { modules: string[]; sounds: string[] } {
+interface GameManifest {
+  engine?: { modules?: unknown };
+  audio?: { sounds?: unknown; music?: unknown };
+}
+
+interface ParsedGameManifest {
+  modules: string[];
+  sounds: string[];
+  /**
+   * Selected BGM track id from GAME.json (`audio.music` string). Null when the
+   * audio module is off. Matches games-repo `tools/lib/assemble.ts`.
+   */
+  music: string | null;
+}
+
+function isKebabCaseName(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-z0-9][a-z0-9-]*$/.test(value);
+}
+
+function parseGameManifest(source: string): ParsedGameManifest {
   const manifest = JSON.parse(source) as GameManifest;
   const modules = manifest.engine?.modules;
   if (
@@ -91,19 +146,49 @@ function parseGameManifest(source: string): { modules: string[]; sounds: string[
     throw new Error('game manifest engine modules are duplicated or out of order');
   }
 
-  const sounds = manifest.audio?.sounds;
   if (!modules.includes('audio')) {
-    return { modules, sounds: [] };
+    return { modules, sounds: [], music: null };
   }
+
+  const sounds = manifest.audio?.sounds;
   if (
     !Array.isArray(sounds) ||
     sounds.length === 0 ||
     new Set(sounds).size !== sounds.length ||
-    sounds.some((soundName) => typeof soundName !== 'string' || !/^[a-z0-9][a-z0-9-]*$/.test(soundName))
+    !sounds.every(isKebabCaseName)
   ) {
     throw new Error('game manifest contains invalid audio sounds');
   }
-  return { modules, sounds };
+
+  // Games-repo assemble: `audio.music` is a single track name string. Injected as
+  // `window.__GAME_AUDIO_MUSIC__ = "<name>"` with only that entry from music.json.
+  const music = manifest.audio?.music;
+  if (!isKebabCaseName(music)) {
+    throw new Error('game manifest contains invalid audio music');
+  }
+
+  return { modules, sounds, music };
+}
+
+/**
+ * Shared music catalog (`shared/audio/music.json`). The games-repo assembler only
+ * reads the `tracks` map — each value is the playback descriptor for one BGM id.
+ */
+function parseMusicTracks(source: string): Record<string, unknown> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(source);
+  } catch {
+    throw new Error('shared audio music catalog is not valid JSON');
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('shared audio music catalog is invalid');
+  }
+  const tracks = (parsed as { tracks?: unknown }).tracks;
+  if (!tracks || typeof tracks !== 'object' || Array.isArray(tracks)) {
+    throw new Error('shared audio music catalog is missing tracks');
+  }
+  return tracks as Record<string, unknown>;
 }
 
 export interface CatalogMediaScreenshot {
@@ -437,36 +522,57 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
           name: 'github-game-modules',
           setup(builder) {
             builder.onResolve({ filter: /^\./ }, (args) => {
-              const resolvedPath = path.posix.resolve(args.resolveDir, args.path);
-              if (!resolvedPath.startsWith(`${gameRoot}/`) || !resolvedPath.endsWith('.ts')) {
+              // Games-repo TypeScript follows normal ESM habits: relative imports may
+              // carry a `.ts` suffix, a `.js` suffix (TypeScript's Node ESM convention
+              // — the source file is still `.ts`), or no suffix at all. Map all three
+              // onto a path under the game directory before the sandbox check; anything
+              // that escapes the game root is rejected.
+              const sourcePath = resolveGameTypeScriptPath(args.resolveDir, args.path);
+              if (!sourcePath || !sourcePath.startsWith(`${gameRoot}/`)) {
                 return {
                   errors: [{ text: `game imports must be TypeScript files inside ${gameRoot}` }],
                 };
               }
-              return { path: resolvedPath, namespace: 'github-game-source' };
+              return { path: sourcePath, namespace: 'github-game-source' };
             });
             builder.onResolve({ filter: /^[^.]/ }, (args) => ({
               errors: [{ text: `game runtime dependency is forbidden: "${args.path}"` }],
             }));
             builder.onLoad({ filter: /.*/, namespace: 'github-game-source' }, async (args) => {
-              if (!loadedPaths.has(args.path)) {
-                if (loadedPaths.size >= MAX_GAME_MODULES) {
-                  return { errors: [{ text: `game exceeds ${MAX_GAME_MODULES} TypeScript modules` }] };
+              // Prefer the resolved file; if an extensionless import pointed at a
+              // directory, fall back to its index.ts (same rule TypeScript uses).
+              // Count the *actual* source path once — not the synthetic `dir.ts`
+              // plus `dir/index.ts` — so directory imports don't burn two slots
+              // toward MAX_GAME_MODULES.
+              let loadedPath = args.path;
+              let source = await readRawFile(loadedPath.slice(1), ref);
+              if (source === null && loadedPath.endsWith('.ts')) {
+                const indexPath = `${loadedPath.slice(0, -'.ts'.length)}/index.ts`;
+                if (indexPath.startsWith(`${gameRoot}/`)) {
+                  const indexSource = await readRawFile(indexPath.slice(1), ref);
+                  if (indexSource !== null) {
+                    loadedPath = indexPath;
+                    source = indexSource;
+                  }
                 }
-                loadedPaths.add(args.path);
               }
-              const source = await readRawFile(args.path.slice(1), ref);
               if (source === null) {
                 return { errors: [{ text: `game module not found: ${args.path}` }] };
               }
-              sourceBytes += Buffer.byteLength(source, 'utf8');
-              if (sourceBytes > MAX_GAME_SOURCE_BYTES) {
-                return { errors: [{ text: `game TypeScript exceeds ${MAX_GAME_SOURCE_BYTES} bytes` }] };
+              if (!loadedPaths.has(loadedPath)) {
+                if (loadedPaths.size >= MAX_GAME_MODULES) {
+                  return { errors: [{ text: `game exceeds ${MAX_GAME_MODULES} TypeScript modules` }] };
+                }
+                loadedPaths.add(loadedPath);
+                sourceBytes += Buffer.byteLength(source, 'utf8');
+                if (sourceBytes > MAX_GAME_SOURCE_BYTES) {
+                  return { errors: [{ text: `game TypeScript exceeds ${MAX_GAME_SOURCE_BYTES} bytes` }] };
+                }
               }
               return {
                 contents: source,
                 loader: 'ts',
-                resolveDir: path.posix.dirname(args.path),
+                resolveDir: path.posix.dirname(loadedPath),
               };
             });
           },
@@ -728,10 +834,32 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       }
 
       const assetEntries = audioAssets.filter((asset): asset is [string, string] => asset !== null);
-      const assetsJs =
-        assetEntries.length > 0
-          ? `window.__GAME_AUDIO_ASSETS__ = Object.freeze(${JSON.stringify(Object.fromEntries(assetEntries))});\n`
-          : '';
+      const assetChunks: string[] = [];
+      if (assetEntries.length > 0) {
+        assetChunks.push(
+          `window.__GAME_AUDIO_ASSETS__ = Object.freeze(${JSON.stringify(Object.fromEntries(assetEntries))});`,
+        );
+      }
+
+      // Music: games-repo assemble reads only `tracks` from music.json, then injects
+      // the selected name plus a one-entry map — not the whole catalog.
+      if (manifest.music !== null) {
+        const musicSource = await readRawFile('shared/audio/music.json', ref);
+        if (musicSource === null) {
+          return null;
+        }
+        const tracks = parseMusicTracks(musicSource);
+        const track = tracks[manifest.music];
+        if (track === undefined) {
+          throw new Error(`game manifest music track not in catalog: ${manifest.music}`);
+        }
+        assetChunks.push(`window.__GAME_AUDIO_MUSIC__ = ${JSON.stringify(manifest.music)};`);
+        assetChunks.push(
+          `window.__GAME_MUSIC_TRACKS__ = Object.freeze(${JSON.stringify({ [manifest.music]: track })});`,
+        );
+      }
+
+      const assetsJs = assetChunks.length > 0 ? `${assetChunks.join('\n')}\n` : '';
       const transpiledSources = await Promise.all(
         [coreTs, ...availableModuleSources].map(async (source) => {
           const result = await transform(source, {

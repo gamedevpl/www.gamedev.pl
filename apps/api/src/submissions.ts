@@ -1207,8 +1207,10 @@ export async function registerSubmissionRoutes(
     try {
       sources = await githubClient!.getGameSources(linkedPr.headRefName, slug);
     } catch (error) {
-      request.log.error({ err: error }, 'failed to fetch preview sources');
-      return reply.status(502).send({ error: 'failed to load preview' });
+      request.log.error({ err: error, slug }, 'failed to fetch preview sources');
+      const detail =
+        error instanceof Error ? error.message.replace(/\s+/g, ' ').trim().slice(0, 240) : 'unknown error';
+      return reply.status(502).send({ error: 'failed to load preview', detail });
     }
 
     if (!sources) {
@@ -1585,8 +1587,13 @@ export async function registerSubmissionRoutes(
         request.log.warn({ err: error, slug }, 'published game failed hygiene checks');
         return reply.status(422).send({ error: 'this game could not be served' });
       }
-      request.log.error({ err: error }, 'failed to serve game');
-      return reply.status(502).send({ error: 'failed to load game' });
+      request.log.error({ err: error, slug }, 'failed to serve game');
+      // Surface a short, non-sensitive reason so a broken play route is diagnosable
+      // from the response body (and from the deploy smoke test) without scraping
+      // Cloud Run logs. Truncate — esbuild messages can be long.
+      const detail =
+        error instanceof Error ? error.message.replace(/\s+/g, ' ').trim().slice(0, 240) : 'unknown error';
+      return reply.status(502).send({ error: 'failed to load game', detail });
     }
   });
 
