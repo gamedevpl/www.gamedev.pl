@@ -44,9 +44,11 @@ Goal: know the numbers before inviting anyone we can't personally apologize to �
 
 Product/metrics:
 
-- Define activation metrics. Creators: _created a game and returned to play or revise it within 7 days._ Players: _played 3+ games in a session._ Use existing telemetry to answer: do creators return? Are post-play revisions actually used?
+- Define activation metrics. Creators: _created a game and returned to play or revise it within 7 days._ Players: _played 3+ games in a session._
+  - ⚠️ **The creator metric is not answerable from the telemetry that exists.** The visit stream is deliberately anonymous and per-visit — no cross-day identity — so it can measure the player funnel and per-game health, but not whether a creator came back. Creator retention has to be derived from the submission records instead (first submission → a revision or a second submission within 7 days), which is a build, not a query.
+  - ⚠️ And with a beta this small it would be a percentage over a handful of people. Build it when the population makes it meaningful; until then the honest read is qualitative — did the people who built a game come back, and what did they say.
 - Seed the catalog to ~30–50 genuinely fun games. An empty arcade kills the play-first funnel. Curate hard.
-- Fix the first 60 seconds: land on the site → playing a good game with zero sign-in. Sign-in gates _creation_, never _play_.
+- ✅ **Done (2026-07-26): the first 60 seconds work.** Land on the site → play a good game with zero sign-in. The closed beta used to gate both halves of the product; it now limits who can _make_ a game, not who can play one. Catalog, published games and both telemetry streams are public; submissions, drafts, room hosting and admin stay walled. Every game a stranger can reach is one the owner merged by hand, so nothing newly reachable is unreviewed.
 - Establish unit economics: cost per created game, cost per revision cycle. This number decides how fast the gates open in Stage 2.
 
 ### Something to run — the five-minute contributor loop
