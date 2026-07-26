@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { act } from 'react';
-import { createRoot } from 'react-dom/client';
+import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { ReportGameButton } from './ReportGameButton';
@@ -17,20 +17,30 @@ import i18n from './i18n';
  */
 
 let container: HTMLDivElement;
+let root: Root | null = null;
 
 beforeEach(async () => {
+  (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   await i18n.changeLanguage('en');
   container = document.createElement('div');
   document.body.appendChild(container);
 });
 
 afterEach(() => {
+  // Unmount before dropping the container — a concurrent commit after jsdom tears
+  // down shows up as an unhandled "window is not defined" that fails the suite even
+  // when every assertion passed.
+  act(() => {
+    root?.unmount();
+  });
+  root = null;
   container.remove();
 });
 
 function draw(slug: string, title: string) {
+  root = createRoot(container);
   act(() => {
-    createRoot(container).render(<ReportGameButton slug={slug} title={title} />);
+    root!.render(<ReportGameButton slug={slug} title={title} />);
   });
   const link = container.querySelector('a')!;
   const href = link.getAttribute('href')!;
