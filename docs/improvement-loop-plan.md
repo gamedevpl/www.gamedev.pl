@@ -14,8 +14,10 @@
 > ([telemetry.ts](../apps/web/src/telemetry.ts), mounted in
 > [PublishedGameFrame.tsx](../apps/web/src/PublishedGameFrame.tsx)); and
 > `POST /api/telemetry` validates, caps, and stores them unattributed
-> ([telemetry.ts](../apps/api/src/telemetry.ts)). Votes, written player feedback,
-> and the games-repo telemetry module are the rest of IL-1.
+> ([telemetry.ts](../apps/api/src/telemetry.ts)). Votes and `end`/`score` depth
+> events have since shipped too (2026-07-26) — see the phased-plan checklist
+> below for the current state. Written player feedback and per-game `progress`
+> markers are what remains of IL-1.
 >
 > **Capture is confirmed working in production** (2026-07-25). A real session on
 > `arena-tag` — a game with no submission document, the exact case that was broken —
@@ -124,30 +126,37 @@ So telemetry is an **extension of an existing message contract**, not a new one:
   change: `window.onerror` / `unhandledrejection` inside the frame, first paint
   and `requestAnimationFrame` liveness (is the game actually running?), and
   document visibility.
-- **Progression depth needs the game's help**, and that belongs in a shared
-  module, not in each game. The games repo already ships
-  `shared/modules/{core,input,collision,drawing,effects,audio,party}.js`, bundled
-  at serve time and opted into per game via `GAME.json`'s
-  `engine.modules` ([multiplayer-plan.md](./multiplayer-plan.md) §4.4). Telemetry
-  becomes `shared/modules/telemetry.js`, same shape as `party`:
+- **Progression depth needs the game's help — but less of it than this section
+  first assumed.** ✅ **Built 2026-07-26, and not as a new opt-in module.**
+  `end`/`score` ride the funnel every game already funnels its lifecycle through:
+  `GameKit.report(snapshot)` in the existing `shared/modules/core.ts`, called every
+  frame by `mount`'s draw callback and by `createGameLoop`. `report` now also calls
+  an internal `reportRoundEnd`, which emits `end` (and the round's `score`, when the
+  snapshot already carries one) the moment `snapshot.state` transitions into `won`
+  or `lost` — deduped so a game sitting on its game-over screen emits one signal,
+  not sixty a second. That transition-on-state-change design is what let all 83
+  games gain it **in one change, with no per-game opt-in**: there is no
+  `GAME.json` flag, no bundling decision, no `createTelemetry()` — a game gets
+  `end`/`score` for free just by calling `report()`, which every game already does.
+  `GameKit.score(value)` is exposed for the games whose `snapshot()` never carried
+  a numeric score to report one anyway.
 
-  ```js
-  const track = GameKit.createTelemetry();
-  track.progress('level-2'); // deduped per session by the module
-  track.score(1200);
-  track.end('won'); // won | lost | quit
-  ```
-
-  Feature detection is the module's job: with no parent window (offline capture,
-  a directly-opened file) every call is a no-op, exactly like `party`.
+  `GameKit.progress(label)` is exposed the same way, but **nothing calls it yet**
+  — a landmark is per-game knowledge ("level-2", "boss") that GameKit cannot guess,
+  so unlike `end`/`score` this one genuinely needs each game's own maintenance
+  work, not a platform-wide change. See
+  [report-play-signals](https://github.com/gamedevpl/www.gamedev.pl-games/blob/main/.github/skills/report-play-signals/SKILL.md)
+  in the games repo for the emission contract, and
+  [product-instrumentation](../.claude/skills/product-instrumentation/SKILL.md)
+  here for the read side.
 
 - **The shell stays authoritative for the funnel.** [GameTheater.tsx](../apps/web/src/GameTheater.tsx)
   owns open and exit, so `game_opened` / `game_closed` / `play_time` come from
   the app, not the game. **Funnel metrics never depend on game cooperation** — a
-  game that emits nothing still yields open/duration/error data; games that adopt
-  the telemetry module additionally yield progression depth. Agents maintaining
-  games are instructed to add `progress` markers when they touch a game, so
-  coverage grows with normal maintenance.
+  game that emits nothing still yields open/duration/error data; every game now
+  additionally yields `end`/`score` for free, per the point above. Agents
+  maintaining games are instructed to add `progress` markers when they touch a
+  game, so that one signal's coverage grows with normal maintenance.
 
   Heartbeat gating detail: the game iframe holds keyboard focus by design
   (commits `4b5f9816`, `54a44e01`), and it is opaque-origin, so the shell cannot
@@ -474,10 +483,18 @@ at all and feeds the only autonomous-eligible class.
   condition as the report control.
 - 📋 **Written player feedback**: the sibling endpoint above, plus a minimal
   post-play prompt.
-- 📋 **`shared/modules/telemetry.js`** in the games repo (opt-in via `GAME.json`),
-  documented in its agent instructions so maintenance adds markers organically.
-  The API already accepts `progress` / `score` / `end`, so landing it needs no
-  app change.
+- ✅ **`end`/`score`** (games repo `d586014`, 2026-07-26): not the new opt-in
+  `shared/modules/telemetry.js` this bullet originally described — see the
+  correction above the code sample earlier in this doc. GameKit's existing
+  `report()` funnel emits both automatically, so all 83 games gained it in one
+  change with no per-game opt-in.
+- 📋 **`progress` markers**, per game, in the games repo. The vocabulary, the
+  session cap, and the read-side funnel ([telemetry-health.ts](../apps/api/src/telemetry-health.ts)
+  `progressLabels`) all exist and are tested — `GameKit.progress(label)` is
+  callable today — but no game calls it, since a landmark name is per-game
+  knowledge GameKit cannot supply. Documented in the games repo's own
+  `report-play-signals` skill so maintenance adds markers organically; this is
+  the one item on this list that a platform-wide change cannot close.
 - ✅ **90-day retention, enforced.** Every row is written with an `expiresAt`
   Timestamp ([store.ts](../apps/api/src/store.ts) `telemetryExpiresAt`) and the TTL
   policy is provisioned by [setup-gcp.sh](../infra/setup-gcp.sh) step 6/6. Until
