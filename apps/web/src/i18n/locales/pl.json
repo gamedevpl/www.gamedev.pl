@@ -340,7 +340,10 @@
     "legalNav": "Informacje prawne",
     "reportIllegal": "Zgłoś nielegalne treści",
     "contact": "Kontakt",
-    "aiDisclosure": "Gry w serwisie gamedev.pl tworzy sztuczna inteligencja na podstawie opisów napisanych przez użytkowników. Mogą zawierać błędy."
+    "aiDisclosure": "Gry w serwisie gamedev.pl tworzy sztuczna inteligencja na podstawie opisów napisanych przez użytkowników. Mogą zawierać błędy.",
+    "projectNav": "Projekt",
+    "openSource": "Otwarte źródła",
+    "reportBug": "Zgłoś błąd"
   },
   "ai": {
     "generatedBadge": "Gra wygenerowana przez AI",

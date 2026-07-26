@@ -3960,6 +3960,13 @@ body.player-open {
   align-content: flex-start;
 }
 
+/* The project row sits under the legal block rather than beside it: the identity and
+   legal links are obligations that should read first, and this is an invitation. */
+.site-footer__project {
+  max-width: 68rem;
+  margin: 1.25rem auto 0;
+}
+
 .site-footer a {
   color: var(--muted);
   text-decoration: none;

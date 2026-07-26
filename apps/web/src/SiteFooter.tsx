@@ -1,6 +1,8 @@
 import { useTranslation } from 'react-i18next';
+import { bugReportUrl, REPO_URL } from './github';
 import { CONTACT_EMAIL, OPERATOR_ADDRESS, OPERATOR_LEGAL_NAME, OPERATOR_TAX_ID } from './legal/operator';
 import { legalPath } from './router';
+import { currentVisitId } from './visitTelemetry';
 
 /**
  * The site footer, and the one legally load-bearing piece of chrome on the page.
@@ -40,6 +42,21 @@ export function SiteFooter() {
           <a href={`mailto:${CONTACT_EMAIL}`}>{t('footer.contact')}</a>
         </nav>
       </div>
+
+      {/* The project half of the footer. Read at render time rather than in an effect so
+          the link always carries the id of the visit the reporter is actually in. */}
+      <nav className="site-footer__links site-footer__project" aria-label={t('footer.projectNav')}>
+        <a href={REPO_URL} target="_blank" rel="noreferrer noopener">
+          {t('footer.openSource')}
+        </a>
+        <a
+          href={bugReportUrl({ where: window.location.pathname, visitId: currentVisitId() })}
+          target="_blank"
+          rel="noreferrer noopener"
+        >
+          {t('footer.reportBug')}
+        </a>
+      </nav>
 
       <p className="site-footer__ai">{t('footer.aiDisclosure')}</p>
       <p className="site-footer__copy">© {year} gamedev.pl</p>

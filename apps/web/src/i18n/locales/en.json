@@ -340,7 +340,10 @@
     "legalNav": "Legal information",
     "reportIllegal": "Report illegal content",
     "contact": "Contact",
-    "aiDisclosure": "Games on gamedev.pl are created by artificial intelligence from descriptions written by users. They may contain errors."
+    "aiDisclosure": "Games on gamedev.pl are created by artificial intelligence from descriptions written by users. They may contain errors.",
+    "projectNav": "Project",
+    "openSource": "Open source",
+    "reportBug": "Report a bug"
   },
   "ai": {
     "generatedBadge": "AI-generated game",

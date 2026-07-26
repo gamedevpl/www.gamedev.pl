@@ -256,6 +256,15 @@ export function recordVisitEvent(event: VisitEvent): void {
   currentSession?.record(event);
 }
 
+/**
+ * The current visit's id, or null when tracking is absent (tests, a standalone render, a
+ * visitor who never started a session). Read by the bug-report link so a reporter can hand
+ * us a key into the server-side record instead of their own details.
+ */
+export function currentVisitId(): string | null {
+  return currentSession?.visitId ?? null;
+}
+
 /** Test seam: installs a session without touching the DOM. */
 export function setVisitSessionForTesting(session: VisitSession | null): void {
   currentSession = session;
