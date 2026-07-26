@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { deriveStatus, extractSlugFromChangedFiles, sanitizeCreatorText } from './submission-status.js';
+import {
+  countCreatorClarifications,
+  deriveStatus,
+  extractSlugFromChangedFiles,
+  sanitizeCreatorText,
+} from './submission-status.js';
 import type { LinkedPullRequest } from './github-client.js';
 
 function pr(overrides: Partial<LinkedPullRequest> = {}): LinkedPullRequest {
@@ -93,6 +98,33 @@ describe('extractSlugFromChangedFiles', () => {
   });
   it('returns null when no game directory is touched', () => {
     expect(extractSlugFromChangedFiles(['docs/x.md'])).toBeNull();
+  });
+});
+
+describe('countCreatorClarifications', () => {
+  const withAnswers = [
+    'A game about a space postman delivering parcels between planets.',
+    '',
+    '## Creator clarifications',
+    '- What visual style fits best: Pixel Art — but with an Amiga palette',
+    '- How should flying work: Vector physics',
+  ].join('\n');
+
+  it('counts the answers a creator appended', () => {
+    expect(countCreatorClarifications(withAnswers)).toBe(2);
+  });
+
+  it('is zero for a concept that never went through the panel', () => {
+    expect(countCreatorClarifications('Just a plain concept with a - dash in it')).toBe(0);
+  });
+
+  it('reads the raw concept, because sanitizing destroys the marker', () => {
+    // The sanitizer strips '#', so a sanitized concept can no longer be told apart
+    // from one where the creator typed that heading themselves. Counting the
+    // sanitized text would have silently reported 0 for every real submission.
+    const sanitized = sanitizeCreatorText(withAnswers, { singleLine: false });
+    expect(sanitized).not.toContain('## Creator clarifications');
+    expect(countCreatorClarifications(sanitized)).toBe(0);
   });
 });
 
