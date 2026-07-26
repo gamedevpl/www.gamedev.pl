@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { build, transform } from 'esbuild';
+import { GAME_KIT_MODULES } from './games-repo-contract.js';
 
 interface CreateIssueInput {
   title: string;
@@ -62,22 +63,8 @@ export interface GameSources {
   title: string | null;
 }
 
-// Canonical order must match the games repo's tools/lib/assemble.ts — the two
-// lists are independent copies and a mismatch silently breaks bundling
-// (issue #247: a stale list 502s every published game at serve time).
-const GAME_KIT_MODULES = [
-  'input',
-  'collision',
-  'world',
-  'ai',
-  'gameplay',
-  'drawing',
-  'actors',
-  'gfx',
-  'effects',
-  'audio',
-  'party',
-] as const;
+// GAME_KIT_MODULES lives in games-repo-contract.ts — CI re-checks the live
+// games repo copy when GAMES_REPO_TOKEN is set (issue #247).
 const MAX_GAME_MODULES = 64;
 const MAX_GAME_SOURCE_BYTES = 200 * 1024;
 

@@ -46,6 +46,7 @@ a single `--set-secrets` list.
 | Secret                    | Purpose                                                             | State (2026-07-26)       |
 | ------------------------- | ------------------------------------------------------------------- | ------------------------ |
 | `github-token`            | Fine-grained PAT (Issues rw + PRs r + Contents r, games repo only)  | ✅ set — submissions on  |
+| `GAMES_REPO_TOKEN` (GitHub Actions) | Contents:read PAT on the games repo — CI lockstep check (`npm run contract:games-repo`) | ⚠️ set on the GitHub repo (not GCP) so assemble/Check 4/music drift fails CI |
 | `submission-token-secret` | HMAC key for the stateless status token → `SUBMISSION_TOKEN_SECRET` | ✅ set                   |
 | `session-secret`          | HMAC key for session cookies → `SESSION_SECRET`                     | ✅ set                   |
 | `resend-api-key`          | Outbound email → `RESEND_API_KEY` (see below)                       | ✅ set                   |

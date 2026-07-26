@@ -1,27 +1,12 @@
 import type { GameProject } from '@gamedevpl/game-generator';
 import { findCredentialLikeStrings } from './credential-scan.js';
+import { MAX_PROJECT_BYTES as CONTRACT_MAX_PROJECT_BYTES } from './games-repo-contract.js';
 
 /**
- * What a game may spend on itself. The games repo enforces the same budget in
- * `tools/validate.ts` (Check 4), and the two must agree: this cap decides whether a
- * game can be *served*, so anything CI accepts and merges has to assemble here, or the
- * game is published and unplayable.
+ * Combined html+js+css size cap. Sourced from `games-repo-contract.ts` so Check 4
+ * in the games repo and this serve gate cannot drift independently (issue #247).
  */
-const GAME_BUDGET_BYTES = 200 * 1024;
-
-/**
- * Sum of the GameKit platform allowances charged outside the author's budget in the
- * games repo's `tools/validate.ts` Check 4: `GAMEKIT_TOUCH` (7,501 — on-screen pad),
- * plus restart chrome, music runtime, touch hint, progress, universal input, pointer
- * poll, and draw surface. Together they raise the serve cap to 242 KiB (issue #247).
- *
- * Keep this equal to the games repo. When only one side moves, games pass CI, merge,
- * and then 422 on the play route.
- */
-const GAMEKIT_PLATFORM_BYTES = 42 * 1024;
-
-/** Combined html+js+css size cap. Generated code is served, not stored, so keep it modest. */
-export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
+export const MAX_PROJECT_BYTES = CONTRACT_MAX_PROJECT_BYTES;
 
 export class ProjectTooLargeError extends Error {}
 export class EmptyProjectError extends Error {}
