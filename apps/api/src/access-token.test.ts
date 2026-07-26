@@ -44,6 +44,17 @@ describe('access token verification', () => {
     expect(verifyTokenSecret(parseAccessToken(forged).secret, real.secretHash)).toBe(false);
   });
 
+  it.each([
+    ['undefined', undefined],
+    ['empty', ''],
+  ])('refuses a record whose stored hash is %s rather than throwing', (_label, storedHash) => {
+    // Firestore records are untrusted shape-wise: an older schema, a half-finished
+    // migration or a console edit can leave the hash off. Throwing here would be a 500
+    // from inside the auth hook, on every request carrying that token.
+    expect(() => verifyTokenSecret('anything', storedHash)).not.toThrow();
+    expect(verifyTokenSecret('anything', storedHash)).toBe(false);
+  });
+
   it('rejects a hash of the wrong length rather than throwing', () => {
     // timingSafeEqual throws on length mismatch; a corrupt record must read as
     // "does not match", never as a 500.

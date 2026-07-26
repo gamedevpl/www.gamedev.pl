@@ -33,3 +33,20 @@ regexes = [
   # it's a public region name.
   '''REGION=europe-west1''',
 ]
+
+# Our own personal access tokens (docs/agent-access-tokens.md).
+#
+# The default ruleset knows GitHub/AWS/Stripe token shapes but not ours, which
+# left a gap exactly where this repo newly needs cover: coding agents now hold a
+# live `gdpl_pat_` credential while working in the tree, so "agent pastes its
+# token into a committed file" is a real accident this must catch. The in-app
+# scanner (apps/api/src/credential-scan.ts) covers the other half — a token
+# embedded in a generated game — and this covers the repo itself.
+#
+# Note the allowlist above exempts access-token.test.ts wholesale; nothing is
+# lost, since those tests build tokens at runtime rather than as literals.
+[[rules]]
+id = "gamedev-access-token"
+description = "gamedev.pl personal access token (gdpl_pat_...)"
+regex = '''gdpl_pat_[0-9a-f]{16}_[A-Za-z0-9_-]{43}'''
+keywords = ["gdpl_pat_"]

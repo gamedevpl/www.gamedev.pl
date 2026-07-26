@@ -84,7 +84,15 @@ export function hashTokenSecret(secret: string): string {
   return createHash('sha256').update(secret).digest('hex');
 }
 
-export function verifyTokenSecret(secret: string, expectedHash: string): boolean {
+export function verifyTokenSecret(secret: string, expectedHash: string | undefined): boolean {
+  // The hash arrives from Firestore, which TypeScript cannot vouch for: a record written
+  // by an older schema, a half-finished migration or a hand edit in the console can be
+  // missing it. Typed as possibly-undefined and refused here, because the alternative is
+  // `Buffer.from(undefined)` throwing inside the auth hook — a 500 on every request
+  // carrying that token, from a route with no try/catch around it. Same fail-closed
+  // reasoning as `isAccessTokenExpired`.
+  if (typeof expectedHash !== 'string' || expectedHash.length === 0) return false;
+
   const actual = Buffer.from(hashTokenSecret(secret), 'utf8');
   const expected = Buffer.from(expectedHash, 'utf8');
   // Length check first: timingSafeEqual throws on a mismatch rather than returning false,
