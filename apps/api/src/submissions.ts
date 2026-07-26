@@ -192,7 +192,6 @@ export async function registerSubmissionRoutes(
     options.dailyImprovementQuota ?? Number(process.env.DAILY_IMPROVEMENT_QUOTA ?? '2');
   const improvementRateLimitWindowMs = 60 * 60 * 1000;
   const maxImprovementsPerWindow = 10;
-  const improvementsByIp = new Map<string, number[]>();
   const internalAuthVerifier = options.internalAuthVerifier ?? createInternalAuthVerifierFromEnv();
 
   // Shared deps for notification emission (in-app + best-effort email). The mailer
@@ -1305,7 +1304,22 @@ export async function registerSubmissionRoutes(
    * that amends the live SPEC, with the same "data, not instructions" fencing as
    * creation. Ownership is store-checked (holding a shared status link is not enough).
    */
-  app.post('/api/submissions/:token/improve', async (request, reply) => {
+  // Per-route @fastify/rate-limit (registered in app.ts via registerRateLimit).
+  // CodeQL's js/missing-rate-limiting Fastify model recognizes config.rateLimit.
+  app.post(
+    '/api/submissions/:token/improve',
+    {
+      config: {
+        rateLimit: {
+          max: maxImprovementsPerWindow,
+          timeWindow: improvementRateLimitWindowMs,
+          errorResponseBuilder: () => ({
+            error: 'too many improvement requests, please try again later',
+          }),
+        },
+      },
+    },
+    async (request, reply) => {
     if (!githubClient || !submissionTokenSecret) {
       return reply.status(503).send({ error: 'submissions are not configured' });
     }
@@ -1313,21 +1327,10 @@ export async function registerSubmissionRoutes(
       return reply.status(503).send({ error: 'submissions are not configured' });
     }
 
-<<<<<<< HEAD
-=======
-    // Rate-limit before any authorization. CodeQL's missing-rate-limiting check
-    // requires the limiter to dominate auth on sensitive write routes; probing with
-    // forged tokens must also not burn store/LLM budget.
-    const currentTime = now();
-    if (isRateLimited(improvementsByIp, request.ip, currentTime, maxImprovementsPerWindow, improvementRateLimitWindowMs)) {
-      return reply.status(429).send({ error: 'too many improvement requests, please try again later' });
-    }
-
     if (!checkUserAccess(request, reply)) {
       return;
     }
 
->>>>>>> c98b691a (fix(studio): rate-limit improve before auth; fix health test)
     const token = z.string().parse((request.params as { token?: string }).token);
     let issueNumber: number;
     try {
@@ -1363,12 +1366,6 @@ export async function registerSubmissionRoutes(
     }
 
     const currentTime = now();
-    if (
-      isRateLimited(improvementsByIp, request.ip, currentTime, maxImprovementsPerWindow, improvementRateLimitWindowMs)
-    ) {
-      return reply.status(429).send({ error: 'too many improvement requests, please try again later' });
-    }
-
     const dateStr = new Date(currentTime).toISOString().slice(0, 10);
     const quota = await store.checkAndIncrementQuota(
       request.user!.uid,
@@ -1419,7 +1416,8 @@ export async function registerSubmissionRoutes(
       request.log.error({ err: error }, 'failed to create improvement issue');
       return reply.status(502).send({ error: 'failed to submit improvement request' });
     }
-  });
+  },
+  );
 
   // The notification sweep (docs/notifications-plan.md N1): the closed-tab backstop
   // for the opportunistic poll-path detection above. Cloud Scheduler POSTs here with
