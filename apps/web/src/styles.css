@@ -1477,6 +1477,39 @@ body.player-open {
   justify-content: center;
 }
 
+/* Two compact buttons sharing one slot in the actions row, rather than each ballooning
+   to the thumb-sized squares every other theater control gets — a vote count is meant
+   to read at a glance next to sound/fullscreen/report/exit, not compete with them for
+   width. The `.vote-widget` descendant selectors below win on specificity over the
+   generic `.game-theater-actions button` mobile rules regardless of source order. */
+.vote-widget {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.game-theater-actions .vote-widget button {
+  min-width: 0;
+  min-height: 0;
+  gap: 4px;
+  padding: 6px 8px;
+}
+
+.vote-count {
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.vote-btn[aria-pressed='true'] {
+  color: var(--accent-blue);
+  border-color: currentColor;
+}
+
+.vote-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .game-viewport-container {
   flex: 1;
   width: 100%;

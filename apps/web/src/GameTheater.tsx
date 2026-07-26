@@ -4,6 +4,7 @@ import { GameFrame } from './GameFrame';
 import { PublishedGameFrame } from './PublishedGameFrame';
 import { PixelIcon, type PixelIconName } from './PixelIcon';
 import { ReportGameButton } from './ReportGameButton';
+import { VoteWidget } from './VoteWidget';
 import { useGamePlayer } from './gamePlayer';
 import { useScreenWakeLock } from './useScreenWakeLock';
 
@@ -21,10 +22,11 @@ type GameTheaterProps = {
    *  (e.g. the prompt a generated game was made from). */
   meta?: ReactNode;
   /**
-   * Slug of a *published* game, which turns on the "Report game" control (DSA art. 16).
-   * Passed explicitly rather than derived from `source`, because drafts and local mocks
-   * are also slug- or html-sourced and are seen by their own creator only — there is
-   * nobody to report them to, and offering it there is noise.
+   * Slug of a *published* game, which turns on the "Report game" control (DSA art. 16)
+   * and the vote widget. Passed explicitly rather than derived from `source`, because
+   * drafts and local mocks are also slug- or html-sourced and are seen by their own
+   * creator only — there is nobody to report them to, and their own draft is not a
+   * signal worth a vote count either.
    */
   reportSlug?: string;
 };
@@ -175,6 +177,7 @@ export function GameTheater({ title, badge, source, onExit, meta, orientation = 
               <span className="btn-label">{fullscreen ? t('player.exitFullscreen') : t('player.fullscreen')}</span>
             </button>
           )}
+          {reportSlug && <VoteWidget slug={reportSlug} />}
           {reportSlug && <ReportGameButton slug={reportSlug} title={displayTitle} />}
           <button
             className="secondary-btn exit-btn"

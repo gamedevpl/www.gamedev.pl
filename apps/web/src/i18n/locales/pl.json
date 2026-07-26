@@ -89,7 +89,13 @@
     "fullscreen": "Pełny ekran",
     "exitFullscreen": "Zamknij pełny ekran",
     "rotateLandscape": "Obróć telefon poziomo, aby zagrać",
-    "rotatePortrait": "Trzymaj telefon pionowo, aby zagrać"
+    "rotatePortrait": "Trzymaj telefon pionowo, aby zagrać",
+    "vote": {
+      "groupLabel": "Oceń tę grę",
+      "up": "Głosuj na tak",
+      "down": "Głosuj na nie",
+      "signInToVote": "Zaloguj się, aby zagłosować"
+    }
   },
   "catalog": {
     "title": "Gry",
