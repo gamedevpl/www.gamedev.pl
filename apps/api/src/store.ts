@@ -40,6 +40,16 @@ export interface SubmissionRecord {
    */
   abandonedAt?: string;
   /**
+   * How many clarifying questions the creator actually answered before this was
+   * submitted — 0 when they skipped the QA panel or it had nothing to ask.
+   *
+   * Derived from the concept that reached the agent rather than reported by the
+   * client, so it measures what the build was really given. It is what lets
+   * "does answering questions produce a better game?" be asked at all: join it
+   * to the slug's play telemetry (question 6) once enough clarified games exist.
+   */
+  clarificationCount?: number;
+  /**
    * The status we last emitted a notification for. Drives transition detection
    * (only notify when the mapped event changes) and lets the sweep stop scanning
    * a submission once it reaches a terminal, already-notified state.
@@ -301,6 +311,8 @@ export interface Store {
   setSubmissionAbandoned(issueNumber: number, at: string): Promise<void>;
   /** Records the creator's language, so the agent can report progress in it. */
   setSubmissionLocale(issueNumber: number, locale: string): Promise<void>;
+  /** Records how many QA answers reached the agent with this submission. */
+  setSubmissionClarificationCount(issueNumber: number, count: number): Promise<void>;
   /** Appends an agent progress event. Returns it with its assigned id and timestamp. */
   appendBuildEvent(
     issueNumber: number,
@@ -500,6 +512,11 @@ export class InMemoryStore implements Store {
   async setSubmissionLocale(issueNumber: number, locale: string): Promise<void> {
     const sub = this.submissions.get(issueNumber);
     if (sub) this.submissions.set(issueNumber, { ...sub, locale });
+  }
+
+  async setSubmissionClarificationCount(issueNumber: number, count: number): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (sub) this.submissions.set(issueNumber, { ...sub, clarificationCount: count });
   }
 
   async appendBuildEvent(
@@ -907,6 +924,13 @@ export class FirestoreStore implements Store {
 
   async setSubmissionLocale(issueNumber: number, locale: string): Promise<void> {
     await this.db.collection('submissions').doc(String(issueNumber)).set({ locale }, { merge: true });
+  }
+
+  async setSubmissionClarificationCount(issueNumber: number, count: number): Promise<void> {
+    await this.db
+      .collection('submissions')
+      .doc(String(issueNumber))
+      .set({ clarificationCount: count }, { merge: true });
   }
 
   private eventsCollection(issueNumber: number) {

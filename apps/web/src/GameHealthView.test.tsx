@@ -5,16 +5,12 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
 import { GameHealthView } from './GameHealthView';
-import type { GameHealth, HealthResponse, VisitsResponse } from './healthApi';
+import type { GameHealth, HealthResponse, VisitFunnel, VisitsResponse } from './healthApi';
 
 /**
  * The operator view's job is to make one thing obvious: which published game is broken.
  * These check that the numbers survive the trip to the screen, and — the part worth
  * guarding — that a non-admin is told nothing at all.
- *
- * The view fetches health and the visit funnel together (same window). The mock must
- * answer both URLs with a fresh Response each time: a single shared body stream is
- * consumed by the first reader and leaves the sibling call failing closed.
  */
 
 function game(partial: Partial<GameHealth> & { slug: string }): GameHealth {
@@ -35,39 +31,43 @@ function game(partial: Partial<GameHealth> & { slug: string }): GameHealth {
   };
 }
 
-/** Empty funnel shaped like the API — enough for VisitFunnelPanel to render quietly. */
-function emptyVisits(days: string[]): VisitsResponse {
-  return {
-    days,
-    truncated: false,
-    funnel: {
-      visits: 0,
-      bounces: 0,
-      visitsWithPlay: 0,
-      plays: 0,
-      depth: [],
-      medianPlaysPerPlayingVisit: 0,
-      timeToFirstPlay: [],
-      medianSecondsToFirstPlay: 0,
-      entries: [],
-      referrers: [],
-      campaigns: [],
-    },
-  };
-}
+const EMPTY_FUNNEL: VisitFunnel = {
+  visits: 0,
+  bounces: 0,
+  visitsWithPlay: 0,
+  plays: 0,
+  depth: [],
+  medianPlaysPerPlayingVisit: 0,
+  timeToFirstPlay: [],
+  medianSecondsToFirstPlay: 0,
+  entries: [],
+  referrers: [],
+  campaigns: [],
+};
 
-function respondWith(body: HealthResponse | null, status = 200) {
+/**
+ * Answers both admin endpoints the view fetches in parallel.
+ *
+ * Two details this has to get right, both learned by getting them wrong. A `Response`
+ * body is single-use, so every call needs a *freshly constructed* one — sharing one
+ * instance makes the second `.json()` throw and the whole view fall into its error
+ * state. And the two endpoints must be told apart by URL, since `Promise.all` means a
+ * funnel payload answering the health request would fail just as silently.
+ */
+function respondWith(body: HealthResponse | null, status = 200, funnel?: VisitsResponse) {
+  const visitsBody: VisitsResponse | null =
+    body === null ? null : (funnel ?? { days: body.days, truncated: body.truncated, funnel: EMPTY_FUNNEL });
+
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const url = String(input);
-    // A non-admin gets the same 404 from every telemetry route — both halves fail closed.
-    if (body === null) {
-      return new Response(null, { status });
-    }
-    if (url.includes('/api/admin/telemetry/visits')) {
-      return new Response(JSON.stringify(emptyVisits(body.days)), { status: 200 });
-    }
-    return new Response(JSON.stringify(body), { status: 200 });
+    const payload = url.includes('/telemetry/visits') ? visitsBody : body;
+    return payload === null ? new Response(null, { status }) : new Response(JSON.stringify(payload), { status: 200 });
   }) as MockInstance<typeof globalThis.fetch>;
+}
+
+/** The health-endpoint calls only — the view also fetches the funnel on every window. */
+function healthCalls(fetchSpy: MockInstance<typeof globalThis.fetch>) {
+  return fetchSpy.mock.calls.map(([input]) => String(input)).filter((url) => url.includes('/telemetry/health'));
 }
 
 describe('GameHealthView', () => {
@@ -176,17 +176,20 @@ describe('GameHealthView', () => {
     const fetchSpy = respondWith({ days: ['2026-07-25'], truncated: false, games: [] });
 
     const root = await render();
-    // Both panels load together for the default window.
-    expect(fetchSpy.mock.calls.some(([url]) => String(url).includes('health?days=7'))).toBe(true);
-    expect(fetchSpy.mock.calls.some(([url]) => String(url).includes('visits?days=7'))).toBe(true);
+    expect(healthCalls(fetchSpy)[0]).toContain('days=7');
 
     const monthButton = [...container.querySelectorAll('button')].find((node) => node.textContent === '30d');
     await act(async () => {
       monthButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    expect(fetchSpy.mock.calls.some(([url]) => String(url).includes('health?days=30'))).toBe(true);
-    expect(fetchSpy.mock.calls.some(([url]) => String(url).includes('visits?days=30'))).toBe(true);
+    expect(healthCalls(fetchSpy)[1]).toContain('days=30');
+    // Both panels share the window, so the funnel must follow it too — a 7-day funnel
+    // above a 30-day table would be a quietly wrong page.
+    const visitCalls = fetchSpy.mock.calls
+      .map(([input]) => String(input))
+      .filter((url) => url.includes('/telemetry/visits'));
+    expect(visitCalls.some((url) => url.includes('days=30'))).toBe(true);
     await act(async () => root.unmount());
   });
 });

@@ -297,6 +297,53 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  it('records how many QA answers came with the concept', async () => {
+    const { githubClient } = createGithubClientStub({ issueNumber: 92 });
+    const store = new InMemoryStore();
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: {
+        title: 'Space Postman',
+        concept: [
+          'Deliver parcels between planets while dodging asteroids and storms.',
+          '',
+          '## Creator clarifications',
+          '- What visual style fits best: Pixel Art',
+          '- How should flying work: Vector physics',
+        ].join('\n'),
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    // Derived from the concept the agent was given, not sent by the client.
+    expect((await store.getSubmission(92))?.clarificationCount).toBe(2);
+
+    await app.close();
+  });
+
+  it('records zero clarifications when the creator skipped the questions', async () => {
+    const { githubClient } = createGithubClientStub({ issueNumber: 93 });
+    const store = new InMemoryStore();
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'Space Postman', concept: 'Deliver parcels between planets while dodging asteroids.' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    // Zero, not absent: "answered nothing" and "we never looked" must stay distinct.
+    expect((await store.getSubmission(93))?.clarificationCount).toBe(0);
+
+    await app.close();
+  });
+
   it('tells the agent which language to report progress in', async () => {
     const { githubClient, updateIssueBody } = createGithubClientStub({ issueNumber: 91 });
     const store = new InMemoryStore();

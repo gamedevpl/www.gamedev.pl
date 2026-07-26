@@ -20,6 +20,7 @@ import { notifyOnTransition, type EmitDeps } from './notify.js';
 import { type BuildShotSummary, type Store } from './store.js';
 import {
   CREATOR_FEEDBACK_MARKER,
+  countCreatorClarifications,
   deriveStatus,
   extractSlugFromChangedFiles,
   parseProgressNote,
@@ -657,6 +658,8 @@ export async function registerSubmissionRoutes(
       if (store) {
         await store.createSubmission(issue.number, request.user!.uid, sanitizedTitle);
         await store.setSubmissionLocale(issue.number, creatorLocale);
+        // Raw, not sanitized: the sanitizer strips the '##' that marks the block.
+        await store.setSubmissionClarificationCount(issue.number, countCreatorClarifications(parsed.data.concept));
       }
 
       // The build channel's credentials are derived from the issue number, so they
