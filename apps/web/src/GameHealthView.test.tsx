@@ -5,12 +5,16 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
 import { GameHealthView } from './GameHealthView';
-import type { GameHealth, HealthResponse } from './healthApi';
+import type { GameHealth, HealthResponse, VisitsResponse } from './healthApi';
 
 /**
  * The operator view's job is to make one thing obvious: which published game is broken.
  * These check that the numbers survive the trip to the screen, and — the part worth
  * guarding — that a non-admin is told nothing at all.
+ *
+ * The view fetches health and the visit funnel together (same window). The mock must
+ * answer both URLs with a fresh Response each time: a single shared body stream is
+ * consumed by the first reader and leaves the sibling call failing closed.
  */
 
 function game(partial: Partial<GameHealth> & { slug: string }): GameHealth {
@@ -31,12 +35,39 @@ function game(partial: Partial<GameHealth> & { slug: string }): GameHealth {
   };
 }
 
+/** Empty funnel shaped like the API — enough for VisitFunnelPanel to render quietly. */
+function emptyVisits(days: string[]): VisitsResponse {
+  return {
+    days,
+    truncated: false,
+    funnel: {
+      visits: 0,
+      bounces: 0,
+      visitsWithPlay: 0,
+      plays: 0,
+      depth: [],
+      medianPlaysPerPlayingVisit: 0,
+      timeToFirstPlay: [],
+      medianSecondsToFirstPlay: 0,
+      entries: [],
+      referrers: [],
+      campaigns: [],
+    },
+  };
+}
+
 function respondWith(body: HealthResponse | null, status = 200) {
-  return vi
-    .spyOn(globalThis, 'fetch')
-    .mockResolvedValue(
-      body === null ? new Response(null, { status }) : new Response(JSON.stringify(body), { status: 200 }),
-    ) as MockInstance<typeof globalThis.fetch>;
+  return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    const url = String(input);
+    // A non-admin gets the same 404 from every telemetry route — both halves fail closed.
+    if (body === null) {
+      return new Response(null, { status });
+    }
+    if (url.includes('/api/admin/telemetry/visits')) {
+      return new Response(JSON.stringify(emptyVisits(body.days)), { status: 200 });
+    }
+    return new Response(JSON.stringify(body), { status: 200 });
+  }) as MockInstance<typeof globalThis.fetch>;
 }
 
 describe('GameHealthView', () => {
@@ -145,14 +176,17 @@ describe('GameHealthView', () => {
     const fetchSpy = respondWith({ days: ['2026-07-25'], truncated: false, games: [] });
 
     const root = await render();
-    expect(String(fetchSpy.mock.calls[0][0])).toContain('days=7');
+    // Both panels load together for the default window.
+    expect(fetchSpy.mock.calls.some(([url]) => String(url).includes('health?days=7'))).toBe(true);
+    expect(fetchSpy.mock.calls.some(([url]) => String(url).includes('visits?days=7'))).toBe(true);
 
     const monthButton = [...container.querySelectorAll('button')].find((node) => node.textContent === '30d');
     await act(async () => {
       monthButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    expect(String(fetchSpy.mock.calls[1][0])).toContain('days=30');
+    expect(fetchSpy.mock.calls.some(([url]) => String(url).includes('health?days=30'))).toBe(true);
+    expect(fetchSpy.mock.calls.some(([url]) => String(url).includes('visits?days=30'))).toBe(true);
     await act(async () => root.unmount());
   });
 });
