@@ -42,6 +42,9 @@ const STATUS_ICONS: Record<SubmissionState, PixelIconName> = {
 
 const WINDOWS = [1, 7, 30];
 
+/** In-progress builds get the same “live” shelf treatment as the home rail. */
+const LIVE_STATUSES = new Set<SubmissionState>(['queued', 'building', 'in_review', 'publishing']);
+
 type StudioTab = 'overview' | 'build' | 'playtest' | 'stats' | 'improve' | 'feedback';
 
 type CreatorStudioViewProps = {
@@ -167,8 +170,10 @@ export function CreatorStudioView({
     return (
       <section className="studio-panel">
         <header className="studio-panel-header">
-          <h1>{t('studioPanel.title')}</h1>
-          <p>{t('studioPanel.signInHint')}</p>
+          <div>
+            <h1 className="section-title">{t('studioPanel.title')}</h1>
+            <p className="panel-copy">{t('studioPanel.signInHint')}</p>
+          </div>
           <button type="button" className="primary-btn" onClick={() => setAuthOpen(true)}>
             <PixelIcon name="user" size={14} /> {t('header.signIn')}
           </button>
@@ -182,8 +187,8 @@ export function CreatorStudioView({
     <section className="studio-panel">
       <header className="studio-panel-header">
         <div>
-          <h1>{t('studioPanel.title')}</h1>
-          <p>{t('studioPanel.subtitle')}</p>
+          <h1 className="section-title">{t('studioPanel.title')}</h1>
+          <p className="panel-copy">{t('studioPanel.subtitle')}</p>
         </div>
         <button type="button" className="secondary-btn" onClick={() => onNavigate('/')}>
           {t('studioPanel.backHome')}
@@ -209,16 +214,19 @@ export function CreatorStudioView({
               {games.map((game) => {
                 const active = game.token === selected;
                 const status = game.lastKnownStatus;
+                const live = status ? LIVE_STATUSES.has(status) : false;
+                const published = isPublished(game);
                 return (
                   <li key={game.token}>
                     <button
                       type="button"
-                      className={`studio-shelf-item${active ? ' is-active' : ''}`}
+                      className={`studio-shelf-item${active ? ' is-active' : ''}${live ? ' is-live' : ''}${published ? ' is-published' : ''}`}
                       onClick={() => selectGame(game.token)}
                       aria-current={active ? 'true' : undefined}
                     >
-                      <span className="studio-shelf-title">{game.title}</span>
-                      <span className="studio-shelf-meta">
+                      <span
+                        className={`studio-shelf-status${live ? ' is-live' : ''}${published ? ' is-published' : ''}`}
+                      >
                         {status ? (
                           <>
                             <PixelIcon name={STATUS_ICONS[status]} size={11} />{' '}
@@ -227,7 +235,9 @@ export function CreatorStudioView({
                         ) : (
                           t('myGames.checking')
                         )}
-                        <span aria-hidden="true"> · </span>
+                      </span>
+                      <span className="studio-shelf-title">{game.title}</span>
+                      <span className="studio-shelf-meta">
                         {formatRelativeTime(Date.parse(game.createdAt), i18n.language)}
                       </span>
                     </button>
@@ -246,7 +256,7 @@ export function CreatorStudioView({
                 ) : null}
               </div>
 
-              <div className="studio-tabs" role="tablist">
+              <div className="studio-tabs" role="tablist" aria-label={t('studioPanel.title')}>
                 {(
                   [
                     ['overview', 'studioPanel.tabs.overview'],
@@ -268,7 +278,7 @@ export function CreatorStudioView({
                     type="button"
                     role="tab"
                     aria-selected={tab === id}
-                    className={`tab-btn${tab === id ? ' active' : ''}`}
+                    className={`studio-tab${tab === id ? ' is-active' : ''}`}
                     onClick={() => setTab(id)}
                   >
                     {t(labelKey)}
@@ -276,7 +286,7 @@ export function CreatorStudioView({
                 ))}
               </div>
 
-              <div className="tab-content">
+              <div className="studio-tab-panel">
                 {tab === 'overview' ? (
                   <OverviewTab
                     game={selectedGame}
@@ -329,8 +339,10 @@ export function CreatorStudioView({
                 {tab === 'feedback' ? (
                   <div className="studio-coming-soon">
                     <PixelIcon name="eye" size={18} />
-                    <h3>{t('studioPanel.feedback.title')}</h3>
-                    <p>{t('studioPanel.feedback.body')}</p>
+                    <div>
+                      <h3>{t('studioPanel.feedback.title')}</h3>
+                      <p>{t('studioPanel.feedback.body')}</p>
+                    </div>
                   </div>
                 ) : null}
               </div>
@@ -377,36 +389,47 @@ function OverviewTab({
     }
   }
 
+  const statusLabel = game.lastKnownStatus
+    ? t(`statusView.states.${game.lastKnownStatus}.label`)
+    : t('myGames.checking');
+  const live = game.lastKnownStatus ? LIVE_STATUSES.has(game.lastKnownStatus) : false;
+
   return (
     <div className="studio-overview">
-      <dl className="studio-facts">
-        <div>
-          <dt>{t('studioPanel.overview.status')}</dt>
-          <dd>
-            {game.lastKnownStatus
-              ? t(`statusView.states.${game.lastKnownStatus}.label`)
-              : t('myGames.checking')}
-          </dd>
-        </div>
-        <div>
-          <dt>{t('studioPanel.overview.created')}</dt>
-          <dd>{formatRelativeTime(Date.parse(game.createdAt), i18n.language)}</dd>
-        </div>
+      <div className="studio-overview-status">
+        <span className={`status-play-badge${published || live ? ' is-live' : ''}`}>
+          {(published || live) && <span className="live-dot" aria-hidden="true" />}
+          {statusLabel}
+        </span>
+      </div>
+
+      <ul className="funnel-stats studio-facts">
+        <li>
+          <span className="funnel-stat-value">
+            {formatRelativeTime(Date.parse(game.createdAt), i18n.language)}
+          </span>
+          <span className="funnel-stat-label">{t('studioPanel.overview.created')}</span>
+        </li>
         {game.publishedAt ? (
-          <div>
-            <dt>{t('studioPanel.overview.published')}</dt>
-            <dd>{formatRelativeTime(Date.parse(game.publishedAt), i18n.language)}</dd>
-          </div>
+          <li>
+            <span className="funnel-stat-value">
+              {formatRelativeTime(Date.parse(game.publishedAt), i18n.language)}
+            </span>
+            <span className="funnel-stat-label">{t('studioPanel.overview.published')}</span>
+          </li>
         ) : null}
         {health ? (
-          <div>
-            <dt>{t('studioPanel.overview.sessions')}</dt>
-            <dd>
-              {health.sessions} · {formatSeconds(health.totalPlaySeconds)} {t('studioPanel.overview.play')}
-            </dd>
-          </div>
+          <li>
+            <span className="funnel-stat-value">
+              {health.sessions}
+              <span className="studio-fact-suffix">
+                · {formatSeconds(health.totalPlaySeconds)} {t('studioPanel.overview.play')}
+              </span>
+            </span>
+            <span className="funnel-stat-label">{t('studioPanel.overview.sessions')}</span>
+          </li>
         ) : null}
-      </dl>
+      </ul>
 
       <div className="studio-actions">
         {published && game.slug ? (
@@ -424,7 +447,7 @@ function OverviewTab({
         {!published && game.lastKnownStatus !== 'abandoned' ? (
           <button
             type="button"
-            className="ghost-btn"
+            className={`status-abandon${abandonArmed ? ' is-danger' : ''}`}
             onClick={() => void handleAbandon()}
             disabled={abandoning}
           >
@@ -482,48 +505,50 @@ function StatsTab({
       {!health || health.sessions === 0 ? (
         <p className="studio-empty">{t('studioPanel.stats.empty')}</p>
       ) : (
-        <dl className="studio-stat-grid">
-          <div>
-            <dt>{t('studioPanel.stats.sessions')}</dt>
-            <dd>{health.sessions}</dd>
-          </div>
-          <div>
-            <dt>{t('studioPanel.stats.bounces')}</dt>
-            <dd>
+        <ul className="funnel-stats">
+          <li>
+            <span className="funnel-stat-value">{health.sessions}</span>
+            <span className="funnel-stat-label">{t('studioPanel.stats.sessions')}</span>
+          </li>
+          <li>
+            <span className="funnel-stat-value">
               {health.bounces} ({percent(health.sessions === 0 ? 0 : health.bounces / health.sessions)})
-            </dd>
-          </div>
-          <div>
-            <dt>{t('studioPanel.stats.medianPlay')}</dt>
-            <dd>{formatSeconds(health.medianPlaySeconds)}</dd>
-          </div>
-          <div>
-            <dt>{t('studioPanel.stats.totalPlay')}</dt>
-            <dd>{formatSeconds(health.totalPlaySeconds)}</dd>
-          </div>
-          <div>
-            <dt>{t('studioPanel.stats.errors')}</dt>
-            <dd>{health.errors}</dd>
-          </div>
-          <div>
-            <dt>{t('studioPanel.stats.stallRate')}</dt>
-            <dd>{percent(health.stallRate)}</dd>
-          </div>
-          <div>
-            <dt>{t('studioPanel.stats.medianFps')}</dt>
-            <dd>{health.medianFps === null ? '—' : Math.round(health.medianFps)}</dd>
-          </div>
-        </dl>
+            </span>
+            <span className="funnel-stat-label">{t('studioPanel.stats.bounces')}</span>
+          </li>
+          <li>
+            <span className="funnel-stat-value">{formatSeconds(health.medianPlaySeconds)}</span>
+            <span className="funnel-stat-label">{t('studioPanel.stats.medianPlay')}</span>
+          </li>
+          <li>
+            <span className="funnel-stat-value">{formatSeconds(health.totalPlaySeconds)}</span>
+            <span className="funnel-stat-label">{t('studioPanel.stats.totalPlay')}</span>
+          </li>
+          <li>
+            <span className="funnel-stat-value">{health.errors}</span>
+            <span className="funnel-stat-label">{t('studioPanel.stats.errors')}</span>
+          </li>
+          <li>
+            <span className="funnel-stat-value">{percent(health.stallRate)}</span>
+            <span className="funnel-stat-label">{t('studioPanel.stats.stallRate')}</span>
+          </li>
+          <li>
+            <span className="funnel-stat-value">
+              {health.medianFps === null ? '—' : Math.round(health.medianFps)}
+            </span>
+            <span className="funnel-stat-label">{t('studioPanel.stats.medianFps')}</span>
+          </li>
+        </ul>
       )}
 
       {health && health.errorSamples.length > 0 ? (
         <div className="studio-error-samples">
-          <h3>{t('studioPanel.stats.errorSamples')}</h3>
+          <h3 className="health-section-title">{t('studioPanel.stats.errorSamples')}</h3>
           <ul>
             {health.errorSamples.map((sample) => (
               <li key={sample.message}>
                 <code>{sample.message}</code>
-                <span>×{sample.count}</span>
+                <span className="health-error-count">×{sample.count}</span>
               </li>
             ))}
           </ul>
@@ -570,9 +595,13 @@ function ImproveTab({ game }: { game: StudioGame }) {
   }
 
   return (
-    <div className="studio-improve">
-      <h3>{published ? t('studioPanel.improve.titlePublished') : t('studioPanel.improve.titleDraft')}</h3>
-      <p>{published ? t('studioPanel.improve.hintPublished') : t('studioPanel.improve.hintDraft')}</p>
+    <div className="status-feedback studio-improve">
+      <h3 className="status-feedback-title">
+        {published ? t('studioPanel.improve.titlePublished') : t('studioPanel.improve.titleDraft')}
+      </h3>
+      <p className="status-feedback-hint">
+        {published ? t('studioPanel.improve.hintPublished') : t('studioPanel.improve.hintDraft')}
+      </p>
       <textarea
         className="status-feedback-input"
         rows={5}
@@ -599,7 +628,7 @@ function ImproveTab({ game }: { game: StudioGame }) {
           </span>
         ) : null}
       </div>
-      {error ? <p className="studio-error">{error}</p> : null}
+      {error ? <p className="error">{error}</p> : null}
     </div>
   );
 }

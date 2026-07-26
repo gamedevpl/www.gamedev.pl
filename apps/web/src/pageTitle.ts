@@ -71,25 +71,20 @@ export function resolveDocumentTitle(route: AppRoute, ctx: DocumentTitleContext)
       return brandedPageTitle(ctx.copy.join);
     case 'health':
       return brandedPageTitle(ctx.copy.health);
-<<<<<<< HEAD
-    case 'legal':
-      return brandedPageTitle(route.doc === 'privacy' ? ctx.copy.privacy : ctx.copy.terms);
-    case 'contact':
-      return brandedPageTitle(ctx.copy.contact);
-    case 'notFound':
-      return brandedPageTitle(ctx.copy.notFound);
-=======
     case 'studio':
       return ctx.studioTitle?.trim()
         ? brandedNamedTitle(ctx.copy.studioNamed, ctx.studioTitle)
         : brandedPageTitle(ctx.copy.studio);
     case 'legal':
       return brandedPageTitle(route.doc === 'privacy' ? ctx.copy.privacy : ctx.copy.terms);
+    case 'contact':
+      return brandedPageTitle(ctx.copy.contact);
+    case 'notFound':
+      return brandedPageTitle(ctx.copy.notFound);
     default: {
       const _exhaustive: never = route;
       return _exhaustive;
     }
->>>>>>> ce57e9b6 (feat(studio): unify build status + playtest pause-and-prompt)
   }
 }
 

@@ -111,12 +111,8 @@ describe('route kinds follow the real router', () => {
     ['/draft/space-hop', 'draft'],
     ['/privacy', 'legal'],
     ['/terms', 'legal'],
-<<<<<<< HEAD
     ['/contact', 'legal'],
-    ['/status/some-token', 'status'],
-=======
     ['/status/some-token', 'studio'],
->>>>>>> ce57e9b6 (feat(studio): unify build status + playtest pause-and-prompt)
     ['/health', 'health'],
     ['/studio', 'studio'],
     ['/studio/some-token', 'studio'],

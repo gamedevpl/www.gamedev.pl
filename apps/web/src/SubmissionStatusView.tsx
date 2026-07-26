@@ -20,15 +20,9 @@ import {
   type SubmissionApiError,
   type SubmissionPreview,
   type SubmissionStatus,
-<<<<<<< HEAD
 } from './submissionApi.js';
-import { draftPath, playPath, statusPath } from './router.js';
+import { draftPath, playPath, statusPath, studioPath } from './router.js';
 import { formatDuration, formatRelativeTime } from './relativeTime.js';
-=======
-} from './submissionApi';
-import { draftPath, playPath, statusPath, studioPath } from './router';
-import { formatDuration, formatRelativeTime } from './relativeTime';
->>>>>>> ce57e9b6 (feat(studio): unify build status + playtest pause-and-prompt)
 
 const TERMINAL_STATUSES = new Set<SubmissionStatus['status']>(['published', 'needs_changes', 'abandoned']);
 /** Statuses that halt the linear timeline rather than sitting on a step of it. */

@@ -111,7 +111,6 @@ describe('the injected bridge reports health', () => {
     bridge.stop();
   });
 
-<<<<<<< HEAD
   it('reports a pointerdown so the host can dismiss overlays without covering the game', async () => {
     const bridge = runBridge('<canvas id="game"></canvas>');
 
@@ -119,7 +118,9 @@ describe('the injected bridge reports health', () => {
     await delivered();
 
     expect(bridge.received.filter((m) => m.type === 'pointer').map((m) => m.source)).toEqual(['gdpl-player']);
-=======
+    bridge.stop();
+  });
+
   it('pauses and resumes on host command, posting a snapshot', async () => {
     // jsdom's cross-realm postMessage into an iframe is unreliable; dispatch the
     // host envelope the same way the real parent would deliver it.
@@ -148,7 +149,6 @@ describe('the injected bridge reports health', () => {
     await delivered();
     expect(bridge.received.some((message) => message.type === 'resumed')).toBe(true);
     expect(bridge.frameWindow.document.getElementById('gdpl-pause-overlay')).toBeNull();
->>>>>>> ce57e9b6 (feat(studio): unify build status + playtest pause-and-prompt)
     bridge.stop();
   });
 });

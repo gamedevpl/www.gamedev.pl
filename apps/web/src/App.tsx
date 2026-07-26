@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-<<<<<<< HEAD
 import { generateGame, type GeneratedGame, type GenerateGameApiError } from './api.js';
 import { fetchCatalog, type CatalogEntry } from './catalog.js';
 import { GameTheater } from './GameTheater.js';
@@ -12,22 +11,7 @@ import { CreatorStudioView } from './CreatorStudioView.js';
 import { DraftView } from './DraftView.js';
 import { GameHealthView } from './GameHealthView.js';
 import { PixelIcon } from './PixelIcon.js';
-import { SubmissionStatusView } from './SubmissionStatusView.js';
 import { CreatorQA, type QAQuestion } from './CreatorQA.js';
-=======
-import { generateGame, type GeneratedGame, type GenerateGameApiError } from './api';
-import { fetchCatalog, type CatalogEntry } from './catalog';
-import { GameTheater } from './GameTheater';
-import { NavHeader } from './NavHeader';
-import { HeroPromptSection } from './HeroPromptSection';
-import { ArcadeCatalog } from './ArcadeCatalog';
-import { MyGamesRail } from './MyGamesRail';
-import { CreatorStudioView } from './CreatorStudioView';
-import { DraftView } from './DraftView';
-import { GameHealthView } from './GameHealthView';
-import { PixelIcon } from './PixelIcon';
-import { CreatorQA, type QAQuestion } from './CreatorQA';
->>>>>>> ce57e9b6 (feat(studio): unify build status + playtest pause-and-prompt)
 import {
   canonicalPlayPath,
   NAVIGATE_EVENT,

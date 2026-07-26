@@ -5039,6 +5039,7 @@ body.player-open {
   }
 }
 
+<<<<<<< HEAD
 /* The playable build panel on the status page.
    Sized so the game is genuinely playable rather than a thumbnail — this is the first
    thing a creator can actually judge, and it arrives before any commit. */
@@ -5118,6 +5119,12 @@ body.player-open {
 }
 
 /* CREATOR CONTROL PANEL (/studio) */
+=======
+/* CREATOR CONTROL PANEL (/studio)
+   Reuses home/status tokens: section-title, panel, my-game-card, chip/health-window
+   tabs, funnel-stats, status-feedback, status-play-badge. Keep Studio from inventing
+   a parallel visual language. */
+>>>>>>> 04304604 (fix(studio): align Creator Studio with site design system)
 .studio-panel {
   max-width: 1100px;
   margin: 0 auto;
@@ -5129,33 +5136,28 @@ body.player-open {
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
 }
 
-.studio-panel-header h1 {
-  margin: 0 0 0.35rem;
-  font-size: 1.75rem;
-  font-weight: 700;
+.studio-panel-header .section-title {
+  margin: 0 0 6px;
 }
 
-.studio-panel-header p {
-  margin: 0;
-  color: var(--muted);
+.studio-panel-header .panel-copy {
   max-width: 36rem;
 }
 
 .studio-layout {
   display: grid;
-  grid-template-columns: minmax(200px, 280px) 1fr;
-  gap: 1.25rem;
+  grid-template-columns: minmax(200px, 260px) 1fr;
+  gap: 16px;
   align-items: start;
 }
 
 .studio-shelf {
-  background: var(--panel);
-  border: 1px solid var(--panel-border);
-  border-radius: 10px;
-  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .studio-shelf-list {
@@ -5164,49 +5166,83 @@ body.player-open {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 12px;
 }
 
+/* Same card language as .my-game-card on the home rail. */
 .studio-shelf-item {
   width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
   text-align: left;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  padding: 0.75rem 0.85rem;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--panel-card);
+  border: 1px solid var(--panel-border);
   color: var(--text);
+  font-weight: 600;
   cursor: pointer;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s,
+    transform 0.2s;
 }
 
 .studio-shelf-item:hover {
-  background: var(--panel-card);
+  border-color: var(--turquoise);
+  transform: translateY(-1px);
 }
 
 .studio-shelf-item.is-active {
-  background: var(--panel-card);
-  border-color: rgba(0, 228, 172, 0.35);
+  border-color: rgba(0, 228, 172, 0.45);
+  box-shadow: 0 0 18px rgba(0, 228, 172, 0.1);
+}
+
+.studio-shelf-item.is-live {
+  border-color: rgba(45, 212, 191, 0.4);
+  box-shadow: 0 0 18px rgba(45, 212, 191, 0.08);
+}
+
+.studio-shelf-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+}
+
+.studio-shelf-status.is-live {
+  color: var(--turquoise);
+}
+
+.studio-shelf-status.is-published {
+  color: var(--accent-blue);
 }
 
 .studio-shelf-title {
   display: block;
-  font-weight: 600;
-  margin-bottom: 0.25rem;
+  font-size: 1rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
 }
 
 .studio-shelf-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.2rem;
+  font-size: 0.78rem;
+  font-weight: 500;
   color: var(--muted);
-  font-size: 0.8rem;
 }
 
 .studio-detail {
   background: var(--panel);
   border: 1px solid var(--panel-border);
-  border-radius: 10px;
-  padding: 1.25rem;
+  border-radius: 12px;
+  padding: 24px;
   min-width: 0;
 }
 
@@ -5214,18 +5250,70 @@ body.player-open {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.75rem;
-  margin-bottom: 0.5rem;
+  gap: 10px;
+  margin-bottom: 14px;
 }
 
 .studio-detail-head h2 {
   margin: 0;
   font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  overflow-wrap: anywhere;
 }
 
 .studio-slug {
   color: var(--turquoise);
   font-size: 0.85rem;
+  background: rgba(0, 228, 172, 0.08);
+  border: 1px solid rgba(0, 228, 172, 0.2);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+/* Chip-style tabs — same grammar as .chip-btn / .health-window. */
+.studio-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 18px;
+  padding: 0 0 14px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.studio-tab {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--panel-border);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.studio-tab:hover {
+  color: #fff;
+  border-color: var(--turquoise);
+  background: rgba(0, 228, 172, 0.08);
+}
+
+.studio-tab.is-active {
+  color: #08241d;
+  background: var(--turquoise);
+  border-color: var(--turquoise);
+  box-shadow: 0 0 12px var(--turquoise-glow);
+}
+
+.studio-tab.is-active:hover {
+  color: #08241d;
+  filter: brightness(1.05);
+}
+
+.studio-tab-panel {
+  min-width: 0;
 }
 
 .studio-empty,
@@ -5245,65 +5333,46 @@ body.player-open {
   color: var(--error);
 }
 
+.studio-overview-status {
+  margin-bottom: 16px;
+}
+
 .studio-facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 1rem;
   margin: 0 0 1.25rem;
 }
 
-.studio-facts dt {
-  color: var(--muted);
-  font-size: 0.8rem;
-  margin-bottom: 0.2rem;
-}
-
-.studio-facts dd {
-  margin: 0;
+.studio-fact-suffix {
+  margin-left: 0.35rem;
+  font-size: 0.85rem;
   font-weight: 600;
+  color: var(--muted);
 }
 
 .studio-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  align-items: center;
+  gap: 12px;
 }
 
-.studio-actions .is-danger {
-  border-color: var(--error);
-  color: var(--error);
+.studio-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .studio-stats-range {
   color: var(--muted);
   font-size: 0.85rem;
-}
-
-.studio-stat-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 1rem;
-  margin: 1rem 0 0;
-}
-
-.studio-stat-grid dt {
-  color: var(--muted);
-  font-size: 0.8rem;
-}
-
-.studio-stat-grid dd {
-  margin: 0.2rem 0 0;
-  font-size: 1.25rem;
-  font-weight: 700;
+  margin: 0;
 }
 
 .studio-error-samples {
-  margin-top: 1.5rem;
+  margin-top: 0.5rem;
 }
 
-.studio-error-samples h3 {
-  margin: 0 0 0.5rem;
-  font-size: 0.95rem;
+.studio-error-samples .health-section-title {
+  margin-top: 0.5rem;
 }
 
 .studio-error-samples ul {
@@ -5312,17 +5381,18 @@ body.player-open {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 8px;
 }
 
 .studio-error-samples li {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
   gap: 1rem;
   background: var(--panel-card);
   border: 1px solid var(--panel-border);
-  border-radius: 6px;
-  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  padding: 10px 12px;
   font-size: 0.85rem;
 }
 
@@ -5331,32 +5401,32 @@ body.player-open {
   color: var(--text);
 }
 
-.studio-improve h3 {
-  margin: 0 0 0.35rem;
-}
-
-.studio-improve p {
-  margin: 0 0 0.75rem;
-  color: var(--muted);
+.studio-improve {
+  margin: 0;
 }
 
 .studio-coming-soon {
   display: flex;
-  flex-direction: column;
   align-items: flex-start;
-  gap: 0.5rem;
+  gap: 12px;
   color: var(--muted);
-  padding: 0.5rem 0 1rem;
+  padding: 20px 18px;
+  border-radius: 12px;
+  border: 1px dashed var(--panel-border);
+  background: rgba(13, 17, 21, 0.4);
 }
 
 .studio-coming-soon h3 {
-  margin: 0;
+  margin: 0 0 4px;
   color: var(--text);
+  font-size: 1.05rem;
 }
 
 .studio-coming-soon p {
   margin: 0;
   max-width: 36rem;
+  line-height: 1.45;
+  font-size: 0.95rem;
 }
 
 .studio-build .status-panel.is-embedded {
@@ -5364,6 +5434,7 @@ body.player-open {
   border: none;
   padding: 0;
   background: transparent;
+  margin: 0;
 }
 
 .studio-playtest-hint,
@@ -5374,61 +5445,70 @@ body.player-open {
 
 .studio-playtest-stage {
   position: relative;
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--panel-border);
-  border-radius: 8px;
+  border-radius: 14px;
   overflow: hidden;
-  background: #0b1018;
+  background:
+    radial-gradient(circle at 50% 20%, rgba(56, 189, 248, 0.1), transparent 55%),
+    #0a0e12;
   min-height: 280px;
-  aspect-ratio: 16 / 10;
+}
+
+.studio-playtest-stage.is-paused {
+  border-color: rgba(0, 228, 172, 0.35);
+  box-shadow: 0 0 24px rgba(0, 228, 172, 0.08);
 }
 
 .studio-playtest-stage .game-frame {
   width: 100%;
-  height: 100%;
+  aspect-ratio: 16 / 10;
+  min-height: 240px;
+  height: auto;
   border: 0;
+  border-radius: 0;
+  box-shadow: none;
   display: block;
+  background: transparent;
 }
 
 .studio-playtest-controls {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.65rem 0.75rem;
+  gap: 12px;
+  padding: 12px 14px;
   border-top: 1px solid var(--panel-border);
-  background: var(--panel-card);
+  background: rgba(22, 28, 34, 0.92);
+}
+
+.studio-playtest-controls .primary-btn,
+.studio-playtest-controls .secondary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .studio-playtest-meta {
   color: var(--muted);
   font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .studio-playtest-prompt {
-  margin-top: 1.25rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-}
-
-.studio-playtest-prompt h3 {
-  margin: 0;
-}
-
-.studio-playtest-prompt > p {
-  margin: 0;
-  color: var(--muted);
+  margin-top: 16px;
 }
 
 .studio-playtest-shot {
-  margin: 0;
+  margin: 0 0 12px;
   max-width: 22rem;
 }
 
 .studio-playtest-shot img {
   display: block;
   width: 100%;
-  border-radius: 6px;
+  border-radius: 8px;
   border: 1px solid var(--panel-border);
   background: #000;
 }
@@ -5441,16 +5521,24 @@ body.player-open {
 
 .studio-playtest-errors {
   list-style: none;
-  margin: 0;
+  margin: 0 0 12px;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 6px;
+}
+
+.studio-playtest-errors li {
+  background: rgba(255, 107, 107, 0.08);
+  border: 1px solid rgba(255, 107, 107, 0.22);
+  border-radius: 8px;
+  padding: 8px 10px;
 }
 
 .studio-playtest-errors code {
   font-size: 0.8rem;
   overflow-wrap: anywhere;
+  color: var(--error);
 }
 
 .my-games-header-actions {
@@ -5472,5 +5560,20 @@ body.player-open {
 
   .studio-panel-header {
     flex-direction: column;
+  }
+
+  .studio-detail {
+    padding: 18px 16px;
+  }
+
+  .studio-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .studio-tabs::-webkit-scrollbar {
+    display: none;
   }
 }

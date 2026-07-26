@@ -156,7 +156,7 @@ export function StudioPlaytestPanel({ game, published }: StudioPlaytestPanelProp
 
   return (
     <div className="studio-playtest">
-      <p className="studio-playtest-hint">{t('studioPanel.playtest.hint')}</p>
+      <p className="panel-copy studio-playtest-hint">{t('studioPanel.playtest.hint')}</p>
 
       {loading ? <p className="studio-muted">{t('studioPanel.playtest.loading')}</p> : null}
       {loadError ? <p className="error">{loadError}</p> : null}
@@ -185,9 +185,9 @@ export function StudioPlaytestPanel({ game, published }: StudioPlaytestPanelProp
       ) : null}
 
       {(paused || snapshot) && (
-        <div className="studio-playtest-prompt">
-          <h3>{t('studioPanel.playtest.promptTitle')}</h3>
-          <p>{t('studioPanel.playtest.promptHint')}</p>
+        <div className="status-feedback studio-playtest-prompt">
+          <h3 className="status-feedback-title">{t('studioPanel.playtest.promptTitle')}</h3>
+          <p className="status-feedback-hint">{t('studioPanel.playtest.promptHint')}</p>
 
           {attachedPng ? (
             <figure className="studio-playtest-shot">
