@@ -2,7 +2,9 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request } from 'playwright-core';
-import { BASE_URL, STORAGE_STATE_ENV } from './browser.js';
+// From config.js, not browser.js: browser.js imports `inject` from vitest, and
+// importing vitest inside globalSetup fails — it runs in a different context.
+import { BASE_URL, STORAGE_STATE_ENV } from './config.js';
 
 /**
  * Exchange the access token for a session cookie exactly once per run.

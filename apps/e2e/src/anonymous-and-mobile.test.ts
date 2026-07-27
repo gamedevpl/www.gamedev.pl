@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Browser, Page } from 'playwright-core';
-import { collectProblems, describeProblems, e2ePrerequisites, launchSiteBrowser, visit } from './browser.js';
+import { browserPrerequisite, collectProblems, describeProblems, launchSiteBrowser, visit } from './browser.js';
 
 /**
  * Two audiences the signed-in desktop walk cannot speak for: a visitor who has not
@@ -10,7 +10,9 @@ import { collectProblems, describeProblems, e2ePrerequisites, launchSiteBrowser,
  * a signed-in 1280px run is structurally blind to — a sign-in wall on something that
  * should be public, or a layout that scrolls sideways.
  */
-const prereq = e2ePrerequisites();
+// Gated on a browser alone, not on a credential: nothing here signs in, so a token
+// requirement would skip these on any machine that has Chromium but no token.
+const prereq = browserPrerequisite();
 if (!prereq.ok) {
   console.warn(`[e2e] SKIPPED anonymous/mobile: ${prereq.reason}`);
 }

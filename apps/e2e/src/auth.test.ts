@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { request, type APIRequestContext } from 'playwright-core';
-import { BASE_URL, STORAGE_STATE_ENV, signedInApiContext } from './browser.js';
+import { BASE_URL, signedInApiContext, storageStatePath } from './browser.js';
 
 /**
  * The credential contract, checked without a browser. If these fail, every browser
@@ -50,7 +50,7 @@ describe.skipIf(!hasToken)('agent access token', () => {
     // /api/auth/session again: that endpoint allows 20/hour, and a test that spends
     // one every run is a test that eventually fails as a 429 looking like a revoked
     // token. The exchange itself is covered — globalSetup throws if it does not 200.
-    const storageState = process.env[STORAGE_STATE_ENV];
+    const storageState = storageStatePath();
     expect(storageState, 'globalSetup should have exported the session state').toBeTruthy();
 
     const state = JSON.parse(await readFile(storageState!, 'utf8')) as {

@@ -8,8 +8,11 @@ import {
   type BrowserContext,
   type Page,
 } from 'playwright-core';
+import { inject } from 'vitest';
+import { BASE_URL, STORAGE_STATE_ENV } from './config.js';
 
-export const BASE_URL = process.env.E2E_BASE_URL ?? 'https://www.gamedev.pl';
+// Re-exported so test files have a single import site for the whole helper surface.
+export { BASE_URL, STORAGE_STATE_ENV };
 
 /**
  * Where Claude Code's remote environments pre-install Playwright's browsers.
@@ -52,6 +55,18 @@ export function e2ePrerequisites(): { ok: boolean; reason: string } {
   if (!process.env.GAMEDEV_ACCESS_TOKEN) {
     return { ok: false, reason: 'GAMEDEV_ACCESS_TOKEN not set (see docs/agent-access-tokens.md)' };
   }
+  return browserPrerequisite();
+}
+
+/**
+ * The weaker gate, for suites that never sign in.
+ *
+ * The anonymous and mobile checks build their own cookie-less contexts, so requiring a
+ * credential there would skip real coverage on any machine that has a browser but no
+ * token — which is most of them, and exactly the pass most likely to catch a
+ * signed-out or small-screen regression.
+ */
+export function browserPrerequisite(): { ok: boolean; reason: string } {
   if (!findChromium()) {
     return { ok: false, reason: 'no pre-installed Chromium found (set E2E_CHROMIUM_PATH)' };
   }
@@ -75,7 +90,11 @@ export function e2ePrerequisites(): { ok: boolean; reason: string } {
  *
  * Never "fix" this by disabling TLS verification or unsetting HTTPS_PROXY — see
  * /root/.ccr/README.md. TLS 1.2 through the proxy is a complete and secure fix.
- * When no proxy is configured, both settings are harmless.
+ *
+ * Both settings are applied *only* when a proxy is configured. The TLS cap is a real
+ * downgrade, not a harmless default: with no proxy in the path there is nothing to
+ * work around, and pinning a laptop run to 1.2 would forgo TLS 1.3 for no reason —
+ * and break outright against a host that ever requires it.
  */
 export async function launchSiteBrowser(): Promise<Browser> {
   const executablePath = findChromium();
@@ -86,12 +105,42 @@ export async function launchSiteBrowser(): Promise<Browser> {
   return chromium.launch({
     executablePath,
     ...(proxyServer ? { proxy: { server: proxyServer } } : {}),
-    args: ['--no-sandbox', '--ssl-version-max=tls1.2', '--autoplay-policy=no-user-gesture-required'],
+    args: [
+      '--no-sandbox',
+      '--autoplay-policy=no-user-gesture-required',
+      ...(proxyServer ? ['--ssl-version-max=tls1.2'] : []),
+    ],
   });
 }
 
-/** Where globalSetup parks the once-per-run session state. */
-export const STORAGE_STATE_ENV = 'E2E_STORAGE_STATE';
+declare module 'vitest' {
+  interface ProvidedContext {
+    E2E_STORAGE_STATE: string;
+  }
+}
+
+/**
+ * Path to the session state globalSetup wrote, read the way Vitest supports.
+ *
+ * `inject()` is the counterpart to globalSetup's `provide()` and is the contract for
+ * getting a value from setup into the workers. The `process.env` fallback is what this
+ * used to rely on alone, and it only happens to work: globalSetup mutates env in the
+ * main process before workers are forked, so forked workers inherit it. That is an
+ * implementation detail of the pool, not a guarantee — under a pool that does not fork
+ * from a mutated parent, the suite would fail with "unset" even though setup succeeded.
+ *
+ * Kept as a fallback rather than removed, because `inject()` throws outside a worker
+ * (globalSetup itself imports this module for BASE_URL).
+ */
+export function storageStatePath(): string | undefined {
+  try {
+    const injected = inject(STORAGE_STATE_ENV);
+    if (injected) return injected;
+  } catch {
+    // Not running inside a Vitest worker — fall through to the inherited env.
+  }
+  return process.env[STORAGE_STATE_ENV];
+}
 
 /**
  * An API context already carrying the bot's session cookie.
@@ -105,7 +154,7 @@ export const STORAGE_STATE_ENV = 'E2E_STORAGE_STATE';
  * budget fast enough to lock the suite out mid-iteration.
  */
 export async function signedInApiContext(): Promise<APIRequestContext> {
-  const storageState = process.env[STORAGE_STATE_ENV];
+  const storageState = storageStatePath();
   if (!storageState) {
     throw new Error(`${STORAGE_STATE_ENV} unset — globalSetup did not run or the token is missing`);
   }

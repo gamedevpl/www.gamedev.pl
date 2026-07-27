@@ -44,12 +44,31 @@ ClientHello and the tunnel succeeds.
 Launch Chromium with **both** the explicit proxy server _and_ the TLS cap:
 
 ```js
+import { readdirSync } from 'node:fs';
+
+// The build number moves with the Playwright version — resolve it, never pin it.
+// A hard-coded chromium-<build> path is the single most likely way this snippet
+// goes stale and "fails" on a machine where Chromium is installed perfectly well.
+const root = process.env.PLAYWRIGHT_BROWSERS_PATH ?? '/opt/pw-browsers';
+const build = readdirSync(root)
+  .filter((n) => /^chromium-\d+$/.test(n))
+  .sort((a, b) => Number(b.split('-')[1]) - Number(a.split('-')[1]))[0];
+
 const browser = await chromium.launch({
-  executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+  executablePath: process.env.E2E_CHROMIUM_PATH ?? `${root}/${build}/chrome-linux/chrome`,
   proxy: { server: process.env.HTTPS_PROXY },
   args: ['--no-sandbox', '--ssl-version-max=tls1.2'],
 });
 ```
+
+Match `chromium-<build>` exactly rather than `chromium*`: the same directory holds
+`chromium_headless_shell-*`, which cannot run the WebGL and audio paths some generated
+games use. `apps/e2e/src/browser.ts` exports this as `findChromium()` — prefer importing
+it over re-deriving the path.
+
+Apply `--ssl-version-max=tls1.2` **only when a proxy is actually configured**. It is a
+real downgrade, not a harmless default: with nothing intercepting the connection there is
+nothing to work around, and pinning to 1.2 would forgo TLS 1.3 for no reason.
 
 Both parts matter: `proxy.server` alone still resets (TLS version is the real blocker);
 `--ssl-version-max` alone doesn't help if Chromium isn't told about the proxy in the first
@@ -80,11 +99,13 @@ const res = await api.post('/api/auth/session', {
 });
 if (res.status() !== 200) throw new Error(`session exchange failed: ${res.status()}`);
 
-// 2. Launch Chromium through the proxy at TLS 1.2 (see "The fix" above).
+// 2. Launch Chromium through the proxy at TLS 1.2 (see "The fix" above for how to
+//    resolve executablePath instead of pinning a build number).
+const proxyServer = process.env.HTTPS_PROXY;
 const browser = await chromium.launch({
-  executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-  proxy: { server: process.env.HTTPS_PROXY },
-  args: ['--no-sandbox', '--ssl-version-max=tls1.2'],
+  executablePath: findChromium(),
+  ...(proxyServer ? { proxy: { server: proxyServer } } : {}),
+  args: ['--no-sandbox', ...(proxyServer ? ['--ssl-version-max=tls1.2'] : [])],
 });
 
 // 3. Carry the cookie into the browser context.
