@@ -1587,12 +1587,6 @@ body.player-open {
   border: 0;
 }
 
-/* Hidden on desktop; the matching media query reveals them as menu rows on a phone.
-   Specificity must beat `.theater-more-panel .theater-menu-item { display: flex }`. */
-.theater-more-panel .theater-mobile-chrome {
-  display: none;
-}
-
 /* Uniform menu rows — strip the mismatched secondary-btn / ghost / solid looks. */
 .theater-more-panel .theater-menu-item,
 .theater-more-panel .share-btn,
@@ -1633,6 +1627,14 @@ body.player-open {
   color: var(--turquoise);
   border-color: transparent;
   outline: none;
+}
+
+/* Hidden on desktop; the matching media query reveals them as menu rows on a phone.
+   Must come after the shared `.theater-menu-item { display: flex }` rule and beat it
+   on specificity, or those rows stay visible on wide screens too. */
+.theater-more-panel .theater-menu-item.theater-mobile-chrome,
+.theater-more-panel .theater-menu-divider.theater-mobile-chrome {
+  display: none;
 }
 
 .theater-more-panel .vote-widget {
