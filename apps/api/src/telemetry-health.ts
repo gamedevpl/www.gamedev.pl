@@ -345,3 +345,59 @@ export function recentPartitions(days: number, now: number = Date.now()): string
     new Date(now - index * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
   );
 }
+
+export interface PartitionScanBudget {
+  /** Documents read from any single day's partition. */
+  perDay: number;
+  /** Documents read across the whole walk, which is what actually bounds cost. */
+  total: number;
+}
+
+export interface PartitionScan<T> {
+  events: T[];
+  /** Partitions actually read, most recent first — never wider than what was asked for. */
+  scanned: string[];
+  /** True when any cap bit, so every count derived from this is a floor. */
+  truncated: boolean;
+}
+
+/**
+ * Reads a window of daily partitions under one shared document budget.
+ *
+ * Shared by the operator page and the scorecard sweep so the two cannot drift in how
+ * they report truncation — a number shown to a human and the same number written into
+ * a scorecard an agent reads must mean the same thing.
+ *
+ * The budget is a *parameter* rather than a constant because the two callers are paying
+ * for different things: an interactive click wants a hard ceiling on latency and cost,
+ * while a once-a-day batch can afford a wider window precisely because it runs once and
+ * amortizes across every reader of the result.
+ */
+export async function scanPartitions<T>(
+  days: string[],
+  budget: PartitionScanBudget,
+  read: (dateStr: string, limit: number) => Promise<T[]>,
+): Promise<PartitionScan<T>> {
+  const events: T[] = [];
+  const scanned: string[] = [];
+  let truncated = false;
+
+  for (const dateStr of days) {
+    const remaining = budget.total - events.length;
+    if (remaining <= 0) {
+      // Out of budget with days still unread: the window really scanned is narrower
+      // than the one asked for, and `scanned` reports the narrower one so the range
+      // attributed to the result is never wider than the range measured.
+      truncated = true;
+      break;
+    }
+    const limit = Math.min(budget.perDay, remaining);
+    const dayEvents = await read(dateStr, limit);
+    // A day at its cap means events were left unread, so every count is a floor.
+    if (dayEvents.length >= limit) truncated = true;
+    events.push(...dayEvents);
+    scanned.push(dateStr);
+  }
+
+  return { events, scanned, truncated };
+}

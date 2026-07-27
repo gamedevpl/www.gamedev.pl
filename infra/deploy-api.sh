@@ -28,7 +28,11 @@
 #   MAIL_FROM=...              (RFC 5322 sender; defaults to noreply@mail.gamedev.pl)
 #   INVITE_URL=...             (where invitees land; defaults to https://www.gamedev.pl)
 #   NOTIFY_SWEEP_AUDIENCE=...  (sweep endpoint URL; enables OIDC auth on /api/internal/notify-sweep)
-#   NOTIFY_SWEEP_SA=...        (Cloud Scheduler SA email allowed to call the sweep)
+#   NOTIFY_SWEEP_SA=...        (Cloud Scheduler SA email allowed to call the sweep; shared by both sweeps)
+#   SCORECARD_SWEEP_AUDIENCE=... (scorecard endpoint URL; enables OIDC auth on
+#                               /api/internal/scorecard-sweep. Separate from the notify
+#                               audience because an OIDC audience is the endpoint's own
+#                               URL — one sweep's token must not be replayable at the other.)
 #
 # Then run:
 #   PROJECT_ID=my-proj ./infra/deploy-api.sh
@@ -54,6 +58,7 @@ MAIL_FROM="${MAIL_FROM:-}"
 INVITE_URL="${INVITE_URL:-}"
 NOTIFY_SWEEP_AUDIENCE="${NOTIFY_SWEEP_AUDIENCE:-}"
 NOTIFY_SWEEP_SA="${NOTIFY_SWEEP_SA:-}"
+SCORECARD_SWEEP_AUDIENCE="${SCORECARD_SWEEP_AUDIENCE:-}"
 # Web Push (docs/notifications-plan.md M2). Public key is public by design (env var);
 # the private key is a Secret Manager secret wired in below. Push is off without them.
 VAPID_PUBLIC_KEY="${VAPID_PUBLIC_KEY:-}"
@@ -146,6 +151,9 @@ if [ -n "$NOTIFY_SWEEP_AUDIENCE" ]; then
 fi
 if [ -n "$NOTIFY_SWEEP_SA" ]; then
   ENV_VARS="${ENV_VARS}|NOTIFY_SWEEP_SA=${NOTIFY_SWEEP_SA}"
+fi
+if [ -n "$SCORECARD_SWEEP_AUDIENCE" ]; then
+  ENV_VARS="${ENV_VARS}|SCORECARD_SWEEP_AUDIENCE=${SCORECARD_SWEEP_AUDIENCE}"
 fi
 if [ -n "$VAPID_PUBLIC_KEY" ]; then
   ENV_VARS="${ENV_VARS}|VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}"

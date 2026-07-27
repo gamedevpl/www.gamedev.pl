@@ -376,6 +376,87 @@ export interface PlayerFeedbackRecord {
   createdAt: string;
 }
 
+/**
+ * Attacker-controlled strings, quarantined in their own object on purpose.
+ *
+ * Everything else on a scorecard is a number this service computed. These two are
+ * strings a *game* chose to emit from inside the sandbox — bounded in length and count,
+ * arbitrary in content. They are safe to render to a human (React escapes them) and
+ * unsafe to interpolate into a coding agent's instructions, which is exactly what IL-3
+ * will want to do.
+ *
+ * A comment saying so has to be read to work; a field named `untrusted` has to be typed
+ * out to be ignored. That is the whole reason this is a nested object rather than two
+ * more fields alongside the numbers — destructuring the scorecard for a prompt cannot
+ * pick these up by accident.
+ */
+export interface ScorecardUntrusted {
+  /** Most frequent distinct error messages, worst first. */
+  errorSamples: Array<{ message: string; count: number }>;
+  /** Landmarks reached, most-reached first — the drop-off curve, when a game emits any. */
+  progressLabels: Array<{ label: string; sessions: number }>;
+}
+
+/**
+ * One game's rolling aggregate — the doc IL-3 reads instead of raw events.
+ *
+ * Stored at `games/{slug}/scorecard/current`. Deliberately carries **no player
+ * identity**: it is built from play telemetry (which has none by construction) plus
+ * vote and feedback *counts*, never the uids behind them and never feedback text.
+ *
+ * No `expiresAt` and no TTL policy. That is not an oversight — the retention promise is
+ * about raw play rows, and an aggregate is what is supposed to outlive them. Adding this
+ * collection group to the TTL loop in infra/setup-gcp.sh would delete the summaries and
+ * keep nothing.
+ *
+ * **`null` means "no evidence", `0` means "measured zero".** The distinction is
+ * load-bearing: a game that emits no endings and a game nobody finishes produce
+ * identical event streams, so anything derived only from endings is null when there were
+ * none. Renderers show `—` for null and must never coerce it to `0%`.
+ */
+export interface Scorecard {
+  slug: string;
+  /** When this doc was computed, so a stale sweep is visible rather than silent. */
+  computedAt: string;
+  /**
+   * The window actually measured — the partitions read, not the ones requested, and
+   * whether any read cap bit. A consumer that ignores `truncated` is reading floors as
+   * if they were totals.
+   */
+  window: { days: string[]; truncated: boolean };
+  sessions: {
+    count: number;
+    /** Sessions that opened but never accrued focused play time. */
+    bounces: number;
+    closes: number;
+    medianPlaySeconds: number;
+    totalPlaySeconds: number;
+  };
+  health: {
+    errors: number;
+    aliveTicks: number;
+    stalledTicks: number;
+    stallRate: number;
+    /** Null when no trusted liveness tick was observed. */
+    medianFps: number | null;
+    resumeTicksIgnored: number;
+  };
+  depth: {
+    outcomes: { won: number; lost: number; quit: number };
+    sessionsWithEnding: number;
+    /** Null when the game reported no endings at all — not the same as "nobody finished". */
+    finishRate: number | null;
+    /** Null when no round was decided. Quits are excluded, not counted as losses. */
+    winRate: number | null;
+    /** Null when nothing scored. */
+    medianBestScore: number | null;
+  };
+  votes: { up: number; down: number };
+  /** Count only. The text itself never reaches this doc; themes are a later IL-2 step. */
+  feedback: { count: number };
+  untrusted: ScorecardUntrusted;
+}
+
 export type WaitlistStatus = 'pending' | 'approved' | 'rejected';
 
 export interface WaitlistEntry {
@@ -542,6 +623,19 @@ export interface Store {
   addPlayerFeedback(slug: string, uid: string, text: string): Promise<PlayerFeedbackRecord>;
   /** A game's feedback, newest first. No consumer yet (IL-2 theme extraction is next); exists now so capture is verifiable. */
   listPlayerFeedback(slug: string): Promise<PlayerFeedbackRecord[]>;
+  /**
+   * How many feedback rows a game has, without reading them.
+   *
+   * A count rather than a length: the scorecard sweep needs this for every game it
+   * touches, and `listPlayerFeedback().length` would bill one document read per row per
+   * night. Firestore's aggregate query is billed per index scan instead, so a game with
+   * a thousand notes costs about the same as one with three.
+   */
+  countPlayerFeedback(slug: string): Promise<number>;
+  /** Overwrites a game's current scorecard (docs/improvement-loop-plan.md IL-2). */
+  putScorecard(slug: string, scorecard: Scorecard): Promise<void>;
+  /** A game's current scorecard, or null before the first sweep has run for it. */
+  getScorecard(slug: string): Promise<Scorecard | null>;
   /** Persist a newly minted personal access token. */
   createAccessToken(record: AccessTokenRecord): Promise<void>;
   /** Point lookup by token id — the hot path on every bearer-authenticated request. */
@@ -614,6 +708,8 @@ export class InMemoryStore implements Store {
   private votes = new Map<string, Map<string, VoteValue>>();
   // slug -> feedback rows, newest last (reversed on read)
   private playerFeedback = new Map<string, PlayerFeedbackRecord[]>();
+  // slug -> current scorecard
+  private scorecards = new Map<string, Scorecard>();
   // tokenId -> personal access token record
   private accessTokens = new Map<string, AccessTokenRecord>();
 
@@ -1040,6 +1136,19 @@ export class InMemoryStore implements Store {
 
   async listPlayerFeedback(slug: string): Promise<PlayerFeedbackRecord[]> {
     return [...(this.playerFeedback.get(slug) ?? [])].reverse();
+  }
+
+  async countPlayerFeedback(slug: string): Promise<number> {
+    return this.playerFeedback.get(slug)?.length ?? 0;
+  }
+
+  async putScorecard(slug: string, scorecard: Scorecard): Promise<void> {
+    this.scorecards.set(slug, structuredClone(scorecard));
+  }
+
+  async getScorecard(slug: string): Promise<Scorecard | null> {
+    const found = this.scorecards.get(slug);
+    return found ? structuredClone(found) : null;
   }
 
   async createAccessToken(record: AccessTokenRecord): Promise<void> {
@@ -1654,6 +1763,29 @@ export class FirestoreStore implements Store {
   async listPlayerFeedback(slug: string): Promise<PlayerFeedbackRecord[]> {
     const snap = await this.feedbackCollection(slug).orderBy('createdAt', 'desc').get();
     return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<PlayerFeedbackRecord, 'id'>) }));
+  }
+
+  async countPlayerFeedback(slug: string): Promise<number> {
+    const snap = await this.feedbackCollection(slug).count().get();
+    return snap.data().count;
+  }
+
+  // `current` is a fixed doc id, so a game has exactly one scorecard and the sweep
+  // overwrites rather than accumulating a history nobody reads.
+  private scorecardRef(slug: string) {
+    return this.gameRef(slug).collection('scorecard').doc('current');
+  }
+
+  async putScorecard(slug: string, scorecard: Scorecard): Promise<void> {
+    // `set` without merge: a scorecard is a whole snapshot, and merging would leave
+    // fields from a previous window alive next to a newer one — a row that never
+    // existed as a measurement.
+    await this.scorecardRef(slug).set(scorecard);
+  }
+
+  async getScorecard(slug: string): Promise<Scorecard | null> {
+    const snap = await this.scorecardRef(slug).get();
+    return snap.exists ? (snap.data() as Scorecard) : null;
   }
 
   async createAccessToken(record: AccessTokenRecord): Promise<void> {
