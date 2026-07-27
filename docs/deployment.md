@@ -34,7 +34,32 @@ Deployments to Cloud Run are triggered on push to `master`:
 3. **Cloud Build Image Creation:** Submits image build using `infra/cloudbuild.yaml` to Artifact Registry. The WIF deployer service account must also have `roles/serviceusage.serviceUsageConsumer` and storage access for the default Cloud Build staging bucket; `infra/setup-wif.sh` grants both.
 4. **Staging / Candidate Revision:** Deploys revision to Cloud Run with `--no-traffic --tag candidate`.
 5. **Candidate Smoke Test:** Anonymous checks (health, shell, public catalog/play, walls hold, forged bearer token rejected) plus an **authenticated smoke** when the `GAMEDEV_ACCESS_TOKEN` repo secret exists — bearer auth, token→cookie exchange, and a session-walled route, run as the CI bot (see [`agent-access-tokens.md`](./agent-access-tokens.md)). Skips loudly when the secret is absent.
-6. **Traffic Promotion & Tag Cleanup:** Promotes traffic to the latest revision (`--to-latest`) and removes the candidate tag (`--remove-tags candidate`) only if the smoke test succeeds.
+6. **End-to-end smoke (real browser):** Drives Chromium against the candidate and asserts that published games **actually run** — the frame is correctly sandboxed, the game document executes, its canvas draws, and the drawing changes over time (`e2e/deploy-smoke.spec.ts`). See below for why this blocks.
+7. **Traffic Promotion & Tag Cleanup:** Promotes traffic to the latest revision (`--to-latest`) and removes the candidate tag (`--remove-tags candidate`) only if every check above succeeds.
+
+### Why the browser smoke blocks a deploy
+
+Playable games are the product; a site that loads but plays nothing is worth nothing. Every
+other check can pass while play is completely broken, because they all stop at HTTP: proving
+`/api/games/<slug>` returns HTML says nothing about whether that HTML _runs_. A CSP header, a
+sandbox change, a bundle regression or a broken assembler each return a healthy 200 and a
+black screen.
+
+The one thing that must not block is a single badly-written game — those live in a separate,
+agent-maintained repo and change independently of this one. So the suite samples several
+published games and decides by breadth:
+
+| Sample result        | Meaning                    | Outcome                     |
+| -------------------- | -------------------------- | --------------------------- |
+| most games fail      | the deploy broke play      | **blocks promotion**        |
+| exactly one fails    | that game is broken        | `::warning::`, ships        |
+| only one game exists | nothing to compare against | **blocks** — it is the site |
+
+It also asserts the sandbox invariant (`allow-scripts`, never `allow-same-origin`) on the
+**rendered, deployed page**, which unit tests in jsdom cannot do, and skips play telemetry so
+CI plays never enter the product numbers. On failure it uploads traces and screenshots as a
+run artifact. Run it yourself against anything:
+`SMOKE_BASE_URL=https://www.gamedev.pl npm run e2e:deployed`.
 
 ## Secrets & access (current live state)
 
@@ -43,15 +68,15 @@ account (`<project-number>-compute@developer.gserviceaccount.com`) needs
 `roles/secretmanager.secretAccessor` on each. `deploy.yml` and `infra/deploy-api.sh` wire whichever exist into
 a single `--set-secrets` list.
 
-| Secret                    | Purpose                                                             | State (2026-07-26)       |
-| ------------------------- | ------------------------------------------------------------------- | ------------------------ |
-| `github-token`            | Fine-grained PAT (Issues rw + PRs r + Contents r, games repo only)  | ✅ set — submissions on  |
+| Secret                              | Purpose                                                                                 | State (2026-07-26)                                                           |
+| ----------------------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `github-token`                      | Fine-grained PAT (Issues rw + PRs r + Contents r, games repo only)                      | ✅ set — submissions on                                                      |
 | `GAMES_REPO_TOKEN` (GitHub Actions) | Contents:read PAT on the games repo — CI lockstep check (`npm run contract:games-repo`) | ⚠️ set on the GitHub repo (not GCP) so assemble/Check 4/music drift fails CI |
-| `submission-token-secret` | HMAC key for the stateless status token → `SUBMISSION_TOKEN_SECRET` | ✅ set                   |
-| `session-secret`          | HMAC key for session cookies → `SESSION_SECRET`                     | ✅ set                   |
-| `resend-api-key`          | Outbound email → `RESEND_API_KEY` (see below)                       | ✅ set                   |
-| `vapid-private-key`       | Web push signing → `VAPID_PRIVATE_KEY`                              | ✅ set                   |
-| `site-basic-auth`         | Former "not public yet" lock → `SITE_BASIC_AUTH`                    | ⚠️ exists but **unused** |
+| `submission-token-secret`           | HMAC key for the stateless status token → `SUBMISSION_TOKEN_SECRET`                     | ✅ set                                                                       |
+| `session-secret`                    | HMAC key for session cookies → `SESSION_SECRET`                                         | ✅ set                                                                       |
+| `resend-api-key`                    | Outbound email → `RESEND_API_KEY` (see below)                                           | ✅ set                                                                       |
+| `vapid-private-key`                 | Web push signing → `VAPID_PRIVATE_KEY`                                                  | ✅ set                                                                       |
+| `site-basic-auth`                   | Former "not public yet" lock → `SITE_BASIC_AUTH`                                        | ⚠️ exists but **unused**                                                     |
 
 `site-basic-auth` is a leftover: the running revision does not wire it, and the site answers
 without an auth challenge. Access is controlled by `PRIVATE_BETA` and the beta allowlist

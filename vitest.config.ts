@@ -12,6 +12,9 @@ import { configDefaults, defineConfig } from 'vitest/config';
  */
 export default defineConfig({
   test: {
-    exclude: [...configDefaults.exclude, '**/.claude/worktrees/**'],
+    // `e2e/` holds Playwright specs driving a *deployed* URL (see e2e/playwright.config.ts).
+    // Vitest's default include matches `*.spec.ts`, so without this a root run collects
+    // them and fails on `@playwright/test` imports it cannot execute.
+    exclude: [...configDefaults.exclude, '**/.claude/worktrees/**', 'e2e/**'],
   },
 });

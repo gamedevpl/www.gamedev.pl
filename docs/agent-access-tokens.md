@@ -183,13 +183,17 @@ Traps, in the order an agent will hit them:
   silently stays logged out with no error. Go through a browser-level API:
   `storageState` as above, or `context.addCookies([...])` with `httpOnly: true` if the
   `Set-Cookie` came from curl.
-- **Do not add Playwright to the repo's `package.json`.** This app has no e2e harness by
-  design; install `playwright-core` in a scratch directory instead. A dependency edit
-  without a regenerated lockfile passes every local check and kills CI at `npm ci` — the
-  exact failure the `verify-agent-work` playbook records.
-- **No `playwright install`.** Chromium is preinstalled in agent VMs
-  (`PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`); pass `executablePath` if your
-  Playwright version doesn't auto-find it.
+- **There is already a Playwright harness — reuse it.** `e2e/` holds the post-deploy
+  suite and the repo pins `@playwright/test`, so `npm run e2e:deployed` works against any
+  target via `SMOKE_BASE_URL`. Do **not** add or bump a Playwright dependency for a
+  one-off check: install `playwright-core` in a scratch directory outside the repo
+  instead. A dependency edit without a regenerated lockfile passes every local check and
+  kills CI at `npm ci` — the exact failure the `verify-agent-work` playbook records.
+- **No `playwright install` in an agent VM.** Chromium is preinstalled
+  (`PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`) and may be a different build than the
+  pinned Playwright expects; point `SMOKE_CHROMIUM_PATH` at the existing binary rather
+  than downloading one. Behind an egress proxy, set `HTTPS_PROXY` — the config picks it
+  up, and without it a proxy 403 reads exactly like the site refusing you.
 - **Production cookies carry `Secure`** — they travel over HTTPS only, so the same
   script pointed at a plain-HTTP host will not authenticate.
 

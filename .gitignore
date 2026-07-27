@@ -14,3 +14,7 @@ coverage
 *.tsbuildinfo
 .vite
 /gitleaks
+
+# Playwright post-deploy e2e artifacts (e2e/playwright.config.ts)
+test-results
+playwright-report

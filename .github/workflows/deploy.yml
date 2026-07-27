@@ -306,6 +306,38 @@ jobs:
 
           echo "Authenticated smoke passed as ${UID_VALUE}: bearer auth, cookie exchange, and the session wall all live."
 
+      # Playable games are the product, and every check above this point can pass while
+      # play is completely broken: `/api/games/<slug>` returning HTML says nothing about
+      # whether that HTML *runs*. A CSP header, a sandbox change, a bundle regression or a
+      # broken assembler all return a healthy 200 and a black screen. This drives a real
+      # browser against the candidate and asserts games actually draw
+      # (e2e/deploy-smoke.spec.ts, docs/deployment.md).
+      #
+      # Blocking, deliberately. The suite itself distinguishes "one game is broken" (warns,
+      # since games live in a separate agent-maintained repo) from "most games are broken"
+      # (fails, because that is the deploy having broken play).
+      - name: Install Chromium for the e2e smoke
+        run: npx playwright install --with-deps chromium
+
+      - name: End-to-end smoke (real browser, real games)
+        env:
+          SMOKE_BASE_URL: ${{ env.CANDIDATE_URL }}
+          GAMEDEV_ACCESS_TOKEN: ${{ secrets.GAMEDEV_ACCESS_TOKEN }}
+        run: npm run e2e:deployed
+
+      # Traces and screenshots for the failing run only — a red deploy gate is useless if
+      # diagnosing it means reproducing the whole deploy locally.
+      - name: Upload e2e artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure-${{ github.run_id }}
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
+
       - name: Promote candidate revision to 100% traffic
         run: |
           gcloud run services update-traffic "$SERVICE" \
