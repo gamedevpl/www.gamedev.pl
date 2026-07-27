@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { APIRequestContext, Browser, BrowserContext, Page } from 'playwright-core';
+import type { APIRequestContext, Browser, BrowserContext, Frame, Page } from 'playwright-core';
 import {
   BASE_URL,
   collectProblems,
@@ -73,14 +73,35 @@ describe.skipIf(!prereq.ok)('signed-in walkthrough', () => {
   });
 
   it('boots a generated game into a live canvas that can receive input', async () => {
-    const { slug } = singlePlayer();
-    await visit(page, `/play/${slug}`, 6_000);
+    // Try a few games rather than pinning whichever sorts first. This test is about the
+    // *player* — frame, canvas, focus delivery — and games live in a separate,
+    // agent-maintained repo. Now that this suite gates deploys, letting one broken game
+    // fail it would hold the website hostage to another repo's content. Whether the
+    // catalog at large is broken is games-playable.test.ts's question, and it is the one
+    // that blocks.
+    const candidates = catalog.filter((g) => !g.multiplayer).slice(0, 3);
+    expect(candidates.length, 'catalog has no single-player game to exercise').toBeGreaterThan(0);
 
-    // Games run in a sandboxed iframe (allow-scripts, no allow-same-origin). The
-    // canvas living inside it is the only real proof the generated bundle booted.
-    const frame = page.frames().find((f) => f !== page.mainFrame());
-    expect(frame, 'game iframe should exist').toBeTruthy();
-    await expect.poll(() => frame!.locator('canvas').count(), { timeout: 30_000 }).toBeGreaterThan(0);
+    let frame: Frame | undefined;
+    for (const candidate of candidates) {
+      await visit(page, `/play/${candidate.slug}`, 6_000);
+      const found = page.frames().find((f) => f !== page.mainFrame());
+      if (!found) continue;
+      // Games run in a sandboxed iframe (allow-scripts, no allow-same-origin). The
+      // canvas living inside it is the only real proof the generated bundle booted.
+      const booted = await found
+        .locator('canvas')
+        .first()
+        .waitFor({ state: 'attached', timeout: 20_000 })
+        .then(() => true)
+        .catch(() => false);
+      if (booted) {
+        frame = found;
+        break;
+      }
+      watcher.drain(); // a candidate that never booted leaves noise that is not this test's finding
+    }
+    expect(frame, 'no sampled single-player game booted a canvas').toBeTruthy();
 
     // These games draw everything — HUD included — into the canvas, so the frame's
     // innerText never moves and pixels are the only readable output. A canvas that

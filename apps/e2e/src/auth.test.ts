@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { request, type APIRequestContext } from 'playwright-core';
-import { BASE_URL, signedInApiContext, storageStatePath } from './browser.js';
+import { BASE_URL, proxyOptions, signedInApiContext, storageStatePath } from './browser.js';
 
 /**
  * The credential contract, checked without a browser. If these fail, every browser
@@ -27,7 +27,7 @@ describe.skipIf(!hasToken)('agent access token', () => {
     // Cookie-less on purpose: /api/auth/me takes either credential, so asking it
     // through the signed-in context would answer 200 from the cookie and tell us
     // nothing about the bearer path this test exists to cover.
-    const clean = await request.newContext({ baseURL: BASE_URL });
+    const clean = await request.newContext({ baseURL: BASE_URL, ...proxyOptions() });
     try {
       const res = await clean.get('/api/auth/me', {
         headers: { Authorization: `Bearer ${process.env.GAMEDEV_ACCESS_TOKEN}` },
@@ -78,7 +78,7 @@ describe.skipIf(!hasToken)('agent access token', () => {
     // cookie on `api`, and /api/auth/me accepts either credential — reusing it here
     // authenticates by cookie and reports 200 no matter how bogus the bearer is,
     // which looks like the token wall failing open when nothing is wrong.
-    const clean = await request.newContext({ baseURL: BASE_URL });
+    const clean = await request.newContext({ baseURL: BASE_URL, ...proxyOptions() });
     try {
       // Assembled at runtime: a well-formed gdpl_pat_ literal in the source would
       // (correctly) trip gitleaks. Same construction as the deploy smoke.

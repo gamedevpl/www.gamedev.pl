@@ -14,3 +14,7 @@ coverage
 *.tsbuildinfo
 .vite
 /gitleaks
+
+# Playwright/browser run artifacts (apps/e2e)
+test-results
+playwright-report
