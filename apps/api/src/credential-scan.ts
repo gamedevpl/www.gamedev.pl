@@ -8,6 +8,10 @@ const CREDENTIAL_PATTERNS: Array<{ kind: string; pattern: RegExp }> = [
   { kind: 'openai-key', pattern: /\bsk-(?!ant-)[A-Za-z0-9_-]{32,}\b/g },
   { kind: 'github-token', pattern: /\bgh[opsu]_[A-Za-z0-9_]{20,}\b/g },
   { kind: 'github-token', pattern: /\bgithub_pat_[A-Za-z0-9_]{20,}\b/g },
+  // Our own personal access tokens (docs/agent-access-tokens.md). Listed here for the
+  // same reason as everyone else's: an agent that holds one while authoring a game is
+  // exactly the situation where it ends up pasted into the output.
+  { kind: 'gamedev-access-token', pattern: /\bgdpl_pat_[0-9a-f]{16}_[A-Za-z0-9_-]{43}\b/g },
   { kind: 'google-api-key', pattern: /\bAIza[0-9A-Za-z_-]{35}\b/g },
   { kind: 'aws-access-key-id', pattern: /\bAKIA[0-9A-Z]{16}\b/g },
   { kind: 'pem-private-key', pattern: /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/g },

@@ -38,6 +38,26 @@ function post(app: Awaited<ReturnType<typeof buildApp>>, payload: unknown, heade
 
 const today = () => new Date().toISOString().slice(0, 10);
 
+/**
+ * Every partition a backdated write could have landed in, oldest first.
+ *
+ * The handler files each event under the partition of *its own* timestamp, not the
+ * flush's, so a deliberately backdated event does not necessarily land in today's.
+ * Asserting on `today()` alone made the backdating tests below fail every night
+ * between 00:00 and 06:00 UTC: clamped six hours into the past, the event is filed
+ * under *yesterday* and the read came back empty. The store is fresh per test, so
+ * reading both partitions is exact rather than merely tolerant.
+ */
+async function listBackdated(store: InMemoryStore) {
+  const todayStr = today();
+  const yesterdayStr = new Date(Date.parse(`${todayStr}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+  const [earlier, current] = await Promise.all([
+    store.listTelemetryEvents(yesterdayStr),
+    store.listTelemetryEvents(todayStr),
+  ]);
+  return [...earlier, ...current];
+}
+
 describe('POST /api/telemetry', () => {
   let store: InMemoryStore;
   beforeEach(async () => {
@@ -225,7 +245,7 @@ describe('POST /api/telemetry', () => {
         ],
       });
 
-      const stored = await store.listTelemetryEvents(today());
+      const stored = await listBackdated(store);
       const times = stored.map((event) => Date.parse(event.at));
       // 10 seconds apart, as they were when they happened — not one shared instant.
       expect(times[1] - times[0]).toBe(10_000);
@@ -259,7 +279,8 @@ describe('POST /api/telemetry', () => {
       });
 
       const sixHours = 6 * 60 * 60 * 1000;
-      const [event] = await store.listTelemetryEvents(today());
+      const [event] = await listBackdated(store);
+      expect(event, 'backdated event missing from both candidate partitions').toBeDefined();
       // Clamped to exactly the cap, measured against a clock read before the request
       // so the millisecond the request itself takes cannot fail the assertion.
       expect(Date.parse(event.at)).toBeGreaterThanOrEqual(before - sixHours);
@@ -278,7 +299,7 @@ describe('POST /api/telemetry', () => {
         events: [{ type: 'game_opened', msSinceOpen: 60_000 }],
       });
 
-      const [event] = await store.listTelemetryEvents(today());
+      const [event] = await listBackdated(store);
       expect(Date.parse(event.at)).toBeGreaterThanOrEqual(before);
       expect(Date.parse(event.at)).toBeLessThanOrEqual(Date.now());
       await app.close();

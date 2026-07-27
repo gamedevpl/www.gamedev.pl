@@ -25,6 +25,27 @@ Access is determined by a **dual-layer check** inside [`apps/api/src/auth.ts`](.
 
 > ⚠️ **Security Invariant**: Email access checks require `email_verified === true` in the Google ID token. An unverified email claim will never grant beta access.
 
+### A third path: automation accounts
+
+Neither layer above applies to **coding agents and other programmatic callers**. They hold a
+personal access token issued to a `bot:` account
+([`docs/agent-access-tokens.md`](../../docs/agent-access-tokens.md)) and reach authenticated
+routes with `Authorization: Bearer <token>` — passing the private-beta wall without appearing
+on any allowlist.
+
+That is intended, not a gap. The allowlists gate **sign-in**; an admin minting a token is
+itself an admission decision, made deliberately and revocably. Two consequences worth
+remembering when auditing access:
+
+- **A waitlist/allowlist audit is not a complete picture of who can reach the API.** Also run
+  `npm run token:list -w @gamedevpl/api -- <uid>` for any `bot:` account you know of.
+- **Revoking beta access does not revoke a token**, and vice versa — they are independent.
+  To fully cut off an automation account, revoke its tokens by id; removing it from an
+  allowlist it was never on does nothing.
+
+Do **not** add `bot:` uids to `BETA_ALLOWED_UIDS`. It would be a no-op that implies these
+accounts sign in, which they cannot.
+
 ---
 
 ## Approving or Managing Participants

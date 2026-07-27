@@ -3,6 +3,13 @@ import cookie from '@fastify/cookie';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { OAuth2Client } from 'google-auth-library';
 import { z } from 'zod';
+import {
+  isAccessTokenExpired,
+  looksLikeAccessToken,
+  parseAccessToken,
+  verifyTokenSecret,
+} from './access-token.js';
+import { readBearerToken } from './bearer.js';
 import { withActiveDay, type Store, type User } from './store.js';
 
 export const SESSION_COOKIE_NAME = 'gamedev_session';
@@ -140,6 +147,14 @@ declare module 'fastify' {
   interface FastifyRequest {
     user: User | null;
     needsSessionRenewal: boolean;
+    /**
+     * How `user` was authenticated. `null` when there is no user.
+     *
+     * Routes that must not be reachable with a long-lived automation credential —
+     * the operator surfaces, and token issuance itself — check this rather than just
+     * `user`, so a leaked token can never widen its own privileges.
+     */
+    authMethod: 'session' | 'token' | null;
   }
 }
 
@@ -221,32 +236,96 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
     }
   };
 
+  /**
+   * Resolve a personal access token from the Authorization header
+   * (docs/agent-access-tokens.md).
+   *
+   * Returns null — never throws — for every failure, so a bad token is simply an
+   * unauthenticated request and the route's own 401 explains it. Distinguishing
+   * "expired" from "revoked" from "never existed" in the response would only tell a
+   * caller holding a stolen token which one they hold.
+   *
+   * This API carries other Bearer credentials that are not PATs (the build channel's
+   * per-issue tokens, the scheduler's OIDC tokens). The `gdpl_pat_` prefix check is
+   * what keeps those out of here — they fall through untouched to the handlers that
+   * do understand them.
+   */
+  const getAccessTokenUser = async (request: FastifyRequest): Promise<User | null> => {
+    const bearer = readBearerToken(request.headers.authorization);
+    if (!bearer || !looksLikeAccessToken(bearer)) return null;
+
+    let tokenId: string;
+    let secret: string;
+    try {
+      ({ tokenId, secret } = parseAccessToken(bearer));
+    } catch {
+      return null;
+    }
+
+    const record = await store.getAccessToken(tokenId);
+    if (!record) return null;
+    if (!verifyTokenSecret(secret, record.secretHash)) return null;
+    // Fail closed on corrupt/missing expiresAt (NaN from Date.parse would
+    // otherwise read as "not expired").
+    if (isAccessTokenExpired(record.expiresAt, Date.now())) return null;
+
+    const user = await store.getUser(record.uid);
+    if (!user) return null;
+
+    // Last-use tracking, coarsened to a day so a chatty agent costs one write rather
+    // than one per request — the question it answers ("is anything still using this
+    // token?") does not need finer resolution. Best-effort by design: bookkeeping must
+    // never turn a working request into a failing one.
+    const nowIso = new Date().toISOString();
+    if (record.lastUsedAt?.slice(0, 10) !== nowIso.slice(0, 10)) {
+      void store.touchAccessToken(tokenId, nowIso).catch(() => {
+        /* same contract as every other measurement in this file */
+      });
+    }
+
+    return user;
+  };
+
   app.decorateRequest('user', null);
   app.decorateRequest('needsSessionRenewal', false);
+  app.decorateRequest('authMethod', null);
 
   app.addHook('onRequest', async (request) => {
     if (!isAuthConfigured) return;
     const { user, needsRenewal } = await getSessionUser(request);
-    if (user) {
-      request.user = user;
-      request.needsSessionRenewal = needsRenewal;
-
-      /**
-       * Record that this account was active today.
-       *
-       * `lastLoginAt` cannot stand in for this: sessions last weeks, so a creator who
-       * comes back every day still shows a single login and reads as never returning.
-       * `withActiveDay` returns null when today is already the newest entry, so the
-       * common case costs no write at all — and a failure here must never turn a
-       * working request into an error, hence the swallow.
-       */
-      const today = new Date().toISOString().slice(0, 10);
-      const activeDays = withActiveDay(user.activeDays, today);
-      if (activeDays) {
-        void store.upsertUser({ uid: user.uid, activeDays }).catch(() => {
-          /* activity history is best-effort, like every other measurement */
-        });
+    if (!user) {
+      // No cookie session — fall back to a personal access token. Deliberately second:
+      // a browser that has both should be treated as the human it is.
+      const tokenUser = await getAccessTokenUser(request);
+      if (tokenUser) {
+        request.user = tokenUser;
+        request.authMethod = 'token';
       }
+      // No `activeDays` write on this path, and that is the point: the list feeds the
+      // creator-return metric, and an agent polling on a schedule would report perfect
+      // retention for an account that is not a person.
+      return;
+    }
+
+    request.user = user;
+    request.needsSessionRenewal = needsRenewal;
+    request.authMethod = 'session';
+
+    /**
+     * Record that this account was active today.
+     *
+     * `lastLoginAt` cannot stand in for this: sessions last weeks, so a creator who
+     * comes back every day still shows a single login and reads as never returning.
+     * `withActiveDay` returns null when today is already the newest entry, so the
+     * common case costs no write at all — and a failure here must never turn a
+     * working request into an error, hence the swallow.
+     */
+    const today = new Date().toISOString().slice(0, 10);
+    const activeDays = withActiveDay(user.activeDays, today);
+    if (activeDays) {
+      void store.upsertUser({ uid: user.uid, activeDays }).catch(() => {
+        /* activity history is best-effort, like every other measurement */
+      });
     }
   });
 
@@ -263,59 +342,155 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
     }
   });
 
-  app.post('/api/auth/google', { config: { rateLimit: { max: maxAuthRequestsPerWindow, timeWindow: authRateLimitWindowMs } } }, async (request, reply) => {
-    if (!isAuthConfigured) {
-      return reply.status(503).send({ error: 'authentication is not configured' });
-    }
-
-    const currentTime = Date.now();
-    if (isRateLimited(authAttemptsByIp, request.ip, currentTime, maxAuthRequestsPerWindow, authRateLimitWindowMs)) {
-      return reply.status(429).send({ error: 'too many login attempts, please try again later' });
-    }
-
-    const parseResult = GoogleAuthSchema.safeParse(request.body);
-    if (!parseResult.success) {
-      return reply.status(400).send({ error: parseResult.error.issues[0]?.message ?? 'invalid request' });
-    }
-
-    try {
-      const googleUser = await verifier.verifyIdToken(parseResult.data.idToken);
-      const uid = `g:${googleUser.sub}`;
-
-      // Private-beta allowlist check — before creating/upserting the user doc so
-      // rejected sign-ins leave no trace in Firestore. Allow if uid OR verified email matches.
-      // NOTE: email is only consulted when Google has verified it (email_verified === true);
-      // an unverified email claim must never satisfy an access-control allowlist.
-      if (options.privateBeta) {
-        const emailLower = googleUser.emailVerified && googleUser.email ? googleUser.email.toLowerCase() : '';
-        const allowed =
-          (options.betaAllowedUids?.has(uid) ?? false) ||
-          (emailLower !== '' && (options.betaAllowedEmails?.has(emailLower) ?? false)) ||
-          (await store.isWaitlistApproved(uid, emailLower));
-        if (!allowed) {
-          // Look up existing waitlist status so the client can show it
-          const waitlistEntry = await store.getWaitlistEntry(uid);
-          return reply.status(403).send({
-            error: 'private beta — sign-ups are closed',
-            waitlistStatus: waitlistEntry?.status ?? null,
-          });
-        }
+  app.post(
+    '/api/auth/google',
+    { config: { rateLimit: { max: maxAuthRequestsPerWindow, timeWindow: authRateLimitWindowMs } } },
+    async (request, reply) => {
+      if (!isAuthConfigured) {
+        return reply.status(503).send({ error: 'authentication is not configured' });
       }
 
-      const user = await store.upsertUser({
-        uid,
-        email: googleUser.email,
-        name: googleUser.name,
-        picture: googleUser.picture,
-      });
+      const currentTime = Date.now();
+      if (isRateLimited(authAttemptsByIp, request.ip, currentTime, maxAuthRequestsPerWindow, authRateLimitWindowMs)) {
+        return reply.status(429).send({ error: 'too many login attempts, please try again later' });
+      }
 
-      if (user.tier === 'blocked') {
+      const parseResult = GoogleAuthSchema.safeParse(request.body);
+      if (!parseResult.success) {
+        return reply.status(400).send({ error: parseResult.error.issues[0]?.message ?? 'invalid request' });
+      }
+
+      try {
+        const googleUser = await verifier.verifyIdToken(parseResult.data.idToken);
+        const uid = `g:${googleUser.sub}`;
+
+        // Private-beta allowlist check — before creating/upserting the user doc so
+        // rejected sign-ins leave no trace in Firestore. Allow if uid OR verified email matches.
+        // NOTE: email is only consulted when Google has verified it (email_verified === true);
+        // an unverified email claim must never satisfy an access-control allowlist.
+        if (options.privateBeta) {
+          const emailLower = googleUser.emailVerified && googleUser.email ? googleUser.email.toLowerCase() : '';
+          const allowed =
+            (options.betaAllowedUids?.has(uid) ?? false) ||
+            (emailLower !== '' && (options.betaAllowedEmails?.has(emailLower) ?? false)) ||
+            (await store.isWaitlistApproved(uid, emailLower));
+          if (!allowed) {
+            // Look up existing waitlist status so the client can show it
+            const waitlistEntry = await store.getWaitlistEntry(uid);
+            return reply.status(403).send({
+              error: 'private beta — sign-ups are closed',
+              waitlistStatus: waitlistEntry?.status ?? null,
+            });
+          }
+        }
+
+        const user = await store.upsertUser({
+          uid,
+          email: googleUser.email,
+          name: googleUser.name,
+          picture: googleUser.picture,
+        });
+
+        if (user.tier === 'blocked') {
+          return reply.status(403).send({ error: 'account is blocked' });
+        }
+
+        const sessionToken = mintSessionToken(uid, effectiveSessionSecret);
+
+        reply.setCookie(SESSION_COOKIE_NAME, sessionToken, {
+          path: '/',
+          httpOnly: true,
+          secure: isProd,
+          sameSite: 'lax',
+          maxAge: DEFAULT_SESSION_DURATION_SECONDS,
+        });
+
+        return { user };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'google token verification failed';
+        return reply.status(401).send({ error: message });
+      }
+    },
+  );
+
+  // Deliberately usable WITHOUT a session — the caller is by definition someone
+  // whose sign-in was just rejected (not on the private-beta allowlist). Shares
+  // the auth rate limiter since it's the same abuse surface (unauthenticated
+  // Google-token verification). Re-verifies the token server-side rather than
+  // trusting any client-asserted identity.
+  app.post(
+    '/api/waitlist',
+    { config: { rateLimit: { max: maxAuthRequestsPerWindow, timeWindow: authRateLimitWindowMs } } },
+    async (request, reply) => {
+      if (!isAuthConfigured) {
+        return reply.status(503).send({ error: 'authentication is not configured' });
+      }
+
+      const currentTime = Date.now();
+      if (isRateLimited(authAttemptsByIp, request.ip, currentTime, maxAuthRequestsPerWindow, authRateLimitWindowMs)) {
+        return reply.status(429).send({ error: 'too many requests, please try again later' });
+      }
+
+      const parseResult = WaitlistSchema.safeParse(request.body);
+      if (!parseResult.success) {
+        return reply.status(400).send({ error: parseResult.error.issues[0]?.message ?? 'invalid request' });
+      }
+
+      try {
+        const googleUser = await verifier.verifyIdToken(parseResult.data.idToken);
+        const uid = `g:${googleUser.sub}`;
+        // Same rule as the beta allowlist: an unverified email claim must never be stored.
+        const email = googleUser.emailVerified && googleUser.email ? googleUser.email : undefined;
+
+        const entry = await store.upsertWaitlistEntry({
+          uid,
+          email,
+          name: googleUser.name,
+          locale: parseResult.data.locale,
+        });
+
+        return { status: 'ok', waitlistStatus: entry.status };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'google token verification failed';
+        return reply.status(401).send({ error: message });
+      }
+    },
+  );
+
+  /**
+   * Exchange a personal access token for a session cookie (docs/agent-access-tokens.md).
+   *
+   * Needed because the web app authenticates with cookies: an agent can call the API all
+   * day with a Bearer header, but the moment it drives a real browser against the real
+   * site — which is the entire point of the feature — it needs the credential the SPA
+   * actually sends. Without this, testing the product would mean reimplementing the
+   * product's fetch layer.
+   *
+   * Not a new privilege and not a bypass: the caller must already hold a valid token for
+   * the account, and what comes back is a session for that same account with the same
+   * lifetime as any other. It is the same shape as `/api/auth/google` — verify a
+   * credential the caller already has, hand back the cookie the browser needs.
+   *
+   * Session auth is deliberately *not* accepted here: a cookie cannot be used to mint a
+   * fresh cookie, so this can never be used to launder an about-to-expire session.
+   */
+  app.post(
+    '/api/auth/session',
+    { config: { rateLimit: { max: maxAuthRequestsPerWindow, timeWindow: authRateLimitWindowMs } } },
+    async (request, reply) => {
+      if (!isAuthConfigured) {
+        return reply.status(503).send({ error: 'authentication is not configured' });
+      }
+
+      if (!request.user || request.authMethod !== 'token') {
+        return reply.status(401).send({ error: 'a personal access token is required' });
+      }
+
+      if (request.user.tier === 'blocked') {
         return reply.status(403).send({ error: 'account is blocked' });
       }
 
-      const sessionToken = mintSessionToken(uid, effectiveSessionSecret);
-
-      reply.setCookie(SESSION_COOKIE_NAME, sessionToken, {
+      reply.setCookie(SESSION_COOKIE_NAME, mintSessionToken(request.user.uid, effectiveSessionSecret), {
         path: '/',
         httpOnly: true,
         secure: isProd,
@@ -323,52 +498,9 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
         maxAge: DEFAULT_SESSION_DURATION_SECONDS,
       });
 
-      return { user };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'google token verification failed';
-      return reply.status(401).send({ error: message });
-    }
-  });
-
-  // Deliberately usable WITHOUT a session — the caller is by definition someone
-  // whose sign-in was just rejected (not on the private-beta allowlist). Shares
-  // the auth rate limiter since it's the same abuse surface (unauthenticated
-  // Google-token verification). Re-verifies the token server-side rather than
-  // trusting any client-asserted identity.
-  app.post('/api/waitlist', { config: { rateLimit: { max: maxAuthRequestsPerWindow, timeWindow: authRateLimitWindowMs } } }, async (request, reply) => {
-    if (!isAuthConfigured) {
-      return reply.status(503).send({ error: 'authentication is not configured' });
-    }
-
-    const currentTime = Date.now();
-    if (isRateLimited(authAttemptsByIp, request.ip, currentTime, maxAuthRequestsPerWindow, authRateLimitWindowMs)) {
-      return reply.status(429).send({ error: 'too many requests, please try again later' });
-    }
-
-    const parseResult = WaitlistSchema.safeParse(request.body);
-    if (!parseResult.success) {
-      return reply.status(400).send({ error: parseResult.error.issues[0]?.message ?? 'invalid request' });
-    }
-
-    try {
-      const googleUser = await verifier.verifyIdToken(parseResult.data.idToken);
-      const uid = `g:${googleUser.sub}`;
-      // Same rule as the beta allowlist: an unverified email claim must never be stored.
-      const email = googleUser.emailVerified && googleUser.email ? googleUser.email : undefined;
-
-      const entry = await store.upsertWaitlistEntry({
-        uid,
-        email,
-        name: googleUser.name,
-        locale: parseResult.data.locale,
-      });
-
-      return { status: 'ok', waitlistStatus: entry.status };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'google token verification failed';
-      return reply.status(401).send({ error: message });
-    }
-  });
+      return { user: request.user };
+    },
+  );
 
   // Local development sign-in. Real Google OAuth needs a client ID, a consent screen and
   // an authorized origin, none of which a first-time contributor has — so without this the

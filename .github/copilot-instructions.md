@@ -49,6 +49,12 @@ npm run type-check && npm run lint && npm run test && npm run build
 `npm run dev` runs the API + web together locally (no cloud, no keys; generator defaults to
 `mock`). This mirrors CI (`.github/workflows/ci.yml`, Node 20).
 
+If your change touches anything behind sign-in, actually drive it. Locally,
+`curl -X POST http://localhost:5173/api/auth/dev -c cookies.txt` gives a full session
+against the in-memory store. Testing the **deployed** site needs a personal access token
+(`Authorization: Bearer $GAMEDEV_ACCESS_TOKEN`) — there is no bypass route. Never commit
+that token. See [`docs/agent-access-tokens.md`](../docs/agent-access-tokens.md).
+
 ## Before larger changes
 
 Read [`docs/roadmap.md`](../docs/roadmap.md) (what's done vs next) and

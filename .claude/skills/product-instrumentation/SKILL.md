@@ -91,6 +91,14 @@ signed in. Both telemetry streams are the anonymous half.
   self-reported flags (the same principle as deriving touch support from game source).
 - **Stable names.** Event types and progress labels are an API: renaming one breaks
   every time series that contains it. Extend deliberately; never repurpose.
+- **Bots are not people, and the data must know it.** Automation accounts live in the
+  `bot:` uid namespace ([`docs/agent-access-tokens.md`](../../docs/agent-access-tokens.md)).
+  A token-authenticated request records no `activeDays` entry, and `bot:` submissions are
+  excluded from `summarizeCreatorMetrics` — otherwise an agent on a schedule reports
+  flawless retention for a creator who does not exist, and the one number Stage 0 gates on
+  becomes a measurement of our own test suite. Any new person-shaped metric (retention,
+  return, cohort, funnel-by-account) must exclude the prefix the same way; play and visit
+  telemetry need no change, since neither is attributed at all.
 
 ## Known gaps (prefer closing one over inventing new metrics)
 

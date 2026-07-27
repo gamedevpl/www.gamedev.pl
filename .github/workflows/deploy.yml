@@ -142,6 +142,8 @@ jobs:
 
           [ -n "$CANDIDATE_URL" ] || { echo "Error: CANDIDATE_URL is empty"; exit 1; }
           echo "Candidate URL: ${CANDIDATE_URL}"
+          # Later steps (the authenticated smoke) need the same URL.
+          echo "CANDIDATE_URL=${CANDIDATE_URL}" >> "$GITHUB_ENV"
 
           # Health is always public
           STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${CANDIDATE_URL}/api/health")
@@ -228,7 +230,81 @@ jobs:
             exit 1
           fi
 
+          # A forged bearer token must read as unauthenticated — never a 500, never a
+          # session (docs/agent-access-tokens.md). Needs no secret, so it runs on every
+          # deploy: it proves the personal-access-token path fails closed even before
+          # any real token exists. The forged value is assembled at runtime because a
+          # well-formed gdpl_pat_ literal in this file would (correctly) trip gitleaks.
+          FORGED_TOKEN="gdpl_pat_$(printf '0%.0s' $(seq 16))_$(printf 'A%.0s' $(seq 43))"
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${FORGED_TOKEN}" "${CANDIDATE_URL}/api/auth/me")
+          if [ "$STATUS_CODE" -ne 401 ]; then
+            echo "Smoke test failed: forged bearer token on /api/auth/me returned ${STATUS_CODE}, expected 401"
+            exit 1
+          fi
+
           echo "Smoke test passed on candidate URL!"
+
+      # The end-to-end check the anonymous smoke above cannot do: prove the
+      # authenticated half of the product actually works on the candidate — bearer
+      # auth, the token→cookie exchange, and a session-walled route — before any
+      # traffic moves. Runs as the CI bot's own credential (docs/agent-access-tokens.md).
+      #
+      # Optional by design: without the GAMEDEV_ACCESS_TOKEN repo secret it skips
+      # loudly rather than passing silently, because a skipped check is absence of
+      # signal, not a pass. Once the secret exists, a failure here blocks promotion —
+      # including failure by token expiry, which is deliberate: an expired CI
+      # credential should be a visible event, not a quiet gap in coverage.
+      - name: Authenticated smoke (agent access token)
+        env:
+          GAMEDEV_ACCESS_TOKEN: ${{ secrets.GAMEDEV_ACCESS_TOKEN }}
+        run: |
+          if [ -z "$GAMEDEV_ACCESS_TOKEN" ]; then
+            echo "::notice::GAMEDEV_ACCESS_TOKEN secret not set — authenticated smoke SKIPPED (bearer/cookie paths unverified on this deploy)"
+            exit 0
+          fi
+
+          [ -n "$CANDIDATE_URL" ] || { echo "Error: CANDIDATE_URL missing from env"; exit 1; }
+
+          # 1. Bearer path: the token authenticates as its account.
+          STATUS_CODE=$(curl -s -o /tmp/smoke-me.json -w "%{http_code}" \
+            -H "Authorization: Bearer ${GAMEDEV_ACCESS_TOKEN}" "${CANDIDATE_URL}/api/auth/me")
+          if [ "$STATUS_CODE" -ne 200 ]; then
+            echo "Authenticated smoke failed: bearer /api/auth/me returned ${STATUS_CODE}."
+            echo "Likely causes: token expired or revoked (npm run token:list -w @gamedevpl/api -- bot:ci), or minted against a different project."
+            exit 1
+          fi
+
+          # 2. CI must run as an automation account, never as a person: bot: uids are
+          #    excluded from creator metrics, and this check is what enforces that a
+          #    human token pasted into the secret gets rejected here rather than
+          #    silently polluting the product numbers on every deploy.
+          UID_VALUE=$(jq -r '.user.uid // empty' /tmp/smoke-me.json)
+          case "$UID_VALUE" in
+            bot:*) ;;
+            *)
+              echo "Authenticated smoke failed: CI token belongs to '${UID_VALUE}', not a bot: account."
+              echo "Mint one for CI: npm run token:mint -w @gamedevpl/api -- bot:ci --name 'github actions' --days 30"
+              exit 1
+              ;;
+          esac
+
+          # 3. Cookie path: exchange the token for the session cookie the SPA sends,
+          #    then prove that cookie passes a session-walled route.
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -c /tmp/smoke-cookies.txt -X POST \
+            -H "Authorization: Bearer ${GAMEDEV_ACCESS_TOKEN}" "${CANDIDATE_URL}/api/auth/session")
+          if [ "$STATUS_CODE" -ne 200 ]; then
+            echo "Authenticated smoke failed: /api/auth/session returned ${STATUS_CODE}"
+            exit 1
+          fi
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -b /tmp/smoke-cookies.txt "${CANDIDATE_URL}/api/notifications")
+          rm -f /tmp/smoke-cookies.txt /tmp/smoke-me.json
+          if [ "$STATUS_CODE" -ne 200 ]; then
+            echo "Authenticated smoke failed: session cookie rejected by /api/notifications (${STATUS_CODE})"
+            exit 1
+          fi
+
+          echo "Authenticated smoke passed as ${UID_VALUE}: bearer auth, cookie exchange, and the session wall all live."
 
       - name: Promote candidate revision to 100% traffic
         run: |

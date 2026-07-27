@@ -2,6 +2,16 @@ import { createHash, randomUUID } from 'node:crypto';
 import { Firestore, type DocumentData } from '@google-cloud/firestore';
 import type { BuildEvent, SubmissionStatus } from './submission-status.js';
 
+/**
+ * Uid namespace for automation accounts (docs/agent-access-tokens.md).
+ *
+ * Alongside `g:` (Google) and `dev:` (local sign-in). Keeping bots in their own
+ * namespace is what lets product measurement tell them apart from people — the creator
+ * metrics exclude them by this prefix — and it is why minting a token cannot
+ * accidentally call a mistyped `g:` account into existence.
+ */
+export const BOT_UID_PREFIX = 'bot:';
+
 export interface User {
   uid: string;
   email?: string;
@@ -352,6 +362,38 @@ export interface WaitlistEntry {
   status: WaitlistStatus;
 }
 
+/**
+ * A personal access token issued to a user account (docs/agent-access-tokens.md).
+ *
+ * Stored in its own top-level collection rather than on the user document, for one
+ * blunt reason: `User` objects are returned to clients by `/api/auth/me` and the
+ * sign-in routes, and a credential record that rides along on the user is one
+ * forgotten `delete` away from being served to a browser. Keeping it in a separate
+ * collection means that can never happen, and it makes the lookup a point read on
+ * the token id rather than a scan.
+ *
+ * `secretHash` is `sha256` of the secret half — the token itself is never stored, so
+ * an operator who can read this collection still cannot authenticate as anyone.
+ */
+export interface AccessTokenRecord {
+  tokenId: string;
+  uid: string;
+  secretHash: string;
+  /** Operator-supplied label, so a list of tokens is readable a month later. */
+  name: string;
+  createdAt: string;
+  /** Who minted it — an admin uid. Kept so issuance is attributable after the fact. */
+  createdByUid: string;
+  /** Expiry is mandatory: a credential for automation should not outlive its purpose. */
+  expiresAt: string;
+  /**
+   * Best-effort last-use stamp, written at most once a day (like `User.activeDays`)
+   * so a busy agent costs one write rather than one per request. Its job is answering
+   * "is this token still in use?" before revoking it, which a day's resolution covers.
+   */
+  lastUsedAt?: string;
+}
+
 export interface Store {
   getUser(uid: string): Promise<User | null>;
   upsertUser(userData: Partial<User> & { uid: string }): Promise<User>;
@@ -471,6 +513,16 @@ export interface Store {
   clearVote(slug: string, uid: string): Promise<GameVoteCounts>;
   /** A game's aggregate vote counts — the public read, no uid involved. */
   getVoteCounts(slug: string): Promise<GameVoteCounts>;
+  /** Persist a newly minted personal access token. */
+  createAccessToken(record: AccessTokenRecord): Promise<void>;
+  /** Point lookup by token id — the hot path on every bearer-authenticated request. */
+  getAccessToken(tokenId: string): Promise<AccessTokenRecord | null>;
+  /** Every token issued to a user, newest first. Never includes secrets (only hashes). */
+  listAccessTokens(uid: string): Promise<AccessTokenRecord[]>;
+  /** Revoke by id. Returns false when the token did not exist. */
+  deleteAccessToken(tokenId: string): Promise<boolean>;
+  /** Best-effort last-use stamp; callers must not let a failure fail the request. */
+  touchAccessToken(tokenId: string, at: string): Promise<void>;
 }
 
 // Stable doc id for a subscription: a hash of its endpoint URL. Endpoints are long
@@ -508,6 +560,8 @@ export class InMemoryStore implements Store {
   private pushSubs = new Map<string, Map<string, PushSubscriptionRecord>>();
   // slug -> (uid -> value)
   private votes = new Map<string, Map<string, VoteValue>>();
+  // tokenId -> personal access token record
+  private accessTokens = new Map<string, AccessTokenRecord>();
 
   async getUser(uid: string): Promise<User | null> {
     const user = this.users.get(uid);
@@ -923,6 +977,31 @@ export class InMemoryStore implements Store {
 
   async getVoteCounts(slug: string): Promise<GameVoteCounts> {
     return this.voteCounts(slug);
+  }
+
+  async createAccessToken(record: AccessTokenRecord): Promise<void> {
+    this.accessTokens.set(record.tokenId, { ...record });
+  }
+
+  async getAccessToken(tokenId: string): Promise<AccessTokenRecord | null> {
+    const record = this.accessTokens.get(tokenId);
+    return record ? { ...record } : null;
+  }
+
+  async listAccessTokens(uid: string): Promise<AccessTokenRecord[]> {
+    return Array.from(this.accessTokens.values())
+      .filter((record) => record.uid === uid)
+      .map((record) => ({ ...record }))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async deleteAccessToken(tokenId: string): Promise<boolean> {
+    return this.accessTokens.delete(tokenId);
+  }
+
+  async touchAccessToken(tokenId: string, at: string): Promise<void> {
+    const record = this.accessTokens.get(tokenId);
+    if (record) this.accessTokens.set(tokenId, { ...record, lastUsedAt: at });
   }
 
   // Test/inspection only — not part of the Store interface. Production code never
@@ -1488,5 +1567,39 @@ export class FirestoreStore implements Store {
   async getVoteCounts(slug: string): Promise<GameVoteCounts> {
     const snap = await this.gameRef(slug).get();
     return FirestoreStore.readVoteCounts(snap.data());
+  }
+
+  async createAccessToken(record: AccessTokenRecord): Promise<void> {
+    await this.db.collection('accessTokens').doc(record.tokenId).create(record);
+  }
+
+  async getAccessToken(tokenId: string): Promise<AccessTokenRecord | null> {
+    const snap = await this.db.collection('accessTokens').doc(tokenId).get();
+    if (!snap.exists) return null;
+    return snap.data() as AccessTokenRecord;
+  }
+
+  async listAccessTokens(uid: string): Promise<AccessTokenRecord[]> {
+    const snap = await this.db.collection('accessTokens').where('uid', '==', uid).get();
+    // Sorted in memory rather than with orderBy: a composite (uid, createdAt) index is
+    // not worth provisioning for a listing whose result set is a handful of rows.
+    return snap.docs
+      .map((doc) => doc.data() as AccessTokenRecord)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async deleteAccessToken(tokenId: string): Promise<boolean> {
+    const docRef = this.db.collection('accessTokens').doc(tokenId);
+    const snap = await docRef.get();
+    if (!snap.exists) return false;
+    await docRef.delete();
+    return true;
+  }
+
+  async touchAccessToken(tokenId: string, at: string): Promise<void> {
+    // `update` (not merge-set): a revoked token's doc is gone, and merge-set
+    // would resurrect a partial record that later auth reads crash on. Missing
+    // docs throw; callers already treat touch as best-effort.
+    await this.db.collection('accessTokens').doc(tokenId).update({ lastUsedAt: at });
   }
 }

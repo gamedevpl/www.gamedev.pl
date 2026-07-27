@@ -33,7 +33,7 @@ Deployments to Cloud Run are triggered on push to `master`:
 2. **Keyless OIDC Auth:** Authenticates via GCP Workload Identity Federation (no long-lived service account keys).
 3. **Cloud Build Image Creation:** Submits image build using `infra/cloudbuild.yaml` to Artifact Registry. The WIF deployer service account must also have `roles/serviceusage.serviceUsageConsumer` and storage access for the default Cloud Build staging bucket; `infra/setup-wif.sh` grants both.
 4. **Staging / Candidate Revision:** Deploys revision to Cloud Run with `--no-traffic --tag candidate`.
-5. **Candidate Smoke Test:** Performs HTTP status check on `${CANDIDATE_URL}/api/health`.
+5. **Candidate Smoke Test:** Anonymous checks (health, shell, public catalog/play, walls hold, forged bearer token rejected) plus an **authenticated smoke** when the `GAMEDEV_ACCESS_TOKEN` repo secret exists — bearer auth, token→cookie exchange, and a session-walled route, run as the CI bot (see [`agent-access-tokens.md`](./agent-access-tokens.md)). Skips loudly when the secret is absent.
 6. **Traffic Promotion & Tag Cleanup:** Promotes traffic to the latest revision (`--to-latest`) and removes the candidate tag (`--remove-tags candidate`) only if the smoke test succeeds.
 
 ## Secrets & access (current live state)
@@ -127,6 +127,33 @@ It refuses to run without `RESEND_API_KEY` (rather than silently not sending); `
 previews the rendered email with no Firestore write and no send. See
 [`.claude/skills/managing-beta-participants`](../.claude/skills/managing-beta-participants) for
 the full access model.
+
+## Issuing agent access tokens
+
+Coding agents authenticate to the deployed site with personal access tokens
+([`agent-access-tokens.md`](./agent-access-tokens.md)). Deliberately **no new deployment
+config**: no Secret Manager entry, no Cloud Run env var, nothing to rotate at the
+infrastructure level. The only prerequisite is that `ADMIN_UIDS` already contains your uid,
+which it must for the operator telemetry views anyway.
+
+Issue one the same way you approve a beta tester — from a shell with gcloud credentials for
+the project:
+
+```bash
+npm run token:mint   -w @gamedevpl/api -- bot:e2e --name "claude cloud vm"
+npm run token:list   -w @gamedevpl/api -- bot:e2e
+npm run token:revoke -w @gamedevpl/api -- <tokenId>
+```
+
+The token prints once and is never recoverable. It creates a `bot:` account on first mint;
+those accounts are excluded from creator metrics, so agent traffic does not move the
+product numbers.
+
+Storage is one new Firestore collection, `accessTokens`, keyed by token id. No composite
+index is required. Expired tokens are already refused at authentication. Do **not** point
+a Firestore TTL policy at `expiresAt` as stored today — that field is an ISO string, and
+TTL only deletes on Timestamp/Date values (a no-op policy otherwise). Self-cleaning would
+need a dedicated Timestamp field or an operator sweep; it is hygiene, not a control.
 
 ## How to deploy manually
 
