@@ -55,10 +55,13 @@ that track the GTM stages.
    ceiling for the *entire* API and also an availability fact: every deploy or instance
    restart drops all live party rooms. Accepted for beta; must fall before Stage 2 spikes
    ([`roadmap.md`](./roadmap.md) Phase 5 🔴).
-2. **GitHub as runtime storage.** The catalog and every game bundle are read from the
-   private games repo at request time ([`github-client.ts`](../apps/api/src/github-client.ts)
-   has retries but no last-good cache). A GitHub API outage or an expired PAT takes the
-   catalog and play path down with it.
+2. **GitHub as runtime storage.** ✅ *Largely resolved 2026-07-27 by the games snapshot
+   (item 10)* — published games and the catalog are served from
+   `gs://gamedevpl-games-snapshots`, not from GitHub at request time. What remains: the
+   preview and draft routes still read the private games repo live
+   ([`github-client.ts`](../apps/api/src/github-client.ts) has retries but no last-good
+   cache), so a GitHub outage or an expired PAT still degrades creation and previews — it
+   no longer takes the catalog and published-play path down with it.
 3. **Expiring PATs.** `github-token` (Secret Manager) and `GAMES_REPO_TOKEN` (Actions
    secret) are fine-grained PATs with expiry dates. Expiry is a scheduled, silent outage of
    submissions and CI — currently nothing tracks the dates.
@@ -135,10 +138,12 @@ GitHub dependency.
      alert, not a metric". Cheapest implementation: the existing notify-sweep already
      iterates open submissions; make it log a `stalled_submission` line the alert matches.
    - relay anomalies (room-not-found spikes — the symptom of a second instance).
-3. **Blunt the GitHub runtime dependency.** In-process last-good cache for the catalog and
-   assembled bundles: serve stale on GitHub 5xx/timeout, refresh in the background. This
-   turns a GitHub outage from "site is empty" into "newest game is late". Small code
-   change, large availability win, and it also cuts steady-state API-rate-limit exposure.
+3. **Blunt the GitHub runtime dependency.** ✅ *Shipped 2026-07-27, and more strongly than
+   proposed here.* Instead of an in-process last-good cache serving stale on GitHub
+   5xx/timeout, published games and the catalog are baked to Cloud Storage at merge time
+   and served from there — so a GitHub outage is already "newest game is late" for
+   published play, and steady-state API-rate-limit exposure is cut to the bake job. See
+   [`games-snapshot.md`](./games-snapshot.md). Previews still read GitHub live.
 4. **Games-repo backup.** A scheduled `git clone --mirror` of the private games repo pushed
    to a GCS bucket (weekly is fine; the repo is small and append-mostly). Covers both
    GitHub-side loss and account lockout.
@@ -364,7 +369,7 @@ by whoever hits the gap.
 Now ──────────── week 2 ─────────────────── week 12 ─────────────── month 6
    Gate O1                  Gate O2                     Gate O3
    backups + alert floor    dashboard, product alerts,  relay split, load test,
-   restore drill, budget,   catalog last-good cache,    load-shed ladder, launch
+   restore drill, budget,   catalog snapshot (done),    load-shed ladder, launch
    PAT ledger, global       queue visibility + pacing,  runbook, IaC, SLOs,
    creation cap + pause     games mirror, retention,    deploy hardening, CDN
    switch                   event mode, resources set   decision
@@ -424,10 +429,27 @@ not DONE until its *Verify* line has actually been performed.
 
 ### O2 — Stage-1 operations (target: weeks 2–12)
 
-10. 📋 **Last-good catalog + bundle cache** (§3's top code change). Serve stale on GitHub
-    5xx/timeout/rate-limit, background refresh, log cache hit/miss/stale-served.
-    — Verify: test simulating GitHub 500s serves the cached catalog; deployed behavior
-    checked by watching logs during a PAT-scope test window.
+10. ✅ **DONE** — PR #260 + games#74, merged 2026-07-27, commit `cc84b4f0`.
+    **Superseded by the bake-at-merge snapshot, which is stronger than the last-good
+    cache this item planned: GitHub is no longer on the published-play path at all**, so
+    there is no live GitHub call left to serve stale *from*. A merge to the games repo
+    bakes every published game into `gs://gamedevpl-games-snapshots` and flips
+    `current.json`; the site serves those bytes, and GitHub is demoted to a fallback for
+    games missing from the snapshot. Design, takedown caveat and rollback procedure:
+    [`games-snapshot.md`](./games-snapshot.md).
+    — Verified in prod 2026-07-27: dispatch → bake → pointer flip → live read; 84 games
+    and 356 media baked with 0 failures; snapshot bytes character-identical to what the
+    GitHub path assembles; zero "falling back to GitHub" warnings on catalog/play once
+    the pointer TTL rolled over.
+    — Residual work this does *not* cover, both small and startable now:
+    - 📋 **Timeout on snapshot GCS fetches** (`apps/api/src/game-snapshot.ts`): a 2–5s
+      `AbortSignal`, so a hung — as opposed to failed — Storage connection cannot stall
+      the play route. The fallback triggers on error, not on a socket that never answers.
+      — Verify: a stalled fetch falls back to GitHub within the timeout.
+    - 📋 **Alert on `publish-games.yml` failure** (belongs with item 11's A-series). A red
+      bake is visible only in the Actions tab, and takedowns now depend on green bakes —
+      a failed bake leaves the previous snapshot serving indefinitely, and nothing
+      retries it. — Verify: a failed bake notifies somewhere outside the Actions tab.
 11. 📋 **Structured failure logging + log-based metrics** for A6 (catalog fetch fail),
     A7 (submission filing fail), A8 (stalled submission — emit from notify-sweep),
     A9 (instance count > 1), A11 (GitHub rate headroom), A12 (429s), A13 (queue depth).
@@ -478,6 +500,8 @@ not DONE until its *Verify* line has actually been performed.
 
 - Item 6 (global cap + pause switch) — one PR, tests included.
 - Item 9 (runbook skeletons) — one PR, unblocks the owner drills in items 3, 7, 23.
-- Item 10 (last-good cache) — one PR; the single highest-leverage code change in the plan.
+- ~~Item 10 (last-good cache)~~ — ✅ done 2026-07-27 as the games snapshot (PR #260 +
+  games#74). Its two follow-ups (fetch timeout, bake-failure alert) are each small and
+  startable now.
 - Drafts for items 2, 4, 11, 12 (`infra/` scripts + dashboard JSON) — one PR the owner
   can execute from.
