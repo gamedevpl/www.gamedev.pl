@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { submitContact } from './contactApi';
+import { submitContact } from './contactApi.js';
 
 describe('submitContact', () => {
   it('POSTs the payload to /api/contact', async () => {
