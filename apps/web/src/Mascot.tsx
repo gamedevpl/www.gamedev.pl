@@ -7,13 +7,28 @@
  *
  * Animation lives in layered SVG groups + CSS (bob, bounce, sway, blink lids,
  * waving arm). `staticPose` freezes everything; `prefers-reduced-motion` does too.
+ *
+ * `InteractiveMascot` wraps the SVG in a button: hover peeks, click cycles
+ * reactions, and the face tracks the pointer a little.
  */
 
-import { useId, type ReactElement, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
 import { MASCOT_IDLE_SPANS, MASCOT_SOLID_SPANS } from './mascotSpans.js';
 
 export type MascotEmotion =
   'idle' | 'happy' | 'curious' | 'thinking' | 'excited' | 'confused' | 'sad' | 'proud' | 'wave' | 'busy';
+
+/** Normalized look direction in roughly [-1, 1] for each axis. */
+export type MascotLook = { x: number; y: number };
 
 type MascotProps = {
   emotion?: MascotEmotion;
@@ -22,6 +37,8 @@ type MascotProps = {
   title?: string;
   /** When true, all motion is forced off (e.g. tiny nav mark). */
   staticPose?: boolean;
+  /** Nudge face cutouts toward a point — no-op on the baked idle silhouette. */
+  look?: MascotLook;
 };
 
 type Span = readonly [number, number, number];
@@ -258,7 +275,14 @@ function BlinkLids() {
   );
 }
 
-export function Mascot({ emotion = 'idle', size = 48, className, title, staticPose = false }: MascotProps) {
+export function Mascot({
+  emotion = 'idle',
+  size = 48,
+  className,
+  title,
+  staticPose = false,
+  look,
+}: MascotProps) {
   const reactId = useId().replace(/:/g, '');
   const maskId = `mascot-mask-${reactId}`;
   const height = Math.round((size * 60) / 70);
@@ -268,6 +292,9 @@ export function Mascot({ emotion = 'idle', size = 48, className, title, staticPo
   const cutouts = cutoutsFor(emotion);
   const isIdle = emotion === 'idle' || cutouts == null;
   const showWaveArm = emotion === 'wave' || emotion === 'excited';
+  // Keep the nudge small — past ~3px the mouth starts to clip the silhouette.
+  const lookTransform =
+    look && !isIdle ? `translate(${(look.x * 2.4).toFixed(2)} ${(look.y * 1.8).toFixed(2)})` : undefined;
 
   return (
     <svg
@@ -293,7 +320,9 @@ export function Mascot({ emotion = 'idle', size = 48, className, title, staticPo
             <defs>
               <mask id={maskId} maskUnits="userSpaceOnUse" x="0" y="0" width="70" height="60">
                 <path fill="#fff" d={SOLID_PATH} />
-                <g fill="#000">{cutouts}</g>
+                <g fill="#000" className="mascot__face-features" transform={lookTransform}>
+                  {cutouts}
+                </g>
               </mask>
             </defs>
             <rect
@@ -317,6 +346,145 @@ export function Mascot({ emotion = 'idle', size = 48, className, title, staticPo
         ) : null}
       </g>
     </svg>
+  );
+}
+
+/** Playful reactions cycled when the visitor pokes the splash mascot. */
+const POKE_REACTIONS: readonly MascotEmotion[] = [
+  'excited',
+  'happy',
+  'curious',
+  'proud',
+  'thinking',
+  'confused',
+];
+
+const POKE_HOLD_MS = 1400;
+
+type InteractiveMascotProps = {
+  size?: number;
+  className?: string;
+  /** Resting emotion between pokes (default: wave). */
+  idleEmotion?: MascotEmotion;
+  /** Accessible name for the poke control. */
+  pokeLabel: string;
+};
+
+/**
+ * Clickable mascot for branded empty states (splash, etc.).
+ * Hover peeks, click cycles a reaction, pointer position nudges the face.
+ */
+export function InteractiveMascot({
+  size = 96,
+  className,
+  idleEmotion = 'wave',
+  pokeLabel,
+}: InteractiveMascotProps) {
+  const rootRef = useRef<HTMLButtonElement>(null);
+  const pokeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reactionIndex = useRef(0);
+  const hoveredRef = useRef(false);
+  const pokingRef = useRef(false);
+  const [emotion, setEmotion] = useState<MascotEmotion>(idleEmotion);
+  const [look, setLook] = useState<MascotLook>({ x: 0, y: 0 });
+  const [poking, setPoking] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const reduceMotionRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof matchMedia !== 'function') return;
+    const media = matchMedia('(prefers-reduced-motion: reduce)');
+    const sync = () => {
+      reduceMotionRef.current = media.matches;
+      setReduceMotion(media.matches);
+    };
+    sync();
+    media.addEventListener('change', sync);
+    return () => media.removeEventListener('change', sync);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (pokeTimer.current) clearTimeout(pokeTimer.current);
+    };
+  }, []);
+
+  const settleEmotion = () =>
+    hoveredRef.current && !reduceMotionRef.current ? 'curious' : idleEmotion;
+
+  const clearPokeTimer = () => {
+    if (pokeTimer.current) {
+      clearTimeout(pokeTimer.current);
+      pokeTimer.current = null;
+    }
+  };
+
+  const handlePointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (reduceMotionRef.current) return;
+    const node = rootRef.current;
+    if (!node) return;
+    const rect = node.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    const y = ((event.clientY - rect.top) / rect.height) * 2 - 1;
+    const clamp = (value: number) => Math.max(-1, Math.min(1, value));
+    setLook({ x: clamp(x), y: clamp(y) });
+  };
+
+  const resetLook = () => setLook({ x: 0, y: 0 });
+
+  const handlePoke = () => {
+    const next = POKE_REACTIONS[reactionIndex.current % POKE_REACTIONS.length]!;
+    reactionIndex.current += 1;
+    pokingRef.current = true;
+    setPoking(true);
+    setEmotion(next);
+    clearPokeTimer();
+    pokeTimer.current = setTimeout(() => {
+      pokingRef.current = false;
+      setPoking(false);
+      setEmotion(settleEmotion());
+      pokeTimer.current = null;
+    }, POKE_HOLD_MS);
+  };
+
+  const tiltStyle: CSSProperties | undefined = reduceMotion
+    ? undefined
+    : {
+        transform: `rotate(${(look.x * 7).toFixed(2)}deg) translateY(${(look.y * 2).toFixed(2)}px)`,
+      };
+
+  return (
+    <button
+      ref={rootRef}
+      type="button"
+      className={['mascot-interactive', poking ? 'mascot-interactive--poking' : null, className]
+        .filter(Boolean)
+        .join(' ')}
+      aria-label={pokeLabel}
+      onClick={handlePoke}
+      onPointerEnter={() => {
+        hoveredRef.current = true;
+        if (!pokingRef.current && !reduceMotionRef.current) setEmotion('curious');
+      }}
+      onPointerLeave={() => {
+        hoveredRef.current = false;
+        resetLook();
+        if (!pokingRef.current) setEmotion(idleEmotion);
+      }}
+      onPointerMove={handlePointerMove}
+      onBlur={() => {
+        hoveredRef.current = false;
+        resetLook();
+        if (!pokingRef.current) setEmotion(idleEmotion);
+      }}
+    >
+      {/* Tilt lives on an inner span so the button can still run the poke squash. */}
+      <span className="mascot-interactive__tilt" style={tiltStyle}>
+        {/* Button owns the accessible name; keep the SVG presentational to avoid a double announce. */}
+        <Mascot emotion={emotion} size={size} look={reduceMotion ? undefined : look} />
+      </span>
+    </button>
   );
 }
 

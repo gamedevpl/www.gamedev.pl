@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
 import { GoogleSignInButton } from './GoogleSignInButton.js';
-import { Mascot } from './Mascot.js';
+import { InteractiveMascot } from './Mascot.js';
 
 type WaitlistState = 'idle' | 'joining' | 'joined' | 'error';
 
@@ -31,7 +31,12 @@ export function ClosedBetaSplash() {
   return (
     <div className="beta-splash">
       <div className="beta-splash__card">
-        <Mascot className="beta-splash__mascot" emotion="wave" size={96} title={t('mascot.waveAlt')} />
+        <InteractiveMascot
+          className="beta-splash__mascot"
+          idleEmotion="wave"
+          size={96}
+          pokeLabel={t('mascot.poke')}
+        />
         <div className="beta-splash__logo">
           <span className="beta-splash__logo-main">gamedev</span>
           <span className="beta-splash__logo-tld">.pl</span>

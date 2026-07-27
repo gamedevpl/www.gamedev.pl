@@ -375,7 +375,8 @@
     "confusedAlt": "The gamedev.pl monster looking confused",
     "sadAlt": "The gamedev.pl monster looking sad",
     "curiousAlt": "The gamedev.pl monster looking curious",
-    "busyAlt": "The gamedev.pl monster hard at work"
+    "busyAlt": "The gamedev.pl monster hard at work",
+    "poke": "Poke the gamedev.pl monster"
   },
   "footer": {
     "legalNav": "Legal information",

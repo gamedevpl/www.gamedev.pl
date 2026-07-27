@@ -4,7 +4,7 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Mascot, MascotMoment, type MascotEmotion } from './Mascot.js';
+import { InteractiveMascot, Mascot, MascotMoment, type MascotEmotion } from './Mascot.js';
 import { MASCOT_IDLE_SPANS, MASCOT_SOLID_SPANS } from './mascotSpans.js';
 
 const EMOTIONS: MascotEmotion[] = [
@@ -276,6 +276,115 @@ describe('Mascot', () => {
     expect(container.querySelector('.mascot-moment')).not.toBeNull();
     expect(container.querySelector('.mascot--confused')).not.toBeNull();
     expect(container.textContent).toContain('Lost the plot');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('nudges face cutouts when given a look direction', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(Mascot, { emotion: 'wave', look: { x: 1, y: -0.5 } }));
+    });
+
+    const features = container.querySelector('.mascot__face-features');
+    expect(features?.getAttribute('transform')).toBe('translate(2.40 -0.90)');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+});
+
+describe('InteractiveMascot', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('pokes through a reaction cycle on click', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.useFakeTimers();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(InteractiveMascot, {
+          pokeLabel: 'Poke the monster',
+          idleEmotion: 'wave',
+          size: 64,
+        }),
+      );
+    });
+
+    const button = container.querySelector<HTMLButtonElement>('button.mascot-interactive');
+    expect(button).not.toBeNull();
+    expect(button?.getAttribute('aria-label')).toBe('Poke the monster');
+    expect(container.querySelector('.mascot--wave')).not.toBeNull();
+
+    await act(async () => {
+      button?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.mascot--excited')).not.toBeNull();
+    expect(button?.classList.contains('mascot-interactive--poking')).toBe(true);
+
+    await act(async () => {
+      vi.advanceTimersByTime(1400);
+    });
+    expect(container.querySelector('.mascot--wave')).not.toBeNull();
+    expect(button?.classList.contains('mascot-interactive--poking')).toBe(false);
+
+    await act(async () => {
+      button?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.mascot--happy')).not.toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('peeks on hover and follows the pointer a little', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(InteractiveMascot, { pokeLabel: 'Poke', idleEmotion: 'wave', size: 80 }));
+    });
+
+    const button = container.querySelector<HTMLButtonElement>('button.mascot-interactive')!;
+    Object.defineProperty(button, 'getBoundingClientRect', {
+      value: () => ({ left: 0, top: 0, width: 80, height: 80, right: 80, bottom: 80, x: 0, y: 0, toJSON: () => ({}) }),
+    });
+
+    await act(async () => {
+      button.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true }));
+    });
+    expect(container.querySelector('.mascot--curious')).not.toBeNull();
+
+    await act(async () => {
+      button.dispatchEvent(
+        new PointerEvent('pointermove', { bubbles: true, clientX: 80, clientY: 0 }),
+      );
+    });
+    expect(container.querySelector('.mascot__face-features')?.getAttribute('transform')).toBe(
+      'translate(2.40 -1.80)',
+    );
+
+    await act(async () => {
+      button.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true }));
+    });
+    expect(container.querySelector('.mascot--wave')).not.toBeNull();
 
     await act(async () => {
       root.unmount();
