@@ -110,4 +110,14 @@ describe('the injected bridge reports health', () => {
     expect(meta?.desc).toBe('Hop in space');
     bridge.stop();
   });
+
+  it('reports a pointerdown so the host can dismiss overlays without covering the game', async () => {
+    const bridge = runBridge('<canvas id="game"></canvas>');
+
+    bridge.frameWindow.dispatchEvent(new bridge.frameWindow.PointerEvent('pointerdown'));
+    await delivered();
+
+    expect(bridge.received.filter((m) => m.type === 'pointer').map((m) => m.source)).toEqual(['gdpl-player']);
+    bridge.stop();
+  });
 });

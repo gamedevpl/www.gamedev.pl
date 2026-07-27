@@ -107,18 +107,21 @@ export function GameTheater({
     if (document.fullscreenElement) return;
     onExitRef.current();
   }, []);
+  // A tap inside the sandboxed game never bubbles to the document — the bridge
+  // relays pointerdown so overlays like More can dismiss without covering the
+  // playfield (which would steal that first tap from the game).
+  const dismissMore = useCallback(() => setMoreOpen(false), []);
   // Escape is handled twice on purpose: the window listener below covers the app's
   // own chrome, and this covers the game iframe, which holds focus while playing
   // and swallows its own key events.
-  const player = useGamePlayer(frameRef, true, requestExit);
+  const player = useGamePlayer(frameRef, true, requestExit, dismissMore);
 
   // The game reports its own (localized) title over the bridge. Prefer it: on a
   // direct `/play/<slug>` link there's no catalog entry to take a title from, so
   // the caller can only derive one from the slug.
   const displayTitle = player.meta?.title?.trim() || title;
 
-  const authorLabel =
-    submittedBy && !isPlatformAuthor(submittedBy) ? submittedBy : t('catalog.platformAuthor');
+  const authorLabel = submittedBy && !isPlatformAuthor(submittedBy) ? submittedBy : t('catalog.platformAuthor');
 
   // Fullscreen buys back the browser chrome — on a phone that's a third of the
   // screen. Unsupported on iPhone Safari, where `fullscreenEnabled` is false and
@@ -185,8 +188,11 @@ export function GameTheater({
   }, [requestExit, moreOpen]);
 
   // Close the overflow menu on an outside tap — phones have no hover to dismiss it.
-  // Defer the listener one tick so the opening click (or a synthetic pointerdown from
-  // automation) cannot close the menu in the same gesture that opened it.
+  // Same-document chrome uses pointerdown here. Taps on the sandboxed game are
+  // relayed by the player bridge (useGamePlayer → dismissMore) so the playfield
+  // stays interactive — focus tricks don't fire reliably on mobile, and a
+  // covering backdrop would steal the first tap.
+  // Defer one tick so the opening click cannot close the menu in the same gesture.
   useEffect(() => {
     if (!moreOpen) return;
     const onPointer = (event: PointerEvent) => {
@@ -266,10 +272,13 @@ export function GameTheater({
                   type="button"
                   className="secondary-btn theater-more-btn"
                   aria-expanded={moreOpen}
+                  aria-haspopup="menu"
                   aria-label={t('player.moreActions')}
                   onClick={() => setMoreOpen((open) => !open)}
                 >
-                  <PixelIcon name={moreOpen ? 'close' : 'menu'} size={14} />
+                  {/* Stay a hamburger when open — swapping to X sat next to Exit and
+                      read as two close buttons. Highlight communicates open state. */}
+                  <PixelIcon name="menu" size={14} />
                 </button>
                 <div className="theater-more-panel" role="menu">
                   {soundControl('theater-menu-item theater-mobile-chrome')}
