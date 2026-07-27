@@ -13,7 +13,7 @@ import { MAX_PROJECT_BYTES as ASSEMBLE_MAX } from './assemble.js';
 
 describe('games-repo-contract (website half)', () => {
   it('keeps the serve budget at the Check 4 total (games-repo MAX_BUNDLE_BYTES)', () => {
-    expect(MAX_PROJECT_BYTES).toBe(243_078);
+    expect(MAX_PROJECT_BYTES).toBe(247_904);
     expect(GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES).toBe(MAX_PROJECT_BYTES);
     // assemble.ts must re-export the same number — a second literal would drift.
     expect(ASSEMBLE_MAX).toBe(MAX_PROJECT_BYTES);
@@ -55,18 +55,22 @@ describe('games-repo source extractors', () => {
   });
 
   it('evaluates MAX_BUNDLE_BYTES across named platform allowances', () => {
-    // Shape mirrors games-repo validate.ts: author budget + named GameKit
-    // allowances. Totals must match MAX_PROJECT_BYTES on this side.
+    // Values mirror games-repo validate.ts, allowance for allowance, so the total
+    // is the real MAX_PROJECT_BYTES rather than a made-up sum that happens to land
+    // on it. Two of them are `a + b` sums over there — an allowance that was raised
+    // keeps the original and the raise side by side instead of collapsing to one
+    // opaque number — so the extractor has to evaluate those, not just read literals.
     const source = `
       const GAME_BUDGET_BYTES = 200 * 1024;
-      const GAMEKIT_TOUCH_BYTES = 7_501;
-      const GAMEKIT_RESTART_BYTES = 1_024;
-      const GAMEKIT_MUSIC_BYTES = 4_096;
-      const GAMEKIT_TOUCH_HINT_BYTES = 512;
-      const GAMEKIT_PROGRESS_BYTES = 2_048;
-      const GAMEKIT_UNIVERSAL_INPUT_BYTES = 3_072;
-      const GAMEKIT_POINTER_POLL_BYTES = 1_536;
-      const GAMEKIT_DRAW_SURFACE_BYTES = 18_489;
+      const GAMEKIT_TOUCH_BYTES = 7_501 + 4_826;
+      const GAMEKIT_RESTART_BYTES = 2_477;
+      const GAMEKIT_MUSIC_BYTES = 7_091 + 650;
+      const GAMEKIT_TOUCH_HINT_BYTES = 89;
+      const GAMEKIT_PROGRESS_BYTES = 307;
+      const GAMEKIT_UNIVERSAL_INPUT_BYTES = 3_191;
+      const GAMEKIT_POINTER_POLL_BYTES = 7_083;
+      const GAMEKIT_DRAW_SURFACE_BYTES = 9_459;
+      const GAMEKIT_POINTER_RELEASE_BYTES = 430;
       const MAX_BUNDLE_BYTES =
         GAME_BUDGET_BYTES +
         GAMEKIT_TOUCH_BYTES +
@@ -76,13 +80,14 @@ describe('games-repo source extractors', () => {
         GAMEKIT_PROGRESS_BYTES +
         GAMEKIT_UNIVERSAL_INPUT_BYTES +
         GAMEKIT_POINTER_POLL_BYTES +
-        GAMEKIT_DRAW_SURFACE_BYTES;
+        GAMEKIT_DRAW_SURFACE_BYTES +
+        GAMEKIT_POINTER_RELEASE_BYTES;
     `;
-    expect(extractMaxBundleBytes(source)).toBe(243_078);
+    expect(extractMaxBundleBytes(source)).toBe(MAX_PROJECT_BYTES);
   });
 
   it('evaluates a numeric MAX_BUNDLE_BYTES literal', () => {
-    expect(extractMaxBundleBytes('const MAX_BUNDLE_BYTES = 243_078;')).toBe(243078);
+    expect(extractMaxBundleBytes('const MAX_BUNDLE_BYTES = 247_904;')).toBe(247904);
   });
 
   it('detects the music injection contract signals', () => {

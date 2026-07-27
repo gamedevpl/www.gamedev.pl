@@ -32,11 +32,18 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
  * Sum of GameKit platform allowances outside the author budget (touch, restart,
  * music, touch hint, progress, universal input, pointer poll, draw surface, …).
  * Together with {@link GAME_BUDGET_BYTES} this must equal games-repo
- * `MAX_BUNDLE_BYTES` (243_078 as of the games-repo side that broke CI on
- * 2026-07-27). Not a round KiB: the platform side is an explicit sum of named
+ * `MAX_BUNDLE_BYTES` (247_904, matching games-repo `shared/assemble-contract.json`
+ * `maxProjectBytes`). Not a round KiB: the platform side is an explicit sum of named
  * allowances, not a padded `42 * 1024` block.
+ *
+ * Last moved by games-repo PR #95: the `touch` allowance went 7_501 → 12_327 (+4_826)
+ * when the on-screen pad gained the discoverability chrome kids need to notice it —
+ * contrast, direction glyphs, the bilingual coach hint, the attention pulse — plus
+ * playfield touch steering and `setSteerAnchor` for character-relative walking. Every
+ * game is served that layer whether it asked for it or not, so it is charged to the
+ * platform side; charging it to authors would silently shrink what they may write.
  */
-export const GAMEKIT_PLATFORM_BYTES = 38_278;
+export const GAMEKIT_PLATFORM_BYTES = 43_104;
 
 /** Combined html+js+css size cap — must match games-repo `MAX_BUNDLE_BYTES`. */
 export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
