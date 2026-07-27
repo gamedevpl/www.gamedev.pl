@@ -1,8 +1,10 @@
 # Operational readiness plan — backups, monitoring, observability
 
-Status: v2, 2026-07-27. v2 added §3 (burst resilience) after walking a player-traffic burst
-and a creator-activity burst to their concrete failure points. Research-based plan; nothing
-in it is built yet unless marked ✅.
+Status: v3, 2026-07-27. v2 added §3 (burst resilience) after walking a player-traffic burst
+and a creator-activity burst to their concrete failure points; v3 added §8, the execution
+backlog — the numbered work items to actually run this plan. Nothing is built yet unless an
+item in §8 is marked DONE. **§8 is the live tracker: update it as items land, the same way
+[`closed-beta-launch-plan.md`](./closed-beta-launch-plan.md) tracked the launch.**
 
 This is the operations counterpart to [`gtm-plan.md`](./gtm-plan.md). The GTM plan opens the
 gates — more invites (Stage 1), public play (Stage 2), launch spikes (Show HN) — and every
@@ -372,3 +374,108 @@ Now ──────────── week 2 ──────────�
 The rule that binds this to the GTM plan: **each GTM gate opens only when the matching ops
 gate has passed its exit check.** More invites need O1; the Polish beachhead runs on O2;
 `PRIVATE_BETA=false` and any launch spike wait for O3.
+
+---
+
+## 8. Execution backlog (the live tracker)
+
+Conventions, borrowed from [`closed-beta-launch-plan.md`](./closed-beta-launch-plan.md):
+items are numbered and ordered — work top to bottom within a gate; **[OWNER]** marks steps
+needing gcloud/console/billing access an agent does not have; everything else is agent
+work in this repo. Mark items **DONE (commit / date / how verified)** in place. An item is
+not DONE until its *Verify* line has actually been performed.
+
+### O1 — the floor (target: ~2 weeks; blocks further invites)
+
+1. 📋 **[OWNER] Enable Firestore PITR.**
+   `gcloud firestore databases update --database='(default)' --enable-pitr --project gamedevpl`
+   — Verify: `gcloud firestore databases describe` shows `pointInTimeRecoveryEnablement: ENABLED`.
+2. 📋 **[OWNER] Backup bucket + daily export.** Create `gs://gamedevpl-firestore-backups`
+   (region `europe-central2`, 30-day lifecycle delete), a Cloud Scheduler job calling the
+   managed `exportDocuments` API daily, and a service account with `datastore.importExportAdmin`
+   + bucket write. Script it into `infra/setup-gcp.sh` (agent can draft; owner runs).
+   — Verify: an export object exists in the bucket the next morning.
+3. 📋 **[OWNER] Restore drill.** Import yesterday's export into a scratch database, read
+   back one `users` doc, delete the scratch DB. Write what actually happened into
+   `docs/runbooks/restore-firestore.md` (item 9 creates the skeleton).
+   — Verify: the runbook's steps were executed once for real, not transcribed from docs.
+4. 📋 **[OWNER] Alert floor.** Cloud Monitoring, email channel: uptime check on
+   `/api/health` (A1), 5xx rate policy (A2), notify-sweep failure policy (A3), export-job
+   failure policy (A4). Agent drafts the exact `gcloud monitoring` commands into
+   `infra/setup-monitoring.sh`; owner runs them.
+   — Verify: force one failure (e.g. pause the sweep job for 10 min) → an email arrives.
+5. 📋 **[OWNER] Billing budget** (A5) at an owner-chosen monthly cap, alerts at 50/90/100%.
+   — Verify: budget visible in console with three thresholds and the email channel bound.
+6. 📋 **Global creation cap + pause switch** (§3 Scenario C; the one O1 code change).
+   Global submissions/day counter beside the per-user quota, `SUBMISSIONS_PAUSED` flag,
+   both runtime-readable (env or Firestore config doc — decide in PR), honest 429 UX
+   string (en + pl). — Verify: tests cover cap-trip and pause; flipping the flag on a
+   deployed revision blocks submission with the friendly message, without a redeploy.
+7. 📋 **PAT expiry ledger.** Record `github-token` + `GAMES_REPO_TOKEN` expiry dates in
+   `docs/runbooks/rotate-secrets.md`; **[OWNER]** set reminders ~2 weeks ahead of each.
+   — Verify: dates written down match the tokens' real settings pages.
+8. 📋 **Hygiene.** **[OWNER]** delete unused `site-basic-auth` secret; export the Route 53
+   zone to `infra/route53-zone.txt` (agent commits it once provided).
+   — Verify: secret gone from `gcloud secrets list`; zone file in git matches live DNS.
+9. 📋 **Runbook skeletons.** Create `docs/runbooks/` with `restore-firestore.md`,
+   `rollback-deploy.md`, `site-down-triage.md`, `rotate-secrets.md` — each with the
+   commands and a "last drilled" line. Agent work; owner fills drill dates.
+
+### O2 — Stage-1 operations (target: weeks 2–12)
+
+10. 📋 **Last-good catalog + bundle cache** (§3's top code change). Serve stale on GitHub
+    5xx/timeout/rate-limit, background refresh, log cache hit/miss/stale-served.
+    — Verify: test simulating GitHub 500s serves the cached catalog; deployed behavior
+    checked by watching logs during a PAT-scope test window.
+11. 📋 **Structured failure logging + log-based metrics** for A6 (catalog fetch fail),
+    A7 (submission filing fail), A8 (stalled submission — emit from notify-sweep),
+    A9 (instance count > 1), A11 (GitHub rate headroom), A12 (429s), A13 (queue depth).
+    Agent lands the log lines; **[OWNER]** runs the metric/policy script.
+    — Verify: each metric visible in Metrics Explorer with nonzero test data.
+12. 📋 **[OWNER] Ops dashboard** ("gamedev-ops"): traffic, latency percentiles, 5xx,
+    instances, Firestore ops, uptime status, month-to-date spend. Agent drafts the
+    dashboard JSON; owner imports. — Verify: two weeks of morning glances actually happened.
+13. 📋 **Issue-creation pacing**: drain accepted submissions to GitHub at a safe fixed
+    rate. — Verify: test proves spacing under a burst of accepted submissions.
+14. 📋 **Creator queue visibility**: "Nth in queue" from open-submission count, surfaced
+    in the status UI (en + pl). — Verify: visible with ≥2 queued submissions in dev.
+15. 📋 **[OWNER] Games-repo mirror**: scheduled `git clone --mirror` of
+    `www.gamedev.pl-games` pushed to GCS weekly. — Verify: mirror object newer than 8 days.
+16. 📋 **App-shell error telemetry** (privacy invariants per
+    [`improvement-loop-plan.md`](./improvement-loop-plan.md); no third party).
+    — Verify: a thrown test error in dev appears in the operator view.
+17. 📋 **Retention**: TTL decision for `telemetry/{date}` partitions + the Timestamp field
+    `accessTokens` TTL needs. — Verify: policy documented + fields present on new writes.
+18. 📋 **Event-mode runbook** (`docs/runbooks/event-mode.md`): pre-warm min-instances,
+    lower global cap, dashboard open; reverse checklist. — Verify: exercised once before
+    the first Stage-1 meetup.
+19. 📋 **[OWNER] Resource sizing**: set explicit `--concurrency/--cpu/--memory` informed
+    by item 21's load test (may land after it); document rationale in `deploy-api.sh`.
+
+### O3 — pre-public hardening (target: months 3–6; blocks `PRIVATE_BETA=false` and launch spikes)
+
+20. 📋 **Relay split / shared room state** (roadmap 🔴; design per
+    [`multiplayer-plan.md`](./multiplayer-plan.md) §4.6) — lifts `--max-instances 1`.
+    — Verify: party mode works with 2+ instances serving traffic.
+21. 📋 **Load test** the anonymous funnel (land → catalog → play → telemetry) at
+    Show-HN rates against a candidate revision; report committed to `docs/`.
+22. 📋 **Load-shedding ladder** encoded (§3): pause creation → sample telemetry → refuse
+    new rooms → play last; each step a config flip. — Verify: each flag exercised in dev.
+23. 📋 **Deploy hardening**: `environment:` protection on deploy job; third-party actions
+    pinned to SHAs; **[OWNER]** one timed, real rollback drill recorded in
+    `rollback-deploy.md`.
+24. 📋 **IaC** for the stable resource set (service, mappings, scheduler jobs, alert
+    policies, budget, buckets, IAM). — Verify: a fresh `plan` shows no drift.
+25. 📋 **SLO doc + launch-day runbook** (`docs/runbooks/launch-day.md`): SLO targets from
+    §2/O3.6, spike procedure, degradation thresholds. — Verify: reviewed against the
+    GTM Stage-2 checklist before the first English launch moment.
+26. 📋 **[OWNER] CDN decision** from item 21's evidence: front static assets with Cloud
+    CDN, or record "not needed at measured load" here.
+
+### Suggested first PR-sized slices (agent work, startable immediately)
+
+- Item 6 (global cap + pause switch) — one PR, tests included.
+- Item 9 (runbook skeletons) — one PR, unblocks the owner drills in items 3, 7, 23.
+- Item 10 (last-good cache) — one PR; the single highest-leverage code change in the plan.
+- Drafts for items 2, 4, 11, 12 (`infra/` scripts + dashboard JSON) — one PR the owner
+  can execute from.
