@@ -645,6 +645,22 @@ export interface Store {
    * this is one query behind an operator page rather than a paginated surface.
    */
   listScorecards(opts?: { limit?: number }): Promise<Scorecard[]>;
+  /**
+   * Every slug that has a `games/{slug}` entry — including games whose document does
+   * not exist but which have subcollections (votes, feedback, scorecard).
+   *
+   * Exists for the erase path. A vote's uid is its *document id* and not a field, so
+   * unlike feedback there is no query that finds one user's votes across games; the only
+   * way is to look under each game. Bounded by the catalog, so a walk is affordable.
+   */
+  listGameSlugs(): Promise<string[]>;
+  /**
+   * Deletes every feedback row a user wrote, across all games. Returns how many.
+   *
+   * Feedback *is* findable by uid because the row carries it as a field, which is the
+   * asymmetry with votes above.
+   */
+  deletePlayerFeedbackByUid(uid: string): Promise<number>;
   /** Persist a newly minted personal access token. */
   createAccessToken(record: AccessTokenRecord): Promise<void>;
   /** Point lookup by token id — the hot path on every bearer-authenticated request. */
@@ -1182,6 +1198,23 @@ export class InMemoryStore implements Store {
       .map((card) => structuredClone(card))
       .sort(compareScorecards)
       .slice(0, opts?.limit ?? 200);
+  }
+
+  async listGameSlugs(): Promise<string[]> {
+    // Union of every slug this store knows anything about, mirroring Firestore's
+    // `listDocuments()`, which also returns a game whose document never existed but
+    // whose subcollections do.
+    return [...new Set([...this.votes.keys(), ...this.playerFeedback.keys(), ...this.scorecards.keys()])].sort();
+  }
+
+  async deletePlayerFeedbackByUid(uid: string): Promise<number> {
+    let deleted = 0;
+    for (const [slug, rows] of this.playerFeedback) {
+      const kept = rows.filter((row) => row.uid !== uid);
+      deleted += rows.length - kept.length;
+      this.playerFeedback.set(slug, kept);
+    }
+    return deleted;
   }
 
   async createAccessToken(record: AccessTokenRecord): Promise<void> {
@@ -1839,6 +1872,30 @@ export class FirestoreStore implements Store {
       .limit(opts?.limit ?? 200)
       .get();
     return snap.docs.map((doc) => doc.data() as Scorecard).sort(compareScorecards);
+  }
+
+  async listGameSlugs(): Promise<string[]> {
+    // `listDocuments()` rather than `get()`: it lists references without reading
+    // documents, and — the part that matters here — it includes games whose parent
+    // document was never written but which have subcollections underneath. A game that
+    // only ever received feedback is exactly that case, and a `get()` would miss it.
+    const refs = await this.db.collection('games').listDocuments();
+    return refs.map((ref) => ref.id).sort();
+  }
+
+  async deletePlayerFeedbackByUid(uid: string): Promise<number> {
+    const snap = await this.db.collectionGroup('playerFeedback').where('uid', '==', uid).get();
+    if (snap.empty) return 0;
+
+    // Chunked because a batch tops out at 500 writes, and "delete everything this
+    // person wrote" is precisely the request that could exceed it.
+    const docs = snap.docs;
+    for (let index = 0; index < docs.length; index += 400) {
+      const batch = this.db.batch();
+      for (const doc of docs.slice(index, index + 400)) batch.delete(doc.ref);
+      await batch.commit();
+    }
+    return docs.length;
   }
 
   async getScorecard(slug: string): Promise<Scorecard | null> {

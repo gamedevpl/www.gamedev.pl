@@ -191,6 +191,32 @@ a Firestore TTL policy at `expiresAt` as stored today — that field is an ISO s
 TTL only deletes on Timestamp/Date values (a no-op policy otherwise). Self-cleaning would
 need a dedicated Timestamp field or an operator sweep; it is hygiene, not a control.
 
+## Honouring a deletion request
+
+The privacy notice (§8) promises that deleting an account removes the votes and written
+feedback that person left on games. Deletion arrives by email, so it is an operator command
+rather than an endpoint — a destructive uid-targeted route would be attack surface buying
+nothing when a human already has to verify the request out of band.
+
+```bash
+npm run player:erase -w @gamedevpl/api -- g:12345 --dry-run   # preview
+npm run player:erase -w @gamedevpl/api -- g:12345 --confirm   # do it
+```
+
+One of `--dry-run` or `--confirm` is required; neither-or-both exits with usage, because
+the destructive reading is not one to guess at. The command is idempotent, so re-running
+after a partial failure is safe.
+
+Two things worth knowing before you run it:
+
+- **Votes are cleared through the same transaction the product uses**, not deleted
+  directly. Vote tallies live on the parent `games/{slug}` document, so a raw delete would
+  leave `votesUp`/`votesDown` overstating reality permanently — a number every visitor
+  sees, wrong, with nothing to catch it.
+- **Play telemetry is not touched, and that is the point.** Play events carry no uid, no IP
+  and no user agent by construction, so there is nothing in them to erase and nothing that
+  could be found if you tried. The erase path for play data is that it was never attributed.
+
 ## How to deploy manually
 
 [`apps/api/Dockerfile`](../apps/api/Dockerfile) is a multi-stage image built from the repo root
