@@ -17,6 +17,7 @@
     "test": "npm run build:packages && npm run test --workspaces --if-present",
     "e2e": "npm run e2e -w @gamedevpl/e2e",
     "contract:games-repo": "npm run contract:games-repo -w @gamedevpl/api",
+    "snapshot:publish": "npm run snapshot:publish -w @gamedevpl/api",
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
     "type-check": "npm run build:packages && npm run type-check --workspaces --if-present",
     "prepare": "husky install"

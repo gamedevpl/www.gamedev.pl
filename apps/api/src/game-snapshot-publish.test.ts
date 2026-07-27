@@ -1,0 +1,266 @@
+import { describe, expect, it, vi } from 'vitest';
+import { publishSnapshot } from './game-snapshot-publish.js';
+import type { GameSnapshotWriter, SnapshotGame, SnapshotMedia, SnapshotPointer } from './game-snapshot.js';
+import type { CatalogGameEntry, GameSources, GitHubClient } from './github-client.js';
+
+const ref = 'main';
+
+function catalogEntry(slug: string, overrides: Partial<CatalogGameEntry> = {}): CatalogGameEntry {
+  return {
+    slug,
+    title: slug,
+    genre: 'arcade',
+    controls: 'arrows',
+    status: 'published',
+    media: null,
+    multiplayer: null,
+    ...overrides,
+  };
+}
+
+function gameSources(overrides: Partial<GameSources> = {}): GameSources {
+  return {
+    indexHtml: '<canvas id="game"></canvas>',
+    gameJs: 'console.log("play")',
+    styleCss: 'body{margin:0}',
+    title: null,
+    ...overrides,
+  };
+}
+
+function createClientStub(params: {
+  catalog: CatalogGameEntry[];
+  sourcesBySlug?: Record<string, GameSources | null>;
+  mediaBySlug?: Record<string, Uint8Array | null>;
+}) {
+  const getCatalog = vi.fn(async () => params.catalog);
+  const getGameSources = vi.fn(async (_ref: string, slug: string) =>
+    params.sourcesBySlug ? (params.sourcesBySlug[slug] ?? null) : gameSources(),
+  );
+  const getGameMedia = vi.fn(async (_ref: string, slug: string) =>
+    params.mediaBySlug ? (params.mediaBySlug[slug] ?? null) : new Uint8Array([1, 2, 3]),
+  );
+  const client = {
+    getCatalog,
+    getGameSources,
+    getGameMedia,
+  } as unknown as GitHubClient;
+  return { client, getCatalog, getGameSources, getGameMedia };
+}
+
+function createWriterSpy() {
+  const order: string[] = [];
+  const games = new Map<string, SnapshotGame>();
+  const media = new Map<string, SnapshotMedia>();
+  let catalog: CatalogGameEntry[] | null = null;
+  let pointer: SnapshotPointer | null = null;
+
+  const writer: GameSnapshotWriter = {
+    async putCatalog(_id, entries) {
+      order.push('catalog');
+      catalog = entries;
+    },
+    async putGame(_id, game) {
+      order.push(`game:${game.slug}`);
+      games.set(game.slug, game);
+    },
+    async putMedia(_id, slug, filename, value) {
+      order.push(`media:${slug}/${filename}`);
+      media.set(`${slug}/${filename}`, value);
+    },
+    async putPointer(value) {
+      order.push('pointer');
+      pointer = value;
+    },
+  };
+
+  return {
+    writer,
+    order,
+    games,
+    media,
+    get catalog() {
+      return catalog;
+    },
+    get pointer() {
+      return pointer;
+    },
+  };
+}
+
+const fixedNow = () => new Date('2026-07-27T10:15:00.000Z');
+
+describe('publishSnapshot', () => {
+  it('bakes each published game into a self-contained document', async () => {
+    const { client } = createClientStub({ catalog: [catalogEntry('bubble-pop')] });
+    const spy = createWriterSpy();
+
+    const result = await publishSnapshot({ client, writer: spy.writer, ref, now: fixedNow });
+
+    expect(result.published).toBe(1);
+    const baked = spy.games.get('bubble-pop');
+    expect(baked?.html).toContain('<!doctype html>');
+    expect(baked?.html).toContain('console.log("play")');
+  });
+
+  it('applies the same serve-time policy the play route would have applied', async () => {
+    const { client } = createClientStub({ catalog: [catalogEntry('bubble-pop')] });
+    const spy = createWriterSpy();
+
+    await publishSnapshot({ client, writer: spy.writer, ref, now: fixedNow });
+
+    const html = spy.games.get('bubble-pop')?.html ?? '';
+    // Baking must not quietly drop the network lockdown or the AI Act art. 50(2)
+    // provenance marking — that is the whole reason this reuses assembleGameHtml.
+    expect(html).toContain("default-src 'none'");
+    expect(html).toContain('name="ai-generated"');
+  });
+
+  it('prefers the SPEC.md title and falls back to the catalog title', async () => {
+    const { client } = createClientStub({
+      catalog: [catalogEntry('a', { title: 'Catalog Title' }), catalogEntry('b')],
+      sourcesBySlug: { a: gameSources({ title: 'Spec Title' }), b: gameSources() },
+    });
+    const spy = createWriterSpy();
+
+    await publishSnapshot({ client, writer: spy.writer, ref, now: fixedNow });
+
+    expect(spy.games.get('a')?.title).toBe('Spec Title');
+    expect(spy.games.get('b')?.title).toBe('b');
+  });
+
+  it('skips games the catalog does not publish', async () => {
+    const { client, getGameSources } = createClientStub({
+      catalog: [catalogEntry('live'), catalogEntry('gone', { status: 'archived' })],
+    });
+    const spy = createWriterSpy();
+
+    const result = await publishSnapshot({ client, writer: spy.writer, ref, now: fixedNow });
+
+    expect(result.published).toBe(1);
+    expect(spy.games.has('gone')).toBe(false);
+    expect(getGameSources).not.toHaveBeenCalledWith(ref, 'gone');
+  });
+
+  it('copies the media the catalog vouches for', async () => {
+    const { client } = createClientStub({
+      catalog: [
+        catalogEntry('bubble-pop', {
+          media: { screenshots: [{ name: 'opening', file: 'opening.png' }], video: 'gameplay.mp4' },
+        }),
+      ],
+    });
+    const spy = createWriterSpy();
+
+    const result = await publishSnapshot({ client, writer: spy.writer, ref, now: fixedNow });
+
+    expect(result.mediaFiles).toBe(2);
+    expect(spy.media.get('bubble-pop/opening.png')?.contentType).toBe('image/png');
+    expect(spy.media.get('bubble-pop/gameplay.mp4')?.contentType).toBe('video/mp4');
+  });
+
+  it('moves the pointer only after every object is durable', async () => {
+    const { client } = createClientStub({
+      catalog: [
+        catalogEntry('bubble-pop', { media: { screenshots: [{ name: 'opening', file: 'opening.png' }], video: null } }),
+      ],
+    });
+    const spy = createWriterSpy();
+
+    await publishSnapshot({ client, writer: spy.writer, ref, now: fixedNow });
+
+    // Until the pointer moves a half-written snapshot is invisible, so publishing
+    // is atomic and the site keeps serving the previous snapshot throughout.
+    expect(spy.order.at(-1)).toBe('pointer');
+    expect(spy.order).toContain('game:bubble-pop');
+    expect(spy.order).toContain('media:bubble-pop/opening.png');
+    expect(spy.order).toContain('catalog');
+  });
+
+  it('records the ref commit in the pointer for traceability', async () => {
+    const { client } = createClientStub({ catalog: [catalogEntry('bubble-pop')] });
+    const spy = createWriterSpy();
+
+    const result = await publishSnapshot({ client, writer: spy.writer, ref, commitSha: 'cafe1234', now: fixedNow });
+
+    expect(spy.pointer).toEqual({
+      snapshotId: result.snapshotId,
+      commitSha: 'cafe1234',
+      publishedAt: '2026-07-27T10:15:00.000Z',
+      gameCount: 1,
+    });
+  });
+});
+
+describe('publishSnapshot failure handling', () => {
+  it('reports a game it could not bake without failing the whole publish', async () => {
+    const { client } = createClientStub({
+      catalog: [catalogEntry('good'), catalogEntry('broken')],
+      sourcesBySlug: { good: gameSources(), broken: null },
+    });
+    const spy = createWriterSpy();
+
+    const result = await publishSnapshot({ client, writer: spy.writer, ref, now: fixedNow });
+
+    expect(result.published).toBe(1);
+    expect(result.failures).toEqual([{ slug: 'broken', reason: 'game sources not found on ref' }]);
+    expect(spy.pointer).not.toBeNull();
+  });
+
+  it('keeps an unbakeable game in the snapshot catalog so it is not silently unpublished', async () => {
+    const { client } = createClientStub({
+      catalog: [catalogEntry('good'), catalogEntry('broken')],
+      sourcesBySlug: { good: gameSources(), broken: null },
+    });
+    const spy = createWriterSpy();
+
+    await publishSnapshot({ client, writer: spy.writer, ref, now: fixedNow });
+
+    // Catalog membership is the games repo's decision, not this job's. The game
+    // stays listed and its play route falls back to GitHub — exactly what it did
+    // before the snapshot existed.
+    expect(spy.catalog?.map((entry) => entry.slug)).toEqual(['good', 'broken']);
+    expect(spy.games.has('broken')).toBe(false);
+  });
+
+  it('treats a game that fails the hygiene gate as a failure, not a bad snapshot', async () => {
+    const { client } = createClientStub({
+      catalog: [catalogEntry('empty')],
+      sourcesBySlug: { empty: gameSources({ gameJs: '   ' }) },
+    });
+    const spy = createWriterSpy();
+
+    const result = await publishSnapshot({ client, writer: spy.writer, ref, now: fixedNow });
+
+    expect(result.published).toBe(0);
+    expect(result.failures[0]?.slug).toBe('empty');
+    expect(spy.pointer?.gameCount).toBe(0);
+  });
+
+  it('carries on when one game is missing a declared media file', async () => {
+    const { client } = createClientStub({
+      catalog: [
+        catalogEntry('bubble-pop', { media: { screenshots: [{ name: 'opening', file: 'opening.png' }], video: null } }),
+      ],
+      mediaBySlug: { 'bubble-pop': null },
+    });
+    const spy = createWriterSpy();
+
+    const result = await publishSnapshot({ client, writer: spy.writer, ref, now: fixedNow });
+
+    expect(result.published).toBe(1);
+    expect(result.mediaFiles).toBe(0);
+    expect(result.failures).toEqual([]);
+  });
+
+  it('bakes an empty catalog without writing a broken pointer', async () => {
+    const { client } = createClientStub({ catalog: [] });
+    const spy = createWriterSpy();
+
+    const result = await publishSnapshot({ client, writer: spy.writer, ref, now: fixedNow });
+
+    expect(result.published).toBe(0);
+    expect(spy.catalog).toEqual([]);
+    expect(spy.pointer?.gameCount).toBe(0);
+  });
+});

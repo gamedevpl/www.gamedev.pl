@@ -37,7 +37,7 @@
 # Then run:
 #   PROJECT_ID=my-proj ./infra/deploy-api.sh
 #
-# Override any of these via env: REGION, SERVICE, REPO, GAMES_REPO.
+# Override any of these via env: REGION, SERVICE, REPO, GAMES_REPO, GAMES_SNAPSHOT_BUCKET.
 set -euo pipefail
 
 : "${PROJECT_ID:?set PROJECT_ID to your GCP project id}"
@@ -47,6 +47,9 @@ REGION="${REGION:-europe-west1}"
 SERVICE="${SERVICE:-gamedev-app}"
 REPO="${REPO:-gamedev}"
 GAMES_REPO="${GAMES_REPO:-gamedevpl/www.gamedev.pl-games}"
+# Pre-assembled published games, baked by .github/workflows/publish-games.yml.
+# Leave empty to serve every game from GitHub the way the site did before.
+GAMES_SNAPSHOT_BUCKET="${GAMES_SNAPSHOT_BUCKET:-${PROJECT_ID}-games-snapshots}"
 GOOGLE_OAUTH_CLIENT_ID="${GOOGLE_OAUTH_CLIENT_ID:-334141807880-t8qsj5n6p3g9imbs3jfut82cecvr87pu.apps.googleusercontent.com}"
 WEB_ORIGIN="${WEB_ORIGIN:-https://gamedev-app-334141807880.europe-west1.run.app,https://www.gamedev.pl,https://gamedev.pl}"
 # Apex → www 301 canonicalization (app-side; Cloud Run mappings can't redirect).
@@ -122,6 +125,9 @@ fi
 # ^|^ switches gcloud's env-var separator to | (pipe) so values may contain
 # commas (WEB_ORIGIN list) and @ signs (BETA_ALLOWED_EMAILS).
 ENV_VARS="^|^GAMES_REPO=${GAMES_REPO}|WEB_ORIGIN=${WEB_ORIGIN}|PRIVATE_BETA=${PRIVATE_BETA}"
+if [ -n "${GAMES_SNAPSHOT_BUCKET:-}" ]; then
+  ENV_VARS="${ENV_VARS}|GAMES_SNAPSHOT_BUCKET=${GAMES_SNAPSHOT_BUCKET}"
+fi
 if [ -n "${CANONICAL_HOST:-}" ]; then
   ENV_VARS="${ENV_VARS}|CANONICAL_HOST=${CANONICAL_HOST}"
 fi

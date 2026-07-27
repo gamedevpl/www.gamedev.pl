@@ -52,6 +52,7 @@ survives only in this repo's early history.
 | [`roadmap.md`](./roadmap.md)                                       | Phased milestones with goals, deliverables, dependencies, open questions                               |
 | [`games-repo.md`](./games-repo.md)                                 | **The current architecture — games will live in a repo maintained by coding agents. Read this first.** |
 | [`games-repo-blueprint.md`](./games-repo-blueprint.md)             | Concrete layout, validation, publishing, and issue-first implementation plan                           |
+| [`games-snapshot.md`](./games-snapshot.md)                         | Published games are baked to Cloud Storage on merge, so playing no longer rebuilds them from GitHub    |
 | [`security-model.md`](./security-model.md)                         | Threat model. The credential-exfiltration finding is **dissolved** by the games-repo pivot             |
 | [`agent-adapters.md`](./agent-adapters.md)                         | Common repository contract for Claude Code / Codex / agy / Copilot                                     |
 | [`deployment.md`](./deployment.md)                                 | Minimal delivery shape for the app, games origin, and submission API                                   |

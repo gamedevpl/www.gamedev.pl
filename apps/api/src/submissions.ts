@@ -12,6 +12,7 @@ import {
   type GitHubClient,
   type LinkedPullRequest,
 } from './github-client.js';
+import { createSnapshotReaderFromEnv, type GameSnapshotReader } from './game-snapshot.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
@@ -83,6 +84,12 @@ export interface SubmissionRoutesOptions {
   translator?: Translator;
   /** Caps and seams for the agent build channel; see registerAgentChannelRoutes. */
   agentChannel?: Pick<AgentChannelOptions, 'maxEventsPerBuild' | 'maxEventsPerWindow'>;
+  /**
+   * Pre-assembled published games. Defaults to the bucket in
+   * GAMES_SNAPSHOT_BUCKET, or null when unset. Always a fast path in front of
+   * GitHub, never a requirement — see game-snapshot.ts.
+   */
+  snapshotReader?: GameSnapshotReader | null;
 }
 
 function checkUserAccess(request: FastifyRequest, reply: FastifyReply): boolean {
@@ -276,6 +283,14 @@ export async function registerSubmissionRoutes(
 
   // Published games live on the games repo's default branch.
   const publishedRef = process.env.GAMES_PUBLISHED_REF ?? 'main';
+
+  // Pre-assembled published games, baked on merge by scripts/publish-snapshot.ts.
+  // `undefined` means "read the environment"; an explicit null disables it (tests
+  // that assert the GitHub-backed behaviour pass null).
+  const snapshotReader = options.snapshotReader === undefined ? createSnapshotReaderFromEnv() : options.snapshotReader;
+  if (snapshotReader) {
+    app.log.info('serving published games from the snapshot bucket, with GitHub as fallback');
+  }
 
   const githubClient =
     githubToken && submissionTokenSecret
@@ -512,13 +527,63 @@ export async function registerSubmissionRoutes(
   // reads), but misses still coalesce into one in-flight refresh, and a failed
   // refresh falls back to the last catalog this instance built — for data that
   // changes only on a merge, briefly stale beats a visitor-facing 502.
+  /**
+   * Where a catalog read actually comes from.
+   *
+   * `forceFresh` deliberately skips the snapshot. It is only set by
+   * isSlugPublished for the publishing→published transition, and that is exactly
+   * the window where the snapshot is the stale source (it is baked a minute or
+   * two after the merge) and GitHub is the fresh one.
+   */
+  async function loadCatalog(client: GitHubClient, forceFresh: boolean): Promise<CatalogGameEntry[]> {
+    if (!forceFresh && snapshotReader) {
+      try {
+        const entries = await snapshotReader.getCatalog();
+        if (entries) {
+          return entries;
+        }
+      } catch (error) {
+        app.log.warn({ err: error }, 'snapshot catalog unavailable; falling back to GitHub');
+      }
+    }
+    return client.getCatalog(publishedRef);
+  }
+
+  /**
+   * Snapshot lookups never fail a request. A miss (game not in this snapshot) and
+   * a transport error both fall back to the GitHub path, so switching the bucket
+   * off, an unbaked game, and a Storage outage all degrade to exactly the
+   * behaviour the site had before the snapshot existed.
+   */
+  async function readSnapshotGame(slug: string): Promise<{ slug: string; title: string; html: string } | null> {
+    if (!snapshotReader) return null;
+    try {
+      return await snapshotReader.getGame(slug);
+    } catch (error) {
+      app.log.warn({ err: error, slug }, 'snapshot game unavailable; falling back to GitHub');
+      return null;
+    }
+  }
+
+  async function readSnapshotMedia(
+    slug: string,
+    filename: string,
+  ): Promise<{ body: Buffer; contentType: string } | null> {
+    if (!snapshotReader) return null;
+    try {
+      return await snapshotReader.getMedia(slug, filename);
+    } catch (error) {
+      app.log.warn({ err: error, slug, filename }, 'snapshot media unavailable; falling back to GitHub');
+      return null;
+    }
+  }
+
   async function getCatalogEntries(client: GitHubClient, forceFresh = false): Promise<CatalogGameEntry[]> {
     if (!forceFresh && catalogCache && catalogCache.expiresAt > now()) {
       return catalogCache.entries;
     }
 
-    catalogRefresh ??= client
-      .getCatalog(publishedRef)
+    catalogRefresh ??= loadCatalog(client, forceFresh)
       .then((entries) => {
         catalogCache = { entries, expiresAt: now() + catalogTtlMs };
         return entries;
@@ -1507,12 +1572,20 @@ export async function registerSubmissionRoutes(
         return reply.status(404).send({ error: 'media not found' });
       }
 
-      const media = await githubClient.getGameMedia(publishedRef, parsedParams.data.slug, parsedParams.data.filename);
-      if (!media) {
-        return reply.status(404).send({ error: 'media not found' });
+      // The catalog allowlist above still gates every read, so the snapshot can
+      // only ever answer for a filename the validated metadata already vouches for.
+      const snapshotMedia = await readSnapshotMedia(parsedParams.data.slug, parsedParams.data.filename);
+      let body: Buffer;
+      if (snapshotMedia) {
+        body = snapshotMedia.body;
+      } else {
+        const media = await githubClient.getGameMedia(publishedRef, parsedParams.data.slug, parsedParams.data.filename);
+        if (!media) {
+          return reply.status(404).send({ error: 'media not found' });
+        }
+        body = Buffer.from(media);
       }
 
-      const body = Buffer.from(media);
       const cacheEntry = {
         expiresAt: currentTime + mediaTtlMs,
         etag: `"${createHash('sha256').update(body).digest('base64url').slice(0, 27)}"`,
@@ -1557,6 +1630,15 @@ export async function registerSubmissionRoutes(
     try {
       if (!(await isSlugPublished(githubClient, slug))) {
         return reply.status(404).send({ error: 'game not found' });
+      }
+
+      // Baked at merge time by the same assembler this route would use, with the
+      // same CSP, provenance meta and credential scan already applied — so a hit
+      // skips the GitHub fan-out and the esbuild bundle entirely.
+      const snapshotGame = await readSnapshotGame(slug);
+      if (snapshotGame) {
+        gameCache.set(slug, { value: snapshotGame, expiresAt: currentTime + gameTtlMs });
+        return reply.send(snapshotGame);
       }
 
       const sources = await githubClient.getGameSources(publishedRef, slug);
