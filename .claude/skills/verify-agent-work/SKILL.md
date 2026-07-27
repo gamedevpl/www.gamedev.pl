@@ -111,6 +111,15 @@ Two concrete instances of that (observed 2026-07-23):
   _fully assembled app_ (`buildApp`/equivalent), not just the plugin that defines the
   route — and grep for the wall's exemption list explicitly to confirm the new path
   matches it.
+- **Hundreds of adjacent 1px SVG `<rect>`s look solid in `crispEdges` and band under
+  `auto`.** Observed (mascot follow-up, 2026-07-27): a pixel silhouette drawn as ~200
+  horizontal span-rects was fine for the idle nav mark (`shape-rendering: crispEdges`)
+  but every emotion placement used `auto` AA — each rect got soft top/bottom edges, and
+  neighbouring partial coverage did not sum to opaque, so the body showed horizontal
+  banding / speckles on phones. Flatten spans into one `<path>` (interior edges cancel
+  in a single coverage pass). Also: a "solid" fill derived separately from the punched
+  silhouette can leave pinholes inside the mouth/eyes; derive solid from idle + enclosed
+  holes, and test that solid covers every idle pixel and leaves only intentional holes.
 
 ## Read the diff against the spec
 
