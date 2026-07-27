@@ -385,6 +385,7 @@ export function InteractiveMascot({
   const reactionIndex = useRef(0);
   const hoveredRef = useRef(false);
   const pokingRef = useRef(false);
+  const lookRef = useRef<MascotLook>({ x: 0, y: 0 });
   const [emotion, setEmotion] = useState<MascotEmotion>(idleEmotion);
   const [look, setLook] = useState<MascotLook>({ x: 0, y: 0 });
   const [poking, setPoking] = useState(false);
@@ -399,8 +400,13 @@ export function InteractiveMascot({
       setReduceMotion(media.matches);
     };
     sync();
-    media.addEventListener('change', sync);
-    return () => media.removeEventListener('change', sync);
+    // MediaQueryList used addListener/removeListener before addEventListener landed in Safari.
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', sync);
+      return () => media.removeEventListener('change', sync);
+    }
+    media.addListener(sync);
+    return () => media.removeListener(sync);
   }, []);
 
   useEffect(() => {
@@ -409,8 +415,8 @@ export function InteractiveMascot({
     };
   }, []);
 
-  const settleEmotion = () =>
-    hoveredRef.current && !reduceMotionRef.current ? 'curious' : idleEmotion;
+  // Reduced motion still gets the emotion swap — only tilt/boop are suppressed.
+  const settleEmotion = () => (hoveredRef.current ? 'curious' : idleEmotion);
 
   const clearPokeTimer = () => {
     if (pokeTimer.current) {
@@ -425,13 +431,22 @@ export function InteractiveMascot({
     if (!node) return;
     const rect = node.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return;
-    const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    const y = ((event.clientY - rect.top) / rect.height) * 2 - 1;
     const clamp = (value: number) => Math.max(-1, Math.min(1, value));
-    setLook({ x: clamp(x), y: clamp(y) });
+    const next = {
+      x: clamp(((event.clientX - rect.left) / rect.width) * 2 - 1),
+      y: clamp(((event.clientY - rect.top) / rect.height) * 2 - 1),
+    };
+    // Skip sub-pixel wiggles so pointermove does not re-render at 60–120Hz.
+    const prev = lookRef.current;
+    if (Math.abs(next.x - prev.x) < 0.04 && Math.abs(next.y - prev.y) < 0.04) return;
+    lookRef.current = next;
+    setLook(next);
   };
 
-  const resetLook = () => setLook({ x: 0, y: 0 });
+  const resetLook = () => {
+    lookRef.current = { x: 0, y: 0 };
+    setLook({ x: 0, y: 0 });
+  };
 
   const handlePoke = () => {
     const next = POKE_REACTIONS[reactionIndex.current % POKE_REACTIONS.length]!;
@@ -465,7 +480,7 @@ export function InteractiveMascot({
       onClick={handlePoke}
       onPointerEnter={() => {
         hoveredRef.current = true;
-        if (!pokingRef.current && !reduceMotionRef.current) setEmotion('curious');
+        if (!pokingRef.current) setEmotion('curious');
       }}
       onPointerLeave={() => {
         hoveredRef.current = false;

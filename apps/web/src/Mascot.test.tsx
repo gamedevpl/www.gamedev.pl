@@ -387,4 +387,41 @@ describe('InteractiveMascot', () => {
       root.unmount();
     });
   });
+
+  it('still peeks on hover when prefers-reduced-motion is set', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = ((query: string) =>
+      ({
+        matches: query.includes('prefers-reduced-motion'),
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      })) as typeof window.matchMedia;
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(InteractiveMascot, { pokeLabel: 'Poke', idleEmotion: 'wave', size: 64 }));
+    });
+
+    const button = container.querySelector<HTMLButtonElement>('button.mascot-interactive')!;
+    await act(async () => {
+      button.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+    });
+    expect(container.querySelector('.mascot--curious')).not.toBeNull();
+    // Tilt/look stay off under reduced motion.
+    expect(container.querySelector('.mascot__face-features')?.getAttribute('transform')).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+    window.matchMedia = originalMatchMedia;
+  });
 });
