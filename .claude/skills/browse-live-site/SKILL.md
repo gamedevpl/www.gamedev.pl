@@ -11,6 +11,14 @@ first if you haven't. This skill adds the one step that doc doesn't need to cove
 specific to **Claude Code on the web / remote execution environments**: getting the
 pre-installed Chromium to actually reach `www.gamedev.pl` through the session's egress proxy.
 
+**Before writing a throwaway script, check `apps/e2e`.** This walkthrough is codified as a
+runnable suite there (`npm run e2e` — not `npm test`, which deliberately excludes it so a
+browser suite pointed at production stays out of the offline test run). Its
+`apps/e2e/src/browser.ts` already
+exports the launch / session / problem-collection helpers described below. Reach for a
+scratch script only to explore something the suite doesn't cover — and when you find
+something worth keeping, add it there rather than leaving it in `/tmp`.
+
 ## Symptom
 
 Without the fix below, every `page.goto()` fails the same way regardless of URL (even
@@ -33,7 +41,7 @@ ClientHello and the tunnel succeeds.
 
 ## The fix
 
-Launch Chromium with **both** the explicit proxy server *and* the TLS cap:
+Launch Chromium with **both** the explicit proxy server _and_ the TLS cap:
 
 ```js
 const browser = await chromium.launch({
@@ -85,10 +93,14 @@ const page = await context.newPage();
 
 // 4. Wire up problem detection BEFORE navigating — console errors, page errors,
 //    failed requests, and 4xx/5xx responses are the actual signal you're looking for.
-page.on('console', (m) => { if (m.type() === 'error') console.log('console.error:', m.text()); });
+page.on('console', (m) => {
+  if (m.type() === 'error') console.log('console.error:', m.text());
+});
 page.on('pageerror', (e) => console.log('pageerror:', e));
 page.on('requestfailed', (r) => console.log('requestfailed:', r.url(), r.failure()?.errorText));
-page.on('response', (r) => { if (r.status() >= 400) console.log(`HTTP ${r.status()}`, r.url()); });
+page.on('response', (r) => {
+  if (r.status() >= 400) console.log(`HTTP ${r.status()}`, r.url());
+});
 
 await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
 await page.waitForTimeout(3000); // SPA hydration + first data fetch
@@ -126,11 +138,11 @@ roughly in order of how often they turn up real issues:
   unhandled console exception.
 - **`/health`** — renders "Not found" for a non-admin identity (including a token-authed
   bot); that's correct per `docs/agent-access-tokens.md`, not a bug.
-- **Signed-out pass** — a *second*, cookie-less browser context (`browser.newContext()`
+- **Signed-out pass** — a _second_, cookie-less browser context (`browser.newContext()`
   without `storageState`) hitting the same routes. Confirms anonymous visitors get a sane
   read-only experience and that nothing meant to be gated actually renders private data.
 - **Mobile viewport** (e.g. 390×844) — check `document.documentElement.scrollWidth -
-  clientWidth` is ~0 on both the home page and a game's play view; horizontal overflow is the
+clientWidth` is ~0 on both the home page and a game's play view; horizontal overflow is the
   most common mobile regression.
 
 ## Interpreting what you find
@@ -139,11 +151,17 @@ Not every console error or 404 is a bug:
 
 - `GET .../media/gameplay.mp4` aborting is normal — the catalog lazy-loads/cancels preview
   video for off-screen cards as you scroll.
+- Chromium's `Failed to load resource: the server responded with a status of NNN` console
+  error names **no URL in its text** — the URL is in the message's `location().url`. Read it
+  from there, or you'll be tempted to dismiss the whole shape as noise. Doing exactly that
+  is how a real missing-favicon 404 survived a full manual walkthrough. Browser-initiated
+  requests like `/favicon.ico` also never appear in `page.on('response')` at all, so that
+  console line is their _only_ report.
 - A 404 on `/api/admin/telemetry/*` from a non-admin bot identity, or on `/health` itself, is
   the intended behavior (unlisted admin route, 404s to everyone else).
 - A 404 on `/api/submissions/<garbage-token>` or `/api/drafts/<slug>` when you deliberately
   navigated to a bogus token/slug is the expected miss path, not a defect — check that the
-  *page* still rendered a friendly empty/error state, which is the actual thing worth verifying.
+  _page_ still rendered a friendly empty/error state, which is the actual thing worth verifying.
 
 Do treat as real findings: unhandled `pageerror` exceptions, a game whose canvas never
 appears or never responds to input, a route that renders a blank page instead of a state,
