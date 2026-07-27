@@ -25,6 +25,14 @@ import type { Store } from './store.js';
  *   walking the games and clearing each one — and cleared through `clearVote` rather than
  *   deleted directly, because the aggregate counts live on the parent game document and a
  *   raw delete would leave `votesUp`/`votesDown` overstating reality forever.
+ *
+ * The walk looks like something a collection-group query should replace, and it cannot be:
+ * `collectionGroup('votes').where(FieldPath.documentId(), '==', uid)` throws, because a
+ * documentId comparison on a collection group requires a *full document path*, and a bare
+ * uid is a single segment. The path it wants is `games/{slug}/votes/{uid}` — which means
+ * knowing the slug, which is the thing the query was supposed to find. Verified against
+ * @google-cloud/firestore 8.7.0; the check is client-side, so it fails every time, not
+ * just against a real database.
  */
 
 export interface ErasePlayerSignalsResult {
