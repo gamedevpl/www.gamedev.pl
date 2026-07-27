@@ -636,6 +636,15 @@ export interface Store {
   putScorecard(slug: string, scorecard: Scorecard): Promise<void>;
   /** A game's current scorecard, or null before the first sweep has run for it. */
   getScorecard(slug: string): Promise<Scorecard | null>;
+  /**
+   * Every game's current scorecard, newest computation first.
+   *
+   * Exists so the sweep's output is *readable*. Writing an aggregate nobody can look at
+   * is the same shape of mistake as a silently-dropping branch: the first sign it had
+   * been producing nonsense would be an agent acting on the nonsense. Bounded, because
+   * this is one query behind an operator page rather than a paginated surface.
+   */
+  listScorecards(opts?: { limit?: number }): Promise<Scorecard[]>;
   /** Persist a newly minted personal access token. */
   createAccessToken(record: AccessTokenRecord): Promise<void>;
   /** Point lookup by token id — the hot path on every bearer-authenticated request. */
@@ -676,6 +685,23 @@ export function stripUndefined<T extends object>(value: T): T {
   // `WaitlistEntry`) have no implicit index signature, so the stricter bound rejects
   // every real caller.
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as T;
+}
+
+/**
+ * Presentation order for scorecards: newest computation first, slug as the tie-break.
+ *
+ * The tie-break is the load-bearing half, not a nicety. A sweep stamps **one**
+ * `computedAt` onto every game it writes, so equal timestamps are not an edge case —
+ * they are every row. Ordering on the timestamp alone leaves the result order undefined
+ * (Firestore guarantees nothing among equal values), which would make the operator table
+ * reshuffle between reads and, past the read limit, change *which* games appear at all.
+ *
+ * Shared by both stores so the in-memory one used by tests cannot quietly disagree with
+ * the Firestore one used in production — that divergence is what makes an ordering bug
+ * invisible until it is in front of a person.
+ */
+export function compareScorecards(a: Scorecard, b: Scorecard): number {
+  return b.computedAt.localeCompare(a.computedAt) || a.slug.localeCompare(b.slug);
 }
 
 /** A zeroed counter set — the shape every usage read falls back to. */
@@ -1149,6 +1175,13 @@ export class InMemoryStore implements Store {
   async getScorecard(slug: string): Promise<Scorecard | null> {
     const found = this.scorecards.get(slug);
     return found ? structuredClone(found) : null;
+  }
+
+  async listScorecards(opts?: { limit?: number }): Promise<Scorecard[]> {
+    return [...this.scorecards.values()]
+      .map((card) => structuredClone(card))
+      .sort(compareScorecards)
+      .slice(0, opts?.limit ?? 200);
   }
 
   async createAccessToken(record: AccessTokenRecord): Promise<void> {
@@ -1781,6 +1814,31 @@ export class FirestoreStore implements Store {
     // fields from a previous window alive next to a newer one — a row that never
     // existed as a measurement.
     await this.scorecardRef(slug).set(scorecard);
+  }
+
+  async listScorecards(opts?: { limit?: number }): Promise<Scorecard[]> {
+    // A collection-group query over `scorecard` reads every game's `current` doc in one
+    // round trip, instead of one read per catalog slug. Safe as a group name: nothing
+    // else in the schema uses it, unlike the `events` collision that forced play
+    // telemetry into its own group.
+    //
+    // Ordered by `computedAt` rather than by any metric, because the question this read
+    // exists to answer is "did the sweep run, and how fresh is the freshest" — a stale
+    // scorecard is the failure worth seeing first.
+    //
+    // The `orderBy` selects *which* docs the limit keeps (the freshest, if the catalog
+    // ever outgrows it); the sort below decides the order they are presented in. Both
+    // are needed: a sweep stamps one `computedAt` on every game it writes, so equal
+    // timestamps are the normal case rather than a rare tie, and Firestore promises
+    // nothing about order among equal values. Sorting here rather than adding
+    // `.orderBy('slug')` avoids provisioning a composite index for a listing that is
+    // already bounded to a couple of hundred rows.
+    const snap = await this.db
+      .collectionGroup('scorecard')
+      .orderBy('computedAt', 'desc')
+      .limit(opts?.limit ?? 200)
+      .get();
+    return snap.docs.map((doc) => doc.data() as Scorecard).sort(compareScorecards);
   }
 
   async getScorecard(slug: string): Promise<Scorecard | null> {

@@ -9,7 +9,14 @@ import {
 } from './telemetry-health.js';
 import { summarizeVisitFunnel, type VisitFunnel } from './visit-funnel.js';
 import { summarizeCreatorMetrics, type CreatorMetrics } from './creator-metrics.js';
-import { BOT_UID_PREFIX, type Store, type TelemetryEvent, type User, type VisitEvent } from './store.js';
+import {
+  BOT_UID_PREFIX,
+  type Scorecard,
+  type Store,
+  type TelemetryEvent,
+  type User,
+  type VisitEvent,
+} from './store.js';
 
 /**
  * Operator-only reads over play telemetry (docs/improvement-loop-plan.md IL-2).
@@ -71,6 +78,17 @@ export interface VisitsResponse {
   days: string[];
   truncated: boolean;
   funnel: VisitFunnel;
+}
+
+/** Scorecards one request returns. The catalog is ~82 games, so this is the whole set. */
+const MAX_SCORECARDS = 200;
+
+export interface ScorecardsResponse {
+  /** Newest computation first, so a stale sweep sorts to the bottom. */
+  scorecards: Scorecard[];
+  /** Null when the sweep has never run (or never written anything). */
+  newestComputedAt: string | null;
+  oldestComputedAt: string | null;
 }
 
 export interface CreatorsResponse {
@@ -201,6 +219,37 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
     const body: CreatorsResponse = {
       sampled: submissions.length,
       metrics: summarizeCreatorMetrics(submissions, usersByUid, now()),
+    };
+    return reply.status(200).send(body);
+  });
+
+  /**
+   * What the nightly scorecard sweep actually produced.
+   *
+   * The sweep writes `games/{slug}/scorecard/current` for IL-3 to read, and until this
+   * existed nothing could read it back — an aggregate whose first observable symptom of
+   * being wrong would be an agent acting on it. This is the operator's look at it, and
+   * deliberately answers a *different* question from the game-health view above: that one
+   * recomputes from raw events on demand, this one shows what was stored and **when**,
+   * so a sweep that silently stopped running is visible as staleness rather than
+   * invisible behind numbers that still look fresh because they were just recomputed.
+   *
+   * Same admin-session gate and 404-to-everyone-else contract as the other reads. The
+   * `untrusted` block travels verbatim — safe here because it is rendered as text, and
+   * the field name is what stops it being pasted into an agent prompt later.
+   */
+  app.get('/api/admin/scorecards', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) {
+      return reply.status(404).send({ error: 'not found' });
+    }
+
+    const scorecards = await store.listScorecards({ limit: MAX_SCORECARDS });
+    const body: ScorecardsResponse = {
+      scorecards,
+      // Freshness is the health of the *sweep* rather than of any game, so it is
+      // computed here rather than left for each reader to derive from the rows.
+      newestComputedAt: scorecards[0]?.computedAt ?? null,
+      oldestComputedAt: scorecards[scorecards.length - 1]?.computedAt ?? null,
     };
     return reply.status(200).send(body);
   });

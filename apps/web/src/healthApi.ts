@@ -110,3 +110,55 @@ export async function fetchCreatorMetrics(): Promise<CreatorsResponse | null> {
   }
   return (await res.json()) as CreatorsResponse;
 }
+
+/**
+ * The stored output of the nightly scorecard sweep, as written for IL-3.
+ *
+ * `untrusted` mirrors the server's shape deliberately: the field name is the thing that
+ * makes it hard to paste game-authored text into an agent prompt by accident, so the
+ * client keeps the same shape rather than flattening it for convenience.
+ */
+export interface Scorecard {
+  slug: string;
+  computedAt: string;
+  window: { days: string[]; truncated: boolean };
+  sessions: { count: number; bounces: number; closes: number; medianPlaySeconds: number; totalPlaySeconds: number };
+  health: {
+    errors: number;
+    aliveTicks: number;
+    stalledTicks: number;
+    stallRate: number;
+    medianFps: number | null;
+    resumeTicksIgnored: number;
+  };
+  depth: {
+    outcomes: { won: number; lost: number; quit: number };
+    sessionsWithEnding: number;
+    /** Null when the game reported no endings at all — render `—`, never `0%`. */
+    finishRate: number | null;
+    winRate: number | null;
+    medianBestScore: number | null;
+  };
+  votes: { up: number; down: number };
+  feedback: { count: number };
+  untrusted: {
+    errorSamples: Array<{ message: string; count: number }>;
+    progressLabels: Array<{ label: string; sessions: number }>;
+  };
+}
+
+export interface ScorecardsResponse {
+  scorecards: Scorecard[];
+  newestComputedAt: string | null;
+  oldestComputedAt: string | null;
+}
+
+/** Same 404-means-not-for-you contract as the other operator reads. */
+export async function fetchScorecards(): Promise<ScorecardsResponse | null> {
+  const res = await fetch(`${API_BASE}/api/admin/scorecards`, { credentials: 'include' });
+  if (res.status === 404 || res.status === 401) return null;
+  if (!res.ok) {
+    throw new Error(`Scorecards request failed (${res.status})`);
+  }
+  return (await res.json()) as ScorecardsResponse;
+}
