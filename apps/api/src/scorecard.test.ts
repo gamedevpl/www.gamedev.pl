@@ -198,3 +198,21 @@ describe('POST /api/internal/scorecard-sweep', () => {
     await app.close();
   });
 });
+
+describe('scorecard ordering', () => {
+  it('breaks ties by slug, because one sweep stamps every game with the same computedAt', async () => {
+    const store = new InMemoryStore();
+    await seed(store, [
+      event({ type: 'game_opened', slug: 'zeta-game', sessionId: 'a' }),
+      event({ type: 'game_opened', slug: 'alpha-game', sessionId: 'b' }),
+      event({ type: 'game_opened', slug: 'mid-game', sessionId: 'c' }),
+    ]);
+    await runScorecardSweep({ store });
+
+    const listed = await store.listScorecards();
+    // Every card shares one timestamp, so `computedAt` alone decides nothing and the
+    // order would be arbitrary without the slug tie-break.
+    expect(new Set(listed.map((card) => card.computedAt)).size).toBe(1);
+    expect(listed.map((card) => card.slug)).toEqual(['alpha-game', 'mid-game', 'zeta-game']);
+  });
+});

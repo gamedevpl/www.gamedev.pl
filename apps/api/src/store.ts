@@ -687,6 +687,23 @@ export function stripUndefined<T extends object>(value: T): T {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as T;
 }
 
+/**
+ * Presentation order for scorecards: newest computation first, slug as the tie-break.
+ *
+ * The tie-break is the load-bearing half, not a nicety. A sweep stamps **one**
+ * `computedAt` onto every game it writes, so equal timestamps are not an edge case —
+ * they are every row. Ordering on the timestamp alone leaves the result order undefined
+ * (Firestore guarantees nothing among equal values), which would make the operator table
+ * reshuffle between reads and, past the read limit, change *which* games appear at all.
+ *
+ * Shared by both stores so the in-memory one used by tests cannot quietly disagree with
+ * the Firestore one used in production — that divergence is what makes an ordering bug
+ * invisible until it is in front of a person.
+ */
+export function compareScorecards(a: Scorecard, b: Scorecard): number {
+  return b.computedAt.localeCompare(a.computedAt) || a.slug.localeCompare(b.slug);
+}
+
 /** A zeroed counter set — the shape every usage read falls back to. */
 function emptyUsageCounters(): UsageCounters {
   return { submissions: 0, previews: 0, mocks: 0, refines: 0, feedback: 0, playerFeedback: 0 };
@@ -1163,7 +1180,7 @@ export class InMemoryStore implements Store {
   async listScorecards(opts?: { limit?: number }): Promise<Scorecard[]> {
     return [...this.scorecards.values()]
       .map((card) => structuredClone(card))
-      .sort((a, b) => b.computedAt.localeCompare(a.computedAt) || a.slug.localeCompare(b.slug))
+      .sort(compareScorecards)
       .slice(0, opts?.limit ?? 200);
   }
 
@@ -1808,12 +1825,20 @@ export class FirestoreStore implements Store {
     // Ordered by `computedAt` rather than by any metric, because the question this read
     // exists to answer is "did the sweep run, and how fresh is the freshest" — a stale
     // scorecard is the failure worth seeing first.
+    //
+    // The `orderBy` selects *which* docs the limit keeps (the freshest, if the catalog
+    // ever outgrows it); the sort below decides the order they are presented in. Both
+    // are needed: a sweep stamps one `computedAt` on every game it writes, so equal
+    // timestamps are the normal case rather than a rare tie, and Firestore promises
+    // nothing about order among equal values. Sorting here rather than adding
+    // `.orderBy('slug')` avoids provisioning a composite index for a listing that is
+    // already bounded to a couple of hundred rows.
     const snap = await this.db
       .collectionGroup('scorecard')
       .orderBy('computedAt', 'desc')
       .limit(opts?.limit ?? 200)
       .get();
-    return snap.docs.map((doc) => doc.data() as Scorecard);
+    return snap.docs.map((doc) => doc.data() as Scorecard).sort(compareScorecards);
   }
 
   async getScorecard(slug: string): Promise<Scorecard | null> {
