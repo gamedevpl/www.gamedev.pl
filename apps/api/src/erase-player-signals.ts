@@ -35,6 +35,29 @@ import type { Store } from './store.js';
  * just against a real database.
  */
 
+/**
+ * Turns Firestore's index errors into the action that resolves them.
+ *
+ * They are accurate but arrive as a wall of gRPC text ending in a console URL, at the exact
+ * moment an operator is part-way through a deletion request they have already accepted.
+ *
+ * The distinction is the point: two different causes wear the same `9 FAILED_PRECONDITION`,
+ * and the remedies are not interchangeable. Re-running `setup-gcp.sh` against a
+ * still-building index reports it as already present, which reads as "the fix did not
+ * work" and invites the operator to conclude the tool is broken.
+ *
+ * Returns null for anything else — an unrecognised failure should be shown as-is, not
+ * dressed up as an index problem.
+ */
+export function indexHint(message: string): string | null {
+  if (!message.includes('FAILED_PRECONDITION') || !message.includes('index')) return null;
+  return message.includes('not ready yet')
+    ? 'The index exists and is still building. Wait a minute and run this again — re-running\n' +
+        'infra/setup-gcp.sh will not help; it will report the index as already present.'
+    : 'The playerFeedback.uid collection-group index is missing. Run infra/setup-gcp.sh\n' +
+        '(step 7), wait for the build to finish, then run this again.';
+}
+
 export interface ErasePlayerSignalsResult {
   uid: string;
   /** Games where a vote was found (and cleared, unless this was a dry run). */

@@ -217,10 +217,15 @@ Two things worth knowing before you run it:
   and no user agent by construction, so there is nothing in them to erase and nothing that
   could be found if you tried. The erase path for play data is that it was never attributed.
 - **It needs the `playerFeedback.uid` collection-group index** from step 7 of
-  [`infra/setup-gcp.sh`](../infra/setup-gcp.sh). If the command fails with
-  `9 FAILED_PRECONDITION`, that index is missing — re-run the setup script, wait for the
-  build, and run the erase again. Nothing partial happens in that case: the failure is on
-  the read, before any delete.
+  [`infra/setup-gcp.sh`](../infra/setup-gcp.sh). A `9 FAILED_PRECONDITION` means one of two
+  different things, and they have different remedies — read which one the message says:
+  - _"That index is not ready yet"_ — the index exists and is **building**. Wait a minute
+    and re-run the erase. Re-running the setup script does nothing; it will just report the
+    index as already present.
+  - _"no matching index found"_ — the index was never created. Run the setup script, then
+    wait for the build as above.
+
+  Either way nothing partial happens: the failure is on the read, before any delete.
 
 ## How to deploy manually
 

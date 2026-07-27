@@ -1,6 +1,42 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { erasePlayerSignals } from './erase-player-signals.js';
+import { erasePlayerSignals, indexHint } from './erase-player-signals.js';
 import { InMemoryStore } from './store.js';
+
+describe('indexHint', () => {
+  // Verbatim from a real run against the live project, moments after setup-gcp.sh created
+  // the index — the case the operator actually hits, so the one worth pinning.
+  const stillBuilding =
+    '9 FAILED_PRECONDITION: The query requires a COLLECTION_GROUP_ASC index for collection ' +
+    'playerFeedback and field uid. That index is not ready yet. See its status here: ' +
+    'https://console.firebase.google.com/v1/r/project/gamedevpl/firestore/indexes?create_exemption=Cl';
+
+  const neverCreated =
+    '9 FAILED_PRECONDITION: no matching index found for collection playerFeedback and field uid.';
+
+  it('tells an operator to wait, not to re-run setup, while the index builds', () => {
+    const hint = indexHint(stillBuilding);
+
+    expect(hint).toContain('still building');
+    expect(hint).toContain('Wait a minute');
+    // The load-bearing half: re-running setup reports the index as present, which reads as
+    // the fix having failed and invites the operator to give up on the tool.
+    expect(hint).toContain('will not help');
+  });
+
+  it('tells an operator to run setup when the index was never created', () => {
+    const hint = indexHint(neverCreated);
+
+    expect(hint).toContain('setup-gcp.sh');
+    expect(hint).not.toContain('still building');
+  });
+
+  it('stays out of the way of unrelated failures', () => {
+    // A permissions error or a network fault must be shown as itself. Guessing "index"
+    // here would send an operator to fix something that was never wrong.
+    expect(indexHint('7 PERMISSION_DENIED: Missing or insufficient permissions.')).toBeNull();
+    expect(indexHint('Error: getaddrinfo ENOTFOUND firestore.googleapis.com')).toBeNull();
+  });
+});
 
 /**
  * This is the executable half of a promise the privacy notice makes, so the tests are

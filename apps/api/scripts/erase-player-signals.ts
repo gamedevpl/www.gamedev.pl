@@ -16,7 +16,7 @@
 // Note what this does *not* do: play telemetry is untouched because it carries no uid at
 // all. There is nothing there to erase, which is the intended property, not a gap.
 
-import { erasePlayerSignals } from '../src/erase-player-signals.js';
+import { erasePlayerSignals, indexHint } from '../src/erase-player-signals.js';
 import { FirestoreStore } from '../src/store.js';
 
 function usage(): never {
@@ -58,6 +58,12 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(message);
+
+  const hint = indexHint(message);
+  // Nothing was deleted: both queries this command runs fail before any write.
+  if (hint) console.error(`${hint}\nNothing was erased — this failed on the read.`);
+
   process.exit(1);
 });
