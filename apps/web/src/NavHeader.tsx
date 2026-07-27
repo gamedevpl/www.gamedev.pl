@@ -3,10 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext';
 import { AuthModal } from './AuthModal';
 import { LanguageSwitcher } from './LanguageSwitcher';
+import { Mascot } from './Mascot';
 import { NotificationBell } from './NotificationBell';
 import { PixelIcon } from './PixelIcon';
 import githubIcon from './assets/github-mark-white.svg';
-import logo from './logo-gamedev.png';
 
 type NavHeaderProps = {
   activeSpecsCount: number;
@@ -38,7 +38,7 @@ export function NavHeader({ activeSpecsCount, onNavigate, onHome }: NavHeaderPro
     <header className="app-header">
       <div className="logo-brand">
         <a href="/" className="logo" onClick={handleLogoClick}>
-          <img src={logo} alt={t('header.logoAlt')} width="36" height="32" />
+          <Mascot className="mascot--logo" emotion="idle" size={36} title={t('header.logoAlt')} staticPose />
           gamedev<span className="turquoise">.pl</span>
         </a>
       </div>

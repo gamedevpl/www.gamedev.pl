@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { GoogleSignInButton } from './GoogleSignInButton';
+import { Mascot } from './Mascot';
 import { PixelIcon } from './PixelIcon';
 
 interface AuthModalProps {
@@ -31,6 +32,7 @@ export function AuthModal({ isOpen, onClose, title, subtitle }: AuthModalProps) 
         </button>
 
         <div className="auth-modal-header">
+          <Mascot className="auth-modal-mascot" emotion="proud" size={56} title={t('mascot.proudAlt')} />
           <h2>
             <PixelIcon name="lock" size={18} /> {title ?? t('auth.authWallTitle')}
           </h2>

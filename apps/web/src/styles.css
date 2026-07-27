@@ -111,7 +111,8 @@ a {
   letter-spacing: -0.5px;
 }
 
-.app-header .logo img {
+.app-header .logo img,
+.app-header .logo .mascot {
   margin-right: 10px;
 }
 
@@ -4275,8 +4276,12 @@ body.player-open {
   padding: 0 1rem;
 }
 
+.not-found .mascot-moment {
+  gap: 10px;
+}
+
 .not-found__code {
-  margin: 0 0 0.5rem;
+  margin: 0.25rem 0 0.5rem;
   font-size: clamp(3.5rem, 12vw, 5.5rem);
   font-weight: 700;
   letter-spacing: -0.04em;
@@ -4601,4 +4606,162 @@ body.player-open {
 .health-table th.num,
 .health-table td.num {
   text-align: right;
+}
+
+/* ——— Mascot (digitized logo monster) ——— */
+.mascot {
+  display: inline-block;
+  color: var(--turquoise);
+  flex: none;
+  vertical-align: middle;
+  overflow: visible;
+}
+
+.mascot__body-group {
+  transform-origin: 35px 52px;
+  transform-box: fill-box;
+}
+
+.mascot:not(.mascot--static).mascot--idle .mascot__body-group,
+.mascot:not(.mascot--static).mascot--happy .mascot__body-group,
+.mascot:not(.mascot--static).mascot--proud .mascot__body-group,
+.mascot:not(.mascot--static).mascot--curious .mascot__body-group {
+  animation: mascot-bob 3.2s ease-in-out infinite;
+}
+
+.mascot:not(.mascot--static).mascot--excited .mascot__body-group,
+.mascot:not(.mascot--static).mascot--busy .mascot__body-group {
+  animation: mascot-bounce 0.7s ease-in-out infinite;
+}
+
+.mascot:not(.mascot--static).mascot--sad .mascot__body-group {
+  animation: mascot-sigh 3.6s ease-in-out infinite;
+}
+
+.mascot:not(.mascot--static).mascot--wave .mascot__arm--right {
+  transform-origin: 56px 32px;
+  animation: mascot-wave 0.85s ease-in-out infinite;
+}
+
+.mascot:not(.mascot--static) .mascot__eyes {
+  transform-origin: 35px 20px;
+  animation: mascot-blink 4.8s ease-in-out infinite;
+}
+
+.mascot--logo {
+  color: var(--turquoise);
+}
+
+.mascot-moment {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  text-align: center;
+  width: 100%;
+}
+
+.mascot-moment__copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: 28rem;
+}
+
+.mascot-moment__copy > p {
+  margin: 0;
+}
+
+.mascot-moment--inline {
+  flex-direction: row;
+  gap: 16px;
+  text-align: left;
+}
+
+.mascot-moment--inline .mascot-moment__copy {
+  align-items: flex-start;
+  text-align: left;
+}
+
+.app-loading-screen__mascot {
+  margin-bottom: 4px;
+}
+
+.beta-splash__mascot {
+  margin: 0 auto 20px;
+}
+
+.auth-modal-mascot {
+  margin: 0 auto 12px;
+}
+
+.hero-mascot-aside {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 12px;
+}
+
+@keyframes mascot-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes mascot-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-5px);
+  }
+  60% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes mascot-sigh {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(1.5px) rotate(-2deg);
+  }
+}
+
+@keyframes mascot-wave {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(18deg);
+  }
+}
+
+@keyframes mascot-blink {
+  0%,
+  42%,
+  48%,
+  100% {
+    transform: scaleY(1);
+  }
+  45% {
+    transform: scaleY(0.12);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mascot .mascot__body-group,
+  .mascot .mascot__arm--right,
+  .mascot .mascot__eyes {
+    animation: none !important;
+  }
 }
