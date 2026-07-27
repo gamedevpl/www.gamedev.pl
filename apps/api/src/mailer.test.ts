@@ -37,6 +37,16 @@ describe('ResendMailer', () => {
     });
   });
 
+  it('forwards replyTo as reply_to for the Resend API', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ id: 'resend-456' }), { status: 200 }));
+    const mailer = new ResendMailer({ apiKey: 'key_abc', from: DEFAULT_MAIL_FROM, fetchImpl });
+
+    await mailer.send({ ...message, replyTo: 'writer@example.com' });
+
+    const body = JSON.parse(fetchImpl.mock.calls[0]![1]?.body as string);
+    expect(body.reply_to).toBe('writer@example.com');
+  });
+
   it('throws MailerError carrying the status on a non-2xx response', async () => {
     const fetchImpl = vi.fn(async () => new Response('rate limited', { status: 429 }));
     const mailer = new ResendMailer({ apiKey: 'key_abc', from: DEFAULT_MAIL_FROM, fetchImpl });

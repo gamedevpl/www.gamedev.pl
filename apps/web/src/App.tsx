@@ -14,6 +14,7 @@ import { SubmissionStatusView } from './SubmissionStatusView';
 import { CreatorQA, type QAQuestion } from './CreatorQA';
 import { canonicalPlayPath, NAVIGATE_EVENT, parsePathRoute, statusPath, playPath, type AppRoute } from './router';
 import { LegalPage } from './LegalPage';
+import { ContactPage } from './ContactPage';
 import { NotFoundPage } from './NotFoundPage';
 import { SiteFooter } from './SiteFooter';
 import { resolveDocumentTitle } from './pageTitle';
@@ -121,6 +122,7 @@ export function App() {
         health: t('pageTitle.health'),
         privacy: t('legal.privacy'),
         terms: t('legal.terms'),
+        contact: t('pageTitle.contact'),
         notFound: t('pageTitle.notFound'),
         playNamed: t('pageTitle.playNamed'),
         draftNamed: t('pageTitle.draftNamed'),
@@ -496,6 +498,23 @@ export function App() {
         />
         <main className="content">
           <LegalPage doc={route.doc} onBack={() => navigate('/')} />
+        </main>
+        <SiteFooter />
+      </div>
+    );
+  }
+
+  // Same early exit as legal: the published contact point must work without a session.
+  if (route.view === 'contact') {
+    return (
+      <div className="app app--contact">
+        <NavHeader
+          activeSpecsCount={savedSpecs.length}
+          onNavigate={handleNavigateSection}
+          onHome={() => navigate('/')}
+        />
+        <main className="content">
+          <ContactPage onBack={() => navigate('/')} />
         </main>
         <SiteFooter />
       </div>

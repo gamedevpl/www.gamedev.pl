@@ -68,8 +68,17 @@ function hasTooManyUrls(rawText: string): boolean {
   return (matches?.length ?? 0) > MAX_URLS_IN_TEXT;
 }
 
-export function moderateText(rawText: string): ModerationVerdict {
-  if (containsPii(rawText)) {
+export interface ModerateTextOptions {
+  /**
+   * Contact forms collect a reply address on purpose, and writers often paste a
+   * phone number into the body. Skip the PII reject there; game-spec moderation
+   * must keep the default (reject).
+   */
+  allowPii?: boolean;
+}
+
+export function moderateText(rawText: string, options: ModerateTextOptions = {}): ModerationVerdict {
+  if (!options.allowPii && containsPii(rawText)) {
     return { allowed: false, category: 'pii' };
   }
   if (hasTooManyUrls(rawText)) {
@@ -87,9 +96,9 @@ export function moderateText(rawText: string): ModerationVerdict {
 
 // Combine multiple fields (e.g. title + concept) into one verdict — reject on the
 // first field that trips, so the client gets one clear category, not a merged mess.
-export function moderateFields(fields: string[]): ModerationVerdict {
+export function moderateFields(fields: string[], options: ModerateTextOptions = {}): ModerationVerdict {
   for (const field of fields) {
-    const verdict = moderateText(field);
+    const verdict = moderateText(field, options);
     if (!verdict.allowed) return verdict;
   }
   return { allowed: true };

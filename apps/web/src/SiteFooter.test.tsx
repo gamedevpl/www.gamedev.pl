@@ -11,10 +11,11 @@ import { setVisitSessionForTesting, VisitSession } from './visitTelemetry';
 /**
  * The footer carries two different reporting routes that look alike and must not be
  * confused: "report illegal content" is the legal notice-and-action path, and "report a
- * bug" goes to the issue tracker. Contact opens the issues list for general outreach;
- * the electronic address stays in the legal documents, not under the brand. These check
- * that the project links are present and that the bug link carries the visit id, which
- * is what lets a public issue be diagnosed without anyone pasting session details into it.
+ * bug" goes to the issue tracker. Contact opens the in-app form that emails the operator;
+ * the electronic address also lives in the legal documents, not under the brand. These
+ * check that the project links are present and that the bug link carries the visit id,
+ * which is what lets a public issue be diagnosed without anyone pasting session details
+ * into it.
  */
 
 let container: HTMLDivElement;
@@ -57,12 +58,14 @@ describe('SiteFooter project links', () => {
     expect(repoLink?.rel).toContain('noopener');
   });
 
-  it('sends Contact to the GitHub issues list, not a mailto', () => {
+  it('sends Contact to the in-app form, not GitHub issues or a bare mailto', () => {
     render();
 
-    const contact = links().find((a) => a.href === 'https://github.com/gamedevpl/www.gamedev.pl/issues');
+    const contact = links().find((a) => a.getAttribute('href') === '/contact');
     expect(contact).toBeDefined();
-    expect(contact?.rel).toContain('noopener');
+    expect(links().some((a) => a.href.includes('github.com') && a.href.includes('/issues') && !a.href.includes('/issues/new'))).toBe(
+      false,
+    );
     expect(links().some((a) => a.href.startsWith('mailto:'))).toBe(false);
     expect(container.textContent).not.toContain('admin@gamedev.pl');
   });

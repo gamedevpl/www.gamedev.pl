@@ -13,6 +13,11 @@ export interface EmailMessage {
   text: string;
   /** Optional HTML body. */
   html?: string;
+  /**
+   * Optional Reply-To. Contact-form mail uses this so a reply from admin@ goes
+   * to the writer, not the noreply sender identity.
+   */
+  replyTo?: string;
   /** Extra headers, e.g. `List-Unsubscribe` for the recurring notification mails. */
   headers?: Record<string, string>;
 }
@@ -72,6 +77,7 @@ export class ResendMailer implements Mailer {
         subject: message.subject,
         text: message.text,
         html: message.html,
+        reply_to: message.replyTo,
         headers: message.headers,
       }),
     });

@@ -62,6 +62,13 @@ export const privacyPl: LegalDocument = {
               'Do końca zamkniętej bety lub do wycofania zapisu',
             ],
             [
+              'Zgłoszenia z formularza kontaktowego: imię lub nazwa, adres e-mail oraz treść wiadomości',
+              'Odczytanie Twojego zapytania i udzielenie odpowiedzi',
+              'art. 6 ust. 1 lit. f — nasz prawnie uzasadniony interes w odpowiadaniu osobom, które do nas piszą, ' +
+                'oraz lit. c — gdy wiadomość jest żądaniem, które musimy rozpatrzyć z mocy prawa',
+              'Do 24 miesięcy po zamknięciu sprawy',
+            ],
+            [
               'Treści, które tworzysz: opis gry, tytuł, odpowiedzi na pytania doprecyzowujące, uwagi do gotowej gry, ' +
                 'opcjonalna nazwa twórcy, przesłane szkice i obrazy',
               'Zbudowanie gry przez agenta AI i jej opublikowanie',

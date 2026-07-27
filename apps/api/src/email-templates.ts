@@ -195,3 +195,36 @@ export function submissionNotificationMessage(
     headers: { 'List-Unsubscribe': `<${params.unsubscribeUrl}>` },
   };
 }
+
+export interface ContactEmailParams {
+  name: string;
+  email: string;
+  message: string;
+}
+
+/**
+ * Operator-facing mail for the public contact form. English only — the recipient
+ * is the operator mailbox, not the writer, so bilingual copy is unnecessary.
+ * The writer's locale is irrelevant to a single admin inbox.
+ */
+export function renderContactEmail(params: ContactEmailParams): RenderedEmail {
+  const subject = `Contact form: ${params.name}`.slice(0, 200);
+  const text = [
+    `From: ${params.name} <${params.email}>`,
+    '',
+    params.message,
+    '',
+    '—',
+    'Sent via the gamedev.pl contact form. Reply to this email to reach the writer.',
+  ].join('\n');
+
+  const htmlMessage = escapeHtml(params.message).replace(/\r\n|\r|\n/g, '<br>');
+  const html = [
+    `<p><strong>From:</strong> ${escapeHtml(params.name)} &lt;${escapeHtml(params.email)}&gt;</p>`,
+    `<p>${htmlMessage}</p>`,
+    '<hr>',
+    '<p style="color:#888;font-size:12px">Sent via the gamedev.pl contact form. Reply to this email to reach the writer.</p>',
+  ].join('\n');
+
+  return { subject, text, html };
+}

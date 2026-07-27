@@ -23,6 +23,9 @@ export type AppRoute =
   // Privacy policy and terms. Reachable without a session — someone deciding whether
   // to sign in has to be able to read what signing in would mean first.
   | { view: 'legal'; doc: LegalDocId }
+  // Public contact form. Same early-exit posture as legal: a contact point behind
+  // sign-in is not a published contact point.
+  | { view: 'contact' }
   // Unknown / invalid path. Kept as its own view so a typo or stale bookmark shows a
   // real 404 instead of silently dumping the visitor on the home catalog.
   | { view: 'notFound' };
@@ -53,6 +56,10 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
 
   if (normalizedPath === '/terms') {
     return { view: 'legal', doc: 'terms' };
+  }
+
+  if (normalizedPath === '/contact') {
+    return { view: 'contact' };
   }
 
   const statusMatch = normalizedPath.match(/^\/status\/([^/]+)$/);
@@ -140,6 +147,11 @@ export type NavigateEventDetail = { path: string };
  */
 export function legalPath(doc: LegalDocId, sectionId?: string): string {
   return sectionId ? `/${doc}#${sectionId}` : `/${doc}`;
+}
+
+/** URL for the public contact form. */
+export function contactPath(): string {
+  return '/contact';
 }
 
 /**

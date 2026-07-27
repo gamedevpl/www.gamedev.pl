@@ -14,7 +14,7 @@
 
 export const REPO_URL = 'https://github.com/gamedevpl/www.gamedev.pl';
 
-/** The public issue tracker — general contact and discussion, not just bug reports. */
+/** The public issue tracker — bug reports and project discussion, not general contact. */
 export const ISSUES_URL = `${REPO_URL}/issues`;
 
 export interface BugReportContext {

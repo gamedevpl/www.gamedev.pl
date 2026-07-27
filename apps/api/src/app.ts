@@ -12,6 +12,7 @@ import { registerAdminRoutes } from './admin.js';
 import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
 import { createGenerator } from './generator.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
+import { registerContactRoutes, type ContactRoutesOptions } from './contact.js';
 import { registerEmailRoutes } from './email-routes.js';
 import { registerMultiplayerRoutes, type MultiplayerRoutesOptions } from './mp.js';
 import { registerNotificationRoutes } from './notifications.js';
@@ -54,6 +55,8 @@ export interface BuildAppOptions {
   playerFeedbackRoutes?: Omit<PlayerFeedbackRoutesOptions, 'store' | 'contentChecker'>;
   /** Seams for the nightly scorecard sweep; defaults to OIDC-or-deny-all from env. */
   scorecardRoutes?: Partial<Omit<ScorecardRoutesOptions, 'store'>>;
+  /** Seams for the public contact form (mailer fake in tests). */
+  contactRoutes?: ContactRoutesOptions;
   // Private beta allowlist — uids (comma-separated) allowed to sign in and access gated routes
   betaAllowedUids?: string;
   // Private beta allowlist — Google-verified emails (comma-separated, case-insensitive)
@@ -164,6 +167,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   await registerEmailRoutes(app, { store, unsubscribeSecret: options.sessionSecret });
 
+  // Public contact form → admin@gamedev.pl. Exempted from the private-beta wall
+  // below: a published contact point that only signed-in beta users can reach is
+  // not a published contact point. Rate-limited and moderated in the handler.
+  await registerContactRoutes(app, options.contactRoutes);
+
   // Play-session telemetry (docs/improvement-loop-plan.md IL-1). This *is* exempted from
   // the private-beta wall below — the "revisit when the site opens" note that used to live
   // here came due when play was opened to anonymous visitors. Walling it now would blind
@@ -272,6 +280,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // The unsubscribe link carries a signed token and is clicked from a mail client
     // that has no session — it must reach its handler through the wall.
     if (request.url.startsWith('/api/email/unsubscribe')) return;
+    // Contact form: same reason as legal pages being reachable without a session.
+    // The handler itself is IP-rate-limited and moderated; the wall must not 401 it.
+    if (request.url.startsWith('/api/contact')) return;
     // Internal endpoints (the Cloud Scheduler notification sweep) authenticate via
     // an OIDC token in the handler, not a session — the wall would 401 them first.
     if (request.url.startsWith('/api/internal/')) return;

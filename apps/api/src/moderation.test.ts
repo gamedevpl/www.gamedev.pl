@@ -59,6 +59,15 @@ describe('moderateText', () => {
     expect(moderateText('call me at +48 512 345 678')).toMatchObject({ allowed: false, category: 'pii' });
   });
 
+  it('can allow PII when a contact body is expected to name a person', () => {
+    expect(
+      moderateText('Please call me back at +48 512 345 678', { allowPii: true }),
+    ).toEqual({ allowed: true });
+    expect(
+      moderateText('Also email other@example.com if needed', { allowPii: true }),
+    ).toEqual({ allowed: true });
+  });
+
   it('rejects specs with too many outbound links', () => {
     const spec = 'Check https://a.example.com and https://b.example.com and https://c.example.com for reference';
     expect(moderateText(spec)).toMatchObject({ allowed: false, category: 'other' });

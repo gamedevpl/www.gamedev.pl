@@ -375,6 +375,21 @@
     "openSource": "Otwarte źródła",
     "reportBug": "Zgłoś błąd"
   },
+  "contact": {
+    "title": "Kontakt",
+    "intro": "Napisz do nas w sprawie Serwisu — pytania, reklamacje lub cokolwiek, co nie jest zgłoszeniem błędu ani nielegalnych treści.",
+    "back": "Wróć do serwisu",
+    "name": "Twoje imię lub nazwa",
+    "email": "Twój e-mail",
+    "message": "Wiadomość",
+    "submit": "Wyślij wiadomość",
+    "sending": "Wysyłanie…",
+    "sent": "Wiadomość wysłana — odpowiemy e-mailem.",
+    "error": "Nie udało się wysłać wiadomości. Spróbuj ponownie za chwilę.",
+    "rateLimited": "Zbyt wiele wiadomości z tej sieci. Spróbuj ponownie później.",
+    "privacyNote": "Twoje imię i e-mail wykorzystamy tylko do odczytania i odpowiedzi na tę wiadomość. Szczegóły w",
+    "orEmail": "Albo napisz bezpośrednio na"
+  },
   "ai": {
     "generatedBadge": "Gra wygenerowana przez AI",
     "generatedShort": "AI",
@@ -441,6 +456,7 @@
     "join": "Dołącz do gry",
     "health": "Telemetria",
     "notFound": "Nie znaleziono strony",
+    "contact": "Kontakt",
     "playNamed": "Graj: {{title}}",
     "draftNamed": "Szkic: {{title}}",
     "statusNamed": "Status · {{title}}"

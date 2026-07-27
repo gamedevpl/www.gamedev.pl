@@ -44,7 +44,9 @@ export function isKnownSpaShellPath(urlOrPath: string): boolean {
   const pathname = normalizePathname(urlOrPath);
 
   if (pathname === '/') return true;
-  if (pathname === '/privacy' || pathname === '/terms' || pathname === '/health') return true;
+  if (pathname === '/privacy' || pathname === '/terms' || pathname === '/health' || pathname === '/contact') {
+    return true;
+  }
 
   const statusMatch = pathname.match(STATUS_PATTERN);
   if (statusMatch?.[1]) return true;

@@ -3,6 +3,7 @@ import {
   betaInviteEmail,
   betaInviteMessage,
   normalizeLocale,
+  renderContactEmail,
   submissionNotificationMessage,
 } from './email-templates.js';
 
@@ -90,5 +91,22 @@ describe('submissionNotificationMessage', () => {
     });
     expect(msg.html).not.toContain('<img src=x');
     expect(msg.html).toContain('&lt;img');
+  });
+});
+
+describe('renderContactEmail', () => {
+  it('includes the writer identity and escapes HTML in the body', () => {
+    const email = renderContactEmail({
+      name: 'Ada <script>',
+      email: 'ada@example.com',
+      message: 'Hello <b>there</b>\nSecond line',
+    });
+    expect(email.subject).toContain('Ada');
+    expect(email.text).toContain('ada@example.com');
+    expect(email.text).toContain('Second line');
+    expect(email.html).not.toContain('<script>');
+    expect(email.html).not.toContain('<b>there</b>');
+    expect(email.html).toContain('&lt;b&gt;there&lt;/b&gt;');
+    expect(email.html).toContain('<br>');
   });
 });
