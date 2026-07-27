@@ -161,6 +161,22 @@
     "empty": "Nie zleciłeś jeszcze żadnej gry.",
     "createFirst": "Stwórz pierwszą grę",
     "shelfAria": "Twoje gry",
+    "shelf": {
+      "heading": "Twoje gry",
+      "count": "{{count}} gier",
+      "searchLabel": "Szukaj wśród swoich gier",
+      "searchPlaceholder": "Szukaj po tytule lub slugu…",
+      "filterAria": "Filtruj gry",
+      "filters": {
+        "all": "Wszystkie",
+        "building": "W budowie",
+        "live": "Na żywo"
+      },
+      "noMatches": "Żadna gra nie pasuje do tego wyszukiwania.",
+      "switcher": "Zmień grę",
+      "pickerTitle": "Wybierz grę",
+      "closePicker": "Zamknij listę gier"
+    },
     "tabs": {
       "overview": "Przegląd",
       "build": "Build",

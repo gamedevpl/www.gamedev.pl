@@ -161,6 +161,22 @@
     "empty": "You have not commissioned a game yet.",
     "createFirst": "Create your first game",
     "shelfAria": "Your games",
+    "shelf": {
+      "heading": "Your games",
+      "count": "{{count}} games",
+      "searchLabel": "Search your games",
+      "searchPlaceholder": "Search by title or slug…",
+      "filterAria": "Filter games",
+      "filters": {
+        "all": "All",
+        "building": "Building",
+        "live": "Live"
+      },
+      "noMatches": "No games match that search.",
+      "switcher": "Switch game",
+      "pickerTitle": "Choose a game",
+      "closePicker": "Close game list"
+    },
     "tabs": {
       "overview": "Overview",
       "build": "Build",

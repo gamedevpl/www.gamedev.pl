@@ -24,6 +24,36 @@ async function main() {
     await store.setSubmissionSlug(102, 'arena-tag');
     await store.setSubmissionLastStatus(102, 'building');
     await store.setSubmissionNotifiedStatus(102, 'building');
+    // Extra shelf rows so local QA can exercise search/filters/mobile switcher at 10+.
+    const extras: Array<{
+      issue: number;
+      title: string;
+      slug?: string;
+      status: 'published' | 'building' | 'queued' | 'in_review' | 'needs_changes';
+      daysAgo: number;
+    }> = [
+      { issue: 103, title: 'Neon Drift', slug: 'neon-drift', status: 'published', daysAgo: 8 },
+      { issue: 104, title: 'Puzzle Dock', slug: 'puzzle-dock', status: 'published', daysAgo: 12 },
+      { issue: 105, title: 'Bolt Rush', status: 'queued', daysAgo: 0 },
+      { issue: 106, title: 'Castle Siege', slug: 'castle-siege', status: 'published', daysAgo: 20 },
+      { issue: 107, title: 'Orbit Hop', status: 'in_review', daysAgo: 1 },
+      { issue: 108, title: 'Tide Pool', slug: 'tide-pool', status: 'published', daysAgo: 30 },
+      { issue: 109, title: 'Pixel Ranch', slug: 'pixel-ranch', status: 'published', daysAgo: 40 },
+      { issue: 110, title: 'Ghost Circuit', status: 'needs_changes', daysAgo: 5 },
+      { issue: 111, title: 'Forest Dash', slug: 'forest-dash', status: 'published', daysAgo: 55 },
+      { issue: 112, title: 'Sumo Mini', slug: 'sumo-mini', status: 'published', daysAgo: 60 },
+    ];
+    for (const extra of extras) {
+      await store.createSubmission(extra.issue, uid, extra.title);
+      if (extra.slug) await store.setSubmissionSlug(extra.issue, extra.slug);
+      const created = new Date(Date.now() - extra.daysAgo * 86400_000).toISOString();
+      // createdAt is set by createSubmission; publishedAt only for live games.
+      if (extra.status === 'published' && extra.slug) {
+        await store.setSubmissionPublishedAt(extra.issue, created);
+      }
+      await store.setSubmissionLastStatus(extra.issue, extra.status);
+      await store.setSubmissionNotifiedStatus(extra.issue, extra.status);
+    }
     const today = new Date().toISOString().slice(0, 10);
     await store.appendTelemetryEvents(today, [
       {

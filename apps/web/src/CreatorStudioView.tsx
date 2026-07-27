@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
 import { AuthModal } from './AuthModal.js';
@@ -8,6 +8,13 @@ import { formatRelativeTime } from './relativeTime.js';
 import { studioPath } from './router.js';
 import { abandonSubmission, submitFeedback, type SubmissionApiError, type SubmissionState } from './submissionApi.js';
 import { StudioPlaytestPanel } from './StudioPlaytestPanel.js';
+import {
+  filterStudioGames,
+  isStudioGamePublished,
+  STUDIO_LIVE_STATUSES,
+  STUDIO_SHELF_TOOLS_AT,
+  type StudioShelfFilter,
+} from './studioShelf.js';
 import { SubmissionStatusView } from './SubmissionStatusView.js';
 import {
   fetchStudioGames,
@@ -23,6 +30,10 @@ import {
  * One place for the whole creator loop: shelf of owned games, the draft Build
  * (former status / "dev studio" page), playtest-with-pause prompting, play
  * health, and post-publish improve. Player-feedback analysis is stubbed.
+ *
+ * Shelf scales past a handful of games: compact rows, search/filter once the
+ * list grows, and on narrow viewports a game switcher (picker sheet) so the
+ * work surface is not buried under ten cards.
  */
 
 const STATUS_ICONS: Record<SubmissionState, PixelIconName> = {
@@ -37,9 +48,6 @@ const STATUS_ICONS: Record<SubmissionState, PixelIconName> = {
 
 const WINDOWS = [1, 7, 30];
 
-/** In-progress builds get the same “live” shelf treatment as the home rail. */
-const LIVE_STATUSES = new Set<SubmissionState>(['queued', 'building', 'in_review', 'publishing']);
-
 type StudioTab = 'overview' | 'build' | 'playtest' | 'stats' | 'improve' | 'feedback';
 
 type CreatorStudioViewProps = {
@@ -53,7 +61,7 @@ type CreatorStudioViewProps = {
 
 function defaultTabFor(game: StudioGame | null): StudioTab {
   if (!game) return 'overview';
-  return isPublished(game) ? 'overview' : 'build';
+  return isStudioGamePublished(game) ? 'overview' : 'build';
 }
 
 function formatSeconds(seconds: number): string {
@@ -72,10 +80,6 @@ function healthFor(game: StudioGame, rows: GameHealth[]): GameHealth | null {
   return rows.find((row) => row.slug === game.slug) ?? null;
 }
 
-function isPublished(game: StudioGame): boolean {
-  return Boolean(game.publishedAt && game.slug) || game.lastKnownStatus === 'published';
-}
-
 export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryConcept }: CreatorStudioViewProps) {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
@@ -89,6 +93,12 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryCo
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(selectedToken ?? null);
   const [tab, setTab] = useState<StudioTab>('overview');
+  const [shelfQuery, setShelfQuery] = useState('');
+  const [shelfFilter, setShelfFilter] = useState<StudioShelfFilter>('all');
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const shelfSearchId = useId();
+  const pickerSearchId = useId();
+  const pickerSearchRef = useRef<HTMLInputElement>(null!);
 
   useEffect(() => {
     if (selectedToken) setSelected(selectedToken);
@@ -133,23 +143,50 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryCo
 
   const selectedGame = useMemo(() => games.find((game) => game.token === selected) ?? null, [games, selected]);
   const selectedHealth = selectedGame ? healthFor(selectedGame, healthRows) : null;
+  const visibleGames = useMemo(
+    () => filterStudioGames(games, { filter: shelfFilter, query: shelfQuery }),
+    [games, shelfFilter, shelfQuery],
+  );
+  const showShelfTools = games.length >= STUDIO_SHELF_TOOLS_AT;
+  const buildingCount = useMemo(
+    () => games.filter((game) => game.lastKnownStatus && STUDIO_LIVE_STATUSES.has(game.lastKnownStatus)).length,
+    [games],
+  );
+  const liveCount = useMemo(() => games.filter((game) => isStudioGamePublished(game)).length, [games]);
 
   useEffect(() => {
     if (selectedGame) {
       setTab((current) => {
         // Keep the user on a tab that still exists for this game.
-        if (current === 'build' && isPublished(selectedGame)) return 'overview';
-        if (current === 'stats' && !isPublished(selectedGame)) return 'build';
-        if (current === 'feedback' && !isPublished(selectedGame)) return 'improve';
+        if (current === 'build' && isStudioGamePublished(selectedGame)) return 'overview';
+        if (current === 'stats' && !isStudioGamePublished(selectedGame)) return 'build';
+        if (current === 'feedback' && !isStudioGamePublished(selectedGame)) return 'improve';
         return current;
       });
     }
   }, [selectedGame]);
 
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const frame = window.requestAnimationFrame(() => pickerSearchRef.current?.focus());
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setPickerOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = previous;
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [pickerOpen]);
+
   function selectGame(token: string) {
     const next = games.find((game) => game.token === token) ?? null;
     setSelected(token);
     setTab(defaultTabFor(next));
+    setPickerOpen(false);
     onNavigate(studioPath(token));
   }
 
@@ -169,6 +206,16 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryCo
       </section>
     );
   }
+
+  const shelfList = (
+    <StudioShelfList
+      games={visibleGames}
+      selected={selected}
+      locale={i18n.language}
+      emptyLabel={t('studioPanel.shelf.noMatches')}
+      onSelect={selectGame}
+    />
+  );
 
   return (
     <section className="studio-panel">
@@ -195,60 +242,57 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryCo
       ) : null}
 
       {!loading && games.length > 0 ? (
-        <div className="studio-layout">
+        <div className={`studio-layout${selectedGame ? ' is-game-open' : ''}`}>
           <aside className="studio-shelf" aria-label={t('studioPanel.shelfAria')}>
-            <ul className="studio-shelf-list">
-              {games.map((game) => {
-                const active = game.token === selected;
-                const status = game.lastKnownStatus;
-                const live = status ? LIVE_STATUSES.has(status) : false;
-                const published = isPublished(game);
-                return (
-                  <li key={game.token}>
-                    <button
-                      type="button"
-                      className={`studio-shelf-item${active ? ' is-active' : ''}${live ? ' is-live' : ''}${published ? ' is-published' : ''}`}
-                      onClick={() => selectGame(game.token)}
-                      aria-current={active ? 'true' : undefined}
-                    >
-                      <span
-                        className={`studio-shelf-status${live ? ' is-live' : ''}${published ? ' is-published' : ''}`}
-                      >
-                        {status ? (
-                          <>
-                            <PixelIcon name={STATUS_ICONS[status]} size={11} /> {t(`statusView.states.${status}.label`)}
-                          </>
-                        ) : (
-                          t('myGames.checking')
-                        )}
-                      </span>
-                      <span className="studio-shelf-title">{game.title}</span>
-                      <span className="studio-shelf-meta">
-                        {formatRelativeTime(Date.parse(game.createdAt), i18n.language)}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+            <div className="studio-shelf-head">
+              <h2 className="studio-shelf-heading">{t('studioPanel.shelf.heading')}</h2>
+              <span className="studio-shelf-count">{t('studioPanel.shelf.count', { count: games.length })}</span>
+            </div>
+            <StudioShelfControls
+              searchInputId={shelfSearchId}
+              query={shelfQuery}
+              filter={shelfFilter}
+              showTools={showShelfTools}
+              buildingCount={buildingCount}
+              liveCount={liveCount}
+              totalCount={games.length}
+              onQueryChange={setShelfQuery}
+              onFilterChange={setShelfFilter}
+            />
+            {shelfList}
           </aside>
 
           {selectedGame ? (
             <div className="studio-detail">
               <div className="studio-detail-head">
-                <h2>{selectedGame.title}</h2>
-                {selectedGame.slug ? <code className="studio-slug">{selectedGame.slug}</code> : null}
+                <button
+                  type="button"
+                  className="studio-game-switcher"
+                  onClick={() => setPickerOpen(true)}
+                  aria-haspopup="dialog"
+                  aria-expanded={pickerOpen}
+                >
+                  <span className="studio-game-switcher-label">{t('studioPanel.shelf.switcher')}</span>
+                  <span className="studio-game-switcher-title">{selectedGame.title}</span>
+                  <PixelIcon name="expand" size={12} />
+                </button>
+                <div className="studio-detail-title-row">
+                  <h2>{selectedGame.title}</h2>
+                  {selectedGame.slug ? <code className="studio-slug">{selectedGame.slug}</code> : null}
+                </div>
               </div>
 
               <div className="studio-tabs" role="tablist" aria-label={t('studioPanel.title')}>
                 {(
                   [
                     ['overview', 'studioPanel.tabs.overview'],
-                    ...(!isPublished(selectedGame) ? ([['build', 'studioPanel.tabs.build']] as const) : []),
+                    ...(!isStudioGamePublished(selectedGame) ? ([['build', 'studioPanel.tabs.build']] as const) : []),
                     ['playtest', 'studioPanel.tabs.playtest'],
-                    ...(isPublished(selectedGame) ? ([['stats', 'studioPanel.tabs.stats']] as const) : []),
+                    ...(isStudioGamePublished(selectedGame) ? ([['stats', 'studioPanel.tabs.stats']] as const) : []),
                     ['improve', 'studioPanel.tabs.improve'],
-                    ...(isPublished(selectedGame) ? ([['feedback', 'studioPanel.tabs.feedback']] as const) : []),
+                    ...(isStudioGamePublished(selectedGame)
+                      ? ([['feedback', 'studioPanel.tabs.feedback']] as const)
+                      : []),
                   ] as const
                 ).map(([id, labelKey]) => (
                   <button
@@ -280,7 +324,7 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryCo
                   />
                 ) : null}
 
-                {tab === 'build' && !isPublished(selectedGame) ? (
+                {tab === 'build' && !isStudioGamePublished(selectedGame) ? (
                   <div className="studio-build">
                     <SubmissionStatusView
                       token={selectedGame.token}
@@ -298,7 +342,7 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryCo
                 ) : null}
 
                 {tab === 'playtest' ? (
-                  <StudioPlaytestPanel game={selectedGame} published={isPublished(selectedGame)} />
+                  <StudioPlaytestPanel game={selectedGame} published={isStudioGamePublished(selectedGame)} />
                 ) : null}
 
                 {tab === 'stats' ? (
@@ -328,7 +372,170 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryCo
           ) : null}
         </div>
       ) : null}
+
+      {pickerOpen ? (
+        <div
+          className="modal-backdrop studio-picker-backdrop"
+          role="presentation"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setPickerOpen(false);
+          }}
+        >
+          <div
+            className="studio-picker"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('studioPanel.shelf.pickerTitle')}
+          >
+            <header className="studio-picker-header">
+              <div>
+                <h2>{t('studioPanel.shelf.pickerTitle')}</h2>
+                <p>{t('studioPanel.shelf.count', { count: games.length })}</p>
+              </div>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setPickerOpen(false)}
+                aria-label={t('studioPanel.shelf.closePicker')}
+              >
+                <PixelIcon name="close" size={14} />
+              </button>
+            </header>
+            <StudioShelfControls
+              searchInputId={pickerSearchId}
+              searchRef={pickerSearchRef}
+              query={shelfQuery}
+              filter={shelfFilter}
+              showTools={showShelfTools || games.length > 1}
+              buildingCount={buildingCount}
+              liveCount={liveCount}
+              totalCount={games.length}
+              onQueryChange={setShelfQuery}
+              onFilterChange={setShelfFilter}
+            />
+            {shelfList}
+          </div>
+        </div>
+      ) : null}
     </section>
+  );
+}
+
+function StudioShelfControls({
+  searchInputId,
+  searchRef,
+  query,
+  filter,
+  showTools,
+  buildingCount,
+  liveCount,
+  totalCount,
+  onQueryChange,
+  onFilterChange,
+}: {
+  searchInputId: string;
+  searchRef?: RefObject<HTMLInputElement>;
+  query: string;
+  filter: StudioShelfFilter;
+  showTools: boolean;
+  buildingCount: number;
+  liveCount: number;
+  totalCount: number;
+  onQueryChange: (value: string) => void;
+  onFilterChange: (value: StudioShelfFilter) => void;
+}) {
+  const { t } = useTranslation();
+  if (!showTools) return null;
+
+  return (
+    <div className="studio-shelf-tools">
+      <label className="studio-shelf-search" htmlFor={searchInputId}>
+        <PixelIcon name="search" size={12} />
+        <span className="studio-sr-only">{t('studioPanel.shelf.searchLabel')}</span>
+        <input
+          id={searchInputId}
+          ref={searchRef}
+          type="search"
+          value={query}
+          onChange={(event) => onQueryChange(event.target.value)}
+          placeholder={t('studioPanel.shelf.searchPlaceholder')}
+          autoComplete="off"
+        />
+      </label>
+      <div className="studio-shelf-filters" role="group" aria-label={t('studioPanel.shelf.filterAria')}>
+        {(
+          [
+            ['all', t('studioPanel.shelf.filters.all'), totalCount],
+            ['building', t('studioPanel.shelf.filters.building'), buildingCount],
+            ['live', t('studioPanel.shelf.filters.live'), liveCount],
+          ] as const
+        ).map(([id, label, count]) => (
+          <button
+            key={id}
+            type="button"
+            className={`studio-shelf-filter${filter === id ? ' is-active' : ''}`}
+            aria-pressed={filter === id}
+            onClick={() => onFilterChange(id)}
+          >
+            {label}
+            <span className="studio-shelf-filter-count">{count}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StudioShelfList({
+  games,
+  selected,
+  locale,
+  emptyLabel,
+  onSelect,
+}: {
+  games: StudioGame[];
+  selected: string | null;
+  locale: string;
+  emptyLabel: string;
+  onSelect: (token: string) => void;
+}) {
+  const { t } = useTranslation();
+
+  if (games.length === 0) {
+    return <p className="studio-shelf-empty">{emptyLabel}</p>;
+  }
+
+  return (
+    <ul className="studio-shelf-list">
+      {games.map((game) => {
+        const active = game.token === selected;
+        const status = game.lastKnownStatus;
+        const building = Boolean(status && STUDIO_LIVE_STATUSES.has(status));
+        const published = isStudioGamePublished(game);
+        return (
+          <li key={game.token}>
+            <button
+              type="button"
+              className={`studio-shelf-item${active ? ' is-active' : ''}${building ? ' is-live' : ''}${published ? ' is-published' : ''}`}
+              onClick={() => onSelect(game.token)}
+              aria-current={active ? 'true' : undefined}
+            >
+              <span className={`studio-shelf-status${building ? ' is-live' : ''}${published ? ' is-published' : ''}`}>
+                {status ? (
+                  <>
+                    <PixelIcon name={STATUS_ICONS[status]} size={11} /> {t(`statusView.states.${status}.label`)}
+                  </>
+                ) : (
+                  t('myGames.checking')
+                )}
+              </span>
+              <span className="studio-shelf-title">{game.title}</span>
+              <span className="studio-shelf-meta">{formatRelativeTime(Date.parse(game.createdAt), locale)}</span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -348,7 +555,7 @@ function OverviewTab({
   onRemoved: (token: string) => void;
 }) {
   const { t, i18n } = useTranslation();
-  const published = isPublished(game);
+  const published = isStudioGamePublished(game);
   const [abandonArmed, setAbandonArmed] = useState(false);
   const [abandoning, setAbandoning] = useState(false);
 
@@ -370,7 +577,7 @@ function OverviewTab({
   const statusLabel = game.lastKnownStatus
     ? t(`statusView.states.${game.lastKnownStatus}.label`)
     : t('myGames.checking');
-  const live = game.lastKnownStatus ? LIVE_STATUSES.has(game.lastKnownStatus) : false;
+  const live = game.lastKnownStatus ? STUDIO_LIVE_STATUSES.has(game.lastKnownStatus) : false;
 
   return (
     <div className="studio-overview">
@@ -532,7 +739,7 @@ function StatsTab({
 
 function ImproveTab({ game }: { game: StudioGame }) {
   const { t } = useTranslation();
-  const published = isPublished(game);
+  const published = isStudioGamePublished(game);
   const [text, setText] = useState('');
   const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [error, setError] = useState<string | null>(null);
