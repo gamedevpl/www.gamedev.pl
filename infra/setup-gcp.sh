@@ -13,30 +13,30 @@ PROJECT_ID="${PROJECT_ID:-gamedevpl}"
 REGION="${REGION:-europe-central2}"
 DEPLOYER_SA="${SA_NAME:-github-actions-deployer}@${PROJECT_ID}.iam.gserviceaccount.com"
 
-echo "==> 1/7 Enabling required GCP APIs"
-# storage.googleapis.com is needed by step 7 (the snapshot bucket) and by the Cloud
+echo "==> 1/8 Enabling required GCP APIs"
+# storage.googleapis.com is needed by step 8 (the snapshot bucket) and by the Cloud
 # Run runtime that reads it. It is already on in most projects, but not guaranteed
-# on a fresh one — and without it step 7 fails after everything before it succeeded.
+# on a fresh one — and without it step 8 fails after everything before it succeeded.
 gcloud services enable run.googleapis.com cloudbuild.googleapis.com \
   artifactregistry.googleapis.com secretmanager.googleapis.com firestore.googleapis.com \
   aiplatform.googleapis.com storage.googleapis.com \
   --project "$PROJECT_ID"
 
-echo "==> 2/7 Provisioning Firestore (Native Mode) in ${REGION}"
+echo "==> 2/8 Provisioning Firestore (Native Mode) in ${REGION}"
 if gcloud firestore databases describe --project "$PROJECT_ID" >/dev/null 2>&1; then
   echo "    Firestore database already exists."
 else
   gcloud firestore databases create --location="$REGION" --type=firestore-native --project="$PROJECT_ID"
 fi
 
-echo "==> 3/7 Granting datastore.user role to Deployer SA (${DEPLOYER_SA})"
+echo "==> 3/8 Granting datastore.user role to Deployer SA (${DEPLOYER_SA})"
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:${DEPLOYER_SA}" \
   --role="roles/datastore.user" \
   --condition=None \
   >/dev/null
 
-echo "==> 4/7 Ensuring Cloud Run runtime SA has datastore.user and aiplatform.user roles"
+echo "==> 4/8 Ensuring Cloud Run runtime SA has datastore.user and aiplatform.user roles"
 PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format="value(projectNumber)")
 RUN_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
@@ -51,7 +51,7 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --condition=None \
   >/dev/null
 
-echo "==> 5/7 Ensuring session-secret exists in Secret Manager and granting secretAccessor"
+echo "==> 5/8 Ensuring session-secret exists in Secret Manager and granting secretAccessor"
 if gcloud secrets describe session-secret --project "$PROJECT_ID" >/dev/null 2>&1; then
   echo "    Secret 'session-secret' already exists."
 else
@@ -83,7 +83,7 @@ gcloud secrets add-iam-policy-binding session-secret \
 # `ttls list` reports only fields that already have a policy, so a name match is the
 # existence check. Verified against the live ACTIVE playEvents policy on 2026-07-25.
 TELEMETRY_GROUPS="playEvents visitEvents"
-echo "==> 6/7 Ensuring the 90-day TTL policy on each telemetry collection group"
+echo "==> 6/8 Ensuring the 90-day TTL policy on each telemetry collection group"
 EXISTING_TTLS="$(gcloud firestore fields ttls list --project="$PROJECT_ID" --format="value(name)" 2>/dev/null || true)"
 for GROUP in $TELEMETRY_GROUPS; do
   if printf '%s\n' "$EXISTING_TTLS" | grep -q "collectionGroups/${GROUP}/fields/expiresAt"; then
@@ -101,12 +101,50 @@ for GROUP in $TELEMETRY_GROUPS; do
   fi
 done
 
+# The operator scorecards read (GET /api/admin/scorecards, backing the /health panel)
+# runs a COLLECTION GROUP query ordered by computedAt — see listScorecards in
+# apps/api/src/store.ts: db.collectionGroup('scorecard').orderBy('computedAt','desc').
+# Firestore auto-indexes single fields only at COLLECTION scope, never COLLECTION_GROUP,
+# so without this index the query fails with `9 FAILED_PRECONDITION` and the whole /health
+# telemetry page 500s — all four operator reads share one Promise.all and one error state,
+# so the missing index blanks the game-health table too.
+#
+# This is a SINGLE-FIELD index, which Firestore requires be configured through single-field
+# controls: `gcloud firestore indexes composite create` rejects it ("not necessary, configure
+# using single field index controls"), and `gcloud firestore indexes fields update` cannot set
+# `query-scope` in this CLI. So it is applied through the Firestore Admin REST field override,
+# which is the only interface that expresses a COLLECTION_GROUP single-field index here.
+#
+# This is an INDEX, not a TTL policy — it must NEVER be added to the TTL loop above. Scorecards
+# are the durable aggregate meant to outlive the raw play rows a TTL expires; a TTL here would
+# delete the summaries and keep nothing. The index just makes them readable in order.
+echo "==> 7/8 Ensuring the COLLECTION_GROUP index for the scorecards operator read"
+SCORECARD_FIELD_URL="https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/collectionGroups/scorecard/fields/computedAt"
+SCORECARD_ACCESS_TOKEN="$(gcloud auth print-access-token --project="$PROJECT_ID")"
+if curl -s -H "Authorization: Bearer ${SCORECARD_ACCESS_TOKEN}" "$SCORECARD_FIELD_URL" \
+  | grep -q '"COLLECTION_GROUP"'; then
+  echo "    scorecard.computedAt COLLECTION_GROUP index: already present."
+else
+  # The COLLECTION (asc/desc) entries reassert Firestore's default single-field indexing,
+  # which setting an explicit indexConfig would otherwise drop; the COLLECTION_GROUP DESC
+  # entry is the one the query needs. Builds asynchronously (seconds for a handful of rows).
+  curl -s -X PATCH "${SCORECARD_FIELD_URL}?updateMask=indexConfig" \
+    -H "Authorization: Bearer ${SCORECARD_ACCESS_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d '{"indexConfig":{"indexes":[
+      {"queryScope":"COLLECTION","fields":[{"fieldPath":"computedAt","order":"ASCENDING"}]},
+      {"queryScope":"COLLECTION","fields":[{"fieldPath":"computedAt","order":"DESCENDING"}]},
+      {"queryScope":"COLLECTION_GROUP","fields":[{"fieldPath":"computedAt","order":"DESCENDING"}]}
+    ]}}' >/dev/null
+  echo "    scorecard.computedAt COLLECTION_GROUP index: creating (builds asynchronously)."
+fi
+
 # Pre-assembled published games (apps/api/src/game-snapshot.ts). The bucket sits in
 # the Cloud Run region, not the Firestore one: it is read on the play path, and a
 # cross-region read would put the latency back that baking was meant to remove.
 SNAPSHOT_BUCKET="${GAMES_SNAPSHOT_BUCKET:-${PROJECT_ID}-games-snapshots}"
 SNAPSHOT_BUCKET_REGION="${SNAPSHOT_BUCKET_REGION:-europe-west1}"
-echo "==> 7/7 Ensuring the games snapshot bucket gs://${SNAPSHOT_BUCKET} exists"
+echo "==> 8/8 Ensuring the games snapshot bucket gs://${SNAPSHOT_BUCKET} exists"
 if gcloud storage buckets describe "gs://${SNAPSHOT_BUCKET}" --project "$PROJECT_ID" >/dev/null 2>&1; then
   echo "    Bucket already exists."
 else
@@ -160,4 +198,4 @@ rm -f "$LIFECYCLE_FILE"
 echo "    IAM (deployer: write, Cloud Run: read) and 90-day lifecycle applied."
 
 echo ""
-echo "==> Done. Firestore database, snapshot bucket, IAM roles (datastore.user, aiplatform.user), session-secret, and telemetry TTL configured for project ${PROJECT_ID}."
+echo "==> Done. Firestore database, snapshot bucket, IAM roles (datastore.user, aiplatform.user), session-secret, telemetry TTL, and the scorecards read index configured for project ${PROJECT_ID}."
