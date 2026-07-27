@@ -2667,8 +2667,20 @@ body.player-open {
     margin: 0 -14px;
     padding: 0 14px;
     scroll-snap-type: x proximity;
+    /* Snapping aligns a chip to the scrollport edge — and the scrollport edge is
+       the card border, because of the bleed above. Without this the browser
+       scrolls the 14px padding away to satisfy the snap, and the first chip comes
+       to rest sliced by the border. scroll-padding moves the snap edge inwards so
+       the inset the padding exists to create actually survives. */
+    scroll-padding: 0 14px;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
+    /* Soften the bleed. A chip running past the card was cut dead on the glowing
+       border, which reads as broken layout rather than as more-to-swipe. Both
+       ends of the strip are empty at their scroll extremes, so each fade only
+       bites while there is something under it left to reach. */
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 14px, #000 calc(100% - 14px), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 14px, #000 calc(100% - 14px), transparent);
   }
 
   .chip-container::-webkit-scrollbar {
