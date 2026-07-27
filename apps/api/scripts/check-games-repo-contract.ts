@@ -90,9 +90,17 @@ async function main(): Promise<void> {
 
   const music = extractMusicContractSignals(assembleSource);
   if (!music.injectsMusicName || !music.readsTracksKey || !music.readsMusicJson) {
+    const musicLines = assembleSource
+      .split('\n')
+      .map((line, index) => ({ line: line.trim(), n: index + 1 }))
+      .filter(({ line }) => /music|__GAME_AUDIO|__GAME_MUSIC|tracks/i.test(line))
+      .slice(0, 40)
+      .map(({ line, n }) => `  L${n}: ${line}`)
+      .join('\n');
     fail(
       `music contract mismatch in games-repo assemble.ts: ` +
-        `injectsMusicName=${music.injectsMusicName} readsTracksKey=${music.readsTracksKey} readsMusicJson=${music.readsMusicJson}`,
+        `injectsMusicName=${music.injectsMusicName} readsTracksKey=${music.readsTracksKey} readsMusicJson=${music.readsMusicJson}\n` +
+        `relevant lines:\n${musicLines || '  (none)'}`,
     );
   }
   console.log('  ✓ music contract (__GAME_AUDIO_MUSIC__ + tracks + music.json)');
