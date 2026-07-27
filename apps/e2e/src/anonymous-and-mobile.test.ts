@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Browser, Page } from 'playwright-core';
-import { collectProblems, describeProblems, e2ePrerequisites, launchSiteBrowser, visit } from './browser';
+import { collectProblems, describeProblems, e2ePrerequisites, launchSiteBrowser, visit } from './browser.js';
 
 /**
  * Two audiences the signed-in desktop walk cannot speak for: a visitor who has not

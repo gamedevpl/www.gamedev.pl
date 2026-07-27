@@ -1,7 +1,13 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { chromium, type APIRequestContext, type Browser, type BrowserContext, type Page } from 'playwright-core';
-import { request } from 'playwright-core';
+import {
+  chromium,
+  request,
+  type APIRequestContext,
+  type Browser,
+  type BrowserContext,
+  type Page,
+} from 'playwright-core';
 
 export const BASE_URL = process.env.E2E_BASE_URL ?? 'https://www.gamedev.pl';
 
@@ -19,11 +25,18 @@ export function findChromium(): string | null {
   if (!existsSync(root)) return null;
 
   // Directory name carries the build number (chromium-1194), which moves with the
-  // Playwright version — glob rather than pin, and prefer the full browser over the
-  // headless shell (the shell cannot run the WebGL/audio paths some games use).
+  // Playwright version — glob rather than pin, and match `chromium-` exactly so the
+  // headless shell (chromium_headless_shell-*) never wins: it cannot run the WebGL
+  // and audio paths some generated games use.
+  //
+  // Sorted by build descending rather than taking readdir order, which is filesystem
+  // dependent: with two builds installed, an unsorted pick means one machine tests
+  // the new Chromium and another silently tests the old one.
   const candidates = readdirSync(root)
-    .filter((name) => name.startsWith('chromium-'))
-    .map((name) => join(root, name, 'chrome-linux', 'chrome'))
+    .map((name) => /^chromium-(\d+)$/.exec(name))
+    .filter((match): match is RegExpExecArray => match !== null)
+    .sort((a, b) => Number(b[1]) - Number(a[1]))
+    .map((match) => join(root, match[0], 'chrome-linux', 'chrome'))
     .filter((path) => existsSync(path));
 
   return candidates[0] ?? null;

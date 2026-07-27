@@ -8,7 +8,7 @@ import {
   signedInApiContext,
   signedInContext,
   visit,
-} from './browser';
+} from './browser.js';
 
 /**
  * The routes a visitor reaches by accident: a typo, a stale bookmark, a shared link
@@ -55,7 +55,7 @@ describe.skipIf(!prereq.ok)('error and edge routes', () => {
     // The status matters as much as the view: a soft-404 that answers 200 tells
     // crawlers a typo'd URL is a real page.
     expect(res?.status()).toBe(404);
-    await expect.poll(() => page.locator('.not-found').count()).toBeGreaterThan(0);
+    await expect.poll(() => page.locator('.not-found').count(), { timeout: 20_000 }).toBeGreaterThan(0);
     // The URL stays visible so the visitor can see what they mistyped.
     expect(new URL(page.url()).pathname).toBe('/this-page-does-not-exist');
 

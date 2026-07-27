@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { request, type APIRequestContext } from 'playwright-core';
-import { BASE_URL, STORAGE_STATE_ENV, signedInApiContext } from './browser';
+import { BASE_URL, STORAGE_STATE_ENV, signedInApiContext } from './browser.js';
 
 /**
  * The credential contract, checked without a browser. If these fail, every browser

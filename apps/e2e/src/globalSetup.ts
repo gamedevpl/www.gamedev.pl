@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request } from 'playwright-core';
-import { BASE_URL, STORAGE_STATE_ENV } from './browser';
+import { BASE_URL, STORAGE_STATE_ENV } from './browser.js';
 
 /**
  * Exchange the access token for a session cookie exactly once per run.

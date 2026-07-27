@@ -9,7 +9,7 @@ import {
   signedInApiContext,
   signedInContext,
   visit,
-} from './browser';
+} from './browser.js';
 
 /**
  * A signed-in walk through the deployed site, as the bot:e2e agent identity.
