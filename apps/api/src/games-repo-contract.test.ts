@@ -12,8 +12,8 @@ import {
 import { MAX_PROJECT_BYTES as ASSEMBLE_MAX } from './assemble.js';
 
 describe('games-repo-contract (website half)', () => {
-  it('keeps the serve budget at the Check 4 total (242 KiB)', () => {
-    expect(MAX_PROJECT_BYTES).toBe(242 * 1024);
+  it('keeps the serve budget at the Check 4 total (games-repo MAX_BUNDLE_BYTES)', () => {
+    expect(MAX_PROJECT_BYTES).toBe(243_078);
     expect(GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES).toBe(MAX_PROJECT_BYTES);
     // assemble.ts must re-export the same number — a second literal would drift.
     expect(ASSEMBLE_MAX).toBe(MAX_PROJECT_BYTES);
@@ -54,6 +54,8 @@ describe('games-repo source extractors', () => {
   });
 
   it('evaluates MAX_BUNDLE_BYTES across named platform allowances', () => {
+    // Shape mirrors games-repo validate.ts: author budget + named GameKit
+    // allowances. Totals must match MAX_PROJECT_BYTES on this side.
     const source = `
       const GAME_BUDGET_BYTES = 200 * 1024;
       const GAMEKIT_TOUCH_BYTES = 7_501;
@@ -63,15 +65,7 @@ describe('games-repo source extractors', () => {
       const GAMEKIT_PROGRESS_BYTES = 2_048;
       const GAMEKIT_UNIVERSAL_INPUT_BYTES = 3_072;
       const GAMEKIT_POINTER_POLL_BYTES = 1_536;
-      const GAMEKIT_DRAW_SURFACE_BYTES =
-        42 * 1024 -
-        GAMEKIT_TOUCH_BYTES -
-        GAMEKIT_RESTART_BYTES -
-        GAMEKIT_MUSIC_BYTES -
-        GAMEKIT_TOUCH_HINT_BYTES -
-        GAMEKIT_PROGRESS_BYTES -
-        GAMEKIT_UNIVERSAL_INPUT_BYTES -
-        GAMEKIT_POINTER_POLL_BYTES;
+      const GAMEKIT_DRAW_SURFACE_BYTES = 18_489;
       const MAX_BUNDLE_BYTES =
         GAME_BUDGET_BYTES +
         GAMEKIT_TOUCH_BYTES +
@@ -83,16 +77,17 @@ describe('games-repo source extractors', () => {
         GAMEKIT_POINTER_POLL_BYTES +
         GAMEKIT_DRAW_SURFACE_BYTES;
     `;
-    expect(extractMaxBundleBytes(source)).toBe(242 * 1024);
+    expect(extractMaxBundleBytes(source)).toBe(243_078);
   });
 
   it('evaluates a numeric MAX_BUNDLE_BYTES literal', () => {
-    expect(extractMaxBundleBytes('const MAX_BUNDLE_BYTES = 247_808;')).toBe(247808);
+    expect(extractMaxBundleBytes('const MAX_BUNDLE_BYTES = 243_078;')).toBe(243078);
   });
 
   it('detects the music injection contract signals', () => {
     const source = `
-      const catalog = JSON.parse(await read('shared/audio/music.json'));
+      import { readMusicCatalog } from '../audio.ts';
+      const catalog = readMusicCatalog();
       const track = catalog.tracks[name];
       out += \`window.__GAME_AUDIO_MUSIC__ = \${JSON.stringify(name)};\`;
       out += \`window.__GAME_MUSIC_TRACKS__ = Object.freeze(\${JSON.stringify({ [name]: track })});\`;
@@ -100,7 +95,29 @@ describe('games-repo source extractors', () => {
     expect(extractMusicContractSignals(source)).toEqual({
       injectsMusicName: true,
       readsTracksKey: true,
-      readsMusicJson: true,
+      readsMusicCatalog: true,
     });
+  });
+
+  it('still accepts the older inline music.json catalog read', () => {
+    const source = `
+      const catalog = JSON.parse(await read('shared/audio/music.json'));
+      const track = catalog.tracks[name];
+      out += \`window.__GAME_AUDIO_MUSIC__ = \${JSON.stringify(name)};\`;
+    `;
+    expect(extractMusicContractSignals(source)).toMatchObject({
+      injectsMusicName: true,
+      readsTracksKey: true,
+      readsMusicCatalog: true,
+    });
+  });
+
+  it('does not treat a bare music.json mention as the historical catalog path', () => {
+    const source = `
+      // TODO: migrate music.json later
+      const track = catalog.tracks[name];
+      out += \`window.__GAME_AUDIO_MUSIC__ = \${JSON.stringify(name)};\`;
+    `;
+    expect(extractMusicContractSignals(source).readsMusicCatalog).toBe(false);
   });
 });

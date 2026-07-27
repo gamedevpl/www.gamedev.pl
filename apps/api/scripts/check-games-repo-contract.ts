@@ -5,7 +5,7 @@
  * asserts they still match `games-repo-contract.ts` on this side:
  *   - GAME_KIT_MODULES order
  *   - MAX_BUNDLE_BYTES === MAX_PROJECT_BYTES
- *   - music injection contract (tracks + __GAME_AUDIO_MUSIC__)
+ *   - music injection contract (tracks + __GAME_AUDIO_MUSIC__ + readMusicCatalog)
  *
  * Requires GAMES_REPO_TOKEN (contents:read on the games repo). In CI, skip with a
  * warning when the secret is unset so forks / fresh clones still go green; set the
@@ -75,18 +75,35 @@ async function main(): Promise<void> {
 
   const remoteBudget = extractMaxBundleBytes(validateSource);
   if (remoteBudget !== MAX_PROJECT_BYTES) {
-    fail(`MAX_BUNDLE_BYTES mismatch: games-repo=${remoteBudget} website MAX_PROJECT_BYTES=${MAX_PROJECT_BYTES}`);
+    const assignLine =
+      validateSource
+        .split('\n')
+        .find((line) => /MAX_BUNDLE_BYTES\s*=/.test(line))
+        ?.trim() ?? '(assignment line not found)';
+    fail(
+      `MAX_BUNDLE_BYTES mismatch: games-repo=${remoteBudget} website MAX_PROJECT_BYTES=${MAX_PROJECT_BYTES}\n` +
+        `  games-repo assignment: ${assignLine}\n` +
+        `  Update GAMEKIT_PLATFORM_BYTES / MAX_PROJECT_BYTES in apps/api/src/games-repo-contract.ts to match.`,
+    );
   }
   console.log(`  ✓ MAX_BUNDLE_BYTES / MAX_PROJECT_BYTES (${remoteBudget})`);
 
   const music = extractMusicContractSignals(assembleSource);
-  if (!music.injectsMusicName || !music.readsTracksKey || !music.readsMusicJson) {
+  if (!music.injectsMusicName || !music.readsTracksKey || !music.readsMusicCatalog) {
+    const musicLines = assembleSource
+      .split('\n')
+      .map((line, index) => ({ line: line.trim(), n: index + 1 }))
+      .filter(({ line }) => /music|__GAME_AUDIO|__GAME_MUSIC|tracks/i.test(line))
+      .slice(0, 40)
+      .map(({ line, n }) => `  L${n}: ${line}`)
+      .join('\n');
     fail(
       `music contract mismatch in games-repo assemble.ts: ` +
-        `injectsMusicName=${music.injectsMusicName} readsTracksKey=${music.readsTracksKey} readsMusicJson=${music.readsMusicJson}`,
+        `injectsMusicName=${music.injectsMusicName} readsTracksKey=${music.readsTracksKey} readsMusicCatalog=${music.readsMusicCatalog}\n` +
+        `relevant lines:\n${musicLines || '  (none)'}`,
     );
   }
-  console.log('  ✓ music contract (__GAME_AUDIO_MUSIC__ + tracks + music.json)');
+  console.log('  ✓ music contract (__GAME_AUDIO_MUSIC__ + tracks + readMusicCatalog)');
 
   console.log('games-repo contract: ok');
 }
