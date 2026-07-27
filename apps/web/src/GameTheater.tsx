@@ -272,7 +272,7 @@ export function GameTheater({
                   type="button"
                   className="secondary-btn theater-more-btn"
                   aria-expanded={moreOpen}
-                  aria-pressed={moreOpen}
+                  aria-haspopup="menu"
                   aria-label={t('player.moreActions')}
                   onClick={() => setMoreOpen((open) => !open)}
                 >

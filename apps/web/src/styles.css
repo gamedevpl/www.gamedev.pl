@@ -1555,8 +1555,7 @@ body.player-open {
 }
 
 /* Open state stays a hamburger — highlight instead of morphing into a second X. */
-.theater-more.is-open .theater-more-btn,
-.theater-more-btn[aria-pressed='true'] {
+.theater-more.is-open .theater-more-btn {
   color: var(--turquoise);
   border-color: var(--turquoise);
   background: rgba(0, 228, 172, 0.12);

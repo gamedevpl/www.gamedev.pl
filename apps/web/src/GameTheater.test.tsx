@@ -87,7 +87,7 @@ describe('GameTheater more menu', () => {
     });
 
     expect(more.getAttribute('aria-expanded')).toBe('true');
-    expect(more.getAttribute('aria-pressed')).toBe('true');
+    expect(more.getAttribute('aria-haspopup')).toBe('menu');
     expect(container.querySelector('.theater-more.is-open')).not.toBeNull();
     expect(container.querySelectorAll('.exit-btn').length).toBe(1);
     expect(more.classList.contains('exit-btn')).toBe(false);
