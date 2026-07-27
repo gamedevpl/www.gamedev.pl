@@ -149,11 +149,20 @@ describe('runScorecardSweep', () => {
       return InMemoryStore.prototype.putScorecard.call(store, slug, card);
     };
 
-    const result = await runScorecardSweep({ store: failing });
+    const seen: Array<{ slug: string; message: string }> = [];
+    const result = await runScorecardSweep({
+      store: failing,
+      onError: (slug, error) => seen.push({ slug, message: (error as Error).message }),
+    });
     expect(result.failed).toBe(1);
     expect(result.written).toBe(1);
     // The healthy game still got its scorecard.
     expect(await store.getScorecard('rock-blaster')).not.toBeNull();
+
+    // And the failure reported a *cause*, not just a count. A swallowed branch that
+    // only increments a counter is how a uniform production-only failure (every game
+    // rejected identically) would look like a number nobody can act on.
+    expect(seen).toEqual([{ slug: 'brick-storm', message: 'write failed' }]);
   });
 });
 

@@ -49,6 +49,8 @@ export interface ScorecardSweepDeps {
   now?: () => number;
   windowDays?: number;
   budget?: PartitionScanBudget;
+  /** Called per game that could not be written, so a failure has a cause and not just a count. */
+  onError?: (slug: string, error: unknown) => void;
 }
 
 export interface ScorecardSweepResult {
@@ -147,10 +149,18 @@ export async function runScorecardSweep(deps: ScorecardSweepDeps): Promise<Score
       ]);
       await store.putScorecard(health.slug, buildScorecard(health, { votes, feedbackCount }, window, computedAt));
       written += 1;
-    } catch {
+    } catch (error) {
       // One unwritable game must not cost every later game its scorecard — the same
       // rule the notification sweep follows for one bad submission.
+      //
+      // But it must not be *silent* either. A swallowed branch that only counts itself
+      // is how the telemetry intake hid a bug that discarded ~95% of real play for a
+      // day; the whole class of failure most likely here is production-only and uniform
+      // (Firestore rejects `undefined` field values, and this client sets no
+      // `ignoreUndefinedProperties`), so every game would fail identically and the
+      // summary alone would show a count with no cause.
       failed += 1;
+      deps.onError?.(health.slug, error);
     }
   }
 
@@ -185,8 +195,12 @@ export async function registerScorecardRoutes(app: FastifyInstance, options: Sco
           now: options.now,
           windowDays: options.windowDays,
           budget: options.budget,
+          onError: (slug, error) => request.log.error({ err: error, slug }, 'scorecard write failed'),
         });
-        request.log.info({ ...result }, 'scorecard sweep complete');
+        // Logged at error level when anything failed: a nightly job nobody watches is
+        // exactly the kind that fails quietly for weeks, and `failed > 0` is the signal.
+        const log = result.failed > 0 ? request.log.error.bind(request.log) : request.log.info.bind(request.log);
+        log({ ...result }, 'scorecard sweep complete');
         return reply.send(result);
       } catch (error) {
         request.log.error({ err: error }, 'scorecard sweep failed');
