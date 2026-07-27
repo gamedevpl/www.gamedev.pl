@@ -126,6 +126,19 @@ is the games repo's decision, not the bake job's.
 
 The job still exits non-zero, because the games repo's own gate should have caught it.
 
+### Takedowns
+
+Publication authority now follows the **snapshot catalog**, so removing a game from the
+games repo is not complete until the next `publish-games.yml` run is green. Until the
+pointer flips, the previous snapshot keeps serving the game, and a bake that fails
+leaves that old snapshot serving indefinitely — there is no expiry that retires it and
+no `schedule:` that retries the bake.
+
+If a takedown is urgent, do not wait for the next merge: run **Publish games snapshot**
+via `workflow_dispatch` against the games-repo ref that already omits the game. That
+manual re-bake is the escape hatch. Confirm the takedown against the live site, not
+against the games repo — a green merge there is not evidence the game stopped serving.
+
 ## Configuration
 
 | Name                    | Where                      | Purpose                                                |
@@ -133,6 +146,15 @@ The job still exits non-zero, because the games repo's own gate should have caug
 | `GAMES_SNAPSHOT_BUCKET` | Cloud Run env var          | Bucket to read snapshots from; unset disables the path |
 | `GAMES_REPO_TOKEN`      | this repo, Actions secret  | Contents:read PAT on the games repo, for the bake      |
 | `SITE_DISPATCH_TOKEN`   | games repo, Actions secret | Fine-grained PAT that may dispatch into this repo      |
+
+**`SITE_DISPATCH_TOKEN` is a write-capable credential, and cannot be made otherwise.**
+`repository_dispatch` is gated by **Contents: read+write** on `gamedevpl/www.gamedev.pl`
+— GitHub exposes no narrower permission for it, so a token that can only ask for a bake
+does not exist. In practice the games repo holds a PAT that could also push to this
+repo's contents. Mitigate by scope, since it cannot be mitigated by permission: grant it
+**that one repository and nothing else**, give it a real expiry, record that expiry in
+the PAT ledger next to `github-token` and `GAMES_REPO_TOKEN`, and treat a leak of it as
+a compromise of this repo rather than of the games repo.
 
 IAM is split by direction: the deploy service account has `storage.objectAdmin` (it
 writes), the Cloud Run runtime SA has `storage.objectViewer` (it reads). A compromised
