@@ -3,8 +3,10 @@
  *
  * Idle is pixel-perfect: horizontal spans traced from `logo-gamedev.png` (70×60).
  * Other emotions start from the same silhouette with the face holes filled back in
- * (`MASCOT_SOLID_SPANS`), then punch new eyes/mouth via an SVG mask. Motion
- * (blink / bob / bounce) is CSS; `prefers-reduced-motion` turns it off.
+ * (`MASCOT_SOLID_SPANS`), then punch new eyes/mouth via an SVG mask.
+ *
+ * Animation lives in layered SVG groups + CSS (bob, bounce, sway, blink lids,
+ * waving arm). `staticPose` freezes everything; `prefers-reduced-motion` does too.
  */
 
 import { useId, type ReactElement, type ReactNode } from 'react';
@@ -27,7 +29,7 @@ type MascotProps = {
   size?: number;
   className?: string;
   title?: string;
-  /** When true, idle blink / bob animations are forced off (e.g. tiny nav mark). */
+  /** When true, all motion is forced off (e.g. tiny nav mark). */
   staticPose?: boolean;
 };
 
@@ -177,6 +179,16 @@ function cutoutsFor(emotion: MascotEmotion): ReactElement | null {
   }
 }
 
+/** Lids that cover the eye holes during a blink — works on the pixel idle body too. */
+function BlinkLids() {
+  return (
+    <g className="mascot__lids" fill="currentColor" aria-hidden="true">
+      <rect className="mascot__lid mascot__lid--left" x="29" y="3" width="5" height="5" rx="1.2" />
+      <rect className="mascot__lid mascot__lid--right" x="38" y="3" width="5" height="5" rx="1.2" />
+    </g>
+  );
+}
+
 export function Mascot({
   emotion = 'idle',
   size = 48,
@@ -192,6 +204,7 @@ export function Mascot({
     .join(' ');
   const cutouts = cutoutsFor(emotion);
   const isIdle = emotion === 'idle' || cutouts == null;
+  const showWaveArm = emotion === 'wave' || emotion === 'excited';
 
   return (
     <svg
@@ -231,6 +244,20 @@ export function Mascot({
             />
           </>
         )}
+
+        <BlinkLids />
+
+        {showWaveArm ? (
+          <g
+            className="mascot__wave-arm"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+          >
+            <path d="M64 36 Q70 26 67 14" />
+          </g>
+        ) : null}
       </g>
     </svg>
   );

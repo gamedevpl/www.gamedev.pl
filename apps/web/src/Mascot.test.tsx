@@ -77,6 +77,28 @@ describe('Mascot', () => {
 
     expect(container.querySelector(`.mascot--${emotion}`)).not.toBeNull();
     expect(container.querySelector('svg.mascot')).not.toBeNull();
+    expect(container.querySelector('.mascot__lids')).not.toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('draws a waving arm for wave and excited', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(Mascot, { emotion: 'wave', size: 48 }));
+    });
+    expect(container.querySelector('.mascot__wave-arm')).not.toBeNull();
+
+    await act(async () => {
+      root.render(createElement(Mascot, { emotion: 'idle', size: 48 }));
+    });
+    expect(container.querySelector('.mascot__wave-arm')).toBeNull();
 
     await act(async () => {
       root.unmount();
