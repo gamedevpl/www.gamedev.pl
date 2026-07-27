@@ -348,12 +348,18 @@ describe('authenticating with a personal access token', () => {
   it('does not count a bot request as a human active day', async () => {
     // `activeDays` feeds the creator-return metric; an agent on a cron would otherwise
     // report perfect retention for an account that is not a person.
+    //
+    // Asserted as a *contrast* against the session path deliberately: until the stores
+    // were fixed to persist `activeDays` at all, checking only the token path passed for
+    // the wrong reason — the field was undefined for everybody.
     const app = await appWith(store);
     const { token } = (await mintFor(app, 'bot:e2e')).json();
 
     await app.inject({ method: 'GET', url: '/api/auth/me', headers: bearer(token) });
+    await app.inject({ method: 'GET', url: '/api/auth/me', headers: sessionHeaders('g:boss') });
 
     expect((await store.getUser('bot:e2e'))?.activeDays).toBeUndefined();
+    expect((await store.getUser('g:boss'))?.activeDays).toEqual([new Date().toISOString().slice(0, 10)]);
   });
 });
 
