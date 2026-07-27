@@ -106,39 +106,91 @@ DELETE /api/admin/access-tokens/<tokenId>
 The token is readable exactly once, in the mint response. Nothing stores it — a caller who
 loses it revokes and mints again.
 
+## Where the token lives
+
+**One token per environment, never one shared token.** Revocation is per-token, so a
+shared token leaked from anywhere forces revoking it everywhere — and `token:list`
+cannot tell you which copy leaked, because they are the same row. Minted per home and
+named for it, the listing becomes an inventory and `lastUsedAt` shows which ones are
+dead weight before you revoke:
+
+```bash
+npm run token:mint -w @gamedevpl/api -- bot:e2e   --name "claude web env" --days 90
+npm run token:mint -w @gamedevpl/api -- bot:ci    --name "github actions" --days 30
+npm run token:mint -w @gamedevpl/api -- bot:local --name "owner laptop"   --days 90
+```
+
+Where each one goes, always as `GAMEDEV_ACCESS_TOKEN`:
+
+- **Claude Code on the web** — the environment's own env-var settings, alongside its
+  setup script and network policy (docs: code.claude.com). If
+  `curl https://www.gamedev.pl/api/health` fails from inside the VM, that is the
+  environment's outbound network policy, not the token — check it before debugging the
+  credential.
+- **A laptop** — shell profile, or a `.env` in the repo (already gitignored).
+- **GitHub Actions** — a repository secret, read as
+  `${{ secrets.GAMEDEV_ACCESS_TOKEN }}`. Actions keeps secrets away from fork-PR
+  workflows, so this is safe by default.
+- **Copilot's coding agent** — deliberately **no**. The `copilot-orchestration`
+  playbook already rules it out ("never route credential handling through an autonomous
+  PR agent"), Copilot's sandbox firewall blocks the site by default anyway, and Copilot
+  works on a local checkout where `/api/auth/dev` costs nothing.
+
+Prefer a short `--days` for anything automated: a 30-day CI token that expires loudly is
+a better failure than one that quietly works forever. **Never commit a token** — the
+repo's gitleaks config and the generated-game credential scanner both know the
+`gdpl_pat_` shape, but those are backstops, not the plan. Keep it in headers, never in
+URLs, which end up in logs and shell history.
+
 ## Using a token (agent)
 
-Put it in the agent environment as `GAMEDEV_ACCESS_TOKEN`. **Never commit it**; it is in
-the generated-game credential scanner, so a game that embeds one is refused at assembly.
-
-**API calls** — send it as a bearer token:
+**API calls** — send it as a bearer token; that is the entire integration:
 
 ```bash
 curl -H "Authorization: Bearer $GAMEDEV_ACCESS_TOKEN" https://www.gamedev.pl/api/auth/me
 ```
 
-**Driving a real browser** — the web app authenticates with cookies, so exchange the token
-for a session first. `POST /api/auth/session` accepts only a token (never a cookie, so a
-session can never launder itself into a fresh one) and returns the same cookie a Google
-sign-in would:
-
-```bash
-curl -si -X POST https://www.gamedev.pl/api/auth/session \
-  -H "Authorization: Bearer $GAMEDEV_ACCESS_TOKEN" | grep -i set-cookie
-```
-
-In Playwright, exchange once and hand the cookie to the browser context:
+**Driving a real browser** — the SPA authenticates with cookies
+(`credentials: 'include'`), so exchange the token for a session first.
+`POST /api/auth/session` accepts only a token (never a cookie, so a session can never
+launder itself into a fresh one) and returns the same cookie a Google sign-in would.
+The verified Playwright shape:
 
 ```js
-const api = await request.newContext();
-const res = await api.post('https://www.gamedev.pl/api/auth/session', {
+import { chromium, request } from 'playwright-core';
+
+const api = await request.newContext({ baseURL: 'https://www.gamedev.pl' });
+await api.post('/api/auth/session', {
   headers: { Authorization: `Bearer ${process.env.GAMEDEV_ACCESS_TOKEN}` },
 });
+
+const browser = await chromium.launch({
+  executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+});
 const context = await browser.newContext({ storageState: await api.storageState() });
+const page = await context.newPage();
+await page.goto('https://www.gamedev.pl'); // renders signed in
 ```
 
-Chromium is preinstalled in most agent VMs (`PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`);
-do not run `playwright install`.
+Playwright's API context keeps its own cookie jar; `storageState()` carries the session
+into the browser. Exchange once per run, not per page — the session lasts 12 hours and
+`/api/auth/session` shares the 20/hour/IP auth limiter.
+
+Traps, in the order an agent will hit them:
+
+- **The cookie is `HttpOnly` — `document.cookie` cannot set it.** A page seeded that way
+  silently stays logged out with no error. Go through a browser-level API:
+  `storageState` as above, or `context.addCookies([...])` with `httpOnly: true` if the
+  `Set-Cookie` came from curl.
+- **Do not add Playwright to the repo's `package.json`.** This app has no e2e harness by
+  design; install `playwright-core` in a scratch directory instead. A dependency edit
+  without a regenerated lockfile passes every local check and kills CI at `npm ci` — the
+  exact failure the `verify-agent-work` playbook records.
+- **No `playwright install`.** Chromium is preinstalled in agent VMs
+  (`PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`); pass `executablePath` if your
+  Playwright version doesn't auto-find it.
+- **Production cookies carry `Secure`** — they travel over HTTPS only, so the same
+  script pointed at a plain-HTTP host will not authenticate.
 
 ## Where this does and does not apply
 
