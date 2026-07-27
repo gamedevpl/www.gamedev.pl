@@ -130,7 +130,9 @@ Genuinely still open, in rough priority order:
   the host's instance.
 - 📋 Takedown operations, backups, and published-catalog rollback.
 - 📋 Observability beyond Cloud Run's defaults — no dashboards or alerting on the
-  paths that now matter (submission failures, relay stalls, sweep health).
+  paths that now matter (submission failures, relay stalls, sweep health). Relay
+  stalls are at least _detected_ now (the notify sweep logs them at `error`); what
+  is missing is anything that notices the log.
 - 📋 Protected deployment environments; no `environment:` gate on `deploy.yml`.
 - 📋 Actions are pinned to major tags (`@v4`, `@v2`), not commit SHAs.
 - 📋 Infrastructure as code. Delivery is shell scripts plus `cloudbuild.yaml`; the
@@ -173,6 +175,12 @@ agent run is spent on creation and none on improving games that already have pla
 Phase 6's capture plane is the cheapest thing that changes that, and it produces
 value (creators see numbers, defects become visible) before any agent is involved.
 
-Two live items should be settled alongside it, because both are cheap and both are
-currently silent failures: the multiplayer instance-count mismatch, and alerting on
-the Copilot relay path that every agent hand-off depends on.
+Both of the cheap silent-failure items this section used to list alongside it are
+now closed. The multiplayer instance-count mismatch was fixed on 2026-07-25 (Phase
+5), and the Copilot relay path that every agent hand-off depends on now has a
+detector: the notify sweep logs at `error` when a creator's change request has gone
+uncollected for an hour, which is what a broken relay looks like from this side.
+
+What is left of the second one is delivery, not detection — that is a line in the
+logs, and nothing yet reads the logs. Routing it somewhere a human sees remains part
+of the observability gap in Phase 5.

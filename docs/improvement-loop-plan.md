@@ -403,6 +403,17 @@ where the change is small and validation is decisive; and treat "no implementer
 available" as a first-class suggestion state, surfaced to the creator rather than
 hidden.
 
+The first of those is now partly built, for the creator-feedback half of the relay
+rather than the suggestion half: the notify sweep counts change requests that no
+agent has collected within an hour and logs at `error` when any exist
+([submissions.ts](../apps/api/src/submissions.ts), `/api/internal/notify-sweep`).
+It reuses the sweep's existing loop over active submissions, so it costs no new
+endpoint, schedule, or auth surface. Two limits worth stating: the queue write that
+makes a request visible is best-effort, so a stall on a request whose write failed
+stays invisible; and this watches the relay's _effect_, not the workflow itself — a
+relay that breaks while no creator happens to be iterating is still silent until
+someone sends feedback.
+
 ### Budgeting
 
 Per babysitter run: at most K new improvement issues filed (start K=2/day
