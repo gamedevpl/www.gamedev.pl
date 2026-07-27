@@ -1591,8 +1591,7 @@ body.player-open {
 .theater-more-panel .theater-menu-item,
 .theater-more-panel .share-btn,
 .theater-more-panel .report-btn,
-.theater-more-panel .feedback-btn,
-.theater-more-panel .vote-btn {
+.theater-more-panel .feedback-btn {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1620,9 +1619,7 @@ body.player-open {
 .theater-more-panel .report-btn:hover,
 .theater-more-panel .report-btn:focus-visible,
 .theater-more-panel .feedback-btn:hover,
-.theater-more-panel .feedback-btn:focus-visible,
-.theater-more-panel .vote-btn:hover,
-.theater-more-panel .vote-btn:focus-visible {
+.theater-more-panel .feedback-btn:focus-visible {
   background: rgba(0, 228, 172, 0.12);
   color: var(--turquoise);
   border-color: transparent;
