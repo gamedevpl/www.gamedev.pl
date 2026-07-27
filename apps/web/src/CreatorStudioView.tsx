@@ -1,26 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from './AuthContext';
-import { AuthModal } from './AuthModal';
-import type { GameHealth } from './healthApi';
-import { PixelIcon, type PixelIconName } from './PixelIcon';
-import { formatRelativeTime } from './relativeTime';
-import { studioPath } from './router';
-import {
-  abandonSubmission,
-  submitFeedback,
-  type SubmissionApiError,
-  type SubmissionState,
-} from './submissionApi';
-import { StudioPlaytestPanel } from './StudioPlaytestPanel';
-import { SubmissionStatusView } from './SubmissionStatusView';
+import { useAuth } from './AuthContext.js';
+import { AuthModal } from './AuthModal.js';
+import type { GameHealth } from './healthApi.js';
+import { PixelIcon, type PixelIconName } from './PixelIcon.js';
+import { formatRelativeTime } from './relativeTime.js';
+import { studioPath } from './router.js';
+import { abandonSubmission, submitFeedback, type SubmissionApiError, type SubmissionState } from './submissionApi.js';
+import { StudioPlaytestPanel } from './StudioPlaytestPanel.js';
+import { SubmissionStatusView } from './SubmissionStatusView.js';
 import {
   fetchStudioGames,
   fetchStudioHealth,
   submitImprovement,
   type StudioApiError,
   type StudioGame,
-} from './studioApi';
+} from './studioApi.js';
 
 /**
  * Creator control panel (docs/improvement-loop-plan.md IL-2 creator surface).
@@ -81,12 +76,7 @@ function isPublished(game: StudioGame): boolean {
   return Boolean(game.publishedAt && game.slug) || game.lastKnownStatus === 'published';
 }
 
-export function CreatorStudioView({
-  selectedToken,
-  onNavigate,
-  onPlay,
-  onRetryConcept,
-}: CreatorStudioViewProps) {
+export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryConcept }: CreatorStudioViewProps) {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const [authOpen, setAuthOpen] = useState(false);
@@ -141,10 +131,7 @@ export function CreatorStudioView({
     };
   }, [user, days, t]);
 
-  const selectedGame = useMemo(
-    () => games.find((game) => game.token === selected) ?? null,
-    [games, selected],
-  );
+  const selectedGame = useMemo(() => games.find((game) => game.token === selected) ?? null, [games, selected]);
   const selectedHealth = selectedGame ? healthFor(selectedGame, healthRows) : null;
 
   useEffect(() => {
@@ -229,8 +216,7 @@ export function CreatorStudioView({
                       >
                         {status ? (
                           <>
-                            <PixelIcon name={STATUS_ICONS[status]} size={11} />{' '}
-                            {t(`statusView.states.${status}.label`)}
+                            <PixelIcon name={STATUS_ICONS[status]} size={11} /> {t(`statusView.states.${status}.label`)}
                           </>
                         ) : (
                           t('myGames.checking')
@@ -251,26 +237,18 @@ export function CreatorStudioView({
             <div className="studio-detail">
               <div className="studio-detail-head">
                 <h2>{selectedGame.title}</h2>
-                {selectedGame.slug ? (
-                  <code className="studio-slug">{selectedGame.slug}</code>
-                ) : null}
+                {selectedGame.slug ? <code className="studio-slug">{selectedGame.slug}</code> : null}
               </div>
 
               <div className="studio-tabs" role="tablist" aria-label={t('studioPanel.title')}>
                 {(
                   [
                     ['overview', 'studioPanel.tabs.overview'],
-                    ...(!isPublished(selectedGame)
-                      ? ([['build', 'studioPanel.tabs.build']] as const)
-                      : []),
+                    ...(!isPublished(selectedGame) ? ([['build', 'studioPanel.tabs.build']] as const) : []),
                     ['playtest', 'studioPanel.tabs.playtest'],
-                    ...(isPublished(selectedGame)
-                      ? ([['stats', 'studioPanel.tabs.stats']] as const)
-                      : []),
+                    ...(isPublished(selectedGame) ? ([['stats', 'studioPanel.tabs.stats']] as const) : []),
                     ['improve', 'studioPanel.tabs.improve'],
-                    ...(isPublished(selectedGame)
-                      ? ([['feedback', 'studioPanel.tabs.feedback']] as const)
-                      : []),
+                    ...(isPublished(selectedGame) ? ([['feedback', 'studioPanel.tabs.feedback']] as const) : []),
                   ] as const
                 ).map(([id, labelKey]) => (
                   <button
@@ -405,16 +383,12 @@ function OverviewTab({
 
       <ul className="funnel-stats studio-facts">
         <li>
-          <span className="funnel-stat-value">
-            {formatRelativeTime(Date.parse(game.createdAt), i18n.language)}
-          </span>
+          <span className="funnel-stat-value">{formatRelativeTime(Date.parse(game.createdAt), i18n.language)}</span>
           <span className="funnel-stat-label">{t('studioPanel.overview.created')}</span>
         </li>
         {game.publishedAt ? (
           <li>
-            <span className="funnel-stat-value">
-              {formatRelativeTime(Date.parse(game.publishedAt), i18n.language)}
-            </span>
+            <span className="funnel-stat-value">{formatRelativeTime(Date.parse(game.publishedAt), i18n.language)}</span>
             <span className="funnel-stat-label">{t('studioPanel.overview.published')}</span>
           </li>
         ) : null}
@@ -533,9 +507,7 @@ function StatsTab({
             <span className="funnel-stat-label">{t('studioPanel.stats.stallRate')}</span>
           </li>
           <li>
-            <span className="funnel-stat-value">
-              {health.medianFps === null ? '—' : Math.round(health.medianFps)}
-            </span>
+            <span className="funnel-stat-value">{health.medianFps === null ? '—' : Math.round(health.medianFps)}</span>
             <span className="funnel-stat-label">{t('studioPanel.stats.medianFps')}</span>
           </li>
         </ul>

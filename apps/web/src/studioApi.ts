@@ -1,5 +1,5 @@
-import type { GameHealth } from './healthApi';
-import type { FeedbackContext, SubmissionState } from './submissionApi';
+import type { GameHealth } from './healthApi.js';
+import type { FeedbackContext, SubmissionState } from './submissionApi.js';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 

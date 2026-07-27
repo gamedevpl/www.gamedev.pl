@@ -12,6 +12,7 @@ const copy: DocumentTitleCopy = {
   draft: 'A game in the making',
   join: 'Join the game',
   health: 'Telemetry',
+  studio: 'Creator Studio',
   privacy: 'Privacy Policy',
   terms: 'Terms of Service',
   contact: 'Contact',

@@ -29,6 +29,7 @@ export type DocumentTitleCopy = {
   draft: string;
   join: string;
   health: string;
+  studio: string;
   privacy: string;
   terms: string;
   contact: string;

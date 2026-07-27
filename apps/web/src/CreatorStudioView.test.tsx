@@ -3,8 +3,8 @@
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CreatorStudioView } from './CreatorStudioView';
-import i18n from './i18n';
+import { CreatorStudioView } from './CreatorStudioView.js';
+import i18n from './i18n/index.js';
 
 vi.mock('./AuthContext', () => ({
   useAuth: () => ({ user: null, logout: vi.fn() }),

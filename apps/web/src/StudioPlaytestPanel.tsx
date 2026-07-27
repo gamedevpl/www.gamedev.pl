@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { fetchPublishedGame } from './catalog';
-import { GameFrame } from './GameFrame';
-import { useCreatorPlaytest, type PlaytestInstrumentation } from './gamePlayer';
-import { PixelIcon } from './PixelIcon';
+import { fetchPublishedGame } from './catalog.js';
+import { GameFrame } from './GameFrame.js';
+import { useCreatorPlaytest, type PlaytestInstrumentation } from './gamePlayer.js';
+import { PixelIcon } from './PixelIcon.js';
 import {
   getSubmissionPreview,
   submitFeedback,
   type FeedbackContext,
   type SubmissionApiError,
-} from './submissionApi';
-import { submitImprovement, type StudioGame } from './studioApi';
+} from './submissionApi.js';
+import { submitImprovement, type StudioGame } from './studioApi.js';
 
 /**
  * Creator Studio playtest: play the draft/live build, pause on a moment worth
@@ -80,10 +80,7 @@ export function StudioPlaytestPanel({ game, published }: StudioPlaytestPanelProp
   const [sendError, setSendError] = useState<string | null>(null);
 
   const active = Boolean(html);
-  const { paused, snapshot, instrumentation, pause, resume, clearSnapshot } = useCreatorPlaytest(
-    frameRef,
-    active,
-  );
+  const { paused, snapshot, instrumentation, pause, resume, clearSnapshot } = useCreatorPlaytest(frameRef, active);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,9 +89,10 @@ export function StudioPlaytestPanel({ game, published }: StudioPlaytestPanelProp
     setLoading(true);
     clearSnapshot();
 
-    const load = published && game.slug
-      ? fetchPublishedGame(game.slug).then((doc) => doc.html)
-      : getSubmissionPreview(game.token).then((preview) => preview.html);
+    const load =
+      published && game.slug
+        ? fetchPublishedGame(game.slug).then((doc) => doc.html)
+        : getSubmissionPreview(game.token).then((preview) => preview.html);
 
     load
       .then((documentHtml) => {
@@ -226,9 +224,7 @@ export function StudioPlaytestPanel({ game, published }: StudioPlaytestPanelProp
               onClick={() => void send()}
               disabled={sendState === 'sending' || trimmed.length < 10}
             >
-              {sendState === 'sending'
-                ? t('studioPanel.improve.sending')
-                : t('studioPanel.playtest.submit')}
+              {sendState === 'sending' ? t('studioPanel.improve.sending') : t('studioPanel.playtest.submit')}
             </button>
             {sendState === 'sent' ? (
               <span className="status-feedback-sent">

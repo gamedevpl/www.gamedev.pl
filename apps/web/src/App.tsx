@@ -129,6 +129,7 @@ export function App() {
         draft: t('pageTitle.draft'),
         join: t('pageTitle.join'),
         health: t('pageTitle.health'),
+        studio: t('pageTitle.studio'),
         privacy: t('legal.privacy'),
         terms: t('legal.terms'),
         contact: t('pageTitle.contact'),
@@ -528,6 +529,7 @@ export function App() {
           activeSpecsCount={savedSpecs.length}
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
+          onStudio={() => navigate(studioPath())}
         />
         <main className="content">
           <ContactPage onBack={() => navigate('/')} />
@@ -546,6 +548,7 @@ export function App() {
           activeSpecsCount={savedSpecs.length}
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
+          onStudio={() => navigate(studioPath())}
         />
         <main className="content">
           <NotFoundPage onHome={() => navigate('/')} />
