@@ -59,6 +59,13 @@ export const privacyEn: LegalDocument = {
               'Until the closed beta ends or you withdraw',
             ],
             [
+              'Contact form submissions: your name, email address, and the message you type',
+              'Reading and replying to your enquiry',
+              'Art. 6(1)(f) — our legitimate interest in answering people who write to us, and ' +
+                'Art. 6(1)(c) where the message is a legal request we must handle',
+              'Up to 24 months after we close the conversation',
+            ],
+            [
               'Content you create: game description, title, answers to clarifying questions, feedback on a finished ' +
                 'game, optional creator name, uploaded sketches and images',
               'Having an AI agent build your game and publishing it',

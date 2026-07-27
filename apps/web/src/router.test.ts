@@ -83,6 +83,10 @@ describe('parsePathRoute', () => {
     expect(parsePathRoute('/terms')).toEqual({ view: 'legal', doc: 'terms' });
   });
 
+  it('parses the contact form route', () => {
+    expect(parsePathRoute('/contact')).toEqual({ view: 'contact' });
+  });
+
   // A cited clause has to survive the trip: `/terms#zglaszanie` is what goes into a
   // reply telling someone how to report content, and if the fragment knocked the
   // route back to home it would land them on the front page instead.

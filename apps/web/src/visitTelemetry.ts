@@ -167,6 +167,11 @@ export function routeKind(view: string): VisitRouteKind {
     case 'health':
     case 'notFound':
       return view;
+    // Contact shares the public-chrome posture of legal pages (reachable without a
+    // session, outside the creator funnel). Folding it into `legal` keeps the
+    // visit vocabulary stable without inventing a new funnel bucket for a form.
+    case 'contact':
+      return 'legal';
     default:
       return 'home';
   }

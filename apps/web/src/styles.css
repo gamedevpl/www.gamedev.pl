@@ -4328,6 +4328,105 @@ body.player-open {
   line-height: 1.65;
 }
 
+.contact-page {
+  max-width: 36rem;
+  margin: 0 auto;
+  padding: 1rem 1.25rem 3rem;
+  line-height: 1.65;
+}
+
+.contact-back {
+  margin-bottom: 1.5rem;
+}
+
+.contact-title {
+  font-size: clamp(1.6rem, 4vw, 2.2rem);
+  margin: 0 0 0.75rem;
+}
+
+.contact-intro {
+  color: var(--muted);
+  margin: 0 0 1.75rem;
+}
+
+.contact-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.contact-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.contact-label {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.contact-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  box-sizing: border-box;
+}
+
+.contact-textarea {
+  resize: vertical;
+  min-height: 8rem;
+}
+
+.contact-input:focus {
+  outline: none;
+  border-color: var(--turquoise);
+}
+
+.contact-privacy {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.contact-privacy a {
+  color: var(--turquoise);
+}
+
+.contact-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.contact-sent {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 1.5rem;
+  padding: 1rem 1.15rem;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  color: var(--text);
+}
+
+.contact-alt {
+  margin: 2rem 0 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.contact-alt a {
+  color: var(--turquoise);
+}
+
 .legal-back {
   margin-bottom: 1.5rem;
 }

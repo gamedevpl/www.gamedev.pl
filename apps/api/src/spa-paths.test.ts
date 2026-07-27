@@ -30,6 +30,7 @@ describe('isKnownSpaShellPath', () => {
     '/privacy',
     '/terms',
     '/health',
+    '/contact',
     '/play/sky-dodge',
     '/ay/sky-dodge',
     '/ai/sky-dodge',

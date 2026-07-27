@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
-import { bugReportUrl, ISSUES_URL, REPO_URL } from './github.js';
+import { bugReportUrl, REPO_URL } from './github.js';
 import { OPERATOR_LEGAL_NAME } from './legal/operator.js';
-import { legalPath } from './router.js';
+import { contactPath, legalPath } from './router.js';
 import { currentVisitId } from './visitTelemetry.js';
 
 /**
@@ -12,11 +12,12 @@ import { currentVisitId } from './visitTelemetry.js';
  * renders on every route including the closed-beta splash, because an anonymous
  * visitor is exactly the person these disclosures are written for.
  *
- * The electronic contact address lives in the legal documents (linked below), not as
- * a second prominent line under the brand — Contact in the nav opens the GitHub
- * issue tracker instead. Address and tax id stay in legal/operator.ts until the
- * operator publishes them; rendering empty constants was a CodeQL false-positive
- * (js/trivial-conditional) and is omitted until those values are non-empty.
+ * Contact opens the in-app form that emails the published address. The address itself
+ * also lives in the legal documents (and as a mailto fallback on the form), not as a
+ * second prominent line under the brand. Address and tax id stay in legal/operator.ts
+ * until the operator publishes them; rendering empty constants was a CodeQL
+ * false-positive (js/trivial-conditional) and is omitted until those values are
+ * non-empty.
  */
 export function SiteFooter() {
   const { t } = useTranslation();
@@ -37,9 +38,7 @@ export function SiteFooter() {
           <a href={legalPath('terms')}>{t('legal.terms')}</a>
           <a href={legalPath('privacy')}>{t('legal.privacy')}</a>
           <a href={legalPath('terms', 'zglaszanie')}>{t('footer.reportIllegal')}</a>
-          <a href={ISSUES_URL} target="_blank" rel="noreferrer noopener">
-            {t('footer.contact')}
-          </a>
+          <a href={contactPath()}>{t('footer.contact')}</a>
         </nav>
       </div>
 

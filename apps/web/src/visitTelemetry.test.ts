@@ -111,6 +111,7 @@ describe('route kinds follow the real router', () => {
     ['/draft/space-hop', 'draft'],
     ['/privacy', 'legal'],
     ['/terms', 'legal'],
+    ['/contact', 'legal'],
     ['/status/some-token', 'status'],
     ['/health', 'health'],
     ['/nope', 'notFound'],

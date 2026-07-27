@@ -383,6 +383,21 @@
     "openSource": "Open source",
     "reportBug": "Report a bug"
   },
+  "contact": {
+    "title": "Contact",
+    "intro": "Write to us about the Service — questions, complaints, or anything that is not a bug report or an illegal-content notice.",
+    "back": "Back to the site",
+    "name": "Your name",
+    "email": "Your email",
+    "message": "Message",
+    "submit": "Send message",
+    "sending": "Sending…",
+    "sent": "Message sent — we will reply by email.",
+    "error": "Could not send the message. Please try again in a moment.",
+    "rateLimited": "Too many messages from this network. Please try again later.",
+    "privacyNote": "We use your name and email only to read and reply to this message. Details in the",
+    "orEmail": "Or write directly to"
+  },
   "ai": {
     "generatedBadge": "AI-generated game",
     "generatedShort": "AI",
@@ -449,6 +464,7 @@
     "join": "Join the game",
     "health": "Telemetry",
     "notFound": "Page not found",
+    "contact": "Contact",
     "playNamed": "Play {{title}}",
     "draftNamed": "Draft {{title}}",
     "statusNamed": "Status · {{title}}"
