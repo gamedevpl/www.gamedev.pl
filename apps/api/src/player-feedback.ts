@@ -137,10 +137,22 @@ export async function registerPlayerFeedbackRoutes(
         return reply.status(400).send({ error: `feedback must be at least ${MIN_FEEDBACK_LENGTH} characters` });
       }
 
-      // 2. Content moderation before spending any quota. Runs on the raw text: the
-      // sanitizer removes markup, and moderation's PII/term patterns should see what
-      // the player actually typed, not a version with characters already stripped out.
-      const moderation = await contentChecker.checkFields([body.data.text]);
+      // 2. Content moderation before spending any quota, on the raw text *and* on the
+      // sanitized text when they differ.
+      //
+      // Both are needed, for opposite reasons. The raw text is the only one that still
+      // carries markdown link targets, so it is what the URL-count check can see. The
+      // sanitized text is what actually gets stored, and sanitization can *reveal*
+      // content the raw form hid: markdown emphasis characters are stripped to nothing,
+      // so `sh*it` passes a term check and is then stored in its matching form. (HTML
+      // tags are not a vector — those become a space, which does not rejoin a word.)
+      // Checking only one leaves the other's evasion open.
+      //
+      // Identical strings are checked once — that is the overwhelmingly common case
+      // (plain prose sanitizes to itself), so the second call is paid only by input
+      // carrying markup, which is exactly the input worth paying for.
+      const fieldsToModerate = sanitized === body.data.text ? [body.data.text] : [body.data.text, sanitized];
+      const moderation = await contentChecker.checkFields(fieldsToModerate);
       if (!moderation.allowed) {
         return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
       }

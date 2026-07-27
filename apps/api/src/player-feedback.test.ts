@@ -120,6 +120,29 @@ describe('player feedback route', () => {
     await app.close();
   });
 
+  it('moderates the sanitized text too, so markup cannot hide a term the stripper reveals', async () => {
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      playerFeedbackRoutes: { publishedSlugs: slugGate(['brick-storm']) },
+    });
+
+    // Markdown emphasis characters are stripped to nothing (HTML tags become a space,
+    // so they are not a vector). The raw form does not match the term pattern; the
+    // sanitized text that would actually be stored does. Moderating only the raw text
+    // would store the slur in its revealed form.
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/games/brick-storm/feedback',
+      headers: authHeaders('g:alice'),
+      payload: { text: 'this game is total sh*it and the controls are broken' },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json()).toMatchObject({ error: 'content_rejected' });
+    expect(await store.listPlayerFeedback('brick-storm')).toEqual([]);
+    await app.close();
+  });
+
   it('accepts, sanitizes, and stores feedback under games/{slug}, not submissions/{n}', async () => {
     const app = await buildApp({
       store,

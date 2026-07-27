@@ -259,7 +259,13 @@ describe('POST /api/telemetry', () => {
       });
 
       const sixHours = 6 * 60 * 60 * 1000;
-      const [event] = await store.listTelemetryEvents(today());
+      // Read the partition the clamped event actually lands in, not today's. An event
+      // is filed under the date its own timestamp names, so backdating by the full cap
+      // puts this one in *yesterday's* partition whenever the suite runs within six
+      // hours of UTC midnight — which used to fail this test every night between 00:00
+      // and 06:00 with an unhelpful "cannot read properties of undefined".
+      const partition = new Date(before - sixHours).toISOString().slice(0, 10);
+      const [event] = await store.listTelemetryEvents(partition);
       // Clamped to exactly the cap, measured against a clock read before the request
       // so the millisecond the request itself takes cannot fail the assertion.
       expect(Date.parse(event.at)).toBeGreaterThanOrEqual(before - sixHours);
