@@ -8,12 +8,10 @@ import { AuthProvider } from './AuthContext';
 import i18n from './i18n';
 
 /**
- * Playing is public; making a game is not.
+ * Closed beta: anonymous visitors see the splash, not the arcade.
  *
- * During the closed beta the splash used to be the entire site for anyone without a
- * session, which meant a shared game link led strangers to a wall. These guard the
- * decision to open play: an anonymous visitor reaches the arcade, and the splash — which
- * owns the waitlist join — appears only for someone whose sign-in was actually refused.
+ * A brief regression opened browse/play without a session; these guard the splash wall
+ * so a shared link or a cold visit lands on sign-in + waitlist, not the catalog.
  */
 
 async function flushEffects() {
@@ -21,18 +19,16 @@ async function flushEffects() {
   await Promise.resolve();
 }
 
-function mockApi(options: { rejectSignIn?: boolean } = {}) {
+function mockApi() {
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const url = String(input);
     if (url.endsWith('/api/auth/me')) {
-      // No session: exactly what an anonymous visitor's first request answers.
       return new Response(JSON.stringify({ error: 'unauthenticated' }), { status: 401 });
     }
     if (url.endsWith('/api/health')) {
       return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: true }));
     }
     if (url.endsWith('/api/catalog')) {
-      if (options.rejectSignIn) return new Response(JSON.stringify([]));
       return new Response(
         JSON.stringify([
           {
@@ -66,7 +62,7 @@ async function renderApp() {
   return container;
 }
 
-describe('anonymous play during closed beta', () => {
+describe('anonymous visitors during closed beta', () => {
   afterEach(() => {
     document.body.innerHTML = '';
     localStorage.clear();
@@ -75,23 +71,22 @@ describe('anonymous play during closed beta', () => {
     vi.restoreAllMocks();
   });
 
-  it('shows the arcade to a visitor with no session instead of the splash', async () => {
+  it('shows the closed-beta splash instead of the arcade', async () => {
     mockApi();
     window.history.pushState(null, '', '/');
 
     const container = await renderApp();
 
-    // The splash's waitlist button is its signature element.
-    expect(container.querySelector('#btn-join-waitlist')).toBeNull();
-    // The catalog was fetched anonymously and rendered.
-    expect(container.textContent).toContain('Sky Dodge');
+    expect(container.querySelector('.beta-splash')).not.toBeNull();
+    expect(container.textContent).not.toContain('Sky Dodge');
+    expect(container.querySelector('article.catalog-card')).toBeNull();
   });
 
-  it('fetches the catalog without a session', async () => {
+  it('does not fetch the catalog without a session', async () => {
     mockApi();
     await renderApp();
 
     const calls = vi.mocked(globalThis.fetch).mock.calls.map((call) => String(call[0]));
-    expect(calls.some((url) => url.endsWith('/api/catalog'))).toBe(true);
+    expect(calls.some((url) => url.endsWith('/api/catalog'))).toBe(false);
   });
 });
