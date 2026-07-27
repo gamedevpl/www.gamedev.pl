@@ -20,7 +20,7 @@ import { e2ePrerequisites, launchSiteBrowser, signedInApiContext, signedInContex
  *
  *   most sampled games fail → the deploy broke play → fail (blocks promotion)
  *   exactly one fails       → that game is broken   → pass, with a loud warning
- *   only one game exists    → nothing to compare    → fail; it *is* the site
+ *   only one game exists    → no warn path at all   → its failure blocks; it *is* the site
  */
 
 /** Enough games to tell "all broken" from "one broken" without lengthening the gate much. */
@@ -222,13 +222,13 @@ describe.skipIf(!prereq.ok)('published games are playable', () => {
     const sandboxes = new Set<string | null>();
     for (const slug of slugs) {
       await visit(page, `/play/${encodeURIComponent(slug)}`, 2_000);
-      sandboxes.add(
-        await page
-          .locator('iframe')
-          .first()
-          .getAttribute('sandbox')
-          .catch(() => null),
-      );
+      // Wait for attachment before reading. On a cold start the frame arrives a moment
+      // after the settle, and `getAttribute` on a not-yet-present element returns null —
+      // which would read as "sandbox missing" and block promotion over a slow revision
+      // rather than a real defect.
+      const iframe = page.locator('iframe').first();
+      await iframe.waitFor({ state: 'attached', timeout: 30_000 });
+      sandboxes.add(await iframe.getAttribute('sandbox'));
     }
 
     expect([...sandboxes], 'every game frame must be exactly allow-scripts').toEqual(['allow-scripts']);

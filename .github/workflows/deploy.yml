@@ -323,13 +323,24 @@ jobs:
       - name: Install workspace dependencies
         run: npm ci
 
+      # PLAYWRIGHT_BROWSERS_PATH must be set for BOTH steps and must match: `install`
+      # writes to ~/.cache/ms-playwright by default, while the suite's findChromium()
+      # searches PLAYWRIGHT_BROWSERS_PATH (default /opt/pw-browsers). Unpinned, the
+      # browser lands where the suite never looks, every suite skips, and the job exits 0
+      # having verified nothing — a green deploy behind a gate that never ran.
       - name: Install Chromium
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/pw-browsers
         run: npx playwright install --with-deps chromium
 
       - name: Browser gate against the candidate
         env:
           E2E_BASE_URL: ${{ env.CANDIDATE_URL }}
           GAMEDEV_ACCESS_TOKEN: ${{ secrets.GAMEDEV_ACCESS_TOKEN }}
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/pw-browsers
+          # Turns "cannot run" into a failed deploy instead of a silent skip
+          # (apps/e2e/src/gate-prerequisites.test.ts).
+          E2E_REQUIRED: '1'
         run: npm run e2e
 
       - name: Promote candidate revision to 100% traffic
