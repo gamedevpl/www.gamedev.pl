@@ -1,6 +1,8 @@
 # Operational readiness plan — backups, monitoring, observability
 
-Status: v1, 2026-07-27. Research-based plan; nothing in it is built yet unless marked ✅.
+Status: v2, 2026-07-27. v2 added §3 (burst resilience) after walking a player-traffic burst
+and a creator-activity burst to their concrete failure points. Research-based plan; nothing
+in it is built yet unless marked ✅.
 
 This is the operations counterpart to [`gtm-plan.md`](./gtm-plan.md). The GTM plan opens the
 gates — more invites (Stage 1), public play (Stage 2), launch spikes (Show HN) — and every
@@ -101,6 +103,10 @@ The floor: no silent data loss, no silent outage.
    issue). Rotation recipes already exist in [`deployment.md`](./deployment.md).
 7. **Hygiene:** delete the unused `site-basic-auth` secret; export the Route 53 zone file
    into `infra/` (it is tiny, changes rarely, and a copy in git is a free DR asset).
+8. **Global creation cap + pause switch** (from §3, Scenario C): a runtime-readable global
+   submissions-per-day cap alongside the per-user quotas, and a `SUBMISSIONS_PAUSED` flag
+   with an honest UX. The one O1 item that is a code change — small, and it is the cost
+   circuit-breaker every later GTM move assumes exists.
 
 **Exit check:** PITR on; an export object exists in the bucket and one restore has
 succeeded; killing the service (or a forced 500) produces an email within minutes; budget
@@ -188,7 +194,108 @@ resolved; alert policies and buckets are in code; SLO doc merged.
 
 ---
 
-## 3. Alert catalog (target state after O2)
+## 3. Burst resilience — two scenarios walked to the point of failure
+
+The GTM plan is *designed to produce bursts*: every shared game link is a landing page,
+party mode is physically viral, and Stage 2 aims launch spikes on purpose. So "what happens
+in a burst" is not a tail risk — it is the success case. Walked concretely against the code
+and config as of 2026-07-27.
+
+### Scenario P — player burst (a shared link catches, or Show HN lands)
+
+The whole player path runs through **one container** (`--max-instances 1`) with **default
+resources** — no `--concurrency`, `--cpu`, or `--memory` flags in either deploy path, so
+Cloud Run defaults apply: ~80 concurrent requests, 1 vCPU. From scale-to-zero, the first
+wave eats a cold start. Then, in the order things actually break:
+
+1. **GitHub rate-limit lockout (the first real breakage).** Catalog and every game bundle
+   are fetched from the private games repo *live, per request* — [`github-client.ts`](../apps/api/src/github-client.ts)
+   retries and honors `Retry-After`, but nothing caches. A fine-grained PAT has a
+   5,000 req/h ceiling plus opaque secondary limits. A few hundred curious visitors
+   browsing the catalog and opening games can spend that budget in minutes — after which
+   **catalog and play return errors for everyone** until the window resets. A viral moment
+   converts itself into a self-inflicted, hour-long outage at precisely the moment the
+   growth loop was working. This coupling — *visitors × GitHub API calls* — is the single
+   most burst-fragile fact in the system.
+2. **Concurrency saturation.** Past ~80 concurrent requests the single instance queues
+   briefly, then sheds with 429/5xx. Static assets, API calls, telemetry flushes, and
+   party-mode WebSockets all compete for the same slots and the same vCPU — there is no
+   CDN in front, so even the app shell's first loads are origin traffic (immutable cache
+   headers only help *repeat* visitors).
+3. **Party mode degrades ungracefully.** Relay frames share the saturated instance, so
+   controllers lag; and any deploy or instance restart during the burst drops every live
+   room. Per-connection frame caps exist ([`mp.ts`](../apps/api/src/mp.ts):
+   40 frames/s, 2 KB frames) but there is no global room-count admission control.
+
+**Resilience posture for P — protect the play path, break the GitHub coupling:**
+
+- **Last-good catalog + bundle cache, promoted from O2 to O1-adjacent priority.** This was
+  §2/O2.3 as an availability item; the burst analysis makes it the top code change overall.
+  With an in-process cache serving stale-on-error and refreshing in the background, a
+  burst of any size costs ~zero GitHub calls for published games, and failure mode 1
+  disappears. Everything else on this list is tuning; this one removes a cliff.
+- **Set resources explicitly** (O2): pick `--concurrency`, `--cpu`, `--memory` from a load
+  test instead of inheriting defaults silently — likely 2 vCPU + higher concurrency once
+  the cache makes requests cheap. Document *why* in the deploy script, next to the
+  max-instances warning.
+- **Event mode** (runbook, O2): before a planned spike or meetup — `--min-instances 1`
+  (no cold start, ~pennies per day, flip back after), quotas lowered, dashboard open.
+  Cheap insurance the GTM plan's launch checklist can invoke by name.
+- **Load-shedding ladder, encoded not improvised** (O3): under pressure, degrade in this
+  order — (a) pause creation (Scenario C's switch), (b) sample or drop telemetry writes
+  (a flag the batcher respects; losing metrics beats losing play), (c) refuse new party
+  rooms with an honest message (global room cap), (d) the play path goes down last.
+- **CDN decision deferred to evidence** (O3): if the load test shows static serving
+  saturating the instance before the API does, front assets with Cloud CDN; otherwise skip.
+
+### Scenario C — creator burst (an invite wave, a prompt jam, press among the allowlisted)
+
+Creation is the expensive, slow, externally-dependent path, and its only throttle today is
+**per-user**: `checkAndIncrementQuota` enforces a daily cap per creator, but N invited
+creators × quota = a global spend bounded only by how many people we invited. There is no
+global cap, no pause switch — "lower the quotas", which the GTM plan's launch checklist
+assumes, currently means *editing env vars and redeploying*. In failure order:
+
+1. **Cost burn, silently.** Every submission is a moderation call plus an agent run — the
+   dominant COGS. A burst is first of all a *budget event*, and until O1's billing alerts
+   exist, nothing announces it before the invoice.
+2. **The agent queue backs up and trust collapses.** Copilot capacity is fixed and slow
+   (minutes per game, limited concurrency). A burst turns "building…" into hours of
+   silence; creators see a quiet agent, retry, file feedback — adding load to the same
+   queue. [`improvement-loop-plan.md`](./improvement-loop-plan.md) already calls a stalled
+   `issue-filed` an alert; in a burst it is the *normal state* unless arrivals are shaped.
+3. **GitHub secondary rate limits on rapid issue creation.** Bursty writes from one PAT
+   trip abuse detection — jeopardizing the same token the play path depends on (until the
+   cache lands, a creator burst can take down *play*). [`risks-and-open-questions.md`](./risks-and-open-questions.md)
+   B3 flagged this for public submission; bursts make it a beta concern too.
+4. **The sweep grows with the backlog.** notify-sweep iterates all open submissions every
+   2 min; a large backlog makes the platform's own heartbeat heavier exactly when the
+   system is busiest.
+
+**Resilience posture for C — global backpressure, honest queueing, and a switch:**
+
+- **Global creation controls as config, not code** (O1 — small build, do it with the
+  alert floor): a global submissions-per-day cap alongside the per-user one, and a
+  `SUBMISSIONS_PAUSED` flag — both readable at runtime (env or a Firestore config doc)
+  so throttling is a flip, not a deploy. When the cap trips, the UX says so honestly:
+  "creation demand is over capacity today — your quota is safe, come back tomorrow."
+  This single item converts both failure modes 1 and 3 from incidents into policy.
+- **Queue-depth visibility and honest ETAs** (O2): the sweep already knows how many
+  submissions are open; surface it — to the operator as a dashboard line + alert (A13),
+  to creators as "Nth in queue" instead of silence. Arrival shaping (a soft "the workshop
+  is busy" gate above a threshold) beats letting everyone in and disappointing all of them.
+- **Issue-creation pacing** (O2): a minimum spacing between GitHub issue creations
+  (a queue drained at a safe rate) so a burst of accepted submissions never trips
+  secondary limits — creators already experience creation as asynchronous, so added
+  seconds are invisible.
+
+The two scenarios fail differently and the plan should say so plainly: **a player burst
+breaks availability; a creator burst breaks economics and trust.** The player posture is
+*cache + shed + protect play*; the creator posture is *cap + queue + communicate*. Both
+share one rule: the switch that saves you must exist — and be config — *before* the burst,
+because during one, a redeploy is itself a risk (it drops every party room).
+
+## 4. Alert catalog (target state after O2)
 
 All email-channel, all Cloud Monitoring native. The bar for adding an alert: *would the
 operator act on it within a day?* Anything else is a dashboard line, not an alert.
@@ -205,11 +312,14 @@ operator act on it within a day?* Anything else is a dashboard line, not an aler
 | A8 | Stalled submission (`issue-filed`, no PR) | age > 6h | O2 |
 | A9 | Instance count | >1 while relay is in-process | O2 |
 | A10 | p95 latency | >2s sustained 15 min (tune after baseline) | O2 |
+| A11 | GitHub API rate-limit headroom | `x-ratelimit-remaining` < 1,000 (log metric) | O2 |
+| A12 | Request shedding | 429s from Cloud Run (concurrency ceiling hit) | O2 |
+| A13 | Creation queue depth / global cap | open submissions > threshold, or global daily cap tripped | O2 |
 
 Plus two *calendar* alerts that no monitoring system will fire: PAT expiries
 (`github-token`, `GAMES_REPO_TOKEN`) and the annual domain/DNS renewal.
 
-## 4. Runbooks (the bus-factor mitigation)
+## 5. Runbooks (the bus-factor mitigation)
 
 A new `docs/runbooks/` directory, one short file per procedure, each tested once by
 actually performing it. Initial set, in priority order:
@@ -225,11 +335,13 @@ actually performing it. Initial set, in priority order:
    already has the recipes; the runbook adds the *order* and the verification step.
 5. **Launch-day spike procedure** (O3) — quotas down, dashboard up, thresholds for
    flipping gates.
+6. **Event mode** (O2, from §3) — pre-warm with `--min-instances 1`, lower the global
+   creation cap, open the dashboard; and the reverse checklist for standing down.
 
 Runbooks follow the repo's self-improvement clause: wrong or incomplete runbooks get fixed
 by whoever hits the gap.
 
-## 5. What we deliberately do not do (anti-goals)
+## 6. What we deliberately do not do (anti-goals)
 
 - **No third-party observability stack** (Datadog, Grafana Cloud, PagerDuty, Sentry-by-default).
   Each adds a vendor, a DPA, and a bill to a platform whose entire load fits GCP free
@@ -243,14 +355,16 @@ by whoever hits the gap.
 - **No metrics that nobody will read.** Every dashboard line and alert must map to an
   action; delete the ones that don't within a month of adding them.
 
-## 6. Sequencing summary
+## 7. Sequencing summary
 
 ```
 Now ──────────── week 2 ─────────────────── week 12 ─────────────── month 6
    Gate O1                  Gate O2                     Gate O3
    backups + alert floor    dashboard, product alerts,  relay split, load test,
-   restore drill, budget,   GitHub-outage cache,        launch runbook, IaC,
-   PAT ledger               games mirror, retention     SLOs, deploy hardening
+   restore drill, budget,   catalog last-good cache,    load-shed ladder, launch
+   PAT ledger, global       queue visibility + pacing,  runbook, IaC, SLOs,
+   creation cap + pause     games mirror, retention,    deploy hardening, CDN
+   switch                   event mode, resources set   decision
    │                        │                           │
    └─ GTM: more invites     └─ GTM Stage 1 beachhead    └─ GTM Stage 2 public/spikes
 ```
