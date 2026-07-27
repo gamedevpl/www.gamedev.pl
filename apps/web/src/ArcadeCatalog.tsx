@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { catalogMediaUrl, isPlatformAuthor, type CatalogEntry } from './catalog';
+import { MascotMoment } from './Mascot';
 import { PixelIcon } from './PixelIcon';
 import { useInView } from './useInView';
 
@@ -264,16 +265,22 @@ export function ArcadeCatalog({
       </div>
 
       {catalogStatus === 'loading' ? (
-        <p className="catalog-state">{t('catalog.loading')}</p>
+        <MascotMoment className="catalog-state" emotion="busy" size={56} title={t('mascot.busyAlt')}>
+          <p>{t('catalog.loading')}</p>
+        </MascotMoment>
       ) : catalogStatus === 'error' ? (
-        <div className="load-error" role="alert">
-          <p className="error">{t('catalog.error', { message: catalogError ?? t('errors.generic') })}</p>
+        <MascotMoment className="load-error" emotion="sad" size={64} title={t('mascot.sadAlt')}>
+          <p className="error" role="alert">
+            {t('catalog.error', { message: catalogError ?? t('errors.generic') })}
+          </p>
           <button type="button" className="secondary-btn" onClick={onRetryCatalog}>
             <PixelIcon name="undo" size={13} /> {t('catalog.retry')}
           </button>
-        </div>
+        </MascotMoment>
       ) : catalogEntries.length === 0 ? (
-        <p className="catalog-state">{t('catalog.empty')}</p>
+        <MascotMoment className="catalog-state" emotion="curious" size={64} title={t('mascot.curiousAlt')}>
+          <p>{t('catalog.empty')}</p>
+        </MascotMoment>
       ) : (
         <div className="catalog-grid">
           {catalogEntries.map((entry) => (
