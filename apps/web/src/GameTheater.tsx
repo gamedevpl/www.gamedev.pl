@@ -107,10 +107,14 @@ export function GameTheater({
     if (document.fullscreenElement) return;
     onExitRef.current();
   }, []);
+  // A tap inside the sandboxed game never bubbles to the document — the bridge
+  // relays pointerdown so overlays like More can dismiss without covering the
+  // playfield (which would steal that first tap from the game).
+  const dismissMore = useCallback(() => setMoreOpen(false), []);
   // Escape is handled twice on purpose: the window listener below covers the app's
   // own chrome, and this covers the game iframe, which holds focus while playing
   // and swallows its own key events.
-  const player = useGamePlayer(frameRef, true, requestExit);
+  const player = useGamePlayer(frameRef, true, requestExit, dismissMore);
 
   // The game reports its own (localized) title over the bridge. Prefer it: on a
   // direct `/play/<slug>` link there's no catalog entry to take a title from, so
@@ -184,37 +188,24 @@ export function GameTheater({
   }, [requestExit, moreOpen]);
 
   // Close the overflow menu on an outside tap — phones have no hover to dismiss it.
-  // Same-document chrome uses pointerdown. Taps on the sandboxed game never bubble
-  // here; they do move focus into the iframe — listen for that (and window blur as
-  // a backstop) so we dismiss without covering the playfield. A backdrop would
-  // steal the first tap from the game.
-  // Defer the pointer listener one tick so the opening click cannot close the menu
-  // in the same gesture.
+  // Same-document chrome uses pointerdown here. Taps on the sandboxed game are
+  // relayed by the player bridge (useGamePlayer → dismissMore) so the playfield
+  // stays interactive — focus tricks don't fire reliably on mobile, and a
+  // covering backdrop would steal the first tap.
+  // Defer one tick so the opening click cannot close the menu in the same gesture.
   useEffect(() => {
     if (!moreOpen) return;
-    const dismiss = () => setMoreOpen(false);
     const onPointer = (event: PointerEvent) => {
       if (moreRef.current && !moreRef.current.contains(event.target as Node)) {
-        dismiss();
+        setMoreOpen(false);
       }
     };
-    const onWindowBlur = () => {
-      window.setTimeout(() => {
-        if (document.activeElement === frameRef.current) dismiss();
-      }, 0);
-    };
-    const frame = frameRef.current;
     const timer = window.setTimeout(() => {
       document.addEventListener('pointerdown', onPointer);
     }, 0);
-    window.addEventListener('blur', onWindowBlur);
-    // Focus on the <iframe> element itself fires when the player taps the game.
-    frame?.addEventListener('focus', dismiss);
     return () => {
       window.clearTimeout(timer);
       document.removeEventListener('pointerdown', onPointer);
-      window.removeEventListener('blur', onWindowBlur);
-      frame?.removeEventListener('focus', dismiss);
     };
   }, [moreOpen]);
 

@@ -20,8 +20,12 @@ const PLAYER = 'gdpl-player';
 //   4. forwards Escape to the host. The game iframe holds keyboard focus (that's
 //      what makes WASD work without a click first), and key events inside an
 //      opaque-origin frame never reach the app's own listener — so without this
-//      relay, "get me out of here" silently stops working.
-//   5. reports health — uncaught errors and animation-frame liveness. This is the
+//      relay, "get me out of here" silently stops working;
+//   5. forwards pointerdown so the host can dismiss overlays (e.g. the More menu)
+//      without covering the playfield — parent document listeners never see taps
+//      inside this opaque-origin frame, and focus tricks don't fire reliably on
+//      mobile either. Report-only: the game still gets the same pointer event;
+//   6. reports health — uncaught errors and animation-frame liveness. This is the
 //      only vantage point that has them: the game runs in an opaque origin the app
 //      cannot inspect, and its CSP blocks every way it could report for itself. An
 //      uncaught error is the single most reliable "this published game is broken"
@@ -53,6 +57,7 @@ const BRIDGE = `(function(){
     // Report only — the game keeps its own Escape handling (pause menus etc).
     if(e.key==='Escape'){post({type:'key',key:'Escape'});}
   });
+  addEventListener('pointerdown',function(){post({type:'pointer'});},{passive:true});
   function init(){
     sendMeta();
     var s=el('sound-toggle');
@@ -196,13 +201,17 @@ export function useGamePlayer(
   active: boolean,
   /** Called when Escape is pressed *inside* the game (see the bridge's job 4). */
   onEscape?: () => void,
+  /** Called on pointerdown inside the game (see the bridge's job 5). */
+  onPointer?: () => void,
 ) {
   const [meta, setMeta] = useState<GamePlayerMeta | null>(null);
   const [muted, setMuted] = useState(false);
 
-  // Held in a ref so a caller's inline closure can't resubscribe the listener below.
+  // Held in refs so a caller's inline closures can't resubscribe the listener below.
   const onEscapeRef = useRef(onEscape);
   onEscapeRef.current = onEscape;
+  const onPointerRef = useRef(onPointer);
+  onPointerRef.current = onPointer;
 
   useEffect(() => {
     if (!active) {
@@ -233,6 +242,8 @@ export function useGamePlayer(
         setMuted(Boolean(data.muted));
       } else if (data.type === 'key' && data.key === 'Escape') {
         onEscapeRef.current?.();
+      } else if (data.type === 'pointer') {
+        onPointerRef.current?.();
       }
     }
     window.addEventListener('message', onMessage);

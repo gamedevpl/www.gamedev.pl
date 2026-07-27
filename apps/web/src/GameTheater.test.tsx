@@ -20,11 +20,7 @@ vi.mock('./gamePlayer', async () => {
   const actual = await vi.importActual<typeof import('./gamePlayer')>('./gamePlayer');
   return {
     ...actual,
-    useGamePlayer: () => ({
-      meta: { title: 'Brick Storm', desc: 'Stack bricks.' },
-      muted: false,
-      toggleSound: vi.fn(),
-    }),
+    // Keep the real useGamePlayer so bridge pointer messages exercise dismissMore.
     useGameTelemetry: () => undefined,
   };
 });
@@ -75,7 +71,6 @@ async function draw() {
       />,
     );
   });
-  // Votes resolve async and remount the widget once counts arrive.
   await act(async () => {
     await Promise.resolve();
   });
@@ -94,15 +89,13 @@ describe('GameTheater more menu', () => {
     expect(more.getAttribute('aria-expanded')).toBe('true');
     expect(more.getAttribute('aria-pressed')).toBe('true');
     expect(container.querySelector('.theater-more.is-open')).not.toBeNull();
-    // Exit remains the only X on the bar; the More trigger stays a hamburger.
     expect(container.querySelectorAll('.exit-btn').length).toBe(1);
     expect(more.classList.contains('exit-btn')).toBe(false);
   });
 
-  it('dismisses when focus moves into the game iframe', async () => {
+  it('dismisses when the game bridge reports a pointerdown inside the iframe', async () => {
     await draw();
     const more = container.querySelector('.theater-more-btn') as HTMLButtonElement;
-    const frame = container.querySelector('iframe') as HTMLIFrameElement;
 
     await act(async () => {
       more.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -110,11 +103,14 @@ describe('GameTheater more menu', () => {
     expect(container.querySelector('.theater-more.is-open')).not.toBeNull();
 
     await act(async () => {
-      // Tapping the playfield focuses the iframe and blurs the parent window —
-      // that's the signal we use instead of covering the game with a backdrop.
-      frame.focus();
-      window.dispatchEvent(new Event('blur'));
-      await Promise.resolve();
+      // Opaque-origin sandboxed frames post with origin "null"; jsdom synthesizes "".
+      // useGamePlayer accepts both via the event.source === null test path for synthetics.
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { source: 'gdpl-player', type: 'pointer' },
+          origin: 'null',
+        }),
+      );
     });
 
     expect(container.querySelector('.theater-more.is-open')).toBeNull();
