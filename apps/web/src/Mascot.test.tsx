@@ -2,6 +2,7 @@
 
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
+import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Mascot, MascotMoment, type MascotEmotion } from './Mascot.js';
 import { MASCOT_IDLE_SPANS, MASCOT_SOLID_SPANS } from './mascotSpans.js';
@@ -104,6 +105,23 @@ describe('mascot spans', () => {
   it('idle spans keep the face open so the logo reads as the logo', () => {
     // eyes, mouth and both ear rings
     expect(enclosedHoles(toGrid(MASCOT_IDLE_SPANS))).toHaveLength(5);
+  });
+
+  /**
+   * The games repo carries the same artwork (`shared/modules/mascot.ts` over there) so
+   * a game can draw the mascot as a canvas cameo without depending on this app. The
+   * two renderers are deliberately independent, but they must agree on the geometry,
+   * or the mascot in a game slowly stops being the mascot in this header.
+   *
+   * Both repos hash the span tables the same way and pin this digest, so editing the
+   * pixels here fails the build until the games repo is updated too. Changing the
+   * mascot on purpose means updating the digest in BOTH places.
+   */
+  it('matches the artwork the games-repo cameo draws', () => {
+    const canonical = [...MASCOT_IDLE_SPANS.flat(), '|', ...MASCOT_SOLID_SPANS.flat()].join(',');
+    expect(createHash('sha256').update(canonical).digest('hex')).toBe(
+      '453c7a011d7a7bfbe316cb55b0632aaaf82316d8410d87c150cd24f83f975c23',
+    );
   });
 });
 
@@ -210,6 +228,35 @@ describe('Mascot', () => {
       // A handful of rects is fine (blink lids, the masked fill); hundreds is the bug.
       expect(container.querySelectorAll('rect').length, emotion).toBeLessThan(10);
     }
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  // The body must be the union OUTLINE of the pixels, not one subpath per span.
+  // Coincident interior edges only cancel while the shape is axis-aligned, so a
+  // per-span path seams the moment an emotion rotates — and five of them do.
+  // A correct trace has one loop per connected boundary and no more:
+  //   idle  — silhouette + mouth + 2 eyes + 2 ear rings + 2 ear centres = 8
+  //   solid — silhouette + 2 ear rings + 2 ear centres = 5
+  it('traces the body as boundary loops, not one subpath per span', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const subpaths = (d: string | null | undefined) => (d ?? '').match(/M/g)?.length ?? 0;
+
+    await act(async () => {
+      root.render(createElement(Mascot, { emotion: 'idle', size: 88 }));
+    });
+    expect(subpaths(container.querySelector('.mascot__pixels path')?.getAttribute('d'))).toBe(8);
+
+    await act(async () => {
+      root.render(createElement(Mascot, { emotion: 'confused', size: 88 }));
+    });
+    expect(subpaths(container.querySelector('mask path')?.getAttribute('d'))).toBe(5);
 
     await act(async () => {
       root.unmount();
