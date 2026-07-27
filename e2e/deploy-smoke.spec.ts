@@ -34,6 +34,8 @@ interface GameReport {
   documentDelivered: boolean;
   litPixels: number;
   animated: boolean;
+  /** Only probed when the game looked static — see `inspectGame`. */
+  respondedToInput?: boolean;
   note?: string;
 }
 
@@ -60,26 +62,40 @@ async function gameFrame(page: Page): Promise<Frame | null> {
   return null;
 }
 
+interface CanvasSample {
+  /** Pixels brighter than the background — "has it drawn anything at all". */
+  lit: number;
+  /** Order-dependent digest of the pixels — "has what it drew changed". */
+  digest: number;
+}
+
 /**
- * Counts pixels the game has drawn. Reaching into the frame works despite the opaque
- * origin because Playwright talks CDP, below the same-origin policy — verified against a
- * real sandboxed srcdoc frame before this suite was written.
+ * Samples the game's canvas. Reaching into the frame works despite the opaque origin
+ * because Playwright talks CDP, below the same-origin policy — verified against a real
+ * sandboxed srcdoc frame before this suite was written.
+ *
+ * Returns a digest as well as a count, because a count alone cannot detect motion: a
+ * sprite translating across a uniform background lights exactly as many pixels in every
+ * frame. Comparing counts would report that game as frozen and block a perfectly good
+ * deploy. The digest folds each pixel with its position, so movement changes it.
  */
-async function litPixels(frame: Frame): Promise<number> {
+async function sampleCanvas(frame: Frame): Promise<CanvasSample | null> {
   return frame
     .evaluate((threshold) => {
       const canvas = document.querySelector('canvas');
-      if (!canvas) return -1;
-      const context = canvas.getContext('2d');
-      if (!context) return -1;
+      const context = canvas?.getContext('2d');
+      if (!canvas || !context) return null;
       const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
-      let count = 0;
+      let lit = 0;
+      let digest = 0;
       for (let i = 0; i < data.length; i += 4) {
-        if ((data[i] ?? 0) + (data[i + 1] ?? 0) + (data[i + 2] ?? 0) > threshold) count++;
+        const brightness = (data[i] ?? 0) + (data[i + 1] ?? 0) + (data[i + 2] ?? 0);
+        if (brightness > threshold) lit++;
+        digest = (Math.imul(digest, 33) + brightness) | 0;
       }
-      return count;
+      return { lit, digest };
     }, LIT_THRESHOLD)
-    .catch(() => -1);
+    .catch(() => null);
 }
 
 async function inspectGame(page: Page, slug: string): Promise<GameReport> {
@@ -114,15 +130,40 @@ async function inspectGame(page: Page, slug: string): Promise<GameReport> {
 
   report.documentDelivered = await frame.evaluate(() => document.body.children.length > 0).catch(() => false);
 
-  // Two samples with time between them: a game that painted one frame and died looks
-  // identical to a working one in a single sample.
-  const first = await litPixels(frame);
-  await page.waitForTimeout(600);
-  const second = await litPixels(frame);
+  // Three spaced samples rather than two: a canvas can appear a beat late, and judging a
+  // game on a sample taken before it existed would report a healthy game as dead.
+  const samples: Array<CanvasSample | null> = [];
+  for (let take = 0; take < 3; take++) {
+    samples.push(await sampleCanvas(frame));
+    if (take < 2) await page.waitForTimeout(500);
+  }
 
-  report.litPixels = Math.max(first, second);
-  report.animated = first >= 0 && second >= 0 && first !== second;
-  if (first === -1) report.note = 'no canvas found in the game document';
+  const valid = samples.filter((sample): sample is CanvasSample => sample !== null);
+  if (valid.length === 0) {
+    report.note = 'no canvas found in the game document';
+    return report;
+  }
+
+  report.litPixels = Math.max(...valid.map((sample) => sample.lit));
+  report.animated = valid.length > 1 && valid[0]!.digest !== valid[valid.length - 1]!.digest;
+
+  // A game that draws but never moves on its own is not necessarily broken — a puzzle or
+  // turn-based game legitimately redraws only on input. Poke it before concluding it is
+  // frozen, so "static by design" cannot block a deploy.
+  if (!report.animated) {
+    await page
+      .locator('iframe')
+      .first()
+      .click({ position: { x: 40, y: 40 } })
+      .catch(() => undefined);
+    for (const key of ['ArrowUp', 'ArrowRight', 'Space']) {
+      await page.keyboard.press(key).catch(() => undefined);
+    }
+    await page.waitForTimeout(400);
+    const poked = await sampleCanvas(frame);
+    report.respondedToInput = !!poked && poked.digest !== valid[valid.length - 1]!.digest;
+    if (report.respondedToInput) report.note = 'static until input, responded when poked';
+  }
 
   return report;
 }
@@ -171,8 +212,16 @@ test.describe('deployed site', () => {
       reports.push(await inspectGame(page, slug));
     }
 
+    // "Alive" is: the frame is sandboxed, a document arrived, and the canvas *changed* —
+    // either on its own or when poked. Liveness is the change, not the brightness: a game
+    // with a dark palette can legitimately light no pixels above the threshold, and
+    // requiring `lit > 0` would block the deploy over an art choice. A deploy that truly
+    // broke play leaves every canvas both blank *and* frozen, which this still catches.
+    // `litPixels` stays in the report as a diagnostic.
     const playable = (report: GameReport) =>
-      report.sandbox === 'allow-scripts' && report.documentDelivered && report.litPixels > 0 && report.animated;
+      report.sandbox === 'allow-scripts' &&
+      report.documentDelivered &&
+      (report.animated || report.respondedToInput === true);
 
     const working = reports.filter(playable);
     const broken = reports.filter((report) => !playable(report));
@@ -181,7 +230,8 @@ test.describe('deployed site', () => {
       const state = playable(report) ? 'OK  ' : 'FAIL';
       console.log(
         `${state} ${report.slug}  shell=${report.shellRendered} sandbox=${report.sandbox} ` +
-          `doc=${report.documentDelivered} lit=${report.litPixels} animated=${report.animated}` +
+          `doc=${report.documentDelivered} lit=${report.litPixels} animated=${report.animated} ` +
+          `input=${report.respondedToInput ?? 'n/a'}` +
           (report.note ? `  (${report.note})` : ''),
       );
     }

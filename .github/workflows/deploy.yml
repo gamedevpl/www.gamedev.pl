@@ -316,6 +316,18 @@ jobs:
       # Blocking, deliberately. The suite itself distinguishes "one game is broken" (warns,
       # since games live in a separate agent-maintained repo) from "most games are broken"
       # (fails, because that is the deploy having broken play).
+      # `deploy` is a separate job from `ci-gate`, on a fresh runner with no node_modules —
+      # everything above this point is gcloud and curl. The e2e steps need the workspace
+      # installed, so set Node up here rather than assuming the CI gate's runner state.
+      - name: Set up Node for the e2e smoke
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install workspace dependencies
+        run: npm ci
+
       - name: Install Chromium for the e2e smoke
         run: npx playwright install --with-deps chromium
 

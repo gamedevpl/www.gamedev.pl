@@ -38,7 +38,9 @@ export default defineConfig({
     // Playwright does not pick up HTTPS_PROXY by itself, and agent VMs route all egress
     // through one — without this the suite gets a proxy 403 that reads exactly like the
     // site refusing the request. CI has no proxy set, so this is inert there.
-    ...(process.env.HTTPS_PROXY ? { proxy: { server: process.env.HTTPS_PROXY } } : {}),
+    ...(process.env.HTTPS_PROXY
+      ? { proxy: { server: process.env.HTTPS_PROXY, bypass: 'localhost,127.0.0.1,::1' } }
+      : {}),
   },
   projects: [
     {
