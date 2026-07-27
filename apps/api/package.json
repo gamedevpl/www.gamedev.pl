@@ -10,6 +10,7 @@
     "type-check": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "contract:games-repo": "tsx scripts/check-games-repo-contract.ts",
+    "snapshot:publish": "tsx scripts/publish-snapshot.ts",
     "beta:approve": "tsx scripts/beta-approve.ts",
     "beta:invite": "tsx scripts/beta-invite.ts",
     "token:mint": "tsx scripts/access-token.ts mint",

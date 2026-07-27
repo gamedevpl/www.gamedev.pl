@@ -1,0 +1,140 @@
+name: Publish games snapshot
+
+# Bakes every published game into the snapshot bucket so the play route serves
+# pre-assembled documents instead of rebuilding each game from GitHub + esbuild on
+# the request path (apps/api/src/game-snapshot.ts).
+#
+# Fires on a repository_dispatch from the games repo's validate workflow, right
+# after a merge to main regenerates catalog.json — see
+# gamedevpl/www.gamedev.pl-games/.github/workflows/validate.yml. The
+# workflow_dispatch entry point is the manual escape hatch: re-baking after an
+# assembler change here, or recovering from a failed publish.
+#
+# Nothing needs to be redeployed afterwards. Running instances re-read the pointer
+# on its short TTL, so a publish becomes visible on its own within about a minute.
+
+on:
+  repository_dispatch:
+    types: [games-published]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Games-repo ref to bake from'
+        required: false
+        default: 'main'
+      dry_run:
+        description: 'Report what would be baked without writing to the bucket'
+        type: boolean
+        required: false
+        default: false
+
+# Two publishes racing would interleave their pointer writes, and the loser could
+# leave `current.json` addressing the older snapshot. Queue them instead — the
+# snapshot prefixes are immutable, so a queued run is simply the newer truth.
+concurrency:
+  group: games-snapshot-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_ID: 'gamedevpl'
+      GAMES_REPO: 'gamedevpl/www.gamedev.pl-games'
+      GAMES_SNAPSHOT_BUCKET: 'gamedevpl-games-snapshots'
+      WIF_PROVIDER: 'projects/334141807880/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+      WIF_SERVICE_ACCOUNT: 'github-actions-deployer@gamedevpl.iam.gserviceaccount.com'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Resolve games-repo ref
+        env:
+          DISPATCH_REF: ${{ github.event.client_payload.ref }}
+          DISPATCH_SHA: ${{ github.event.client_payload.sha }}
+          INPUT_REF: ${{ github.event.inputs.ref }}
+        run: |
+          # Payload values come from another repository's workflow, so they are
+          # treated as data: passed through the environment (never interpolated
+          # into the script) and constrained before use.
+          REF="${DISPATCH_REF:-${INPUT_REF:-main}}"
+          case "$REF" in
+            *[!A-Za-z0-9._/-]*)
+              echo "Error: refusing to bake from a ref with unexpected characters"
+              exit 1
+              ;;
+          esac
+          echo "SNAPSHOT_REF=${REF}" >> "$GITHUB_ENV"
+          case "$DISPATCH_SHA" in
+            "" ) ;;
+            *[!0-9a-fA-F]* )
+              echo "::warning::ignoring malformed commit sha in dispatch payload"
+              ;;
+            * ) echo "SNAPSHOT_SHA=${DISPATCH_SHA}" >> "$GITHUB_ENV" ;;
+          esac
+
+      - name: Authenticate to GCP via Workload Identity Federation
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
+
+      - name: Bake and publish the snapshot
+        env:
+          # Same fine-grained PAT the contract check uses: contents:read on the
+          # games repo. The default GITHUB_TOKEN cannot read another repository.
+          GAMES_REPO_TOKEN: ${{ secrets.GAMES_REPO_TOKEN }}
+          GAMES_PUBLISHED_REF: ${{ env.SNAPSHOT_REF }}
+        run: |
+          if [ -z "$GAMES_REPO_TOKEN" ]; then
+            echo "Error: GAMES_REPO_TOKEN secret is required to read the games repo"
+            exit 1
+          fi
+
+          ARGS=(--ref "$SNAPSHOT_REF")
+          if [ -n "${SNAPSHOT_SHA:-}" ]; then
+            ARGS+=(--commit-sha "$SNAPSHOT_SHA")
+          fi
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            ARGS+=(--dry-run)
+          fi
+
+          npm run snapshot:publish -- "${ARGS[@]}"
+
+      - name: Verify the live site serves the new snapshot
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          # A green publish that the site cannot read is the failure mode worth
+          # catching here: the bucket is written by this job but read by Cloud Run
+          # under a different identity, so permissions can be wrong in one
+          # direction only. Serving falls back to GitHub either way, which is
+          # precisely why this would otherwise go unnoticed.
+          BASE_URL="https://www.gamedev.pl"
+          STATUS_CODE=$(curl -s -o /tmp/publish-catalog.json -w "%{http_code}" "${BASE_URL}/api/catalog")
+          if [ "$STATUS_CODE" -ne 200 ]; then
+            echo "::warning::catalog returned ${STATUS_CODE} after publish; snapshot may not be live yet"
+            exit 0
+          fi
+          PLAY_SLUG=$(jq -r '([.[] | select(.status == "published") | .slug] | first) // empty' /tmp/publish-catalog.json)
+          if [ -z "$PLAY_SLUG" ]; then
+            echo "::warning::no published slug to verify"
+            exit 0
+          fi
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${BASE_URL}/api/games/${PLAY_SLUG}")
+          if [ "$STATUS_CODE" -ne 200 ]; then
+            echo "Error: /api/games/${PLAY_SLUG} returned ${STATUS_CODE} after publish"
+            exit 1
+          fi
+          echo "Play route healthy after publish (${PLAY_SLUG})."
