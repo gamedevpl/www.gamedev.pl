@@ -3,12 +3,7 @@ import cookie from '@fastify/cookie';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { OAuth2Client } from 'google-auth-library';
 import { z } from 'zod';
-import {
-  isAccessTokenExpired,
-  looksLikeAccessToken,
-  parseAccessToken,
-  verifyTokenSecret,
-} from './access-token.js';
+import { isAccessTokenExpired, looksLikeAccessToken, parseAccessToken, verifyTokenSecret } from './access-token.js';
 import { readBearerToken } from './bearer.js';
 import { withActiveDay, type Store, type User } from './store.js';
 

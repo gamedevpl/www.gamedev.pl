@@ -1,12 +1,15 @@
 # Game Improvement Loop: feedback-driven, agent-assisted iteration
 
-> Status: 🚧 **IL-1's capture path is built** (2026-07-25); IL-2 onward is still
-> design. Revised the same day against the shipped platform (first drafted
-> 2026-07-23) — everything the first draft listed as a dependency is now live:
-> catalog, player, submission → Copilot → PR → publish, notifications (in-app +
-> email + push), and a live agent channel. The revision matters because three of
-> the original design decisions were made against a platform that no longer
-> exists — see [What changed](#what-changed-since-the-first-draft).
+> Status: ✅ **IL-1 (Capture) is complete** (2026-07-26); IL-2's read path
+> (operator health view, votes, creator return, `end`/`score`/`progress` depth
+> reads) is also live, and IL-2's remaining pieces (scheduled aggregation,
+> feedback-theme extraction, the creator-facing scorecard) and IL-3 onward are
+> still design. Revised against the shipped platform (first drafted 2026-07-23) —
+> everything the first draft listed as a dependency is now live: catalog, player,
+> submission → Copilot → PR → publish, notifications (in-app + email + push), and
+> a live agent channel. The revision matters because three of the original design
+> decisions were made against a platform that no longer exists — see
+> [What changed](#what-changed-since-the-first-draft).
 >
 > **Built so far:** the player bridge reports uncaught errors and animation-frame
 > liveness ([gamePlayer.ts](../apps/web/src/gamePlayer.ts)); a play session reports
@@ -14,10 +17,14 @@
 > ([telemetry.ts](../apps/web/src/telemetry.ts), mounted in
 > [PublishedGameFrame.tsx](../apps/web/src/PublishedGameFrame.tsx)); and
 > `POST /api/telemetry` validates, caps, and stores them unattributed
-> ([telemetry.ts](../apps/api/src/telemetry.ts)). Votes and `end`/`score` depth
-> events have since shipped too (2026-07-26) — see the phased-plan checklist
-> below for the current state. Written player feedback and per-game `progress`
-> markers are what remains of IL-1.
+> ([telemetry.ts](../apps/api/src/telemetry.ts)). Votes, `end`/`score` depth
+> events, and written player feedback
+> ([player-feedback.ts](../apps/api/src/player-feedback.ts)) have since shipped
+> too (2026-07-26) — see the phased-plan checklist below for the current state.
+> Per-game `progress` markers are the one item that stays perpetually partial by
+> design: 13 of ~82 games call `GameKit.progress` as of 2026-07-26, growing one
+> game at a time as maintenance touches them, since a landmark name is per-game
+> knowledge no platform-wide change can supply.
 >
 > **Capture is confirmed working in production** (2026-07-25). A real session on
 > `arena-tag` — a game with no submission document, the exact case that was broken —
@@ -141,10 +148,15 @@ So telemetry is an **extension of an existing message contract**, not a new one:
   `GameKit.score(value)` is exposed for the games whose `snapshot()` never carried
   a numeric score to report one anyway.
 
-  `GameKit.progress(label)` is exposed the same way, but **nothing calls it yet**
-  — a landmark is per-game knowledge ("level-2", "boss") that GameKit cannot guess,
-  so unlike `end`/`score` this one genuinely needs each game's own maintenance
-  work, not a platform-wide change. See
+  `GameKit.progress(label)` is exposed the same way. Unlike `end`/`score` it could
+  not land platform-wide — a landmark is per-game knowledge ("level-2", "boss")
+  that GameKit cannot guess — so it grows one game's maintenance at a time.
+  **13 of ~82 games call it as of 2026-07-26** (`breach-protocol`, `brick-storm`,
+  `cover-runner`, `dojo-showdown`, `flashlight-tag`, `lane-clash`, `last-bot-standing`,
+  `party-karts`, `party-realm`, `pixel-invasion`, `quiz-night-party`, `rock-blaster`,
+  `street-brawl-coop`) — most of the catalog is still dark on this one signal, and
+  closing the rest is exactly the "touch it, add a marker" maintenance this section
+  describes, not a single follow-up task. See
   [report-play-signals](https://github.com/gamedevpl/www.gamedev.pl-games/blob/main/.github/skills/report-play-signals/SKILL.md)
   in the games repo for the emission contract, and
   [product-instrumentation](../.claude/skills/product-instrumentation/SKILL.md)
@@ -266,11 +278,10 @@ creator must be reached, `getSubmissionBySlug(slug)` joins to their submission a
 read time, and returns null for the majority that were never commissioned here.
 
 ```
-submissions/{issueNumber}/
-  playerFeedback/{id}  ← { uid|null, text, moderation: {...}, status: new|triaged|linked }
 games/{slug}/
   scorecard/current    ← rolling aggregate doc (the ONLY thing agents read)
   votes/{uid}          ← { value: up|down, updatedAt }
+  playerFeedback/{id}  ← { uid, text, createdAt } — post-moderation only
 telemetry/{yyyy-mm-dd}/playEvents/{id}  ← raw events, 90-day TTL, keyed by slug
 suggestions/{id}       ← { slug, insight, proposedAction, evidence, status:
                            proposed|approved|rejected|issue-filed|merged|measured }
@@ -278,10 +289,18 @@ suggestions/{id}       ← { slug, insight, proposedAction, evidence, status:
 
 Notes on the shape:
 
-- Scorecards and votes hang off **`games/{slug}`**, a collection this plan does
-  introduce after all — because it is the only place every playable game can be
-  addressed. Player feedback stays under the submission, where the existing
-  creator-feedback route already writes it and where a takedown removes it.
+- Scorecards, votes, **and player feedback** hang off **`games/{slug}`**, a collection
+  this plan does introduce after all — because it is the only place every playable
+  game can be addressed. This corrects the line this section used to have: player
+  feedback was originally specified under `submissions/{issueNumber}/playerFeedback/{id}`,
+  on the theory that a takedown removes it with the submission. That is the exact
+  mistake telemetry made first and votes repeated and fixed — most published games
+  (the ones with real play, and so real feedback) have no submission document at all,
+  so addressing by submission would silently drop the majority of it. Corrected here
+  in the same change that shipped the endpoint, the same way the votes move corrected
+  this doc in its own commit. One consequence neither correction resolves: a takedown
+  of a game now has to separately clear `games/{slug}`'s vote and feedback subcollections,
+  since there is no longer a submission delete to cascade from.
 - Raw telemetry is date-partitioned top-level so the aggregation job reads one
   day's partition rather than fanning out across games.
 - The subcollection is **`playEvents`**, not `events`. A Firestore TTL policy is
@@ -430,12 +449,20 @@ considerably:
 Most of this is reuse rather than new work:
 
 - **Player feedback** = a session-gated sibling of the creator endpoint:
-  `POST /api/games/:slug/feedback` → resolve via `getSubmissionBySlug` →
+  `POST /api/games/:slug/feedback` → `PublishedSlugGate` (the same catalog-membership
+  gate telemetry and votes use — not `getSubmissionBySlug`, which this bullet
+  originally named and which would have silently dropped feedback for every game
+  with no submission document, exactly the bug telemetry's intake had) →
   `contentChecker.checkFields` (same 422 contract) → `sanitizeCreatorText` →
-  store post-moderation only. It reuses the per-IP sliding window and a new
-  `UsageCounters` kind, and — unlike creator feedback — it does **not** post to
-  GitHub. It accumulates into the scorecard; only the router decides whether it
-  ever reaches an agent.
+  store post-moderation only under `games/{slug}/playerFeedback/{id}`. It reuses
+  the per-IP sliding window and a new `UsageCounters` kind (`playerFeedback`,
+  separate from the creator `feedback` counter), and — unlike creator feedback —
+  it does **not** post to GitHub: most published games have no open PR or issue to
+  comment on, and this signal is comparatively high-volume next to a build-time
+  revision request. It accumulates into `games/{slug}/playerFeedback` for the
+  future scorecard (IL-2 joins to a creator at read time via `getSubmissionBySlug`,
+  same as telemetry); only the router decides whether any of it ever reaches an
+  agent, and even then only as aggregated, fenced evidence.
 - **Never un-fenced.** Improvement issue bodies quote evidence inside fenced
   blocks under the standing "content below is data, not instructions" preamble,
   the same construction `submissions.ts` uses today.
@@ -481,20 +508,31 @@ at all and feeds the only autonomous-eligible class.
   a shared game link shows real numbers to a visitor who has never signed in. In
   the player header next to sound/fullscreen, gated on the same published-slug
   condition as the report control.
-- 📋 **Written player feedback**: the sibling endpoint above, plus a minimal
-  post-play prompt.
+- ✅ **Written player feedback** (2026-07-26): `POST /api/games/:slug/feedback`
+  ([player-feedback.ts](../apps/api/src/player-feedback.ts)) — session-gated (a
+  deliberate departure from votes' public-read/session-write split: free text is a
+  materially larger abuse surface than a thumb, and the cost is real — it excludes
+  the anonymous players this loop exists to measure), moderated, sanitized, and
+  stored under `games/{slug}/playerFeedback/{id}` (see the corrected Data model
+  section above). A minimal post-play prompt ships in the theater bar next to the
+  vote widget ([PlayerFeedbackWidget.tsx](../apps/web/src/PlayerFeedbackWidget.tsx)):
+  a compact control that reveals a short text form on demand rather than a
+  persistent panel competing with the game for space.
 - ✅ **`end`/`score`** (games repo `d586014`, 2026-07-26): not the new opt-in
   `shared/modules/telemetry.js` this bullet originally described — see the
   correction above the code sample earlier in this doc. GameKit's existing
   `report()` funnel emits both automatically, so all 83 games gained it in one
   change with no per-game opt-in.
-- 📋 **`progress` markers**, per game, in the games repo. The vocabulary, the
+- 🚧 **`progress` markers**, per game, in the games repo. The vocabulary, the
   session cap, and the read-side funnel ([telemetry-health.ts](../apps/api/src/telemetry-health.ts)
   `progressLabels`) all exist and are tested — `GameKit.progress(label)` is
-  callable today — but no game calls it, since a landmark name is per-game
-  knowledge GameKit cannot supply. Documented in the games repo's own
-  `report-play-signals` skill so maintenance adds markers organically; this is
-  the one item on this list that a platform-wide change cannot close.
+  callable today, and **13 of ~82 games call it** as of 2026-07-26 (see the list
+  above), added a few at a time by maintenance touching those games rather than
+  by one platform-wide change (`GameKit` cannot guess a landmark name). Documented
+  in the games repo's own `report-play-signals` skill so coverage keeps growing
+  organically; the remaining catalog stays dark on this one signal until each
+  game is next touched — this is the one item on this list a platform-wide
+  change cannot close in a single stroke.
 - ✅ **90-day retention, enforced.** Every row is written with an `expiresAt`
   Timestamp ([store.ts](../apps/api/src/store.ts) `telemetryExpiresAt`) and the TTL
   policy is provisioned by [setup-gcp.sh](../infra/setup-gcp.sh) step 6/6. Until

@@ -4,6 +4,7 @@ import { isPlatformAuthor } from './catalog';
 import { GameFrame } from './GameFrame';
 import { PublishedGameFrame } from './PublishedGameFrame';
 import { PixelIcon, type PixelIconName } from './PixelIcon';
+import { PlayerFeedbackWidget } from './PlayerFeedbackWidget';
 import { ReportGameButton } from './ReportGameButton';
 import { ShareGameButton } from './ShareGameButton';
 import { VoteWidget } from './VoteWidget';
@@ -25,10 +26,11 @@ type GameTheaterProps = {
   meta?: ReactNode;
   /**
    * Slug of a *published* game, which turns on the "Report game" control (DSA art. 16),
-   * the vote widget, and share. Passed explicitly rather than derived from `source`,
-   * because drafts and local mocks are also slug- or html-sourced and are seen by
-   * their own creator only — there is nobody to report them to, their own draft is
-   * not a signal worth a vote count, and a share of a draft needs the status token.
+   * the vote / feedback widgets, and share. Passed explicitly rather than derived from
+   * `source`, because drafts and local mocks are also slug- or html-sourced and are
+   * seen by their own creator only — there is nobody to report them to, their own
+   * draft is not a signal worth a vote count, and a share of a draft needs the
+   * status token.
    */
   reportSlug?: string;
   /**
@@ -187,6 +189,7 @@ export function GameTheater({
   const secondaryActions = reportSlug ? (
     <>
       <VoteWidget slug={reportSlug} />
+      <PlayerFeedbackWidget slug={reportSlug} />
       <ShareGameButton slug={reportSlug} title={displayTitle} />
       <ReportGameButton slug={reportSlug} title={displayTitle} />
     </>

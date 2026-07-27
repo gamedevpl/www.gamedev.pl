@@ -101,6 +101,16 @@
       "signInToVote": "Sign in to vote",
       "signInTitle": "Sign in to vote",
       "signInSubtitle": "Votes are tied to your account, so each person gets one per game."
+    },
+    "feedback": {
+      "action": "Leave feedback",
+      "signInToLeave": "Sign in to leave feedback",
+      "placeholder": "What worked, what didn't, where did you get stuck…",
+      "submit": "Send feedback",
+      "sending": "Sending…",
+      "sent": "Thanks — your feedback was received.",
+      "quota": "You've sent a lot of feedback today — please try again tomorrow.",
+      "error": "We couldn't send that right now. Please try again in a moment."
     }
   },
   "catalog": {

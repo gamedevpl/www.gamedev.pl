@@ -101,6 +101,16 @@
       "signInToVote": "Zaloguj się, aby zagłosować",
       "signInTitle": "Zaloguj się, aby zagłosować",
       "signInSubtitle": "Głosy są powiązane z kontem, więc każda osoba ma jeden głos na grę."
+    },
+    "feedback": {
+      "action": "Zostaw opinię",
+      "signInToLeave": "Zaloguj się, aby zostawić opinię",
+      "placeholder": "Co działało, co nie, gdzie utknąłeś…",
+      "submit": "Wyślij opinię",
+      "sending": "Wysyłanie…",
+      "sent": "Dzięki — otrzymaliśmy Twoją opinię.",
+      "quota": "Wysłałeś dziś dużo opinii — spróbuj ponownie jutro.",
+      "error": "Nie udało się teraz tego wysłać. Spróbuj ponownie za chwilę."
     }
   },
   "catalog": {

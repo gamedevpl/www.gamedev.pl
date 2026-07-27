@@ -15,6 +15,7 @@ import { createDefaultContentChecker, type ContentChecker } from './moderation.j
 import { registerEmailRoutes } from './email-routes.js';
 import { registerMultiplayerRoutes, type MultiplayerRoutesOptions } from './mp.js';
 import { registerNotificationRoutes } from './notifications.js';
+import { registerPlayerFeedbackRoutes, type PlayerFeedbackRoutesOptions } from './player-feedback.js';
 import { registerPushRoutes } from './push-routes.js';
 import { registerRefineRoute, type SpecRefiner } from './refine.js';
 import { InMemoryStore, type Store } from './store.js';
@@ -47,6 +48,8 @@ export interface BuildAppOptions {
   telemetryRoutes?: Omit<TelemetryRoutesOptions, 'store'>;
   /** Seams for game votes; defaults to a live catalog-backed slug gate. */
   voteRoutes?: Omit<VoteRoutesOptions, 'store'>;
+  /** Seams for written player feedback; defaults to a live catalog-backed slug gate. */
+  playerFeedbackRoutes?: Omit<PlayerFeedbackRoutesOptions, 'store' | 'contentChecker'>;
   // Private beta allowlist — uids (comma-separated) allowed to sign in and access gated routes
   betaAllowedUids?: string;
   // Private beta allowlist — Google-verified emails (comma-separated, case-insensitive)
@@ -164,9 +167,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // request.user, records nothing identifying, and drops events for slugs that are not
   // published games.
   //
-  // One env-derived gate is shared by telemetry and votes: both ask the same question
-  // ("is this a published catalog slug?") and must not drift. Call-site overrides still
-  // win via the spreads below.
+  // One env-derived gate is shared by telemetry, votes, and written feedback: all
+  // three ask the same question ("is this a published catalog slug?") and must not
+  // drift. Call-site overrides still win via the spreads below.
   const envPublishedSlugs = await createPublishedSlugGateFromEnv();
   await registerTelemetryRoutes(app, {
     store,
@@ -192,6 +195,18 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     store,
     publishedSlugs: envPublishedSlugs,
     ...options.voteRoutes,
+  });
+
+  // Written player feedback (docs/improvement-loop-plan.md, signal source #1). Keyed
+  // by slug and gated the same way votes are; unlike votes it requires a session to
+  // even read the tradeoff (there is no public read here — feedback has no public
+  // aggregate view yet, that's IL-2's scorecard). See player-feedback.ts for why it
+  // needs a session and why, unlike creator feedback, it never touches GitHub.
+  await registerPlayerFeedbackRoutes(app, {
+    store,
+    contentChecker,
+    publishedSlugs: envPublishedSlugs,
+    ...options.playerFeedbackRoutes,
   });
 
   // Operator reads over that telemetry. Separate allowlist from the beta one: being
