@@ -134,12 +134,14 @@ validation gate so it guards published bundles.
 
 ## Open questions
 
-- **Where are published bundles hosted?** Today the app reads the private games
-  repo through its authenticated API. `GET /api/catalog` exposes catalog
-  metadata, `GET /api/games/:slug` serves assembled sandbox content, and
-  `GET /api/games/:slug/media/:filename` proxies only metadata-listed gallery
-  images/videos. A separate bucket/CDN remains an optimization if the catalog
-  outgrows this delivery shape.
+- ~~**Where are published bundles hosted?**~~ **Resolved: a Cloud Storage snapshot,
+  with GitHub as fallback.** Merges to the games repo bake catalog, assembled HTML,
+  and media into `gs://…-games-snapshots`; the API prefers that snapshot on
+  `GET /api/catalog`, `GET /api/games/:slug`, and media routes, and falls back to
+  live GitHub reads (plus on-demand assemble) when the bucket is unset, a game
+  failed to bake, or Storage is down. PR / draft previews still read GitHub live.
+  The API remains the games origin — the bucket is not public. Details:
+  [`games-snapshot.md`](./games-snapshot.md).
 - **Repository ownership and merge authority.** Agent PRs need a human gate initially,
   especially because review is also the moderation point.
 - **Submission identity, attribution, rights, and abuse controls.** These must be decided before
