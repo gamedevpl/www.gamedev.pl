@@ -156,6 +156,27 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
   and adds its landmarks (see the games repo's `report-play-signals` skill), so most of
   the catalog stays dark on this signal indefinitely — that is expected, not a bug to fix
   in one pass.
+- ~~Nothing aggregates per-game signals durably~~ — **closed 2026-07-27**: a nightly
+  Cloud Scheduler sweep (`POST /api/internal/scorecard-sweep`,
+  [scorecard.ts](../../../apps/api/src/scorecard.ts)) writes
+  `games/{slug}/scorecard/current` from a 28-day telemetry window plus vote and feedback
+  counts. **This doc is the only thing IL-3's agents are permitted to read**, which makes
+  two of its properties load-bearing for anything added to it later:
+  - **Game-supplied strings live under `untrusted`, never beside the numbers.**
+    `errorSamples[].message` and `progressLabels[].label` are chosen by a game inside the
+    sandbox. Quarantining them structurally (rather than by comment) means a prompt built
+    by destructuring the scorecard cannot pick one up by accident, and a test asserts no
+    such string is reachable elsewhere in the doc. **Any new attacker-controlled field
+    belongs in `untrusted` too** — that is the rule, not a one-off.
+  - **`null` is "no evidence"; `0` is "measured zero".** The operator page renders `—` for
+    the same distinction; the scorecard encodes it in the data, because an agent acts on
+    the value rather than reading a dash next to it. `finishRate` is null when a game
+    emitted no endings at all.
+  - Scorecards carry a feedback **count** and no text. Text arrives with the theme
+    extraction that summarizes it, not before — the moment raw text lands here it is on
+    the path to an agent.
+  - No TTL, deliberately: retention is a promise about raw play rows, and an aggregate is
+    what is meant to outlive them. Do **not** add this group to the TTL loop.
 - **Build economics are duration-only** — submission→publish timestamps and build events
   exist; revision-cycle counts are derivable; keep it that way as builds evolve.
 

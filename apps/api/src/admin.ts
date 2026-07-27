@@ -1,6 +1,12 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { recentPartitions, summarizeGameHealth, type GameHealth } from './telemetry-health.js';
+import {
+  recentPartitions,
+  scanPartitions,
+  summarizeGameHealth,
+  type GameHealth,
+  type PartitionScanBudget,
+} from './telemetry-health.js';
 import { summarizeVisitFunnel, type VisitFunnel } from './visit-funnel.js';
 import { summarizeCreatorMetrics, type CreatorMetrics } from './creator-metrics.js';
 import { BOT_UID_PREFIX, type Store, type TelemetryEvent, type User, type VisitEvent } from './store.js';
@@ -99,40 +105,12 @@ export function isAdminSession(request: FastifyRequest, adminUids: Set<string> |
 }
 
 /**
- * Reads a window of daily partitions under one shared document budget.
- *
- * Both telemetry streams need the identical walk — newest day first, per-day cap, and a
- * total cap so the widest window (exactly the one someone reaches for when something
- * looks wrong) cannot turn one click into tens of thousands of reads. Sharing it means
- * the two views cannot drift into reporting truncation differently.
+ * This page's read budget. The walk itself lives in telemetry-health.ts, shared with the
+ * scorecard sweep so an operator's numbers and an agent's cannot disagree about what
+ * "truncated" means; only the ceiling differs, because a click and a nightly batch are
+ * paying for different things.
  */
-async function scanPartitions<T>(
-  days: string[],
-  read: (dateStr: string, limit: number) => Promise<T[]>,
-): Promise<{ events: T[]; scanned: string[]; truncated: boolean }> {
-  const events: T[] = [];
-  const scanned: string[] = [];
-  let truncated = false;
-
-  for (const dateStr of days) {
-    const remaining = MAX_EVENTS_PER_REQUEST - events.length;
-    if (remaining <= 0) {
-      // Out of budget with days still unread: the window really scanned is narrower
-      // than the one asked for, and `days` reports the narrower one so the range shown
-      // to the reader is never wider than the range measured.
-      truncated = true;
-      break;
-    }
-    const limit = Math.min(MAX_EVENTS_PER_DAY, remaining);
-    const dayEvents = await read(dateStr, limit);
-    // A day at its cap means events were left unread, so every count is a floor.
-    if (dayEvents.length >= limit) truncated = true;
-    events.push(...dayEvents);
-    scanned.push(dateStr);
-  }
-
-  return { events, scanned, truncated };
-}
+const REQUEST_BUDGET: PartitionScanBudget = { perDay: MAX_EVENTS_PER_DAY, total: MAX_EVENTS_PER_REQUEST };
 
 export async function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOptions): Promise<void> {
   const { store, adminUids } = options;
@@ -154,8 +132,10 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
     // Newest day first, so exhausting the budget drops the oldest history rather than
     // the data most likely to be asked about.
     const requested = recentPartitions(parsed.data.days ?? DEFAULT_DAYS, now());
-    const { events, scanned, truncated } = await scanPartitions<TelemetryEvent>(requested, (dateStr, limit) =>
-      store.listTelemetryEvents(dateStr, { limit }),
+    const { events, scanned, truncated } = await scanPartitions<TelemetryEvent>(
+      requested,
+      REQUEST_BUDGET,
+      (dateStr, limit) => store.listTelemetryEvents(dateStr, { limit }),
     );
 
     const body: HealthResponse = { days: scanned, truncated, games: summarizeGameHealth(events) };
@@ -181,8 +161,10 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
     }
 
     const requested = recentPartitions(parsed.data.days ?? DEFAULT_DAYS, now());
-    const { events, scanned, truncated } = await scanPartitions<VisitEvent>(requested, (dateStr, limit) =>
-      store.listVisitEvents(dateStr, { limit }),
+    const { events, scanned, truncated } = await scanPartitions<VisitEvent>(
+      requested,
+      REQUEST_BUDGET,
+      (dateStr, limit) => store.listVisitEvents(dateStr, { limit }),
     );
 
     const body: VisitsResponse = { days: scanned, truncated, funnel: summarizeVisitFunnel(events) };

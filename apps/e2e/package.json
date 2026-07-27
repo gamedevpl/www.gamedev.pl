@@ -1,0 +1,17 @@
+{
+  "name": "@gamedevpl/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "// scripts": "Deliberately no `test` script: `npm run test` at the root fans out with --workspaces, and this suite drives a browser against a real deployment. Picked up there it would put every local test run on the network, stretch 16s into minutes, and fail whenever the deployed site lags the working tree. Run it explicitly: npm run e2e.",
+  "scripts": {
+    "e2e": "vitest run",
+    "type-check": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.15",
+    "playwright-core": "^1.56.1",
+    "typescript": "^5.5.4",
+    "vitest": "^3.2.7"
+  }
+}

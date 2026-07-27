@@ -578,10 +578,55 @@ at all and feeds the only autonomous-eligible class.
   deeper reason it is safe to expose is that the data has no player identity in it to
   leak — not redacted at read time, never written at all.
 
-- Daily aggregation job (Cloud Scheduler → internal endpoint, same pattern as
-  the notify sweep) → `scorecard/current`.
-- Feedback theme extraction through the genai seam.
-- Scorecard panel on the game dashboard; digest notification type + weekly batch.
+- ✅ **Daily aggregation job** (2026-07-27): `POST /api/internal/scorecard-sweep`
+  ([scorecard.ts](../apps/api/src/scorecard.ts)), Cloud Scheduler → OIDC internal
+  endpoint, the same pattern as the notify sweep. Rolls a 28-day telemetry window plus
+  vote and feedback counts into `games/{slug}/scorecard/current`.
+
+  Three decisions worth keeping:
+
+  - **Attacker-controlled strings are quarantined under `untrusted`**, not placed beside
+    the numbers. The scorecard is the one doc IL-3 reads, and `errorSamples[].message`
+    and `progressLabels[].label` are strings a game chose. A comment saying "do not
+    interpolate these" has to be read to work; a field that must be typed out as
+    `card.untrusted.errorSamples` has to be _reached for_ to be misused. A test asserts
+    no such string is reachable anywhere else in the doc.
+  - **`null` means no evidence; `0` means measured zero.** `summarizeGameHealth` reports
+    `finishRate: 0` for a game that emitted no endings, which reads as "nobody finishes
+    this" when it means "this game never says". The scorecard makes that explicit, since
+    it is the value an agent acts on rather than one a human reads next to a `—`.
+  - **Scored only for games with evidence in the window.** A game nobody opened gets no
+    scorecard rather than a page of zeros — the same "absence of evidence" rule. The
+    accepted cost is that a game with votes but no recent plays gets none either.
+
+  The window scan shares `scanPartitions` with the operator page (in
+  [telemetry-health.ts](../apps/api/src/telemetry-health.ts)) so a number shown to a human
+  and the same number written into a scorecard cannot disagree about what `truncated`
+  means; only the budget differs, since a nightly batch and an interactive click are
+  paying for different things.
+
+  Provisioning (the audience is the endpoint URL, so this sweep needs **its own**
+  `SCORECARD_SWEEP_AUDIENCE` — a token minted for the notify sweep is correctly rejected
+  here, and vice versa; the scheduler service account is shared):
+
+  ```bash
+  SWEEP_URL="$(gcloud run services describe gamedev-app --region europe-west1 \
+    --project gamedevpl --format 'value(status.url)')/api/internal/scorecard-sweep"
+  SA=notify-sweep@gamedevpl.iam.gserviceaccount.com
+  # Redeploy with SCORECARD_SWEEP_AUDIENCE="$SWEEP_URL" set (NOTIFY_SWEEP_SA already is), then:
+  gcloud scheduler jobs create http scorecard-sweep --location europe-west1 --project gamedevpl \
+    --schedule '20 3 * * *' --uri "$SWEEP_URL" --http-method POST \
+    --oidc-service-account-email "$SA" --oidc-token-audience "$SWEEP_URL"
+  ```
+
+  Until that job and env var exist the endpoint is present and **closed** — the verifier
+  denies everything when its audience is unset, so an unconfigured deploy cannot be swept
+  by anyone.
+
+- 📋 Feedback theme extraction through the genai seam. Note the scorecard deliberately
+  carries a feedback **count** and no text today: the moment text lands in this doc it is
+  on the path to an agent, so it arrives with the theme pass that summarizes it, not before.
+- 📋 Scorecard panel on the game dashboard; digest notification type + weekly batch.
 - Exit: a creator can answer "is my game working, where do players drop off,
   what do they say" without any agent involvement.
 

@@ -34,7 +34,42 @@ Deployments to Cloud Run are triggered on push to `master`:
 3. **Cloud Build Image Creation:** Submits image build using `infra/cloudbuild.yaml` to Artifact Registry. The WIF deployer service account must also have `roles/serviceusage.serviceUsageConsumer` and storage access for the default Cloud Build staging bucket; `infra/setup-wif.sh` grants both.
 4. **Staging / Candidate Revision:** Deploys revision to Cloud Run with `--no-traffic --tag candidate`.
 5. **Candidate Smoke Test:** Anonymous checks (health, shell, public catalog/play, walls hold, forged bearer token rejected) plus an **authenticated smoke** when the `GAMEDEV_ACCESS_TOKEN` repo secret exists — bearer auth, token→cookie exchange, and a session-walled route, run as the CI bot (see [`agent-access-tokens.md`](./agent-access-tokens.md)). Skips loudly when the secret is absent.
-6. **Traffic Promotion & Tag Cleanup:** Promotes traffic to the latest revision (`--to-latest`) and removes the candidate tag (`--remove-tags candidate`) only if the smoke test succeeds.
+6. **Browser gate (`apps/e2e`):** Drives real Chromium against the candidate and asserts the site works where HTTP checks cannot see — most importantly that **published games actually run**. See below for why this blocks.
+7. **Traffic Promotion & Tag Cleanup:** Promotes traffic to the latest revision (`--to-latest`) and removes the candidate tag (`--remove-tags candidate`) only if **both** the curl smoke checks and the browser gate succeed.
+
+### Why the browser gate blocks a deploy
+
+Playable games are the product; a site that loads but plays nothing is worth nothing. Every
+other check stops at HTTP, so play can be completely broken while the deploy is green:
+proving `/api/games/<slug>` returns HTML says nothing about whether that HTML _runs_. A CSP
+header, a sandbox change, a bundle regression or a broken assembler each return a healthy
+200 and a black screen.
+
+The one thing that must not block is a single badly-written game — those live in a separate,
+agent-maintained repo and change independently of this one. So `games-playable.test.ts`
+samples several single-player games and decides by breadth:
+
+| Sample result        | Meaning                      | Outcome                                 |
+| -------------------- | ---------------------------- | --------------------------------------- |
+| most games fail      | the deploy broke play        | **blocks promotion**                    |
+| exactly one fails    | that game is broken          | `::warning::`, ships                    |
+| only one game exists | no warn path to fall back on | its failure **blocks** — it is the site |
+
+Liveness is _change_, not brightness: the canvas is read in-frame and digested, so a sprite
+moving across a uniform background still counts as alive, and a dark palette is not mistaken
+for a black screen. A game that never moves on its own is poked with input before being
+called frozen. The sandbox invariant (`allow-scripts`, never `allow-same-origin`) is asserted
+on every sampled game's rendered frame — something jsdom unit tests cannot do.
+
+Locally, the suite skips without a token or a browser — a contributor should not get
+failures they cannot act on. **In CI that would be the worst outcome**: a skipped suite
+exits 0 and the deploy promotes having verified nothing. So the workflow sets
+`E2E_REQUIRED=1`, and `gate-prerequisites.test.ts` (which never skips) turns an unusable
+environment into a failed deploy. It also pins `PLAYWRIGHT_BROWSERS_PATH` for both the
+install and the run: unpinned, `playwright install` writes to `~/.cache/ms-playwright`
+while the suite looks in `/opt/pw-browsers`, and the gate skips itself into uselessness.
+
+Run it yourself against anything: `E2E_BASE_URL=https://www.gamedev.pl npm run e2e`.
 
 ## Secrets & access (current live state)
 

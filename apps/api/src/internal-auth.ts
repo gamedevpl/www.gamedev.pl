@@ -50,11 +50,34 @@ export class DenyAllInternalAuthVerifier implements InternalAuthVerifier {
 }
 
 /**
- * Build the internal-auth verifier from env: OIDC when both NOTIFY_SWEEP_AUDIENCE
- * and NOTIFY_SWEEP_SA are set, otherwise deny-all (endpoint present but closed).
+ * Which internal endpoint a verifier is for.
+ *
+ * There is one env var per sweep because **the audience is the endpoint's own URL** —
+ * Cloud Scheduler mints a token for the exact URL it calls, so a verifier built for the
+ * notify sweep rejects a token minted for the scorecard sweep and vice versa. That is
+ * the property worth having: a token intercepted from one job cannot be replayed against
+ * the other. The service account is shared (one scheduler identity), so only the
+ * audience differs.
  */
-export function createInternalAuthVerifierFromEnv(env: NodeJS.ProcessEnv = process.env): InternalAuthVerifier {
-  const audience = env.NOTIFY_SWEEP_AUDIENCE?.trim();
+const AUDIENCE_ENV_VAR = {
+  notifySweep: 'NOTIFY_SWEEP_AUDIENCE',
+  scorecardSweep: 'SCORECARD_SWEEP_AUDIENCE',
+} as const;
+
+export type InternalSweep = keyof typeof AUDIENCE_ENV_VAR;
+
+/**
+ * Build the internal-auth verifier from env: OIDC when both the sweep's audience and
+ * NOTIFY_SWEEP_SA are set, otherwise deny-all (endpoint present but closed).
+ *
+ * Fails closed per sweep rather than globally: configuring the notify sweep must not
+ * silently open the scorecard sweep to a token minted for a different URL.
+ */
+export function createInternalAuthVerifierFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  sweep: InternalSweep = 'notifySweep',
+): InternalAuthVerifier {
+  const audience = env[AUDIENCE_ENV_VAR[sweep]]?.trim();
   const serviceAccountEmail = env.NOTIFY_SWEEP_SA?.trim();
   if (audience && serviceAccountEmail) {
     return new OidcInternalAuthVerifier({ audience, serviceAccountEmail });

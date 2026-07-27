@@ -17,6 +17,8 @@ import { registerMultiplayerRoutes, type MultiplayerRoutesOptions } from './mp.j
 import { registerNotificationRoutes } from './notifications.js';
 import { registerPlayerFeedbackRoutes, type PlayerFeedbackRoutesOptions } from './player-feedback.js';
 import { registerPushRoutes } from './push-routes.js';
+import { registerScorecardRoutes, type ScorecardRoutesOptions } from './scorecard.js';
+import { createInternalAuthVerifierFromEnv } from './internal-auth.js';
 import { registerRefineRoute, type SpecRefiner } from './refine.js';
 import { InMemoryStore, type Store } from './store.js';
 import { registerSubmissionRoutes, type SubmissionRoutesOptions } from './submissions.js';
@@ -50,6 +52,8 @@ export interface BuildAppOptions {
   voteRoutes?: Omit<VoteRoutesOptions, 'store'>;
   /** Seams for written player feedback; defaults to a live catalog-backed slug gate. */
   playerFeedbackRoutes?: Omit<PlayerFeedbackRoutesOptions, 'store' | 'contentChecker'>;
+  /** Seams for the nightly scorecard sweep; defaults to OIDC-or-deny-all from env. */
+  scorecardRoutes?: Partial<Omit<ScorecardRoutesOptions, 'store'>>;
   // Private beta allowlist — uids (comma-separated) allowed to sign in and access gated routes
   betaAllowedUids?: string;
   // Private beta allowlist — Google-verified emails (comma-separated, case-insensitive)
@@ -214,6 +218,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // numbers. Unset means the route admits nobody, which is the right default for a
   // surface whose whole purpose is seeing across other people's games.
   await registerAdminRoutes(app, { store, adminUids });
+
+  // The nightly Distill step (docs/improvement-loop-plan.md IL-2): rolls the telemetry
+  // window plus vote/feedback counts into one scorecard per game. Authenticated by the
+  // scheduler's OIDC token in the handler — the beta wall already exempts /api/internal/,
+  // which is why the verifier and not the wall is what protects it.
+  await registerScorecardRoutes(app, {
+    store,
+    internalAuthVerifier: createInternalAuthVerifierFromEnv(process.env, 'scorecardSweep'),
+    ...options.scorecardRoutes,
+  });
 
   // Issuing personal access tokens (docs/agent-access-tokens.md) — the credential that
   // lets a coding agent in a cloud VM authenticate as a real account without a browser,

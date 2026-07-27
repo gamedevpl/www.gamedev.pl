@@ -131,7 +131,7 @@ jobs:
             --min-instances 0 \
             --max-instances 1 \
             --port 8080 \
-            --set-env-vars "^|^GAMES_REPO=${GAMES_REPO}|GOOGLE_OAUTH_CLIENT_ID=${{ vars.GOOGLE_OAUTH_CLIENT_ID }}|WEB_ORIGIN=https://gamedev-app-334141807880.europe-west1.run.app,https://www.gamedev.pl,https://gamedev.pl|CANONICAL_HOST=www.gamedev.pl|PRIVATE_BETA=true|BETA_ALLOWED_UIDS=${{ vars.BETA_ALLOWED_UIDS }}|BETA_ALLOWED_EMAILS=${{ vars.BETA_ALLOWED_EMAILS }}|ADMIN_UIDS=${{ vars.ADMIN_UIDS }}|NOTIFY_SWEEP_AUDIENCE=${{ vars.NOTIFY_SWEEP_AUDIENCE }}|NOTIFY_SWEEP_SA=${{ vars.NOTIFY_SWEEP_SA }}|VAPID_PUBLIC_KEY=${{ vars.VAPID_PUBLIC_KEY }}|VAPID_SUBJECT=${{ vars.VAPID_SUBJECT }}" \
+            --set-env-vars "^|^GAMES_REPO=${GAMES_REPO}|GOOGLE_OAUTH_CLIENT_ID=${{ vars.GOOGLE_OAUTH_CLIENT_ID }}|WEB_ORIGIN=https://gamedev-app-334141807880.europe-west1.run.app,https://www.gamedev.pl,https://gamedev.pl|CANONICAL_HOST=www.gamedev.pl|PRIVATE_BETA=true|BETA_ALLOWED_UIDS=${{ vars.BETA_ALLOWED_UIDS }}|BETA_ALLOWED_EMAILS=${{ vars.BETA_ALLOWED_EMAILS }}|ADMIN_UIDS=${{ vars.ADMIN_UIDS }}|NOTIFY_SWEEP_AUDIENCE=${{ vars.NOTIFY_SWEEP_AUDIENCE }}|NOTIFY_SWEEP_SA=${{ vars.NOTIFY_SWEEP_SA }}|SCORECARD_SWEEP_AUDIENCE=${{ vars.SCORECARD_SWEEP_AUDIENCE }}|VAPID_PUBLIC_KEY=${{ vars.VAPID_PUBLIC_KEY }}|VAPID_SUBJECT=${{ vars.VAPID_SUBJECT }}" \
             "${SECRET_FLAGS[@]}"
 
       - name: Smoke test candidate revision
@@ -305,6 +305,58 @@ jobs:
           fi
 
           echo "Authenticated smoke passed as ${UID_VALUE}: bearer auth, cookie exchange, and the session wall all live."
+
+      # The browser gate. Everything above stops at HTTP, so play can be completely broken
+      # while every check is green: `/api/games/<slug>` returning HTML says nothing about
+      # whether that HTML runs. A CSP header, a sandbox change, a bundle regression or a
+      # broken assembler each return a healthy 200 and a black screen — and a site without
+      # playable games is worth nothing (apps/e2e, docs/deployment.md).
+      #
+      # `deploy` is a separate job from `ci-gate`, on a fresh runner with no node_modules —
+      # everything before this point is gcloud and curl — so Node is set up here.
+      - name: Set up Node for the browser gate
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install workspace dependencies
+        run: npm ci
+
+      # PLAYWRIGHT_BROWSERS_PATH must be set for BOTH steps and must match: `install`
+      # writes to ~/.cache/ms-playwright by default, while the suite's findChromium()
+      # searches PLAYWRIGHT_BROWSERS_PATH (default /opt/pw-browsers). Unpinned, the
+      # browser lands where the suite never looks, every suite skips, and the job exits 0
+      # having verified nothing — a green deploy behind a gate that never ran.
+      # `npx playwright install` resolves the *latest* playwright CLI — the workspace has
+      # playwright-core, which ships no CLI — so the directory layout it produces is not
+      # something to assume. findChromium()'s `chromium-<build>/chrome-linux/chrome` guess
+      # missed it on the first real run and the gate refused to run at all. Locate the
+      # binary that was actually installed and hand it over explicitly; E2E_CHROMIUM_PATH
+      # takes priority over every heuristic in findChromium().
+      - name: Install Chromium
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/pw-browsers
+        run: |
+          npx playwright install --with-deps chromium
+
+          BIN=$(find "$PLAYWRIGHT_BROWSERS_PATH" -type f -name chrome -perm -u+x 2>/dev/null | sort | tail -1)
+          if [ -z "$BIN" ]; then
+            echo "::error::no chromium binary under $PLAYWRIGHT_BROWSERS_PATH — layout below"
+            find "$PLAYWRIGHT_BROWSERS_PATH" -maxdepth 3 | head -50
+            exit 1
+          fi
+          echo "Chromium: $BIN"
+          echo "E2E_CHROMIUM_PATH=$BIN" >> "$GITHUB_ENV"
+
+      - name: Browser gate against the candidate
+        env:
+          E2E_BASE_URL: ${{ env.CANDIDATE_URL }}
+          GAMEDEV_ACCESS_TOKEN: ${{ secrets.GAMEDEV_ACCESS_TOKEN }}
+          # Turns "cannot run" into a failed deploy instead of a silent skip
+          # (apps/e2e/src/gate-prerequisites.test.ts).
+          E2E_REQUIRED: '1'
+        run: npm run e2e
 
       - name: Promote candidate revision to 100% traffic
         run: |
