@@ -13,16 +13,7 @@ import { useId, type ReactElement, type ReactNode } from 'react';
 import { MASCOT_IDLE_SPANS, MASCOT_SOLID_SPANS } from './mascotSpans.js';
 
 export type MascotEmotion =
-  | 'idle'
-  | 'happy'
-  | 'curious'
-  | 'thinking'
-  | 'excited'
-  | 'confused'
-  | 'sad'
-  | 'proud'
-  | 'wave'
-  | 'busy';
+  'idle' | 'happy' | 'curious' | 'thinking' | 'excited' | 'confused' | 'sad' | 'proud' | 'wave' | 'busy';
 
 type MascotProps = {
   emotion?: MascotEmotion;
@@ -33,8 +24,21 @@ type MascotProps = {
   staticPose?: boolean;
 };
 
-function spansToRects(spans: ReadonlyArray<readonly [number, number, number]>, keyPrefix: string): ReactElement[] {
-  return spans.map(([x, y, width], i) => <rect key={`${keyPrefix}-${i}`} x={x} y={y} width={width} height={1} />);
+/**
+ * Flatten the pixel spans into ONE path rather than one `<rect>` per span.
+ *
+ * Separate rects are composited separately, so an antialiasing renderer gives each
+ * 1px-tall rect a soft top and bottom edge. Two neighbours each contributing partial
+ * coverage at their shared boundary does not add up to full coverage, so a seam shows
+ * on every row — as horizontal banding on the body, and as speckle once the browser
+ * downscales it. Inside a single path those interior edges cancel during the one
+ * coverage pass, and the shape fills solid.
+ *
+ * This matters most in the emotion mask, where the banding became holes in the mask
+ * itself. Each span is emitted as its own closed subpath.
+ */
+function spansToPath(spans: ReadonlyArray<readonly [number, number, number]>): string {
+  return spans.map(([x, y, width]) => `M${x} ${y}h${width}v1h${-width}Z`).join('');
 }
 
 function eyeSlits(
@@ -98,6 +102,10 @@ const MOUTH_CURIOUS =
 const MOUTH_BUSY =
   'M20 13 L25 20 L30 12 L35 21 L40 11 L45 21 L50 13 L50 32 L45 26 L40 34 L35 25 L30 33 L25 26 L20 31 Z';
 
+// Built once at module load — the spans never change.
+const IDLE_PATH = spansToPath(MASCOT_IDLE_SPANS);
+const SOLID_PATH = spansToPath(MASCOT_SOLID_SPANS);
+
 function cutoutsFor(emotion: MascotEmotion): ReactElement | null {
   switch (emotion) {
     case 'idle':
@@ -143,20 +151,14 @@ function cutoutsFor(emotion: MascotEmotion): ReactElement | null {
     case 'confused':
       return (
         <>
-          {eyeSlits(
-            { cx: 33, cy: 4.2, rot: -36, rx: 2.1, ry: 1.5 },
-            { cx: 43, cy: 6.5, rot: 18, rx: 2.7, ry: 1.25 },
-          )}
+          {eyeSlits({ cx: 33, cy: 4.2, rot: -36, rx: 2.1, ry: 1.5 }, { cx: 43, cy: 6.5, rot: 18, rx: 2.7, ry: 1.25 })}
           <path className="mascot__mouth" d={MOUTH_CONFUSED} />
         </>
       );
     case 'sad':
       return (
         <>
-          {eyeSlits(
-            { cx: 34, cy: 6.2, rot: 22, rx: 2.3, ry: 1.1 },
-            { cx: 42, cy: 6.2, rot: -22, rx: 2.3, ry: 1.1 },
-          )}
+          {eyeSlits({ cx: 34, cy: 6.2, rot: 22, rx: 2.3, ry: 1.1 }, { cx: 42, cy: 6.2, rot: -22, rx: 2.3, ry: 1.1 })}
           <path className="mascot__mouth" d={MOUTH_SAD} />
         </>
       );
@@ -189,13 +191,7 @@ function BlinkLids() {
   );
 }
 
-export function Mascot({
-  emotion = 'idle',
-  size = 48,
-  className,
-  title,
-  staticPose = false,
-}: MascotProps) {
+export function Mascot({ emotion = 'idle', size = 48, className, title, staticPose = false }: MascotProps) {
   const reactId = useId().replace(/:/g, '');
   const maskId = `mascot-mask-${reactId}`;
   const height = Math.round((size * 60) / 70);
@@ -223,13 +219,13 @@ export function Mascot({
       <g className="mascot__body-group">
         {isIdle ? (
           <g className="mascot__pixels" fill="currentColor">
-            {spansToRects(MASCOT_IDLE_SPANS, 'idle')}
+            <path d={IDLE_PATH} />
           </g>
         ) : (
           <>
             <defs>
               <mask id={maskId} maskUnits="userSpaceOnUse" x="0" y="0" width="70" height="60">
-                <g fill="#fff">{spansToRects(MASCOT_SOLID_SPANS, 'solid')}</g>
+                <path fill="#fff" d={SOLID_PATH} />
                 <g fill="#000">{cutouts}</g>
               </mask>
             </defs>
@@ -248,13 +244,7 @@ export function Mascot({
         <BlinkLids />
 
         {showWaveArm ? (
-          <g
-            className="mascot__wave-arm"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.4"
-            strokeLinecap="round"
-          >
+          <g className="mascot__wave-arm" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
             <path d="M64 36 Q70 26 67 14" />
           </g>
         ) : null}
@@ -272,13 +262,7 @@ type MascotMomentProps = {
 };
 
 /** Mascot + optional caption for empty / error / loading moments. */
-export function MascotMoment({
-  emotion = 'idle',
-  size = 64,
-  className,
-  title,
-  children,
-}: MascotMomentProps) {
+export function MascotMoment({ emotion = 'idle', size = 64, className, title, children }: MascotMomentProps) {
   return (
     <div className={['mascot-moment', className].filter(Boolean).join(' ')}>
       <Mascot emotion={emotion} size={size} title={title} />

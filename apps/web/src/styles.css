@@ -4739,26 +4739,6 @@ body.player-open {
   margin: 0 auto 12px;
 }
 
-.hero-mascot-aside {
-  display: flex;
-  justify-content: center;
-  margin: 0 0 12px;
-}
-
-.hero-mascot-aside .mascot {
-  cursor: default;
-  transition: transform 0.2s ease;
-}
-
-.hero-mascot-aside.is-interactive .mascot {
-  cursor: pointer;
-}
-
-.hero-mascot-aside.is-interactive:hover .mascot:not(.mascot--static),
-.hero-mascot-aside.is-interactive:focus-within .mascot:not(.mascot--static) {
-  transform: scale(1.06);
-}
-
 @keyframes mascot-breathe {
   0%,
   100% {
@@ -4888,10 +4868,5 @@ body.player-open {
   .mascot .mascot__wave-arm,
   .mascot .mascot__eyes {
     animation: none !important;
-  }
-
-  .hero-mascot-aside.is-interactive:hover .mascot,
-  .hero-mascot-aside.is-interactive:focus-within .mascot {
-    transform: none;
   }
 }
