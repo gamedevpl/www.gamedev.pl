@@ -75,7 +75,16 @@ async function main(): Promise<void> {
 
   const remoteBudget = extractMaxBundleBytes(validateSource);
   if (remoteBudget !== MAX_PROJECT_BYTES) {
-    fail(`MAX_BUNDLE_BYTES mismatch: games-repo=${remoteBudget} website MAX_PROJECT_BYTES=${MAX_PROJECT_BYTES}`);
+    const assignLine =
+      validateSource
+        .split('\n')
+        .find((line) => /MAX_BUNDLE_BYTES\s*=/.test(line))
+        ?.trim() ?? '(assignment line not found)';
+    fail(
+      `MAX_BUNDLE_BYTES mismatch: games-repo=${remoteBudget} website MAX_PROJECT_BYTES=${MAX_PROJECT_BYTES}\n` +
+        `  games-repo assignment: ${assignLine}\n` +
+        `  Update GAMEKIT_PLATFORM_BYTES / MAX_PROJECT_BYTES in apps/api/src/games-repo-contract.ts to match.`,
+    );
   }
   console.log(`  ✓ MAX_BUNDLE_BYTES / MAX_PROJECT_BYTES (${remoteBudget})`);
 

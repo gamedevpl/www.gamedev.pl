@@ -29,10 +29,13 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
 
 /**
  * Sum of GameKit platform allowances outside the author budget (touch, restart,
- * music, touch hint, progress, universal input, pointer poll, draw surface).
- * Together with {@link GAME_BUDGET_BYTES} this is the 242 KiB serve cap.
+ * music, touch hint, progress, universal input, pointer poll, draw surface, …).
+ * Together with {@link GAME_BUDGET_BYTES} this must equal games-repo
+ * `MAX_BUNDLE_BYTES` (243_078 as of the games-repo side that broke CI on
+ * 2026-07-27). Not a round KiB: the platform side is an explicit sum of named
+ * allowances, not a padded `42 * 1024` block.
  */
-export const GAMEKIT_PLATFORM_BYTES = 42 * 1024;
+export const GAMEKIT_PLATFORM_BYTES = 38_278;
 
 /** Combined html+js+css size cap — must match games-repo `MAX_BUNDLE_BYTES`. */
 export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
