@@ -225,7 +225,11 @@ Two things worth knowing before you run it:
   - _"no matching index found"_ — the index was never created. Run the setup script, then
     wait for the build as above.
 
-  Either way nothing partial happens: the failure is on the read, before any delete.
+  Either way nothing has been erased when this fires. That is arranged rather than lucky:
+  feedback is the only step needing an index, so it runs **before** any vote is cleared,
+  which is why an index failure cannot leave a half-done erase. A failure later in the run
+  (a dropped connection during the vote walk) can leave feedback deleted and some votes
+  still standing — re-run it, the command is idempotent and finishes the job.
 
 ## How to deploy manually
 

@@ -36,6 +36,15 @@ describe('indexHint', () => {
     expect(indexHint('7 PERMISSION_DENIED: Missing or insufficient permissions.')).toBeNull();
     expect(indexHint('Error: getaddrinfo ENOTFOUND firestore.googleapis.com')).toBeNull();
   });
+
+  it('does not claim an index error belonging to some other query', () => {
+    // This command depends on exactly one index. An index failure naming a different
+    // collection is a real failure the operator must read, and answering it with
+    // "provision playerFeedback.uid" sends them to fix something already fine.
+    expect(
+      indexHint('9 FAILED_PRECONDITION: The query requires a COLLECTION_GROUP_DESC index for collection scorecard and field computedAt.'),
+    ).toBeNull();
+  });
 });
 
 /**
@@ -124,6 +133,24 @@ describe('erasePlayerSignals', () => {
 
     expect(actual.feedbackDeleted).toBe(preview.feedbackDeleted);
     expect(actual.votesCleared).toEqual(preview.votesCleared);
+  });
+
+  it('writes nothing when the feedback query fails', async () => {
+    // The CLI tells an operator "nothing was erased" when it hits the index error, and
+    // that has to be true, not hopeful. Feedback is the only step needing an index, so it
+    // runs before any vote is cleared. If someone reorders it, this fails: the erase would
+    // wipe every vote and then report that nothing happened.
+    const boom = new Error(
+      '9 FAILED_PRECONDITION: The query requires a COLLECTION_GROUP_ASC index for collection ' +
+        'playerFeedback and field uid. That index is not ready yet.',
+    );
+    store.deletePlayerFeedbackByUid = () => Promise.reject(boom);
+
+    await expect(erasePlayerSignals({ store, uid: 'g:leaver' })).rejects.toThrow('FAILED_PRECONDITION');
+
+    expect(await store.getVote('brick-storm', 'g:leaver')).toBe('up');
+    expect(await store.getVote('rock-blaster', 'g:leaver')).toBe('down');
+    expect(await store.getVoteCounts('brick-storm')).toEqual({ up: 2, down: 0 });
   });
 
   it('is idempotent — a second run finds nothing left', async () => {

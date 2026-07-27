@@ -62,8 +62,10 @@ main().catch((error) => {
   console.error(message);
 
   const hint = indexHint(message);
-  // Nothing was deleted: both queries this command runs fail before any write.
-  if (hint) console.error(`${hint}\nNothing was erased — this failed on the read.`);
+  // Safe to state as fact: the feedback query is the only step needing an index and it
+  // runs before any vote is cleared, so an index failure happens before the first write.
+  // `erasePlayerSignals` has a test pinning that order for exactly this claim.
+  if (hint) console.error(`\n${hint}\nNothing was erased — this failed before the first write.`);
 
   process.exit(1);
 });
