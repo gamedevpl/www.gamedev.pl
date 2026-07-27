@@ -132,7 +132,9 @@ Genuinely still open, in rough priority order:
 - 📋 Observability beyond Cloud Run's defaults — no dashboards or alerting on the
   paths that now matter (submission failures, relay stalls, sweep health).
 - 📋 Protected deployment environments; no `environment:` gate on `deploy.yml`.
-- 📋 Actions are pinned to major tags (`@v4`, `@v2`), not commit SHAs.
+- 📋 Action pinning is incomplete: the Google auth/gcloud actions in `deploy.yml` are
+  SHA-pinned, but first-party `actions/checkout` / `actions/setup-node` remain on
+  major tags across all workflows.
 - 📋 Infrastructure as code. Delivery is shell scripts plus `cloudbuild.yaml`; the
   resources are now decided, so the original "IaC only after resources exist"
   precondition is satisfied.

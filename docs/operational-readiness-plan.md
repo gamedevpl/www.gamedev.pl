@@ -35,7 +35,7 @@ that track the GTM stages.
 | Logs | ⚠️ Cloud Logging collects stdout; no log-based metrics, no alerts on error patterns |
 | Cost visibility | ❌ No billing budget/alert. GTM Stage 2's stated failure mode is "a launch spike that burns the monthly budget in a day" — nothing would announce it |
 | Incident response | ❌ No runbook. Knowledge lives in the owner's head and in scattered doc callouts |
-| IaC / deploy hardening | ❌ Shell scripts + `cloudbuild.yaml`; actions pinned to major tags; no `environment:` protection on deploy |
+| IaC / deploy hardening | ⚠️ Shell scripts + `cloudbuild.yaml`; no `environment:` protection on deploy; action pinning is mixed — the Google auth/gcloud actions are SHA-pinned, first-party `actions/checkout`/`setup-node` are major-tagged |
 
 ### Data inventory (what a backup must cover)
 
@@ -178,7 +178,8 @@ sequencing per [`content-safety-plan.md`](./content-safety-plan.md)).
 4. **Deployment hardening**, now that strangers are watching the repo (GTM makes the repo
    itself a marketing surface, which makes its supply chain a target):
    - `environment:` protection on the deploy job;
-   - pin third-party actions to commit SHAs;
+   - finish action pinning to commit SHAs — the Google auth/gcloud actions already are;
+     `actions/checkout` and `actions/setup-node` remain major-tagged;
    - a drilled rollback: `gcloud run services update-traffic gamedev-app
      --to-revisions <previous>=100` executed once for real and timed.
 5. **IaC for the now-stable resource set.** The roadmap's precondition ("IaC only after
@@ -461,8 +462,9 @@ not DONE until its *Verify* line has actually been performed.
     Show-HN rates against a candidate revision; report committed to `docs/`.
 22. 📋 **Load-shedding ladder** encoded (§3): pause creation → sample telemetry → refuse
     new rooms → play last; each step a config flip. — Verify: each flag exercised in dev.
-23. 📋 **Deploy hardening**: `environment:` protection on deploy job; third-party actions
-    pinned to SHAs; **[OWNER]** one timed, real rollback drill recorded in
+23. 📋 **Deploy hardening**: `environment:` protection on deploy job; remaining
+    major-tagged actions (`checkout`, `setup-node`) pinned to SHAs like the Google ones
+    already are; **[OWNER]** one timed, real rollback drill recorded in
     `rollback-deploy.md`.
 24. 📋 **IaC** for the stable resource set (service, mappings, scheduler jobs, alert
     policies, budget, buckets, IAM). — Verify: a fresh `plan` shows no drift.
