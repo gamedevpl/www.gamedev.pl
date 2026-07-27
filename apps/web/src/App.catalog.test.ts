@@ -251,7 +251,8 @@ describe('catalog playback', () => {
       );
       await flushEffects();
     });
-    expect(container.querySelector('.theater-title')?.textContent).toBe('Football 3D Lite');
+    expect(container.querySelector('.theater-title-text')?.textContent).toBe('Football 3D Lite');
+    expect(container.querySelector('.theater-author')?.textContent).toMatch(/gamedev\.pl/);
 
     await act(async () => {
       root.unmount();

@@ -125,12 +125,29 @@ export function GameTheater({
   // the control simply doesn't appear rather than failing on tap.
   const [fullscreen, setFullscreen] = useState(false);
   const canFullscreen = Boolean(document.fullscreenEnabled);
+  // Phone bar is title · More · Exit; sound/fullscreen move into the menu. Track
+  // the breakpoint in JS so we don't render an empty More control on desktop for
+  // drafts that have no vote/share/report row.
+  const [isNarrow, setIsNarrow] = useState(false);
+
+  useEffect(() => {
+    if (typeof matchMedia !== 'function') return;
+    const query = matchMedia('(max-width: 768px)');
+    const update = () => setIsNarrow(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
 
   useEffect(() => {
     const onChange = () => setFullscreen(Boolean(document.fullscreenElement));
     document.addEventListener('fullscreenchange', onChange);
     return () => document.removeEventListener('fullscreenchange', onChange);
   }, []);
+
+  useEffect(() => {
+    if (fullscreen) setMoreOpen(false);
+  }, [fullscreen]);
 
   const toggleFullscreen = useCallback(() => {
     if (document.fullscreenElement) {
@@ -186,86 +203,109 @@ export function GameTheater({
     };
   }, [moreOpen]);
 
-  const secondaryActions = reportSlug ? (
-    <>
-      <VoteWidget slug={reportSlug} />
-      <PlayerFeedbackWidget slug={reportSlug} />
-      <ShareGameButton slug={reportSlug} title={displayTitle} />
-      <ReportGameButton slug={reportSlug} title={displayTitle} />
-    </>
-  ) : null;
+  const showMoreMenu = Boolean(reportSlug) || isNarrow;
+
+  const soundControl = (className: string) => (
+    <button
+      type="button"
+      className={className}
+      onClick={player.toggleSound}
+      aria-pressed={player.muted}
+      aria-label={player.muted ? t('player.soundOff') : t('player.soundOn')}
+    >
+      <PixelIcon name={player.muted ? 'mute' : 'sound'} size={13} />
+      <span className="btn-label">{player.muted ? t('player.soundOff') : t('player.soundOn')}</span>
+    </button>
+  );
+
+  const fullscreenControl = (className: string) =>
+    canFullscreen ? (
+      <button
+        type="button"
+        className={className}
+        onClick={toggleFullscreen}
+        aria-pressed={fullscreen}
+        aria-label={fullscreen ? t('player.exitFullscreen') : t('player.fullscreen')}
+      >
+        <PixelIcon name={fullscreen ? 'collapse' : 'expand'} size={13} />
+        <span className="btn-label">{fullscreen ? t('player.exitFullscreen') : t('player.fullscreen')}</span>
+      </button>
+    ) : null;
 
   return (
     <section
-      className="panel stage is-playing-full-viewport"
+      className={`panel stage is-playing-full-viewport${fullscreen ? ' is-native-fullscreen' : ''}`}
       role="dialog"
       aria-modal="true"
       aria-label={displayTitle}
       ref={stageRef}
     >
-      <div className="game-theater-bar">
-        <div className="game-theater-meta">
-          <span className="theater-badge" title={t('ai.generatedTooltip')}>
-            <PixelIcon name={badge.icon} size={12} /> {badge.label}
-          </span>
-          <div className="theater-title-block">
-            <h2 className="theater-title">{displayTitle}</h2>
-            <span className="theater-author">{t('player.byAuthor', { author: authorLabel })}</span>
+      {/* Fullscreen is for the game, not the chrome: hide the bar and leave one
+          compact exit control so Escape (browser) and this button both work. */}
+      {fullscreen ? (
+        <button
+          type="button"
+          className="theater-exit-fullscreen"
+          onClick={toggleFullscreen}
+          aria-label={t('player.exitFullscreen')}
+          title={t('player.exitFullscreen')}
+        >
+          <PixelIcon name="collapse" size={16} />
+        </button>
+      ) : (
+        <div className="game-theater-bar">
+          <div className="game-theater-meta">
+            <span className="theater-badge" title={t('ai.generatedTooltip')}>
+              <PixelIcon name={badge.icon} size={12} /> {badge.label}
+            </span>
+            <h2 className="theater-title">
+              <span className="theater-title-text">{displayTitle}</span>
+              <span className="theater-author">{t('player.byAuthor', { author: authorLabel })}</span>
+            </h2>
+            {player.meta?.desc ? <span className="theater-desc">{player.meta.desc}</span> : meta}
           </div>
-          {player.meta?.desc ? <span className="theater-desc">{player.meta.desc}</span> : meta}
-        </div>
-        <div className="game-theater-actions">
-          {/* Labels collapse to icons on a phone (see .btn-label), so every control
-              carries an aria-label of its own rather than relying on its text. */}
-          <button
-            className="secondary-btn sound-btn"
-            onClick={player.toggleSound}
-            aria-pressed={player.muted}
-            aria-label={player.muted ? t('player.soundOff') : t('player.soundOn')}
-          >
-            <PixelIcon name={player.muted ? 'mute' : 'sound'} size={13} />
-            <span className="btn-label">{player.muted ? t('player.soundOff') : t('player.soundOn')}</span>
-          </button>
-          {canFullscreen && (
+          <div className="game-theater-actions">
+            {/* Desktop: sound + fullscreen sit on the bar. Phone: they move into More. */}
+            {soundControl('secondary-btn sound-btn theater-desktop-chrome')}
+            {fullscreenControl('secondary-btn fullscreen-btn theater-desktop-chrome')}
+            {showMoreMenu && (
+              <div className={`theater-more${moreOpen ? ' is-open' : ''}`} ref={moreRef}>
+                <button
+                  type="button"
+                  className="secondary-btn theater-more-btn"
+                  aria-expanded={moreOpen}
+                  aria-label={t('player.moreActions')}
+                  onClick={() => setMoreOpen((open) => !open)}
+                >
+                  <PixelIcon name={moreOpen ? 'close' : 'menu'} size={14} />
+                </button>
+                <div className="theater-more-panel" role="menu">
+                  {soundControl('theater-menu-item theater-mobile-chrome')}
+                  {fullscreenControl('theater-menu-item theater-mobile-chrome')}
+                  {reportSlug && (
+                    <>
+                      <div className="theater-menu-divider theater-mobile-chrome" role="separator" />
+                      <VoteWidget slug={reportSlug} />
+                      <PlayerFeedbackWidget slug={reportSlug} />
+                      <ShareGameButton slug={reportSlug} title={displayTitle} />
+                      <ReportGameButton slug={reportSlug} title={displayTitle} />
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
             <button
-              className="secondary-btn fullscreen-btn"
-              onClick={toggleFullscreen}
-              aria-pressed={fullscreen}
-              aria-label={fullscreen ? t('player.exitFullscreen') : t('player.fullscreen')}
+              className="secondary-btn exit-btn"
+              onClick={onExit}
+              ref={exitRef}
+              aria-label={t('catalog.exitPlayer', { defaultValue: 'Exit Player' })}
             >
-              <PixelIcon name={fullscreen ? 'collapse' : 'expand'} size={13} />
-              <span className="btn-label">{fullscreen ? t('player.exitFullscreen') : t('player.fullscreen')}</span>
+              <PixelIcon name="close" size={12} />
+              <span className="btn-label">{t('catalog.exitPlayer', { defaultValue: 'Exit Player' })}</span>
             </button>
-          )}
-          {/* Play chrome stays on the bar (sound / fullscreen / exit). Everything
-              else — vote, feedback, share, report — lives behind one "more" control
-              so the first glance is title + play, not a toolbar of eight buttons. */}
-          {secondaryActions && (
-            <div className={`theater-more${moreOpen ? ' is-open' : ''}`} ref={moreRef}>
-              <button
-                type="button"
-                className="secondary-btn theater-more-btn"
-                aria-expanded={moreOpen}
-                aria-label={t('player.moreActions')}
-                onClick={() => setMoreOpen((open) => !open)}
-              >
-                <PixelIcon name={moreOpen ? 'close' : 'menu'} size={14} />
-                <span className="btn-label">{t('player.moreActions')}</span>
-              </button>
-              <div className="theater-more-panel">{secondaryActions}</div>
-            </div>
-          )}
-          <button
-            className="secondary-btn exit-btn"
-            onClick={onExit}
-            ref={exitRef}
-            aria-label={t('catalog.exitPlayer', { defaultValue: 'Exit Player' })}
-          >
-            <PixelIcon name="close" size={12} />
-            <span className="btn-label">{t('catalog.exitPlayer', { defaultValue: 'Exit Player' })}</span>
-          </button>
+          </div>
         </div>
-      </div>
+      )}
       <div className="game-viewport-container">
         {'slug' in source ? (
           <PublishedGameFrame key={source.slug} slug={source.slug} title={title} frameRef={frameRef} embed />

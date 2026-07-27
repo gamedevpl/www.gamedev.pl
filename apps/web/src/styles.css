@@ -1453,28 +1453,28 @@ body.player-open {
 
 .theater-title {
   margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  flex: none;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.theater-title-text {
   font-size: 1.2rem;
   font-weight: 700;
   color: #fff;
-  white-space: nowrap;
-  flex: none;
-}
-
-.theater-title-block {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  flex: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .theater-author {
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex: none;
 }
 
 .theater-controls {
@@ -1539,8 +1539,8 @@ body.player-open {
   cursor: default;
 }
 
-/* Secondary theater actions live behind one "more" control at every width —
-   vote / feedback / share / report — so the bar stays Sound · Fullscreen · More · Exit. */
+/* Hamburger for secondary (and, on a phone, play) chrome. Styled like the site
+   header dropdown so every row shares one background, padding, and hover. */
 .theater-more {
   position: relative;
   display: flex;
@@ -1550,7 +1550,8 @@ body.player-open {
 .theater-more-btn {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  justify-content: center;
+  min-width: 40px;
 }
 
 .theater-more-panel {
@@ -1561,30 +1562,105 @@ body.player-open {
   z-index: 40;
   flex-direction: column;
   align-items: stretch;
-  gap: 6px;
-  min-width: 200px;
-  padding: 10px;
+  gap: 4px;
+  min-width: 220px;
+  padding: 8px;
   border-radius: 12px;
   background: rgba(22, 28, 34, 0.96);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
   border: 1px solid var(--panel-border);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.5),
+    0 0 1px var(--turquoise-glow);
+  animation: fadeIn 0.15s ease-out;
 }
 
 .theater-more.is-open .theater-more-panel {
   display: flex;
 }
 
-.theater-more-panel .vote-widget {
-  justify-content: stretch;
+.theater-menu-divider {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--panel-border);
+  border: 0;
 }
 
-.theater-more-panel .vote-widget button,
+/* Hidden on desktop; the matching media query reveals them as menu rows on a phone.
+   Specificity must beat `.theater-more-panel .theater-menu-item { display: flex }`. */
+.theater-more-panel .theater-mobile-chrome {
+  display: none;
+}
+
+/* Uniform menu rows — strip the mismatched secondary-btn / ghost / solid looks. */
+.theater-more-panel .theater-menu-item,
 .theater-more-panel .share-btn,
 .theater-more-panel .report-btn,
+.theater-more-panel .feedback-btn,
+.theater-more-panel .vote-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 14px;
+  min-height: 44px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 500;
+  text-decoration: none;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.theater-more-panel .theater-menu-item:hover,
+.theater-more-panel .theater-menu-item:focus-visible,
+.theater-more-panel .share-btn:hover,
+.theater-more-panel .share-btn:focus-visible,
+.theater-more-panel .report-btn:hover,
+.theater-more-panel .report-btn:focus-visible,
+.theater-more-panel .feedback-btn:hover,
+.theater-more-panel .feedback-btn:focus-visible,
+.theater-more-panel .vote-btn:hover,
+.theater-more-panel .vote-btn:focus-visible {
+  background: rgba(0, 228, 172, 0.12);
+  color: var(--turquoise);
+  border-color: transparent;
+  outline: none;
+}
+
+.theater-more-panel .vote-widget {
+  display: flex;
+  gap: 4px;
+  padding: 0;
+}
+
+.theater-more-panel .vote-widget .vote-btn {
+  flex: 1;
+  justify-content: center;
+}
+
+.theater-more-panel .vote-btn[aria-pressed='true'] {
+  color: var(--accent-blue);
+  background: rgba(64, 156, 255, 0.12);
+}
+
+.theater-more-panel .feedback-widget {
+  width: 100%;
+}
+
 .theater-more-panel .feedback-btn {
   width: 100%;
-  justify-content: flex-start;
-  min-height: 40px;
+}
+
+.theater-more-panel .btn-label {
+  display: inline;
 }
 
 /* Written player feedback: a header control like the vote widget, but revealing a
@@ -1638,6 +1714,38 @@ body.player-open {
   gap: 6px;
   color: var(--accent-blue);
   margin: 0;
+}
+
+/* Immersive fullscreen: the bar is gone; one floating control exits it. */
+.theater-exit-fullscreen {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left));
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(12, 18, 24, 0.72);
+  color: #fff;
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.theater-exit-fullscreen:hover,
+.theater-exit-fullscreen:focus-visible {
+  border-color: var(--turquoise);
+  color: var(--turquoise);
+  outline: none;
+}
+
+.is-native-fullscreen .game-viewport-container {
+  padding: 0;
 }
 
 .game-viewport-container {
@@ -1731,20 +1839,16 @@ body.player-open {
   }
 
   .theater-title {
-    font-size: 0.95rem;
     flex: 1 1 auto;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 
-  .theater-title-block {
-    flex: 1 1 auto;
-    min-width: 0;
+  .theater-title-text {
+    font-size: 0.95rem;
   }
 
   .theater-author {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
   }
 
   .game-theater-actions button .btn-label {
@@ -1752,8 +1856,8 @@ body.player-open {
   }
 
   /* Sized for a thumb (Apple/Google both land on ~44px) rather than a cursor. */
-  .game-theater-actions button,
-  .game-theater-actions .report-btn {
+  .game-theater-actions > button,
+  .game-theater-actions .theater-more-btn {
     min-width: 44px;
     min-height: 44px;
     justify-content: center;
@@ -1764,23 +1868,24 @@ body.player-open {
     gap: 6px;
   }
 
-  .sound-btn,
-  .theater-more-btn {
-    min-width: 44px;
+  /* Phone: sound + fullscreen leave the bar and appear as menu rows instead. */
+  .theater-desktop-chrome {
+    display: none !important;
+  }
+
+  .theater-more-panel .theater-menu-item.theater-mobile-chrome {
+    display: flex;
+  }
+
+  .theater-more-panel .theater-menu-divider.theater-mobile-chrome {
+    display: block;
   }
 
   .theater-more-panel {
-    min-width: 180px;
+    min-width: 200px;
   }
 
-  .theater-more-panel .vote-widget button,
-  .theater-more-panel .share-btn,
-  .theater-more-panel .report-btn,
-  .theater-more-panel .feedback-btn {
-    min-height: 44px;
-  }
-
-  /* Labels return inside the open menu — icon-only there is opaque. */
+  /* Labels stay visible inside the open menu — icon-only there is opaque. */
   .theater-more-panel .btn-label {
     display: inline !important;
   }
