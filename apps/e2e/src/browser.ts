@@ -191,6 +191,22 @@ const EXPECTED_NOISE: { pattern: RegExp; why: string }[] = [
     pattern: /401 .*\/api\/auth\/me|\/api\/auth\/me.*401/,
     why: 'anonymous session probe is expected to be unauthenticated',
   },
+  {
+    // ClosedBetaSplash mounts GoogleSignInButton, which calls google.accounts.id.prompt().
+    // In CI / headless Chromium there is no signed-in Google account, so One Tap / FedCM
+    // logs these and nothing else — the splash and the sign-in button still render. Agent
+    // auth uses GAMEDEV_ACCESS_TOKEN (docs/agent-access-tokens.md), not Google, so this
+    // noise is not a product defect the gate should block on.
+    pattern: /Provider's accounts list is empty/,
+    why: 'GSI One Tap with no Google account in the browser (CI / headless)',
+  },
+  {
+    // Same One Tap path: FedCM fails to retrieve a token when there is no account to
+    // offer. Paired with the empty-accounts line above; keep both so either message
+    // alone cannot red the deploy.
+    pattern: /\[GSI_LOGGER\]: FedCM get\(\) rejects with NetworkError/,
+    why: 'GSI FedCM One Tap has no account in headless Chromium',
+  },
 ];
 
 function isExpected(text: string): boolean {
