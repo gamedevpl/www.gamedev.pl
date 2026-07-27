@@ -583,11 +583,42 @@ export async function registerSubmissionRoutes(
       return catalogCache.entries;
     }
 
-    catalogRefresh ??= loadCatalog(client, forceFresh)
-      .then((entries) => {
-        catalogCache = { entries, expiresAt: now() + catalogTtlMs };
-        return entries;
-      })
+    // A forced read never joins the coalesced one. Coalescing is right for the
+    // cheap path and wrong here: the in-flight refresh is snapshot-backed, and the
+    // snapshot is precisely the stale source during the publishing→published window
+    // that forceFresh exists to see through. Adopting it would answer "not
+    // published yet" from the source being bypassed, and burn the caller's
+    // once-per-cooldown attempt doing it.
+    //
+    // The window is narrow — isSlugPublished awaits an unforced read first, which
+    // leaves the cache warm and catalogRefresh clear — so this is a guard on the
+    // TTL-boundary interleaving rather than a fix for an observed failure. Stampede
+    // safety is unaffected: the path is cooldown-gated to once per window.
+    const remember = (entries: CatalogGameEntry[]): CatalogGameEntry[] => {
+      catalogCache = { entries, expiresAt: now() + catalogTtlMs };
+      return entries;
+    };
+    // A refresh that fails still beats a visitor-facing 502 when this instance has
+    // built a catalog before: the data changes only on a merge, so briefly stale is
+    // nearly always right.
+    const serveStaleOrRethrow = (error: unknown): CatalogGameEntry[] => {
+      if (catalogCache) {
+        app.log.warn({ err: error }, 'catalog refresh failed; serving last known entries');
+        return catalogCache.entries;
+      }
+      throw error;
+    };
+
+    if (forceFresh) {
+      try {
+        return remember(await loadCatalog(client, true));
+      } catch (error) {
+        return serveStaleOrRethrow(error);
+      }
+    }
+
+    catalogRefresh ??= loadCatalog(client, false)
+      .then(remember)
       .finally(() => {
         catalogRefresh = null;
       });
@@ -595,11 +626,7 @@ export async function registerSubmissionRoutes(
     try {
       return await catalogRefresh;
     } catch (error) {
-      if (catalogCache) {
-        app.log.warn({ err: error }, 'catalog refresh failed; serving last known entries');
-        return catalogCache.entries;
-      }
-      throw error;
+      return serveStaleOrRethrow(error);
     }
   }
 

@@ -131,8 +131,14 @@ The job still exits non-zero, because the games repo's own gate should have caug
 Publication authority now follows the **snapshot catalog**, so removing a game from the
 games repo is not complete until the next `publish-games.yml` run is green. Until the
 pointer flips, the previous snapshot keeps serving the game, and a bake that fails
-leaves that old snapshot serving indefinitely — there is no expiry that retires it and
-no `schedule:` that retries the bake.
+leaves that old snapshot serving until something re-bakes it — there is no expiry that
+retires it on its own.
+
+The nightly `schedule:` in `publish-games.yml` (04:23 UTC) is that something. It bounds
+how long a stale snapshot can serve at roughly a day, covering both a takedown whose
+bake failed and a dispatch that stopped arriving at all. It is a floor on recovery, not
+a substitute for the merge-time publish, and a day is far too slow for an urgent
+takedown.
 
 If a takedown is urgent, do not wait for the next merge: run **Publish games snapshot**
 via `workflow_dispatch` against the games-repo ref that already omits the game. That

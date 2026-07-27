@@ -12,10 +12,22 @@ name: Publish games snapshot
 #
 # Nothing needs to be redeployed afterwards. Running instances re-read the pointer
 # on its short TTL, so a publish becomes visible on its own within about a minute.
+#
+# The nightly schedule is a safety net, not the delivery mechanism. Publication
+# authority follows the snapshot catalog, so if the dispatch stops arriving —
+# an expired or under-permissioned SITE_DISPATCH_TOKEN, a games-repo workflow
+# failing before it reaches that step — nothing else retires the current snapshot
+# and the site serves a frozen catalog indefinitely. That failure is silent on this
+# side: serving falls back to GitHub only for games *missing* from the snapshot,
+# never for stale ones. The schedule bounds that staleness at a day, and re-bakes a
+# takedown that a failed publish left serving.
 
 on:
   repository_dispatch:
     types: [games-published]
+  # 04:23 UTC: off the top of the hour, where GitHub's scheduler is least contended.
+  schedule:
+    - cron: '23 4 * * *'
   workflow_dispatch:
     inputs:
       ref:
