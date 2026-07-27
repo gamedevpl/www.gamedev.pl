@@ -532,6 +532,29 @@ export function pushSubscriptionId(endpoint: string): string {
   return createHash('sha256').update(endpoint).digest('hex');
 }
 
+/**
+ * Drop keys whose value is `undefined` before a Firestore write.
+ *
+ * Firestore rejects `undefined` outright ("Cannot use 'undefined' as a Firestore
+ * value") rather than treating it as an absent field, which collides head-on with the
+ * TypeScript optional fields (`email?`, `name?`, `picture?`, `locale?`) that this
+ * codebase builds records from. The mismatch is invisible in tests because
+ * `InMemoryStore` stores whatever it is handed, so it only ever surfaces as a 500 in
+ * production — which is exactly how it surfaced: the first `bot:` account (no email, no
+ * picture) could not be created, and the waitlist has the same latent fault for anyone
+ * whose Google email is unverified, since `auth.ts` deliberately passes `undefined`
+ * there rather than store an unverified claim.
+ *
+ * Applied at the write boundary rather than at each call site so a record can be built
+ * naturally, with optional fields left off.
+ */
+export function stripUndefined<T extends object>(value: T): T {
+  // `T extends object`, not `Record<string, unknown>`: interfaces (`User`,
+  // `WaitlistEntry`) have no implicit index signature, so the stricter bound rejects
+  // every real caller.
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as T;
+}
+
 /** A zeroed counter set — the shape every usage read falls back to. */
 function emptyUsageCounters(): UsageCounters {
   return { submissions: 0, previews: 0, mocks: 0, refines: 0, feedback: 0 };
@@ -583,6 +606,9 @@ export class InMemoryStore implements Store {
       // Preserve email prefs across logins — a re-login must not resubscribe.
       locale: userData.locale ?? existing?.locale,
       emailUnsubscribedAt: existing?.emailUnsubscribedAt ?? null,
+      // Carried explicitly. Omitting it silently discarded every write from the
+      // activity hook in `auth.ts`, whose only purpose is to persist this field.
+      activeDays: userData.activeDays ?? existing?.activeDays,
     };
 
     this.users.set(userData.uid, updated);
@@ -1042,6 +1068,8 @@ export class FirestoreStore implements Store {
           createdAt: now,
           lastLoginAt: now,
           tier: userData.tier ?? 'standard',
+          locale: userData.locale,
+          activeDays: userData.activeDays,
         };
       } else {
         const existing = snap.data() as User;
@@ -1052,10 +1080,15 @@ export class FirestoreStore implements Store {
           picture: userData.picture ?? existing.picture,
           lastLoginAt: now,
           tier: userData.tier ?? existing.tier,
+          // `...existing` carries the *stored* value, so an incoming update to either of
+          // these was dropped on the floor for every account that already existed —
+          // which, for `activeDays`, is every account the activity hook ever touched.
+          locale: userData.locale ?? existing.locale,
+          activeDays: userData.activeDays ?? existing.activeDays,
         };
       }
 
-      transaction.set(docRef, user, { merge: true });
+      transaction.set(docRef, stripUndefined(user), { merge: true });
       return user;
     });
   }
@@ -1374,7 +1407,7 @@ export class FirestoreStore implements Store {
       locale: entry.locale,
       status: existing?.status ?? 'pending',
     };
-    await docRef.set(record, { merge: true });
+    await docRef.set(stripUndefined(record), { merge: true });
     return record;
   }
 
