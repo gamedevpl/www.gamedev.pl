@@ -40,7 +40,32 @@ function publishedGithubClient(): GitHubClient {
   };
 }
 
-async function buildSweepApp(store: InMemoryStore, verifier: InternalAuthVerifier) {
+/** An open, in-progress PR — the submission stays in the active set across sweeps. */
+function buildingGithubClient(): GitHubClient {
+  const openPr: LinkedPullRequest = {
+    number: 5,
+    state: 'OPEN',
+    merged: false,
+    isDraft: true,
+    titleHasWip: true,
+    headRefName: 'agent/sky',
+    changedFiles: ['games/sky-dodge/index.html'],
+  };
+  return {
+    createIssue: async () => ({ number: 42 }),
+    getIssueState: async () => ({ state: 'open' }),
+    findLinkedPR: async () => openPr,
+    getGameSources: async () => null,
+    getGameMedia: async () => null,
+    getCatalog: async () => [],
+  };
+}
+
+async function buildSweepApp(
+  store: InMemoryStore,
+  verifier: InternalAuthVerifier,
+  overrides: { githubClient?: GitHubClient; now?: () => number } = {},
+) {
   return buildApp({
     store,
     sessionSecret: 'dev-session-secret-change-me',
@@ -48,11 +73,14 @@ async function buildSweepApp(store: InMemoryStore, verifier: InternalAuthVerifie
       githubToken: 'token',
       submissionTokenSecret: secret,
       gamesRepo: 'gamedevpl/www.gamedev.pl-games',
-      githubClient: publishedGithubClient(),
+      githubClient: overrides.githubClient ?? publishedGithubClient(),
       internalAuthVerifier: verifier,
+      ...(overrides.now ? { now: overrides.now } : {}),
     },
   });
 }
+
+const HOUR_MS = 60 * 60 * 1000;
 
 describe('POST /api/internal/notify-sweep', () => {
   it('rejects callers that fail OIDC verification with 401', async () => {
@@ -74,7 +102,7 @@ describe('POST /api/internal/notify-sweep', () => {
       headers: { authorization: 'Bearer scheduler-token' },
     });
     expect(first.statusCode).toBe(200);
-    expect(first.json()).toEqual({ scanned: 1, emitted: 1 });
+    expect(first.json()).toEqual({ scanned: 1, emitted: 1, stalled: 0 });
 
     const list = await store.listNotifications('g:owner');
     expect(list).toHaveLength(1);
@@ -88,8 +116,88 @@ describe('POST /api/internal/notify-sweep', () => {
       url: '/api/internal/notify-sweep',
       headers: { authorization: 'Bearer scheduler-token' },
     });
-    expect(second.json()).toEqual({ scanned: 0, emitted: 0 });
+    expect(second.json()).toEqual({ scanned: 0, emitted: 0, stalled: 0 });
     await app.close();
+  });
+
+  // The games-repo workflow that re-posts creator feedback as an `@copilot` mention
+  // is the only thing that can wake a stopped agent, and it fails silently when it
+  // fails at all. These cover the detector that makes that visible.
+  describe('creator feedback relay stall detection', () => {
+    async function sweep(app: Awaited<ReturnType<typeof buildSweepApp>>) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/internal/notify-sweep',
+        headers: { authorization: 'Bearer scheduler-token' },
+      });
+      expect(res.statusCode).toBe(200);
+      return res.json();
+    }
+
+    it('flags a change request no agent has collected within the threshold', async () => {
+      const store = new InMemoryStore();
+      await store.createSubmission(42, 'g:owner', 'Sky Dodge');
+      await store.appendCreatorMessage(42, 'make the ship slower');
+
+      // The message is written with the real clock; advancing the route's clock past
+      // the threshold ages it without fake timers, matching how the rest of the API
+      // tests time (an injected `now`, never vi.useFakeTimers).
+      const app = await buildSweepApp(store, acceptAll, {
+        githubClient: buildingGithubClient(),
+        now: () => Date.now() + 2 * HOUR_MS,
+      });
+
+      expect(await sweep(app)).toMatchObject({ scanned: 1, stalled: 1 });
+      await app.close();
+    });
+
+    it('leaves a recent change request alone', async () => {
+      const store = new InMemoryStore();
+      await store.createSubmission(42, 'g:owner', 'Sky Dodge');
+      await store.appendCreatorMessage(42, 'make the ship slower');
+
+      // Inside the hour: an agent that has not acked yet is working, not stalled.
+      const app = await buildSweepApp(store, acceptAll, {
+        githubClient: buildingGithubClient(),
+        now: () => Date.now() + 5 * 60 * 1000,
+      });
+
+      expect(await sweep(app)).toMatchObject({ scanned: 1, stalled: 0 });
+      await app.close();
+    });
+
+    it('does not flag a message the agent already collected, however old', async () => {
+      const store = new InMemoryStore();
+      await store.createSubmission(42, 'g:owner', 'Sky Dodge');
+      const message = await store.appendCreatorMessage(42, 'make the ship slower');
+      await store.markCreatorMessagesDelivered(42, [message.id]);
+
+      const app = await buildSweepApp(store, acceptAll, {
+        githubClient: buildingGithubClient(),
+        now: () => Date.now() + 48 * HOUR_MS,
+      });
+
+      // Delivery is the whole signal: the relay demonstrably worked here, so age
+      // means the agent is thinking, not that the hand-off was lost.
+      expect(await sweep(app)).toMatchObject({ scanned: 1, stalled: 0 });
+      await app.close();
+    });
+
+    it('counts stalled submissions once each, not once per queued message', async () => {
+      const store = new InMemoryStore();
+      await store.createSubmission(42, 'g:owner', 'Sky Dodge');
+      await store.createSubmission(43, 'g:other', 'Cave Run');
+      await store.appendCreatorMessage(42, 'make the ship slower');
+      await store.appendCreatorMessage(42, 'and add a pause button');
+
+      const app = await buildSweepApp(store, acceptAll, {
+        githubClient: buildingGithubClient(),
+        now: () => Date.now() + 2 * HOUR_MS,
+      });
+
+      expect(await sweep(app)).toMatchObject({ scanned: 2, stalled: 1 });
+      await app.close();
+    });
   });
 
   it('is walled off from anonymous callers only by OIDC, not a session (private beta)', async () => {

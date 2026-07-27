@@ -14,7 +14,9 @@
     "build:packages": "npm run build -w @gamedevpl/game-generator",
     "build": "npm run build:packages && npm run build -w @gamedevpl/api && npm run build -w @gamedevpl/web",
     "dev": "npm run build:packages && concurrently -n api,web -c blue,green \"npm run dev -w @gamedevpl/api\" \"npm run dev -w @gamedevpl/web\"",
-    "test": "npm run build:packages && npm run test --workspaces --if-present",
+    "test": "npm run build:packages && npm run test --workspaces --if-present && npm run test:rules",
+    "// test:rules": "eslint-rules/ is not a workspace, so `npm test --workspaces` cannot reach it. Run explicitly, or the rule guarding every import in the repo is the one thing with no test running in CI.",
+    "test:rules": "vitest run --dir eslint-rules",
     "e2e": "npm run e2e -w @gamedevpl/e2e",
     "contract:games-repo": "npm run contract:games-repo -w @gamedevpl/api",
     "snapshot:publish": "npm run snapshot:publish -w @gamedevpl/api --",
@@ -33,7 +35,8 @@
     "globals": "^17.7.0",
     "husky": "^9.1.1",
     "prettier": "^3.3.3",
-    "typescript": "^5.5.4"
+    "typescript": "^5.5.4",
+    "vitest": "^3.2.7"
   },
   "overrides": {
     "fast-uri": "^3.1.2",
