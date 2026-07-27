@@ -36,6 +36,23 @@ Because it needs a credential, this suite **does not run in normal PR CI** — i
 there. Run it against a candidate URL before promoting a deploy, or by hand while
 working on the front end.
 
+### Do not put `GAMEDEV_ACCESS_TOKEN` in `ci.yml`
+
+This is a public repo, and making the suite run in CI is the obvious next thought. It is
+the one change here that would actually be dangerous.
+
+`ci.yml` triggers on `pull_request`, which runs **code authored by the pull request** —
+`npm run lint`, `npm run test`, and `npm run build` all execute whatever the branch says
+they execute. Today that is harmless, because the only secret it can see is
+`GAMES_REPO_TOKEN` and fork PRs get no secrets at all. Add `GAMEDEV_ACCESS_TOKEN` to that
+workflow and any PR raised from a branch _inside_ the repo could exfiltrate it by editing
+a test file.
+
+`deploy.yml` is the safe home, and already holds the secret: it triggers only on
+`push: branches: [master]`, so nothing runs there until it has been reviewed and merged.
+Wire the suite in next to the existing authenticated smoke, pointed at `CANDIDATE_URL`
+before traffic is promoted.
+
 ## One token exchange per run
 
 `POST /api/auth/session` is rate limited to **20 per hour**, and that budget is shared
