@@ -20,6 +20,7 @@ export const GAME_KIT_MODULES = [
   'effects',
   'audio',
   'party',
+  'mascot',
 ] as const;
 
 export type GameKitModuleName = (typeof GAME_KIT_MODULES)[number];
