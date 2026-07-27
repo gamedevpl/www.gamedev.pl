@@ -95,12 +95,10 @@
     "moreActions": "Więcej działań",
     "byAuthor": "autor: {{author}}",
     "vote": {
-      "groupLabel": "Oceń tę grę",
-      "up": "Głosuj na tak",
-      "down": "Głosuj na nie",
-      "signInToVote": "Zaloguj się, aby zagłosować",
-      "signInTitle": "Zaloguj się, aby zagłosować",
-      "signInSubtitle": "Głosy są powiązane z kontem, więc każda osoba ma jeden głos na grę."
+      "up": "Polub tę grę",
+      "signInToVote": "Zaloguj się, aby polubić",
+      "signInTitle": "Zaloguj się, aby polubić",
+      "signInSubtitle": "Polubienia są powiązane z kontem, więc każda osoba ma jedno na grę."
     },
     "feedback": {
       "action": "Zostaw opinię",

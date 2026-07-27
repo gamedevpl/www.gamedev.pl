@@ -6,10 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n';
 
 /**
- * The widget's whole job is: show real counts to anyone, and only let a signed-in
- * caller change them. Signed-out clicks open the sign-in modal rather than looking
- * greyed-out-and-broken. Clicking the vote you already cast un-votes it, and a vote
- * action never blanks the counts that were already on screen.
+ * The widget's whole job is: show the up-count to anyone, and only let a signed-in
+ * caller change it. Signed-out clicks open the sign-in modal rather than looking
+ * greyed-out-and-broken. Clicking an already-cast up vote un-votes it, and a vote
+ * action never blanks the count that was already on screen.
  */
 
 const authState = vi.hoisted(() => ({ user: null as { uid: string } | null }));
@@ -55,28 +55,26 @@ async function draw() {
   });
 }
 
-function buttons() {
-  const [up, down] = container.querySelectorAll('button');
-  return { up, down };
+function upButton(): HTMLButtonElement {
+  return container.querySelector('button')!;
 }
 
 describe('VoteWidget', () => {
-  it('renders nothing while the initial read is in flight, then shows the counts', async () => {
+  it('renders nothing while the initial read is in flight, then shows the up count', async () => {
     votesApi.fetchVotes.mockResolvedValue({ up: 4, down: 1, mine: null });
     await draw();
     expect(container.textContent).toContain('4');
-    expect(container.textContent).toContain('1');
+    expect(container.querySelectorAll('button')).toHaveLength(1);
   });
 
-  it('shows real counts to a signed-out visitor and opens sign-in on click', async () => {
+  it('shows the real count to a signed-out visitor and opens sign-in on click', async () => {
     authState.user = null;
     votesApi.fetchVotes.mockResolvedValue({ up: 4, down: 1, mine: null });
     await draw();
 
-    const { up, down } = buttons();
+    const up = upButton();
     // Clickable, not greyed-out — the title explains why a click needs a session.
     expect(up.hasAttribute('disabled')).toBe(false);
-    expect(down.hasAttribute('disabled')).toBe(false);
     expect(up.title).toMatch(/sign in/i);
 
     await act(async () => {
@@ -84,16 +82,16 @@ describe('VoteWidget', () => {
     });
 
     expect(votesApi.castVote).not.toHaveBeenCalled();
-    expect(document.body.textContent).toMatch(/sign in to vote/i);
+    expect(document.body.textContent).toMatch(/sign in to like/i);
   });
 
-  it('a signed-in click casts a vote and reflects the response', async () => {
+  it('a signed-in click casts an up vote and reflects the response', async () => {
     authState.user = { uid: 'g:me' };
     votesApi.fetchVotes.mockResolvedValue({ up: 4, down: 1, mine: null });
     votesApi.castVote.mockResolvedValue({ up: 5, down: 1, mine: 'up' });
     await draw();
 
-    const { up } = buttons();
+    const up = upButton();
     await act(async () => {
       up.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
@@ -109,7 +107,7 @@ describe('VoteWidget', () => {
     votesApi.clearVote.mockResolvedValue({ up: 4, down: 1, mine: null });
     await draw();
 
-    const { up } = buttons();
+    const up = upButton();
     expect(up.getAttribute('aria-pressed')).toBe('true');
 
     await act(async () => {
@@ -121,36 +119,19 @@ describe('VoteWidget', () => {
     expect(container.textContent).toContain('4');
   });
 
-  it('clicking the other value flips the vote, not adds to it', async () => {
-    authState.user = { uid: 'g:me' };
-    votesApi.fetchVotes.mockResolvedValue({ up: 5, down: 1, mine: 'up' });
-    votesApi.castVote.mockResolvedValue({ up: 4, down: 2, mine: 'down' });
-    await draw();
-
-    const { down } = buttons();
-    await act(async () => {
-      down.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-
-    expect(votesApi.castVote).toHaveBeenCalledWith('brick-storm', 'down');
-    expect(container.textContent).toContain('4');
-    expect(container.textContent).toContain('2');
-  });
-
-  it('leaves the last known counts up when a vote click fails', async () => {
+  it('leaves the last known count up when a vote click fails', async () => {
     authState.user = { uid: 'g:me' };
     votesApi.fetchVotes.mockResolvedValue({ up: 4, down: 1, mine: null });
     votesApi.castVote.mockRejectedValue(new Error('network error'));
     await draw();
 
-    const { up } = buttons();
+    const up = upButton();
     await act(async () => {
       up.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    // Still the pre-click numbers, not blanked by the failed request.
+    // Still the pre-click number, not blanked by the failed request.
     expect(container.textContent).toContain('4');
-    expect(container.textContent).toContain('1');
   });
 
   it('renders nothing at all when the initial read fails', async () => {

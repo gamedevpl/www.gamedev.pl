@@ -95,12 +95,10 @@
     "moreActions": "More actions",
     "byAuthor": "by {{author}}",
     "vote": {
-      "groupLabel": "Rate this game",
-      "up": "Vote up",
-      "down": "Vote down",
-      "signInToVote": "Sign in to vote",
-      "signInTitle": "Sign in to vote",
-      "signInSubtitle": "Votes are tied to your account, so each person gets one per game."
+      "up": "Like this game",
+      "signInToVote": "Sign in to like",
+      "signInTitle": "Sign in to like",
+      "signInSubtitle": "Likes are tied to your account, so each person gets one per game."
     },
     "feedback": {
       "action": "Leave feedback",
