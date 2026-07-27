@@ -2,7 +2,7 @@ import react from '@vitejs/plugin-react';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vite';
-import { isKnownSpaShellPath, looksLikeStaticAsset } from '../api/src/spa-paths.ts';
+import { isKnownSpaShellPath, looksLikeStaticAsset } from '../api/src/spa-paths.js';
 
 const apiTarget = process.env.VITE_API_TARGET ?? 'http://127.0.0.1:3001';
 

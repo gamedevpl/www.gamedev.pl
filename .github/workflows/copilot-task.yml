@@ -7,8 +7,10 @@ on:
         description: 'Task description for Copilot'
         required: true
         type: string
-  issue_comment:
-    types: [created]
+  # No issue_comment trigger: this workflow reads its task from inputs.task or
+  # client_payload.task, neither of which a comment event carries. It used to fire
+  # on every comment created anywhere in the repo, running the full npm ci +
+  # type-check + lint + test + build gate to echo an empty string.
   repository_dispatch:
     types: [copilot-task]
 
@@ -39,6 +41,14 @@ jobs:
       - name: Verify Baseline (Green Gate)
         run: npm run type-check && npm run lint && npm run test && npm run build
 
+      # The task text is attacker-influenced (anyone who can fire workflow_dispatch or
+      # repository_dispatch picks it). Interpolating ${{ }} directly into `run:` splices
+      # it into the script *before* bash parses it, so a payload containing $(...) or a
+      # newline executes as code. Passing it through the environment instead means bash
+      # only ever sees it as a variable's value, never as script text — hence the env
+      # block plus a quoted expansion rather than a bare ${{ }} inside the script.
       - name: Echo Task Payload
+        env:
+          TASK: ${{ github.event.inputs.task || github.event.client_payload.task }}
         run: |
-          echo "Executing task: ${{ github.event.inputs.task || github.event.client_payload.task }}"
+          echo "Executing task: ${TASK}"

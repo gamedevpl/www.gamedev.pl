@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { isPlatformAuthor } from './catalog';
-import { GameFrame } from './GameFrame';
-import { PublishedGameFrame } from './PublishedGameFrame';
-import { PixelIcon, type PixelIconName } from './PixelIcon';
-import { PlayerFeedbackWidget } from './PlayerFeedbackWidget';
-import { ReportGameButton } from './ReportGameButton';
-import { ShareGameButton } from './ShareGameButton';
-import { VoteWidget } from './VoteWidget';
-import { useGamePlayer } from './gamePlayer';
-import { useScreenWakeLock } from './useScreenWakeLock';
+import { isPlatformAuthor } from './catalog.js';
+import { GameFrame } from './GameFrame.js';
+import { PublishedGameFrame } from './PublishedGameFrame.js';
+import { PixelIcon, type PixelIconName } from './PixelIcon.js';
+import { PlayerFeedbackWidget } from './PlayerFeedbackWidget.js';
+import { ReportGameButton } from './ReportGameButton.js';
+import { ShareGameButton } from './ShareGameButton.js';
+import { VoteWidget } from './VoteWidget.js';
+import { useGamePlayer } from './gamePlayer.js';
+import { useScreenWakeLock } from './useScreenWakeLock.js';
 
 /** A game to run, sourced either from raw assembled HTML or a published slug. */
 export type GameTheaterSource = { html: string } | { slug: string };

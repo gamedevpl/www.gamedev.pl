@@ -1,4 +1,4 @@
-import type { Scorecard, ScorecardsResponse } from './healthApi';
+import type { Scorecard, ScorecardsResponse } from './healthApi.js';
 
 /**
  * What the nightly scorecard sweep last produced (docs/improvement-loop-plan.md IL-2).

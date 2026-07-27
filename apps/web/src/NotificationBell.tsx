@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from './AuthContext';
+import { useAuth } from './AuthContext.js';
 import {
   clearNotifications,
   fetchNotifications,
   markNotificationsRead,
   type AppNotification,
   type NotificationType,
-} from './notificationsApi';
-import { pushUiState, subscribeToPush, unsubscribeFromPush, type PushUiState } from './pushApi';
+} from './notificationsApi.js';
+import { pushUiState, subscribeToPush, unsubscribeFromPush, type PushUiState } from './pushApi.js';
 import './NotificationBell.css';
 
 const POLL_MS = 60_000;

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, type MutableRefObject } from 'react';
-import i18n from './i18n';
-import { embedGameHtml, withGameLocale } from './gamePlayer';
+import i18n from './i18n/index.js';
+import { embedGameHtml, withGameLocale } from './gamePlayer.js';
 
 type GameFrameSource = { title: string; html: string; src?: never } | { title: string; src: string; html?: never };
 

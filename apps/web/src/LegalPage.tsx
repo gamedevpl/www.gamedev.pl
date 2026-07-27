@@ -1,10 +1,10 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { legalDocument, type LegalBlock, type LegalDocId } from './legal';
-import { renderInline } from './legal/inline';
-import { OPERATOR_LEGAL_NAME } from './legal/operator';
-import { legalAnchor, legalPath } from './router';
-import { PixelIcon } from './PixelIcon';
+import { legalDocument, type LegalBlock, type LegalDocId } from './legal/index.js';
+import { renderInline } from './legal/inline.js';
+import { OPERATOR_LEGAL_NAME } from './legal/operator.js';
+import { legalAnchor, legalPath } from './router.js';
+import { PixelIcon } from './PixelIcon.js';
 
 function Block({ block }: { block: LegalBlock }) {
   if (block.kind === 'p') return <p>{renderInline(block.text)}</p>;

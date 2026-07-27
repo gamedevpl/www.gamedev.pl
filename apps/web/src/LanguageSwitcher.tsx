@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { SUPPORTED_LANGUAGES } from './i18n';
+import { SUPPORTED_LANGUAGES } from './i18n/index.js';
 
 const LABELS: Record<string, string> = { en: 'EN', pl: 'PL' };
 

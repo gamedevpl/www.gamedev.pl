@@ -1,9 +1,9 @@
 import { useEffect, useState, type MutableRefObject } from 'react';
 import { useTranslation } from 'react-i18next';
-import { GameFrame } from './GameFrame';
-import { fetchPublishedGame } from './catalog';
-import { PixelIcon } from './PixelIcon';
-import { useGameTelemetry } from './gamePlayer';
+import { GameFrame } from './GameFrame.js';
+import { fetchPublishedGame } from './catalog.js';
+import { PixelIcon } from './PixelIcon.js';
+import { useGameTelemetry } from './gamePlayer.js';
 
 type PublishedGameFrameProps = {
   slug: string;

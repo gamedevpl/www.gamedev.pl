@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { recordCreateStep } from './visitTelemetry';
+import { recordCreateStep } from './visitTelemetry.js';
 import type { CatalogEntry } from './catalog.js';
 import { SketchModal } from './SketchModal.js';
 import { PixelIcon } from './PixelIcon.js';

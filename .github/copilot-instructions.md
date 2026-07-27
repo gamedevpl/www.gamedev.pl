@@ -29,7 +29,9 @@ See [`docs/architecture.md`](../docs/architecture.md#sandboxed-game-execution).
 ## Conventions
 
 - **ESM only** — every package is `"type": "module"`; use `.js` extensions in relative TS
-  imports (e.g. `import { x } from './mock.js'`).
+  imports (e.g. `import { x } from './mock.js'`). Enforced by the
+  `gamedev/relative-import-extensions` lint rule, so `npm run lint -- --fix` will write the
+  correct specifier for you — including `./dir/index.js` where `./dir` is a directory.
 - **TypeScript strict** — `strict`, `noUnusedLocals`, `noUnusedParameters`,
   `noFallthroughCasesInSwitch`. Prefix intentionally-unused args with `_`.
 - **Small, focused files**; comment _why_, not _what_.

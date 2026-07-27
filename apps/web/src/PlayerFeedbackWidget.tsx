@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AuthModal } from './AuthModal';
-import { useAuth } from './AuthContext';
-import { PixelIcon } from './PixelIcon';
-import { submitPlayerFeedback, type PlayerFeedbackError } from './playerFeedbackApi';
+import { AuthModal } from './AuthModal.js';
+import { useAuth } from './AuthContext.js';
+import { PixelIcon } from './PixelIcon.js';
+import { submitPlayerFeedback, type PlayerFeedbackError } from './playerFeedbackApi.js';
 
 /**
  * Written player feedback (docs/improvement-loop-plan.md, signal source #1) — the

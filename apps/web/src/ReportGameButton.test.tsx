@@ -4,9 +4,9 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { ReportGameButton } from './ReportGameButton';
-import { CONTACT_EMAIL } from './legal/operator';
-import i18n from './i18n';
+import { ReportGameButton } from './ReportGameButton.js';
+import { CONTACT_EMAIL } from './legal/operator.js';
+import i18n from './i18n/index.js';
 
 /**
  * This control is our DSA art. 16 notice-and-action mechanism. A notice only obliges

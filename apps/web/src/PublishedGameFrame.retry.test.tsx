@@ -8,9 +8,9 @@ vi.mock('./catalog', () => ({
   fetchPublishedGame: vi.fn(),
 }));
 
-import { PublishedGameFrame } from './PublishedGameFrame';
-import { fetchPublishedGame } from './catalog';
-import i18n from './i18n';
+import { PublishedGameFrame } from './PublishedGameFrame.js';
+import { fetchPublishedGame } from './catalog.js';
+import i18n from './i18n/index.js';
 
 describe('PublishedGameFrame retry', () => {
   let container: HTMLDivElement;
@@ -28,13 +28,11 @@ describe('PublishedGameFrame retry', () => {
   });
 
   it('offers Retry after a failed load and fetches again when clicked', async () => {
-    vi.mocked(fetchPublishedGame)
-      .mockRejectedValueOnce(new Error('boom'))
-      .mockResolvedValueOnce({
-        slug: 'solo-cards',
-        title: 'Solo Cards',
-        html: '<!doctype html><title>Solo Cards</title>',
-      });
+    vi.mocked(fetchPublishedGame).mockRejectedValueOnce(new Error('boom')).mockResolvedValueOnce({
+      slug: 'solo-cards',
+      title: 'Solo Cards',
+      html: '<!doctype html><title>Solo Cards</title>',
+    });
 
     const root = createRoot(container);
     await act(async () => {

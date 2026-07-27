@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
-import { isPlayTimeAccruing, TelemetrySession } from './telemetry';
-import { recordVisitEvent } from './visitTelemetry';
+import { isPlayTimeAccruing, TelemetrySession } from './telemetry.js';
+import { recordVisitEvent } from './visitTelemetry.js';
 
 // Message envelope tags. The host is the app; the player is the bridge script
 // that runs inside the sandboxed game iframe.

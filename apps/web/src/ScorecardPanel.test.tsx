@@ -3,8 +3,8 @@
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { describe, expect, it } from 'vitest';
-import { ScorecardPanel } from './ScorecardPanel';
-import type { Scorecard, ScorecardsResponse } from './healthApi';
+import { ScorecardPanel } from './ScorecardPanel.js';
+import type { Scorecard, ScorecardsResponse } from './healthApi.js';
 
 /**
  * This panel is the only place a stopped sweep is visible — the game-health table beside

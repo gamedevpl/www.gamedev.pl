@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import { CONTACT_EMAIL, SERVICE_URL } from './legal/operator';
-import { PixelIcon } from './PixelIcon';
+import { CONTACT_EMAIL, SERVICE_URL } from './legal/operator.js';
+import { PixelIcon } from './PixelIcon.js';
 
 /**
  * Notice-and-action, minimum viable (DSA art. 16).

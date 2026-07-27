@@ -3,8 +3,8 @@
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import i18n from './i18n';
-import { NotFoundPage } from './NotFoundPage';
+import i18n from './i18n/index.js';
+import { NotFoundPage } from './NotFoundPage.js';
 
 describe('NotFoundPage', () => {
   afterEach(() => {

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { clearPendingQa, loadPendingQa, savePendingQa } from './pendingQa';
+import { clearPendingQa, loadPendingQa, savePendingQa } from './pendingQa.js';
 
 const session = {
   spec: { title: 'Kosmiczny listonosz', concept: 'Deliver parcels between planets', displayName: 'Greg' },

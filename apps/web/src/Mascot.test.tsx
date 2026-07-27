@@ -3,8 +3,8 @@
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Mascot, MascotMoment, type MascotEmotion } from './Mascot';
-import { MASCOT_IDLE_SPANS, MASCOT_SOLID_SPANS } from './mascotSpans';
+import { Mascot, MascotMoment, type MascotEmotion } from './Mascot.js';
+import { MASCOT_IDLE_SPANS, MASCOT_SOLID_SPANS } from './mascotSpans.js';
 
 const EMOTIONS: MascotEmotion[] = [
   'idle',

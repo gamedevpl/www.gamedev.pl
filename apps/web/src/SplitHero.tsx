@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { CatalogEntry } from './catalog';
+import type { CatalogEntry } from './catalog.js';
 
 type SplitHeroProps = {
   featuredGame: CatalogEntry | null;

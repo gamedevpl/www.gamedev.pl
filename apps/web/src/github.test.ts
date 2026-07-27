@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bugReportUrl, ISSUES_URL, REPO_URL } from './github';
+import { bugReportUrl, ISSUES_URL, REPO_URL } from './github.js';
 
 describe('github links', () => {
   it('points the issues list at the same repo', () => {
