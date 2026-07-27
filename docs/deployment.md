@@ -43,15 +43,15 @@ account (`<project-number>-compute@developer.gserviceaccount.com`) needs
 `roles/secretmanager.secretAccessor` on each. `deploy.yml` and `infra/deploy-api.sh` wire whichever exist into
 a single `--set-secrets` list.
 
-| Secret                    | Purpose                                                             | State (2026-07-26)       |
-| ------------------------- | ------------------------------------------------------------------- | ------------------------ |
-| `github-token`            | Fine-grained PAT (Issues rw + PRs r + Contents r, games repo only)  | ✅ set — submissions on  |
+| Secret                              | Purpose                                                                                 | State (2026-07-26)                                                           |
+| ----------------------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `github-token`                      | Fine-grained PAT (Issues rw + PRs r + Contents r, games repo only)                      | ✅ set — submissions on                                                      |
 | `GAMES_REPO_TOKEN` (GitHub Actions) | Contents:read PAT on the games repo — CI lockstep check (`npm run contract:games-repo`) | ⚠️ set on the GitHub repo (not GCP) so assemble/Check 4/music drift fails CI |
-| `submission-token-secret` | HMAC key for the stateless status token → `SUBMISSION_TOKEN_SECRET` | ✅ set                   |
-| `session-secret`          | HMAC key for session cookies → `SESSION_SECRET`                     | ✅ set                   |
-| `resend-api-key`          | Outbound email → `RESEND_API_KEY` (see below)                       | ✅ set                   |
-| `vapid-private-key`       | Web push signing → `VAPID_PRIVATE_KEY`                              | ✅ set                   |
-| `site-basic-auth`         | Former "not public yet" lock → `SITE_BASIC_AUTH`                    | ⚠️ exists but **unused** |
+| `submission-token-secret`           | HMAC key for the stateless status token → `SUBMISSION_TOKEN_SECRET`                     | ✅ set                                                                       |
+| `session-secret`                    | HMAC key for session cookies → `SESSION_SECRET`                                         | ✅ set                                                                       |
+| `resend-api-key`                    | Outbound email → `RESEND_API_KEY` (see below)                                           | ✅ set                                                                       |
+| `vapid-private-key`                 | Web push signing → `VAPID_PRIVATE_KEY`                                                  | ✅ set                                                                       |
+| `site-basic-auth`                   | Former "not public yet" lock → `SITE_BASIC_AUTH`                                        | ⚠️ exists but **unused**                                                     |
 
 `site-basic-auth` is a leftover: the running revision does not wire it, and the site answers
 without an auth challenge. Access is controlled by `PRIVATE_BETA` and the beta allowlist

@@ -66,6 +66,13 @@ export const privacyEn: LegalDocument = {
               'Indefinitely for published games (they are part of the project record); unpublished submissions — 24 months',
             ],
             [
+              'Your reactions to games you play: a thumbs up/down, and any written feedback you leave — each stored ' +
+                'with your account identifier so one vote counts once and feedback can be traced if it is abusive',
+              'Improving the games and deciding what to fix next; keeping the feedback form usable',
+              'Art. 6(1)(f) — our legitimate interest in improving the games and in a safe Service',
+              'Until you delete your account',
+            ],
+            [
               'The moderation outcome for your description (whether it was rejected and why)',
               'Preventing unlawful or harmful content from being created',
               'Art. 6(1)(c) — legal obligation (Digital Services Act), and 6(1)(f) — our legitimate interest in a ' +
@@ -270,8 +277,8 @@ export const privacyEn: LegalDocument = {
           kind: 'p',
           text:
             `You can ask us to delete your account at any time by writing to [${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL}). ` +
-            'We then remove your account data, email address, notification subscriptions, and the link between your ' +
-            'submissions and you.',
+            'We then remove your account data, email address, notification subscriptions, the votes and written ' +
+            'feedback you left on games, and the link between your submissions and you.',
         },
         {
           kind: 'p',

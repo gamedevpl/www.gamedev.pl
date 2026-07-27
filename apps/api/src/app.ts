@@ -15,6 +15,7 @@ import { createDefaultContentChecker, type ContentChecker } from './moderation.j
 import { registerEmailRoutes } from './email-routes.js';
 import { registerMultiplayerRoutes, type MultiplayerRoutesOptions } from './mp.js';
 import { registerNotificationRoutes } from './notifications.js';
+import { registerPlayerFeedbackRoutes, type PlayerFeedbackRoutesOptions } from './player-feedback.js';
 import { registerPushRoutes } from './push-routes.js';
 import { registerRefineRoute, type SpecRefiner } from './refine.js';
 import { InMemoryStore, type Store } from './store.js';
@@ -47,6 +48,8 @@ export interface BuildAppOptions {
   telemetryRoutes?: Omit<TelemetryRoutesOptions, 'store'>;
   /** Seams for game votes; defaults to a live catalog-backed slug gate. */
   voteRoutes?: Omit<VoteRoutesOptions, 'store'>;
+  /** Seams for written player feedback; defaults to a live catalog-backed slug gate. */
+  playerFeedbackRoutes?: Omit<PlayerFeedbackRoutesOptions, 'store' | 'contentChecker'>;
   // Private beta allowlist — uids (comma-separated) allowed to sign in and access gated routes
   betaAllowedUids?: string;
   // Private beta allowlist — Google-verified emails (comma-separated, case-insensitive)
@@ -185,6 +188,17 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await registerVoteRoutes(app, {
     store,
     ...(options.voteRoutes ?? { publishedSlugs: createPublishedSlugGateFromEnv() }),
+  });
+
+  // Written player feedback (docs/improvement-loop-plan.md, signal source #1). Keyed
+  // by slug and gated the same way votes are; unlike votes it requires a session to
+  // even read the tradeoff (there is no public read here — feedback has no public
+  // aggregate view yet, that's IL-2's scorecard). See player-feedback.ts for why it
+  // needs a session and why, unlike creator feedback, it never touches GitHub.
+  await registerPlayerFeedbackRoutes(app, {
+    store,
+    contentChecker,
+    ...(options.playerFeedbackRoutes ?? { publishedSlugs: createPublishedSlugGateFromEnv() }),
   });
 
   // Operator reads over that telemetry. Separate allowlist from the beta one: being

@@ -52,15 +52,8 @@ export async function mintAccessTokenFor(store: Store, params: MintAccessTokenPa
 
   // Enforced here (not only at the HTTP boundary) so the CLI cannot mint a
   // token that outlives the documented max, or a zero/negative window.
-  if (
-    !Number.isInteger(expiresInDays) ||
-    expiresInDays < 1 ||
-    expiresInDays > MAX_EXPIRY_DAYS
-  ) {
-    throw new MintAccessTokenError(
-      'invalid_expiry',
-      `expiresInDays must be an integer from 1 to ${MAX_EXPIRY_DAYS}`,
-    );
+  if (!Number.isInteger(expiresInDays) || expiresInDays < 1 || expiresInDays > MAX_EXPIRY_DAYS) {
+    throw new MintAccessTokenError('invalid_expiry', `expiresInDays must be an integer from 1 to ${MAX_EXPIRY_DAYS}`);
   }
 
   const existing = await store.getUser(uid);

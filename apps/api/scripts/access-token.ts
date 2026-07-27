@@ -49,9 +49,7 @@ async function mint(store: FirestoreStore, args: string[]): Promise<void> {
   const expiresInDays = daysRaw ? Number(daysRaw) : undefined;
   if (
     daysRaw &&
-    (!Number.isInteger(expiresInDays) ||
-      (expiresInDays ?? 0) < 1 ||
-      (expiresInDays ?? 0) > MAX_EXPIRY_DAYS)
+    (!Number.isInteger(expiresInDays) || (expiresInDays ?? 0) < 1 || (expiresInDays ?? 0) > MAX_EXPIRY_DAYS)
   ) {
     console.error(`--days must be an integer from 1 to ${MAX_EXPIRY_DAYS}, got "${daysRaw}"`);
     process.exit(1);

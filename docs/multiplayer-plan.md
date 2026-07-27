@@ -276,7 +276,7 @@ max_players: 4
   `party` without the frontmatter fails. The offline-only rule is **unchanged** — no new
   network allowances of any kind.
 - `GAME_KIT_MODULES` gains `party` (canonical order today: `input, collision, world, ai,
-  gameplay, drawing, actors, gfx, effects, audio, party`) in both `tools/lib/assemble.ts`
+gameplay, drawing, actors, gfx, effects, audio, party`) in both `tools/lib/assemble.ts`
   and the API's `github-client.ts`, which keep independent copies of that list.
 - The catalog carries `multiplayer`, `minPlayers`, `maxPlayers` through `CatalogGameEntry` →
   `/api/catalog` → the web `CatalogEntry`.

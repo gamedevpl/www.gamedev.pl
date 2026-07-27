@@ -69,6 +69,14 @@ export const privacyPl: LegalDocument = {
               'Bezterminowo dla gier opublikowanych (są częścią historii projektu); zgłoszenia nieopublikowane — 24 miesiące',
             ],
             [
+              'Twoje reakcje na gry, w które grasz: ocena kciukiem w górę/w dół oraz wpisane uwagi — zapisywane wraz ' +
+                'z identyfikatorem Twojego konta, aby jeden głos liczył się raz, a uwagi dało się powiązać z autorem ' +
+                'w razie nadużycia',
+              'Ulepszanie gier i decydowanie, co poprawić w następnej kolejności; utrzymanie użyteczności formularza uwag',
+              'art. 6 ust. 1 lit. f — nasz prawnie uzasadniony interes w ulepszaniu gier i bezpieczeństwie Serwisu',
+              'Do usunięcia konta',
+            ],
+            [
               'Wynik moderacji Twojego opisu (czy i dlaczego został odrzucony)',
               'Niedopuszczenie do powstania treści bezprawnych lub szkodliwych',
               'art. 6 ust. 1 lit. c — obowiązek prawny (akt o usługach cyfrowych) oraz lit. f — nasz prawnie ' +
@@ -279,8 +287,8 @@ export const privacyPl: LegalDocument = {
           kind: 'p',
           text:
             `Możesz w każdej chwili poprosić o usunięcie konta, pisząc na [${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL}). ` +
-            'Usuwamy wtedy dane Twojego konta, adres e-mail, subskrypcje powiadomień i powiązanie zgłoszeń z Twoją ' +
-            'osobą.',
+            'Usuwamy wtedy dane Twojego konta, adres e-mail, subskrypcje powiadomień, oddane przez Ciebie głosy i ' +
+            'wpisane uwagi do gier oraz powiązanie zgłoszeń z Twoją osobą.',
         },
         {
           kind: 'p',
