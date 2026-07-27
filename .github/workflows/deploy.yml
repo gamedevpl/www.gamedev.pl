@@ -306,6 +306,32 @@ jobs:
 
           echo "Authenticated smoke passed as ${UID_VALUE}: bearer auth, cookie exchange, and the session wall all live."
 
+      # The browser gate. Everything above stops at HTTP, so play can be completely broken
+      # while every check is green: `/api/games/<slug>` returning HTML says nothing about
+      # whether that HTML runs. A CSP header, a sandbox change, a bundle regression or a
+      # broken assembler each return a healthy 200 and a black screen — and a site without
+      # playable games is worth nothing (apps/e2e, docs/deployment.md).
+      #
+      # `deploy` is a separate job from `ci-gate`, on a fresh runner with no node_modules —
+      # everything before this point is gcloud and curl — so Node is set up here.
+      - name: Set up Node for the browser gate
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install workspace dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser gate against the candidate
+        env:
+          E2E_BASE_URL: ${{ env.CANDIDATE_URL }}
+          GAMEDEV_ACCESS_TOKEN: ${{ secrets.GAMEDEV_ACCESS_TOKEN }}
+        run: npm run e2e
+
       - name: Promote candidate revision to 100% traffic
         run: |
           gcloud run services update-traffic "$SERVICE" \

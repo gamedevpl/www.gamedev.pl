@@ -9,10 +9,10 @@ import {
   type Page,
 } from 'playwright-core';
 import { inject } from 'vitest';
-import { BASE_URL, STORAGE_STATE_ENV } from './config.js';
+import { BASE_URL, proxyOptions, STORAGE_STATE_ENV } from './config.js';
 
 // Re-exported so test files have a single import site for the whole helper surface.
-export { BASE_URL, STORAGE_STATE_ENV };
+export { BASE_URL, proxyOptions, STORAGE_STATE_ENV };
 
 /**
  * Where Claude Code's remote environments pre-install Playwright's browsers.
@@ -158,7 +158,7 @@ export async function signedInApiContext(): Promise<APIRequestContext> {
   if (!storageState) {
     throw new Error(`${STORAGE_STATE_ENV} unset — globalSetup did not run or the token is missing`);
   }
-  return request.newContext({ baseURL: BASE_URL, storageState });
+  return request.newContext({ baseURL: BASE_URL, storageState, ...proxyOptions() });
 }
 
 /** A browser context carrying the bot's session cookie. */

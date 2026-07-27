@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { request } from 'playwright-core';
 // From config.js, not browser.js: browser.js imports `inject` from vitest, and
 // importing vitest inside globalSetup fails — it runs in a different context.
-import { BASE_URL, STORAGE_STATE_ENV } from './config.js';
+import { BASE_URL, proxyOptions, STORAGE_STATE_ENV } from './config.js';
 
 /**
  * Exchange the access token for a session cookie exactly once per run.
@@ -24,7 +24,7 @@ let directory: string | undefined;
 export async function setup({ provide }: { provide: (key: string, value: unknown) => void }) {
   if (!process.env.GAMEDEV_ACCESS_TOKEN) return; // suites skip themselves; nothing to set up
 
-  const api = await request.newContext({ baseURL: BASE_URL });
+  const api = await request.newContext({ baseURL: BASE_URL, ...proxyOptions() });
   try {
     const res = await api.post('/api/auth/session', {
       headers: { Authorization: `Bearer ${process.env.GAMEDEV_ACCESS_TOKEN}` },
@@ -38,7 +38,9 @@ export async function setup({ provide }: { provide: (key: string, value: unknown
     }
     if (res.status() !== 200) {
       throw new Error(
-        `token→session exchange failed (${res.status()}). Likely expired or revoked — ` +
+        `token→session exchange failed (${res.status()}). If 403 from a sandbox, suspect the ` +
+          'egress proxy before the token — HTTPS_PROXY must reach ' +
+          `${BASE_URL}. Otherwise it is expired or revoked: ` +
           'npm run token:list -w @gamedevpl/api -- bot:e2e',
       );
     }
