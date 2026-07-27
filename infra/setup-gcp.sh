@@ -101,43 +101,58 @@ for GROUP in $TELEMETRY_GROUPS; do
   fi
 done
 
-# The operator scorecards read (GET /api/admin/scorecards, backing the /health panel)
-# runs a COLLECTION GROUP query ordered by computedAt — see listScorecards in
-# apps/api/src/store.ts: db.collectionGroup('scorecard').orderBy('computedAt','desc').
-# Firestore auto-indexes single fields only at COLLECTION scope, never COLLECTION_GROUP,
-# so without this index the query fails with `9 FAILED_PRECONDITION` and the whole /health
-# telemetry page 500s — all four operator reads share one Promise.all and one error state,
-# so the missing index blanks the game-health table too.
+# Two reads run COLLECTION GROUP queries over a single field, and Firestore auto-indexes
+# single fields only at COLLECTION scope, never COLLECTION_GROUP. Without these the query
+# fails with `9 FAILED_PRECONDITION` — not a slow query, a hard error:
 #
-# This is a SINGLE-FIELD index, which Firestore requires be configured through single-field
-# controls: `gcloud firestore indexes composite create` rejects it ("not necessary, configure
+#   scorecard.computedAt (DESC)  listScorecards, apps/api/src/store.ts
+#     Backs GET /api/admin/scorecards and the /health scorecards panel. All four operator
+#     reads share one Promise.all and one error state, so this one missing index blanks
+#     the game-health table too, not just the panel that needs it.
+#
+#   playerFeedback.uid (ASC)     deletePlayerFeedbackByUid, apps/api/src/store.ts
+#     Backs `npm run player:erase` — the executable half of the privacy notice's promise
+#     to remove a person's votes and feedback on account deletion. This one fails at the
+#     worst possible moment: an operator running a deletion request they have already
+#     accepted, with no other way to carry it out. Equality needs only ASCENDING.
+#
+# These are SINGLE-FIELD indexes, which Firestore requires be configured through single-field
+# controls: `gcloud firestore indexes composite create` rejects them ("not necessary, configure
 # using single field index controls"), and `gcloud firestore indexes fields update` cannot set
-# `query-scope` in this CLI. So it is applied through the Firestore Admin REST field override,
-# which is the only interface that expresses a COLLECTION_GROUP single-field index here.
+# `query-scope` in this CLI. So they are applied through the Firestore Admin REST field
+# override, the only interface that expresses a COLLECTION_GROUP single-field index here.
 #
-# This is an INDEX, not a TTL policy — it must NEVER be added to the TTL loop above. Scorecards
-# are the durable aggregate meant to outlive the raw play rows a TTL expires; a TTL here would
-# delete the summaries and keep nothing. The index just makes them readable in order.
-echo "==> 7/8 Ensuring the COLLECTION_GROUP index for the scorecards operator read"
-SCORECARD_FIELD_URL="https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/collectionGroups/scorecard/fields/computedAt"
-SCORECARD_ACCESS_TOKEN="$(gcloud auth print-access-token --project="$PROJECT_ID")"
-if curl -s -H "Authorization: Bearer ${SCORECARD_ACCESS_TOKEN}" "$SCORECARD_FIELD_URL" \
-  | grep -q '"COLLECTION_GROUP"'; then
-  echo "    scorecard.computedAt COLLECTION_GROUP index: already present."
-else
+# These are INDEXES, not TTL policies — they must NEVER be added to the TTL loop above.
+# Scorecards are the durable aggregate meant to outlive the raw play rows a TTL expires, and
+# feedback is a person's own words; a TTL on either would delete what we meant to keep.
+echo "==> 7/8 Ensuring the COLLECTION_GROUP indexes the operator reads need"
+FIELD_ACCESS_TOKEN="$(gcloud auth print-access-token --project="$PROJECT_ID")"
+# group:field:order — one line per COLLECTION_GROUP single-field index.
+CG_INDEXES="scorecard:computedAt:DESCENDING playerFeedback:uid:ASCENDING"
+for ENTRY in $CG_INDEXES; do
+  CG_GROUP="${ENTRY%%:*}"
+  CG_REST="${ENTRY#*:}"
+  CG_FIELD="${CG_REST%%:*}"
+  CG_ORDER="${CG_REST#*:}"
+  FIELD_URL="https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/collectionGroups/${CG_GROUP}/fields/${CG_FIELD}"
+  if curl -s -H "Authorization: Bearer ${FIELD_ACCESS_TOKEN}" "$FIELD_URL" \
+    | grep -q '"COLLECTION_GROUP"'; then
+    echo "    ${CG_GROUP}.${CG_FIELD} COLLECTION_GROUP index: already present."
+    continue
+  fi
   # The COLLECTION (asc/desc) entries reassert Firestore's default single-field indexing,
-  # which setting an explicit indexConfig would otherwise drop; the COLLECTION_GROUP DESC
-  # entry is the one the query needs. Builds asynchronously (seconds for a handful of rows).
-  curl -s -X PATCH "${SCORECARD_FIELD_URL}?updateMask=indexConfig" \
-    -H "Authorization: Bearer ${SCORECARD_ACCESS_TOKEN}" \
+  # which setting an explicit indexConfig would otherwise drop; the COLLECTION_GROUP entry
+  # is the one the query needs. Builds asynchronously (seconds for a handful of rows).
+  curl -s -X PATCH "${FIELD_URL}?updateMask=indexConfig" \
+    -H "Authorization: Bearer ${FIELD_ACCESS_TOKEN}" \
     -H "Content-Type: application/json" \
-    -d '{"indexConfig":{"indexes":[
-      {"queryScope":"COLLECTION","fields":[{"fieldPath":"computedAt","order":"ASCENDING"}]},
-      {"queryScope":"COLLECTION","fields":[{"fieldPath":"computedAt","order":"DESCENDING"}]},
-      {"queryScope":"COLLECTION_GROUP","fields":[{"fieldPath":"computedAt","order":"DESCENDING"}]}
-    ]}}' >/dev/null
-  echo "    scorecard.computedAt COLLECTION_GROUP index: creating (builds asynchronously)."
-fi
+    -d "{\"indexConfig\":{\"indexes\":[
+      {\"queryScope\":\"COLLECTION\",\"fields\":[{\"fieldPath\":\"${CG_FIELD}\",\"order\":\"ASCENDING\"}]},
+      {\"queryScope\":\"COLLECTION\",\"fields\":[{\"fieldPath\":\"${CG_FIELD}\",\"order\":\"DESCENDING\"}]},
+      {\"queryScope\":\"COLLECTION_GROUP\",\"fields\":[{\"fieldPath\":\"${CG_FIELD}\",\"order\":\"${CG_ORDER}\"}]}
+    ]}}" >/dev/null
+  echo "    ${CG_GROUP}.${CG_FIELD} COLLECTION_GROUP index: creating (builds asynchronously)."
+done
 
 # Pre-assembled published games (apps/api/src/game-snapshot.ts). The bucket sits in
 # the Cloud Run region, not the Firestore one: it is read on the play path, and a

@@ -15,7 +15,8 @@
     "beta:invite": "tsx scripts/beta-invite.ts",
     "token:mint": "tsx scripts/access-token.ts mint",
     "token:list": "tsx scripts/access-token.ts list",
-    "token:revoke": "tsx scripts/access-token.ts revoke"
+    "token:revoke": "tsx scripts/access-token.ts revoke",
+    "player:erase": "tsx scripts/erase-player-signals.ts"
   },
   "dependencies": {
     "@fastify/cookie": "11.1.0",
