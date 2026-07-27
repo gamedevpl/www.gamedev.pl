@@ -124,4 +124,18 @@ describe('CreatorStudioView', () => {
 
     root.unmount();
   });
+
+  it('enters focus mode once the shelf has many games selected', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue(manyGames(10));
+
+    const { container, root } = await renderStudio();
+
+    expect(container.querySelector('.studio-layout')?.classList.contains('is-focus')).toBe(true);
+    expect(container.querySelector('.studio-game-switcher')?.textContent).toMatch(/10 games/i);
+
+    root.unmount();
+  });
 });

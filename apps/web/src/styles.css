@@ -5383,33 +5383,85 @@ body.player-open {
 .studio-game-switcher {
   display: none;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   width: 100%;
   text-align: left;
-  padding: 10px 12px;
-  border-radius: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
   border: 1px solid var(--panel-border);
-  background: rgba(255, 255, 255, 0.03);
+  background: linear-gradient(180deg, rgba(0, 228, 172, 0.06), transparent 70%), rgba(255, 255, 255, 0.03);
   color: var(--text);
   cursor: pointer;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s,
+    background 0.2s;
+}
+
+.studio-game-switcher:hover {
+  border-color: rgba(0, 228, 172, 0.45);
+  box-shadow: 0 0 18px rgba(0, 228, 172, 0.08);
+}
+
+.studio-game-switcher-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex-shrink: 0;
 }
 
 .studio-game-switcher-label {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.45px;
   color: var(--muted);
 }
 
+.studio-game-switcher-count {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--turquoise);
+  white-space: nowrap;
+}
+
 .studio-game-switcher-title {
   flex: 1;
   min-width: 0;
-  font-size: 0.95rem;
+  font-size: 1.15rem;
   font-weight: 700;
+  letter-spacing: -0.2px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.studio-game-switcher .studio-slug {
+  flex-shrink: 0;
+}
+
+/* 5+ games: collapse the shelf after selection so the selected game owns the page. */
+.studio-layout.is-focus {
+  grid-template-columns: 1fr;
+}
+
+.studio-layout.is-focus > .studio-shelf {
+  display: none;
+}
+
+.studio-layout.is-focus .studio-game-switcher {
+  display: flex;
+}
+
+.studio-layout.is-focus .studio-detail-title-row {
+  display: none;
+}
+
+.studio-layout.is-focus .studio-detail {
+  max-width: 920px;
+  width: 100%;
+  margin: 0 auto;
 }
 
 .studio-picker-backdrop {
@@ -5763,17 +5815,26 @@ body.player-open {
     grid-template-columns: 1fr;
   }
 
-  /* Focus mode: hide the tall shelf; switch games via the picker sheet. */
+  /* Narrow viewports always focus after selection — even a short shelf costs scroll. */
   .studio-layout.is-game-open > .studio-shelf {
     display: none;
   }
 
   .studio-layout.is-game-open .studio-game-switcher {
-    display: inline-flex;
+    display: flex;
   }
 
   .studio-layout.is-game-open .studio-detail-title-row {
     display: none;
+  }
+
+  .studio-layout.is-game-open .studio-detail {
+    max-width: none;
+    margin: 0;
+  }
+
+  .studio-game-switcher-title {
+    font-size: 1rem;
   }
 
   .studio-shelf {

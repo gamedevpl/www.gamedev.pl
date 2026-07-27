@@ -242,7 +242,17 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryCo
       ) : null}
 
       {!loading && games.length > 0 ? (
-        <div className={`studio-layout${selectedGame ? ' is-game-open' : ''}`}>
+        <div
+          className={[
+            'studio-layout',
+            selectedGame ? 'is-game-open' : '',
+            // Once the shelf is no longer a glanceable handful, collapse it after
+            // selection so the work surface owns the viewport (desktop + mobile).
+            selectedGame && showShelfTools ? 'is-focus' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
           <aside className="studio-shelf" aria-label={t('studioPanel.shelfAria')}>
             <div className="studio-shelf-head">
               <h2 className="studio-shelf-heading">{t('studioPanel.shelf.heading')}</h2>
@@ -272,8 +282,14 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryCo
                   aria-haspopup="dialog"
                   aria-expanded={pickerOpen}
                 >
-                  <span className="studio-game-switcher-label">{t('studioPanel.shelf.switcher')}</span>
+                  <span className="studio-game-switcher-meta">
+                    <span className="studio-game-switcher-label">{t('studioPanel.shelf.switcher')}</span>
+                    <span className="studio-game-switcher-count">
+                      {t('studioPanel.shelf.count', { count: games.length })}
+                    </span>
+                  </span>
                   <span className="studio-game-switcher-title">{selectedGame.title}</span>
+                  {selectedGame.slug ? <code className="studio-slug">{selectedGame.slug}</code> : null}
                   <PixelIcon name="expand" size={12} />
                 </button>
                 <div className="studio-detail-title-row">
