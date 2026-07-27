@@ -7,6 +7,7 @@ import path from 'node:path';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
+import { registerAccessTokenRoutes } from './access-token-routes.js';
 import { registerAdminRoutes } from './admin.js';
 import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
 import { createGenerator } from './generator.js';
@@ -205,6 +206,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // numbers. Unset means the route admits nobody, which is the right default for a
   // surface whose whole purpose is seeing across other people's games.
   await registerAdminRoutes(app, { store, adminUids });
+
+  // Issuing personal access tokens (docs/agent-access-tokens.md) — the credential that
+  // lets a coding agent in a cloud VM authenticate as a real account without a browser,
+  // a Google identity, or any bypass route. Same operator allowlist as the views above,
+  // and session-only, so a token can never mint another.
+  await registerAccessTokenRoutes(app, { store, adminUids });
 
   app.get('/api/health', async () => ({ status: 'ok', provider: generator.name, privateBeta }));
 

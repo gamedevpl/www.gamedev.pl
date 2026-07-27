@@ -277,8 +277,7 @@ max_players: 4
   network allowances of any kind.
 - `GAME_KIT_MODULES` gains `party` (canonical order today: `input, collision, world, ai,
 gameplay, drawing, actors, gfx, effects, audio, party`) in both `tools/lib/assemble.ts`
-and the API's `github-client.ts`, which
-  keep independent copies of that list.
+  and the API's `github-client.ts`, which keep independent copies of that list.
 - The catalog carries `multiplayer`, `minPlayers`, `maxPlayers` through `CatalogGameEntry` →
   `/api/catalog` → the web `CatalogEntry`.
 - Agent instructions get a multiplayer section + the two seed games as house-style references.

@@ -9,8 +9,12 @@
     "start": "node dist/server.js",
     "type-check": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "contract:games-repo": "tsx scripts/check-games-repo-contract.ts",
     "beta:approve": "tsx scripts/beta-approve.ts",
-    "beta:invite": "tsx scripts/beta-invite.ts"
+    "beta:invite": "tsx scripts/beta-invite.ts",
+    "token:mint": "tsx scripts/access-token.ts mint",
+    "token:list": "tsx scripts/access-token.ts list",
+    "token:revoke": "tsx scripts/access-token.ts revoke"
   },
   "dependencies": {
     "@fastify/cookie": "11.1.0",

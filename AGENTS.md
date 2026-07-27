@@ -30,6 +30,14 @@ npm run type-check && npm run lint && npm run test && npm run build
 `npm run dev` runs everything locally; the generator defaults to the offline `mock` provider,
 so no cloud or API keys are needed.
 
+**Testing behind sign-in.** Locally, `curl -X POST http://localhost:5173/api/auth/dev -c
+cookies.txt` gives you a full session — no credentials, in-memory store, nothing real
+touched. To exercise the **deployed** site you need a personal access token
+(`Authorization: Bearer $GAMEDEV_ACCESS_TOKEN`), because there is no bypass route and never
+will be; exchange it at `POST /api/auth/session` for the cookie the SPA sends if you're
+driving a browser. Tokens are issued by the repo owner and must never be committed. See
+[`docs/agent-access-tokens.md`](docs/agent-access-tokens.md).
+
 ## Current architecture
 
 Production games will live in a **dedicated games repo maintained by coding agents**; this app

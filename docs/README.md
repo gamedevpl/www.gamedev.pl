@@ -67,6 +67,7 @@ survives only in this repo's early history.
 | [`local-development.md`](./local-development.md)                   | ✅ Running the whole product on a laptop with no keys — start here to contribute                       |
 | [`multiplayer-plan.md`](./multiplayer-plan.md)                     | ✅ Party mode: shared screen, phones as controllers, slot model, in-process relay                      |
 | [`auth-and-usage-plan.md`](./auth-and-usage-plan.md)               | ✅ Google sign-in, sessions, per-user quotas                                                           |
+| [`agent-access-tokens.md`](./agent-access-tokens.md)               | ✅ How an agent in a cloud VM authenticates without a browser or a Google account                      |
 | [`content-safety-plan.md`](./content-safety-plan.md)               | ✅ Moderation of submitted specs before an agent ever sees them                                        |
 | [`legal-compliance-plan.md`](./legal-compliance-plan.md)           | ✅ RODO/UŚUDE/DSA/AI-Act obligations and what is published to satisfy them                             |
 | [`agent-live-channel-plan.md`](./agent-live-channel-plan.md)       | ✅ How a working agent reports progress to the creator in seconds, not commits                         |

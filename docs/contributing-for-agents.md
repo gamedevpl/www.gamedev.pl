@@ -63,6 +63,36 @@ npm run type-check && npm run lint && npm run test && npm run build
 This mirrors the CI workflow (`.github/workflows/ci.yml`, Node 20). A Husky `pre-commit` hook
 runs `lint-staged` (Prettier) on staged files.
 
+### Exercising the authenticated half of the product
+
+A green gate says the code compiles and its tests pass. It does not say the flow works. If
+your change touches anything behind sign-in — creating, revising, notifications, votes,
+party mode — drive it.
+
+**Locally (the default, and what most changes need).** `npm run dev`, then:
+
+```bash
+curl -X POST http://localhost:5173/api/auth/dev -c cookies.txt
+```
+
+That is a full session for `dev:local` against the in-memory store and the mock generator.
+No credentials, nothing real touched. See [`local-development.md`](./local-development.md).
+
+**Against the deployed site**, when the thing under test is production behaviour — real
+Firestore, the real beta walls, the real CDN — you need a personal access token, because
+you have no browser and no Google account and there is no bypass route:
+
+```bash
+curl -H "Authorization: Bearer $GAMEDEV_ACCESS_TOKEN" https://www.gamedev.pl/api/auth/me
+# driving a real browser? exchange it for the cookie the SPA actually sends:
+curl -si -X POST https://www.gamedev.pl/api/auth/session \
+  -H "Authorization: Bearer $GAMEDEV_ACCESS_TOKEN" | grep -i set-cookie
+```
+
+Tokens are issued by the repo owner, never self-served, and `GAMEDEV_ACCESS_TOKEN` must
+never be committed or pasted into a game, an issue, or a PR description. Full guide:
+[`agent-access-tokens.md`](./agent-access-tokens.md).
+
 ## Code conventions
 
 - **ESM only.** Every package is `"type": "module"`. Use `.js` extensions in relative imports
