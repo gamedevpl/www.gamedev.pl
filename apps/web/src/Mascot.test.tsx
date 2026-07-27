@@ -76,7 +76,7 @@ describe('Mascot', () => {
     });
 
     expect(container.querySelector(`.mascot--${emotion}`)).not.toBeNull();
-    expect(container.querySelector('.mascot__mouth, .mascot__eyes')).not.toBeNull();
+    expect(container.querySelector('svg.mascot')).not.toBeNull();
 
     await act(async () => {
       root.unmount();

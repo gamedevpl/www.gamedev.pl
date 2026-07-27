@@ -38,7 +38,7 @@ export function NavHeader({ activeSpecsCount, onNavigate, onHome }: NavHeaderPro
     <header className="app-header">
       <div className="logo-brand">
         <a href="/" className="logo" onClick={handleLogoClick}>
-          <Mascot className="mascot--logo" emotion="idle" size={36} title={t('header.logoAlt')} staticPose />
+          <Mascot className="mascot--logo" emotion="idle" size={35} title={t('header.logoAlt')} staticPose />
           gamedev<span className="turquoise">.pl</span>
         </a>
       </div>

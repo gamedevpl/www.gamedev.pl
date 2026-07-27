@@ -4638,12 +4638,11 @@ body.player-open {
   animation: mascot-sigh 3.6s ease-in-out infinite;
 }
 
-.mascot:not(.mascot--static).mascot--wave .mascot__arm--right {
-  transform-origin: 65px 38px;
-  animation: mascot-wave 0.85s ease-in-out infinite;
+.mascot:not(.mascot--static).mascot--wave .mascot__body-group {
+  animation: mascot-bob 1.1s ease-in-out infinite;
 }
 
-.mascot:not(.mascot--static) .mascot__eyes {
+.mascot:not(.mascot--static):not(.mascot--idle) .mascot__eyes {
   transform-origin: 38px 6px;
   animation: mascot-blink 4.8s ease-in-out infinite;
 }
@@ -4736,16 +4735,6 @@ body.player-open {
   }
 }
 
-@keyframes mascot-wave {
-  0%,
-  100% {
-    transform: rotate(0deg);
-  }
-  50% {
-    transform: rotate(18deg);
-  }
-}
-
 @keyframes mascot-blink {
   0%,
   42%,
@@ -4760,7 +4749,6 @@ body.player-open {
 
 @media (prefers-reduced-motion: reduce) {
   .mascot .mascot__body-group,
-  .mascot .mascot__arm--right,
   .mascot .mascot__eyes {
     animation: none !important;
   }
