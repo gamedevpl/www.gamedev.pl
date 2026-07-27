@@ -111,4 +111,13 @@ describe('games-repo source extractors', () => {
       readsMusicCatalog: true,
     });
   });
+
+  it('does not treat a bare music.json mention as the historical catalog path', () => {
+    const source = `
+      // TODO: migrate music.json later
+      const track = catalog.tracks[name];
+      out += \`window.__GAME_AUDIO_MUSIC__ = \${JSON.stringify(name)};\`;
+    `;
+    expect(extractMusicContractSignals(source).readsMusicCatalog).toBe(false);
+  });
 });

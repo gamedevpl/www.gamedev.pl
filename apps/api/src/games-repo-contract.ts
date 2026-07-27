@@ -90,14 +90,18 @@ export function extractMusicContractSignals(assembleSource: string): {
   readsTracksKey: boolean;
   readsMusicCatalog: boolean;
 } {
+  // Escape so `shared/audio/music.json` is matched literally — a bare `/music\.json/`
+  // would also accept comments or unrelated filenames (Copilot review on #272).
+  const catalogPathPattern = MUSIC_CONTRACT.catalogPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return {
     injectsMusicName: new RegExp(`${MUSIC_CONTRACT.windowMusicName}\\s*=`).test(assembleSource),
     readsTracksKey: new RegExp(`\\b${MUSIC_CONTRACT.catalogTracksKey}\\b`).test(assembleSource),
-    // Prefer the post-refactor reader; keep the old inline path as a fallback so an
-    // older games-repo tip still clears the check during a staggered rollout.
+    // Prefer the post-refactor reader; keep the historical catalog path as a
+    // fallback so an older games-repo tip still clears the check during a
+    // staggered rollout.
     readsMusicCatalog:
       new RegExp(`\\b${MUSIC_CONTRACT.catalogReader}\\s*\\(`).test(assembleSource) ||
-      /music\.json/.test(assembleSource),
+      new RegExp(catalogPathPattern).test(assembleSource),
   };
 }
 
