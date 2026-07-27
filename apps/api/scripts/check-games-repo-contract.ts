@@ -5,7 +5,7 @@
  * asserts they still match `games-repo-contract.ts` on this side:
  *   - GAME_KIT_MODULES order
  *   - MAX_BUNDLE_BYTES === MAX_PROJECT_BYTES
- *   - music injection contract (tracks + __GAME_AUDIO_MUSIC__)
+ *   - music injection contract (tracks + __GAME_AUDIO_MUSIC__ + readMusicCatalog)
  *
  * Requires GAMES_REPO_TOKEN (contents:read on the games repo). In CI, skip with a
  * warning when the secret is unset so forks / fresh clones still go green; set the
@@ -89,7 +89,7 @@ async function main(): Promise<void> {
   console.log(`  ✓ MAX_BUNDLE_BYTES / MAX_PROJECT_BYTES (${remoteBudget})`);
 
   const music = extractMusicContractSignals(assembleSource);
-  if (!music.injectsMusicName || !music.readsTracksKey || !music.readsMusicJson) {
+  if (!music.injectsMusicName || !music.readsTracksKey || !music.readsMusicCatalog) {
     const musicLines = assembleSource
       .split('\n')
       .map((line, index) => ({ line: line.trim(), n: index + 1 }))
@@ -99,11 +99,11 @@ async function main(): Promise<void> {
       .join('\n');
     fail(
       `music contract mismatch in games-repo assemble.ts: ` +
-        `injectsMusicName=${music.injectsMusicName} readsTracksKey=${music.readsTracksKey} readsMusicJson=${music.readsMusicJson}\n` +
+        `injectsMusicName=${music.injectsMusicName} readsTracksKey=${music.readsTracksKey} readsMusicCatalog=${music.readsMusicCatalog}\n` +
         `relevant lines:\n${musicLines || '  (none)'}`,
     );
   }
-  console.log('  ✓ music contract (__GAME_AUDIO_MUSIC__ + tracks + music.json)');
+  console.log('  ✓ music contract (__GAME_AUDIO_MUSIC__ + tracks + readMusicCatalog)');
 
   console.log('games-repo contract: ok');
 }

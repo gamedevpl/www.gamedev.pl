@@ -86,7 +86,8 @@ describe('games-repo source extractors', () => {
 
   it('detects the music injection contract signals', () => {
     const source = `
-      const catalog = JSON.parse(await read('shared/audio/music.json'));
+      import { readMusicCatalog } from '../audio.ts';
+      const catalog = readMusicCatalog();
       const track = catalog.tracks[name];
       out += \`window.__GAME_AUDIO_MUSIC__ = \${JSON.stringify(name)};\`;
       out += \`window.__GAME_MUSIC_TRACKS__ = Object.freeze(\${JSON.stringify({ [name]: track })});\`;
@@ -94,7 +95,20 @@ describe('games-repo source extractors', () => {
     expect(extractMusicContractSignals(source)).toEqual({
       injectsMusicName: true,
       readsTracksKey: true,
-      readsMusicJson: true,
+      readsMusicCatalog: true,
+    });
+  });
+
+  it('still accepts the older inline music.json catalog read', () => {
+    const source = `
+      const catalog = JSON.parse(await read('shared/audio/music.json'));
+      const track = catalog.tracks[name];
+      out += \`window.__GAME_AUDIO_MUSIC__ = \${JSON.stringify(name)};\`;
+    `;
+    expect(extractMusicContractSignals(source)).toMatchObject({
+      injectsMusicName: true,
+      readsTracksKey: true,
+      readsMusicCatalog: true,
     });
   });
 });

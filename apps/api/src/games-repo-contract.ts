@@ -43,13 +43,17 @@ export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
 /**
  * Music embedding contract (games-repo `tools/lib/assemble.ts`):
  * - `GAME.json` → `audio.music` is a single track-name string
- * - `shared/audio/music.json` → read only the `tracks` map
+ * - catalog is loaded via `readMusicCatalog()` (games-repo `tools/audio.ts`;
+ *   formerly an inline `shared/audio/music.json` read in assemble.ts)
  * - inject `window.__GAME_AUDIO_MUSIC__ = "<name>"` and a one-entry tracks object
  */
 export const MUSIC_CONTRACT = {
   manifestField: 'music',
   manifestFieldType: 'string',
+  /** Historical path; the catalog file may still live here inside `tools/audio.ts`. */
   catalogPath: 'shared/audio/music.json',
+  /** Function assemble.ts calls to load the music catalog (post-refactor lockstep). */
+  catalogReader: 'readMusicCatalog',
   catalogTracksKey: 'tracks',
   windowMusicName: '__GAME_AUDIO_MUSIC__',
   windowTracksName: '__GAME_MUSIC_TRACKS__',
@@ -84,12 +88,16 @@ export function extractMaxBundleBytes(validateSource: string): number {
 export function extractMusicContractSignals(assembleSource: string): {
   injectsMusicName: boolean;
   readsTracksKey: boolean;
-  readsMusicJson: boolean;
+  readsMusicCatalog: boolean;
 } {
   return {
     injectsMusicName: new RegExp(`${MUSIC_CONTRACT.windowMusicName}\\s*=`).test(assembleSource),
     readsTracksKey: new RegExp(`\\b${MUSIC_CONTRACT.catalogTracksKey}\\b`).test(assembleSource),
-    readsMusicJson: /music\.json/.test(assembleSource),
+    // Prefer the post-refactor reader; keep the old inline path as a fallback so an
+    // older games-repo tip still clears the check during a staggered rollout.
+    readsMusicCatalog:
+      new RegExp(`\\b${MUSIC_CONTRACT.catalogReader}\\s*\\(`).test(assembleSource) ||
+      /music\.json/.test(assembleSource),
   };
 }
 
