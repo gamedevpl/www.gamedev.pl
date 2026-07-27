@@ -35,6 +35,34 @@ import type { Store } from './store.js';
  * just against a real database.
  */
 
+/**
+ * Turns Firestore's index errors into the action that resolves them.
+ *
+ * They are accurate but arrive as a wall of gRPC text ending in a console URL, at the exact
+ * moment an operator is part-way through a deletion request they have already accepted.
+ *
+ * The distinction is the point: two different causes wear the same `9 FAILED_PRECONDITION`,
+ * and the remedies are not interchangeable. Re-running `setup-gcp.sh` against a
+ * still-building index reports it as already present, which reads as "the fix did not
+ * work" and invites the operator to conclude the tool is broken.
+ *
+ * Returns null for anything else — an unrecognised failure should be shown as-is, not
+ * dressed up as an index problem. That includes an index error naming some *other* query:
+ * this command depends on exactly one index, so a hint is only honest when the message
+ * says so. Confidently misidentifying the failure is worse than staying quiet, because a
+ * raw error sends an operator to read it while a wrong hint sends them somewhere useless.
+ */
+export function indexHint(message: string): string | null {
+  const isIndexFailure = message.includes('FAILED_PRECONDITION') && message.includes('index');
+  const namesOurIndex = message.includes('playerFeedback') && message.includes('uid');
+  if (!isIndexFailure || !namesOurIndex) return null;
+  return message.includes('not ready yet')
+    ? 'The index exists and is still building. Wait a minute and run this again — re-running\n' +
+        'infra/setup-gcp.sh will not help; it will report the index as already present.'
+    : 'The playerFeedback.uid collection-group index is missing. Run infra/setup-gcp.sh\n' +
+        '(step 7), wait for the build to finish, then run this again.';
+}
+
 export interface ErasePlayerSignalsResult {
   uid: string;
   /** Games where a vote was found (and cleared, unless this was a dry run). */
@@ -55,6 +83,24 @@ export async function erasePlayerSignals(options: ErasePlayerSignalsOptions): Pr
   const { store, uid } = options;
   const dryRun = options.dryRun ?? false;
 
+  // Feedback goes first, and the order is load-bearing rather than incidental.
+  //
+  // It is the only step that needs a Firestore index, so it is the only step that can fail
+  // for a reason unrelated to the data — a missing or still-building index throws
+  // 9 FAILED_PRECONDITION. The vote walk needs no index at all: `listDocuments`, document
+  // reads, and single-document transactions. Running feedback first therefore means an
+  // index failure happens before anything has been written, so the CLI can tell an operator
+  // "nothing was erased" and have that be true. With the walk first, a failure here would
+  // have cleared every vote and then reported that nothing happened.
+  //
+  // Count and delete run the same `where('uid','==',uid)` predicate over the same
+  // collection group, differing only in `.count()` versus `.get()`. That matters more than
+  // it looks: a dry run is the only thing standing between an operator and an irreversible
+  // delete, so it must not be able to see a different set of rows than the delete will.
+  const feedbackDeleted = dryRun
+    ? await store.countPlayerFeedbackByUid(uid)
+    : await store.deletePlayerFeedbackByUid(uid);
+
   const slugs = await store.listGameSlugs();
   const votesCleared: string[] = [];
   for (const slug of slugs) {
@@ -65,14 +111,6 @@ export async function erasePlayerSignals(options: ErasePlayerSignalsOptions): Pr
     // vote document directly would strand the counts.
     if (!dryRun) await store.clearVote(slug, uid);
   }
-
-  // Count and delete run the same `where('uid','==',uid)` predicate over the same
-  // collection group, differing only in `.count()` versus `.get()`. That matters more than
-  // it looks: a dry run is the only thing standing between an operator and an irreversible
-  // delete, so it must not be able to see a different set of rows than the delete will.
-  const feedbackDeleted = dryRun
-    ? await store.countPlayerFeedbackByUid(uid)
-    : await store.deletePlayerFeedbackByUid(uid);
 
   return { uid, votesCleared, feedbackDeleted, dryRun };
 }

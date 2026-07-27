@@ -16,7 +16,7 @@
 // Note what this does *not* do: play telemetry is untouched because it carries no uid at
 // all. There is nothing there to erase, which is the intended property, not a gap.
 
-import { erasePlayerSignals } from '../src/erase-player-signals.js';
+import { erasePlayerSignals, indexHint } from '../src/erase-player-signals.js';
 import { FirestoreStore } from '../src/store.js';
 
 function usage(): never {
@@ -58,6 +58,14 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(message);
+
+  const hint = indexHint(message);
+  // Safe to state as fact: the feedback query is the only step needing an index and it
+  // runs before any vote is cleared, so an index failure happens before the first write.
+  // `erasePlayerSignals` has a test pinning that order for exactly this claim.
+  if (hint) console.error(`\n${hint}\nNothing was erased — this failed before the first write.`);
+
   process.exit(1);
 });
