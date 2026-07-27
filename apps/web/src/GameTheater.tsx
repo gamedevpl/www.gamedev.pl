@@ -166,6 +166,8 @@ export function GameTheater({
   }, [requestExit, moreOpen]);
 
   // Close the overflow menu on an outside tap — phones have no hover to dismiss it.
+  // Defer the listener one tick so the opening click (or a synthetic pointerdown from
+  // automation) cannot close the menu in the same gesture that opened it.
   useEffect(() => {
     if (!moreOpen) return;
     const onPointer = (event: PointerEvent) => {
@@ -173,8 +175,13 @@ export function GameTheater({
         setMoreOpen(false);
       }
     };
-    document.addEventListener('pointerdown', onPointer);
-    return () => document.removeEventListener('pointerdown', onPointer);
+    const timer = window.setTimeout(() => {
+      document.addEventListener('pointerdown', onPointer);
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener('pointerdown', onPointer);
+    };
   }, [moreOpen]);
 
   const secondaryActions = reportSlug ? (

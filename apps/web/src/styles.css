@@ -1420,6 +1420,10 @@ body.player-open {
   border-bottom: 1px solid var(--panel-border);
   width: 100%;
   flex: none;
+  /* The overflow menu hangs below the bar; clipping it would make the hamburger
+     look broken — the panel opens but nothing appears. */
+  overflow: visible;
+  z-index: 2;
 }
 
 .game-theater-meta {
@@ -1705,7 +1709,7 @@ body.player-open {
     background: rgba(22, 28, 34, 0.96);
     border: 1px solid var(--panel-border);
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
-    z-index: 30;
+    z-index: 40;
   }
 
   .theater-more.is-open .theater-more-panel {
