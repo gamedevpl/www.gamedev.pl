@@ -5,7 +5,7 @@ import {
   type TelemetryEvent,
   type TelemetrySend,
   type WireEvent,
-} from './telemetry';
+} from './telemetry.js';
 
 type Batch = { slug: string; sessionId: string; flushMsSinceOpen: number; events: WireEvent[] };
 
@@ -184,7 +184,7 @@ describe('isPlayTimeAccruing', () => {
 describe('sendTelemetry', () => {
   it('posts with keepalive so the final flush survives the page closing', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 202 }));
-    const { sendTelemetry } = await import('./telemetry');
+    const { sendTelemetry } = await import('./telemetry.js');
 
     sendTelemetry({
       slug: 'space-hop',
@@ -202,7 +202,7 @@ describe('sendTelemetry', () => {
 
   it('swallows a rejected request — telemetry never surfaces to the player', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'));
-    const { sendTelemetry } = await import('./telemetry');
+    const { sendTelemetry } = await import('./telemetry.js');
 
     expect(() =>
       sendTelemetry({

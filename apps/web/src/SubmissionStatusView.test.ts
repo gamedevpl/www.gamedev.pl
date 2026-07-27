@@ -3,15 +3,15 @@
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import i18n from './i18n';
-import { ACTIVE_POLL_MS, SubmissionStatusView } from './SubmissionStatusView';
+import i18n from './i18n/index.js';
+import { ACTIVE_POLL_MS, SubmissionStatusView } from './SubmissionStatusView.js';
 import {
   abandonSubmission,
   getBuildStats,
   getSubmissionPreview,
   getSubmissionStatus,
   submitFeedback,
-} from './submissionApi';
+} from './submissionApi.js';
 
 vi.mock('./submissionApi', async () => {
   const actual = await vi.importActual<typeof import('./submissionApi')>('./submissionApi');

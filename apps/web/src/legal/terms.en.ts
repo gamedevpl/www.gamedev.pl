@@ -1,5 +1,5 @@
-import type { LegalDocument } from './types';
-import { CONTACT_EMAIL, LEGAL_EFFECTIVE_DATE, OPERATOR_LEGAL_NAME, SERVICE_DOMAIN, SERVICE_URL } from './operator';
+import type { LegalDocument } from './types.js';
+import { CONTACT_EMAIL, LEGAL_EFFECTIVE_DATE, OPERATOR_LEGAL_NAME, SERVICE_DOMAIN, SERVICE_URL } from './operator.js';
 
 /**
  * Terms of Service — English translation. The Polish text in `terms.pl.ts` is the

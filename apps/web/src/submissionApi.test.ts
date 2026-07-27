@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getSubmissionStatus, submitSpec } from './submissionApi';
+import { getSubmissionStatus, submitSpec } from './submissionApi.js';
 
 describe('submissionApi', () => {
   afterEach(() => {

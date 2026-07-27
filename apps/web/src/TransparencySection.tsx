@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import githubIcon from './assets/github-mark-white.svg';
-import { PixelIcon } from './PixelIcon';
+import { PixelIcon } from './PixelIcon.js';
 
 export function TransparencySection() {
   const { t } = useTranslation();

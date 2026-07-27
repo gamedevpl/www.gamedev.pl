@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { PixelIcon } from './PixelIcon';
+import { PixelIcon } from './PixelIcon.js';
 
 type SketchModalProps = {
   isOpen: boolean;

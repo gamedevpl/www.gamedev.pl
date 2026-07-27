@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { catalogMediaUrl, fetchCatalog } from './catalog';
+import { catalogMediaUrl, fetchCatalog } from './catalog.js';
 
 describe('catalog helpers', () => {
   afterEach(() => {

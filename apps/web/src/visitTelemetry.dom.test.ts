@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
-import { NAVIGATE_EVENT, type NavigateEventDetail } from './router';
-import { startVisitTracking, type WireVisitEvent } from './visitTelemetry';
+import { NAVIGATE_EVENT, type NavigateEventDetail } from './router.js';
+import { startVisitTracking, type WireVisitEvent } from './visitTelemetry.js';
 
 /**
  * The wiring half of visit tracking, which the pure-function tests cannot reach.

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { GameTheater } from './GameTheater';
-import { getDraftBySlug, type SubmissionApiError, type SubmissionPreview } from './submissionApi';
+import { GameTheater } from './GameTheater.js';
+import { getDraftBySlug, type SubmissionApiError, type SubmissionPreview } from './submissionApi.js';
 
 type DraftViewProps = {
   slug: string;

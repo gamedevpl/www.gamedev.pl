@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Mascot } from './Mascot';
+import { Mascot } from './Mascot.js';
 
 export function AppLoadingScreen() {
   const { t } = useTranslation();

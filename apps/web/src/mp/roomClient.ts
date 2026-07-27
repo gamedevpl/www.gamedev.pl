@@ -1,4 +1,4 @@
-import { parseServerFrame, PROTOCOL_VERSION, roomSocketUrl, type InputKey, type ServerFrame } from './protocol';
+import { parseServerFrame, PROTOCOL_VERSION, roomSocketUrl, type InputKey, type ServerFrame } from './protocol.js';
 
 export type RoomStatus = 'connecting' | 'connected' | 'reconnecting' | 'closed';
 

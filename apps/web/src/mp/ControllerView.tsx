@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { RoomClient, type RoomStatus } from './roomClient';
-import { useScreenWakeLock } from '../useScreenWakeLock';
-import type { InputKey, RoomPhase } from './protocol';
+import { RoomClient, type RoomStatus } from './roomClient.js';
+import { useScreenWakeLock } from '../useScreenWakeLock.js';
+import type { InputKey, RoomPhase } from './protocol.js';
 
 type ControllerViewProps = { code: string; token: string };
 

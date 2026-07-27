@@ -1,11 +1,11 @@
 import { useState, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from './AuthContext';
-import { AuthModal } from './AuthModal';
-import { LanguageSwitcher } from './LanguageSwitcher';
-import { Mascot } from './Mascot';
-import { NotificationBell } from './NotificationBell';
-import { PixelIcon } from './PixelIcon';
+import { useAuth } from './AuthContext.js';
+import { AuthModal } from './AuthModal.js';
+import { LanguageSwitcher } from './LanguageSwitcher.js';
+import { Mascot } from './Mascot.js';
+import { NotificationBell } from './NotificationBell.js';
+import { PixelIcon } from './PixelIcon.js';
 import githubIcon from './assets/github-mark-white.svg';
 
 type NavHeaderProps = {

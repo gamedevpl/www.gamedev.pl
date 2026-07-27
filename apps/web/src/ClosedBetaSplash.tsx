@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from './AuthContext';
-import { GoogleSignInButton } from './GoogleSignInButton';
-import { Mascot } from './Mascot';
+import { useAuth } from './AuthContext.js';
+import { GoogleSignInButton } from './GoogleSignInButton.js';
+import { Mascot } from './Mascot.js';
 
 type WaitlistState = 'idle' | 'joining' | 'joined' | 'error';
 

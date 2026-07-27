@@ -4,9 +4,9 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { SiteFooter } from './SiteFooter';
-import i18n from './i18n';
-import { setVisitSessionForTesting, VisitSession } from './visitTelemetry';
+import { SiteFooter } from './SiteFooter.js';
+import i18n from './i18n/index.js';
+import { setVisitSessionForTesting, VisitSession } from './visitTelemetry.js';
 
 /**
  * The footer carries two different reporting routes that look alike and must not be

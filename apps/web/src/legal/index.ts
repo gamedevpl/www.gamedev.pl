@@ -1,10 +1,10 @@
-import { privacyEn } from './privacy.en';
-import { privacyPl } from './privacy.pl';
-import { termsEn } from './terms.en';
-import { termsPl } from './terms.pl';
-import type { LegalDocId, LegalDocument } from './types';
+import { privacyEn } from './privacy.en.js';
+import { privacyPl } from './privacy.pl.js';
+import { termsEn } from './terms.en.js';
+import { termsPl } from './terms.pl.js';
+import type { LegalDocId, LegalDocument } from './types.js';
 
-export type { LegalBlock, LegalDocId, LegalDocument, LegalSection } from './types';
+export type { LegalBlock, LegalDocId, LegalDocument, LegalSection } from './types.js';
 
 const DOCUMENTS: Record<'en' | 'pl', Record<LegalDocId, LegalDocument>> = {
   en: { privacy: privacyEn, terms: termsEn },

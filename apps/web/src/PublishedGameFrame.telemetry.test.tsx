@@ -12,8 +12,8 @@ vi.mock('./catalog', () => ({
   })),
 }));
 
-import { PublishedGameFrame } from './PublishedGameFrame';
-import type { PublishedGame } from './catalog';
+import { PublishedGameFrame } from './PublishedGameFrame.js';
+import type { PublishedGame } from './catalog.js';
 
 /**
  * The wiring test: a real play of a published game must report itself.
@@ -94,7 +94,7 @@ describe('PublishedGameFrame telemetry', () => {
   });
 
   it('reports nothing before the game document arrives — a click is not a play', async () => {
-    const { fetchPublishedGame } = await import('./catalog');
+    const { fetchPublishedGame } = await import('./catalog.js');
     let release: (game: PublishedGame) => void = () => {};
     vi.mocked(fetchPublishedGame).mockReturnValue(new Promise((resolve) => (release = resolve)));
 

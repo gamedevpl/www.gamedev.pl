@@ -3,8 +3,8 @@
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
-import { VisitFunnelPanel } from './VisitFunnelPanel';
-import type { VisitFunnel, VisitsResponse } from './healthApi';
+import { VisitFunnelPanel } from './VisitFunnelPanel.js';
+import type { VisitFunnel, VisitsResponse } from './healthApi.js';
 
 /**
  * Renders the operator funnel panel.

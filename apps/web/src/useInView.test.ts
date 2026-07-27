@@ -3,7 +3,7 @@
 import { act, createElement, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useInView } from './useInView';
+import { useInView } from './useInView.js';
 
 type ObserverInstance = {
   callback: IntersectionObserverCallback;
@@ -41,13 +41,7 @@ function installIntersectionObserverMock() {
   vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
 }
 
-function Probe({
-  onChange,
-  once,
-}: {
-  onChange: (inView: boolean) => void;
-  once?: boolean;
-}) {
+function Probe({ onChange, once }: { onChange: (inView: boolean) => void; once?: boolean }) {
   const { ref, inView } = useInView({ once });
   useEffect(() => {
     onChange(inView);

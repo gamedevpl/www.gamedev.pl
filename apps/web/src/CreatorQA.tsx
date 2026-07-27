@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { PixelIcon } from './PixelIcon';
-import type { PendingQaAnswers } from './pendingQa';
+import { PixelIcon } from './PixelIcon.js';
+import type { PendingQaAnswers } from './pendingQa.js';
 
 export interface QAOption {
   label: string;

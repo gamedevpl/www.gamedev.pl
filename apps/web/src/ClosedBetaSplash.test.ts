@@ -3,11 +3,11 @@
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AuthProvider } from './AuthContext';
-import { ClosedBetaSplash } from './ClosedBetaSplash';
-import i18n from './i18n';
+import { AuthProvider } from './AuthContext.js';
+import { ClosedBetaSplash } from './ClosedBetaSplash.js';
+import i18n from './i18n/index.js';
 
-import { AppLoadingScreen } from './AppLoadingScreen';
+import { AppLoadingScreen } from './AppLoadingScreen.js';
 
 async function flushEffects() {
   await Promise.resolve();

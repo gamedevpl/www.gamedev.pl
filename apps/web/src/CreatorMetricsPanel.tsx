@@ -1,4 +1,4 @@
-import type { CreatorsResponse } from './healthApi';
+import type { CreatorsResponse } from './healthApi.js';
 
 /**
  * Creator return and build economics — the two figures docs/gtm-plan.md gates Stage 0 on.
@@ -66,15 +66,14 @@ export function CreatorMetricsPanel({ data }: { data: CreatorsResponse }) {
         */}
         {rate === null ? (
           <>
-            No creator has had a full 7 days since publishing yet, so the return rate is not
-            measurable — {metrics.published} game{metrics.published === 1 ? '' : 's'} published so
-            far, from {data.sampled} sampled.
+            No creator has had a full 7 days since publishing yet, so the return rate is not measurable —{' '}
+            {metrics.published} game{metrics.published === 1 ? '' : 's'} published so far, from {data.sampled} sampled.
           </>
         ) : (
           <>
             {metrics.returnedWithin7Days} of {metrics.eligibleForReturn} creator
-            {metrics.eligibleForReturn === 1 ? '' : 's'} whose 7 days have elapsed. Creators who
-            published more recently are excluded rather than counted as not returning.
+            {metrics.eligibleForReturn === 1 ? '' : 's'} whose 7 days have elapsed. Creators who published more recently
+            are excluded rather than counted as not returning.
           </>
         )}
       </p>
