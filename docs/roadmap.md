@@ -175,9 +175,12 @@ agent run is spent on creation and none on improving games that already have pla
 Phase 6's capture plane is the cheapest thing that changes that, and it produces
 value (creators see numbers, defects become visible) before any agent is involved.
 
-One live item should be settled alongside it, because it is cheap and currently a
-silent failure: the multiplayer instance-count mismatch. The Copilot relay path that
-every agent hand-off depends on now has a detector — the notify sweep logs at `error`
-when a creator's change request has gone uncollected for an hour, which is what a
-broken relay looks like from this side. That is a signal in the logs, not a page:
-routing it somewhere someone reads is still part of the observability item above.
+Both of the cheap silent-failure items this section used to list alongside it are
+now closed. The multiplayer instance-count mismatch was fixed on 2026-07-25 (Phase
+5), and the Copilot relay path that every agent hand-off depends on now has a
+detector: the notify sweep logs at `error` when a creator's change request has gone
+uncollected for an hour, which is what a broken relay looks like from this side.
+
+What is left of the second one is delivery, not detection — that is a line in the
+logs, and nothing yet reads the logs. Routing it somewhere a human sees remains part
+of the observability gap in Phase 5.
