@@ -328,16 +328,31 @@ jobs:
       # searches PLAYWRIGHT_BROWSERS_PATH (default /opt/pw-browsers). Unpinned, the
       # browser lands where the suite never looks, every suite skips, and the job exits 0
       # having verified nothing — a green deploy behind a gate that never ran.
+      # `npx playwright install` resolves the *latest* playwright CLI — the workspace has
+      # playwright-core, which ships no CLI — so the directory layout it produces is not
+      # something to assume. findChromium()'s `chromium-<build>/chrome-linux/chrome` guess
+      # missed it on the first real run and the gate refused to run at all. Locate the
+      # binary that was actually installed and hand it over explicitly; E2E_CHROMIUM_PATH
+      # takes priority over every heuristic in findChromium().
       - name: Install Chromium
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/pw-browsers
-        run: npx playwright install --with-deps chromium
+        run: |
+          npx playwright install --with-deps chromium
+
+          BIN=$(find "$PLAYWRIGHT_BROWSERS_PATH" -type f -name chrome -perm -u+x 2>/dev/null | sort | tail -1)
+          if [ -z "$BIN" ]; then
+            echo "::error::no chromium binary under $PLAYWRIGHT_BROWSERS_PATH — layout below"
+            find "$PLAYWRIGHT_BROWSERS_PATH" -maxdepth 3 | head -50
+            exit 1
+          fi
+          echo "Chromium: $BIN"
+          echo "E2E_CHROMIUM_PATH=$BIN" >> "$GITHUB_ENV"
 
       - name: Browser gate against the candidate
         env:
           E2E_BASE_URL: ${{ env.CANDIDATE_URL }}
           GAMEDEV_ACCESS_TOKEN: ${{ secrets.GAMEDEV_ACCESS_TOKEN }}
-          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/pw-browsers
           # Turns "cannot run" into a failed deploy instead of a silent skip
           # (apps/e2e/src/gate-prerequisites.test.ts).
           E2E_REQUIRED: '1'
