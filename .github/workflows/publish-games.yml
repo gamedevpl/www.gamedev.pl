@@ -115,14 +115,24 @@ jobs:
 
       - name: Verify the live site serves the new snapshot
         if: ${{ github.event.inputs.dry_run != 'true' }}
+        env:
+          GAMEDEV_ACCESS_TOKEN: ${{ secrets.GAMEDEV_ACCESS_TOKEN }}
         run: |
           # A green publish that the site cannot read is the failure mode worth
           # catching here: the bucket is written by this job but read by Cloud Run
           # under a different identity, so permissions can be wrong in one
           # direction only. Serving falls back to GitHub either way, which is
           # precisely why this would otherwise go unnoticed.
+          #
+          # Catalog/play are behind the closed-beta wall, so this needs the CI
+          # bearer token. Without it we can only warn — anonymous probes 401 by design.
           BASE_URL="https://www.gamedev.pl"
-          STATUS_CODE=$(curl -s -o /tmp/publish-catalog.json -w "%{http_code}" "${BASE_URL}/api/catalog")
+          if [ -z "$GAMEDEV_ACCESS_TOKEN" ]; then
+            echo "::warning::GAMEDEV_ACCESS_TOKEN not set — skipping post-publish catalog/play verify (wall requires a session)"
+            exit 0
+          fi
+          STATUS_CODE=$(curl -s -o /tmp/publish-catalog.json -w "%{http_code}" \
+            -H "Authorization: Bearer ${GAMEDEV_ACCESS_TOKEN}" "${BASE_URL}/api/catalog")
           if [ "$STATUS_CODE" -ne 200 ]; then
             echo "::warning::catalog returned ${STATUS_CODE} after publish; snapshot may not be live yet"
             exit 0
@@ -132,7 +142,8 @@ jobs:
             echo "::warning::no published slug to verify"
             exit 0
           fi
-          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${BASE_URL}/api/games/${PLAY_SLUG}")
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${GAMEDEV_ACCESS_TOKEN}" "${BASE_URL}/api/games/${PLAY_SLUG}")
           if [ "$STATUS_CODE" -ne 200 ]; then
             echo "Error: /api/games/${PLAY_SLUG} returned ${STATUS_CODE} after publish"
             exit 1

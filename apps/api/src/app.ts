@@ -95,11 +95,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // `fastify-rate-limit` so CodeQL's js/missing-rate-limiting model recognizes it.
   await registerRateLimit(app);
 
-  // Private beta controls. When PRIVATE_BETA=true, sign-in is restricted to uids/emails in
-  // the allowlist and the wall below gates every route except the exemptions listed there —
-  // which now include browsing and playing published games, so the beta limits who can
-  // *make* a game rather than who can play one.
-  // Flip to false (config, not code) to open sign-up too. Tests/dev default to false.
+  // Private beta controls. When PRIVATE_BETA=true, all data routes require a session
+  // and sign-in is restricted to uids/emails in the allowlist.
+  // Flip to false (config, not code) to open the site. Tests/dev default to false.
   const privateBeta =
     options.betaAllowedUids !== undefined || options.betaAllowedEmails !== undefined
       ? true // explicit test injection implies beta mode
@@ -164,12 +162,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   await registerEmailRoutes(app, { store, unsubscribeSecret: options.sessionSecret });
 
-  // Play-session telemetry (docs/improvement-loop-plan.md IL-1). This *is* exempted from
-  // the private-beta wall below — the "revisit when the site opens" note that used to live
-  // here came due when play was opened to anonymous visitors. Walling it now would blind
-  // per-game health for exactly the players we just admitted. The handler never reads
-  // request.user, records nothing identifying, and drops events for slugs that are not
-  // published games.
+  // Play-session telemetry (docs/improvement-loop-plan.md IL-1). Deliberately *not*
+  // exempted from the private-beta wall below: during closed beta every player is a
+  // signed-in member, so the wall costs nothing and keeps the intake shut to the
+  // open internet. Revisit when the site opens — the handler itself never reads
+  // request.user and records nothing that identifies a player.
   //
   // One env-derived gate is shared by telemetry, votes, and written feedback: all
   // three ask the same question ("is this a published catalog slug?") and must not
@@ -256,14 +253,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     });
   }
 
-  // In private-beta mode the API is walled by default: anything not listed below requires a
-  // session on the beta allowlist. The exceptions are not a grab-bag — each is a door that
-  // must work for someone who has no session and, in several cases, never will: a probe, a
-  // login flow, a mail client, a scheduler, a coding agent, a phone that scanned a QR code,
-  // and — since play was opened — anyone following a link to a published game.
-  //
-  // IMPORTANT: the wall must gate only /api/* paths — the static SPA shell must load freely
-  // so the visitor can reach the sign-in button (chicken-and-egg otherwise).
+  // In private-beta mode all API data reads require a session so the app is usable only
+  // after sign-in. IMPORTANT: the wall must gate only /api/* paths — the static SPA shell
+  // must load freely so the visitor can reach the sign-in button (chicken-and-egg otherwise).
+  // /api/health, /api/auth/*, and /api/waitlist stay public within the API (probes, login
+  // flow, and the waitlist — which by definition serves people who just failed sign-in).
   app.addHook('onRequest', async (request, reply) => {
     if (!privateBeta) return;
     if (!request.url.startsWith('/api/')) return; // static shell always passes through
@@ -284,24 +278,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // room token (verified in the first frame, not here), and the room it opens
     // was created by an allowlisted host. Everything else stays walled.
     if (request.url.startsWith('/api/mp/ws')) return;
-    // Telemetry never reads request.user. The visit stream measures the arrival itself,
-    // which happens *before* sign-in — walling it would zero out the one funnel it exists
-    // to capture. Play telemetry is schema-validated, IP-rate-limited, session-capped and
-    // gated to published slugs, so it is equally safe to admit from the open internet, and
-    // walling it would blind per-game health for exactly the anonymous players below.
-    if (request.url.startsWith('/api/telemetry')) return;
-    // Playing is public; making a game is not.
-    //
-    // Play costs nothing to serve and is the whole growth loop — a shared game link has to
-    // work for someone who has never signed in, or sharing does nothing. Creation is what
-    // costs real money per attempt, and it stays behind sign-in and the allowlist along
-    // with every other spend route.
-    //
-    // Both routes below serve *published* games only: the catalog filters on published
-    // status and the player refuses a slug that is not in it. Unmerged work lives under
-    // `/api/drafts/`, a different prefix, and stays walled — publication is a human merge,
-    // so everything reachable here is content the owner already approved.
-    if (request.url === '/api/catalog' || request.url.startsWith('/api/games/')) return;
+    // Visit telemetry measures the arrival itself, which for most visitors during
+    // closed beta happens *before* sign-in — walling it would silently zero out the
+    // one funnel this stream exists to capture. It never reads request.user and
+    // records no identifying data, so admitting it from the open internet is free.
+    // Play telemetry stays behind the wall (see registerTelemetryRoutes above).
+    if (request.url.startsWith('/api/telemetry/visit')) return;
     if (!request.user) {
       return reply.status(401).send({ error: 'authentication required' });
     }
