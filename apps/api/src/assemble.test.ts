@@ -19,7 +19,7 @@ describe('the size cap', () => {
   it('matches the budget the games repo enforces in Check 4', () => {
     // Sourced from games-repo-contract.ts; CI re-checks the live games-repo
     // MAX_BUNDLE_BYTES when GAMES_REPO_TOKEN is set (issue #247).
-    expect(MAX_PROJECT_BYTES).toBe(243_078);
+    expect(MAX_PROJECT_BYTES).toBe(248_372);
   });
 
   it('accepts a game that fills the budget', () => {
