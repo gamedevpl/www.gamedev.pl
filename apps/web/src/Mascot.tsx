@@ -24,21 +24,88 @@ type MascotProps = {
   staticPose?: boolean;
 };
 
+type Span = readonly [number, number, number];
+
 /**
- * Flatten the pixel spans into ONE path rather than one `<rect>` per span.
+ * Trace the outline of a pixel-span set, so the body is one path with no edges
+ * running through its middle.
  *
- * Separate rects are composited separately, so an antialiasing renderer gives each
- * 1px-tall rect a soft top and bottom edge. Two neighbours each contributing partial
- * coverage at their shared boundary does not add up to full coverage, so a seam shows
- * on every row — as horizontal banding on the body, and as speckle once the browser
- * downscales it. Inside a single path those interior edges cancel during the one
- * coverage pass, and the shape fills solid.
+ * The body used to be one `<rect>` per span — around 200 of them, each 1px tall.
+ * Separate shapes are antialiased separately, and two neighbours each contributing
+ * partial coverage at their shared boundary do not add up to full coverage, so a
+ * seam showed on every row: horizontal banding, and speckle once downscaled.
  *
- * This matters most in the emotion mask, where the banding became holes in the mask
- * itself. Each span is emitted as its own closed subpath.
+ * Merging the spans into one path is not enough on its own. Coincident interior
+ * edges only cancel exactly while the shape is axis-aligned; the moment it is
+ * rotated — and `peek`, `ponder`, `hustle`, `sigh` and `wobble` all rotate up to
+ * 6deg — the seams come back. So we emit the true union outline instead: the
+ * boundary between filled and empty pixels, and nothing else. There are no interior
+ * edges left to seam, at any angle.
+ *
+ * Edges are wound so that outer loops and hole loops run opposite ways, which is
+ * what the default nonzero fill needs to punch the ear rings out.
  */
-function spansToPath(spans: ReadonlyArray<readonly [number, number, number]>): string {
-  return spans.map(([x, y, width]) => `M${x} ${y}h${width}v1h${-width}Z`).join('');
+function spansToOutlinePath(spans: ReadonlyArray<Span>): string {
+  const filled = Array.from({ length: 60 }, () => Array<boolean>(70).fill(false));
+  for (const [x, y, width] of spans) {
+    for (let i = 0; i < width; i++) filled[y][x + i] = true;
+  }
+  const isFilled = (x: number, y: number) => x >= 0 && x < 70 && y >= 0 && y < 60 && filled[y][x];
+
+  const key = (x: number, y: number) => x * 100 + y;
+  const steps = new Map<number, Array<[number, number]>>();
+  const addEdge = (fx: number, fy: number, tx: number, ty: number) => {
+    const from = key(fx, fy);
+    const list = steps.get(from);
+    if (list) list.push([tx, ty]);
+    else steps.set(from, [[tx, ty]]);
+  };
+  for (let y = 0; y < 60; y++) {
+    for (let x = 0; x < 70; x++) {
+      if (!filled[y][x]) continue;
+      if (!isFilled(x, y - 1)) addEdge(x, y, x + 1, y);
+      if (!isFilled(x + 1, y)) addEdge(x + 1, y, x + 1, y + 1);
+      if (!isFilled(x, y + 1)) addEdge(x + 1, y + 1, x, y + 1);
+      if (!isFilled(x - 1, y)) addEdge(x, y + 1, x, y);
+    }
+  }
+
+  const parts: string[] = [];
+  while (steps.size) {
+    const startKey = steps.keys().next().value as number;
+    const start: [number, number] = [Math.floor(startKey / 100), startKey % 100];
+    const loop: Array<[number, number]> = [start];
+    let cursor = start;
+    for (;;) {
+      const list = steps.get(key(cursor[0], cursor[1]));
+      if (!list || list.length === 0) break;
+      const step = list.pop()!;
+      if (list.length === 0) steps.delete(key(cursor[0], cursor[1]));
+      loop.push(step);
+      cursor = step;
+      if (cursor[0] === start[0] && cursor[1] === start[1]) break;
+    }
+
+    // Drop the repeated closing point, then collapse runs of collinear corners.
+    const points = loop.slice(0, -1);
+    const corners = points.filter((point, i) => {
+      const before = points[(i - 1 + points.length) % points.length];
+      const after = points[(i + 1) % points.length];
+      return (point[0] - before[0]) * (after[1] - point[1]) !== (point[1] - before[1]) * (after[0] - point[0]);
+    });
+    if (corners.length < 3) continue;
+
+    let [cx, cy] = corners[0];
+    const d = [`M${cx} ${cy}`];
+    for (const [px, py] of corners.slice(1)) {
+      d.push(px === cx ? `v${py - cy}` : `h${px - cx}`);
+      cx = px;
+      cy = py;
+    }
+    d.push('Z');
+    parts.push(d.join(''));
+  }
+  return parts.join('');
 }
 
 function eyeSlits(
@@ -102,9 +169,9 @@ const MOUTH_CURIOUS =
 const MOUTH_BUSY =
   'M20 13 L25 20 L30 12 L35 21 L40 11 L45 21 L50 13 L50 32 L45 26 L40 34 L35 25 L30 33 L25 26 L20 31 Z';
 
-// Built once at module load — the spans never change.
-const IDLE_PATH = spansToPath(MASCOT_IDLE_SPANS);
-const SOLID_PATH = spansToPath(MASCOT_SOLID_SPANS);
+// Traced once at module load — the spans never change.
+const IDLE_PATH = spansToOutlinePath(MASCOT_IDLE_SPANS);
+const SOLID_PATH = spansToOutlinePath(MASCOT_SOLID_SPANS);
 
 function cutoutsFor(emotion: MascotEmotion): ReactElement | null {
   switch (emotion) {
