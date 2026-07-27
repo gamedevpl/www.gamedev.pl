@@ -219,6 +219,10 @@ export function App() {
   }, [stageContent]);
 
   useEffect(() => {
+    // Wait until /api/health has told us whether PRIVATE_BETA is on — privateBeta
+    // defaults to false, so fetching before that would 401-spam (and log noise) for
+    // every anonymous visitor during closed beta.
+    if (authLoading) return;
     // In private-beta mode /api/catalog requires a session — an anonymous fetch
     // would just 401. Don't fetch (and don't render an error) until signed in.
     // Outside private beta, catalog reads stay public (owner decision).
@@ -249,7 +253,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [user, privateBeta, route.view, catalogReloadKey]);
+  }, [user, privateBeta, authLoading, route.view, catalogReloadKey]);
 
   const handleRetryCatalog = useCallback(() => {
     setCatalogReloadKey((n) => n + 1);
