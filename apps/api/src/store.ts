@@ -548,7 +548,10 @@ export function pushSubscriptionId(endpoint: string): string {
  * Applied at the write boundary rather than at each call site so a record can be built
  * naturally, with optional fields left off.
  */
-export function stripUndefined<T extends Record<string, unknown>>(value: T): T {
+export function stripUndefined<T extends object>(value: T): T {
+  // `T extends object`, not `Record<string, unknown>`: interfaces (`User`,
+  // `WaitlistEntry`) have no implicit index signature, so the stricter bound rejects
+  // every real caller.
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as T;
 }
 
