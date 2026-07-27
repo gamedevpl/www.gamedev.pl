@@ -13,6 +13,12 @@
          app to portrait would take that away. -->
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#0f1418" />
+    <!-- The browser-tab icon, which the manifest does not cover: manifest icons are for
+         the installed app, so without this a desktop tab falls back to requesting
+         /favicon.ico — which this site does not serve, costing every visit a 404 and
+         leaving the tab blank. Reuses the 192px PWA icon rather than adding a fifth
+         copy of the same artwork in .ico form. -->
+    <link rel="icon" type="image/png" href="/icons/icon-192.png" />
     <!-- iOS ignores the manifest's icons for the home screen and reads this instead. -->
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <!-- Pre-16.4 iOS has no manifest support at all; these are how it learns the app is
