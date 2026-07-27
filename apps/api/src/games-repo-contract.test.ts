@@ -13,7 +13,7 @@ import { MAX_PROJECT_BYTES as ASSEMBLE_MAX } from './assemble.js';
 
 describe('games-repo-contract (website half)', () => {
   it('keeps the serve budget at the Check 4 total (games-repo MAX_BUNDLE_BYTES)', () => {
-    expect(MAX_PROJECT_BYTES).toBe(247_904);
+    expect(MAX_PROJECT_BYTES).toBe(248_372);
     expect(GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES).toBe(MAX_PROJECT_BYTES);
     // assemble.ts must re-export the same number — a second literal would drift.
     expect(ASSEMBLE_MAX).toBe(MAX_PROJECT_BYTES);
@@ -62,7 +62,7 @@ describe('games-repo source extractors', () => {
     // opaque number — so the extractor has to evaluate those, not just read literals.
     const source = `
       const GAME_BUDGET_BYTES = 200 * 1024;
-      const GAMEKIT_TOUCH_BYTES = 7_501 + 4_826;
+      const GAMEKIT_TOUCH_BYTES = 7_501 + 5_294;
       const GAMEKIT_RESTART_BYTES = 2_477;
       const GAMEKIT_MUSIC_BYTES = 7_091 + 650;
       const GAMEKIT_TOUCH_HINT_BYTES = 89;
@@ -87,7 +87,7 @@ describe('games-repo source extractors', () => {
   });
 
   it('evaluates a numeric MAX_BUNDLE_BYTES literal', () => {
-    expect(extractMaxBundleBytes('const MAX_BUNDLE_BYTES = 247_904;')).toBe(247904);
+    expect(extractMaxBundleBytes('const MAX_BUNDLE_BYTES = 248_372;')).toBe(248372);
   });
 
   it('detects the music injection contract signals', () => {
