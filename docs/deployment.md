@@ -33,7 +33,7 @@ Deployments to Cloud Run are triggered on push to `master`:
 2. **Keyless OIDC Auth:** Authenticates via GCP Workload Identity Federation (no long-lived service account keys).
 3. **Cloud Build Image Creation:** Submits image build using `infra/cloudbuild.yaml` to Artifact Registry. The WIF deployer service account must also have `roles/serviceusage.serviceUsageConsumer` and storage access for the default Cloud Build staging bucket; `infra/setup-wif.sh` grants both.
 4. **Staging / Candidate Revision:** Deploys revision to Cloud Run with `--no-traffic --tag candidate`.
-5. **Candidate Smoke Test:** Performs HTTP status check on `${CANDIDATE_URL}/api/health`.
+5. **Candidate Smoke Test:** Anonymous checks (health, shell, public catalog/play, walls hold, forged bearer token rejected) plus an **authenticated smoke** when the `GAMEDEV_ACCESS_TOKEN` repo secret exists — bearer auth, token→cookie exchange, and a session-walled route, run as the CI bot (see [`agent-access-tokens.md`](./agent-access-tokens.md)). Skips loudly when the secret is absent.
 6. **Traffic Promotion & Tag Cleanup:** Promotes traffic to the latest revision (`--to-latest`) and removes the candidate tag (`--remove-tags candidate`) only if the smoke test succeeds.
 
 ## Secrets & access (current live state)

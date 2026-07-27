@@ -130,7 +130,8 @@ Where each one goes, always as `GAMEDEV_ACCESS_TOKEN`:
 - **A laptop** — shell profile, or a `.env` in the repo (already gitignored).
 - **GitHub Actions** — a repository secret, read as
   `${{ secrets.GAMEDEV_ACCESS_TOKEN }}`. Actions keeps secrets away from fork-PR
-  workflows, so this is safe by default.
+  workflows, so this is safe by default. The deploy workflow already consumes it: see
+  the authenticated smoke below.
 - **Copilot's coding agent** — deliberately **no**. The `copilot-orchestration`
   playbook already rules it out ("never route credential handling through an autonomous
   PR agent"), Copilot's sandbox firewall blocks the site by default anyway, and Copilot
@@ -191,6 +192,31 @@ Traps, in the order an agent will hit them:
   Playwright version doesn't auto-find it.
 - **Production cookies carry `Secure`** — they travel over HTTPS only, so the same
   script pointed at a plain-HTTP host will not authenticate.
+
+## CI: the authenticated deploy smoke
+
+`deploy.yml` runs two layers of this on every candidate revision, **before traffic
+moves**:
+
+- **Always, no secret needed:** a forged `gdpl_pat_`-shaped bearer token must get 401
+  from `/api/auth/me` — the token path fails closed, proven on every deploy. (The forged
+  value is assembled at runtime in the workflow, because a well-formed literal would
+  rightly trip gitleaks.)
+- **When the `GAMEDEV_ACCESS_TOKEN` repo secret exists:** bearer `/api/auth/me` → 200,
+  the uid **must be `bot:`-namespaced** (a human token pasted into CI is rejected rather
+  than polluting creator metrics on every deploy), then the token→cookie exchange and a
+  session-walled route (`/api/notifications`) → 200. Any failure blocks promotion; the
+  live revision keeps serving.
+
+Without the secret the step skips with a loud `::notice::` rather than passing silently
+— a skipped check is absence of signal, not a pass. Two consequences to know about:
+
+- **An expired CI token fails deploys.** Deliberate: credential expiry should be a
+  visible event. Fix by minting a fresh one (`--days 30` for CI) and updating the
+  secret; or delete the secret to fall back to skipping.
+- Secrets are snapshotted per-run — a deploy racing a secret update bakes in the old
+  value (a failure mode this repo has hit with vars before; see the
+  `verify-agent-work` playbook). Re-run the workflow after changing the secret.
 
 ## Where this does and does not apply
 
