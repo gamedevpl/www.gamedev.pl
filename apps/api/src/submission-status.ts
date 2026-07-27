@@ -153,6 +153,26 @@ export interface SubmissionStatusResponseBase {
    * with no pull request yet can still show something.
    */
   media?: BuildMediaItem[];
+  /**
+   * Playable builds pushed over the channel, newest first. A picture tells the creator
+   * what the game looks like; these are the first thing that lets them find out whether
+   * it is any fun, which is the only question they can really answer.
+   */
+  playable?: BuildPlayableItem[];
+}
+
+/**
+ * One playable build in progress. Unlike `BuildMediaItem` there is no `branch` variant:
+ * a committed game is reachable through the draft link already, and this exists for the
+ * window before any commit — from about a minute in, when the scaffold first compiles.
+ */
+export interface BuildPlayableItem {
+  /** Stored preview id — the client builds the URL. */
+  ref: string;
+  slug?: string;
+  /** Agent-authored caption, in the reader's language when one was supplied. */
+  label?: string;
+  createdAt?: string;
 }
 
 /**

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { GameFrame } from './GameFrame.js';
 import { GameTheater } from './GameTheater.js';
 import { PixelIcon, type PixelIconName } from './PixelIcon.js';
 import {
@@ -9,8 +10,10 @@ import {
   getSubmissionStatus,
   submitFeedback,
   buildMediaUrl,
+  buildPlayableUrl,
   type BuildEvent,
   type BuildMediaItem,
+  type BuildPlayableItem,
   type BuildEventKind,
   type BuildProgress,
   type BuildStep,
@@ -402,6 +405,10 @@ export function SubmissionStatusView({
                 onSent={(text) => setPendingRevisions((current) => [...current, { text, at: Date.now() }])}
               />
             ) : null}
+
+            {/* Above the feed on purpose: a playable build outranks any description of
+                one, and it is available minutes before the first commit. */}
+            <PlayableBuildPanel token={token} playable={status.playable ?? []} />
 
             <BuildProgressPanel
               token={token}
@@ -835,6 +842,38 @@ function buildActivityFeed(
 
   // Newest first — that's what makes the build feel live.
   return entries.filter((entry) => Number.isFinite(entry.at)).sort((a, b) => b.at - a.at);
+}
+
+/**
+ * The game as it stands right now, playable, before anything has been committed.
+ *
+ * This is the earliest honest answer to the only question the creator can really
+ * judge: is it any fun. `npm run create` leaves a playable starter on disk about a
+ * minute into a build, and a watcher pushes whatever compiles from then on — so this
+ * panel typically appears long before the first screenshot and many minutes before the
+ * first commit. It is deliberately loaded by URL into a sandboxed frame rather than
+ * fetched and inlined: the document is unreviewed agent output.
+ */
+function PlayableBuildPanel({ token, playable }: { token: string; playable: BuildPlayableItem[] }) {
+  const { t, i18n } = useTranslation();
+  const latest = playable[0];
+  if (!latest) return null;
+
+  return (
+    <section className="status-playable" aria-live="polite">
+      <h3>{t('statusView.playableTitle')}</h3>
+      {/* The agent's own caption when it wrote one — untrusted text, rendered as text. */}
+      <p className="status-playable-hint">{latest.label ?? t('statusView.playableHint')}</p>
+      <div className="status-playable-frame">
+        <GameFrame title={latest.slug ?? t('statusView.playableTitle')} src={buildPlayableUrl(token, latest)} />
+      </div>
+      {latest.createdAt ? (
+        <p className="status-playable-time">
+          {t('statusView.playableUpdated', { time: formatRelativeTime(latest.createdAt, i18n.language) })}
+        </p>
+      ) : null}
+    </section>
+  );
 }
 
 function BuildProgressPanel({

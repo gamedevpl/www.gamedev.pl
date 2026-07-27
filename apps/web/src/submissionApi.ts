@@ -82,7 +82,28 @@ export type SubmissionStatus = {
    * before the first commit. Build the URL with {@link buildMediaUrl}.
    */
   media?: BuildMediaItem[];
+  /**
+   * Playable builds pushed over the channel, newest first — the game as it stood at
+   * some moment, before any commit. Build the URL with {@link buildPlayableUrl}.
+   */
+  playable?: BuildPlayableItem[];
 };
+
+export type BuildPlayableItem = {
+  ref: string;
+  slug?: string;
+  /** Untrusted, agent-authored text — render escaped. */
+  label?: string;
+  createdAt?: string;
+};
+
+/**
+ * Where to fetch one playable build. The response is unreviewed agent output served as
+ * HTML, so it is only ever loaded into a sandboxed frame — never fetched and inlined.
+ */
+export function buildPlayableUrl(token: string, item: BuildPlayableItem): string {
+  return `${API_BASE}/api/submissions/${encodeURIComponent(token)}/preview/${encodeURIComponent(item.ref)}`;
+}
 
 export type BuildMediaItem = {
   source: 'branch' | 'channel';
