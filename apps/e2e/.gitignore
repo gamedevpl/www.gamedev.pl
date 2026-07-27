@@ -1,0 +1,8 @@
+# Defence in depth for a public repo. globalSetup.ts deliberately parks the signed-in
+# session state in os.tmpdir(), so nothing auth-shaped should ever appear here — but
+# "write it next to the tests instead" is a natural-looking refactor, and the file holds
+# a live session cookie. If someone makes that change, this stops the cookie reaching a
+# commit; .gitleaks.toml only knows the gdpl_pat_ token shape, not session state.
+*storage-state*.json
+*.storageState.json
+auth-state.json
