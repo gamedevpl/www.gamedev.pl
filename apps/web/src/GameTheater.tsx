@@ -237,9 +237,9 @@ export function GameTheater({
               <span className="btn-label">{fullscreen ? t('player.exitFullscreen') : t('player.fullscreen')}</span>
             </button>
           )}
-          {/* Desktop: secondary actions sit in the bar. Phone: they collapse into
-              a hamburger — five+ 44px targets beside a title do not fit 360px.
-              One DOM instance either way, so VoteWidget does not double-fetch. */}
+          {/* Play chrome stays on the bar (sound / fullscreen / exit). Everything
+              else — vote, feedback, share, report — lives behind one "more" control
+              so the first glance is title + play, not a toolbar of eight buttons. */}
           {secondaryActions && (
             <div className={`theater-more${moreOpen ? ' is-open' : ''}`} ref={moreRef}>
               <button
@@ -250,6 +250,7 @@ export function GameTheater({
                 onClick={() => setMoreOpen((open) => !open)}
               >
                 <PixelIcon name={moreOpen ? 'close' : 'menu'} size={14} />
+                <span className="btn-label">{t('player.moreActions')}</span>
               </button>
               <div className="theater-more-panel">{secondaryActions}</div>
             </div>
