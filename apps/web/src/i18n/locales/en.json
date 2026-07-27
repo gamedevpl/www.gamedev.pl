@@ -105,6 +105,8 @@
     "feedback": {
       "action": "Leave feedback",
       "signInToLeave": "Sign in to leave feedback",
+      "signInTitle": "Sign in to leave feedback",
+      "signInSubtitle": "Feedback is tied to your account so we can follow up and keep spam out.",
       "placeholder": "What worked, what didn't, where did you get stuck…",
       "submit": "Send feedback",
       "sending": "Sending…",

@@ -607,8 +607,13 @@ export function App() {
                     <h2 className="theater-title">{stageContent.game.title}</h2>
                   </div>
                   <div className="game-theater-actions">
-                    <button className="secondary-btn exit-btn" onClick={() => setStageContent(null)}>
-                      <PixelIcon name="close" size={12} /> {t('catalog.exitPlayer', { defaultValue: 'Exit Player' })}
+                    <button
+                      className="secondary-btn exit-btn"
+                      onClick={() => setStageContent(null)}
+                      aria-label={t('catalog.exitPlayer', { defaultValue: 'Close' })}
+                      title={t('catalog.exitPlayer', { defaultValue: 'Close' })}
+                    >
+                      <PixelIcon name="close" size={14} />
                     </button>
                   </div>
                 </div>

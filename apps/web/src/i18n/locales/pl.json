@@ -105,6 +105,8 @@
     "feedback": {
       "action": "Zostaw opinię",
       "signInToLeave": "Zaloguj się, aby zostawić opinię",
+      "signInTitle": "Zaloguj się, aby zostawić opinię",
+      "signInSubtitle": "Opinie są powiązane z kontem, żebyśmy mogli wrócić z odpowiedzią i ograniczyć spam.",
       "placeholder": "Co działało, co nie, gdzie utknąłeś…",
       "submit": "Wyślij opinię",
       "sending": "Wysyłanie…",

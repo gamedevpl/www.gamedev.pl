@@ -240,19 +240,9 @@ export function GameTheater({
       aria-label={displayTitle}
       ref={stageRef}
     >
-      {/* Fullscreen is for the game, not the chrome: hide the bar and leave one
-          compact exit control so Escape (browser) and this button both work. */}
-      {fullscreen ? (
-        <button
-          type="button"
-          className="theater-exit-fullscreen"
-          onClick={toggleFullscreen}
-          aria-label={t('player.exitFullscreen')}
-          title={t('player.exitFullscreen')}
-        >
-          <PixelIcon name="collapse" size={16} />
-        </button>
-      ) : (
+      {/* Fullscreen hides the bar so the game owns the screen. Votes stay on the
+          bar when it's visible; secondary actions stay in More. */}
+      {!fullscreen && (
         <div className="game-theater-bar">
           <div className="game-theater-meta">
             <span className="theater-badge" title={t('ai.generatedTooltip')}>
@@ -265,6 +255,8 @@ export function GameTheater({
             {player.meta?.desc ? <span className="theater-desc">{player.meta.desc}</span> : meta}
           </div>
           <div className="game-theater-actions">
+            {/* Thumbs are first-class: the one signal people expect without hunting. */}
+            {reportSlug ? <VoteWidget slug={reportSlug} /> : null}
             {/* Desktop: sound + fullscreen sit on the bar. Phone: they move into More. */}
             {soundControl('secondary-btn sound-btn theater-desktop-chrome')}
             {fullscreenControl('secondary-btn fullscreen-btn theater-desktop-chrome')}
@@ -285,7 +277,6 @@ export function GameTheater({
                   {reportSlug && (
                     <>
                       <div className="theater-menu-divider theater-mobile-chrome" role="separator" />
-                      <VoteWidget slug={reportSlug} />
                       <PlayerFeedbackWidget slug={reportSlug} />
                       <ShareGameButton slug={reportSlug} title={displayTitle} />
                       <ReportGameButton slug={reportSlug} title={displayTitle} />
@@ -298,10 +289,10 @@ export function GameTheater({
               className="secondary-btn exit-btn"
               onClick={onExit}
               ref={exitRef}
-              aria-label={t('catalog.exitPlayer', { defaultValue: 'Exit Player' })}
+              aria-label={t('catalog.exitPlayer', { defaultValue: 'Close' })}
+              title={t('catalog.exitPlayer', { defaultValue: 'Close' })}
             >
-              <PixelIcon name="close" size={12} />
-              <span className="btn-label">{t('catalog.exitPlayer', { defaultValue: 'Exit Player' })}</span>
+              <PixelIcon name="close" size={14} />
             </button>
           </div>
         </div>
@@ -321,6 +312,19 @@ export function GameTheater({
           </div>
         )}
       </div>
+      {/* After the iframe in DOM order + high z-index so it isn't buried under the
+          game surface. Escape still exits fullscreen via the browser. */}
+      {fullscreen ? (
+        <button
+          type="button"
+          className="theater-exit-fullscreen"
+          onClick={toggleFullscreen}
+          aria-label={t('player.exitFullscreen')}
+          title={t('player.exitFullscreen')}
+        >
+          <PixelIcon name="close" size={16} />
+        </button>
+      ) : null}
     </section>
   );
 }
