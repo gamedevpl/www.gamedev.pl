@@ -79,6 +79,17 @@ describe('erasePlayerSignals', () => {
     expect(await store.getVoteCounts('brick-storm')).toEqual({ up: 2, down: 0 });
   });
 
+  it('previews exactly what it then deletes', async () => {
+    // The dry run is the only thing between an operator and an irreversible delete, so
+    // the two must agree by construction rather than by coincidence — they run the same
+    // query, and this is the assertion that keeps them running the same query.
+    const preview = await erasePlayerSignals({ store, uid: 'g:leaver', dryRun: true });
+    const actual = await erasePlayerSignals({ store, uid: 'g:leaver' });
+
+    expect(actual.feedbackDeleted).toBe(preview.feedbackDeleted);
+    expect(actual.votesCleared).toEqual(preview.votesCleared);
+  });
+
   it('is idempotent — a second run finds nothing left', async () => {
     await erasePlayerSignals({ store, uid: 'g:leaver' });
     const second = await erasePlayerSignals({ store, uid: 'g:leaver' });

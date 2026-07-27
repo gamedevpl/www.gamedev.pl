@@ -58,25 +58,13 @@ export async function erasePlayerSignals(options: ErasePlayerSignalsOptions): Pr
     if (!dryRun) await store.clearVote(slug, uid);
   }
 
+  // Count and delete run the same `where('uid','==',uid)` predicate over the same
+  // collection group, differing only in `.count()` versus `.get()`. That matters more than
+  // it looks: a dry run is the only thing standing between an operator and an irreversible
+  // delete, so it must not be able to see a different set of rows than the delete will.
   const feedbackDeleted = dryRun
-    ? await countFeedbackFor(store, uid, slugs)
+    ? await store.countPlayerFeedbackByUid(uid)
     : await store.deletePlayerFeedbackByUid(uid);
 
   return { uid, votesCleared, feedbackDeleted, dryRun };
-}
-
-/**
- * Counts a user's feedback without deleting it — the dry-run path only.
- *
- * Walks the games rather than adding a count-by-uid to the Store interface: this runs
- * once per erase request, by an operator, and a second query shape that exists solely to
- * preview a delete is a second thing that can disagree with the delete it previews.
- */
-async function countFeedbackFor(store: Store, uid: string, slugs: string[]): Promise<number> {
-  let total = 0;
-  for (const slug of slugs) {
-    const rows = await store.listPlayerFeedback(slug);
-    total += rows.filter((row) => row.uid === uid).length;
-  }
-  return total;
 }

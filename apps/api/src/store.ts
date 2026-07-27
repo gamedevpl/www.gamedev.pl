@@ -661,6 +661,17 @@ export interface Store {
    * asymmetry with votes above.
    */
   deletePlayerFeedbackByUid(uid: string): Promise<number>;
+  /**
+   * How many feedback rows a user wrote, across all games — the dry run for the delete
+   * above.
+   *
+   * Deliberately the *same* predicate as `deletePlayerFeedbackByUid`, differing only in
+   * `.count()` versus `.get()`. A preview of a destructive operation that finds its rows
+   * by a different route than the deletion does is a preview that can quietly disagree
+   * with what follows, and the direction it disagrees in — under-reporting — is the one
+   * an operator would not catch.
+   */
+  countPlayerFeedbackByUid(uid: string): Promise<number>;
   /** Persist a newly minted personal access token. */
   createAccessToken(record: AccessTokenRecord): Promise<void>;
   /** Point lookup by token id — the hot path on every bearer-authenticated request. */
@@ -1215,6 +1226,14 @@ export class InMemoryStore implements Store {
       this.playerFeedback.set(slug, kept);
     }
     return deleted;
+  }
+
+  async countPlayerFeedbackByUid(uid: string): Promise<number> {
+    let total = 0;
+    for (const rows of this.playerFeedback.values()) {
+      total += rows.filter((row) => row.uid === uid).length;
+    }
+    return total;
   }
 
   async createAccessToken(record: AccessTokenRecord): Promise<void> {
@@ -1883,8 +1902,16 @@ export class FirestoreStore implements Store {
     return refs.map((ref) => ref.id).sort();
   }
 
+  // Both of these need the COLLECTION_GROUP index on playerFeedback.uid that
+  // infra/setup-gcp.sh step 7 provisions. Firestore auto-indexes single fields at
+  // COLLECTION scope only, so without it they fail with 9 FAILED_PRECONDITION rather
+  // than merely running slowly.
+  private feedbackByUid(uid: string) {
+    return this.db.collectionGroup('playerFeedback').where('uid', '==', uid);
+  }
+
   async deletePlayerFeedbackByUid(uid: string): Promise<number> {
-    const snap = await this.db.collectionGroup('playerFeedback').where('uid', '==', uid).get();
+    const snap = await this.feedbackByUid(uid).get();
     if (snap.empty) return 0;
 
     // Chunked because a batch tops out at 500 writes, and "delete everything this
@@ -1896,6 +1923,11 @@ export class FirestoreStore implements Store {
       await batch.commit();
     }
     return docs.length;
+  }
+
+  async countPlayerFeedbackByUid(uid: string): Promise<number> {
+    const snap = await this.feedbackByUid(uid).count().get();
+    return snap.data().count;
   }
 
   async getScorecard(slug: string): Promise<Scorecard | null> {

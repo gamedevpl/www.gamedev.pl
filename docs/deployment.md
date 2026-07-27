@@ -216,6 +216,11 @@ Two things worth knowing before you run it:
 - **Play telemetry is not touched, and that is the point.** Play events carry no uid, no IP
   and no user agent by construction, so there is nothing in them to erase and nothing that
   could be found if you tried. The erase path for play data is that it was never attributed.
+- **It needs the `playerFeedback.uid` collection-group index** from step 7 of
+  [`infra/setup-gcp.sh`](../infra/setup-gcp.sh). If the command fails with
+  `9 FAILED_PRECONDITION`, that index is missing — re-run the setup script, wait for the
+  build, and run the erase again. Nothing partial happens in that case: the failure is on
+  the read, before any delete.
 
 ## How to deploy manually
 
