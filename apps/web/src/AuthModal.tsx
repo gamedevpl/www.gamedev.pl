@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { GoogleSignInButton } from './GoogleSignInButton';
-import { Mascot } from './Mascot';
-import { PixelIcon } from './PixelIcon';
+import { GoogleSignInButton } from './GoogleSignInButton.js';
+import { Mascot } from './Mascot.js';
+import { PixelIcon } from './PixelIcon.js';
 
 interface AuthModalProps {
   isOpen: boolean;

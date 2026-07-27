@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AuthModal } from './AuthModal';
-import { useAuth } from './AuthContext';
-import { PixelIcon } from './PixelIcon';
-import { castVote, clearVote, fetchVotes, type VoteCounts } from './votesApi';
+import { AuthModal } from './AuthModal.js';
+import { useAuth } from './AuthContext.js';
+import { PixelIcon } from './PixelIcon.js';
+import { castVote, clearVote, fetchVotes, type VoteCounts } from './votesApi.js';
 
 /**
  * Thumbs-up on a played game (docs/improvement-loop-plan.md, signal source #2).

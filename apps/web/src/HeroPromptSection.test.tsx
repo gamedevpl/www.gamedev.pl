@@ -3,8 +3,8 @@
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { HeroPromptSection } from './HeroPromptSection';
-import i18n from './i18n';
+import { HeroPromptSection } from './HeroPromptSection.js';
+import i18n from './i18n/index.js';
 
 async function flushEffects() {
   await Promise.resolve();

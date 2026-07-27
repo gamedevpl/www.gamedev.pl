@@ -3,6 +3,7 @@ import tsPlugin from '@typescript-eslint/eslint-plugin';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import globals from 'globals';
+import gamedevRules from './eslint-rules/relative-import-extensions.mjs';
 
 // Flat config lints a file only when some block's `files` pattern matches it, so the
 // ts/tsx blocks below are what define the lint surface — the same one `--ext ts,tsx` gave.
@@ -23,6 +24,11 @@ export default [
       '**/*.js',
       '**/*.cjs',
       '**/*.mjs',
+      // Game sources standing in for the *external* games repo, not code this repo
+      // authors. They exist to pin the assembler's contract, so they must keep whatever
+      // shape real published games have — normalising them to local convention would
+      // quietly stop testing the thing they were checked in to test.
+      'apps/api/fixtures/**',
     ],
   },
   { ...js.configs.recommended, files: TS_FILES },
@@ -37,8 +43,13 @@ export default [
       parserOptions: { ecmaFeatures: { jsx: true } },
       globals: { ...globals.node, ...globals.browser },
     },
+    plugins: { gamedev: gamedevRules },
     rules: {
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      // The ESM convention copilot-instructions.md documents. Unenforced it held in
+      // apps/api (where Node would crash without it) and drifted in apps/web (where
+      // Vite covers for it), which left reviewers flagging it by hand forever.
+      'gamedev/relative-import-extensions': 'error',
     },
   },
   {

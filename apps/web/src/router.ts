@@ -1,4 +1,4 @@
-import type { LegalDocId } from './legal/types';
+import type { LegalDocId } from './legal/types.js';
 
 export type AppRoute =
   | { view: 'home' }

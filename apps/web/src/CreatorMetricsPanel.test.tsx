@@ -3,8 +3,8 @@
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
-import { CreatorMetricsPanel } from './CreatorMetricsPanel';
-import type { CreatorMetrics, CreatorsResponse } from './healthApi';
+import { CreatorMetricsPanel } from './CreatorMetricsPanel.js';
+import type { CreatorMetrics, CreatorsResponse } from './healthApi.js';
 
 /**
  * The Stage 0 gate is a real decision made on the number this panel renders, so the

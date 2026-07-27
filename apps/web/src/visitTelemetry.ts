@@ -1,4 +1,4 @@
-import { NAVIGATE_EVENT, parsePathRoute } from './router';
+import { NAVIGATE_EVENT, parsePathRoute } from './router.js';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 

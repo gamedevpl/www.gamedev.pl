@@ -4,7 +4,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
-import { GameHealthView } from './GameHealthView';
+import { GameHealthView } from './GameHealthView.js';
 import type {
   GameHealth,
   HealthResponse,
@@ -12,7 +12,7 @@ import type {
   VisitsResponse,
   CreatorsResponse,
   ScorecardsResponse,
-} from './healthApi';
+} from './healthApi.js';
 
 /**
  * The operator view's job is to make one thing obvious: which published game is broken.

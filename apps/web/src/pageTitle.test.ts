@@ -5,7 +5,7 @@ import {
   humanizeSlug,
   resolveDocumentTitle,
   type DocumentTitleCopy,
-} from './pageTitle';
+} from './pageTitle.js';
 
 const copy: DocumentTitleCopy = {
   home: 'Gamedev.pl — Describe a game, play it',

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { embedGameHtml, withGameLocale } from './gamePlayer';
+import { embedGameHtml, withGameLocale } from './gamePlayer.js';
 
 describe('embedGameHtml', () => {
   it('injects the hide-chrome style and bridge script before </body>', () => {

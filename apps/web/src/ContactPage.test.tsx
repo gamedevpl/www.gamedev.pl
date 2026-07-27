@@ -3,14 +3,14 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import i18n from './i18n';
+import i18n from './i18n/index.js';
 
 const contactApi = vi.hoisted(() => ({
   submitContact: vi.fn(),
 }));
-vi.mock('./contactApi', () => contactApi);
+vi.mock('./contactApi.js', () => contactApi);
 
-import { ContactPage } from './ContactPage';
+import { ContactPage } from './ContactPage.js';
 
 let container: HTMLDivElement;
 let root: Root | null = null;

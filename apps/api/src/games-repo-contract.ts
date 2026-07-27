@@ -29,10 +29,13 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
 
 /**
  * Sum of GameKit platform allowances outside the author budget (touch, restart,
- * music, touch hint, progress, universal input, pointer poll, draw surface).
- * Together with {@link GAME_BUDGET_BYTES} this is the 242 KiB serve cap.
+ * music, touch hint, progress, universal input, pointer poll, draw surface, …).
+ * Together with {@link GAME_BUDGET_BYTES} this must equal games-repo
+ * `MAX_BUNDLE_BYTES` (243_078 as of the games-repo side that broke CI on
+ * 2026-07-27). Not a round KiB: the platform side is an explicit sum of named
+ * allowances, not a padded `42 * 1024` block.
  */
-export const GAMEKIT_PLATFORM_BYTES = 42 * 1024;
+export const GAMEKIT_PLATFORM_BYTES = 38_278;
 
 /** Combined html+js+css size cap — must match games-repo `MAX_BUNDLE_BYTES`. */
 export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
@@ -40,13 +43,17 @@ export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
 /**
  * Music embedding contract (games-repo `tools/lib/assemble.ts`):
  * - `GAME.json` → `audio.music` is a single track-name string
- * - `shared/audio/music.json` → read only the `tracks` map
+ * - catalog is loaded via `readMusicCatalog()` (games-repo `tools/audio.ts`;
+ *   formerly an inline `shared/audio/music.json` read in assemble.ts)
  * - inject `window.__GAME_AUDIO_MUSIC__ = "<name>"` and a one-entry tracks object
  */
 export const MUSIC_CONTRACT = {
   manifestField: 'music',
   manifestFieldType: 'string',
+  /** Historical path; the catalog file may still live here inside `tools/audio.ts`. */
   catalogPath: 'shared/audio/music.json',
+  /** Function assemble.ts calls to load the music catalog (post-refactor lockstep). */
+  catalogReader: 'readMusicCatalog',
   catalogTracksKey: 'tracks',
   windowMusicName: '__GAME_AUDIO_MUSIC__',
   windowTracksName: '__GAME_MUSIC_TRACKS__',
@@ -81,12 +88,20 @@ export function extractMaxBundleBytes(validateSource: string): number {
 export function extractMusicContractSignals(assembleSource: string): {
   injectsMusicName: boolean;
   readsTracksKey: boolean;
-  readsMusicJson: boolean;
+  readsMusicCatalog: boolean;
 } {
+  // Escape so `shared/audio/music.json` is matched literally — a bare `/music\.json/`
+  // would also accept comments or unrelated filenames (Copilot review on #272).
+  const catalogPathPattern = MUSIC_CONTRACT.catalogPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return {
     injectsMusicName: new RegExp(`${MUSIC_CONTRACT.windowMusicName}\\s*=`).test(assembleSource),
     readsTracksKey: new RegExp(`\\b${MUSIC_CONTRACT.catalogTracksKey}\\b`).test(assembleSource),
-    readsMusicJson: /music\.json/.test(assembleSource),
+    // Prefer the post-refactor reader; keep the historical catalog path as a
+    // fallback so an older games-repo tip still clears the check during a
+    // staggered rollout.
+    readsMusicCatalog:
+      new RegExp(`\\b${MUSIC_CONTRACT.catalogReader}\\s*\\(`).test(assembleSource) ||
+      new RegExp(catalogPathPattern).test(assembleSource),
   };
 }
 

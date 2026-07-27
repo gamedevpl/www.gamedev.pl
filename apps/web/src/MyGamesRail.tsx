@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { PixelIcon, type PixelIconName } from './PixelIcon';
-import { getSavedSpecs } from './mySpecs';
-import { formatRelativeTime } from './relativeTime';
-import { getSubmissionStatus, listMySubmissions, type SubmissionState } from './submissionApi';
+import { PixelIcon, type PixelIconName } from './PixelIcon.js';
+import { getSavedSpecs } from './mySpecs.js';
+import { formatRelativeTime } from './relativeTime.js';
+import { getSubmissionStatus, listMySubmissions, type SubmissionState } from './submissionApi.js';
 
 /**
  * "Your games" on the home page. Before this existed, a creator who closed the tab

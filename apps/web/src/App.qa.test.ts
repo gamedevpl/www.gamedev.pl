@@ -3,9 +3,9 @@
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { App } from './App';
-import { AuthProvider } from './AuthContext';
-import i18n from './i18n';
+import { App } from './App.js';
+import { AuthProvider } from './AuthContext.js';
+import i18n from './i18n/index.js';
 
 /**
  * The QA gate as the creator meets it: type an idea, get questions, answer them.

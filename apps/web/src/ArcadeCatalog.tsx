@@ -1,9 +1,9 @@
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { catalogMediaUrl, isPlatformAuthor, type CatalogEntry } from './catalog';
-import { MascotMoment } from './Mascot';
-import { PixelIcon } from './PixelIcon';
-import { useInView } from './useInView';
+import { catalogMediaUrl, isPlatformAuthor, type CatalogEntry } from './catalog.js';
+import { MascotMoment } from './Mascot.js';
+import { PixelIcon } from './PixelIcon.js';
+import { useInView } from './useInView.js';
 
 type ArcadeCatalogProps = {
   catalogStatus: 'loading' | 'ready' | 'error';

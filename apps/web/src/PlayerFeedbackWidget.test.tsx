@@ -3,7 +3,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import i18n from './i18n';
+import i18n from './i18n/index.js';
 
 const authState = vi.hoisted(() => ({ user: null as { uid: string } | null }));
 vi.mock('./AuthContext', () => ({
@@ -15,7 +15,7 @@ const feedbackApi = vi.hoisted(() => ({
 }));
 vi.mock('./playerFeedbackApi', () => feedbackApi);
 
-import { PlayerFeedbackWidget } from './PlayerFeedbackWidget';
+import { PlayerFeedbackWidget } from './PlayerFeedbackWidget.js';
 
 let container: HTMLDivElement;
 let root: Root | null = null;

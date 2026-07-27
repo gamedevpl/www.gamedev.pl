@@ -1,24 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { generateGame, type GeneratedGame, type GenerateGameApiError } from './api';
-import { fetchCatalog, type CatalogEntry } from './catalog';
-import { GameTheater } from './GameTheater';
-import { NavHeader } from './NavHeader';
-import { HeroPromptSection } from './HeroPromptSection';
-import { ArcadeCatalog } from './ArcadeCatalog';
-import { MyGamesRail } from './MyGamesRail';
-import { DraftView } from './DraftView';
-import { GameHealthView } from './GameHealthView';
-import { PixelIcon } from './PixelIcon';
-import { SubmissionStatusView } from './SubmissionStatusView';
-import { CreatorQA, type QAQuestion } from './CreatorQA';
-import { canonicalPlayPath, NAVIGATE_EVENT, parsePathRoute, statusPath, playPath, type AppRoute } from './router';
-import { LegalPage } from './LegalPage';
-import { ContactPage } from './ContactPage';
-import { NotFoundPage } from './NotFoundPage';
-import { SiteFooter } from './SiteFooter';
-import { resolveDocumentTitle } from './pageTitle';
-import { useDocumentTitle } from './useDocumentTitle';
+import { generateGame, type GeneratedGame, type GenerateGameApiError } from './api.js';
+import { fetchCatalog, type CatalogEntry } from './catalog.js';
+import { GameTheater } from './GameTheater.js';
+import { NavHeader } from './NavHeader.js';
+import { HeroPromptSection } from './HeroPromptSection.js';
+import { ArcadeCatalog } from './ArcadeCatalog.js';
+import { MyGamesRail } from './MyGamesRail.js';
+import { DraftView } from './DraftView.js';
+import { GameHealthView } from './GameHealthView.js';
+import { PixelIcon } from './PixelIcon.js';
+import { SubmissionStatusView } from './SubmissionStatusView.js';
+import { CreatorQA, type QAQuestion } from './CreatorQA.js';
+import { canonicalPlayPath, NAVIGATE_EVENT, parsePathRoute, statusPath, playPath, type AppRoute } from './router.js';
+import { LegalPage } from './LegalPage.js';
+import { ContactPage } from './ContactPage.js';
+import { NotFoundPage } from './NotFoundPage.js';
+import { SiteFooter } from './SiteFooter.js';
+import { resolveDocumentTitle } from './pageTitle.js';
+import { useDocumentTitle } from './useDocumentTitle.js';
 
 /** Read the current URL into an AppRoute, rewriting `/ay|/ai/<slug>` → `/play/<slug>`. */
 function readLocationRoute(): AppRoute {
@@ -28,17 +28,17 @@ function readLocationRoute(): AppRoute {
   }
   return parsePathRoute(window.location.pathname, window.location.hash);
 }
-import { submitSpec, refineSpec, type SubmissionApiError } from './submissionApi';
-import { getSavedSpecs, saveSpec, type SavedSpec } from './mySpecs';
-import { clearPendingQa, loadPendingQa, savePendingQa, type PendingQaAnswers } from './pendingQa';
-import { useAuth } from './AuthContext';
-import { AuthModal } from './AuthModal';
-import { recordCreateStep } from './visitTelemetry';
-import { ClosedBetaSplash } from './ClosedBetaSplash';
-import { AppLoadingScreen } from './AppLoadingScreen';
-import { ControllerView } from './mp/ControllerView';
-import { PartyStage } from './mp/PartyStage';
-import { createPartySession, type PartySession } from './mp/mpApi';
+import { submitSpec, refineSpec, type SubmissionApiError } from './submissionApi.js';
+import { getSavedSpecs, saveSpec, type SavedSpec } from './mySpecs.js';
+import { clearPendingQa, loadPendingQa, savePendingQa, type PendingQaAnswers } from './pendingQa.js';
+import { useAuth } from './AuthContext.js';
+import { AuthModal } from './AuthModal.js';
+import { recordCreateStep } from './visitTelemetry.js';
+import { ClosedBetaSplash } from './ClosedBetaSplash.js';
+import { AppLoadingScreen } from './AppLoadingScreen.js';
+import { ControllerView } from './mp/ControllerView.js';
+import { PartyStage } from './mp/PartyStage.js';
+import { createPartySession, type PartySession } from './mp/mpApi.js';
 
 type StageContent =
   | { type: 'catalog'; game: CatalogEntry }

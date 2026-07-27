@@ -3,7 +3,7 @@
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { describe, expect, it } from 'vitest';
-import { GameFrame } from './GameFrame';
+import { GameFrame } from './GameFrame.js';
 import fs from 'node:fs';
 import path from 'node:path';
 

@@ -1,4 +1,4 @@
-import type { QAQuestion } from './CreatorQA';
+import type { QAQuestion } from './CreatorQA.js';
 
 /**
  * The clarifying-questions session, parked in localStorage.

@@ -3,7 +3,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import i18n from './i18n';
+import i18n from './i18n/index.js';
 
 vi.mock('./AuthContext', () => ({
   useAuth: () => ({ user: null, signInWithGoogleToken: vi.fn(), logout: vi.fn() }),
@@ -35,7 +35,7 @@ vi.mock('./useScreenWakeLock', () => ({
   useScreenWakeLock: () => undefined,
 }));
 
-import { GameTheater } from './GameTheater';
+import { GameTheater } from './GameTheater.js';
 
 let container: HTMLDivElement;
 let root: Root | null = null;

@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import { MascotMoment } from './Mascot';
-import { PixelIcon } from './PixelIcon';
+import { MascotMoment } from './Mascot.js';
+import { PixelIcon } from './PixelIcon.js';
 
 type NotFoundPageProps = {
   onHome: () => void;

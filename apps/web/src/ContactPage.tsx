@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { submitContact, type ContactError } from './contactApi';
-import { CONTACT_EMAIL } from './legal/operator';
-import { PixelIcon } from './PixelIcon';
-import { legalPath } from './router';
+import { submitContact, type ContactError } from './contactApi.js';
+import { CONTACT_EMAIL } from './legal/operator.js';
+import { PixelIcon } from './PixelIcon.js';
+import { legalPath } from './router.js';
 
 /**
  * Public contact form. Replaces the old footer link to the GitHub issues list for

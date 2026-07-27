@@ -8,7 +8,7 @@ import {
   parsePathRoute,
   playPath,
   statusPath,
-} from './router';
+} from './router.js';
 
 describe('parsePathRoute', () => {
   it('maps empty and root paths to home', () => {

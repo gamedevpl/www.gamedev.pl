@@ -1,6 +1,6 @@
 import { webcrypto } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import { parsePathRoute } from './router';
+import { parsePathRoute } from './router.js';
 
 // vitest's node environment does not expose the webcrypto global that a real browser
 // (and plain Node) provides, and `readVisitIdentity` relies on `crypto.randomUUID()`
@@ -18,7 +18,7 @@ import {
   utmFields,
   VisitSession,
   type WireVisitEvent,
-} from './visitTelemetry';
+} from './visitTelemetry.js';
 
 function capture() {
   const batches: { visitId: string; flushMsSinceStart: number; events: WireVisitEvent[] }[] = [];
@@ -297,7 +297,7 @@ describe('sendVisitTelemetry', () => {
   it('swallows a rejected request so telemetry never surfaces as a failure', async () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error('offline'));
     vi.stubGlobal('fetch', fetchMock);
-    const { sendVisitTelemetry } = await import('./visitTelemetry');
+    const { sendVisitTelemetry } = await import('./visitTelemetry.js');
     expect(() => sendVisitTelemetry({ visitId: 'v1', flushMsSinceStart: 0, events: [] })).not.toThrow();
     vi.unstubAllGlobals();
   });

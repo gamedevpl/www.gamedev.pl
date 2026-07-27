@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { embedGameHtml } from './gamePlayer';
+import { embedGameHtml } from './gamePlayer.js';
 
 /**
  * Runs the injected bridge for real rather than grepping its source.

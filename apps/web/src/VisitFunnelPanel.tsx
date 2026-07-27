@@ -1,4 +1,4 @@
-import { type VisitFunnel, type VisitsResponse } from './healthApi';
+import { type VisitFunnel, type VisitsResponse } from './healthApi.js';
 
 /**
  * The visit funnel, rendered beside game health on the operator page.

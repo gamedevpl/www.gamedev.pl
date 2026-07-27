@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchNotifications, markNotificationsRead } from './notificationsApi';
+import { fetchNotifications, markNotificationsRead } from './notificationsApi.js';
 
 afterEach(() => {
   vi.restoreAllMocks();

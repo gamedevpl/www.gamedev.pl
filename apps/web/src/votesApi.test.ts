@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { castVote, clearVote, fetchVotes } from './votesApi';
+import { castVote, clearVote, fetchVotes } from './votesApi.js';
 
 afterEach(() => {
   vi.restoreAllMocks();

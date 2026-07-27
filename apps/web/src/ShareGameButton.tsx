@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { PixelIcon } from './PixelIcon';
+import { PixelIcon } from './PixelIcon.js';
 
 /**
  * One-tap share of a published game's `/play/<slug>` permalink.
@@ -19,8 +19,7 @@ export function ShareGameButton({ slug, title }: { slug: string; title: string }
   const share = async () => {
     const url = playUrl();
     const canShare =
-      typeof navigator.share === 'function' &&
-      (!navigator.canShare || navigator.canShare({ url, title, text: title }));
+      typeof navigator.share === 'function' && (!navigator.canShare || navigator.canShare({ url, title, text: title }));
 
     if (canShare) {
       try {

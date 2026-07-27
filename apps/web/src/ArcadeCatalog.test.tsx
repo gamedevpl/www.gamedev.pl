@@ -3,9 +3,9 @@
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ArcadeCatalog } from './ArcadeCatalog';
-import type { CatalogEntry } from './catalog';
-import i18n from './i18n';
+import { ArcadeCatalog } from './ArcadeCatalog.js';
+import type { CatalogEntry } from './catalog.js';
+import i18n from './i18n/index.js';
 
 type ObserverInstance = {
   callback: IntersectionObserverCallback;

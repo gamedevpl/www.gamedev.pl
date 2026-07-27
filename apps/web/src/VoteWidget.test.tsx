@@ -3,7 +3,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import i18n from './i18n';
+import i18n from './i18n/index.js';
 
 /**
  * The widget's whole job is: show the up-count to anyone, and only let a signed-in
@@ -24,7 +24,7 @@ const votesApi = vi.hoisted(() => ({
 }));
 vi.mock('./votesApi', () => votesApi);
 
-import { VoteWidget } from './VoteWidget';
+import { VoteWidget } from './VoteWidget.js';
 
 let container: HTMLDivElement;
 let root: Root | null = null;

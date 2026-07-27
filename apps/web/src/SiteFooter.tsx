@@ -1,8 +1,8 @@
 import { useTranslation } from 'react-i18next';
-import { bugReportUrl, REPO_URL } from './github';
-import { OPERATOR_LEGAL_NAME } from './legal/operator';
-import { contactPath, legalPath } from './router';
-import { currentVisitId } from './visitTelemetry';
+import { bugReportUrl, REPO_URL } from './github.js';
+import { OPERATOR_LEGAL_NAME } from './legal/operator.js';
+import { contactPath, legalPath } from './router.js';
+import { currentVisitId } from './visitTelemetry.js';
 
 /**
  * The site footer, and the one legally load-bearing piece of chrome on the page.

@@ -9,10 +9,10 @@ import {
   type VisitsResponse,
   type CreatorsResponse,
   type ScorecardsResponse,
-} from './healthApi';
-import { VisitFunnelPanel } from './VisitFunnelPanel';
-import { CreatorMetricsPanel } from './CreatorMetricsPanel';
-import { ScorecardPanel } from './ScorecardPanel';
+} from './healthApi.js';
+import { VisitFunnelPanel } from './VisitFunnelPanel.js';
+import { CreatorMetricsPanel } from './CreatorMetricsPanel.js';
+import { ScorecardPanel } from './ScorecardPanel.js';
 
 /**
  * Operator view over play telemetry (docs/improvement-loop-plan.md IL-2).

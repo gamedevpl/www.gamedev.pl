@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { GameTheater } from './GameTheater';
-import { PixelIcon, type PixelIconName } from './PixelIcon';
+import { GameTheater } from './GameTheater.js';
+import { PixelIcon, type PixelIconName } from './PixelIcon.js';
 import {
   abandonSubmission,
   getBuildStats,
@@ -17,9 +17,9 @@ import {
   type SubmissionApiError,
   type SubmissionPreview,
   type SubmissionStatus,
-} from './submissionApi';
-import { draftPath, playPath, statusPath } from './router';
-import { formatDuration, formatRelativeTime } from './relativeTime';
+} from './submissionApi.js';
+import { draftPath, playPath, statusPath } from './router.js';
+import { formatDuration, formatRelativeTime } from './relativeTime.js';
 
 const TERMINAL_STATUSES = new Set<SubmissionStatus['status']>(['published', 'needs_changes', 'abandoned']);
 /** Statuses that halt the linear timeline rather than sitting on a step of it. */

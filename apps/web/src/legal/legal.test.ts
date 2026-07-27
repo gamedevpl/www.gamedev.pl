@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ALL_LEGAL_DOCUMENTS, legalDocument, type LegalDocument } from './index';
-import { CONTACT_EMAIL } from './operator';
+import { ALL_LEGAL_DOCUMENTS, legalDocument, type LegalDocument } from './index.js';
+import { CONTACT_EMAIL } from './operator.js';
 
 const DOC_IDS = ['privacy', 'terms'] as const;
 

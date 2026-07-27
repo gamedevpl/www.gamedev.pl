@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { submitPlayerFeedback } from './playerFeedbackApi';
+import { submitPlayerFeedback } from './playerFeedbackApi.js';
 
 afterEach(() => {
   vi.restoreAllMocks();

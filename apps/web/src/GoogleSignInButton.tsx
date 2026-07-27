@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useAuth } from './AuthContext';
+import { useAuth } from './AuthContext.js';
 
 declare global {
   interface Window {
