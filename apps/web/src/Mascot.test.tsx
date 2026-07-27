@@ -367,22 +367,19 @@ describe('InteractiveMascot', () => {
       value: () => ({ left: 0, top: 0, width: 80, height: 80, right: 80, bottom: 80, x: 0, y: 0, toJSON: () => ({}) }),
     });
 
+    // React wires onPointerEnter/Leave to pointerover/out (enter/leave don't bubble).
     await act(async () => {
-      button.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true }));
+      button.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
     });
     expect(container.querySelector('.mascot--curious')).not.toBeNull();
 
     await act(async () => {
-      button.dispatchEvent(
-        new PointerEvent('pointermove', { bubbles: true, clientX: 80, clientY: 0 }),
-      );
+      button.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 80, clientY: 0 }));
     });
-    expect(container.querySelector('.mascot__face-features')?.getAttribute('transform')).toBe(
-      'translate(2.40 -1.80)',
-    );
+    expect(container.querySelector('.mascot__face-features')?.getAttribute('transform')).toBe('translate(2.40 -1.80)');
 
     await act(async () => {
-      button.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true }));
+      button.dispatchEvent(new PointerEvent('pointerout', { bubbles: true }));
     });
     expect(container.querySelector('.mascot--wave')).not.toBeNull();
 
