@@ -14,9 +14,12 @@ REGION="${REGION:-europe-central2}"
 DEPLOYER_SA="${SA_NAME:-github-actions-deployer}@${PROJECT_ID}.iam.gserviceaccount.com"
 
 echo "==> 1/7 Enabling required GCP APIs"
+# storage.googleapis.com is needed by step 7 (the snapshot bucket) and by the Cloud
+# Run runtime that reads it. It is already on in most projects, but not guaranteed
+# on a fresh one — and without it step 7 fails after everything before it succeeded.
 gcloud services enable run.googleapis.com cloudbuild.googleapis.com \
   artifactregistry.googleapis.com secretmanager.googleapis.com firestore.googleapis.com \
-  aiplatform.googleapis.com \
+  aiplatform.googleapis.com storage.googleapis.com \
   --project "$PROJECT_ID"
 
 echo "==> 2/7 Provisioning Firestore (Native Mode) in ${REGION}"

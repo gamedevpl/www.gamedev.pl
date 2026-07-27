@@ -48,8 +48,11 @@ SERVICE="${SERVICE:-gamedev-app}"
 REPO="${REPO:-gamedev}"
 GAMES_REPO="${GAMES_REPO:-gamedevpl/www.gamedev.pl-games}"
 # Pre-assembled published games, baked by .github/workflows/publish-games.yml.
-# Leave empty to serve every game from GitHub the way the site did before.
-GAMES_SNAPSHOT_BUCKET="${GAMES_SNAPSHOT_BUCKET:-${PROJECT_ID}-games-snapshots}"
+# Set GAMES_SNAPSHOT_BUCKET='' to serve every game from GitHub the way the site
+# did before. Note the `-` rather than `:-`: an explicit empty value has to survive
+# for that opt-out to work at all, and it is what makes the `-n` guard below mean
+# something instead of being always true.
+GAMES_SNAPSHOT_BUCKET="${GAMES_SNAPSHOT_BUCKET-${PROJECT_ID}-games-snapshots}"
 GOOGLE_OAUTH_CLIENT_ID="${GOOGLE_OAUTH_CLIENT_ID:-334141807880-t8qsj5n6p3g9imbs3jfut82cecvr87pu.apps.googleusercontent.com}"
 WEB_ORIGIN="${WEB_ORIGIN:-https://gamedev-app-334141807880.europe-west1.run.app,https://www.gamedev.pl,https://gamedev.pl}"
 # Apex → www 301 canonicalization (app-side; Cloud Run mappings can't redirect).
