@@ -30,7 +30,9 @@ vi.mock('./gamePlayer', async () => {
 });
 
 vi.mock('./PublishedGameFrame', () => ({
-  PublishedGameFrame: () => <iframe className="game-frame" title="game" />,
+  PublishedGameFrame: ({ frameRef }: { frameRef?: { current: HTMLIFrameElement | null } }) => (
+    <iframe className="game-frame" title="game" ref={frameRef as React.Ref<HTMLIFrameElement>} />
+  ),
 }));
 
 vi.mock('./useScreenWakeLock', () => ({
@@ -97,20 +99,24 @@ describe('GameTheater more menu', () => {
     expect(more.classList.contains('exit-btn')).toBe(false);
   });
 
-  it('dismisses when the playfield backdrop is tapped', async () => {
+  it('dismisses when focus moves into the game iframe', async () => {
     await draw();
     const more = container.querySelector('.theater-more-btn') as HTMLButtonElement;
+    const frame = container.querySelector('iframe') as HTMLIFrameElement;
 
     await act(async () => {
       more.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(container.querySelector('.theater-more-backdrop')).not.toBeNull();
+    expect(container.querySelector('.theater-more.is-open')).not.toBeNull();
 
     await act(async () => {
-      container.querySelector('.theater-more-backdrop')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      // Tapping the playfield focuses the iframe and blurs the parent window —
+      // that's the signal we use instead of covering the game with a backdrop.
+      frame.focus();
+      window.dispatchEvent(new Event('blur'));
+      await Promise.resolve();
     });
 
     expect(container.querySelector('.theater-more.is-open')).toBeNull();
-    expect(container.querySelector('.theater-more-backdrop')).toBeNull();
   });
 });

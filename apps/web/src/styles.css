@@ -1423,22 +1423,7 @@ body.player-open {
   /* The overflow menu hangs below the bar; clipping it would make the hamburger
      look broken — the panel opens but nothing appears. */
   overflow: visible;
-  /* Above the dismiss backdrop so bar controls stay tappable while More is open. */
-  z-index: 40;
-  position: relative;
-}
-
-/* Transparent full-theater hit target under the bar. Needed because pointer events
-   inside the sandboxed game iframe never bubble to the document listener. */
-.theater-more-backdrop {
-  position: absolute;
-  inset: 0;
-  z-index: 30;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: default;
+  z-index: 2;
 }
 
 .game-theater-meta {

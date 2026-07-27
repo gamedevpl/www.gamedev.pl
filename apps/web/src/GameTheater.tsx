@@ -117,8 +117,7 @@ export function GameTheater({
   // the caller can only derive one from the slug.
   const displayTitle = player.meta?.title?.trim() || title;
 
-  const authorLabel =
-    submittedBy && !isPlatformAuthor(submittedBy) ? submittedBy : t('catalog.platformAuthor');
+  const authorLabel = submittedBy && !isPlatformAuthor(submittedBy) ? submittedBy : t('catalog.platformAuthor');
 
   // Fullscreen buys back the browser chrome — on a phone that's a third of the
   // screen. Unsupported on iPhone Safari, where `fullscreenEnabled` is false and
@@ -185,22 +184,37 @@ export function GameTheater({
   }, [requestExit, moreOpen]);
 
   // Close the overflow menu on an outside tap — phones have no hover to dismiss it.
-  // Same-document chrome (title, like, exit) uses this listener; taps on the game
-  // iframe never reach it, so an explicit backdrop covers the playfield too.
-  // Defer one tick so the opening click cannot close the menu in the same gesture.
+  // Same-document chrome uses pointerdown. Taps on the sandboxed game never bubble
+  // here; they do move focus into the iframe — listen for that (and window blur as
+  // a backstop) so we dismiss without covering the playfield. A backdrop would
+  // steal the first tap from the game.
+  // Defer the pointer listener one tick so the opening click cannot close the menu
+  // in the same gesture.
   useEffect(() => {
     if (!moreOpen) return;
+    const dismiss = () => setMoreOpen(false);
     const onPointer = (event: PointerEvent) => {
       if (moreRef.current && !moreRef.current.contains(event.target as Node)) {
-        setMoreOpen(false);
+        dismiss();
       }
     };
+    const onWindowBlur = () => {
+      window.setTimeout(() => {
+        if (document.activeElement === frameRef.current) dismiss();
+      }, 0);
+    };
+    const frame = frameRef.current;
     const timer = window.setTimeout(() => {
       document.addEventListener('pointerdown', onPointer);
     }, 0);
+    window.addEventListener('blur', onWindowBlur);
+    // Focus on the <iframe> element itself fires when the player taps the game.
+    frame?.addEventListener('focus', dismiss);
     return () => {
       window.clearTimeout(timer);
       document.removeEventListener('pointerdown', onPointer);
+      window.removeEventListener('blur', onWindowBlur);
+      frame?.removeEventListener('focus', dismiss);
     };
   }, [moreOpen]);
 
@@ -244,74 +258,62 @@ export function GameTheater({
       {/* Fullscreen hides the bar so the game owns the screen. Votes stay on the
           bar when it's visible; secondary actions stay in More. */}
       {!fullscreen && (
-        <>
-          {/* Captures taps on the sandboxed game (iframe events never bubble here)
-              so the menu can dismiss without forcing a second press on the trigger. */}
-          {moreOpen ? (
-            <button
-              type="button"
-              className="theater-more-backdrop"
-              aria-label={t('player.dismissMore')}
-              onClick={() => setMoreOpen(false)}
-            />
-          ) : null}
-          <div className="game-theater-bar">
-            <div className="game-theater-meta">
-              <span className="theater-badge" title={t('ai.generatedTooltip')}>
-                <PixelIcon name={badge.icon} size={12} /> {badge.label}
-              </span>
-              <h2 className="theater-title">
-                <span className="theater-title-text">{displayTitle}</span>
-                <span className="theater-author">{t('player.byAuthor', { author: authorLabel })}</span>
-              </h2>
-              {player.meta?.desc ? <span className="theater-desc">{player.meta.desc}</span> : meta}
-            </div>
-            <div className="game-theater-actions">
-              {/* Thumbs are first-class: the one signal people expect without hunting. */}
-              {reportSlug ? <VoteWidget slug={reportSlug} /> : null}
-              {/* Desktop: sound + fullscreen sit on the bar. Phone: they move into More. */}
-              {soundControl('secondary-btn sound-btn theater-desktop-chrome')}
-              {fullscreenControl('secondary-btn fullscreen-btn theater-desktop-chrome')}
-              {showMoreMenu && (
-                <div className={`theater-more${moreOpen ? ' is-open' : ''}`} ref={moreRef}>
-                  <button
-                    type="button"
-                    className="secondary-btn theater-more-btn"
-                    aria-expanded={moreOpen}
-                    aria-pressed={moreOpen}
-                    aria-label={t('player.moreActions')}
-                    onClick={() => setMoreOpen((open) => !open)}
-                  >
-                    {/* Stay a hamburger when open — swapping to X sat next to Exit and
-                        read as two close buttons. Highlight communicates open state. */}
-                    <PixelIcon name="menu" size={14} />
-                  </button>
-                  <div className="theater-more-panel" role="menu">
-                    {soundControl('theater-menu-item theater-mobile-chrome')}
-                    {fullscreenControl('theater-menu-item theater-mobile-chrome')}
-                    {reportSlug && (
-                      <>
-                        <div className="theater-menu-divider theater-mobile-chrome" role="separator" />
-                        <PlayerFeedbackWidget slug={reportSlug} />
-                        <ShareGameButton slug={reportSlug} title={displayTitle} />
-                        <ReportGameButton slug={reportSlug} title={displayTitle} />
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
-              <button
-                className="secondary-btn exit-btn"
-                onClick={onExit}
-                ref={exitRef}
-                aria-label={t('catalog.exitPlayer', { defaultValue: 'Close' })}
-                title={t('catalog.exitPlayer', { defaultValue: 'Close' })}
-              >
-                <PixelIcon name="close" size={14} />
-              </button>
-            </div>
+        <div className="game-theater-bar">
+          <div className="game-theater-meta">
+            <span className="theater-badge" title={t('ai.generatedTooltip')}>
+              <PixelIcon name={badge.icon} size={12} /> {badge.label}
+            </span>
+            <h2 className="theater-title">
+              <span className="theater-title-text">{displayTitle}</span>
+              <span className="theater-author">{t('player.byAuthor', { author: authorLabel })}</span>
+            </h2>
+            {player.meta?.desc ? <span className="theater-desc">{player.meta.desc}</span> : meta}
           </div>
-        </>
+          <div className="game-theater-actions">
+            {/* Thumbs are first-class: the one signal people expect without hunting. */}
+            {reportSlug ? <VoteWidget slug={reportSlug} /> : null}
+            {/* Desktop: sound + fullscreen sit on the bar. Phone: they move into More. */}
+            {soundControl('secondary-btn sound-btn theater-desktop-chrome')}
+            {fullscreenControl('secondary-btn fullscreen-btn theater-desktop-chrome')}
+            {showMoreMenu && (
+              <div className={`theater-more${moreOpen ? ' is-open' : ''}`} ref={moreRef}>
+                <button
+                  type="button"
+                  className="secondary-btn theater-more-btn"
+                  aria-expanded={moreOpen}
+                  aria-pressed={moreOpen}
+                  aria-label={t('player.moreActions')}
+                  onClick={() => setMoreOpen((open) => !open)}
+                >
+                  {/* Stay a hamburger when open — swapping to X sat next to Exit and
+                      read as two close buttons. Highlight communicates open state. */}
+                  <PixelIcon name="menu" size={14} />
+                </button>
+                <div className="theater-more-panel" role="menu">
+                  {soundControl('theater-menu-item theater-mobile-chrome')}
+                  {fullscreenControl('theater-menu-item theater-mobile-chrome')}
+                  {reportSlug && (
+                    <>
+                      <div className="theater-menu-divider theater-mobile-chrome" role="separator" />
+                      <PlayerFeedbackWidget slug={reportSlug} />
+                      <ShareGameButton slug={reportSlug} title={displayTitle} />
+                      <ReportGameButton slug={reportSlug} title={displayTitle} />
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+            <button
+              className="secondary-btn exit-btn"
+              onClick={onExit}
+              ref={exitRef}
+              aria-label={t('catalog.exitPlayer', { defaultValue: 'Close' })}
+              title={t('catalog.exitPlayer', { defaultValue: 'Close' })}
+            >
+              <PixelIcon name="close" size={14} />
+            </button>
+          </div>
+        </div>
       )}
       <div className="game-viewport-container">
         {'slug' in source ? (
