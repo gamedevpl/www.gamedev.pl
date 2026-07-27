@@ -47,7 +47,7 @@ type StageContent =
 
 export function App() {
   const { t, i18n } = useTranslation();
-  const { user, loading: authLoading, privateBeta, waitlistStatus } = useAuth();
+  const { user, loading: authLoading, privateBeta } = useAuth();
   const [route, setRoute] = useState(() => readLocationRoute());
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
@@ -221,8 +221,14 @@ export function App() {
   }, [stageContent]);
 
   useEffect(() => {
-    // The catalog is public in every mode now: playing does not require a session, so an
-    // anonymous fetch succeeds and the arcade renders for a first-time visitor.
+    // Wait until /api/health has told us whether PRIVATE_BETA is on — privateBeta
+    // defaults to false, so fetching before that would 401-spam (and log noise) for
+    // every anonymous visitor during closed beta.
+    if (authLoading) return;
+    // In private-beta mode /api/catalog requires a session — an anonymous fetch
+    // would just 401. Don't fetch (and don't render an error) until signed in.
+    // Outside private beta, catalog reads stay public (owner decision).
+    if (privateBeta && !user) return;
     // Only the home page shows the gallery. On `/play/<slug>` the theater covers the
     // whole viewport, so fetching the catalog (and, through it, every entry's media)
     // is work nobody can see — a direct game link should cost the game, and nothing
@@ -249,7 +255,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [user, privateBeta, route.view, catalogReloadKey]);
+  }, [user, privateBeta, authLoading, route.view, catalogReloadKey]);
 
   const handleRetryCatalog = useCallback(() => {
     setCatalogReloadKey((n) => n + 1);
@@ -543,12 +549,9 @@ export function App() {
     return <AppLoadingScreen />;
   }
 
-  // Anonymous visitors browse and play — a shared game link has to work for someone who has
-  // never signed in. The splash is no longer the whole site; it is the answer to one specific
-  // moment: you tried to sign in and the closed beta refused you. It owns the waitlist join,
-  // which is why that moment renders it rather than a bare error. `waitlistStatus` is only
-  // ever set from a refused sign-in (or a completed join), so 'unknown' means "hasn't asked".
-  if (privateBeta && !user && waitlistStatus !== 'unknown') {
+  // Closed beta: no session → branded splash (sign-in + waitlist). The shell still loads so
+  // the Google button can appear; every data route is walled on the API side.
+  if (privateBeta && !user) {
     return <ClosedBetaSplash />;
   }
 

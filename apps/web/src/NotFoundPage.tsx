@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { MascotMoment } from './Mascot';
 import { PixelIcon } from './PixelIcon';
 
 type NotFoundPageProps = {
@@ -15,16 +16,18 @@ export function NotFoundPage({ onHome }: NotFoundPageProps) {
 
   return (
     <section className="not-found" aria-labelledby="not-found-title">
-      <p className="not-found__code" aria-hidden="true">
-        404
-      </p>
-      <h1 id="not-found-title" className="not-found__title">
-        {t('notFound.title')}
-      </h1>
-      <p className="not-found__copy">{t('notFound.copy')}</p>
-      <button type="button" className="primary-btn not-found__home" onClick={onHome}>
-        <PixelIcon name="arrowRight" size={12} /> {t('notFound.home')}
-      </button>
+      <MascotMoment emotion="confused" size={88} title={t('mascot.confusedAlt')}>
+        <p className="not-found__code" aria-hidden="true">
+          404
+        </p>
+        <h1 id="not-found-title" className="not-found__title">
+          {t('notFound.title')}
+        </h1>
+        <p className="not-found__copy">{t('notFound.copy')}</p>
+        <button type="button" className="primary-btn not-found__home" onClick={onHome}>
+          <PixelIcon name="arrowRight" size={12} /> {t('notFound.home')}
+        </button>
+      </MascotMoment>
     </section>
   );
 }

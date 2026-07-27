@@ -33,7 +33,7 @@ describe('ClosedBetaSplash', () => {
       await flushEffects();
     });
 
-    expect(container.querySelector('.app-loading-screen__spinner')).not.toBeNull();
+    expect(container.querySelector('.app-loading-screen__mascot')).not.toBeNull();
     expect(container.querySelector('.app-loading-screen__logo')).not.toBeNull();
 
     await act(async () => root.unmount());

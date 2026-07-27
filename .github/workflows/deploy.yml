@@ -39,6 +39,10 @@ jobs:
       SERVICE: 'gamedev-app'
       REPO: 'gamedev'
       GAMES_REPO: 'gamedevpl/www.gamedev.pl-games'
+      # Pre-assembled published games (apps/api/src/game-snapshot.ts), written by
+      # publish-games.yml. Unset would simply mean every play rebuilds from GitHub
+      # again — serving treats the snapshot as a fast path, never a requirement.
+      GAMES_SNAPSHOT_BUCKET: 'gamedevpl-games-snapshots'
       WIF_PROVIDER: 'projects/334141807880/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
       WIF_SERVICE_ACCOUNT: 'github-actions-deployer@gamedevpl.iam.gserviceaccount.com'
 
@@ -131,10 +135,12 @@ jobs:
             --min-instances 0 \
             --max-instances 1 \
             --port 8080 \
-            --set-env-vars "^|^GAMES_REPO=${GAMES_REPO}|GOOGLE_OAUTH_CLIENT_ID=${{ vars.GOOGLE_OAUTH_CLIENT_ID }}|WEB_ORIGIN=https://gamedev-app-334141807880.europe-west1.run.app,https://www.gamedev.pl,https://gamedev.pl|CANONICAL_HOST=www.gamedev.pl|PRIVATE_BETA=true|BETA_ALLOWED_UIDS=${{ vars.BETA_ALLOWED_UIDS }}|BETA_ALLOWED_EMAILS=${{ vars.BETA_ALLOWED_EMAILS }}|ADMIN_UIDS=${{ vars.ADMIN_UIDS }}|NOTIFY_SWEEP_AUDIENCE=${{ vars.NOTIFY_SWEEP_AUDIENCE }}|NOTIFY_SWEEP_SA=${{ vars.NOTIFY_SWEEP_SA }}|SCORECARD_SWEEP_AUDIENCE=${{ vars.SCORECARD_SWEEP_AUDIENCE }}|VAPID_PUBLIC_KEY=${{ vars.VAPID_PUBLIC_KEY }}|VAPID_SUBJECT=${{ vars.VAPID_SUBJECT }}" \
+            --set-env-vars "^|^GAMES_REPO=${GAMES_REPO}|GAMES_SNAPSHOT_BUCKET=${GAMES_SNAPSHOT_BUCKET}|GOOGLE_OAUTH_CLIENT_ID=${{ vars.GOOGLE_OAUTH_CLIENT_ID }}|WEB_ORIGIN=https://gamedev-app-334141807880.europe-west1.run.app,https://www.gamedev.pl,https://gamedev.pl|CANONICAL_HOST=www.gamedev.pl|PRIVATE_BETA=true|BETA_ALLOWED_UIDS=${{ vars.BETA_ALLOWED_UIDS }}|BETA_ALLOWED_EMAILS=${{ vars.BETA_ALLOWED_EMAILS }}|ADMIN_UIDS=${{ vars.ADMIN_UIDS }}|NOTIFY_SWEEP_AUDIENCE=${{ vars.NOTIFY_SWEEP_AUDIENCE }}|NOTIFY_SWEEP_SA=${{ vars.NOTIFY_SWEEP_SA }}|SCORECARD_SWEEP_AUDIENCE=${{ vars.SCORECARD_SWEEP_AUDIENCE }}|VAPID_PUBLIC_KEY=${{ vars.VAPID_PUBLIC_KEY }}|VAPID_SUBJECT=${{ vars.VAPID_SUBJECT }}" \
             "${SECRET_FLAGS[@]}"
 
       - name: Smoke test candidate revision
+        # Anonymous checks: shell + waitlist reachable; catalog/games/spend routes walled.
+        # Play assemble lives in the authenticated smoke (session required under PRIVATE_BETA).
         run: |
           CANDIDATE_URL=$(gcloud run services describe "$SERVICE" --region "$REGION" \
             --project "$PROJECT_ID" --format=json \
@@ -159,42 +165,21 @@ jobs:
             exit 1
           fi
 
-          # Playing is public, so the catalog must serve an anonymous request. A 401 here
-          # means the beta wall regressed and every shared game link now leads strangers to
-          # a sign-in screen; anything else non-200 means we are about to promote a revision
-          # that cannot show the arcade at all. Both are worth failing the deploy for.
-          STATUS_CODE=$(curl -s -o /tmp/smoke-catalog.json -w "%{http_code}" "${CANDIDATE_URL}/api/catalog")
-          if [ "$STATUS_CODE" -eq 401 ]; then
-            echo "Smoke test failed: /api/catalog answered 401 — play must stay public to anonymous visitors"
-            exit 1
-          fi
-          if [ "$STATUS_CODE" -ne 200 ]; then
-            echo "Smoke test failed: expected 200 for anonymous /api/catalog (got ${STATUS_CODE})"
+          # In private-beta mode catalog requires a session → 401
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${CANDIDATE_URL}/api/catalog")
+          if [ "$STATUS_CODE" -ne 401 ]; then
+            echo "Smoke test failed: expected 401 for /api/catalog in private-beta mode (got ${STATUS_CODE})"
             exit 1
           fi
 
-          # Catalog can be green while every play route 502s (the assembler fans out into
-          # GitHub + esbuild; catalog.json is one Contents read). Fail the deploy if a
-          # published game cannot actually be assembled — that is the product.
-          PLAY_SLUG=$(jq -r '([.[] | select(.status == "published") | .slug] | first) // empty' /tmp/smoke-catalog.json)
-          if [ -z "$PLAY_SLUG" ]; then
-            echo "Smoke test failed: catalog has no published slug to play-test"
-            exit 1
-          fi
-          STATUS_CODE=$(curl -s -o /tmp/smoke-game.json -w "%{http_code}" "${CANDIDATE_URL}/api/games/${PLAY_SLUG}")
-          if [ "$STATUS_CODE" -ne 200 ]; then
-            echo "Smoke test failed: /api/games/${PLAY_SLUG} returned ${STATUS_CODE}"
-            head -c 500 /tmp/smoke-game.json; echo
-            exit 1
-          fi
-          if ! jq -e '.html | type == "string" and length > 0' /tmp/smoke-game.json >/dev/null; then
-            echo "Smoke test failed: /api/games/${PLAY_SLUG} response missing html"
-            head -c 500 /tmp/smoke-game.json; echo
+          # Published games are behind the same wall — anonymous play must not leak through.
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${CANDIDATE_URL}/api/games/smoke-test-slug")
+          if [ "$STATUS_CODE" -ne 401 ]; then
+            echo "Smoke test failed: expected 401 for unauthenticated /api/games (got ${STATUS_CODE})"
             exit 1
           fi
 
-          # The other half of that decision: unmerged work is not published content, so
-          # drafts must stay walled even though published games are open.
+          # Drafts stay walled (unmerged work is not published content).
           STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${CANDIDATE_URL}/api/drafts/smoke-test-slug")
           if [ "$STATUS_CODE" -ne 401 ]; then
             echo "Smoke test failed: expected 401 for unauthenticated /api/drafts (got ${STATUS_CODE})"
@@ -298,13 +283,40 @@ jobs:
             exit 1
           fi
           STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -b /tmp/smoke-cookies.txt "${CANDIDATE_URL}/api/notifications")
-          rm -f /tmp/smoke-cookies.txt /tmp/smoke-me.json
           if [ "$STATUS_CODE" -ne 200 ]; then
             echo "Authenticated smoke failed: session cookie rejected by /api/notifications (${STATUS_CODE})"
             exit 1
           fi
 
-          echo "Authenticated smoke passed as ${UID_VALUE}: bearer auth, cookie exchange, and the session wall all live."
+          # Catalog + a published game must assemble for a signed-in beta member. Anonymous
+          # smoke only proves the wall; this is what proves the product still plays.
+          STATUS_CODE=$(curl -s -o /tmp/smoke-catalog.json -w "%{http_code}" \
+            -H "Authorization: Bearer ${GAMEDEV_ACCESS_TOKEN}" "${CANDIDATE_URL}/api/catalog")
+          if [ "$STATUS_CODE" -ne 200 ]; then
+            echo "Authenticated smoke failed: bearer /api/catalog returned ${STATUS_CODE}"
+            exit 1
+          fi
+          PLAY_SLUG=$(jq -r '([.[] | select(.status == "published") | .slug] | first) // empty' /tmp/smoke-catalog.json)
+          if [ -z "$PLAY_SLUG" ]; then
+            echo "Authenticated smoke failed: catalog has no published slug to play-test"
+            exit 1
+          fi
+          STATUS_CODE=$(curl -s -o /tmp/smoke-game.json -w "%{http_code}" \
+            -H "Authorization: Bearer ${GAMEDEV_ACCESS_TOKEN}" "${CANDIDATE_URL}/api/games/${PLAY_SLUG}")
+          if [ "$STATUS_CODE" -ne 200 ]; then
+            echo "Authenticated smoke failed: /api/games/${PLAY_SLUG} returned ${STATUS_CODE}"
+            head -c 500 /tmp/smoke-game.json; echo
+            exit 1
+          fi
+          if ! jq -e '.html | type == "string" and length > 0' /tmp/smoke-game.json >/dev/null; then
+            echo "Authenticated smoke failed: /api/games/${PLAY_SLUG} response missing html"
+            head -c 500 /tmp/smoke-game.json; echo
+            exit 1
+          fi
+
+          rm -f /tmp/smoke-cookies.txt /tmp/smoke-me.json /tmp/smoke-catalog.json /tmp/smoke-game.json
+
+          echo "Authenticated smoke passed as ${UID_VALUE}: bearer auth, cookie exchange, session wall, and play assemble all live."
 
       # The browser gate. Everything above stops at HTTP, so play can be completely broken
       # while every check is green: `/api/games/<slug>` returning HTML says nothing about

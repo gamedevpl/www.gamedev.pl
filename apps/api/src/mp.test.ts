@@ -317,7 +317,7 @@ describe('POST /api/mp/sessions', () => {
 });
 
 describe('private beta wall', () => {
-  it('exempts the controller websocket without exempting room creation', async () => {
+  it('exempts the controller websocket but nothing else', async () => {
     const store = new InMemoryStore();
     const app = await buildApp({ store, sessionSecret, betaAllowedUids: 'g:allowed' });
 
@@ -329,11 +329,9 @@ describe('private beta wall', () => {
     });
     expect(sessions.statusCode).toBe(401);
 
-    // …as must anything that spends. (This used to assert the catalog was walled too;
-    // browsing and playing are public now, so the catalog is no longer the example of
-    // a walled route. Room *hosting* still requires an allowlisted account.)
-    const draft = await app.inject({ method: 'GET', url: '/api/drafts/some-slug' });
-    expect(draft.statusCode).toBe(401);
+    // …as must every other data route (catalog is the cheap stand-in for the wall).
+    const catalog = await app.inject({ method: 'GET', url: '/api/catalog' });
+    expect(catalog.statusCode).toBe(401);
 
     // …while the websocket path is reachable (it 400s on a plain GET because it
     // wants an upgrade, which is the point: the wall did not answer it).

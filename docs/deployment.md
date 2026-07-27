@@ -33,7 +33,7 @@ Deployments to Cloud Run are triggered on push to `master`:
 2. **Keyless OIDC Auth:** Authenticates via GCP Workload Identity Federation (no long-lived service account keys).
 3. **Cloud Build Image Creation:** Submits image build using `infra/cloudbuild.yaml` to Artifact Registry. The WIF deployer service account must also have `roles/serviceusage.serviceUsageConsumer` and storage access for the default Cloud Build staging bucket; `infra/setup-wif.sh` grants both.
 4. **Staging / Candidate Revision:** Deploys revision to Cloud Run with `--no-traffic --tag candidate`.
-5. **Candidate Smoke Test:** Anonymous checks (health, shell, public catalog/play, walls hold, forged bearer token rejected) plus an **authenticated smoke** when the `GAMEDEV_ACCESS_TOKEN` repo secret exists — bearer auth, token→cookie exchange, and a session-walled route, run as the CI bot (see [`agent-access-tokens.md`](./agent-access-tokens.md)). Skips loudly when the secret is absent.
+5. **Candidate Smoke Test:** Anonymous checks (health, shell, beta wall on catalog/games, waitlist open, forged bearer token rejected) plus an **authenticated smoke** when the `GAMEDEV_ACCESS_TOKEN` repo secret exists — bearer auth, token→cookie exchange, a session-walled route, and catalog/play assemble, run as the CI bot (see [`agent-access-tokens.md`](./agent-access-tokens.md)). Skips loudly when the secret is absent.
 6. **Browser gate (`apps/e2e`):** Drives real Chromium against the candidate and asserts the site works where HTTP checks cannot see — most importantly that **published games actually run**. See below for why this blocks.
 7. **Traffic Promotion & Tag Cleanup:** Promotes traffic to the latest revision (`--to-latest`) and removes the candidate tag (`--remove-tags candidate`) only if **both** the curl smoke checks and the browser gate succeed.
 
@@ -78,15 +78,16 @@ account (`<project-number>-compute@developer.gserviceaccount.com`) needs
 `roles/secretmanager.secretAccessor` on each. `deploy.yml` and `infra/deploy-api.sh` wire whichever exist into
 a single `--set-secrets` list.
 
-| Secret                              | Purpose                                                                                 | State (2026-07-26)                                                           |
-| ----------------------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `github-token`                      | Fine-grained PAT (Issues rw + PRs r + Contents r, games repo only)                      | ✅ set — submissions on                                                      |
-| `GAMES_REPO_TOKEN` (GitHub Actions) | Contents:read PAT on the games repo — CI lockstep check (`npm run contract:games-repo`) | ⚠️ set on the GitHub repo (not GCP) so assemble/Check 4/music drift fails CI |
-| `submission-token-secret`           | HMAC key for the stateless status token → `SUBMISSION_TOKEN_SECRET`                     | ✅ set                                                                       |
-| `session-secret`                    | HMAC key for session cookies → `SESSION_SECRET`                                         | ✅ set                                                                       |
-| `resend-api-key`                    | Outbound email → `RESEND_API_KEY` (see below)                                           | ✅ set                                                                       |
-| `vapid-private-key`                 | Web push signing → `VAPID_PRIVATE_KEY`                                                  | ✅ set                                                                       |
-| `site-basic-auth`                   | Former "not public yet" lock → `SITE_BASIC_AUTH`                                        | ⚠️ exists but **unused**                                                     |
+| Secret                                 | Purpose                                                                                                                                  | State (2026-07-26)                                                                                  |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `github-token`                         | Fine-grained PAT (Issues rw + PRs r + Contents r, games repo only)                                                                       | ✅ set — submissions on                                                                             |
+| `GAMES_REPO_TOKEN` (GitHub Actions)    | Contents:read PAT on the games repo — CI lockstep check (`npm run contract:games-repo`) and the snapshot bake (`publish-games.yml`)      | ⚠️ set on the GitHub repo (not GCP) so assemble/Check 4/music drift fails CI                        |
+| `SITE_DISPATCH_TOKEN` (GitHub Actions) | Fine-grained PAT that lets the **games repo** dispatch `games-published` into this repo — see [`games-snapshot.md`](./games-snapshot.md) | ⚠️ set on the _games_ repo; without it the site serves the previous snapshot until a manual publish |
+| `submission-token-secret`              | HMAC key for the stateless status token → `SUBMISSION_TOKEN_SECRET`                                                                      | ✅ set                                                                                              |
+| `session-secret`                       | HMAC key for session cookies → `SESSION_SECRET`                                                                                          | ✅ set                                                                                              |
+| `resend-api-key`                       | Outbound email → `RESEND_API_KEY` (see below)                                                                                            | ✅ set                                                                                              |
+| `vapid-private-key`                    | Web push signing → `VAPID_PRIVATE_KEY`                                                                                                   | ✅ set                                                                                              |
+| `site-basic-auth`                      | Former "not public yet" lock → `SITE_BASIC_AUTH`                                                                                         | ⚠️ exists but **unused**                                                                            |
 
 `site-basic-auth` is a leftover: the running revision does not wire it, and the site answers
 without an auth challenge. Access is controlled by `PRIVATE_BETA` and the beta allowlist
@@ -189,6 +190,37 @@ index is required. Expired tokens are already refused at authentication. Do **no
 a Firestore TTL policy at `expiresAt` as stored today — that field is an ISO string, and
 TTL only deletes on Timestamp/Date values (a no-op policy otherwise). Self-cleaning would
 need a dedicated Timestamp field or an operator sweep; it is hygiene, not a control.
+
+## Honouring a deletion request
+
+The privacy notice (§8) promises that deleting an account removes the votes and written
+feedback that person left on games. Deletion arrives by email, so it is an operator command
+rather than an endpoint — a destructive uid-targeted route would be attack surface buying
+nothing when a human already has to verify the request out of band.
+
+```bash
+npm run player:erase -w @gamedevpl/api -- g:12345 --dry-run   # preview
+npm run player:erase -w @gamedevpl/api -- g:12345 --confirm   # do it
+```
+
+One of `--dry-run` or `--confirm` is required; neither-or-both exits with usage, because
+the destructive reading is not one to guess at. The command is idempotent, so re-running
+after a partial failure is safe.
+
+Two things worth knowing before you run it:
+
+- **Votes are cleared through the same transaction the product uses**, not deleted
+  directly. Vote tallies live on the parent `games/{slug}` document, so a raw delete would
+  leave `votesUp`/`votesDown` overstating reality permanently — a number every visitor
+  sees, wrong, with nothing to catch it.
+- **Play telemetry is not touched, and that is the point.** Play events carry no uid, no IP
+  and no user agent by construction, so there is nothing in them to erase and nothing that
+  could be found if you tried. The erase path for play data is that it was never attributed.
+- **It needs the `playerFeedback.uid` collection-group index** from step 7 of
+  [`infra/setup-gcp.sh`](../infra/setup-gcp.sh). If the command fails with
+  `9 FAILED_PRECONDITION`, that index is missing — re-run the setup script, wait for the
+  build, and run the erase again. Nothing partial happens in that case: the failure is on
+  the read, before any delete.
 
 ## How to deploy manually
 

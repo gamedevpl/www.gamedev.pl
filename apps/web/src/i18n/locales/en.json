@@ -366,6 +366,15 @@
     "copy": "That link doesn't go anywhere on gamedev.pl. It may be mistyped, or the page may have moved.",
     "home": "Back to the catalog"
   },
+  "mascot": {
+    "heroAlt": "The gamedev.pl monster, cheering you on",
+    "waveAlt": "The gamedev.pl monster waving hello",
+    "proudAlt": "The gamedev.pl monster looking proud",
+    "confusedAlt": "The gamedev.pl monster looking confused",
+    "sadAlt": "The gamedev.pl monster looking sad",
+    "curiousAlt": "The gamedev.pl monster looking curious",
+    "busyAlt": "The gamedev.pl monster hard at work"
+  },
   "footer": {
     "legalNav": "Legal information",
     "reportIllegal": "Report illegal content",

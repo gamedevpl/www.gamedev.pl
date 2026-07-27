@@ -63,9 +63,19 @@ describe('SiteFooter project links', () => {
 
     const contact = links().find((a) => a.getAttribute('href') === '/contact');
     expect(contact).toBeDefined();
-    expect(links().some((a) => a.href.includes('github.com') && a.href.includes('/issues') && !a.href.includes('/issues/new'))).toBe(
-      false,
-    );
+
+    // Contact must not be the issues list. The only /issues link left is "report a
+    // bug" (…/issues/new?…). Parse the URL so we match the host and path precisely —
+    // a substring check on "github.com" trips CodeQL's incomplete-sanitization rule.
+    const issueListLinks = links().filter((a) => {
+      try {
+        const url = new URL(a.href);
+        return url.hostname === 'github.com' && url.pathname === '/gamedevpl/www.gamedev.pl/issues';
+      } catch {
+        return false;
+      }
+    });
+    expect(issueListLinks).toHaveLength(0);
     expect(links().some((a) => a.href.startsWith('mailto:'))).toBe(false);
     expect(container.textContent).not.toContain('admin@gamedev.pl');
   });

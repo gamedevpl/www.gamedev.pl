@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { recordCreateStep } from './visitTelemetry';
 import type { CatalogEntry } from './catalog.js';
 import { SketchModal } from './SketchModal.js';
+import { Mascot, type MascotEmotion } from './Mascot.js';
 import { PixelIcon } from './PixelIcon.js';
 import { getQuota } from './submissionApi.js';
 
@@ -200,7 +201,19 @@ export function HeroPromptSection({
     }
   };
 
+  const [isMascotHovered, setIsMascotHovered] = useState(false);
+
   const matchedGame = useMemo(() => findMatchingGame(promptText, catalogEntries), [promptText, catalogEntries]);
+
+  const heroEmotion: MascotEmotion = useMemo(() => {
+    if (isMascotHovered) return 'wave';
+    if (submissionStatus === 'refining') return 'thinking';
+    if (submissionStatus === 'loading' || mockStatus === 'loading') return 'busy';
+    if (submissionError || mockStatus === 'error') return 'sad';
+    if (matchedGame) return 'excited';
+    if (promptText.trim().length >= 3) return 'curious';
+    return 'happy';
+  }, [isMascotHovered, submissionStatus, mockStatus, submissionError, matchedGame, promptText]);
 
   const suggestions = [t('suggestions.dodge'), t('suggestions.collect'), t('suggestions.space')];
 
@@ -288,6 +301,15 @@ export function HeroPromptSection({
   return (
     <section className="hero-prompt-section">
       <div className="hero-text-container">
+        <div
+          className="hero-mascot-aside is-interactive"
+          onPointerEnter={() => setIsMascotHovered(true)}
+          onPointerLeave={() => setIsMascotHovered(false)}
+          onFocus={() => setIsMascotHovered(true)}
+          onBlur={() => setIsMascotHovered(false)}
+        >
+          <Mascot emotion={heroEmotion} size={72} title={t('mascot.heroAlt')} />
+        </div>
         <h1 className="hero-headline">{t('hero.mainTitle')}</h1>
       </div>
 

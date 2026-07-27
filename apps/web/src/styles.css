@@ -111,7 +111,8 @@ a {
   letter-spacing: -0.5px;
 }
 
-.app-header .logo img {
+.app-header .logo img,
+.app-header .logo .mascot {
   margin-right: 10px;
 }
 
@@ -1552,6 +1553,13 @@ body.player-open {
   align-items: center;
   justify-content: center;
   min-width: 40px;
+}
+
+/* Open state stays a hamburger — highlight instead of morphing into a second X. */
+.theater-more.is-open .theater-more-btn {
+  color: var(--turquoise);
+  border-color: var(--turquoise);
+  background: rgba(0, 228, 172, 0.12);
 }
 
 .theater-more-panel {
@@ -4275,8 +4283,12 @@ body.player-open {
   padding: 0 1rem;
 }
 
+.not-found .mascot-moment {
+  gap: 10px;
+}
+
 .not-found__code {
-  margin: 0 0 0.5rem;
+  margin: 0.25rem 0 0.5rem;
   font-size: clamp(3.5rem, 12vw, 5.5rem);
   font-weight: 700;
   letter-spacing: -0.04em;
@@ -4700,4 +4712,285 @@ body.player-open {
 .health-table th.num,
 .health-table td.num {
   text-align: right;
+}
+
+/* ——— Mascot (digitized logo monster) ——— */
+.mascot {
+  display: inline-block;
+  color: var(--turquoise);
+  flex: none;
+  vertical-align: middle;
+  overflow: visible;
+}
+
+.mascot__body-group {
+  transform-origin: 35px 54px;
+}
+
+/* Idle / friendly — breathe with a little squash */
+.mascot:not(.mascot--static).mascot--idle .mascot__body-group,
+.mascot:not(.mascot--static).mascot--happy .mascot__body-group,
+.mascot:not(.mascot--static).mascot--proud .mascot__body-group {
+  animation: mascot-breathe 2.8s ease-in-out infinite;
+}
+
+.mascot:not(.mascot--static).mascot--curious .mascot__body-group {
+  animation: mascot-peek 2.4s ease-in-out infinite;
+}
+
+.mascot:not(.mascot--static).mascot--thinking .mascot__body-group {
+  animation: mascot-ponder 3.4s ease-in-out infinite;
+}
+
+.mascot:not(.mascot--static).mascot--excited .mascot__body-group {
+  animation: mascot-bounce 0.55s ease-in-out infinite;
+}
+
+.mascot:not(.mascot--static).mascot--busy .mascot__body-group {
+  animation: mascot-hustle 0.45s ease-in-out infinite;
+}
+
+.mascot:not(.mascot--static).mascot--sad .mascot__body-group {
+  animation: mascot-sigh 3.6s ease-in-out infinite;
+}
+
+.mascot:not(.mascot--static).mascot--confused .mascot__body-group {
+  animation: mascot-wobble 2.2s ease-in-out infinite;
+}
+
+.mascot:not(.mascot--static).mascot--wave .mascot__body-group {
+  animation: mascot-breathe 2.2s ease-in-out infinite;
+}
+
+/* Blink lids — cover the eye holes briefly on every living pose */
+.mascot__lid {
+  opacity: 0;
+}
+
+.mascot:not(.mascot--static) .mascot__lid--left {
+  animation: mascot-lid-blink 4.6s ease-in-out infinite;
+}
+
+.mascot:not(.mascot--static) .mascot__lid--right {
+  animation: mascot-lid-blink 4.6s ease-in-out infinite;
+  animation-delay: 0.04s;
+}
+
+/* Raised arm for wave / excited */
+.mascot__wave-arm {
+  transform-origin: 64px 36px;
+}
+
+.mascot:not(.mascot--static).mascot--wave .mascot__wave-arm {
+  animation: mascot-wave-arm 0.7s ease-in-out infinite;
+}
+
+.mascot:not(.mascot--static).mascot--excited .mascot__wave-arm {
+  animation: mascot-cheer-arm 0.55s ease-in-out infinite;
+}
+
+.mascot--logo {
+  color: var(--turquoise);
+}
+
+.mascot-moment {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  text-align: center;
+  width: 100%;
+}
+
+.mascot-moment__copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: 28rem;
+}
+
+.mascot-moment__copy > p {
+  margin: 0;
+}
+
+.mascot-moment--inline {
+  flex-direction: row;
+  gap: 16px;
+  text-align: left;
+}
+
+.mascot-moment--inline .mascot-moment__copy {
+  align-items: flex-start;
+  text-align: left;
+}
+
+.app-loading-screen__mascot {
+  margin-bottom: 4px;
+}
+
+.beta-splash__mascot {
+  margin: 0 auto 20px;
+}
+
+.auth-modal-mascot {
+  margin: 0 auto 12px;
+}
+
+.hero-mascot-aside {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 12px;
+}
+
+.hero-mascot-aside .mascot {
+  cursor: default;
+  transition: transform 0.2s ease;
+}
+
+.hero-mascot-aside.is-interactive .mascot {
+  cursor: pointer;
+}
+
+.hero-mascot-aside.is-interactive:hover .mascot:not(.mascot--static),
+.hero-mascot-aside.is-interactive:focus-within .mascot:not(.mascot--static) {
+  transform: scale(1.06);
+}
+
+@keyframes mascot-breathe {
+  0%,
+  100% {
+    transform: translateY(0) scale(1, 1);
+  }
+  50% {
+    transform: translateY(-3px) scale(1.03, 0.97);
+  }
+}
+
+@keyframes mascot-peek {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  30% {
+    transform: translateY(-2px) rotate(-4deg);
+  }
+  70% {
+    transform: translateY(-3px) rotate(5deg);
+  }
+}
+
+@keyframes mascot-ponder {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-3deg);
+  }
+  50% {
+    transform: translateY(-2px) rotate(4deg);
+  }
+}
+
+@keyframes mascot-bounce {
+  0%,
+  100% {
+    transform: translateY(0) scale(1, 1);
+  }
+  35% {
+    transform: translateY(-7px) scale(0.96, 1.06);
+  }
+  55% {
+    transform: translateY(-2px) scale(1.04, 0.94);
+  }
+}
+
+@keyframes mascot-hustle {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  25% {
+    transform: translate(-1.5px, -4px) rotate(-4deg);
+  }
+  50% {
+    transform: translate(1.5px, -1px) rotate(3deg);
+  }
+  75% {
+    transform: translate(-1px, -5px) rotate(-2deg);
+  }
+}
+
+@keyframes mascot-sigh {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg) scale(1, 1);
+  }
+  50% {
+    transform: translateY(2px) rotate(-3deg) scale(1.02, 0.96);
+  }
+}
+
+@keyframes mascot-wobble {
+  0%,
+  100% {
+    transform: rotate(0deg) translateY(0);
+  }
+  25% {
+    transform: rotate(-6deg) translateY(-1px);
+  }
+  75% {
+    transform: rotate(6deg) translateY(-1px);
+  }
+}
+
+@keyframes mascot-lid-blink {
+  0%,
+  42%,
+  50%,
+  92%,
+  100% {
+    opacity: 0;
+  }
+  44%,
+  47% {
+    opacity: 1;
+  }
+  94%,
+  96% {
+    opacity: 1;
+  }
+}
+
+@keyframes mascot-wave-arm {
+  0%,
+  100% {
+    transform: rotate(-8deg);
+  }
+  50% {
+    transform: rotate(28deg);
+  }
+}
+
+@keyframes mascot-cheer-arm {
+  0%,
+  100% {
+    transform: rotate(0deg) translateY(0);
+  }
+  50% {
+    transform: rotate(12deg) translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mascot .mascot__body-group,
+  .mascot .mascot__lid,
+  .mascot .mascot__wave-arm,
+  .mascot .mascot__eyes {
+    animation: none !important;
+  }
+
+  .hero-mascot-aside.is-interactive:hover .mascot,
+  .hero-mascot-aside.is-interactive:focus-within .mascot {
+    transform: none;
+  }
 }
