@@ -90,7 +90,18 @@ export async function registerContactRoutes(
 
       // Abuse categories only — writers are allowed (expected) to leave a phone or
       // a second address in the body. The reply address lives in its own field.
-      const moderation = moderateFields([sanitizedName, sanitizedMessage], { allowPii: true });
+      //
+      // Moderate raw *and* sanitized when they differ (same posture as player
+      // feedback): raw still carries markdown link targets for the URL-count check;
+      // sanitized is what the outbound mail actually contains, and stripping
+      // emphasis can reveal a blocked term the raw form hid (`sh*it` → `shit`).
+      const nameFields =
+        sanitizedName === parsed.data.name ? [sanitizedName] : [parsed.data.name, sanitizedName];
+      const messageFields =
+        sanitizedMessage === parsed.data.message
+          ? [sanitizedMessage]
+          : [parsed.data.message, sanitizedMessage];
+      const moderation = moderateFields([...nameFields, ...messageFields], { allowPii: true });
       if (!moderation.allowed) {
         return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
       }

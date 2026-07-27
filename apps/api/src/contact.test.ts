@@ -110,6 +110,28 @@ describe('POST /api/contact', () => {
     await app.close();
   });
 
+  it('rejects markdown-wrapped link floods that sanitization would otherwise hide', async () => {
+    const mailer = new ConsoleMailer(() => {});
+    const app = await buildApp({
+      store: new InMemoryStore(),
+      sessionSecret,
+      contactRoutes: { mailer },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/contact',
+      payload: validPayload({
+        message:
+          'See [a](https://a.example.com) and [b](https://b.example.com) and [c](https://c.example.com) please.',
+      }),
+    });
+    expect(res.statusCode).toBe(422);
+    expect(JSON.parse(res.body)).toMatchObject({ error: 'content_rejected' });
+    expect(mailer.sent).toHaveLength(0);
+    await app.close();
+  });
+
   it('rate-limits a flood from one address', async () => {
     const mailer = new ConsoleMailer(() => {});
     const app = await buildApp({
