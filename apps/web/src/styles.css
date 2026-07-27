@@ -4639,12 +4639,12 @@ body.player-open {
 }
 
 .mascot:not(.mascot--static).mascot--wave .mascot__arm--right {
-  transform-origin: 56px 32px;
+  transform-origin: 65px 38px;
   animation: mascot-wave 0.85s ease-in-out infinite;
 }
 
 .mascot:not(.mascot--static) .mascot__eyes {
-  transform-origin: 35px 20px;
+  transform-origin: 38px 6px;
   animation: mascot-blink 4.8s ease-in-out infinite;
 }
 

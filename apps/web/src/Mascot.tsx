@@ -2,11 +2,11 @@
  * Digitized gamedev.pl monster mascot — the turquoise logo creature, as a layered
  * SVG so it can change expression and gesture.
  *
- * Geometry matches `logo-gamedev.png` (rounded body, donut ears, jagged mouth,
- * stick arms, block legs). Eyes/mouth/ear-holes are real mask cutouts so the
- * creature sits cleanly on any background. Emotions swap those cutouts and the
- * arm paths; CSS classes add blink, bob, bounce, and wave. Respects
- * `prefers-reduced-motion`.
+ * Geometry is traced from `logo-gamedev.png` (70×60): eyes sit near the crown,
+ * the jagged mouth owns most of the torso, donut ears hang mid-side, stick arms
+ * drop beside the block legs. Face features are real mask cutouts so the creature
+ * sits cleanly on any background. Emotions swap cutouts + arm paths; CSS adds
+ * blink / bob / bounce / wave. Respects `prefers-reduced-motion`.
  */
 
 import { useId, type ReactElement, type ReactNode } from 'react';
@@ -39,33 +39,68 @@ type FaceParts = {
   rightArm: string;
 };
 
-function eyeSlits(leftRot: number, rightRot: number, cy = 20, rx = 2.4, ry = 1.35): ReactElement {
+/** Default logo mouth — wide sawtooth traced from the PNG. */
+const MOUTH_IDLE =
+  'M18 12 L22 18 L26 11 L30 19 L35 10 L40 19 L44 11 L48 18 L52 12 L52 34 L48 28 L44 36 L40 27 L35 37 L30 28 L26 36 L22 29 L18 34 Z';
+
+const MOUTH_WIDE =
+  'M16 11 L21 19 L26 10 L31 20 L35 9 L39 20 L44 10 L49 19 L54 11 L54 36 L49 30 L44 38 L39 29 L35 39 L31 30 L26 38 L21 31 L16 36 Z';
+
+const MOUTH_SMILE = 'M22 20 C27 33 43 33 48 20 C43 27 27 27 22 20 Z';
+
+const MOUTH_PROUD = 'M24 22 C29 32 41 32 46 22 C41 28 29 28 24 22 Z';
+
+const MOUTH_SAD = 'M24 28 C29 21 41 21 46 28 C41 25 29 25 24 28 Z';
+
+const MOUTH_THINK =
+  'M24 18 L28 23 L32 17 L36 24 L40 16 L44 23 L48 18 L48 30 L44 26 L40 32 L36 25 L32 31 L28 26 L24 30 Z';
+
+const MOUTH_CONFUSED =
+  'M18 16 C22 12 26 24 30 16 C34 10 38 24 42 16 C46 12 50 22 52 16 C50 28 46 26 42 32 C38 36 34 24 30 32 C26 36 22 24 18 30 Z';
+
+const MOUTH_CURIOUS =
+  'M20 14 L24 20 L28 13 L32 21 L36 12 L40 21 L44 13 L48 20 L52 14 L52 32 L48 27 L44 34 L40 26 L36 35 L32 27 L28 34 L24 28 L20 32 Z';
+
+const MOUTH_BUSY =
+  'M20 14 L25 20 L30 13 L35 21 L40 12 L45 21 L50 14 L50 32 L45 27 L40 34 L35 26 L30 33 L25 27 L20 31 Z';
+
+const ARM_IDLE_L = 'M5 40 Q3 46 4 52';
+const ARM_IDLE_R = 'M65 40 Q67 46 66 52';
+
+function eyeSlits(
+  left: { cx: number; cy: number; rot: number; rx?: number; ry?: number },
+  right: { cx: number; cy: number; rot: number; rx?: number; ry?: number },
+): ReactElement {
+  const lrx = left.rx ?? 2.2;
+  const lry = left.ry ?? 1.1;
+  const rrx = right.rx ?? 2.2;
+  const rry = right.ry ?? 1.1;
   return (
     <g className="mascot__eyes">
       <ellipse
         className="mascot__eye mascot__eye--left"
-        cx="27"
-        cy={cy}
-        rx={rx}
-        ry={ry}
-        transform={`rotate(${leftRot} 27 ${cy})`}
+        cx={left.cx}
+        cy={left.cy}
+        rx={lrx}
+        ry={lry}
+        transform={`rotate(${left.rot} ${left.cx} ${left.cy})`}
       />
       <ellipse
         className="mascot__eye mascot__eye--right"
-        cx="43"
-        cy={cy}
-        rx={rx}
-        ry={ry}
-        transform={`rotate(${rightRot} 43 ${cy})`}
+        cx={right.cx}
+        cy={right.cy}
+        rx={rrx}
+        ry={rry}
+        transform={`rotate(${right.rot} ${right.cx} ${right.cy})`}
       />
     </g>
   );
 }
 
 function eyeDiscs(
-  size: { rx: number; ry: number } = { rx: 3.2, ry: 3.4 },
-  left: { cx: number; cy: number } = { cx: 27, cy: 20 },
-  right: { cx: number; cy: number } = { cx: 43, cy: 20 },
+  size: { rx: number; ry: number },
+  left: { cx: number; cy: number },
+  right: { cx: number; cy: number },
 ): ReactElement {
   return (
     <g className="mascot__eyes">
@@ -75,31 +110,14 @@ function eyeDiscs(
   );
 }
 
-/** Closed happy eyes — thick arcs punched as stroked mask paths. */
 function eyeCrescents(): ReactElement {
   return (
-    <g className="mascot__eyes" fill="none" stroke="#000" strokeWidth="2.4" strokeLinecap="round">
-      <path className="mascot__eye mascot__eye--left" d="M23.5 20.5 A 3.5 2.6 0 0 1 30.5 20.5" />
-      <path className="mascot__eye mascot__eye--right" d="M39.5 20.5 A 3.5 2.6 0 0 1 46.5 20.5" />
+    <g className="mascot__eyes" fill="none" stroke="#000" strokeWidth="2.2" strokeLinecap="round">
+      <path className="mascot__eye mascot__eye--left" d="M31 6.5 A 3.2 2.4 0 0 1 37.5 6.5" />
+      <path className="mascot__eye mascot__eye--right" d="M38.5 6.5 A 3.2 2.4 0 0 1 45 6.5" />
     </g>
   );
 }
-
-const MOUTH_IDLE =
-  'M21 28 L25 34 L29 27 L33 35 L37 26 L41 35 L45 27 L49 34 L51 28 L49 39 L45 34 L41 41 L37 33 L33 41 L29 34 L25 40 L21 36 Z';
-const MOUTH_WIDE =
-  'M20 28 L24 34 L28 27 L32 35 L36 26 L40 35 L44 27 L48 34 L50 28 L48 40 L44 35 L40 42 L36 34 L32 42 L28 35 L24 41 L20 36 Z';
-const MOUTH_SMILE = 'M22 30 C26 38 44 38 48 30 C44 34 26 34 22 30 Z';
-const MOUTH_PROUD = 'M24 31 C28 37 42 37 46 31 C42 34.5 28 34.5 24 31 Z';
-const MOUTH_SAD = 'M24 36 C28 31 42 31 46 36 C42 34 28 34 24 36 Z';
-const MOUTH_THINK =
-  'M28 32 L31 35 L34 32 L37 35.5 L40 32 L42 34.5 L44 32 L42 36 L40 34 L37 38 L34 34.5 L31 37.5 L28 35 Z';
-const MOUTH_CONFUSED =
-  'M23 31 C26 28 29 36 32 31 C35 26 38 36 41 31 C44 27 47 34 49 31 C47 37 44 35 41 38 C38 41 35 34 32 38 C29 41 26 34 23 37 Z';
-const MOUTH_CURIOUS =
-  'M24 29 L27 33 L30 29 L33 34 L36 29 L39 34 L42 29 L46 33 L48 29 L46 36 L42 33 L39 38 L36 33 L33 38 L30 33 L27 37 L24 33 Z';
-const MOUTH_BUSY =
-  'M23 29 L27 33.5 L31 28.5 L35 34.5 L39 28 L43 34.5 L47 29 L45 37 L41 33 L37 39 L33 33.5 L29 38.5 L25 34 L23 36 Z';
 
 function faceFor(emotion: MascotEmotion): FaceParts {
   switch (emotion) {
@@ -107,12 +125,12 @@ function faceFor(emotion: MascotEmotion): FaceParts {
       return {
         cutouts: (
           <>
-            {eyeDiscs()}
+            {eyeDiscs({ rx: 2.8, ry: 3 }, { cx: 34, cy: 6 }, { cx: 42, cy: 6 })}
             <path className="mascot__mouth" d={MOUTH_SMILE} />
           </>
         ),
-        leftArm: 'M14 34 Q8 42 10 50',
-        rightArm: 'M56 34 Q62 42 60 50',
+        leftArm: ARM_IDLE_L,
+        rightArm: ARM_IDLE_R,
       };
     case 'proud':
       return {
@@ -122,114 +140,106 @@ function faceFor(emotion: MascotEmotion): FaceParts {
             <path className="mascot__mouth" d={MOUTH_PROUD} />
           </>
         ),
-        leftArm: 'M14 34 Q7 38 9 46',
-        rightArm: 'M56 34 Q63 38 61 46',
+        leftArm: 'M5 40 Q2 44 6 48',
+        rightArm: 'M65 40 Q68 44 64 48',
       };
     case 'curious':
       return {
         cutouts: (
           <>
-            {eyeDiscs({ rx: 2.8, ry: 3.6 }, { cx: 27, cy: 19.5 }, { cx: 44, cy: 19.2 })}
+            {eyeDiscs({ rx: 2.4, ry: 3.2 }, { cx: 33.5, cy: 5.5 }, { cx: 43, cy: 5 })}
             <path className="mascot__mouth" d={MOUTH_CURIOUS} />
           </>
         ),
-        leftArm: 'M14 34 Q9 40 12 48',
-        rightArm: 'M56 34 Q64 36 66 28',
+        leftArm: ARM_IDLE_L,
+        rightArm: 'M65 40 Q68 34 66 28',
       };
     case 'thinking':
       return {
         cutouts: (
           <>
-            {eyeSlits(-18, -18, 19, 2.6, 3.2)}
+            {eyeSlits(
+              { cx: 33.5, cy: 5, rot: -24, rx: 2.4, ry: 1.4 },
+              { cx: 41.5, cy: 5, rot: -24, rx: 2.4, ry: 1.4 },
+            )}
             <path className="mascot__mouth" d={MOUTH_THINK} />
           </>
         ),
-        leftArm: 'M14 34 Q10 42 18 44',
-        rightArm: 'M56 34 Q62 40 54 45',
+        leftArm: 'M5 40 Q4 46 12 48',
+        rightArm: 'M65 40 Q66 46 58 48',
       };
     case 'excited':
       return {
         cutouts: (
           <>
-            {eyeDiscs({ rx: 3.8, ry: 4.2 }, { cx: 27, cy: 19 }, { cx: 43, cy: 19 })}
+            {eyeDiscs({ rx: 3.4, ry: 3.8 }, { cx: 34, cy: 5.5 }, { cx: 42, cy: 5.5 })}
             <path className="mascot__mouth" d={MOUTH_WIDE} />
           </>
         ),
-        leftArm: 'M14 32 Q6 24 8 16',
-        rightArm: 'M56 32 Q64 24 62 16',
+        leftArm: 'M5 38 Q1 28 4 20',
+        rightArm: 'M65 38 Q69 28 66 20',
       };
     case 'confused':
       return {
         cutouts: (
           <>
-            <g className="mascot__eyes">
-              <ellipse
-                className="mascot__eye mascot__eye--left"
-                cx="27"
-                cy="18"
-                rx="2.4"
-                ry="3.5"
-                transform="rotate(-28 27 18)"
-              />
-              <ellipse
-                className="mascot__eye mascot__eye--right"
-                cx="44"
-                cy="21.5"
-                rx="3.2"
-                ry="2.6"
-                transform="rotate(20 44 21.5)"
-              />
-            </g>
+            {eyeSlits(
+              { cx: 33, cy: 4.5, rot: -36, rx: 2.2, ry: 1.5 },
+              { cx: 43, cy: 7, rot: 18, rx: 2.8, ry: 1.3 },
+            )}
             <path className="mascot__mouth" d={MOUTH_CONFUSED} />
           </>
         ),
-        leftArm: 'M14 34 Q8 44 14 50',
-        rightArm: 'M56 34 Q64 44 58 52',
+        leftArm: 'M5 40 Q2 48 6 54',
+        rightArm: 'M65 40 Q68 48 64 54',
       };
     case 'sad':
       return {
         cutouts: (
           <>
-            {eyeSlits(22, -22, 21, 2.8, 2.2)}
+            {eyeSlits(
+              { cx: 34, cy: 7, rot: 22, rx: 2.4, ry: 1.1 },
+              { cx: 42, cy: 7, rot: -22, rx: 2.4, ry: 1.1 },
+            )}
             <path className="mascot__mouth" d={MOUTH_SAD} />
           </>
         ),
-        leftArm: 'M14 36 Q10 46 12 52',
-        rightArm: 'M56 36 Q60 46 58 52',
+        leftArm: 'M5 42 Q3 50 4 55',
+        rightArm: 'M65 42 Q67 50 66 55',
       };
     case 'wave':
       return {
         cutouts: (
           <>
-            {eyeDiscs({ rx: 3, ry: 3.2 })}
+            {eyeDiscs({ rx: 2.8, ry: 3 }, { cx: 34, cy: 6 }, { cx: 42, cy: 6 })}
             <path className="mascot__mouth" d={MOUTH_WIDE} />
           </>
         ),
-        leftArm: 'M14 34 Q9 42 11 50',
-        rightArm: 'M56 32 Q66 22 64 12',
+        leftArm: ARM_IDLE_L,
+        rightArm: 'M65 38 Q70 28 68 18',
       };
     case 'busy':
       return {
         cutouts: (
           <>
-            {eyeDiscs({ rx: 2.6, ry: 3.4 })}
+            {eyeDiscs({ rx: 2.4, ry: 3 }, { cx: 34, cy: 6 }, { cx: 42, cy: 6 })}
             <path className="mascot__mouth" d={MOUTH_BUSY} />
           </>
         ),
-        leftArm: 'M14 34 Q8 30 10 22',
-        rightArm: 'M56 34 Q62 30 60 22',
+        leftArm: 'M5 40 Q2 34 4 26',
+        rightArm: 'M65 40 Q68 34 66 26',
       };
     case 'idle':
     default:
       return {
         cutouts: (
           <>
-            {eyeSlits(-28, 28)}
+            {eyeSlits({ cx: 34, cy: 5.5, rot: -28 }, { cx: 41.5, cy: 5.5, rot: 28 })}
             <path className="mascot__mouth" d={MOUTH_IDLE} />
           </>
         ),
-        leftArm: 'M14 34 Q8 42 10 51',
-        rightArm: 'M56 34 Q62 42 60 51',
+        leftArm: ARM_IDLE_L,
+        rightArm: ARM_IDLE_R,
       };
   }
 }
@@ -266,15 +276,18 @@ export function Mascot({
         {/* White = keep body, black = punch through (eyes, mouth, ear holes). */}
         <mask id={maskId} maskUnits="userSpaceOnUse" x="0" y="0" width="70" height="60">
           <g fill="#fff">
-            <circle cx="12" cy="24" r="9.5" />
-            <circle cx="58" cy="24" r="9.5" />
-            <rect x="14" y="8" width="42" height="38" rx="11" ry="11" />
-            <rect x="22" y="44" width="9" height="12" rx="2.5" />
-            <rect x="39" y="44" width="9" height="12" rx="2.5" />
+            {/* Side ears — donut discs mid-body, matching the PNG. */}
+            <circle cx="7.5" cy="25.5" r="7.5" />
+            <circle cx="62.5" cy="25.5" r="7.5" />
+            {/* Torso — rounded block from the crown down to the hips. */}
+            <rect x="13" y="1" width="44" height="48" rx="12" ry="12" />
+            {/* Legs */}
+            <rect x="20" y="48" width="9" height="11" rx="2.5" />
+            <rect x="40" y="48" width="9" height="11" rx="2.5" />
           </g>
           <g fill="#000">
-            <circle cx="12" cy="24" r="4.2" />
-            <circle cx="58" cy="24" r="4.2" />
+            <circle cx="7.5" cy="25.5" r="2.6" />
+            <circle cx="62.5" cy="25.5" r="2.6" />
             {face.cutouts}
           </g>
         </mask>
@@ -286,7 +299,7 @@ export function Mascot({
         </g>
 
         {/* Arms live outside the mask so CSS can swing them. */}
-        <g className="mascot__arms" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+        <g className="mascot__arms" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
           <path className="mascot__arm mascot__arm--left" d={face.leftArm} />
           <path className="mascot__arm mascot__arm--right" d={face.rightArm} />
         </g>
