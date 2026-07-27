@@ -636,6 +636,15 @@ export interface Store {
   putScorecard(slug: string, scorecard: Scorecard): Promise<void>;
   /** A game's current scorecard, or null before the first sweep has run for it. */
   getScorecard(slug: string): Promise<Scorecard | null>;
+  /**
+   * Every game's current scorecard, newest computation first.
+   *
+   * Exists so the sweep's output is *readable*. Writing an aggregate nobody can look at
+   * is the same shape of mistake as a silently-dropping branch: the first sign it had
+   * been producing nonsense would be an agent acting on the nonsense. Bounded, because
+   * this is one query behind an operator page rather than a paginated surface.
+   */
+  listScorecards(opts?: { limit?: number }): Promise<Scorecard[]>;
   /** Persist a newly minted personal access token. */
   createAccessToken(record: AccessTokenRecord): Promise<void>;
   /** Point lookup by token id — the hot path on every bearer-authenticated request. */
@@ -1149,6 +1158,13 @@ export class InMemoryStore implements Store {
   async getScorecard(slug: string): Promise<Scorecard | null> {
     const found = this.scorecards.get(slug);
     return found ? structuredClone(found) : null;
+  }
+
+  async listScorecards(opts?: { limit?: number }): Promise<Scorecard[]> {
+    return [...this.scorecards.values()]
+      .map((card) => structuredClone(card))
+      .sort((a, b) => b.computedAt.localeCompare(a.computedAt) || a.slug.localeCompare(b.slug))
+      .slice(0, opts?.limit ?? 200);
   }
 
   async createAccessToken(record: AccessTokenRecord): Promise<void> {
@@ -1781,6 +1797,23 @@ export class FirestoreStore implements Store {
     // fields from a previous window alive next to a newer one — a row that never
     // existed as a measurement.
     await this.scorecardRef(slug).set(scorecard);
+  }
+
+  async listScorecards(opts?: { limit?: number }): Promise<Scorecard[]> {
+    // A collection-group query over `scorecard` reads every game's `current` doc in one
+    // round trip, instead of one read per catalog slug. Safe as a group name: nothing
+    // else in the schema uses it, unlike the `events` collision that forced play
+    // telemetry into its own group.
+    //
+    // Ordered by `computedAt` rather than by any metric, because the question this read
+    // exists to answer is "did the sweep run, and how fresh is the freshest" — a stale
+    // scorecard is the failure worth seeing first.
+    const snap = await this.db
+      .collectionGroup('scorecard')
+      .orderBy('computedAt', 'desc')
+      .limit(opts?.limit ?? 200)
+      .get();
+    return snap.docs.map((doc) => doc.data() as Scorecard);
   }
 
   async getScorecard(slug: string): Promise<Scorecard | null> {

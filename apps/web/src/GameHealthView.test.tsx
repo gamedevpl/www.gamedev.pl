@@ -5,7 +5,14 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
 import { GameHealthView } from './GameHealthView';
-import type { GameHealth, HealthResponse, VisitFunnel, VisitsResponse, CreatorsResponse } from './healthApi';
+import type {
+  GameHealth,
+  HealthResponse,
+  VisitFunnel,
+  VisitsResponse,
+  CreatorsResponse,
+  ScorecardsResponse,
+} from './healthApi';
 
 /**
  * The operator view's job is to make one thing obvious: which published game is broken.
@@ -80,6 +87,10 @@ function respondWith(body: HealthResponse | null, status = 200, funnel?: VisitsR
   const visitsBody: VisitsResponse | null =
     body === null ? null : (funnel ?? { days: body.days, truncated: body.truncated, funnel: EMPTY_FUNNEL });
   const creatorsBody: CreatorsResponse | null = body === null ? null : EMPTY_CREATORS;
+  // The scorecard read shares the page's Promise.all, so it has to answer here too —
+  // an unrouted URL would fall through to the health body and render as a scorecard.
+  const scorecardsBody: ScorecardsResponse | null =
+    body === null ? null : { scorecards: [], newestComputedAt: null, oldestComputedAt: null };
 
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const url = String(input);
@@ -87,7 +98,9 @@ function respondWith(body: HealthResponse | null, status = 200, funnel?: VisitsR
       ? visitsBody
       : url.includes('/telemetry/creators')
         ? creatorsBody
-        : body;
+        : url.includes('/admin/scorecards')
+          ? scorecardsBody
+          : body;
     return payload === null ? new Response(null, { status }) : new Response(JSON.stringify(payload), { status: 200 });
   }) as MockInstance<typeof globalThis.fetch>;
 }

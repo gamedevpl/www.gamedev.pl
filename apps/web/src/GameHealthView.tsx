@@ -3,13 +3,16 @@ import {
   fetchGameHealth,
   fetchVisitFunnel,
   fetchCreatorMetrics,
+  fetchScorecards,
   type GameHealth,
   type HealthResponse,
   type VisitsResponse,
   type CreatorsResponse,
+  type ScorecardsResponse,
 } from './healthApi';
 import { VisitFunnelPanel } from './VisitFunnelPanel';
 import { CreatorMetricsPanel } from './CreatorMetricsPanel';
+import { ScorecardPanel } from './ScorecardPanel';
 
 /**
  * Operator view over play telemetry (docs/improvement-loop-plan.md IL-2).
@@ -71,6 +74,7 @@ export function GameHealthView() {
   const [data, setData] = useState<HealthResponse | null>(null);
   const [visits, setVisits] = useState<VisitsResponse | null>(null);
   const [creators, setCreators] = useState<CreatorsResponse | null>(null);
+  const [scorecards, setScorecards] = useState<ScorecardsResponse | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'forbidden' | 'error'>('loading');
 
   useEffect(() => {
@@ -78,8 +82,8 @@ export function GameHealthView() {
     setState('loading');
     // Both panels share one window, so they are fetched together and fail together:
     // showing a 30-day funnel above a 7-day table would be worse than showing neither.
-    Promise.all([fetchGameHealth(days), fetchVisitFunnel(days), fetchCreatorMetrics()])
-      .then(([health, funnel, creatorMetrics]) => {
+    Promise.all([fetchGameHealth(days), fetchVisitFunnel(days), fetchCreatorMetrics(), fetchScorecards()])
+      .then(([health, funnel, creatorMetrics, sweptScorecards]) => {
         if (cancelled) return;
         if (!health) {
           setState('forbidden');
@@ -88,6 +92,7 @@ export function GameHealthView() {
         setData(health);
         setVisits(funnel);
         setCreators(creatorMetrics);
+        setScorecards(sweptScorecards);
         setState('ready');
       })
       .catch(() => {
@@ -144,6 +149,14 @@ export function GameHealthView() {
       {state === 'ready' && creators?.metrics && <CreatorMetricsPanel data={creators} />}
 
       {state === 'ready' && visits && <VisitFunnelPanel data={visits} />}
+
+      {/* Above the game-health table on purpose: this is the only place a stopped sweep
+          is visible, and the table below always looks current because it recomputes.
+
+          Guarded on `scorecards.scorecards` rather than truthiness, for the same reason
+          the creators panel is: all four reads share one Promise.all and one error
+          state, so a payload of an unexpected shape would blank the health table too. */}
+      {state === 'ready' && scorecards?.scorecards && <ScorecardPanel data={scorecards} />}
 
       {state === 'ready' && data && (
         <>
