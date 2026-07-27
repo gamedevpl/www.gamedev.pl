@@ -46,20 +46,34 @@ function apiSources(): string[] {
     .map((name) => readFileSync(join(here, name), 'utf8'));
 }
 
-interface QuerySite {
+type IndexOrder = 'ASCENDING' | 'DESCENDING';
+
+interface Constraint {
   group: string;
-  fields: string[];
+  field: string;
+  order: IndexOrder;
+}
+
+/** `scorecard.computedAt:DESCENDING` — the identity an index either has or does not. */
+function key(constraint: Pick<Constraint, 'group' | 'field' | 'order'>): string {
+  return `${constraint.group}.${constraint.field}:${constraint.order}`;
 }
 
 /**
- * Finds `collectionGroup('x')` and the fields constrained on the same statement.
+ * Finds `collectionGroup('x')` and the constraints on the same statement.
  *
  * "Same statement" is everything up to the next `;`, which is what makes chained calls
  * across several lines work. Both `where` and `orderBy` count: each needs the field
  * indexed at COLLECTION_GROUP scope.
+ *
+ * **Direction is part of the requirement, not decoration.** The field override written by
+ * step 7 creates exactly one COLLECTION_GROUP entry, in one direction, so an index
+ * provisioned ASCENDING does not satisfy an `orderBy(field, 'desc')` — that is the same
+ * hard 9 FAILED_PRECONDITION as having no index at all. An equality `where` is served by
+ * ASCENDING, and `orderBy` defaults to ascending when the direction is left off.
  */
-function findCollectionGroupQueries(source: string): QuerySite[] {
-  const sites: QuerySite[] = [];
+function findCollectionGroupQueries(source: string): Constraint[] {
+  const constraints: Constraint[] = [];
   const groupPattern = /\.collectionGroup\(\s*'([^']+)'\s*\)/g;
 
   for (const match of source.matchAll(groupPattern)) {
@@ -67,11 +81,16 @@ function findCollectionGroupQueries(source: string): QuerySite[] {
     const end = source.indexOf(';', start);
     const statement = source.slice(start, end === -1 ? source.length : end);
 
-    const fields = [...statement.matchAll(/\.(?:where|orderBy)\(\s*'([^']+)'/g)].map((field) => field[1]);
-    sites.push({ group: match[1], fields });
+    // Second capture is the operator for `where` ('==') and the direction for `orderBy`
+    // ('desc'), which is why the direction is read per-kind rather than positionally.
+    const constraintPattern = /\.(where|orderBy)\(\s*'([^']+)'\s*(?:,\s*'([^']*)')?/g;
+    for (const [, kind, field, second] of statement.matchAll(constraintPattern)) {
+      const order: IndexOrder = kind === 'orderBy' && second === 'desc' ? 'DESCENDING' : 'ASCENDING';
+      constraints.push({ group: match[1], field, order });
+    }
   }
 
-  return sites;
+  return constraints;
 }
 
 /** Parses the `CG_INDEXES="group:field:ORDER ..."` list that step 7 iterates over. */
@@ -81,44 +100,52 @@ function provisionedIndexes(script: string): Set<string> {
 
   const provisioned = new Set<string>();
   for (const entry of declaration[1].split(/\s+/).filter(Boolean)) {
-    const [group, field] = entry.split(':');
-    provisioned.add(`${group}.${field}`);
+    const [group, field, order] = entry.split(':');
+    // A malformed entry would otherwise become an index nobody notices is absent — the
+    // shell loop would PATCH a nonsense order and this check would compare against
+    // `undefined`, so both halves would agree the query is covered when it is not.
+    if (!group || !field || (order !== 'ASCENDING' && order !== 'DESCENDING')) {
+      throw new Error(`Malformed CG_INDEXES entry "${entry}" — expected group:field:ASCENDING|DESCENDING.`);
+    }
+    provisioned.add(key({ group, field, order }));
   }
   return provisioned;
 }
 
 describe('COLLECTION_GROUP indexes', () => {
-  const sites = apiSources().flatMap((source) => findCollectionGroupQueries(source));
+  const constraints = apiSources().flatMap((source) => findCollectionGroupQueries(source));
 
   it('finds the collection-group queries it is meant to be guarding', () => {
     // If a refactor moves these queries or changes how they are written, this fails
-    // rather than quietly guarding an empty list.
-    const found = sites.map((site) => site.group).sort();
+    // rather than quietly guarding an empty list. Deduplicated: this asserts *which*
+    // groups are queried, so a second query against a group already covered is not a
+    // change worth failing over.
+    const found = [...new Set(constraints.map((constraint) => constraint.group))].sort();
 
     expect(
       found,
-      'The set of collection groups queried by store.ts changed. If you added a query, add the ' +
-        'group here and its field to CG_INDEXES in infra/setup-gcp.sh. If this went empty or ' +
+      'The set of collection groups queried by apps/api/src changed. If you added a query, add ' +
+        'the group here and its field to CG_INDEXES in infra/setup-gcp.sh. If this went empty or ' +
         'lost an entry, the regex above stopped matching the code it guards — fix the regex, ' +
         'because a guard that matches nothing still passes and reads as coverage.',
     ).toEqual(['playerFeedback', 'scorecard']);
   });
 
-  it('provisions an index for every field a collection-group query constrains', () => {
+  it('provisions an index, in the right direction, for every constrained field', () => {
     const provisioned = provisionedIndexes(setupScript);
 
-    const missing = sites.flatMap((site) =>
-      site.fields.filter((field) => !provisioned.has(`${site.group}.${field}`)).map((field) => `${site.group}.${field}`),
-    );
+    const missing = [...new Set(constraints.filter((constraint) => !provisioned.has(key(constraint))).map(key))];
 
     expect(
       missing,
       missing.length
         ? `No COLLECTION_GROUP index for ${missing.join(', ')}. Firestore indexes single fields at ` +
             'COLLECTION scope only, so this query will fail in production with 9 FAILED_PRECONDITION ' +
-            '— not run slowly, fail. Add it to CG_INDEXES in infra/setup-gcp.sh (step 7) as ' +
-            '`group:field:ASCENDING` (equality) or `group:field:DESCENDING` (descending orderBy), ' +
-            'then re-run the script against the live project.'
+            '— not run slowly, fail. Add each to CG_INDEXES in infra/setup-gcp.sh (step 7) in exactly ' +
+            'the `group:field:ORDER` form listed above, then re-run the script against the live ' +
+            'project. If an entry for that field already exists, the direction is wrong rather than ' +
+            'the index missing: step 7 writes one COLLECTION_GROUP entry per field, and the opposite ' +
+            'direction does not satisfy the query.'
         : undefined,
     ).toEqual([]);
   });
