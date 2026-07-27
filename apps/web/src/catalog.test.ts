@@ -40,10 +40,27 @@ describe('catalog helpers', () => {
         multiplayer: null,
         orientation: 'any',
         touch: null,
+        submittedBy: null,
       },
     ]);
     // The catalog is served by our own API, not public GitHub Pages.
     expect(globalThis.fetch).toHaveBeenCalledWith('/api/catalog');
+  });
+
+  it('keeps a submitted_by byline and treats nullish values as absent', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          { slug: 'a', title: 'A', genre: '', controls: '', status: 'published', submittedBy: 'alice' },
+          { slug: 'b', title: 'B', genre: '', controls: '', status: 'published', submitted_by: 'bob' },
+          { slug: 'c', title: 'C', genre: '', controls: '', status: 'published', submittedBy: 'null' },
+          { slug: 'd', title: 'D', genre: '', controls: '', status: 'published' },
+        ]),
+      ),
+    );
+
+    const entries = await fetchCatalog();
+    expect(entries.map((entry) => entry.submittedBy)).toEqual(['alice', 'bob', null, null]);
   });
 
   it('keeps a declared orientation and treats anything else as no preference', async () => {

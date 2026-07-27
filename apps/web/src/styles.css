@@ -1224,6 +1224,14 @@ button:disabled {
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
 }
 
+.card-author {
+  margin: -4px 0 0;
+  font-size: 0.8rem;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.7);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
 /* Buttons hug their content and sit bottom-left instead of stretching the full card
    width — a bright full-width CTA on every card turned the whole grid into a wall of
    green. Play stays the obvious action without dominating the preview. */
@@ -1448,6 +1456,23 @@ body.player-open {
   flex: none;
 }
 
+.theater-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: none;
+}
+
+.theater-author {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .theater-controls {
   color: var(--muted);
   font-size: 0.85rem;
@@ -1508,6 +1533,23 @@ body.player-open {
 .vote-btn:disabled {
   opacity: 0.45;
   cursor: default;
+}
+
+/* Share / vote / report: inline on desktop; hamburger panel on a phone. */
+.theater-more {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.theater-more-btn {
+  display: none;
+}
+
+.theater-more-panel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .game-viewport-container {
@@ -1608,8 +1650,18 @@ body.player-open {
     text-overflow: ellipsis;
   }
 
+  .theater-title-block {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .theater-author {
+    font-size: 0.7rem;
+  }
+
   .game-theater-actions button .btn-label,
-  .game-theater-actions .report-btn .btn-label {
+  .game-theater-actions .report-btn .btn-label,
+  .game-theater-actions .share-btn .btn-label {
     display: none;
   }
 
@@ -1628,6 +1680,52 @@ body.player-open {
 
   .sound-btn {
     min-width: 44px;
+  }
+
+  /* Collapse share / vote / report into the overflow menu on a narrow bar. */
+  .theater-more-btn {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+    padding: 10px;
+  }
+
+  .theater-more-panel {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    min-width: 180px;
+    padding: 10px;
+    border-radius: 12px;
+    background: rgba(22, 28, 34, 0.96);
+    border: 1px solid var(--panel-border);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+    z-index: 30;
+  }
+
+  .theater-more.is-open .theater-more-panel {
+    display: flex;
+  }
+
+  .theater-more-panel .vote-widget {
+    justify-content: stretch;
+  }
+
+  .theater-more-panel .vote-widget button,
+  .theater-more-panel .share-btn,
+  .theater-more-panel .report-btn {
+    width: 100%;
+    justify-content: flex-start;
+    min-height: 44px;
+  }
+
+  .theater-more-panel .btn-label {
+    display: inline !important;
   }
 }
 
@@ -4252,32 +4350,14 @@ body.player-open {
   color: var(--turquoise);
 }
 
-/* Quiet DSA art. 16 control: findable, not competing with Sound/Fullscreen/Exit. */
+/* Report sits with the other theater controls — previously a muted ghost link
+   that players read as disabled. Still not a primary CTA; just clearly tappable. */
 .report-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: 0.85rem;
-  font-weight: 500;
   text-decoration: none;
-  cursor: pointer;
-  transition:
-    color 0.15s ease,
-    border-color 0.15s ease,
-    background 0.15s ease;
 }
 
 .report-btn:hover,
 .report-btn:focus-visible {
-  color: var(--text);
-  border-color: rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
   outline: none;
 }
 

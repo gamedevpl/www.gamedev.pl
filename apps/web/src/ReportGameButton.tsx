@@ -37,11 +37,11 @@ export function ReportGameButton({ slug, title }: { slug: string; title: string 
     t('report.goodFaith'),
   ].join('\n');
 
-  // Quiet text control on purpose: DSA art. 16 needs a findable report path, but
-  // it must not compete with Sound / Fullscreen / Exit in the theater chrome.
+  // Styled as a real secondary control (not a muted ghost link): players kept reading
+  // the old quiet colour as "disabled", which made the DSA path look broken.
   return (
     <a
-      className="report-btn"
+      className="secondary-btn report-btn"
       href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`}
       aria-label={t('report.action')}
       title={t('report.action')}

@@ -7,13 +7,15 @@ import i18n from './i18n';
 
 /**
  * The widget's whole job is: show real counts to anyone, and only let a signed-in
- * caller change them. These tests check both halves, plus the two UX rules that are
- * easy to get backwards — clicking the vote you already cast un-votes it, and a vote
+ * caller change them. Signed-out clicks open the sign-in modal rather than looking
+ * greyed-out-and-broken. Clicking the vote you already cast un-votes it, and a vote
  * action never blanks the counts that were already on screen.
  */
 
 const authState = vi.hoisted(() => ({ user: null as { uid: string } | null }));
-vi.mock('./AuthContext', () => ({ useAuth: () => authState }));
+vi.mock('./AuthContext', () => ({
+  useAuth: () => ({ ...authState, signInWithGoogleToken: vi.fn(), logout: vi.fn() }),
+}));
 
 const votesApi = vi.hoisted(() => ({
   fetchVotes: vi.fn(),
@@ -66,15 +68,23 @@ describe('VoteWidget', () => {
     expect(container.textContent).toContain('1');
   });
 
-  it('shows real counts to a signed-out visitor, but disables voting', async () => {
+  it('shows real counts to a signed-out visitor and opens sign-in on click', async () => {
     authState.user = null;
     votesApi.fetchVotes.mockResolvedValue({ up: 4, down: 1, mine: null });
     await draw();
 
     const { up, down } = buttons();
-    expect(up.hasAttribute('disabled')).toBe(true);
-    expect(down.hasAttribute('disabled')).toBe(true);
+    // Clickable, not greyed-out — the title explains why a click needs a session.
+    expect(up.hasAttribute('disabled')).toBe(false);
+    expect(down.hasAttribute('disabled')).toBe(false);
     expect(up.title).toMatch(/sign in/i);
+
+    await act(async () => {
+      up.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(votesApi.castVote).not.toHaveBeenCalled();
+    expect(document.body.textContent).toMatch(/sign in to vote/i);
   });
 
   it('a signed-in click casts a vote and reflects the response', async () => {

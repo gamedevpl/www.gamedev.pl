@@ -90,11 +90,17 @@
     "exitFullscreen": "Exit Fullscreen",
     "rotateLandscape": "Turn your phone sideways to play",
     "rotatePortrait": "Hold your phone upright to play",
+    "share": "Share",
+    "shareCopied": "Link copied",
+    "moreActions": "More actions",
+    "byAuthor": "by {{author}}",
     "vote": {
       "groupLabel": "Rate this game",
       "up": "Vote up",
       "down": "Vote down",
-      "signInToVote": "Sign in to vote"
+      "signInToVote": "Sign in to vote",
+      "signInTitle": "Sign in to vote",
+      "signInSubtitle": "Votes are tied to your account, so each person gets one per game."
     }
   },
   "catalog": {
@@ -119,7 +125,8 @@
     "keyboardOnlyTooltip": "This game has no touch controls — it needs a keyboard.",
     "play": "Play Game",
     "playingBadge": "Playing",
-    "remix": "Remix Game"
+    "remix": "Remix Game",
+    "platformAuthor": "gamedev.pl"
   },
   "studio": {
     "title": "Active Projects & Tracker",

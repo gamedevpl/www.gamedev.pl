@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { isPlatformAuthor } from './catalog';
 import { GameFrame } from './GameFrame';
 import { PublishedGameFrame } from './PublishedGameFrame';
 import { PixelIcon, type PixelIconName } from './PixelIcon';
 import { ReportGameButton } from './ReportGameButton';
+import { ShareGameButton } from './ShareGameButton';
 import { VoteWidget } from './VoteWidget';
 import { useGamePlayer } from './gamePlayer';
 import { useScreenWakeLock } from './useScreenWakeLock';
@@ -22,13 +24,18 @@ type GameTheaterProps = {
    *  (e.g. the prompt a generated game was made from). */
   meta?: ReactNode;
   /**
-   * Slug of a *published* game, which turns on the "Report game" control (DSA art. 16)
-   * and the vote widget. Passed explicitly rather than derived from `source`, because
-   * drafts and local mocks are also slug- or html-sourced and are seen by their own
-   * creator only — there is nobody to report them to, and their own draft is not a
-   * signal worth a vote count either.
+   * Slug of a *published* game, which turns on the "Report game" control (DSA art. 16),
+   * the vote widget, and share. Passed explicitly rather than derived from `source`,
+   * because drafts and local mocks are also slug- or html-sourced and are seen by
+   * their own creator only — there is nobody to report them to, their own draft is
+   * not a signal worth a vote count, and a share of a draft needs the status token.
    */
   reportSlug?: string;
+  /**
+   * Unverified creator attribution from the catalog (`submitted_by`). null / the
+   * platform sentinel read as the site itself; anything else is shown as a byline.
+   */
+  submittedBy?: string | null;
 };
 
 /**
@@ -62,11 +69,22 @@ function useOrientationMismatch(desired: 'any' | 'portrait' | 'landscape'): bool
  * sound chrome is hidden and surfaced here instead. Callers own page scroll-locking
  * (`document.body.classList` 'player-open') and the overlay's mount lifecycle.
  */
-export function GameTheater({ title, badge, source, onExit, meta, orientation = 'any', reportSlug }: GameTheaterProps) {
+export function GameTheater({
+  title,
+  badge,
+  source,
+  onExit,
+  meta,
+  orientation = 'any',
+  reportSlug,
+  submittedBy = null,
+}: GameTheaterProps) {
   const { t } = useTranslation();
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const exitRef = useRef<HTMLButtonElement | null>(null);
   const stageRef = useRef<HTMLElement | null>(null);
+  const moreRef = useRef<HTMLDivElement | null>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   // Playing is the one thing you do here without touching the screen for minutes at
   // a time, which is exactly when a phone dims and sleeps. Hold the screen awake.
@@ -96,6 +114,9 @@ export function GameTheater({ title, badge, source, onExit, meta, orientation = 
   // direct `/play/<slug>` link there's no catalog entry to take a title from, so
   // the caller can only derive one from the slug.
   const displayTitle = player.meta?.title?.trim() || title;
+
+  const authorLabel =
+    submittedBy && !isPlatformAuthor(submittedBy) ? submittedBy : t('catalog.platformAuthor');
 
   // Fullscreen buys back the browser chrome — on a phone that's a third of the
   // screen. Unsupported on iPhone Safari, where `fullscreenEnabled` is false and
@@ -128,7 +149,13 @@ export function GameTheater({ title, badge, source, onExit, meta, orientation = 
     exitRef.current?.focus();
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') requestExit();
+      if (event.key === 'Escape') {
+        if (moreOpen) {
+          setMoreOpen(false);
+          return;
+        }
+        requestExit();
+      }
     };
     window.addEventListener('keydown', onKeyDown);
 
@@ -136,7 +163,27 @@ export function GameTheater({ title, badge, source, onExit, meta, orientation = 
       window.removeEventListener('keydown', onKeyDown);
       previouslyFocused?.focus?.();
     };
-  }, [requestExit]);
+  }, [requestExit, moreOpen]);
+
+  // Close the overflow menu on an outside tap — phones have no hover to dismiss it.
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onPointer = (event: PointerEvent) => {
+      if (moreRef.current && !moreRef.current.contains(event.target as Node)) {
+        setMoreOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', onPointer);
+    return () => document.removeEventListener('pointerdown', onPointer);
+  }, [moreOpen]);
+
+  const secondaryActions = reportSlug ? (
+    <>
+      <VoteWidget slug={reportSlug} />
+      <ShareGameButton slug={reportSlug} title={displayTitle} />
+      <ReportGameButton slug={reportSlug} title={displayTitle} />
+    </>
+  ) : null;
 
   return (
     <section
@@ -151,7 +198,10 @@ export function GameTheater({ title, badge, source, onExit, meta, orientation = 
           <span className="theater-badge" title={t('ai.generatedTooltip')}>
             <PixelIcon name={badge.icon} size={12} /> {badge.label}
           </span>
-          <h2 className="theater-title">{displayTitle}</h2>
+          <div className="theater-title-block">
+            <h2 className="theater-title">{displayTitle}</h2>
+            <span className="theater-author">{t('player.byAuthor', { author: authorLabel })}</span>
+          </div>
           {player.meta?.desc ? <span className="theater-desc">{player.meta.desc}</span> : meta}
         </div>
         <div className="game-theater-actions">
@@ -177,8 +227,23 @@ export function GameTheater({ title, badge, source, onExit, meta, orientation = 
               <span className="btn-label">{fullscreen ? t('player.exitFullscreen') : t('player.fullscreen')}</span>
             </button>
           )}
-          {reportSlug && <VoteWidget slug={reportSlug} />}
-          {reportSlug && <ReportGameButton slug={reportSlug} title={displayTitle} />}
+          {/* Desktop: secondary actions sit in the bar. Phone: they collapse into
+              a hamburger — five+ 44px targets beside a title do not fit 360px.
+              One DOM instance either way, so VoteWidget does not double-fetch. */}
+          {secondaryActions && (
+            <div className={`theater-more${moreOpen ? ' is-open' : ''}`} ref={moreRef}>
+              <button
+                type="button"
+                className="secondary-btn theater-more-btn"
+                aria-expanded={moreOpen}
+                aria-label={t('player.moreActions')}
+                onClick={() => setMoreOpen((open) => !open)}
+              >
+                <PixelIcon name={moreOpen ? 'close' : 'menu'} size={14} />
+              </button>
+              <div className="theater-more-panel">{secondaryActions}</div>
+            </div>
+          )}
           <button
             className="secondary-btn exit-btn"
             onClick={onExit}

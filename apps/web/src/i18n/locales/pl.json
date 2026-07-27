@@ -90,11 +90,17 @@
     "exitFullscreen": "Zamknij pełny ekran",
     "rotateLandscape": "Obróć telefon poziomo, aby zagrać",
     "rotatePortrait": "Trzymaj telefon pionowo, aby zagrać",
+    "share": "Udostępnij",
+    "shareCopied": "Skopiowano link",
+    "moreActions": "Więcej działań",
+    "byAuthor": "autor: {{author}}",
     "vote": {
       "groupLabel": "Oceń tę grę",
       "up": "Głosuj na tak",
       "down": "Głosuj na nie",
-      "signInToVote": "Zaloguj się, aby zagłosować"
+      "signInToVote": "Zaloguj się, aby zagłosować",
+      "signInTitle": "Zaloguj się, aby zagłosować",
+      "signInSubtitle": "Głosy są powiązane z kontem, więc każda osoba ma jeden głos na grę."
     }
   },
   "catalog": {
@@ -119,7 +125,8 @@
     "keyboardOnlyTooltip": "Ta gra nie ma sterowania dotykowego — wymaga klawiatury.",
     "play": "Zagraj",
     "playingBadge": "Gramy",
-    "remix": "Zremiksuj"
+    "remix": "Zremiksuj",
+    "platformAuthor": "gamedev.pl"
   },
   "studio": {
     "title": "Aktywne Projekty i Śledzenie",

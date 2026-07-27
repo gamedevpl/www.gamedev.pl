@@ -38,6 +38,22 @@ export interface CatalogEntry {
   multiplayer: CatalogMultiplayer | null;
   orientation: CatalogOrientation;
   touch: CatalogTouch | null;
+  /**
+   * Who commissioned the game (`submitted_by` in the games-repo SPEC). Unverified —
+   * a handle, a display name, or the platform sentinel. null when unknown.
+   */
+  submittedBy: string | null;
+}
+
+/** Platform sentinel used in fixture / seed SPECs for games with no human creator. */
+export const PLATFORM_SUBMITTED_BY = 'gamedev-platform';
+
+/**
+ * True when the byline should read as the site itself rather than a named person —
+ * missing values and the platform sentinel both mean "built here, no human creator".
+ */
+export function isPlatformAuthor(submittedBy: string | null | undefined): boolean {
+  return !submittedBy || submittedBy === PLATFORM_SUBMITTED_BY;
 }
 
 /** A published game assembled by the API, ready for the sandboxed iframe's srcDoc. */
@@ -155,7 +171,19 @@ export async function fetchCatalog(): Promise<CatalogEntry[]> {
       multiplayer: parseCatalogMultiplayer((entry as { multiplayer?: unknown }).multiplayer),
       orientation: parseCatalogOrientation(entry.orientation),
       touch: parseCatalogTouch(entry.touch),
+      submittedBy: parseCatalogSubmittedBy(
+        (entry as { submittedBy?: unknown; submitted_by?: unknown }).submittedBy ??
+          (entry as { submitted_by?: unknown }).submitted_by,
+      ),
     }));
+}
+
+/** Same rules as the API: null / "null" / missing → null; otherwise length-capped text. */
+function parseCatalogSubmittedBy(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === 'null' || trimmed === '~') return null;
+  return trimmed.slice(0, 40);
 }
 
 export async function fetchPublishedGame(slug: string): Promise<PublishedGame> {

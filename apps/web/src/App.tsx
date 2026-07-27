@@ -194,6 +194,7 @@ export function App() {
         // Same reasoning: unknown, not "keyboard only". The badge is a warning, and
         // a deep link is no reason to show one.
         touch: null,
+        submittedBy: null,
       };
       setStageContent({ type: 'catalog', game: initialGame });
       document.getElementById('stage')?.scrollIntoView?.({ behavior: 'smooth' });
@@ -633,6 +634,7 @@ export function App() {
                 onExit={() => navigate('/')}
                 orientation={stageContent.game.orientation}
                 reportSlug={stageContent.game.slug}
+                submittedBy={stageContent.game.submittedBy}
               />
             )}
 

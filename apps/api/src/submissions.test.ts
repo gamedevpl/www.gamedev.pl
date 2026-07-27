@@ -27,6 +27,8 @@ function catalogEntry(slug: string, overrides: Partial<CatalogGameEntry> = {}): 
     status: 'published',
     media: null,
     multiplayer: null,
+    orientation: 'any',
+    submittedBy: null,
     ...overrides,
   };
 }
@@ -910,6 +912,8 @@ describe('catalog route', () => {
         status: 'published',
         media: null,
         multiplayer: null,
+        orientation: 'any',
+        submittedBy: null,
       },
     ]);
 
