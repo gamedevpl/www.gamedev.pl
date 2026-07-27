@@ -55,10 +55,10 @@ describe('ReportGameButton', () => {
     expect(href.startsWith(`mailto:${CONTACT_EMAIL}?`)).toBe(true);
   });
 
-  it('renders as a quiet control rather than a primary theater button', () => {
+  it('renders as a theater secondary control rather than a muted ghost link', () => {
     const { link } = draw('space-dash', 'Space Dash');
     expect(link.classList.contains('report-btn')).toBe(true);
-    expect(link.classList.contains('secondary-btn')).toBe(false);
+    expect(link.classList.contains('secondary-btn')).toBe(true);
   });
 
   it('pre-fills all four elements a valid notice needs', () => {

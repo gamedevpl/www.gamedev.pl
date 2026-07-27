@@ -214,6 +214,13 @@ export interface CatalogGameEntry {
    */
   orientation: CatalogGameOrientation;
   /**
+   * Who commissioned the game, from `submitted_by:` in SPEC.md (or the committed
+   * catalog). Unverified free text — a GitHub handle, a display name, or the
+   * platform sentinel `gamedev-platform`. null when absent or explicitly null.
+   * The player surfaces this as a byline; it is never a trust or identity claim.
+   */
+  submittedBy: string | null;
+  /**
    * Touch playability class, derived from each game's *code* by the games repo's
    * own build (it runs inferTouchSupport over the sources). Nothing readable from
    * SPEC.md can reproduce it, so it is present only when the catalog came from the
@@ -266,6 +273,21 @@ const GAME_ORIENTATIONS = new Set<CatalogGameOrientation>(['any', 'portrait', 'l
 function parseOrientation(frontmatter: Record<string, string>): CatalogGameOrientation {
   const value = (frontmatter.orientation ?? '').trim().toLowerCase() as CatalogGameOrientation;
   return GAME_ORIENTATIONS.has(value) ? value : 'any';
+}
+
+/** Ceiling matches the creator display-name cap on submissions. */
+const SUBMITTED_BY_MAX = 40;
+
+/**
+ * `submitted_by: null` is the YAML for "no human creator"; parsers that stringify
+ * frontmatter hand us the literal "null". Empty / missing / tilde mean the same.
+ * Anything else is shown as a byline — length-capped, never interpreted as code.
+ */
+export function parseSubmittedBy(raw: string | undefined | null): string | null {
+  if (raw === undefined || raw === null) return null;
+  const value = raw.trim();
+  if (!value || value === 'null' || value === '~') return null;
+  return value.slice(0, SUBMITTED_BY_MAX);
 }
 
 export interface GitHubClient {
@@ -996,6 +1018,7 @@ ${gameJs}`;
           media: parseGameMedia(mediaMetadata),
           multiplayer: parseMultiplayer(frontmatter),
           orientation: parseOrientation(frontmatter),
+          submittedBy: parseSubmittedBy(frontmatter.submitted_by),
         });
       }
 
@@ -1047,6 +1070,15 @@ function parseCommittedCatalog(raw: string): CatalogGameEntry[] | null {
     const orientationRaw = typeof candidate.orientation === 'string' ? candidate.orientation.trim().toLowerCase() : '';
     const touch = candidate.touch;
 
+    const submittedByRaw =
+      typeof candidate.submittedBy === 'string'
+        ? candidate.submittedBy
+        : typeof candidate.submitted_by === 'string'
+          ? candidate.submitted_by
+          : candidate.submittedBy === null || candidate.submitted_by === null
+            ? null
+            : undefined;
+
     entries.push({
       slug: candidate.slug,
       title: candidate.title,
@@ -1058,6 +1090,7 @@ function parseCommittedCatalog(raw: string): CatalogGameEntry[] | null {
       orientation: GAME_ORIENTATIONS.has(orientationRaw as CatalogGameOrientation)
         ? (orientationRaw as CatalogGameOrientation)
         : 'any',
+      submittedBy: parseSubmittedBy(submittedByRaw),
       ...(typeof touch === 'string' && CATALOG_TOUCH_VALUES.has(touch as CatalogGameTouch)
         ? { touch: touch as CatalogGameTouch }
         : {}),

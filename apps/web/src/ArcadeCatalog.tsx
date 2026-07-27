@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { catalogMediaUrl, type CatalogEntry } from './catalog';
+import { catalogMediaUrl, isPlatformAuthor, type CatalogEntry } from './catalog';
 import { PixelIcon } from './PixelIcon';
 import { useInView } from './useInView';
 
@@ -226,6 +226,11 @@ function CatalogCard({
               </span>
             )}
           </h3>
+          <p className="card-author">
+            {t('player.byAuthor', {
+              author: isPlatformAuthor(entry.submittedBy) ? t('catalog.platformAuthor') : entry.submittedBy,
+            })}
+          </p>
           <div className="card-actions">
             <button className="primary-btn" onClick={() => onPlayGame(entry)}>
               <PixelIcon name="play" size={13} /> {t('catalog.play')}

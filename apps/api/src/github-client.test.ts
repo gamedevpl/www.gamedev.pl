@@ -108,6 +108,7 @@ describe('getCatalog', () => {
         },
         multiplayer: null,
         orientation: 'any',
+        submittedBy: null,
       },
     ]);
     // Artifact probe + one directory listing + one GraphQL chunk — not one
@@ -137,8 +138,32 @@ describe('getCatalog', () => {
         media: null,
         multiplayer: null,
         orientation: 'any',
+        submittedBy: null,
       },
     ]);
+  });
+
+  it('reads submitted_by as a byline, treating nullish YAML as absent', async () => {
+    const specs: Record<string, Record<string, string>> = {
+      named: { title: 'Named', status: 'published', submitted_by: 'alice' },
+      platform: { title: 'Platform', status: 'published', submitted_by: 'gamedev-platform' },
+      none: { title: 'None', status: 'published', submitted_by: 'null' },
+      silent: { title: 'Silent', status: 'published' },
+    };
+    const files: Record<string, string | null> = {};
+    for (const [name, frontmatter] of Object.entries(specs)) {
+      files[`games/${name}/SPEC.md`] = specMd(frontmatter);
+      files[`games/${name}/media/metadata.json`] = null;
+    }
+    const fetchImpl = catalogFetchImpl(Object.keys(specs), files);
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+    const catalog = await client.getCatalog('main');
+    const bySlug = Object.fromEntries(catalog.map((entry) => [entry.slug, entry.submittedBy]));
+
+    expect(bySlug.named).toBe('alice');
+    expect(bySlug.platform).toBe('gamedev-platform');
+    expect(bySlug.none).toBeNull();
+    expect(bySlug.silent).toBeNull();
   });
 
   it('reads flat multiplayer frontmatter keys, and ignores malformed ones', async () => {
@@ -287,6 +312,7 @@ describe('getCatalog', () => {
         orientation: 'portrait',
         multiplayer: null,
         media: { screenshots: [{ name: 'opening', file: 'opening.png' }], video: 'gameplay.mp4' },
+        submittedBy: null,
       },
       {
         slug: 'arena-tag',
@@ -299,6 +325,7 @@ describe('getCatalog', () => {
         orientation: 'any',
         multiplayer: { mode: 'controllers', minPlayers: 2, maxPlayers: 4 },
         media: null,
+        submittedBy: null,
       },
     ]);
   });
@@ -357,6 +384,7 @@ describe('getCatalog', () => {
         orientation: 'any',
         multiplayer: null,
         media: null,
+        submittedBy: null,
       },
     ]);
   });

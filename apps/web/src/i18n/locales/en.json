@@ -90,15 +90,21 @@
     "exitFullscreen": "Exit Fullscreen",
     "rotateLandscape": "Turn your phone sideways to play",
     "rotatePortrait": "Hold your phone upright to play",
+    "share": "Share",
+    "shareCopied": "Link copied",
+    "moreActions": "More actions",
+    "byAuthor": "by {{author}}",
     "vote": {
-      "groupLabel": "Rate this game",
-      "up": "Vote up",
-      "down": "Vote down",
-      "signInToVote": "Sign in to vote"
+      "up": "Like this game",
+      "signInToVote": "Sign in to like",
+      "signInTitle": "Sign in to like",
+      "signInSubtitle": "Likes are tied to your account, so each person gets one per game."
     },
     "feedback": {
       "action": "Leave feedback",
       "signInToLeave": "Sign in to leave feedback",
+      "signInTitle": "Sign in to leave feedback",
+      "signInSubtitle": "Feedback is tied to your account so we can follow up and keep spam out.",
       "placeholder": "What worked, what didn't, where did you get stuck…",
       "submit": "Send feedback",
       "sending": "Sending…",
@@ -129,7 +135,8 @@
     "keyboardOnlyTooltip": "This game has no touch controls — it needs a keyboard.",
     "play": "Play Game",
     "playingBadge": "Playing",
-    "remix": "Remix Game"
+    "remix": "Remix Game",
+    "platformAuthor": "gamedev.pl"
   },
   "studio": {
     "title": "Active Projects & Tracker",

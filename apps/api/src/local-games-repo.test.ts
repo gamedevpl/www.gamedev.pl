@@ -11,6 +11,7 @@ describe('local games repo', () => {
     expect(slugs).toEqual(['odd-one-out', 'pixel-dodge', 'range-squad']);
     expect(catalog.every((entry) => entry.status === 'published')).toBe(true);
     expect(catalog.find((entry) => entry.slug === 'pixel-dodge')?.title).toBe('Pixel Dodge');
+    expect(catalog.find((entry) => entry.slug === 'pixel-dodge')?.submittedBy).toBe('gamedev-platform');
   });
 
   it('assembles playable sources through the real bundler', async () => {

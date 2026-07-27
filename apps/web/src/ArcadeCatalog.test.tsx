@@ -77,6 +77,7 @@ const entries: CatalogEntry[] = [
     multiplayer: null,
     orientation: 'any',
     touch: null,
+    submittedBy: null,
   },
   {
     slug: 'below-fold',
@@ -94,6 +95,7 @@ const entries: CatalogEntry[] = [
     multiplayer: null,
     orientation: 'any',
     touch: null,
+    submittedBy: 'alice',
   },
 ];
 

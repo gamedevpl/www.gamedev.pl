@@ -1224,6 +1224,14 @@ button:disabled {
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
 }
 
+.card-author {
+  margin: -4px 0 0;
+  font-size: 0.8rem;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.7);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
 /* Buttons hug their content and sit bottom-left instead of stretching the full card
    width — a bright full-width CTA on every card turned the whole grid into a wall of
    green. Play stays the obvious action without dominating the preview. */
@@ -1412,6 +1420,10 @@ body.player-open {
   border-bottom: 1px solid var(--panel-border);
   width: 100%;
   flex: none;
+  /* The overflow menu hangs below the bar; clipping it would make the hamburger
+     look broken — the panel opens but nothing appears. */
+  overflow: visible;
+  z-index: 2;
 }
 
 .game-theater-meta {
@@ -1441,10 +1453,27 @@ body.player-open {
 
 .theater-title {
   margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  flex: none;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.theater-title-text {
   font-size: 1.2rem;
   font-weight: 700;
   color: #fff;
-  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.theater-author {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 500;
   flex: none;
 }
 
@@ -1510,6 +1539,113 @@ body.player-open {
   cursor: default;
 }
 
+/* Hamburger for secondary (and, on a phone, play) chrome. Styled like the site
+   header dropdown so every row shares one background, padding, and hover. */
+.theater-more {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.theater-more-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+}
+
+.theater-more-panel {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 220px;
+  padding: 8px;
+  border-radius: 12px;
+  background: rgba(22, 28, 34, 0.96);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--panel-border);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.5),
+    0 0 1px var(--turquoise-glow);
+  animation: fadeIn 0.15s ease-out;
+}
+
+.theater-more.is-open .theater-more-panel {
+  display: flex;
+}
+
+.theater-menu-divider {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--panel-border);
+  border: 0;
+}
+
+/* Uniform menu rows — strip the mismatched secondary-btn / ghost / solid looks. */
+.theater-more-panel .theater-menu-item,
+.theater-more-panel .share-btn,
+.theater-more-panel .report-btn,
+.theater-more-panel .feedback-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 14px;
+  min-height: 44px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 500;
+  text-decoration: none;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.theater-more-panel .theater-menu-item:hover,
+.theater-more-panel .theater-menu-item:focus-visible,
+.theater-more-panel .share-btn:hover,
+.theater-more-panel .share-btn:focus-visible,
+.theater-more-panel .report-btn:hover,
+.theater-more-panel .report-btn:focus-visible,
+.theater-more-panel .feedback-btn:hover,
+.theater-more-panel .feedback-btn:focus-visible {
+  background: rgba(0, 228, 172, 0.12);
+  color: var(--turquoise);
+  border-color: transparent;
+  outline: none;
+}
+
+/* Hidden on desktop; the matching media query reveals them as menu rows on a phone.
+   Must come after the shared `.theater-menu-item { display: flex }` rule and beat it
+   on specificity, or those rows stay visible on wide screens too. */
+.theater-more-panel .theater-menu-item.theater-mobile-chrome,
+.theater-more-panel .theater-menu-divider.theater-mobile-chrome {
+  display: none;
+}
+
+.theater-more-panel .feedback-widget {
+  width: 100%;
+}
+
+.theater-more-panel .feedback-btn {
+  width: 100%;
+}
+
+.theater-more-panel .btn-label {
+  display: inline;
+}
+
 /* Written player feedback: a header control like the vote widget, but revealing a
    popover instead of acting immediately — free text needs a confirm step a thumb
    does not. */
@@ -1517,9 +1653,11 @@ body.player-open {
   position: relative;
 }
 
-.feedback-btn:disabled {
-  opacity: 0.45;
-  cursor: default;
+/* Icon-only close control — label lives in aria-label / title. */
+.game-theater-actions .exit-btn {
+  min-width: 40px;
+  justify-content: center;
+  padding-inline: 10px;
 }
 
 .feedback-popover {
@@ -1561,6 +1699,44 @@ body.player-open {
   gap: 6px;
   color: var(--accent-blue);
   margin: 0;
+}
+
+/* Immersive fullscreen: the bar is gone; one floating control exits it.
+   High z-index + post-iframe DOM order keep it above the sandboxed game surface,
+   which otherwise paints over low-z siblings in some browsers. */
+.theater-exit-fullscreen {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left));
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(12, 18, 24, 0.92);
+  color: #fff;
+  cursor: pointer;
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(0, 228, 172, 0.25);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.theater-exit-fullscreen:hover,
+.theater-exit-fullscreen:focus-visible {
+  border-color: var(--turquoise);
+  color: var(--turquoise);
+  background: rgba(12, 18, 24, 0.98);
+  outline: none;
+}
+
+.is-native-fullscreen .game-viewport-container {
+  padding: 0;
 }
 
 .game-viewport-container {
@@ -1654,33 +1830,62 @@ body.player-open {
   }
 
   .theater-title {
-    font-size: 0.95rem;
     flex: 1 1 auto;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 
-  .game-theater-actions button .btn-label,
-  .game-theater-actions .report-btn .btn-label {
+  .theater-title-text {
+    font-size: 0.95rem;
+  }
+
+  .theater-author {
+    font-size: 0.75rem;
+  }
+
+  .game-theater-actions button .btn-label {
     display: none;
   }
 
   /* Sized for a thumb (Apple/Google both land on ~44px) rather than a cursor. */
-  .game-theater-actions button,
-  .game-theater-actions .report-btn {
+  .game-theater-actions > button,
+  .game-theater-actions .theater-more-btn,
+  .game-theater-actions .exit-btn {
     min-width: 44px;
     min-height: 44px;
     justify-content: center;
     padding: 10px;
   }
 
+  .game-theater-actions .vote-widget button {
+    min-width: 40px;
+    min-height: 44px;
+    padding: 8px 10px;
+  }
+
   .game-theater-actions {
     gap: 6px;
   }
 
-  .sound-btn {
-    min-width: 44px;
+  /* Phone: sound + fullscreen leave the bar and appear as menu rows instead. */
+  .theater-desktop-chrome {
+    display: none !important;
+  }
+
+  .theater-more-panel .theater-menu-item.theater-mobile-chrome {
+    display: flex;
+  }
+
+  .theater-more-panel .theater-menu-divider.theater-mobile-chrome {
+    display: block;
+  }
+
+  .theater-more-panel {
+    min-width: 200px;
+  }
+
+  /* Labels stay visible inside the open menu — icon-only there is opaque. */
+  .theater-more-panel .btn-label {
+    display: inline !important;
   }
 }
 
@@ -4305,32 +4510,14 @@ body.player-open {
   color: var(--turquoise);
 }
 
-/* Quiet DSA art. 16 control: findable, not competing with Sound/Fullscreen/Exit. */
+/* Report sits with the other theater controls — previously a muted ghost link
+   that players read as disabled. Still not a primary CTA; just clearly tappable. */
 .report-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: 0.85rem;
-  font-weight: 500;
   text-decoration: none;
-  cursor: pointer;
-  transition:
-    color 0.15s ease,
-    border-color 0.15s ease,
-    background 0.15s ease;
 }
 
 .report-btn:hover,
 .report-btn:focus-visible {
-  color: var(--text);
-  border-color: rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
   outline: none;
 }
 

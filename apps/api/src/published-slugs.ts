@@ -80,10 +80,26 @@ export function createPublishedSlugGate(options: PublishedSlugGateOptions): Publ
  * Builds the gate from the environment, or returns null when the games repo is not
  * configured (secret-less deploys run browse/play-only). A null gate means telemetry
  * accepts and drops, exactly as it does for an unknown slug.
+ *
+ * In local development (no token, not production/test) the gate reads the same
+ * fixture/checkout catalog the browse surface serves — otherwise every vote and
+ * play-telemetry flush would 404 against fixture slugs that are clearly published.
  */
-export function createPublishedSlugGateFromEnv(fetchImpl?: typeof fetch): PublishedSlugGate | null {
+export async function createPublishedSlugGateFromEnv(
+  fetchImpl?: typeof fetch,
+): Promise<PublishedSlugGate | null> {
   const token = process.env.GITHUB_TOKEN?.trim();
   const repo = process.env.GAMES_REPO?.trim();
-  if (!token || !repo) return null;
-  return createPublishedSlugGate({ client: createGitHubClient({ token, repo, fetchImpl }) });
+  if (token && repo) {
+    return createPublishedSlugGate({ client: createGitHubClient({ token, repo, fetchImpl }) });
+  }
+
+  const nodeEnv = process.env.NODE_ENV;
+  if (nodeEnv !== 'production' && nodeEnv !== 'test') {
+    const { resolveLocalGamesDir, createLocalGamesClient } = await import('./local-games-repo.js');
+    const local = await resolveLocalGamesDir();
+    return createPublishedSlugGate({ client: createLocalGamesClient({ rootDir: local.rootDir }) });
+  }
+
+  return null;
 }

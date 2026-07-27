@@ -6,7 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n';
 
 const authState = vi.hoisted(() => ({ user: null as { uid: string } | null }));
-vi.mock('./AuthContext', () => ({ useAuth: () => authState }));
+vi.mock('./AuthContext', () => ({
+  useAuth: () => ({ ...authState, signInWithGoogleToken: vi.fn(), logout: vi.fn() }),
+}));
 
 const feedbackApi = vi.hoisted(() => ({
   submitPlayerFeedback: vi.fn(),
@@ -56,12 +58,20 @@ function typeInto(textarea: HTMLTextAreaElement, value: string) {
 }
 
 describe('PlayerFeedbackWidget', () => {
-  it('disables the control and shows a sign-in hint when signed out', async () => {
+  it('stays clickable when signed out and opens sign-in instead of looking broken', async () => {
     authState.user = null;
     await draw();
     const button = toggleButton();
-    expect(button.hasAttribute('disabled')).toBe(true);
+    // Clickable, not greyed-out — the title explains why a click needs a session.
+    expect(button.hasAttribute('disabled')).toBe(false);
     expect(button.title).toMatch(/sign in/i);
+
+    await act(async () => {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.querySelector('.feedback-input')).toBeNull();
+    expect(document.body.textContent).toMatch(/sign in to leave feedback/i);
   });
 
   it('signed in, clicking the control opens the feedback form', async () => {

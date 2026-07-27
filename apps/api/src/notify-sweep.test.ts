@@ -26,6 +26,8 @@ function publishedGithubClient(): GitHubClient {
       status: 'published',
       media: null,
       multiplayer: null,
+      orientation: 'any',
+      submittedBy: null,
     },
   ];
   return {

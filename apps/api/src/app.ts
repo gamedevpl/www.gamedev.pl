@@ -170,9 +170,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // per-game health for exactly the players we just admitted. The handler never reads
   // request.user, records nothing identifying, and drops events for slugs that are not
   // published games.
+  //
+  // One env-derived gate is shared by telemetry, votes, and written feedback: all
+  // three ask the same question ("is this a published catalog slug?") and must not
+  // drift. Call-site overrides still win via the spreads below.
+  const envPublishedSlugs = await createPublishedSlugGateFromEnv();
   await registerTelemetryRoutes(app, {
     store,
-    ...(options.telemetryRoutes ?? { publishedSlugs: createPublishedSlugGateFromEnv() }),
+    publishedSlugs: envPublishedSlugs,
+    ...options.telemetryRoutes,
   });
 
   // Visit-level telemetry — the funnel before and between games. Exempted from the
@@ -191,7 +197,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // for the same reason play itself is: it is what a game link has to work through.
   await registerVoteRoutes(app, {
     store,
-    ...(options.voteRoutes ?? { publishedSlugs: createPublishedSlugGateFromEnv() }),
+    publishedSlugs: envPublishedSlugs,
+    ...options.voteRoutes,
   });
 
   // Written player feedback (docs/improvement-loop-plan.md, signal source #1). Keyed
@@ -202,7 +209,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await registerPlayerFeedbackRoutes(app, {
     store,
     contentChecker,
-    ...(options.playerFeedbackRoutes ?? { publishedSlugs: createPublishedSlugGateFromEnv() }),
+    publishedSlugs: envPublishedSlugs,
+    ...options.playerFeedbackRoutes,
   });
 
   // Operator reads over that telemetry. Separate allowlist from the beta one: being

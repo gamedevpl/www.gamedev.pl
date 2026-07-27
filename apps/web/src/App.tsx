@@ -194,6 +194,7 @@ export function App() {
         // Same reasoning: unknown, not "keyboard only". The badge is a warning, and
         // a deep link is no reason to show one.
         touch: null,
+        submittedBy: null,
       };
       setStageContent({ type: 'catalog', game: initialGame });
       document.getElementById('stage')?.scrollIntoView?.({ behavior: 'smooth' });
@@ -606,8 +607,13 @@ export function App() {
                     <h2 className="theater-title">{stageContent.game.title}</h2>
                   </div>
                   <div className="game-theater-actions">
-                    <button className="secondary-btn exit-btn" onClick={() => setStageContent(null)}>
-                      <PixelIcon name="close" size={12} /> {t('catalog.exitPlayer', { defaultValue: 'Exit Player' })}
+                    <button
+                      className="secondary-btn exit-btn"
+                      onClick={() => setStageContent(null)}
+                      aria-label={t('catalog.exitPlayer', { defaultValue: 'Close' })}
+                      title={t('catalog.exitPlayer', { defaultValue: 'Close' })}
+                    >
+                      <PixelIcon name="close" size={14} />
                     </button>
                   </div>
                 </div>
@@ -633,6 +639,7 @@ export function App() {
                 onExit={() => navigate('/')}
                 orientation={stageContent.game.orientation}
                 reportSlug={stageContent.game.slug}
+                submittedBy={stageContent.game.submittedBy}
               />
             )}
 

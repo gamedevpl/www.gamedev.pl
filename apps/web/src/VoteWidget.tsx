@@ -1,15 +1,20 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AuthModal } from './AuthModal';
 import { useAuth } from './AuthContext';
 import { PixelIcon } from './PixelIcon';
-import { castVote, clearVote, fetchVotes, type VoteCounts, type VoteValue } from './votesApi';
+import { castVote, clearVote, fetchVotes, type VoteCounts } from './votesApi';
 
 /**
- * Thumbs up/down on a played game (docs/improvement-loop-plan.md, signal source #2).
+ * Thumbs-up on a played game (docs/improvement-loop-plan.md, signal source #2).
  *
- * Counts are public — a shared game link shows real numbers to a visitor who has never
- * signed in — but casting one needs a session, since a vote is keyed by uid. Signed
- * out, the buttons show what a vote would need without pretending to accept one.
+ * Counts are public — a shared game link shows the real number to a visitor who has
+ * never signed in — but casting one needs a session, since a vote is keyed by uid.
+ * Signed out, the button stays fully clickable and opens the sign-in modal: greying
+ * it out looked like a broken control rather than an auth gate.
+ *
+ * Downvotes are not offered in the product UI; dislike signal comes from report /
+ * written feedback instead.
  */
 export function VoteWidget({ slug }: { slug: string }) {
   const { t } = useTranslation();
@@ -18,6 +23,7 @@ export function VoteWidget({ slug }: { slug: string }) {
   // Vote actions land in a beat; hold the previous counts up rather than blanking the
   // widget on every click.
   const [pending, setPending] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -36,10 +42,14 @@ export function VoteWidget({ slug }: { slug: string }) {
 
   if (!counts) return null;
 
-  const cast = async (value: VoteValue) => {
-    if (!user || pending) return;
+  const toggleUp = async () => {
+    if (pending) return;
+    if (!user) {
+      setAuthOpen(true);
+      return;
+    }
     setPending(true);
-    const next = counts.mine === value ? clearVote(slug) : castVote(slug, value);
+    const next = counts.mine === 'up' ? clearVote(slug) : castVote(slug, 'up');
     try {
       setCounts(await next);
     } catch {
@@ -52,29 +62,27 @@ export function VoteWidget({ slug }: { slug: string }) {
   const signedOutTitle = t('player.vote.signInToVote');
 
   return (
-    <div className="vote-widget" role="group" aria-label={t('player.vote.groupLabel')}>
-      <button
-        className="secondary-btn vote-btn"
-        onClick={() => cast('up')}
-        disabled={!user || pending}
-        aria-pressed={counts.mine === 'up'}
-        aria-label={t('player.vote.up')}
-        title={user ? t('player.vote.up') : signedOutTitle}
-      >
-        <PixelIcon name="thumbUp" size={13} />
-        <span className="vote-count">{counts.up}</span>
-      </button>
-      <button
-        className="secondary-btn vote-btn"
-        onClick={() => cast('down')}
-        disabled={!user || pending}
-        aria-pressed={counts.mine === 'down'}
-        aria-label={t('player.vote.down')}
-        title={user ? t('player.vote.down') : signedOutTitle}
-      >
-        <PixelIcon name="thumbDown" size={13} />
-        <span className="vote-count">{counts.down}</span>
-      </button>
-    </div>
+    <>
+      <div className="vote-widget">
+        <button
+          type="button"
+          className="secondary-btn vote-btn"
+          onClick={() => void toggleUp()}
+          disabled={pending}
+          aria-pressed={counts.mine === 'up'}
+          aria-label={t('player.vote.up')}
+          title={user ? t('player.vote.up') : signedOutTitle}
+        >
+          <PixelIcon name="thumbUp" size={13} />
+          <span className="vote-count">{counts.up}</span>
+        </button>
+      </div>
+      <AuthModal
+        isOpen={authOpen}
+        onClose={() => setAuthOpen(false)}
+        title={t('player.vote.signInTitle')}
+        subtitle={t('player.vote.signInSubtitle')}
+      />
+    </>
   );
 }
