@@ -17,6 +17,10 @@ import { submitImprovement, type StudioGame } from './studioApi.js';
  * talking about, and send a change request with the paused frame + a small
  * instrumentation digest attached. The parent cannot screenshot the sandboxed
  * canvas (no allow-same-origin) — capture runs inside the player bridge.
+ *
+ * Always mounts as a full-viewport theater (same idea as GameTheater): the game
+ * owns the screen; pause/resume + the note sheet are layers on top. An inset
+ * 16:9 card inside Studio chrome is unplayable on a phone (iPhone SE especially).
  */
 
 /** Tiny canvas toy used only when DEV_SEED_STUDIO left no real preview HTML. */
@@ -45,6 +49,8 @@ const DEV_PLAYTEST_HTML = `<!doctype html><html><head><meta charset="utf-8"><tit
 type StudioPlaytestPanelProps = {
   game: StudioGame;
   published: boolean;
+  /** Leave theater — typically returns to Overview so Studio chrome is usable again. */
+  onExit: () => void;
 };
 
 /**
@@ -96,9 +102,10 @@ function toContext(
   };
 }
 
-export function StudioPlaytestPanel({ game, published }: StudioPlaytestPanelProps) {
+export function StudioPlaytestPanel({ game, published, onExit }: StudioPlaytestPanelProps) {
   const { t } = useTranslation();
   const frameRef = useRef<HTMLIFrameElement | null>(null);
+  const exitRef = useRef<HTMLButtonElement | null>(null);
   const [html, setHtml] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -146,8 +153,21 @@ export function StudioPlaytestPanel({ game, published }: StudioPlaytestPanelProp
     };
   }, [game.token, game.slug, published, t, clearSnapshot]);
 
+  // Same scroll lock as GameTheater — fixed overlay must own the viewport.
+  useEffect(() => {
+    if (!html) return;
+    document.body.classList.add('player-open');
+    return () => document.body.classList.remove('player-open');
+  }, [html]);
+
+  useEffect(() => {
+    if (!html) return;
+    exitRef.current?.focus();
+  }, [html]);
+
   const attachedPng = snapshot?.pngBase64 ?? null;
   const trimmed = text.trim();
+  const promptOpen = Boolean(paused || snapshot);
 
   const send = async () => {
     if (trimmed.length < 10) return;
@@ -182,13 +202,55 @@ export function StudioPlaytestPanel({ game, published }: StudioPlaytestPanelProp
 
   return (
     <div className="studio-playtest">
-      <p className="panel-copy studio-playtest-hint">{t('studioPanel.playtest.hint')}</p>
+      {!html ? (
+        <>
+          <p className="panel-copy studio-playtest-hint">{t('studioPanel.playtest.hint')}</p>
+          {loading ? <p className="studio-muted">{t('studioPanel.playtest.loading')}</p> : null}
+          {loadError ? <p className="error">{loadError}</p> : null}
+        </>
+      ) : (
+        <div
+          className={`studio-playtest-theater${paused ? ' is-paused' : ''}${promptOpen ? ' is-prompting' : ''}`}
+          role="dialog"
+          aria-modal="true"
+          aria-label={t('studioPanel.playtest.theaterAria', { title: game.title })}
+        >
+          <div className="studio-playtest-bar">
+            <div className="studio-playtest-bar-meta">
+              <span className="studio-playtest-badge">{t('studioPanel.tabs.playtest')}</span>
+              <h2 className="studio-playtest-title">{game.title}</h2>
+              <span className="studio-playtest-meta">
+                {t('studioPanel.playtest.played', { seconds: instrumentation.playSeconds })}
+                {instrumentation.errors.length > 0
+                  ? ` · ${t('studioPanel.playtest.errorCount', { count: instrumentation.errors.length })}`
+                  : null}
+              </span>
+            </div>
+            <div className="studio-playtest-bar-actions">
+              {paused ? (
+                <button type="button" className="secondary-btn" onClick={resume}>
+                  <PixelIcon name="play" size={12} />
+                  <span className="btn-label">{t('studioPanel.playtest.resume')}</span>
+                </button>
+              ) : (
+                <button type="button" className="primary-btn" onClick={pause}>
+                  <PixelIcon name="pause" size={12} />
+                  <span className="btn-label">{t('studioPanel.playtest.pause')}</span>
+                </button>
+              )}
+              <button
+                type="button"
+                className="secondary-btn exit-btn"
+                onClick={onExit}
+                ref={exitRef}
+                aria-label={t('catalog.exitPlayer', { defaultValue: 'Close' })}
+                title={t('catalog.exitPlayer', { defaultValue: 'Close' })}
+              >
+                <PixelIcon name="close" size={14} />
+              </button>
+            </div>
+          </div>
 
-      {loading ? <p className="studio-muted">{t('studioPanel.playtest.loading')}</p> : null}
-      {loadError ? <p className="error">{loadError}</p> : null}
-
-      {html ? (
-        <div className={`studio-playtest-stage${paused ? ' is-paused' : ''}`}>
           <div className="studio-playtest-viewport">
             <GameFrame frameRef={frameRef} title={game.title} html={html} embed />
             {needsLandscape ? (
@@ -198,77 +260,60 @@ export function StudioPlaytestPanel({ game, published }: StudioPlaytestPanelProp
               </div>
             ) : null}
           </div>
-          <div className="studio-playtest-controls">
-            {paused ? (
-              <button type="button" className="secondary-btn" onClick={resume}>
-                <PixelIcon name="play" size={12} /> {t('studioPanel.playtest.resume')}
-              </button>
-            ) : (
-              <button type="button" className="primary-btn" onClick={pause}>
-                <PixelIcon name="pause" size={12} /> {t('studioPanel.playtest.pause')}
-              </button>
-            )}
-            <span className="studio-playtest-meta">
-              {t('studioPanel.playtest.played', { seconds: instrumentation.playSeconds })}
-              {instrumentation.errors.length > 0
-                ? ` · ${t('studioPanel.playtest.errorCount', { count: instrumentation.errors.length })}`
-                : null}
-            </span>
-          </div>
-        </div>
-      ) : null}
 
-      {(paused || snapshot) && (
-        <div className="status-feedback studio-playtest-prompt">
-          <h3 className="status-feedback-title">{t('studioPanel.playtest.promptTitle')}</h3>
-          <p className="status-feedback-hint">{t('studioPanel.playtest.promptHint')}</p>
+          {promptOpen ? (
+            <div className="studio-playtest-sheet status-feedback">
+              <h3 className="status-feedback-title">{t('studioPanel.playtest.promptTitle')}</h3>
+              <p className="status-feedback-hint">{t('studioPanel.playtest.promptHint')}</p>
 
-          {attachedPng ? (
-            <figure className="studio-playtest-shot">
-              <img src={`data:image/png;base64,${attachedPng}`} alt="" />
-              <figcaption>{t('studioPanel.playtest.shotCaption')}</figcaption>
-            </figure>
-          ) : (
-            <p className="studio-muted">{t('studioPanel.playtest.noShot')}</p>
-          )}
+              {attachedPng ? (
+                <figure className="studio-playtest-shot">
+                  <img src={`data:image/png;base64,${attachedPng}`} alt="" />
+                  <figcaption>{t('studioPanel.playtest.shotCaption')}</figcaption>
+                </figure>
+              ) : (
+                <p className="studio-muted">{t('studioPanel.playtest.noShot')}</p>
+              )}
 
-          {(snapshot?.instrumentation ?? instrumentation).errors.length > 0 ? (
-            <ul className="studio-playtest-errors">
-              {(snapshot?.instrumentation ?? instrumentation).errors.slice(-3).map((error) => (
-                <li key={error}>
-                  <code>{error}</code>
-                </li>
-              ))}
-            </ul>
+              {(snapshot?.instrumentation ?? instrumentation).errors.length > 0 ? (
+                <ul className="studio-playtest-errors">
+                  {(snapshot?.instrumentation ?? instrumentation).errors.slice(-3).map((error) => (
+                    <li key={error}>
+                      <code>{error}</code>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+
+              <textarea
+                className="status-feedback-input"
+                value={text}
+                onChange={(event) => {
+                  setText(event.target.value);
+                  if (sendState === 'sent') setSendState('idle');
+                }}
+                placeholder={t('studioPanel.playtest.placeholder')}
+                rows={3}
+                maxLength={2000}
+              />
+              <div className="status-feedback-actions">
+                <button
+                  type="button"
+                  className="primary-btn"
+                  onClick={() => void send()}
+                  disabled={sendState === 'sending' || trimmed.length < 10}
+                >
+                  {sendState === 'sending' ? t('studioPanel.improve.sending') : t('studioPanel.playtest.submit')}
+                </button>
+                {sendState === 'sent' ? (
+                  <span className="status-feedback-sent">
+                    <PixelIcon name="check" size={13} /> {t('studioPanel.improve.sent')}
+                  </span>
+                ) : null}
+              </div>
+              {sendError ? <p className="error">{sendError}</p> : null}
+            </div>
           ) : null}
-
-          <textarea
-            className="status-feedback-input"
-            value={text}
-            onChange={(event) => {
-              setText(event.target.value);
-              if (sendState === 'sent') setSendState('idle');
-            }}
-            placeholder={t('studioPanel.playtest.placeholder')}
-            rows={3}
-            maxLength={2000}
-          />
-          <div className="status-feedback-actions">
-            <button
-              type="button"
-              className="primary-btn"
-              onClick={() => void send()}
-              disabled={sendState === 'sending' || trimmed.length < 10}
-            >
-              {sendState === 'sending' ? t('studioPanel.improve.sending') : t('studioPanel.playtest.submit')}
-            </button>
-            {sendState === 'sent' ? (
-              <span className="status-feedback-sent">
-                <PixelIcon name="check" size={13} /> {t('studioPanel.improve.sent')}
-              </span>
-            ) : null}
-          </div>
-          {sendError ? <p className="error">{sendError}</p> : null}
         </div>
       )}
     </div>

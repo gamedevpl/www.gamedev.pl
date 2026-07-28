@@ -451,8 +451,9 @@ considerably:
   patches land before game loops), shows overlay + snapshot, and also dispatches
   `gdpl-pause` / `gdpl-resume` for GameKit
   ([www.gamedev.pl-games#110](https://github.com/gamedevpl/www.gamedev.pl-games/pull/110)).
-  Studio playtest assumes landscape and goes edge-to-edge on narrow screens with a
-  rotate nudge when the phone is upright.
+  Studio playtest assumes landscape and opens as a full-viewport theater (same
+  idea as GameTheater) with pause/resume on the bar and the note sheet layered
+  over the game — not an inset iframe inside Studio chrome.
 - 📋 **Suggestion inbox** — cards with insight → evidence → proposed change →
   [Approve → files issue] / [Dismiss with reason]. Dismissal reasons feed router
   tuning. Approval reuses the feedback-comment path that already works.
