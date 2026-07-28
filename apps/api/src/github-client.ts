@@ -455,7 +455,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
     }
   }
 
-  /** Reads a file's raw bytes from the contents API; null when it doesn't exist on `ref`. */
+  /** Reads a file as text from the contents API; null when it doesn't exist on `ref`. */
   async function readRawFileFromApi(path: string, ref: string): Promise<string | null> {
     const url = `https://api.github.com/repos/${repo}/contents/${path}?ref=${encodeURIComponent(ref)}`;
     const response = await githubFetch(url, {

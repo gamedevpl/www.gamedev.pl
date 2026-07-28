@@ -214,7 +214,11 @@ export async function* readTarEntries(
       if (retained > maxTotalBytes) {
         throw new Error(`tar: archive exceeds ${maxTotalBytes} retained bytes`);
       }
-      yield { path, bytes: new Uint8Array(body.buffer, body.byteOffset, body.byteLength) };
+      // Copy rather than view: `body` sits inside a padded block that is itself a
+      // slice of an arriving chunk, so a view would pin that whole chunk for as
+      // long as the caller holds one small file — and `retained` would be
+      // counting something other than what is actually held.
+      yield { path, bytes: Uint8Array.from(body) };
     }
   }
 }
