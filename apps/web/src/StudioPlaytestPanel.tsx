@@ -47,18 +47,30 @@ type StudioPlaytestPanelProps = {
   published: boolean;
 };
 
-/** Studio playtest assumes landscape games — nudge when the phone is upright. */
+/**
+ * Studio playtest assumes landscape games — nudge when a handheld is upright.
+ * Desktop windows can be any shape (owner resizes; don't tell them to rotate).
+ * Mirrors GameTheater's coarse-pointer gate + Mascot's Safari MediaQueryList shim.
+ */
 function useNeedsLandscape(): boolean {
-  const [needs, setNeeds] = useState(() =>
-    typeof window !== 'undefined' ? !window.matchMedia('(orientation: landscape)').matches : false,
-  );
+  const [needs, setNeeds] = useState(false);
+
   useEffect(() => {
-    const query = window.matchMedia('(orientation: landscape)');
+    if (typeof matchMedia !== 'function' || !matchMedia('(pointer: coarse)').matches) {
+      setNeeds(false);
+      return;
+    }
+    const query = matchMedia('(orientation: landscape)');
     const sync = () => setNeeds(!query.matches);
     sync();
-    query.addEventListener('change', sync);
-    return () => query.removeEventListener('change', sync);
+    if (typeof query.addEventListener === 'function') {
+      query.addEventListener('change', sync);
+      return () => query.removeEventListener('change', sync);
+    }
+    query.addListener(sync);
+    return () => query.removeListener(sync);
   }, []);
+
   return needs;
 }
 
