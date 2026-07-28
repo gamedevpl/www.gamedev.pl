@@ -27,7 +27,7 @@
     "creator": {
       "digest": {
         "title": "Your games this week",
-        "body": "{{sessions}} play sessions across {{games}} games, {{votesUp}}👍 {{votesDown}}👎, and {{feedback}} notes from players."
+        "body": "Sessions: {{sessions}} · Games: {{games}} · {{votesUp}}👍 {{votesDown}}👎 · Notes from players: {{feedback}}"
       }
     }
   },

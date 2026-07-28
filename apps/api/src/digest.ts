@@ -152,6 +152,8 @@ export function matchesPrevious(previousParams: Record<string, string> | null, t
 export interface DigestSweepDeps extends EmitDeps {
   store: Store;
   now?: () => number;
+  /** Overrides `MAX_SCORECARDS_SAMPLED`; exists so the ceiling's boundary is testable. */
+  scorecardSampleLimit?: number;
   /** Called per creator whose digest could not be emitted, so a failure has a cause. */
   onError?: (uid: string, error: unknown) => void;
 }
@@ -187,11 +189,16 @@ export async function runDigestSweep(deps: DigestSweepDeps): Promise<DigestSweep
   // Evidence first: every game the nightly sweep had something to say about, then back to
   // who owns it. A game with no scorecard cannot produce a digest line, so it never needs
   // to be enumerated.
-  const sampled = await store.listScorecards({ limit: MAX_SCORECARDS_SAMPLED });
-  const truncated = sampled.length >= MAX_SCORECARDS_SAMPLED;
+  // One over the ceiling, so `truncated` distinguishes "there were more" from "there were
+  // exactly this many". Asking for exactly the limit makes a full page indistinguishable
+  // from an overflowing one, and reporting truncation that did not happen is a false alarm
+  // about missing digests — the opposite error from a silent cap, and still an error.
+  const sampleLimit = deps.scorecardSampleLimit ?? MAX_SCORECARDS_SAMPLED;
+  const sampled = await store.listScorecards({ limit: sampleLimit + 1 });
+  const truncated = sampled.length > sampleLimit;
 
   const cardsByOwner = new Map<string, Scorecard[]>();
-  for (const card of sampled) {
+  for (const card of sampled.slice(0, sampleLimit)) {
     const submission = await store.getSubmissionBySlug(card.slug);
     // No submission means no creator on the platform to write to — most of the catalog
     // predates the submission flow. Unpublished and abandoned games are not theirs to hear

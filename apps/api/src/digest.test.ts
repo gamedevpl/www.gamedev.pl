@@ -170,6 +170,19 @@ describe('runDigestSweep', () => {
     expect(await store.listNotifications('g:veteran')).toHaveLength(1);
   });
 
+  it('reports truncation only when there was actually more', async () => {
+    await played('brick-storm', 5);
+    await store.createSubmission(97, 'g:alice', 'Second');
+    await store.setSubmissionSlug(97, 'second-game');
+    await store.setSubmissionPublishedAt(97, '2026-07-02T00:00:00.000Z');
+    await played('second-game', 5);
+
+    // Exactly at the ceiling is not truncation. Asking for exactly the limit would make a
+    // full page look identical to an overflowing one and cry wolf about lost digests.
+    expect((await runDigestSweep({ store, now, scorecardSampleLimit: 2 })).truncated).toBe(false);
+    expect((await runDigestSweep({ store, now, scorecardSampleLimit: 1 })).truncated).toBe(true);
+  });
+
   it('does not repeat itself when the numbers have not moved', async () => {
     await played('brick-storm', 12, 3);
     await runDigestSweep({ store, now });

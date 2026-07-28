@@ -33,7 +33,7 @@
 #   MAIL_FROM=...              (RFC 5322 sender; defaults to noreply@mail.gamedev.pl)
 #   INVITE_URL=...             (where invitees land; defaults to https://www.gamedev.pl)
 #   NOTIFY_SWEEP_AUDIENCE=...  (sweep endpoint URL; enables OIDC auth on /api/internal/notify-sweep)
-#   NOTIFY_SWEEP_SA=...        (Cloud Scheduler SA email allowed to call the sweep; shared by both sweeps)
+#   NOTIFY_SWEEP_SA=...        (Cloud Scheduler SA email allowed to call the sweeps; shared by all three)
 #   DIGEST_SWEEP_AUDIENCE=...   (digest endpoint URL; enables OIDC auth on the
 #                                weekly creator digest sweep)
 #   SCORECARD_SWEEP_AUDIENCE=... (scorecard endpoint URL; enables OIDC auth on

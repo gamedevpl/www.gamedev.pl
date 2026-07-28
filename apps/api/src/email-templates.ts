@@ -217,22 +217,28 @@ export interface DigestEmailParams {
   unsubscribeUrl: string;
 }
 
+/**
+ * Labelled counts rather than a sentence, in both languages, and deliberately so.
+ *
+ * A sentence has to agree with its numbers: English needs "1 session" vs "2 sessions", and
+ * Polish needs three forms (1 sesja / 2–4 sesje / 5+ sesji) that a binary conditional gets
+ * wrong for exactly the range a small game lands in. Labels do not agree with anything, so
+ * every value is correct without a plural-rules table nobody would maintain.
+ */
 const digestCopy: Record<Locale, { subject: string; cta: string; line: (p: DigestEmailParams) => string }> = {
   en: {
     subject: 'Your games this week on gamedev.pl',
     cta: 'See the details',
     line: (p) =>
-      `${p.sessions} ${p.sessions === 1 ? 'play session' : 'play sessions'} across ` +
-      `${p.games} ${p.games === 1 ? 'game' : 'games'}, ${p.votesUp}👍 ${p.votesDown}👎, and ` +
-      `${p.feedback} written ${p.feedback === 1 ? 'note' : 'notes'} from players.`,
+      `Sessions: ${p.sessions} · Games: ${p.games} · ${p.votesUp}👍 ${p.votesDown}👎 · ` +
+      `Notes from players: ${p.feedback}`,
   },
   pl: {
     subject: 'Twoje gry w tym tygodniu na gamedev.pl',
     cta: 'Zobacz szczegóły',
     line: (p) =>
-      `${p.sessions} ${p.sessions === 1 ? 'sesja gry' : 'sesji gry'} w ` +
-      `${p.games} ${p.games === 1 ? 'grze' : 'grach'}, ${p.votesUp}👍 ${p.votesDown}👎 oraz ` +
-      `${p.feedback} ${p.feedback === 1 ? 'wiadomość' : 'wiadomości'} od graczy.`,
+      `Sesje: ${p.sessions} · Gry: ${p.games} · ${p.votesUp}👍 ${p.votesDown}👎 · ` +
+      `Wiadomości od graczy: ${p.feedback}`,
   },
 };
 
