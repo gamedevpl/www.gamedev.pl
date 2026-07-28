@@ -23,6 +23,12 @@
         "title": "Twoje zgłoszenie wymaga zmian",
         "body": "„{{title}}” wymaga poprawek."
       }
+    },
+    "creator": {
+      "digest": {
+        "title": "Twoje gry w tym tygodniu",
+        "body": "{{sessions}} sesji gry w {{games}} grach, {{votesUp}}👍 {{votesDown}}👎 oraz {{feedback}} wiadomości od graczy."
+      }
     }
   },
   "header": {

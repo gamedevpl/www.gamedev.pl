@@ -341,7 +341,26 @@ export function telemetryExpiresAt(at: string): Date {
 // Transactional creator events (docs/notifications-plan.md). Deliberately minimal —
 // queued/in_review are not notified. New types must pass the "would the user thank
 // us?" test before being added.
-export type NotificationType = 'submission.building' | 'submission.published' | 'submission.needs_changes';
+export type NotificationType =
+  | 'submission.building'
+  | 'submission.published'
+  | 'submission.needs_changes'
+  /**
+   * Weekly summary of how a creator's published games are doing
+   * (docs/improvement-loop-plan.md IL-2). Unlike the three above it is not tied to one
+   * submission, which is why its id is keyed by week rather than by issue number.
+   */
+  | 'creator.digest';
+
+/**
+ * The types that are about one submission, and so can render "«game title» happened".
+ *
+ * Split out because the digest cannot: it spans every game a creator owns and carries
+ * counts instead of a title. Keeping it a derived type rather than a hand-written list
+ * means a fourth submission event joins the email and push copy automatically, while a
+ * second non-submission event has to be thought about.
+ */
+export type SubmissionNotificationType = Exclude<NotificationType, 'creator.digest'>;
 
 export interface StoredNotification {
   /** Deterministic id (e.g. `sub-142-published`) so emission is idempotent. */

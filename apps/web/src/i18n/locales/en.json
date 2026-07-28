@@ -23,6 +23,12 @@
         "title": "Your submission needs changes",
         "body": "“{{title}}” needs another look."
       }
+    },
+    "creator": {
+      "digest": {
+        "title": "Your games this week",
+        "body": "{{sessions}} play sessions across {{games}} games, {{votesUp}}👍 {{votesDown}}👎, and {{feedback}} notes from players."
+      }
     }
   },
   "header": {

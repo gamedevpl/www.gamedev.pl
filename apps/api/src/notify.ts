@@ -5,14 +5,26 @@
 // here alongside the unsubscribe path, which is why the store already carries the
 // emailedAt column.
 
-import { normalizeLocale, submissionNotificationMessage, submissionPushContent } from './email-templates.js';
+import {
+  digestNotificationMessage,
+  digestPushContent,
+  normalizeLocale,
+  submissionNotificationMessage,
+  submissionPushContent,
+  type DigestEmailParams,
+} from './email-templates.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
 import { createPusherFromEnv, type Pusher } from './pusher.js';
-import type { NotificationType, StoredNotification, SubmissionRecord, Store } from './store.js';
+import type {
+  StoredNotification,
+  SubmissionNotificationType,
+  SubmissionRecord,
+  Store,
+} from './store.js';
 import type { SubmissionPublishedResponse, SubmissionStatus, SubmissionStatusResponse } from './submission-status.js';
 import { mintUnsubscribeToken } from './unsubscribe-token.js';
 
-const SHORT_TYPE: Record<NotificationType, string> = {
+const SHORT_TYPE: Record<SubmissionNotificationType, string> = {
   'submission.building': 'building',
   'submission.published': 'published',
   'submission.needs_changes': 'needs-changes',
@@ -21,14 +33,14 @@ const SHORT_TYPE: Record<NotificationType, string> = {
 // Which derived statuses are worth a notification, and as which event. queued,
 // publishing, and (deliberately) in_review-vs-building share one "it's building"
 // event so a WIP→ready flip doesn't double-notify. Idempotent ids back this up.
-const STATUS_TO_EVENT: Partial<Record<SubmissionStatus, NotificationType>> = {
+const STATUS_TO_EVENT: Partial<Record<SubmissionStatus, SubmissionNotificationType>> = {
   building: 'submission.building',
   in_review: 'submission.building',
   published: 'submission.published',
   needs_changes: 'submission.needs_changes',
 };
 
-export function statusToEvent(status: SubmissionStatus): NotificationType | null {
+export function statusToEvent(status: SubmissionStatus): SubmissionNotificationType | null {
   return STATUS_TO_EVENT[status] ?? null;
 }
 
@@ -91,11 +103,15 @@ async function maybeSendEmail(deps: EmitDeps, uid: string, notification: StoredN
       appBaseUrl,
       `/api/email/unsubscribe?token=${mintUnsubscribeToken(uid, unsubscribeSecret)}`,
     );
-    const message = submissionNotificationMessage(user.email, normalizeLocale(user.locale), notification.type, {
-      title: notification.params.title ?? '',
-      actionUrl,
-      unsubscribeUrl,
-    });
+    const locale = normalizeLocale(user.locale);
+    const message =
+      notification.type === 'creator.digest'
+        ? digestNotificationMessage(user.email, locale, digestEmailParams(notification, actionUrl, unsubscribeUrl))
+        : submissionNotificationMessage(user.email, locale, notification.type, {
+            title: notification.params.title ?? '',
+            actionUrl,
+            unsubscribeUrl,
+          });
 
     await mailer.send(message);
     await deps.store.markNotificationEmailed(uid, notification.id);
@@ -120,11 +136,11 @@ async function maybePush(deps: EmitDeps, uid: string, notification: StoredNotifi
     if (subscriptions.length === 0) return;
 
     const appBaseUrl = deps.appBaseUrl ?? process.env.APP_BASE_URL?.trim() ?? 'https://www.gamedev.pl';
-    const { title, body } = submissionPushContent(
-      normalizeLocale(user?.locale),
-      notification.type,
-      notification.params.title ?? '',
-    );
+    const locale = normalizeLocale(user?.locale);
+    const { title, body } =
+      notification.type === 'creator.digest'
+        ? digestPushContent(locale, digestEmailParams(notification, '', ''))
+        : submissionPushContent(locale, notification.type, notification.params.title ?? '');
     const payload = { title, body, url: absoluteAppUrl(appBaseUrl, notification.link), tag: notification.id };
 
     await Promise.all(
@@ -140,10 +156,37 @@ async function maybePush(deps: EmitDeps, uid: string, notification: StoredNotifi
   }
 }
 
+/**
+ * Reads a digest notification's string params back into numbers for rendering.
+ *
+ * Params are stored as strings so a locale switch re-renders an old notification from its
+ * data rather than from text frozen at emission. A missing or malformed value becomes 0
+ * rather than NaN — an email reading "NaN play sessions" is worse than one reading "0".
+ */
+function digestEmailParams(
+  notification: StoredNotification,
+  actionUrl: string,
+  unsubscribeUrl: string,
+): DigestEmailParams {
+  const num = (key: string): number => {
+    const parsed = Number(notification.params[key]);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  return {
+    games: num('games'),
+    sessions: num('sessions'),
+    votesUp: num('votesUp'),
+    votesDown: num('votesDown'),
+    feedback: num('feedback'),
+    actionUrl,
+    unsubscribeUrl,
+  };
+}
+
 export interface SubmissionNotificationEvent {
   /** Owner of the submission — the notification recipient. */
   uid: string;
-  type: NotificationType;
+  type: SubmissionNotificationType;
   issueNumber: number;
   /** Sanitized game title, shown in the notification text. */
   gameTitle: string;
@@ -151,6 +194,44 @@ export interface SubmissionNotificationEvent {
   statusToken: string;
   /** Present for `submission.published`: deep-link straight to the playable game. */
   slug?: string;
+}
+
+export interface DigestNotificationEvent {
+  uid: string;
+  /** Week-keyed id, so a sweep that runs twice in one week emits once. */
+  id: string;
+  /** Counts only — see digest.ts for why no player-written text travels this path. */
+  params: Record<string, string>;
+  link: string;
+  createdAt: string;
+}
+
+/**
+ * Emit a creator's weekly digest (docs/improvement-loop-plan.md IL-2).
+ *
+ * Lives here rather than in digest.ts so it shares the email and Web Push fan-out with
+ * submission notifications, including their unsubscribe handling and the `emailedAt` retry
+ * flag. A digest that delivered through its own path would be a second place for
+ * "respect the unsubscribe" to be got wrong.
+ */
+export async function emitDigestNotification(
+  deps: EmitDeps,
+  event: DigestNotificationEvent,
+): Promise<{ created: boolean }> {
+  const { created, notification } = await deps.store.createNotification(event.uid, {
+    id: event.id,
+    type: 'creator.digest',
+    createdAt: event.createdAt,
+    titleKey: 'notifications.creator.digest.title',
+    bodyKey: 'notifications.creator.digest.body',
+    params: event.params,
+    link: event.link,
+  });
+
+  await maybeSendEmail(deps, event.uid, notification);
+  if (created) await maybePush(deps, event.uid, notification);
+
+  return { created };
 }
 
 /**
