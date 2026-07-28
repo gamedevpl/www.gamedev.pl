@@ -134,7 +134,9 @@ Genuinely still open, in rough priority order:
   stalls are at least _detected_ now (the notify sweep logs them at `error`); what
   is missing is anything that notices the log.
 - 📋 Protected deployment environments; no `environment:` gate on `deploy.yml`.
-- 📋 Actions are pinned to major tags (`@v4`, `@v2`), not commit SHAs.
+- 📋 Action pinning is incomplete: the Google auth/gcloud actions in `deploy.yml` are
+  SHA-pinned, but first-party `actions/checkout` / `actions/setup-node` remain on
+  major tags across all workflows.
 - 📋 Infrastructure as code. Delivery is shell scripts plus `cloudbuild.yaml`; the
   resources are now decided, so the original "IaC only after resources exist"
   precondition is satisfied.

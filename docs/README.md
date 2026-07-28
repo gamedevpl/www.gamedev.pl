@@ -81,6 +81,7 @@ survives only in this repo's early history.
 | [`agent-progress-notes.md`](./agent-progress-notes.md)             | The older commit-based progress journal, superseded by the live channel                                |
 | [`steel-thread-plan.md`](./steel-thread-plan.md)                   | 🗃️ Historical — the milestone plan that got the first end-to-end thread working                        |
 | [`gtm-plan.md`](./gtm-plan.md)                                     | Go-to-market: stages, gates, and how the GitHub presence fits in                                       |
+| [`operational-readiness-plan.md`](./operational-readiness-plan.md) | 📋 Backups, monitoring, observability: the ops gates that must pass before each GTM gate opens         |
 
 ## Shared agent playbooks
 
