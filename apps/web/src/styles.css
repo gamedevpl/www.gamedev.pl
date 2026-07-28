@@ -4819,6 +4819,16 @@ body.player-open {
   color: var(--turquoise);
 }
 
+/*
+ * The header mark breathes and blinks like every other mascot on the site — it is the
+ * one instance every visitor sees, so freezing it was the wrong instance to freeze.
+ * Hovering the logo promotes that idle breath to the excited hop, which gives the
+ * brand link a reaction of its own instead of borrowing the text underline.
+ */
+.logo:hover .mascot--logo:not(.mascot--static) .mascot__body-group {
+  animation: mascot-bounce 0.55s ease-in-out infinite;
+}
+
 .mascot-moment {
   display: flex;
   flex-direction: column;

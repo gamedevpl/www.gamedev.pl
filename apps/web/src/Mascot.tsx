@@ -35,7 +35,11 @@ type MascotProps = {
   size?: number;
   className?: string;
   title?: string;
-  /** When true, all motion is forced off (e.g. tiny nav mark). */
+  /**
+   * When true, all motion is forced off. Nothing in the app sets this today — the
+   * header mark breathes like every other instance — but a still frame is what a
+   * favicon/OG rasteriser or a print stylesheet would want.
+   */
   staticPose?: boolean;
   /** Nudge face cutouts toward a point — no-op on the baked idle silhouette. */
   look?: MascotLook;
