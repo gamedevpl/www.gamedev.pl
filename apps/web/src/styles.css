@@ -4834,6 +4834,75 @@ body.player-open {
   margin: 0 auto 20px;
 }
 
+/* Interactive poke target — used on the closed-beta splash. */
+.mascot-interactive {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 4px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 12px;
+  transform-origin: 50% 85%;
+  transition: transform 0.12s ease-out;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mascot-interactive__tilt {
+  display: inline-flex;
+  transform-origin: 50% 85%;
+  transition: transform 0.08s linear;
+  will-change: transform;
+}
+
+.mascot-interactive:focus-visible {
+  outline: 2px solid var(--turquoise);
+  outline-offset: 4px;
+}
+
+.mascot-interactive:hover .mascot {
+  filter: brightness(1.08);
+}
+
+.mascot-interactive:active {
+  transform: scale(0.94, 0.9);
+}
+
+.mascot-interactive--poking {
+  animation: mascot-interactive-boop 0.45s ease-out;
+}
+
+@keyframes mascot-interactive-boop {
+  0% {
+    transform: scale(1, 1);
+  }
+  35% {
+    transform: scale(1.08, 0.92);
+  }
+  70% {
+    transform: scale(0.96, 1.06);
+  }
+  100% {
+    transform: scale(1, 1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mascot-interactive,
+  .mascot-interactive__tilt,
+  .mascot-interactive--poking {
+    transition: none;
+    animation: none;
+  }
+
+  .mascot-interactive:active {
+    transform: none;
+  }
+}
+
 .auth-modal-mascot {
   margin: 0 auto 12px;
 }

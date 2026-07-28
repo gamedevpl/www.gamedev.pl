@@ -62,6 +62,9 @@ describe('ClosedBetaSplash', () => {
 
     expect(container.querySelector('.google-sign-in-container')).not.toBeNull();
     expect(container.querySelector('#btn-join-waitlist')).toBeNull();
+    const mascot = container.querySelector<HTMLButtonElement>('button.mascot-interactive.beta-splash__mascot');
+    expect(mascot).not.toBeNull();
+    expect(mascot?.getAttribute('aria-label')).toMatch(/poke|szturchnij/i);
 
     await act(async () => root.unmount());
   });

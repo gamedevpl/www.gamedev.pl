@@ -375,7 +375,8 @@
     "confusedAlt": "Potwór gamedev.pl zdezorientowany",
     "sadAlt": "Potwór gamedev.pl smutny",
     "curiousAlt": "Potwór gamedev.pl zaciekawiony",
-    "busyAlt": "Potwór gamedev.pl w pełni pracy"
+    "busyAlt": "Potwór gamedev.pl w pełni pracy",
+    "poke": "Szturchnij potwora gamedev.pl"
   },
   "footer": {
     "legalNav": "Informacje prawne",
