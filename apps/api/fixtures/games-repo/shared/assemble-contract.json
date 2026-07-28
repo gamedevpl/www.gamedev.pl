@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "_comment": "Cross-repo serve contract.",
+  "gameKitModules": [
+    "input",
+    "collision",
+    "world",
+    "ai",
+    "gameplay",
+    "drawing",
+    "actors",
+    "gfx",
+    "gfx3d",
+    "effects",
+    "audio",
+    "party",
+    "save",
+    "commons",
+    "mascot"
+  ],
+  "authorBudgetBytes": 204800,
+  "platformAllowancesBytes": {
+    "touch": 13061,
+    "restart": 2477,
+    "music": 7741,
+    "touchHint": 89,
+    "progress": 307,
+    "universalInput": 3191,
+    "pointerPoll": 7083,
+    "drawSurface": 9459,
+    "pointerRelease": 430,
+    "hostPause": 1473,
+    "mascotDraw": 679,
+    "headroom": 75237,
+    "gfx3d": 56000
+  },
+  "maxProjectBytes": 382027,
+  "audio": {
+    "musicField": "string",
+    "musicCatalogRequiredKeys": ["version", "tracks"],
+    "injectedGlobals": {
+      "assets": "__GAME_AUDIO_ASSETS__",
+      "defaultMusic": "__GAME_AUDIO_MUSIC__",
+      "tracks": "__GAME_MUSIC_TRACKS__"
+    }
+  }
+}
