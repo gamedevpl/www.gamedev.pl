@@ -160,7 +160,9 @@ describe('InMemoryStore build previews', () => {
   const ISSUE = 4242;
 
   async function push(store: InMemoryStore, label: string) {
-    await store.appendBuildPreview(ISSUE, { slug: 'sky-dodge', label, data: '<html></html>' } as never);
+    // No cast: the literal has to satisfy the real argument type, so a change to
+    // `appendBuildPreview`'s signature fails here instead of being silently absorbed.
+    await store.appendBuildPreview(ISSUE, { slug: 'sky-dodge', label, data: '<html></html>' });
     // Same keep count the agent channel uses, so the interaction under test is the real one.
     await store.pruneBuildPreviews(ISSUE, 4);
   }
