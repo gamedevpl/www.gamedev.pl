@@ -5825,93 +5825,186 @@ body.player-open {
   margin: 0 0 0.75rem;
 }
 
-.studio-playtest-stage {
-  position: relative;
+/* Full-viewport playtest theater — same contract as `.stage.is-playing-full-viewport`.
+   An inset card inside Studio chrome leaves a postage-stamp iframe on phones
+   (iPhone SE especially); the game must own the screen, with controls as layers. */
+.studio-playtest-theater {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: #06090c;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--panel-border);
-  border-radius: 14px;
-  overflow: hidden;
-  background: #05080c;
-  min-height: 0;
+  box-shadow: none;
+  animation: fadeIn 0.2s ease-out;
+  /* Do not set touch-action:none on the theater root — the pause note sheet scrolls
+     and touch-action intersects with ancestors. Hold gestures on the game surface. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.studio-playtest-stage.is-paused {
-  border-color: rgba(0, 228, 172, 0.35);
-  box-shadow: 0 0 24px rgba(0, 228, 172, 0.08);
+.studio-playtest-theater.is-paused .studio-playtest-bar {
+  border-bottom-color: rgba(0, 228, 172, 0.35);
+}
+
+.studio-playtest-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 16px;
+  padding-top: max(10px, env(safe-area-inset-top));
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+  background: rgba(18, 24, 30, 0.95);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--panel-border);
+  width: 100%;
+  flex: none;
+  z-index: 2;
+}
+
+.studio-playtest-bar-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.studio-playtest-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--turquoise);
+}
+
+.studio-playtest-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.studio-playtest-meta {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.studio-playtest-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.studio-playtest-bar-actions .primary-btn,
+.studio-playtest-bar-actions .secondary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.studio-playtest-bar-actions .exit-btn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  justify-content: center;
 }
 
 .studio-playtest-viewport {
+  flex: 1;
+  width: 100%;
   position: relative;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
   background: #000;
-  /* Games are landscape — give the stage the width budget, not side padding. */
-  min-height: 0;
+  overflow: hidden;
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  /* Game surface only — keep this off the note sheet ancestors. */
+  touch-action: none;
 }
 
-.studio-playtest-stage .game-frame {
-  width: min(100%, calc(70vh * 16 / 9));
-  aspect-ratio: 16 / 9;
-  max-height: 70vh;
-  min-height: 180px;
-  height: auto;
+.studio-playtest-theater .game-frame {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  min-height: 0;
+  aspect-ratio: auto;
   border: 0;
   border-radius: 0;
   box-shadow: none;
   display: block;
   background: #000;
+  touch-action: none;
 }
 
 .studio-playtest-rotate {
   position: absolute;
-  bottom: max(12px, env(safe-area-inset-bottom));
-  left: 12px;
-  right: 12px;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  left: 16px;
+  right: 16px;
   margin-inline: auto;
   width: max-content;
-  max-width: calc(100% - 24px);
+  max-width: calc(100% - 32px);
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
+  gap: 10px;
+  padding: 10px 16px;
   border-radius: 999px;
-  background: rgba(12, 18, 24, 0.88);
+  background: rgba(12, 18, 24, 0.86);
   border: 1px solid rgba(0, 228, 172, 0.32);
   color: var(--text);
-  font-size: 0.85rem;
+  font-size: 0.88rem;
   font-weight: 600;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   pointer-events: none;
   z-index: 2;
+  animation: fadeIn 0.25s ease-out;
 }
 
-.studio-playtest-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  border-top: 1px solid var(--panel-border);
-  background: rgba(22, 28, 34, 0.92);
-}
-
-.studio-playtest-controls .primary-btn,
-.studio-playtest-controls .secondary-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.studio-playtest-meta {
-  color: var(--muted);
-  font-size: 0.85rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.studio-playtest-prompt {
-  margin-top: 16px;
+/* Pause note sheet — floats over the game, does not push the iframe into a stamp. */
+.studio-playtest-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  max-height: min(72vh, 34rem);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0;
+  padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+  border-radius: 16px 16px 0 0;
+  border: 1px solid var(--panel-border);
+  border-bottom: none;
+  background: rgba(18, 24, 30, 0.96);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
+  /* Explicit pan so a long note sheet scrolls on phones (theater no longer sets none). */
+  touch-action: pan-y;
+  -webkit-user-select: text;
+  user-select: text;
+  animation: fadeIn 0.2s ease-out;
 }
 
 .studio-playtest-shot {
@@ -5953,6 +6046,56 @@ body.player-open {
   font-size: 0.8rem;
   overflow-wrap: anywhere;
   color: var(--error);
+}
+
+@media (max-width: 768px) {
+  .studio-playtest-bar {
+    padding: 8px 12px;
+    padding-top: max(8px, env(safe-area-inset-top));
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+
+  .studio-playtest-title {
+    font-size: 0.92rem;
+  }
+
+  /* Short landscape phone: every pixel the bar takes is a pixel the game doesn't. */
+  .studio-playtest-badge,
+  .studio-playtest-meta {
+    display: none;
+  }
+
+  .studio-playtest-bar-actions .btn-label {
+    display: none;
+  }
+
+  .studio-playtest-bar-actions .primary-btn,
+  .studio-playtest-bar-actions .secondary-btn:not(.exit-btn) {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .studio-playtest-sheet {
+    max-height: min(78vh, 28rem);
+  }
+
+  .studio-playtest-shot {
+    max-width: 100%;
+  }
+}
+
+@media (max-height: 420px) {
+  .studio-playtest-bar {
+    padding-top: max(4px, env(safe-area-inset-top));
+    padding-bottom: 4px;
+  }
+
+  .studio-playtest-title {
+    font-size: 0.85rem;
+  }
 }
 
 .my-games-header-actions {
@@ -6007,50 +6150,6 @@ body.player-open {
     padding: 18px 16px;
   }
 
-  /* Playtest needs every horizontal pixel — bleed the stage edge-to-edge and keep
-     chrome padding only on the text/controls around it. */
-  .studio-panel.is-playtesting {
-    padding-left: 0;
-    padding-right: 0;
-  }
-
-  .studio-panel.is-playtesting .studio-panel-header,
-  .studio-panel.is-playtesting .studio-empty,
-  .studio-panel.is-playtesting .studio-empty-state,
-  .studio-panel.is-playtesting .studio-game-switcher,
-  .studio-panel.is-playtesting .studio-tabs,
-  .studio-panel.is-playtesting .studio-playtest-hint,
-  .studio-panel.is-playtesting .studio-playtest-prompt,
-  .studio-panel.is-playtesting .studio-muted,
-  .studio-panel.is-playtesting .error {
-    padding-left: 16px;
-    padding-right: 16px;
-  }
-
-  .studio-panel.is-playtesting .studio-detail {
-    padding: 12px 0 18px;
-    border-radius: 0;
-    border-left: none;
-    border-right: none;
-  }
-
-  .studio-panel.is-playtesting .studio-playtest-stage {
-    border-radius: 0;
-    border-left: none;
-    border-right: none;
-  }
-
-  .studio-panel.is-playtesting .studio-playtest-stage .game-frame {
-    width: 100%;
-    max-height: min(56vw, 48vh);
-    min-height: 160px;
-  }
-
-  .studio-panel.is-playtesting .studio-playtest-controls {
-    padding-left: 16px;
-    padding-right: 16px;
-  }
-
   .studio-tabs {
     flex-wrap: nowrap;
     overflow-x: auto;
@@ -6065,13 +6164,6 @@ body.player-open {
 
   .studio-picker {
     width: 100%;
-  }
-}
-
-@media (max-width: 800px) and (orientation: landscape) {
-  .studio-panel.is-playtesting .studio-playtest-stage .game-frame {
-    width: min(100%, calc(78vh * 16 / 9));
-    max-height: 78vh;
   }
 }
 
