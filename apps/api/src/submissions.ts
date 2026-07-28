@@ -18,7 +18,7 @@ import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo
 import { createMailerFromEnv, type Mailer } from './mailer.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { notifyOnTransition, type EmitDeps } from './notify.js';
-import { type BuildShotSummary, type Store } from './store.js';
+import { type BuildPreviewSummary, type BuildShotSummary, type Store } from './store.js';
 import {
   CREATOR_FEEDBACK_MARKER,
   countCreatorClarifications,
@@ -28,6 +28,7 @@ import {
   sanitizeCreatorText,
   type BuildEvent,
   type BuildMediaItem,
+  type BuildPlayableItem,
   type SubmissionStatusResponse,
 } from './submission-status.js';
 import { InvalidTokenError, mintToken, verifyToken } from './submission-token.js';
@@ -353,6 +354,23 @@ export async function registerSubmissionRoutes(
     return value;
   }
 
+  // Only the newest few previews are kept at all (the channel prunes on write), and the
+  // creator only ever wants the latest playable thing plus a little history.
+  const maxPreviewsShown = 4;
+  const previewsCache = new Map<number, { expiresAt: number; value: BuildPreviewSummary[] }>();
+
+  async function loadBuildPreviews(issueNumber: number): Promise<BuildPreviewSummary[]> {
+    if (!store) return [];
+    const currentTime = now();
+    const cached = previewsCache.get(issueNumber);
+    if (cached && cached.expiresAt > currentTime) {
+      return cached.value;
+    }
+    const value = await store.listBuildPreviews(issueNumber, { limit: maxPreviewsShown });
+    previewsCache.set(issueNumber, { value, expiresAt: currentTime + eventsCacheTtlMs });
+    return value;
+  }
+
   const maxShotsShown = 12;
   const shotsCache = new Map<number, { expiresAt: number; value: BuildShotSummary[] }>();
 
@@ -429,6 +447,19 @@ export async function registerSubmissionRoutes(
     ];
   }
 
+  /** Playable builds pushed over the channel, newest first. */
+  async function buildPlayables(issueNumber: number, locale: string): Promise<BuildPlayableItem[]> {
+    return (await loadBuildPreviews(issueNumber)).map((preview): BuildPlayableItem => {
+      const caption = preview.locale === locale && preview.labelLocalized ? preview.labelLocalized : preview.label;
+      return {
+        ref: preview.id,
+        ...(preview.slug ? { slug: preview.slug } : {}),
+        ...(caption ? { label: caption } : {}),
+        createdAt: preview.createdAt,
+      };
+    });
+  }
+
   /**
    * Resolves each event to one sentence in the reader's language. An agent that wrote
    * the sentence in the creator's language already (the common case — we tell it which
@@ -472,11 +503,16 @@ export async function registerSubmissionRoutes(
     issueNumber: number,
     locale: string,
   ): Promise<SubmissionStatusResponse> {
-    const [events, media] = await Promise.all([loadBuildEvents(issueNumber), buildMedia(status, issueNumber, locale)]);
+    const [events, media, playable] = await Promise.all([
+      loadBuildEvents(issueNumber),
+      buildMedia(status, issueNumber, locale),
+      buildPlayables(issueNumber, locale),
+    ]);
     return {
       ...status,
       ...(events.length > 0 ? { events: await localizeEvents(events, locale) } : {}),
       ...(media.length > 0 ? { media } : {}),
+      ...(playable.length > 0 ? { playable } : {}),
     };
   }
 
@@ -1564,6 +1600,88 @@ export async function registerSubmissionRoutes(
       } catch (error) {
         request.log.error({ err: error }, 'failed to serve build screenshot');
         return reply.status(502).send({ error: 'failed to load game media' });
+      }
+    },
+  );
+
+  /**
+   * A playable build the agent pushed over the channel, before it committed anything.
+   *
+   * This serves unreviewed agent output as executable HTML, which is the most dangerous
+   * thing in this file, so the defences are layered and none of them is decorative:
+   *
+   *  - `Content-Security-Policy: sandbox` is the header form of the iframe attribute, so
+   *    the restriction holds even if the document is opened directly rather than framed.
+   *    `allow-scripts` is granted because a game is nothing without it; `allow-same-origin`
+   *    deliberately is not, which leaves the document in an opaque origin with no access
+   *    to storage or cookies anywhere.
+   *  - `default-src 'none'` with inline script and style allowed matches what an assembled
+   *    bundle actually is — everything embedded, nothing fetched. Any attempt to call home
+   *    fails, so an injected exfiltration payload has nowhere to send anything.
+   *  - `X-Content-Type-Options: nosniff` and `Content-Disposition: inline` keep the
+   *    response from being reinterpreted as anything other than what it is.
+   *
+   * No `frame-ancestors`: the web app may be served from a different origin than this API
+   * (`VITE_API_BASE_URL`), and restricting it would block the status page from framing the
+   * preview in exactly those deployments. It would also buy nothing — the URL is reachable
+   * only with the creator's submission token, and a document already confined to an opaque
+   * origin has nothing worth clickjacking.
+   *
+   * Caching is short and private. A preview is superseded within minutes and belongs to
+   * one creator's build; it must not sit in a shared cache the way published media can.
+   */
+  app.get(
+    '/api/submissions/:token/preview/:id',
+    { config: { rateLimit: { max: maxMediaPerWindow, timeWindow: gamesRateLimitWindowMs } } },
+    async (request, reply) => {
+      if (!submissionTokenSecret || !store) {
+        return reply.status(503).send({ error: 'submissions are not configured' });
+      }
+      if (!checkUserAccess(request, reply)) {
+        return;
+      }
+
+      const parsedParams = z.object({ token: z.string(), id: z.string().max(64) }).safeParse(request.params);
+      if (!parsedParams.success) {
+        return reply.status(404).send({ error: 'preview not found' });
+      }
+
+      const currentTime = now();
+      if (isRateLimited(mediaByIp, request.ip, currentTime, maxMediaPerWindow, gamesRateLimitWindowMs)) {
+        return reply.status(429).send({ error: 'too many game requests, please try again later' });
+      }
+
+      let issueNumber: number;
+      try {
+        issueNumber = verifyToken(parsedParams.data.token, submissionTokenSecret);
+      } catch (error) {
+        if (error instanceof InvalidTokenError) {
+          return reply.status(400).send({ error: 'invalid submission token' });
+        }
+        throw error;
+      }
+
+      try {
+        const preview = await store.getBuildPreview(issueNumber, parsedParams.data.id);
+        if (!preview) {
+          return reply.status(404).send({ error: 'preview not found' });
+        }
+
+        return reply
+          .header(
+            'Content-Security-Policy',
+            "sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; " +
+              "style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:; " +
+              "connect-src 'none'; form-action 'none'; base-uri 'none'",
+          )
+          .header('X-Content-Type-Options', 'nosniff')
+          .header('Content-Disposition', 'inline')
+          .header('Cache-Control', 'private, max-age=60')
+          .type('text/html; charset=utf-8')
+          .send(Buffer.from(preview.data, 'base64'));
+      } catch (error) {
+        request.log.error({ err: error }, 'failed to serve build preview');
+        return reply.status(502).send({ error: 'failed to load preview' });
       }
     },
   );

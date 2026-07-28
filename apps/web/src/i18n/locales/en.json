@@ -313,7 +313,10 @@
       "no": "Keep building",
       "sending": "Stopping…",
       "error": "We couldn't stop this build right now. Please try again in a moment."
-    }
+    },
+    "playableTitle": "Play it now",
+    "playableHint": "An early build, straight from the workshop — rough, unfinished, and already playable. Tell them what to change while it is easy.",
+    "playableUpdated": "Updated {{time}}"
   },
   "suggestions": {
     "dodge": "Dodge the falling rocks",

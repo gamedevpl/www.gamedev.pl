@@ -148,6 +148,38 @@ export interface BuildShot {
 /** A shot without its bytes — what a listing needs. */
 export type BuildShotSummary = Omit<BuildShot, 'data'>;
 
+/**
+ * A playable build of the game as it stood at some moment, pushed before any commit.
+ *
+ * A screenshot answers "what does it look like"; this answers "does it play", which is
+ * the only question a creator can really judge a game by. It is the same self-contained
+ * offline HTML the site serves for a published game — one file, no assets, capped by the
+ * games repo's own bundle budget — so whatever plays a published game plays this.
+ *
+ * Bytes live here as base64 for the same reason shots do: an assembled bundle is a couple
+ * of hundred kilobytes, which sits inside a Firestore document with room to spare, and a
+ * preview that is obsolete within minutes is not worth a bucket and a retention job.
+ *
+ * This is unreviewed agent output. It has passed a build and a smoke run and nothing
+ * else — no gate, no review, no merge. Whatever serves it must treat it as hostile.
+ */
+export interface BuildPreview {
+  id: string;
+  /** base64-encoded self-contained HTML document. */
+  data: string;
+  /** The game's slug, for a title the creator recognizes. */
+  slug?: string;
+  /** Agent-authored caption in English, already sanitized. */
+  label?: string;
+  /** The same caption in `locale`, authored rather than machine translated. */
+  labelLocalized?: string;
+  locale?: string;
+  createdAt: string;
+}
+
+/** A preview without its bytes — what a listing needs. */
+export type BuildPreviewSummary = Omit<BuildPreview, 'data'>;
+
 export interface UsageCounters {
   submissions: number;
   previews: number;
@@ -540,6 +572,20 @@ export interface Store {
   getBuildShot(issueNumber: number, id: string): Promise<BuildShot | null>;
   /** How many screenshots a build has pushed — the cap that bounds a runaway agent. */
   countBuildShots(issueNumber: number): Promise<number>;
+
+  appendBuildPreview(
+    issueNumber: number,
+    preview: Omit<BuildPreview, 'id' | 'createdAt'> & { createdAt?: string },
+  ): Promise<BuildPreview>;
+
+  listBuildPreviews(issueNumber: number, opts?: { limit?: number }): Promise<BuildPreviewSummary[]>;
+
+  getBuildPreview(issueNumber: number, id: string): Promise<BuildPreview | null>;
+
+  countBuildPreviews(issueNumber: number): Promise<number>;
+
+  /** Drops all but the newest `keep` previews, returning how many were removed. */
+  pruneBuildPreviews(issueNumber: number, keep: number): Promise<number>;
   /** Queues a creator change request for the agent to collect. */
   appendCreatorMessage(issueNumber: number, text: string): Promise<CreatorMessage>;
   /** Undelivered creator messages, oldest first — the agent's inbox. */
@@ -746,6 +792,7 @@ export class InMemoryStore implements Store {
   private submissions = new Map<number, SubmissionRecord>();
   private buildEvents = new Map<number, BuildEvent[]>();
   private buildShots = new Map<number, BuildShot[]>();
+  private buildPreviews = new Map<number, BuildPreview[]>();
   private creatorMessages = new Map<number, CreatorMessage[]>();
   private usage = new Map<string, UsageCounters>();
   private waitlist = new Map<string, WaitlistEntry>();
@@ -903,6 +950,45 @@ export class InMemoryStore implements Store {
 
   async countBuildShots(issueNumber: number): Promise<number> {
     return this.buildShots.get(issueNumber)?.length ?? 0;
+  }
+
+  async appendBuildPreview(
+    issueNumber: number,
+    preview: Omit<BuildPreview, 'id' | 'createdAt'> & { createdAt?: string },
+  ): Promise<BuildPreview> {
+    const record: BuildPreview = {
+      ...preview,
+      id: randomUUID(),
+      createdAt: preview.createdAt ?? new Date().toISOString(),
+    };
+    const existing = this.buildPreviews.get(issueNumber) ?? [];
+    existing.push(record);
+    this.buildPreviews.set(issueNumber, existing);
+    return { ...record };
+  }
+
+  async listBuildPreviews(issueNumber: number, opts?: { limit?: number }): Promise<BuildPreviewSummary[]> {
+    return [...(this.buildPreviews.get(issueNumber) ?? [])]
+      .sort(byNewestFirst)
+      .slice(0, opts?.limit ?? 4)
+      .map(({ data: _data, ...summary }) => ({ ...summary }));
+  }
+
+  async getBuildPreview(issueNumber: number, id: string): Promise<BuildPreview | null> {
+    const found = this.buildPreviews.get(issueNumber)?.find((preview) => preview.id === id);
+    return found ? { ...found } : null;
+  }
+
+  async countBuildPreviews(issueNumber: number): Promise<number> {
+    return this.buildPreviews.get(issueNumber)?.length ?? 0;
+  }
+
+  async pruneBuildPreviews(issueNumber: number, keep: number): Promise<number> {
+    const existing = this.buildPreviews.get(issueNumber) ?? [];
+    if (existing.length <= keep) return 0;
+    const kept = [...existing].sort(byNewestFirst).slice(0, keep);
+    this.buildPreviews.set(issueNumber, kept);
+    return existing.length - kept.length;
   }
 
   async appendCreatorMessage(issueNumber: number, text: string): Promise<CreatorMessage> {
@@ -1395,6 +1481,10 @@ export class FirestoreStore implements Store {
     return this.db.collection('submissions').doc(String(issueNumber)).collection('shots');
   }
 
+  private previewsCollection(issueNumber: number) {
+    return this.db.collection('submissions').doc(String(issueNumber)).collection('previews');
+  }
+
   async appendBuildEvent(
     issueNumber: number,
     event: Omit<BuildEvent, 'id' | 'createdAt'> & { createdAt?: string },
@@ -1449,6 +1539,63 @@ export class FirestoreStore implements Store {
   async countBuildShots(issueNumber: number): Promise<number> {
     const snap = await this.shotsCollection(issueNumber).count().get();
     return snap.data().count;
+  }
+
+  async appendBuildPreview(
+    issueNumber: number,
+    preview: Omit<BuildPreview, 'id' | 'createdAt'> & { createdAt?: string },
+  ): Promise<BuildPreview> {
+    const record: BuildPreview = {
+      ...preview,
+      id: randomUUID(),
+      createdAt: preview.createdAt ?? new Date().toISOString(),
+    };
+    const document = Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined));
+    await this.previewsCollection(issueNumber).doc(record.id).set(document);
+    return record;
+  }
+
+  async listBuildPreviews(issueNumber: number, opts?: { limit?: number }): Promise<BuildPreviewSummary[]> {
+    // `select()` matters far more here than it does for shots: a preview document is a
+    // couple of hundred kilobytes, and this listing rides a status response the creator's
+    // browser polls every few seconds. The bytes are fetched once, by the iframe.
+    const snap = await this.previewsCollection(issueNumber)
+      .select('id', 'slug', 'label', 'labelLocalized', 'locale', 'createdAt')
+      .orderBy('createdAt', 'desc')
+      .limit(opts?.limit ?? 4)
+      .get();
+    return snap.docs.map((doc) => doc.data() as BuildPreviewSummary).sort(byNewestFirst);
+  }
+
+  async getBuildPreview(issueNumber: number, id: string): Promise<BuildPreview | null> {
+    const doc = await this.previewsCollection(issueNumber).doc(id).get();
+    return doc.exists ? (doc.data() as BuildPreview) : null;
+  }
+
+  async countBuildPreviews(issueNumber: number): Promise<number> {
+    const snap = await this.previewsCollection(issueNumber).count().get();
+    return snap.data().count;
+  }
+
+  async pruneBuildPreviews(issueNumber: number, keep: number): Promise<number> {
+    // Previews are heavy and each one obsoletes the last, so the collection is trimmed on
+    // write rather than left to a retention job. Ids only — pulling the documents to
+    // decide which to drop would fetch the very bytes this is trying not to keep.
+    const snap = await this.previewsCollection(issueNumber).select('createdAt').orderBy('createdAt', 'desc').get();
+    const stale = snap.docs.slice(keep);
+    if (!stale.length) return 0;
+    // Chunked, because a Firestore batch takes at most 500 operations. Steady state is
+    // one deletion per push, so this never matters — until pruning falls behind (a spell
+    // of write errors while the watcher keeps pushing), at which point a single batch
+    // would start failing permanently and previews would grow without bound. The cheap
+    // loop is what stops a transient fault from becoming a permanent one.
+    const BATCH_LIMIT = 500;
+    for (let start = 0; start < stale.length; start += BATCH_LIMIT) {
+      const batch = this.db.batch();
+      for (const doc of stale.slice(start, start + BATCH_LIMIT)) batch.delete(doc.ref);
+      await batch.commit();
+    }
+    return stale.length;
   }
 
   async appendCreatorMessage(issueNumber: number, text: string): Promise<CreatorMessage> {

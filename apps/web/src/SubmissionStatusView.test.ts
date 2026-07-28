@@ -71,6 +71,48 @@ describe('SubmissionStatusView', () => {
     });
   });
 
+  it('offers the latest playable build in a sandboxed frame, before any commit exists', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    // Still queued: no pull request, no commit, no committed capture. This is the
+    // ten-minute stretch a watcher fills, and the whole reason the route exists.
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'queued',
+      playable: [
+        {
+          ref: 'newest',
+          slug: 'puppy-stroll',
+          label: 'You can walk the puppy now.',
+          createdAt: new Date().toISOString(),
+        },
+        { ref: 'older', slug: 'puppy-stroll', createdAt: new Date(Date.now() - 120_000).toISOString() },
+      ],
+    });
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/status/playable-token');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'playable-token' }));
+      await flushEffects();
+    });
+
+    const frame = container.querySelector('iframe.game-frame') as HTMLIFrameElement | null;
+    expect(frame).not.toBeNull();
+    // Newest wins: an older build is history, not the thing to play.
+    expect(frame?.getAttribute('src')).toContain('/preview/newest');
+    // The document is unreviewed agent output, so the frame must isolate it. Without
+    // allow-same-origin it lands in an opaque origin with no reach into this app.
+    expect(frame?.getAttribute('sandbox')).toBe('allow-scripts');
+    expect(container.textContent).toContain('You can walk the puppy now.');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('shows agent channel updates while the build is still queued, with translated step labels', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     // No PR yet — so no `progress` at all. This is exactly the stretch where the

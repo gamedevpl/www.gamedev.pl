@@ -88,6 +88,45 @@ const BuildShotInputSchema = z.object({
     .optional(),
 });
 
+const MAX_PREVIEW_LABEL = 120;
+/**
+ * 320 KB decoded. The games repo caps an assembled bundle at a little over 200 KB
+ * (validate.ts Check 4) and the largest game in the catalog measures 243 KB, so this
+ * clears the real ceiling with slack while staying well inside a Firestore document.
+ */
+const maxPreviewBytes = 320 * 1024;
+
+const BuildPreviewInputSchema = z.object({
+  html: z
+    .string()
+    .trim()
+    .min(1, 'html is required')
+    .max(Math.ceil((maxPreviewBytes * 4) / 3) + 1024, 'preview is too large')
+    .regex(/^[A-Za-z0-9+/\s]*={0,2}$/, 'html must be base64'),
+  slug: z
+    .string()
+    .trim()
+    .max(64)
+    .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'invalid slug')
+    .optional(),
+  label: z
+    .string()
+    .trim()
+    .max(MAX_PREVIEW_LABEL * 4)
+    .optional(),
+  labelLocalized: z
+    .string()
+    .trim()
+    .max(MAX_PREVIEW_LABEL * 4)
+    .optional(),
+  locale: z
+    .string()
+    .trim()
+    .max(10)
+    .regex(/^[a-z]{2}(-[A-Za-z0-9]{2,8})?$/, 'invalid locale')
+    .optional(),
+});
+
 export interface AgentChannelOptions {
   store?: Store;
   /** Signing key for build tokens; the same secret that mints submission tokens. */
@@ -106,6 +145,10 @@ export interface AgentChannelOptions {
   maxShotsPerBuild?: number;
   /** Screenshots one build may push per hour. */
   maxShotsPerWindow?: number;
+  /** How many playable previews are kept; older ones are pruned on write. */
+  keepPreviews?: number;
+  /** Playable previews one build may push per hour. */
+  maxPreviewsPerWindow?: number;
 }
 
 type RejectionReason = 'stopped' | 'rate_limited' | 'too_many_events' | 'too_many_shots';
@@ -136,9 +179,16 @@ export async function registerAgentChannelRoutes(
   // Screenshots are far heavier than sentences, so they get their own, tighter caps.
   const maxShotsPerBuild = options.maxShotsPerBuild ?? 24;
   const maxShotsPerWindow = options.maxShotsPerWindow ?? 40;
+  // A watcher pushes whatever currently builds, so previews arrive on a cadence rather
+  // than on the agent's judgement. Only the newest few are worth keeping — each one
+  // obsoletes the last — but the hourly allowance is generous, because a build that
+  // recompiles every thirty seconds for half an hour is working exactly as intended.
+  const keepPreviews = options.keepPreviews ?? 4;
+  const maxPreviewsPerWindow = options.maxPreviewsPerWindow ?? 90;
   const eventsByBuild = new Map<number, number[]>();
   const inboxChecksByBuild = new Map<number, number[]>();
   const shotsByBuild = new Map<number, number[]>();
+  const previewsByBuild = new Map<number, number[]>();
 
   /**
    * Resolves the build a request is about. The token is the whole credential: it
@@ -327,6 +377,82 @@ export async function registerAgentChannelRoutes(
       ...(await channelState(issueNumber, record)),
     });
   });
+
+  /**
+   * A playable build of the game, pushed before any commit.
+   *
+   * The measured problem: `npm run create` leaves a playable starter on disk about a
+   * minute into a build, and the agent does not attempt its first build until minute
+   * eight or eleven. For those ten minutes something runnable exists and nobody looks at
+   * it, while the creator watches a status page. This is the route that closes that gap,
+   * and it is meant to be driven by a watcher rather than by the agent's judgement —
+   * whatever currently compiles, as often as it changes.
+   *
+   * What arrives is a self-contained offline HTML document, the same shape the site
+   * already serves for a published game. Two things are checked rather than trusted: the
+   * decoded size, and that the bytes actually open as an HTML document. Everything else
+   * about it is unreviewed agent output, so the route that serves it back sandboxes it.
+   */
+  app.post(
+    '/api/agent/build/preview',
+    { config: { rateLimit: { max: 200, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      const { issueNumber, record } = resolved;
+
+      const parsed = BuildPreviewInputSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
+      }
+
+      const reject = async (reason: RejectionReason) =>
+        reply.send({ accepted: false, rejected: reason, ...(await channelState(issueNumber, record)) });
+
+      if (stopReason(record)) {
+        return reject('stopped');
+      }
+      if (isRateLimited(previewsByBuild, issueNumber, now(), maxPreviewsPerWindow)) {
+        return reject('rate_limited');
+      }
+
+      const bytes = Buffer.from(parsed.data.html, 'base64');
+      if (bytes.length > maxPreviewBytes) {
+        return reply.status(413).send({ error: 'preview is too large' });
+      }
+      // The equivalent of the PNG signature check on shots. It proves nothing about what
+      // the document does — only that serving it as text/html is not a category error.
+      const head = bytes.subarray(0, 512).toString('utf8').trimStart().toLowerCase();
+      if (!head.startsWith('<!doctype html') && !head.startsWith('<html')) {
+        return reply.status(400).send({ error: 'not an HTML document' });
+      }
+
+      const label = parsed.data.label
+        ? sanitizeCreatorText(parsed.data.label, { singleLine: true }).slice(0, MAX_PREVIEW_LABEL)
+        : '';
+      const labelLocalized = parsed.data.labelLocalized
+        ? sanitizeCreatorText(parsed.data.labelLocalized, { singleLine: true }).slice(0, MAX_PREVIEW_LABEL)
+        : '';
+      const hasLocalized = Boolean(labelLocalized && parsed.data.locale);
+
+      const stored = await store!.appendBuildPreview(issueNumber, {
+        data: bytes.toString('base64'),
+        ...(parsed.data.slug ? { slug: parsed.data.slug } : {}),
+        ...(label ? { label } : {}),
+        ...(hasLocalized ? { labelLocalized, locale: parsed.data.locale } : {}),
+      });
+      // Pruning after the write, not before: a push that succeeds and then fails to tidy up
+      // has still delivered the thing the creator is waiting for.
+      await store!.pruneBuildPreviews(issueNumber, keepPreviews).catch(() => 0);
+      options.onEvent?.(issueNumber);
+
+      return reply.send({
+        accepted: true,
+        preview: { id: stored.id, createdAt: stored.createdAt, ...(stored.slug ? { slug: stored.slug } : {}) },
+        ...(await channelState(issueNumber, record)),
+      });
+    },
+  );
 
   // Collect without reporting. Deliberately does NOT mark messages delivered — an
   // agent that reads a request and then crashes must not lose it. Acking is explicit.

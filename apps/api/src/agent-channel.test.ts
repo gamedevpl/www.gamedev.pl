@@ -371,4 +371,153 @@ describe('agent build channel', () => {
     });
     expect(stolen.statusCode).toBe(404);
   });
+
+  const GAME_HTML = Buffer.from('<!doctype html><html><body><canvas id="game"></canvas></body></html>').toString(
+    'base64',
+  );
+
+  it('stores a pushed playable build, lists it on the status response, and serves it', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    app = await createApp(store);
+
+    const pushed = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/preview',
+      headers: agentHeaders(),
+      payload: { html: GAME_HTML, slug: 'puppy-stroll', label: 'You can walk the puppy now.' },
+    });
+
+    expect(pushed.statusCode).toBe(200);
+    expect(pushed.json().accepted).toBe(true);
+    const previewId = pushed.json().preview.id as string;
+
+    const token = mintToken(ISSUE, secret);
+    const status = await app.inject({ method: 'GET', url: `/api/submissions/${token}` });
+    expect(status.json().playable).toEqual([
+      expect.objectContaining({ ref: previewId, slug: 'puppy-stroll', label: 'You can walk the puppy now.' }),
+    ]);
+
+    const page = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${token}/preview/${previewId}`,
+      headers: creatorHeaders(),
+    });
+    expect(page.statusCode).toBe(200);
+    expect(page.headers['content-type']).toContain('text/html');
+    expect(page.body).toContain('<canvas id="game">');
+  });
+
+  it('serves a preview sandboxed, uncacheable by shared caches, and unable to call home', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    app = await createApp(store);
+
+    const pushed = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/preview',
+      headers: agentHeaders(),
+      payload: { html: GAME_HTML },
+    });
+    const token = mintToken(ISSUE, secret);
+    const page = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${token}/preview/${pushed.json().preview.id}`,
+      headers: creatorHeaders(),
+    });
+
+    // This document is unreviewed agent output executed in the creator's browser. Each
+    // of these is load-bearing, so each is asserted rather than assumed.
+    const csp = page.headers['content-security-policy'] as string;
+    expect(csp).toContain('sandbox allow-scripts');
+    // Never granted: with it, the sandbox would share the site's origin and the
+    // document could reach the creator's session.
+    expect(csp).not.toContain('allow-same-origin');
+    // A game bundle is offline by construction, so nothing legitimate needs the network.
+    expect(csp).toContain("connect-src 'none'");
+    expect(csp).toContain("form-action 'none'");
+    // Deliberately absent: the web app may live on a different origin than the API
+    // (VITE_API_BASE_URL), and frame-ancestors would block the status page from
+    // framing its own preview in exactly those deployments.
+    expect(csp).not.toContain('frame-ancestors');
+    expect(page.headers['x-content-type-options']).toBe('nosniff');
+    expect(page.headers['cache-control']).toContain('private');
+  });
+
+  it('refuses a payload that is not an HTML document', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    app = await createApp(store);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/preview',
+      headers: agentHeaders(),
+      payload: { html: Buffer.from('GIF89a<script>alert(1)</script>').toString('base64') },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toBe('not an HTML document');
+    expect(await store.countBuildPreviews(ISSUE)).toBe(0);
+  });
+
+  it('keeps only the newest previews, because each one obsoletes the last', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    app = await createApp(store);
+
+    for (let index = 0; index < 7; index++) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/preview',
+        headers: agentHeaders(),
+        payload: { html: GAME_HTML, label: `build ${index}` },
+      });
+      expect(response.json().accepted).toBe(true);
+    }
+
+    // A watcher pushing every time the game recompiles would otherwise accumulate
+    // hundreds of megabytes over one build.
+    expect(await store.countBuildPreviews(ISSUE)).toBe(4);
+    const newest = await store.listBuildPreviews(ISSUE);
+    expect(newest[0]?.label).toBe('build 6');
+  });
+
+  it('will not serve one build’s playable preview to another build’s token', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    await seedSubmission(store, 99);
+    app = await createApp(store);
+
+    const pushed = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/preview',
+      headers: agentHeaders(),
+      payload: { html: GAME_HTML },
+    });
+
+    const stolen = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(99, secret)}/preview/${pushed.json().preview.id}`,
+      headers: creatorHeaders(),
+    });
+    expect(stolen.statusCode).toBe(404);
+  });
+
+  it('stops accepting previews once the creator has stopped the build', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    await store.setSubmissionAbandoned(ISSUE, new Date().toISOString());
+    app = await createApp(store);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/preview',
+      headers: agentHeaders(),
+      payload: { html: GAME_HTML },
+    });
+
+    expect(response.json()).toMatchObject({ accepted: false, rejected: 'stopped' });
+    expect(await store.countBuildPreviews(ISSUE)).toBe(0);
+  });
 });
