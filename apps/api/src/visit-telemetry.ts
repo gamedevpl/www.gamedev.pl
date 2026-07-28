@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { rememberBounded } from './bounded-map.js';
 import type { Store, VisitEvent } from './store.js';
 
 /**
@@ -29,6 +30,14 @@ const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const MAX_VISIT_MS = 24 * 60 * 60 * 1000;
 /** How far back an event may be dated from its flush — bounds client-supplied offsets. */
 const MAX_BACKDATE_MS = 6 * 60 * 60 * 1000;
+/**
+ * Hard ceilings on the in-memory bookkeeping. `visitId` is client-supplied, so the
+ * cap on visits is what stops a stream of fresh ids from growing the map without
+ * bound; the IP ceiling is far higher because evicting a limiter bucket hands that
+ * caller a fresh window, and real client addresses are not cheap to vary.
+ */
+const MAX_TRACKED_VISITS = 5000;
+const MAX_TRACKED_IPS = 20_000;
 
 const RouteKindSchema = z.enum(['home', 'play', 'draft', 'status', 'join', 'legal', 'health', 'studio', 'notFound']);
 /**
@@ -90,11 +99,11 @@ export interface VisitTelemetryRoutesOptions {
 function isRateLimited(buckets: Map<string, number[]>, key: string, currentTime: number): boolean {
   const hits = (buckets.get(key) ?? []).filter((timestamp) => currentTime - timestamp < RATE_LIMIT_WINDOW_MS);
   if (hits.length >= MAX_REQUESTS_PER_WINDOW) {
-    buckets.set(key, hits);
+    rememberBounded(buckets, key, hits, MAX_TRACKED_IPS);
     return true;
   }
   hits.push(currentTime);
-  buckets.set(key, hits);
+  rememberBounded(buckets, key, hits, MAX_TRACKED_IPS);
   return false;
 }
 
@@ -106,15 +115,8 @@ export async function registerVisitTelemetryRoutes(
   const now = options.now ?? Date.now;
 
   const requestsByIp = new Map<string, number[]>();
-  /** visitId -> { count, lastSeen }, pruned lazily so an idle process does not grow. */
+  /** visitId -> { count, lastSeen }. Capped and LRU-evicted — see bounded-map.ts. */
   const visitCounts = new Map<string, { count: number; lastSeen: number }>();
-
-  function pruneVisits(currentTime: number): void {
-    if (visitCounts.size < 5000) return;
-    for (const [visitId, entry] of visitCounts) {
-      if (currentTime - entry.lastSeen > 6 * 60 * 60 * 1000) visitCounts.delete(visitId);
-    }
-  }
 
   app.post('/api/telemetry/visit', async (request, reply) => {
     const currentTime = now();
@@ -128,11 +130,15 @@ export async function registerVisitTelemetryRoutes(
       return reply.status(429).send({ error: 'too many telemetry requests' });
     }
 
-    pruneVisits(currentTime);
     const visit = visitCounts.get(parsed.data.visitId) ?? { count: 0, lastSeen: currentTime };
     const room = MAX_EVENTS_PER_VISIT - visit.count;
     if (room <= 0) {
-      visitCounts.set(parsed.data.visitId, { count: visit.count, lastSeen: currentTime });
+      rememberBounded(
+        visitCounts,
+        parsed.data.visitId,
+        { count: visit.count, lastSeen: currentTime },
+        MAX_TRACKED_VISITS,
+      );
       return reply.status(202).send({ accepted: 0 });
     }
 
@@ -173,7 +179,12 @@ export async function registerVisitTelemetryRoutes(
       }
     });
 
-    visitCounts.set(parsed.data.visitId, { count: visit.count + events.length, lastSeen: currentTime });
+    rememberBounded(
+      visitCounts,
+      parsed.data.visitId,
+      { count: visit.count + events.length, lastSeen: currentTime },
+      MAX_TRACKED_VISITS,
+    );
 
     // Back-dating means one flush can straddle midnight, so events go to the partition
     // their own timestamp names rather than all following the last one's.
