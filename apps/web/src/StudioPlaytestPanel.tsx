@@ -47,6 +47,33 @@ type StudioPlaytestPanelProps = {
   published: boolean;
 };
 
+/**
+ * Studio playtest assumes landscape games — nudge when a handheld is upright.
+ * Desktop windows can be any shape (owner resizes; don't tell them to rotate).
+ * Mirrors GameTheater's coarse-pointer gate + Mascot's Safari MediaQueryList shim.
+ */
+function useNeedsLandscape(): boolean {
+  const [needs, setNeeds] = useState(false);
+
+  useEffect(() => {
+    if (typeof matchMedia !== 'function' || !matchMedia('(pointer: coarse)').matches) {
+      setNeeds(false);
+      return;
+    }
+    const query = matchMedia('(orientation: landscape)');
+    const sync = () => setNeeds(!query.matches);
+    sync();
+    if (typeof query.addEventListener === 'function') {
+      query.addEventListener('change', sync);
+      return () => query.removeEventListener('change', sync);
+    }
+    query.addListener(sync);
+    return () => query.removeListener(sync);
+  }, []);
+
+  return needs;
+}
+
 function toContext(
   pngBase64: string | null | undefined,
   instrumentation: PlaytestInstrumentation,
@@ -78,6 +105,7 @@ export function StudioPlaytestPanel({ game, published }: StudioPlaytestPanelProp
   const [text, setText] = useState('');
   const [sendState, setSendState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [sendError, setSendError] = useState<string | null>(null);
+  const needsLandscape = useNeedsLandscape();
 
   const active = Boolean(html);
   const { paused, snapshot, instrumentation, pause, resume, clearSnapshot } = useCreatorPlaytest(frameRef, active);
@@ -161,7 +189,15 @@ export function StudioPlaytestPanel({ game, published }: StudioPlaytestPanelProp
 
       {html ? (
         <div className={`studio-playtest-stage${paused ? ' is-paused' : ''}`}>
-          <GameFrame frameRef={frameRef} title={game.title} html={html} embed />
+          <div className="studio-playtest-viewport">
+            <GameFrame frameRef={frameRef} title={game.title} html={html} embed />
+            {needsLandscape ? (
+              <div className="studio-playtest-rotate" role="status">
+                <PixelIcon name="gamepad" size={14} />
+                <span>{t('player.rotateLandscape')}</span>
+              </div>
+            ) : null}
+          </div>
           <div className="studio-playtest-controls">
             {paused ? (
               <button type="button" className="secondary-btn" onClick={resume}>

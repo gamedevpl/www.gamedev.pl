@@ -446,10 +446,13 @@ considerably:
 - 📋 **Pause-and-prompt enrichment** — first cut ships: bridge `pause` / `resume` /
   `capture`, host accumulates error/alive/progress during the playtest, feedback
   and improve accept optional `context.screenshotPng` + `instrumentation` (fenced
-  as data; PNG stored as a creator playtest shot). True game-loop pause still
-  needs games-repo cooperation (`gdpl-pause` CustomEvent); today the overlay +
-  frame capture freeze the _moment_ for the prompt even when the sim keeps
-  ticking under the veil.
+  as data; PNG stored as a creator playtest shot). The bridge dispatches
+  `gdpl-pause` / `gdpl-resume` CustomEvents (plus overlay + snapshot); GameKit
+  freezes the sim and suspends audio when those fire
+  ([www.gamedev.pl-games#110](https://github.com/gamedevpl/www.gamedev.pl-games/pull/110)).
+  The shell does not patch `requestAnimationFrame` / `AudioContext`. Studio
+  playtest assumes landscape and goes edge-to-edge on narrow screens with a
+  rotate nudge when the phone is upright.
 - 📋 **Suggestion inbox** — cards with insight → evidence → proposed change →
   [Approve → files issue] / [Dismiss with reason]. Dismissal reasons feed router
   tuning. Approval reuses the feedback-comment path that already works.

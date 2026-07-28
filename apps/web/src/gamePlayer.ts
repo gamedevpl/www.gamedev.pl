@@ -45,6 +45,9 @@ const BRIDGE = `(function(){
     var r=e&&e.reason;post({type:'error',message:String((r&&r.message)||r||'unhandled rejection').slice(0,200)});
   });
   var frames=0,paused=false,overlay=null,lastAlive=0;
+  // Freeze is owned by GameKit (gdpl-pause / gdpl-resume on document). The bridge
+  // only dispatches those events, shows the veil, and snapshots — it does not patch
+  // requestAnimationFrame or AudioContext.
   if('requestAnimationFrame'in window){(function tick(){frames++;requestAnimationFrame(tick);})();}
   setInterval(function(){lastAlive=frames;post({type:'alive',frames:frames});frames=0;},5000);
   function largestCanvas(){

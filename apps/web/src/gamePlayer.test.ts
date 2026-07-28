@@ -30,6 +30,16 @@ describe('embedGameHtml', () => {
     expect(out).toContain('<style id="gdpl-embed">');
     expect(out).toContain('<script>');
   });
+
+  it('dispatches gdpl-pause / gdpl-resume so GameKit can freeze the sim', () => {
+    const out = embedGameHtml('<html><head></head><body></body></html>');
+    expect(out).toContain("CustomEvent('gdpl-pause')");
+    expect(out).toContain("CustomEvent('gdpl-resume')");
+    // Freeze is GameKit's job — the bridge must not patch globals.
+    expect(out).not.toContain('heldRaf');
+    expect(out).not.toContain('flushHeldRaf');
+    expect(out).not.toContain('suspendAudio');
+  });
 });
 
 describe('withGameLocale', () => {
