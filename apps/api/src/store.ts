@@ -427,6 +427,16 @@ export interface ScorecardUntrusted {
   errorSamples: Array<{ message: string; count: number }>;
   /** Landmarks reached, most-reached first — the drop-off curve, when a game emits any. */
   progressLabels: Array<{ label: string; sessions: number }>;
+  /**
+   * Recurring themes distilled from written feedback, most-supported first.
+   *
+   * Empty when a game had too few notes to summarize, when extraction is switched off, or
+   * when it failed — all three are an absence of evidence and must render as one. Belongs
+   * here rather than beside `feedback.count` because a summary of player-written text
+   * inherits that text's taint: safe to show an operator, never safe to hand an agent as
+   * instruction. Optional because scorecards written before this existed do not have it.
+   */
+  feedbackThemes?: Array<{ theme: string; count: number }>;
 }
 
 /**
@@ -667,8 +677,14 @@ export interface Store {
   getVoteCounts(slug: string): Promise<GameVoteCounts>;
   /** Appends one already-moderated, already-sanitized feedback row. Returns it with its id. */
   addPlayerFeedback(slug: string, uid: string, text: string): Promise<PlayerFeedbackRecord>;
-  /** A game's feedback, newest first. No consumer yet (IL-2 theme extraction is next); exists now so capture is verifiable. */
-  listPlayerFeedback(slug: string): Promise<PlayerFeedbackRecord[]>;
+  /**
+   * A game's feedback, newest first.
+   *
+   * `limit` bounds the read for the scorecard sweep's theme extraction, so one game with
+   * thousands of notes cannot dominate a nightly job. Unbounded without it, because the
+   * erase preview needs every row it is about to delete.
+   */
+  listPlayerFeedback(slug: string, opts?: { limit?: number }): Promise<PlayerFeedbackRecord[]>;
   /**
    * How many feedback rows a game has, without reading them.
    *
@@ -1273,8 +1289,9 @@ export class InMemoryStore implements Store {
     return record;
   }
 
-  async listPlayerFeedback(slug: string): Promise<PlayerFeedbackRecord[]> {
-    return [...(this.playerFeedback.get(slug) ?? [])].reverse();
+  async listPlayerFeedback(slug: string, opts?: { limit?: number }): Promise<PlayerFeedbackRecord[]> {
+    const newestFirst = [...(this.playerFeedback.get(slug) ?? [])].reverse();
+    return opts?.limit === undefined ? newestFirst : newestFirst.slice(0, opts.limit);
   }
 
   async countPlayerFeedback(slug: string): Promise<number> {
@@ -1992,8 +2009,12 @@ export class FirestoreStore implements Store {
     return record;
   }
 
-  async listPlayerFeedback(slug: string): Promise<PlayerFeedbackRecord[]> {
-    const snap = await this.feedbackCollection(slug).orderBy('createdAt', 'desc').get();
+  async listPlayerFeedback(slug: string, opts?: { limit?: number }): Promise<PlayerFeedbackRecord[]> {
+    // Unbounded by default because the erase preview and the operator read both want
+    // everything; the sweep passes a limit so one game with thousands of notes cannot
+    // dominate a nightly job's read budget.
+    const ordered = this.feedbackCollection(slug).orderBy('createdAt', 'desc');
+    const snap = await (opts?.limit === undefined ? ordered : ordered.limit(opts.limit)).get();
     return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<PlayerFeedbackRecord, 'id'>) }));
   }
 

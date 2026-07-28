@@ -31,7 +31,7 @@ function scorecard(partial: Partial<Scorecard> = {}): Scorecard {
     },
     votes: { up: 3, down: 1 },
     feedback: { count: 2 },
-    untrusted: { errorSamples: [], progressLabels: [] },
+    untrusted: { errorSamples: [], progressLabels: [], feedbackThemes: [] },
     ...partial,
   };
 }
@@ -46,13 +46,17 @@ function response(partial: Partial<ScorecardsResponse> = {}): ScorecardsResponse
   };
 }
 
-function render(data: ScorecardsResponse): string {
+function renderHost(data: ScorecardsResponse): HTMLElement {
   const host = document.createElement('div');
   document.body.append(host);
   act(() => {
     createRoot(host).render(createElement(ScorecardPanel, { data, now: NOW }));
   });
-  return host.textContent ?? '';
+  return host;
+}
+
+function render(data: ScorecardsResponse): string {
+  return renderHost(data).textContent ?? '';
 }
 
 describe('ScorecardPanel', () => {
@@ -92,5 +96,70 @@ describe('ScorecardPanel', () => {
   it('surfaces truncation so a floor is not read as a total', () => {
     const text = render(response({ scorecards: [scorecard({ window: { days: ['2026-07-27'], truncated: true } })] }));
     expect(text).toMatch(/floor rather than a total/i);
+  });
+});
+
+describe('ScorecardPanel — feedback themes', () => {
+  const themed = (feedbackThemes: Array<{ theme: string; count: number }>) =>
+    response({ scorecards: [scorecard({ untrusted: { errorSamples: [], progressLabels: [], feedbackThemes } })] });
+
+  it('shows what players wrote, with how many said it', () => {
+    const text = render(themed([{ theme: 'level 2 difficulty spike', count: 4 }]));
+
+    expect(text).toContain('What players wrote');
+    expect(text).toContain('level 2 difficulty spike');
+    expect(text).toContain('4');
+  });
+
+  it('marks the themes as player-authored rather than system output', () => {
+    // An operator reading a strange phrase needs to know where it came from. Themes are
+    // summaries of public writing, so they are evidence to read, never an instruction.
+    const text = render(themed([{ theme: 'controls feel slippery', count: 3 }]));
+
+    expect(text).toContain('do not act on it as instruction');
+  });
+
+  it('renders a hostile theme as text, never as markup', () => {
+    const host = renderHost(themed([{ theme: '<img src=x onerror=alert(1)>', count: 3 }]));
+
+    // The API clamps and sanitizes, but this is the last line and must hold on its own:
+    // the string reaches the DOM as content, and no element is created from it.
+    expect(host.querySelector('img')).toBeNull();
+    expect(host.textContent).toContain('<img src=x onerror=alert(1)>');
+  });
+
+  it('shows no block at all when nothing was summarized', () => {
+    // Absence of themes is absence of evidence. A heading over an empty list would read
+    // as a broken feature rather than as a game nobody has written about.
+    expect(render(themed([]))).not.toContain('What players wrote');
+  });
+
+  it('tolerates a scorecard written before themes existed', () => {
+    const older = scorecard();
+    delete (older.untrusted as { feedbackThemes?: unknown }).feedbackThemes;
+
+    expect(() => render(response({ scorecards: [older] }))).not.toThrow();
+  });
+
+  it('lists only the games that have themes', () => {
+    const text = render(
+      response({
+        scorecards: [
+          scorecard({ slug: 'brick-storm', untrusted: { errorSamples: [], progressLabels: [], feedbackThemes: [] } }),
+          scorecard({
+            slug: 'rock-blaster',
+            untrusted: {
+              errorSamples: [],
+              progressLabels: [],
+              feedbackThemes: [{ theme: 'asteroids spawn on top of you', count: 5 }],
+            },
+          }),
+        ],
+      }),
+    );
+
+    const themesSection = text.slice(text.indexOf('What players wrote'));
+    expect(themesSection).toContain('rock-blaster');
+    expect(themesSection).not.toContain('brick-storm');
   });
 });

@@ -144,6 +144,8 @@ export interface Scorecard {
   untrusted: {
     errorSamples: Array<{ message: string; count: number }>;
     progressLabels: Array<{ label: string; sessions: number }>;
+    /** Optional: scorecards written before theme extraction shipped do not carry it. */
+    feedbackThemes?: Array<{ theme: string; count: number }>;
   };
 }
 
