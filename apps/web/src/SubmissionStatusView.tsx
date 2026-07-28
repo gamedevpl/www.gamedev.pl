@@ -4,14 +4,13 @@ import { GameTheater } from './GameTheater.js';
 import { PixelIcon, type PixelIconName } from './PixelIcon.js';
 import {
   abandonSubmission,
+  getChannelPlayable,
   getSubmissionPreview,
   getSubmissionStatus,
   submitFeedback,
   buildMediaUrl,
-  buildPlayableUrl,
   type BuildEvent,
   type BuildMediaItem,
-  type BuildPlayableItem,
   type BuildEventKind,
   type BuildProgress,
   type BuildStep,
@@ -144,21 +143,25 @@ export function SubmissionStatusView({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewRefreshing, setPreviewRefreshing] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  // Early channel build HTML (pre-commit). Loaded as text so GameTheater can inject
+  // the player bridge — same sandbox as framing by URL, with working Escape/sound.
+  const [channelHtml, setChannelHtml] = useState<string | null>(null);
+  const [channelLoading, setChannelLoading] = useState(false);
 
-  // Which game (if any) is open in the full-viewport theater. The draft's HTML is
-  // snapshotted at launch (`launchedHtml`) so a background refresh doesn't reload
-  // the game out from under the player mid-session — reopening picks up the latest.
-  // Channel builds use `launchedSrc` instead: unreviewed agent output stays on the
-  // iframe's `src`, never fetched into the parent.
-  const [playing, setPlaying] = useState<'draft' | 'channel' | 'published' | null>(null);
+  // Which game (if any) is open in the full-viewport theater. HTML is snapshotted at
+  // launch (`launchedHtml`) so a background refresh doesn't reload the game out from
+  // under the player mid-session — reopening picks up the latest. Channel builds use
+  // the same path as PR drafts: fetched as text, then srcdoc + player bridge.
+  const [playing, setPlaying] = useState<'draft' | 'published' | null>(null);
   const [launchedHtml, setLaunchedHtml] = useState<string | null>(null);
-  const [launchedSrc, setLaunchedSrc] = useState<string | null>(null);
 
   // Tracks the PR head SHA the currently-displayed preview was built from, so we
   // only re-fetch (and reload the iframe) when the agent has actually pushed new
   // work — not on every status poll.
   const loadedPreviewShaRef = useRef<string | null>(null);
   const previewInFlightRef = useRef(false);
+  const loadedChannelRef = useRef<string | null>(null);
+  const channelInFlightRef = useRef(false);
 
   const currentTrackingUrl = useMemo(
     () => trackingUrl ?? new URL(embedded ? studioPath(token) : statusPath(token), window.location.href).toString(),
@@ -176,13 +179,16 @@ export function SubmissionStatusView({
     setIsInvalidToken(false);
     setPlaying(null);
     setLaunchedHtml(null);
-    setLaunchedSrc(null);
     setPreview(null);
     setPreviewLoading(false);
     setPreviewRefreshing(false);
     setPreviewError(null);
+    setChannelHtml(null);
+    setChannelLoading(false);
     loadedPreviewShaRef.current = null;
     previewInFlightRef.current = false;
+    loadedChannelRef.current = null;
+    channelInFlightRef.current = false;
 
     const stopPolling = () => {
       if (timeoutId !== undefined) {
@@ -287,6 +293,40 @@ export function SubmissionStatusView({
       });
   }, [status?.preview?.slug, status?.progress?.headSha, t, token]);
 
+  // Prefetch the latest channel build when there is no PR preview yet — same PlayCard
+  // → theater path, so Escape / sound / chrome-hide need the player bridge, which
+  // means the HTML has to arrive as text (srcdoc), not as an iframe `src`.
+  useEffect(() => {
+    const latest = status?.playable?.[0];
+    if (preview || !latest) {
+      if (!latest) {
+        setChannelHtml(null);
+        loadedChannelRef.current = null;
+      }
+      return;
+    }
+    if (latest.ref === loadedChannelRef.current || channelInFlightRef.current) return;
+
+    channelInFlightRef.current = true;
+    setChannelLoading(true);
+    setPreviewError(null);
+
+    getChannelPlayable(token, latest)
+      .then((html) => {
+        setChannelHtml(html);
+        loadedChannelRef.current = latest.ref;
+      })
+      .catch((err: unknown) => {
+        const apiError = err as SubmissionApiError;
+        setChannelHtml(null);
+        setPreviewError(apiError.message || t('statusView.previewError'));
+      })
+      .finally(() => {
+        channelInFlightRef.current = false;
+        setChannelLoading(false);
+      });
+  }, [preview, status?.playable, t, token]);
+
   const previewTitle = preview?.title ?? submittedTitle ?? status?.preview?.slug ?? t('statusView.previewGameTitle');
 
   // Lock page scroll while the theater overlay is open (matches the home player).
@@ -299,18 +339,16 @@ export function SubmissionStatusView({
   const openDraft = () => {
     if (!preview) return;
     setLaunchedHtml(preview.html);
-    setLaunchedSrc(null);
     setPlaying('draft');
   };
-  const openChannelBuild = (item: BuildPlayableItem) => {
-    setLaunchedSrc(buildPlayableUrl(token, item));
-    setLaunchedHtml(null);
-    setPlaying('channel');
+  const openChannel = () => {
+    if (!channelHtml) return;
+    setLaunchedHtml(channelHtml);
+    setPlaying('draft');
   };
   const closeTheater = () => {
     setPlaying(null);
     setLaunchedHtml(null);
-    setLaunchedSrc(null);
   };
 
   const latestChannelBuild = status?.playable?.[0] ?? null;
@@ -422,7 +460,7 @@ export function SubmissionStatusView({
                 cta={t('statusView.playDraft')}
                 onPlay={openDraft}
               />
-            ) : latestChannelBuild ? (
+            ) : channelHtml && latestChannelBuild ? (
               <PlayCard
                 badge={
                   <>
@@ -432,9 +470,9 @@ export function SubmissionStatusView({
                 title={submittedTitle ?? latestChannelBuild.slug ?? t('statusView.previewGameTitle')}
                 subtitle={latestChannelBuild.label ?? t('statusView.playableHint')}
                 cta={t('statusView.playDraft')}
-                onPlay={() => openChannelBuild(latestChannelBuild)}
+                onPlay={openChannel}
               />
-            ) : previewLoading ? (
+            ) : previewLoading || channelLoading ? (
               <p className="status-preview-pending">
                 <span className="status-preview-spinner" aria-hidden="true" /> {t('statusView.previewLoading')}
               </p>
@@ -452,7 +490,7 @@ export function SubmissionStatusView({
             {status.status !== 'published' && status.status !== 'abandoned' ? (
               <FeedbackPanel
                 token={token}
-                building={!preview && !latestChannelBuild}
+                building={!preview && !channelHtml}
                 onSent={(text) => setPendingRevisions((current) => [...current, { text, at: Date.now() }])}
               />
             ) : null}
@@ -494,18 +532,11 @@ export function SubmissionStatusView({
 
       {playing === 'draft' && launchedHtml != null ? (
         <GameTheater
-          title={previewTitle}
+          title={
+            preview ? previewTitle : (submittedTitle ?? latestChannelBuild?.slug ?? t('statusView.previewGameTitle'))
+          }
           badge={{ icon: 'wrench', label: t('statusView.draftBadge') }}
           source={{ html: launchedHtml }}
-          onExit={closeTheater}
-        />
-      ) : null}
-
-      {playing === 'channel' && launchedSrc != null ? (
-        <GameTheater
-          title={submittedTitle ?? latestChannelBuild?.slug ?? t('statusView.previewGameTitle')}
-          badge={{ icon: 'wrench', label: t('statusView.draftBadge') }}
-          source={{ src: launchedSrc }}
           onExit={closeTheater}
         />
       ) : null}

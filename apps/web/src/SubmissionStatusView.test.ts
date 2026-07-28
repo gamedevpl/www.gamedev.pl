@@ -5,7 +5,13 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n/index.js';
 import { ACTIVE_POLL_MS, SubmissionStatusView } from './SubmissionStatusView.js';
-import { abandonSubmission, getSubmissionPreview, getSubmissionStatus, submitFeedback } from './submissionApi.js';
+import {
+  abandonSubmission,
+  getChannelPlayable,
+  getSubmissionPreview,
+  getSubmissionStatus,
+  submitFeedback,
+} from './submissionApi.js';
 
 vi.mock('./submissionApi', async () => {
   const actual = await vi.importActual<typeof import('./submissionApi')>('./submissionApi');
@@ -13,6 +19,7 @@ vi.mock('./submissionApi', async () => {
     ...actual,
     getSubmissionStatus: vi.fn(),
     getSubmissionPreview: vi.fn(),
+    getChannelPlayable: vi.fn(),
     submitFeedback: vi.fn(),
     abandonSubmission: vi.fn(),
   };
@@ -20,6 +27,7 @@ vi.mock('./submissionApi', async () => {
 
 const mockedGetSubmissionStatus = vi.mocked(getSubmissionStatus);
 const mockedGetSubmissionPreview = vi.mocked(getSubmissionPreview);
+const mockedGetChannelPlayable = vi.mocked(getChannelPlayable);
 const mockedSubmitFeedback = vi.mocked(submitFeedback);
 const mockedAbandonSubmission = vi.mocked(abandonSubmission);
 
@@ -74,6 +82,8 @@ describe('SubmissionStatusView', () => {
         { ref: 'older', slug: 'puppy-stroll', createdAt: new Date(Date.now() - 120_000).toISOString() },
       ],
     });
+    // Fetched as text so the theater can inject the player bridge (Escape / sound).
+    mockedGetChannelPlayable.mockResolvedValue('<!doctype html><canvas></canvas>');
     await i18n.changeLanguage('en');
     window.history.pushState(null, '', '/status/playable-token');
 
@@ -84,11 +94,14 @@ describe('SubmissionStatusView', () => {
     await act(async () => {
       root.render(createElement(SubmissionStatusView, { token: 'playable-token' }));
       await flushEffects();
+      await flushEffects();
     });
 
     // Same surface as the PR draft: a PlayCard, nothing embedded inline.
     expect(container.querySelector('iframe')).toBeNull();
     expect(container.textContent).toContain('You can walk the puppy now.');
+    // Newest wins: an older build is history, not the thing to play.
+    expect(mockedGetChannelPlayable).toHaveBeenCalledWith('playable-token', expect.objectContaining({ ref: 'newest' }));
     const playDraft = container.querySelector<HTMLButtonElement>('.status-play-cta');
     expect(playDraft?.textContent).toContain('Play the draft');
 
@@ -97,12 +110,10 @@ describe('SubmissionStatusView', () => {
       await flushEffects();
     });
 
-    const frame = container.querySelector('iframe.game-frame') as HTMLIFrameElement | null;
+    const frame = container.querySelector('iframe[title="puppy-stroll"]') as HTMLIFrameElement | null;
     expect(frame).not.toBeNull();
-    // Newest wins: an older build is history, not the thing to play.
-    expect(frame?.getAttribute('src')).toContain('/preview/newest');
-    // The document is unreviewed agent output, so the frame must isolate it. Without
-    // allow-same-origin it lands in an opaque origin with no reach into this app.
+    // srcdoc + bridge — same path as a PR draft, so theater chrome actually works.
+    expect(frame?.getAttribute('srcdoc') ?? '').toContain('gdpl-player');
     expect(frame?.getAttribute('sandbox')).toBe('allow-scripts');
 
     await act(async () => {

@@ -13,14 +13,8 @@ import { useGameSaveBridge } from './gameSave.js';
 import { useWorldBridge } from './world.js';
 import { useScreenWakeLock } from './useScreenWakeLock.js';
 
-/**
- * A game to run in the theater.
- * - `html`: assembled document (draft / generated) loaded via srcdoc.
- * - `slug`: published catalog game fetched by the player.
- * - `src`: URL of an unreviewed channel build — loaded by the iframe itself, never
- *   fetched into the parent (same boundary as GameFrame's `src` mode).
- */
-export type GameTheaterSource = { html: string } | { slug: string } | { src: string };
+/** A game to run, sourced either from raw assembled HTML or a published slug. */
+export type GameTheaterSource = { html: string } | { slug: string };
 
 type GameTheaterProps = {
   title: string;
@@ -330,11 +324,6 @@ export function GameTheater({
       <div className="game-viewport-container">
         {'slug' in source ? (
           <PublishedGameFrame key={source.slug} slug={source.slug} title={title} frameRef={frameRef} embed />
-        ) : 'src' in source ? (
-          // Channel builds stay on `src` — the document is unreviewed agent output and
-          // must not be fetched into the parent. No embed bridge: we can't rewrite a
-          // cross-origin URL document the way we rewrite srcdoc HTML.
-          <GameFrame title={title} src={source.src} frameRef={frameRef} />
         ) : (
           <GameFrame title={title} html={source.html} frameRef={frameRef} embed />
         )}
