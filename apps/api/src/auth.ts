@@ -28,8 +28,12 @@ export interface SessionPayload {
    * checking the admin list at exchange time) is what makes the property hold no
    * matter when an account joins that list.
    *
-   * Absent on every cookie minted before this field existed, which is correct: those
-   * could only come from a Google sign-in.
+   * Absent on every cookie minted before this field existed, and those all read as
+   * ordinary sessions. Right for the Google ones; briefly wrong for any the exchange
+   * handed out beforehand, which keep satisfying the session-only checks until they
+   * expire. That window is one session lifetime (12h) and closes on its own; rotating
+   * SESSION_SECRET at deploy closes it immediately, which is worth doing if a PAT for
+   * an admin account was ever exchanged.
    */
   src?: 'token';
 }
@@ -520,11 +524,18 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
         return reply.status(503).send({ error: 'authentication is not configured' });
       }
 
-      if (!request.user || request.authMethod !== 'token') {
+      // Resolved from the Authorization header rather than read off `request.authMethod`:
+      // a cookie minted *here* also reports 'token', so trusting the method alone would
+      // let a derived cookie mint an endless succession of fresh ones — self-renewing
+      // past the revocation of the very PAT it came from, and reopening the "a cookie
+      // cannot mint a cookie" hole this route is documented to close. The exchange has
+      // to be driven by the credential itself, every time.
+      const tokenUser = await getAccessTokenUser(request);
+      if (!tokenUser) {
         return reply.status(401).send({ error: 'a personal access token is required' });
       }
 
-      if (request.user.tier === 'blocked') {
+      if (tokenUser.tier === 'blocked') {
         return reply.status(403).send({ error: 'account is blocked' });
       }
 
@@ -534,13 +545,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
       // for — which is the whole point of this route — works unchanged.
       reply.setCookie(
         SESSION_COOKIE_NAME,
-        mintSessionToken(
-          request.user.uid,
-          effectiveSessionSecret,
-          DEFAULT_SESSION_DURATION_SECONDS,
-          undefined,
-          'token',
-        ),
+        mintSessionToken(tokenUser.uid, effectiveSessionSecret, DEFAULT_SESSION_DURATION_SECONDS, undefined, 'token'),
         {
           path: '/',
           httpOnly: true,
@@ -550,7 +555,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
         },
       );
 
-      return { user: request.user };
+      return { user: tokenUser };
     },
   );
 

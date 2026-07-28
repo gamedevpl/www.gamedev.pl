@@ -401,6 +401,27 @@ describe('authenticating with a personal access token', () => {
     expect(res.statusCode).toBe(201);
   });
 
+  it('refuses to mint a fresh session from a cookie it minted earlier', async () => {
+    // A derived cookie authenticates as a token, so checking the auth *method* alone
+    // would let it mint an endless succession of replacements and outlive revocation of
+    // the PAT behind it. The exchange must see the credential itself every time.
+    const app = await appWith(store, { betaAllowedUids: 'g:boss' });
+    const { token } = (await mintFor(app, 'bot:e2e')).json();
+
+    const exchanged = await app.inject({ method: 'POST', url: '/api/auth/session', headers: bearer(token) });
+    const setCookie = exchanged.headers['set-cookie'];
+    const cookie = String(Array.isArray(setCookie) ? setCookie[0] : setCookie).split(';')[0] as string;
+
+    // The cookie really is a working credential — so the refusal below is the rule
+    // biting, not the header being dropped.
+    const me = await app.inject({ method: 'GET', url: '/api/auth/me', headers: { cookie } });
+    expect(me.statusCode).toBe(200);
+    expect(me.json().user.uid).toBe('bot:e2e');
+
+    const again = await app.inject({ method: 'POST', url: '/api/auth/session', headers: { cookie } });
+    expect(again.statusCode).toBe(401);
+  });
+
   it.each([
     ['a browser session', () => sessionHeaders('g:boss')],
     ['no credential', () => ({})],
