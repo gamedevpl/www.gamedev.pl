@@ -745,7 +745,37 @@ at all and feeds the only autonomous-eligible class.
 
 ### Phase IL-3 — Suggest (agent in the loop, human approves everything)
 
-- Babysitter analyst run (scheduled) producing `suggestions/` from scorecards.
+- ✅ **The router** (2026-07-28): [suggestions.ts](../apps/api/src/suggestions.ts) classifies
+  each scorecard as defect / friction / design-change / healthy / insufficient-data, with
+  the evidence behind the call, surfaced at `GET /api/admin/suggestions`.
+
+  **The decision is rules over numbers, never a model over text** — and the invariant is
+  about _text_ specifically, because the looser version would be false:
+
+  - No untrusted **string** reaches the routing decision. Error messages, progression
+    labels and feedback themes are never read, compared or matched.
+  - No untrusted **string** reaches a finding. Findings read as this system speaking, so
+    they quote nothing; a progression finding is positional rather than naming the
+    landmark.
+  - **Counts are signal, and a game produces some of them.** It emits its own `progress`
+    markers and its own uncaught errors, so it can influence which class it lands in. That
+    is not a hole: those events _are_ the measurement, and a game that makes itself look
+    broken has asked to be looked at, which is all a suggestion is.
+
+  A game can raise its own hand; it cannot put words in our mouth. That is this phase's ⚠️
+  answered where it actually bites.
+
+  Findings are positional rather than quoting — "players who reached one landmark never
+  reached the next", not the landmark's game-authored name — so no untrusted text lands in
+  the sentence that reads as this system speaking.
+
+  **Computed on read, persisted nowhere, files nothing.** A suggestion engine that will
+  eventually point a coding agent at somebody's game should be watched saying what it
+  _would_ do before it does any of it. `healthy` and `insufficient-data` are returned
+  rather than filtered, so a game being passed over is visible and distinguishable from
+  the router never having run.
+
+- 📋 Babysitter analyst run (scheduled) persisting `suggestions/` from the router above.
 - Suggestion inbox UI; Approve → structured improvement issue (evidence-fenced)
   → Copilot **via the relay**, with a stall alert on `issue-filed` → no PR.
 - Measurement records written at merge; 14-day post-change comparison.

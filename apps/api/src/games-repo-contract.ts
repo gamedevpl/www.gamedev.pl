@@ -22,6 +22,7 @@ export const GAME_KIT_MODULES = [
   'audio',
   'party',
   'save',
+  'commons',
   'mascot',
 ] as const;
 

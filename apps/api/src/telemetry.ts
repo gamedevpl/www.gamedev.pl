@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { rememberBounded } from './bounded-map.js';
 import type { PublishedSlugGate } from './published-slugs.js';
 import type { Store, TelemetryEvent } from './store.js';
 
@@ -34,6 +35,14 @@ const MAX_EVENTS_PER_SESSION = 400;
 /** Flushes one IP may send per minute, across all its tabs. */
 const MAX_REQUESTS_PER_WINDOW = 120;
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+/**
+ * Hard ceilings on the in-memory bookkeeping. `sessionId` is client-supplied, so the
+ * cap on sessions is what stops a stream of fresh ids from growing the map without
+ * bound; the IP ceiling is far higher because evicting a limiter bucket hands that
+ * caller a fresh window, and real client addresses are not cheap to vary.
+ */
+const MAX_TRACKED_SESSIONS = 5000;
+const MAX_TRACKED_IPS = 20_000;
 const MAX_MESSAGE_LENGTH = 200;
 const MAX_LABEL_LENGTH = 40;
 /** Log every Nth unknown-slug drop: enough to notice a systemic problem, not a flood. */
@@ -113,11 +122,11 @@ export interface TelemetryRoutesOptions {
 function isRateLimited(buckets: Map<string, number[]>, key: string, currentTime: number): boolean {
   const hits = (buckets.get(key) ?? []).filter((timestamp) => currentTime - timestamp < RATE_LIMIT_WINDOW_MS);
   if (hits.length >= MAX_REQUESTS_PER_WINDOW) {
-    buckets.set(key, hits);
+    rememberBounded(buckets, key, hits, MAX_TRACKED_IPS);
     return true;
   }
   hits.push(currentTime);
-  buckets.set(key, hits);
+  rememberBounded(buckets, key, hits, MAX_TRACKED_IPS);
   return false;
 }
 
@@ -128,15 +137,8 @@ export async function registerTelemetryRoutes(app: FastifyInstance, options: Tel
   const requestsByIp = new Map<string, number[]>();
   /** Flushes discarded for an unrecognised slug; logged sparsely, never per request. */
   let droppedUnknownSlug = 0;
-  /** sessionId -> { count, lastSeen }, pruned lazily so an idle process does not grow. */
+  /** sessionId -> { count, lastSeen }. Capped and LRU-evicted — see bounded-map.ts. */
   const sessionCounts = new Map<string, { count: number; lastSeen: number }>();
-
-  function pruneSessions(currentTime: number): void {
-    if (sessionCounts.size < 5000) return;
-    for (const [sessionId, entry] of sessionCounts) {
-      if (currentTime - entry.lastSeen > 6 * 60 * 60 * 1000) sessionCounts.delete(sessionId);
-    }
-  }
 
   app.post('/api/telemetry', async (request, reply) => {
     const currentTime = now();
@@ -168,11 +170,15 @@ export async function registerTelemetryRoutes(app: FastifyInstance, options: Tel
       return reply.status(202).send({ accepted: 0 });
     }
 
-    pruneSessions(currentTime);
     const session = sessionCounts.get(parsed.data.sessionId) ?? { count: 0, lastSeen: currentTime };
     const room = MAX_EVENTS_PER_SESSION - session.count;
     if (room <= 0) {
-      sessionCounts.set(parsed.data.sessionId, { count: session.count, lastSeen: currentTime });
+      rememberBounded(
+        sessionCounts,
+        parsed.data.sessionId,
+        { count: session.count, lastSeen: currentTime },
+        MAX_TRACKED_SESSIONS,
+      );
       return reply.status(202).send({ accepted: 0 });
     }
 
@@ -221,7 +227,12 @@ export async function registerTelemetryRoutes(app: FastifyInstance, options: Tel
       }
     });
 
-    sessionCounts.set(parsed.data.sessionId, { count: session.count + events.length, lastSeen: currentTime });
+    rememberBounded(
+      sessionCounts,
+      parsed.data.sessionId,
+      { count: session.count + events.length, lastSeen: currentTime },
+      MAX_TRACKED_SESSIONS,
+    );
 
     // Back-dating means one flush can straddle midnight, so events go to the partition
     // their own timestamp names rather than all following the last one's.

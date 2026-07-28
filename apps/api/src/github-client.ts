@@ -215,6 +215,13 @@ export interface CatalogGameEntry {
    */
   saves: CatalogGameSaves | null;
   /**
+   * `shared` when the game has a world every player writes into (`world: shared` in
+   * SPEC.md frontmatter), null for the solo majority. Advisory metadata for the catalog
+   * UI: whether a world actually exists is decided by the game's GAME.json field spec,
+   * read on demand by the world routes, not by this field.
+   */
+  world: CatalogGameWorld | null;
+  /**
    * The orientation the game was designed for, from `orientation:` in SPEC.md
    * frontmatter. Design intent nothing in the source can reveal, so unlike touch
    * support it is authored rather than derived. Defaults to 'any'; the player
@@ -248,6 +255,7 @@ export interface CatalogGameMultiplayer {
 }
 
 export type CatalogGameSaves = 'player';
+export type CatalogGameWorld = 'shared';
 
 /**
  * `player` is the only mode that exists. Anything else — a typo, a value from a newer
@@ -256,6 +264,10 @@ export type CatalogGameSaves = 'player';
  */
 function parseSaves(value: unknown): CatalogGameSaves | null {
   return value === 'player' ? 'player' : null;
+}
+
+function parseWorld(value: unknown): CatalogGameWorld | null {
+  return value === 'shared' ? 'shared' : null;
 }
 
 /** Platform ceiling on player slots — mirrors SLOT_COLORS in mp.ts. */
@@ -367,6 +379,18 @@ export interface GitHubClient {
    * unparseable SPEC.md are skipped.
    */
   getCatalog(ref: string): Promise<CatalogGameEntry[]>;
+  /**
+   * One game's raw GAME.json, parsed but not interpreted. Null when the game does not
+   * exist or its manifest is not JSON.
+   *
+   * Read per slug and on demand rather than folded into `getCatalog`, deliberately. The
+   * only caller is the shared-world route, which needs the `world` field spec — a
+   * nested object, so it cannot live in SPEC.md's flat frontmatter where the rest of a
+   * game's metadata does. Adding a manifest read to the catalog build would put another
+   * file fetch on every game on every refresh, and that fan-out has already caused one
+   * rate-limit outage. Worlds are rare; their manifests are fetched when asked for.
+   */
+  getGameManifest(ref: string, slug: string): Promise<Record<string, unknown> | null>;
 }
 
 /**
@@ -934,6 +958,26 @@ ${gameJs}`;
       return parseGameMedia(await readRawFile(`games/${slug}/media/metadata.json`, ref));
     },
 
+    async getGameManifest(ref, slug) {
+      // Only well-formed slugs address a game directory; anything that could escape it
+      // is refused before it reaches the contents API.
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) {
+        return null;
+      }
+      const source = await readRawFile(`games/${slug}/GAME.json`, ref);
+      if (source === null) return null;
+      try {
+        const parsed: unknown = JSON.parse(source);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+          ? (parsed as Record<string, unknown>)
+          : null;
+      } catch {
+        // An unparseable manifest is a games-repo bug that CI would have caught. Here
+        // it must not become a 500 on a route a player is sitting in front of.
+        return null;
+      }
+    },
+
     async getCatalog(ref) {
       // Refs appear inside GraphQL string literals below — keep the charset tight so
       // a misconfigured GAMES_PUBLISHED_REF cannot break out of the expression.
@@ -1044,6 +1088,7 @@ ${gameJs}`;
           media: parseGameMedia(mediaMetadata),
           multiplayer: parseMultiplayer(frontmatter),
           saves: parseSaves(frontmatter.saves),
+          world: parseWorld(frontmatter.world),
           orientation: parseOrientation(frontmatter),
           submittedBy: parseSubmittedBy(frontmatter.submitted_by),
         });
@@ -1115,6 +1160,7 @@ function parseCommittedCatalog(raw: string): CatalogGameEntry[] | null {
       media: parseCommittedMedia(candidate.media),
       multiplayer: parseCommittedMultiplayer(candidate.multiplayer),
       saves: parseSaves(candidate.saves),
+      world: parseWorld(candidate.world),
       orientation: GAME_ORIENTATIONS.has(orientationRaw as CatalogGameOrientation)
         ? (orientationRaw as CatalogGameOrientation)
         : 'any',

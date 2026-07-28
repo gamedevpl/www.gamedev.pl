@@ -17,6 +17,8 @@ import { createDefaultContentChecker, type ContentChecker } from './moderation.j
 import { registerContactRoutes, type ContactRoutesOptions } from './contact.js';
 import { registerEmailRoutes } from './email-routes.js';
 import { registerGameSaveRoutes, type GameSaveRoutesOptions } from './game-saves.js';
+import { registerWorldRoutes, type WorldRoutesOptions } from './worlds.js';
+import { createWorldSchemaSourceFromEnv } from './world-source.js';
 import { resolveLocalGamesDir } from './local-games-repo.js';
 import { registerMultiplayerRoutes, type MultiplayerRoutesOptions } from './mp.js';
 import { registerNotificationRoutes } from './notifications.js';
@@ -62,6 +64,8 @@ export interface BuildAppOptions {
   voteRoutes?: Omit<VoteRoutesOptions, 'store'>;
   /** Seams for per-player game saves; defaults to a live catalog-backed slug gate. */
   gameSaveRoutes?: Omit<GameSaveRoutesOptions, 'store'>;
+  /** Seams for shared worlds; defaults to a live games-repo-backed schema source. */
+  worldRoutes?: Partial<Omit<WorldRoutesOptions, 'store'>>;
   /** Seams for written player feedback; defaults to a live catalog-backed slug gate. */
   playerFeedbackRoutes?: Omit<PlayerFeedbackRoutesOptions, 'store' | 'contentChecker'>;
   /** Seams for the nightly scorecard sweep; defaults to OIDC-or-deny-all from env. */
@@ -227,6 +231,18 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     store,
     publishedSlugs: envPublishedSlugs,
     ...options.gameSaveRoutes,
+  });
+
+  // Shared asynchronous worlds (docs/persistent-world-plan.md P2). Unlike saves, the
+  // read here is public: a world is worth looking at before you have an account, and
+  // gating it would show an empty field to exactly the visitor deciding whether to
+  // care. Writes need a session, are validated against the game's declared schema, and
+  // run every text field past the same moderator written feedback uses.
+  await registerWorldRoutes(app, {
+    store,
+    contentChecker,
+    worlds: await createWorldSchemaSourceFromEnv(envPublishedSlugs),
+    ...options.worldRoutes,
   });
 
   // Written player feedback (docs/improvement-loop-plan.md, signal source #1). Keyed

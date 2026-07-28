@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
-import { InMemoryStore, type TelemetryEvent, type VisitEvent } from './store.js';
+import { InMemoryStore, type Scorecard, type TelemetryEvent, type VisitEvent } from './store.js';
 import type { HealthResponse, ScorecardsResponse, VisitsResponse } from './admin.js';
 import { runScorecardSweep } from './scorecard.js';
 
@@ -350,6 +350,82 @@ describe('GET /api/admin/scorecards', () => {
     // it hard to paste into an agent prompt survives serialization.
     const stripped = { ...body.scorecards[0], untrusted: undefined };
     expect(JSON.stringify(stripped)).not.toContain('Disregard prior');
+    await app.close();
+  });
+});
+
+describe('GET /api/admin/suggestions', () => {
+  let store: InMemoryStore;
+  beforeEach(async () => {
+    store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    await store.upsertUser({ uid: 'g:beta' });
+  });
+
+  it('answers 404 to a non-admin and to a signed-out caller alike', async () => {
+    const app = await appWith(store);
+
+    expect(
+      (await app.inject({ method: 'GET', url: '/api/admin/suggestions', headers: authHeaders('g:beta') })).statusCode,
+    ).toBe(404);
+    expect((await app.inject({ method: 'GET', url: '/api/admin/suggestions' })).statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('is empty and honest before the scorecard sweep has ever run', async () => {
+    const app = await appWith(store);
+
+    const res = await app.inject({ method: 'GET', url: '/api/admin/suggestions', headers: authHeaders('g:boss') });
+
+    expect(res.statusCode).toBe(200);
+    // Nothing to route is not the same as everything being fine, and `computedFrom: null`
+    // is what says which one this is.
+    expect(res.json()).toEqual({ suggestions: [], computedFrom: null });
+    await app.close();
+  });
+
+  it('routes the scorecards the sweep produced', async () => {
+    const crashy: Scorecard = {
+      slug: 'crashy',
+      computedAt: '2026-07-28T03:00:00.000Z',
+      window: { days: ['2026-07-28'], truncated: false },
+      sessions: { count: 100, bounces: 0, closes: 0, medianPlaySeconds: 30, totalPlaySeconds: 3000 },
+      health: { errors: 50, aliveTicks: 1000, stalledTicks: 0, stallRate: 0, medianFps: 60, resumeTicksIgnored: 0 },
+      depth: {
+        outcomes: { won: 0, lost: 0, quit: 0 },
+        sessionsWithEnding: 0,
+        finishRate: null,
+        winRate: 0,
+        medianBestScore: null,
+      },
+      votes: { up: 0, down: 0 },
+      feedback: { count: 0 },
+      untrusted: {
+        errorSamples: [{ message: 'TypeError: x is not a function', count: 50 }],
+        progressLabels: [],
+        feedbackThemes: [],
+      },
+    };
+    // Typed, not cast: this fixture is the only thing asserting the endpoint's shape, so a
+    // change to Scorecard should fail here rather than be absorbed.
+    await store.putScorecard('crashy', crashy);
+
+    const app = await appWith(store);
+    const res = await app.inject({ method: 'GET', url: '/api/admin/suggestions', headers: authHeaders('g:boss') });
+
+    const body = res.json() as {
+      suggestions: Array<{
+        slug: string;
+        class: string;
+        untrustedContext: { errorSamples: Array<{ message: string }> };
+      }>;
+      computedFrom: string;
+    };
+    expect(body.suggestions).toHaveLength(1);
+    expect(body.suggestions[0]).toMatchObject({ slug: 'crashy', class: 'defect' });
+    // The game's own error text reaches the operator, under the name that says so.
+    expect(body.suggestions[0].untrustedContext.errorSamples[0].message).toContain('TypeError');
+    expect(body.computedFrom).toBe('2026-07-28T03:00:00.000Z');
     await app.close();
   });
 });

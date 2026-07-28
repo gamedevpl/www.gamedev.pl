@@ -234,6 +234,14 @@ function CatalogCard({
                 <PixelIcon name="clock" size={12} /> {t('catalog.savesBadge')}
               </span>
             )}
+            {/* The one badge that is about other people rather than about the game.
+                Worth its own colour: "somebody else has been here" is a different kind
+                of reason to click than "this remembers you". */}
+            {entry.world === 'shared' && (
+              <span className="card-world-badge">
+                <PixelIcon name="star" size={12} /> {t('catalog.worldBadge')}
+              </span>
+            )}
           </h3>
           <p className="card-author">
             {t('player.byAuthor', {

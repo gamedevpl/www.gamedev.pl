@@ -91,6 +91,15 @@ export const privacyPl: LegalDocument = {
               'Do usunięcia konta lub do usunięcia postępów z poziomu samej gry',
             ],
             [
+              'To, co zbudujesz lub zostawisz we wspólnym świecie gry (np. zasadzona roślina albo przypięta ' +
+                'notatka) — zapisywane wraz z identyfikatorem Twojego konta, aby tylko Ty mógł to zmienić lub ' +
+                'usunąć. Inni gracze widzą to, co stworzyłeś, ale nigdy nie widzą, kto to zrobił: gra otrzymuje ' +
+                'kod, a nie Twoje imię ani konto',
+              'Umożliwienie graczom wspólnego budowania jednego miejsca na przestrzeni wielu wizyt',
+              'art. 6 ust. 1 lit. b — wykonanie umowy',
+              'Do usunięcia konta lub do usunięcia tego z poziomu samej gry',
+            ],
+            [
               'Wynik moderacji Twojego opisu (czy i dlaczego został odrzucony)',
               'Niedopuszczenie do powstania treści bezprawnych lub szkodliwych',
               'art. 6 ust. 1 lit. c — obowiązek prawny (akt o usługach cyfrowych) oraz lit. f — nasz prawnie ' +
@@ -302,8 +311,9 @@ export const privacyPl: LegalDocument = {
           text:
             `Możesz w każdej chwili poprosić o usunięcie konta, pisząc na [${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL}). ` +
             'Usuwamy wtedy dane Twojego konta, adres e-mail, subskrypcje powiadomień, oddane przez Ciebie głosy i ' +
-            'wpisane uwagi do gier, zapisane postępy w grach, które je przechowują, oraz powiązanie zgłoszeń z ' +
-            'Twoją osobą.',
+            'wpisane uwagi do gier, zapisane postępy w grach, które je przechowują, wszystko, co zbudowałeś we ' +
+            'wspólnych światach gier, oraz powiązanie zgłoszeń z Twoją osobą. Usunięcie tego, co ' +
+            'zbudowałeś we wspólnym świecie, usuwa to również z widoku innych graczy.',
         },
         {
           kind: 'p',

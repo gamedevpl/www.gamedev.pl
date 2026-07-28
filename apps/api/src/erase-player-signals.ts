@@ -75,6 +75,15 @@ export interface ErasePlayerSignalsResult {
   feedbackDeleted: number;
   /** Games whose saved progress was found (and deleted, unless this was a dry run). */
   savesDeleted: string[];
+  /**
+   * Shared worlds this person had built in (and was removed from, unless a dry run).
+   *
+   * Named separately from saves because the consequence is different and an operator
+   * has to be able to say it out loud: erasing a save removes something only this
+   * person could see, while erasing a world entry takes a thing off other players'
+   * screens. It is still the right call — it is their contribution to withdraw.
+   */
+  worldsErased: string[];
   dryRun: boolean;
 }
 
@@ -124,5 +133,10 @@ export async function erasePlayerSignals(options: ErasePlayerSignalsOptions): Pr
   const savesDeleted = (await store.listGameSaves(uid)).map((save) => save.slug).sort();
   if (!dryRun && savesDeleted.length > 0) await store.deleteGameSaves(uid);
 
-  return { uid, votesCleared, feedbackDeleted, savesDeleted, dryRun };
+  // Same list-then-delete shape and for the same reason: the report has to name the
+  // worlds, not count them.
+  const worldsErased = await store.listWorldsForUser(uid);
+  if (!dryRun && worldsErased.length > 0) await store.deleteWorldEntriesForUser(uid);
+
+  return { uid, votesCleared, feedbackDeleted, savesDeleted, worldsErased, dryRun };
 }

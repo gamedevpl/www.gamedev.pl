@@ -73,6 +73,16 @@ function fakeFirestore() {
 
   const makeRef = (collection: string, id: string) => ({
     id,
+    // `worlds/{id}/worldEntries` — the grandparent is what names a world, and the
+    // erase path reads exactly that to report which worlds it touched.
+    get parent() {
+      return {
+        get parent() {
+          const segments = collection.split('/');
+          return segments.length >= 3 ? { id: segments[segments.length - 2] } : null;
+        },
+      };
+    },
     get: async () => ({
       get exists() {
         return docs.has(key(collection, id));
@@ -91,9 +101,41 @@ function fakeFirestore() {
     collection: (sub: string) => makeCollection(`${collection}/${id}/${sub}`),
   });
 
+  /** Paths whose last segment is `group`, wherever they sit — a collection group. */
+  const groupPaths = (group: string) =>
+    [...new Set([...docs.keys()].map((stored) => stored.slice(0, stored.lastIndexOf('/'))))].filter((path) =>
+      path.endsWith(`/${group}`),
+    );
+
+  const makeQuery = (paths: string[], filter: ((data: Record<string, unknown>) => boolean) | null) => {
+    const rows = () =>
+      paths.flatMap((path) =>
+        idsUnder(path)
+          .map((id) => ({ path, id, data: docs.get(key(path, id)) ?? {} }))
+          .filter((row) => (filter ? filter(row.data) : true)),
+      );
+    const query = {
+      where: (field: string, op: string, value: unknown) => {
+        if (op !== '==') throw new Error(`fake supports == only, got ${op}`);
+        return makeQuery(paths, (data) => (filter ? filter(data) : true) && data[field] === value);
+      },
+      count: () => ({ get: async () => ({ data: () => ({ count: rows().length }) }) }),
+      get: async () => {
+        const found = rows();
+        return {
+          empty: found.length === 0,
+          docs: found.map((row) => ({ id: row.id, data: () => row.data, ref: makeRef(row.path, row.id) })),
+        };
+      },
+    };
+    return query;
+  };
+
   const makeCollection = (path: string) => ({
     doc: (id: string) => makeRef(path, id),
     listDocuments: async () => idsUnder(path).map((id) => makeRef(path, id)),
+    where: (field: string, op: string, value: unknown) => makeQuery([path], null).where(field, op, value),
+    count: () => makeQuery([path], null).count(),
     get: async () => ({
       docs: idsUnder(path).map((id) => ({ id, data: () => docs.get(key(path, id)) ?? {} })),
     }),
@@ -101,6 +143,7 @@ function fakeFirestore() {
 
   const db = {
     collection: (collection: string) => makeCollection(collection),
+    collectionGroup: (group: string) => makeQuery(groupPaths(group), null),
     // Deletes are staged and applied on commit, like the real client — so a test that
     // forgets to commit sees nothing deleted rather than passing by accident.
     batch: () => {
@@ -117,12 +160,16 @@ function fakeFirestore() {
     },
     runTransaction: async <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => {
       const tx = {
-        get: (ref: ReturnType<typeof makeRef>) => ref.get(),
+        // Aggregate queries are readable inside a transaction in the real client, and
+        // the world write depends on that: its quota check has to be ordered against a
+        // concurrent claim or two tabs can both spend the same last slot.
+        get: (target: { get: () => Promise<unknown> }) => target.get(),
         set: (ref: ReturnType<typeof makeRef>, data: Record<string, unknown>, options?: { merge?: boolean }) => {
           rejectUndefined(data);
-          const previous = options?.merge ? (docs.get(key('users', ref.id)) ?? {}) : {};
-          docs.set(key('users', ref.id), { ...previous, ...data });
+          rejectNestedArrays(data);
+          void ref.set(data, options);
         },
+        delete: (ref: ReturnType<typeof makeRef>) => void ref.delete(),
       };
       return fn(tx);
     },
@@ -278,6 +325,138 @@ describe('FirestoreStore game saves', () => {
 
     expect(await store.getGameSave('g:alice', 'crypt-delver')).toBeNull();
     expect(await store.getGameSave('g:alice', 'brick-storm')).not.toBeNull();
+  });
+});
+
+describe('FirestoreStore shared worlds', () => {
+  const claim = (uid: string, key: string, fields: Record<string, string | number | boolean>) => ({
+    worldId: 'shared-garden',
+    key,
+    uid,
+    fields,
+    maxPerPlayer: 2,
+    maxEntries: 100,
+  });
+
+  it('stores an entry as real fields, unlike a save', async () => {
+    // The inversion that decided the schema: a save is opaque because its shape is the
+    // game's business, while a world entry has a declared shape that was validated
+    // field by field before it got here — so it is stored as fields Firestore can query.
+    const { db, docs } = fakeFirestore();
+    const store = new FirestoreStore(db);
+
+    const result = await store.putWorldEntry(claim('g:alice', 'plot.1', { plant: 'oak', height: 3 }));
+
+    expect(result).toMatchObject({ ok: true });
+    expect(docs.get('worlds/shared-garden/worldEntries/plot.1')).toMatchObject({
+      fields: { plant: 'oak', height: 3 },
+      ownerUid: 'g:alice',
+    });
+    expect((await store.getWorldEntry('shared-garden', 'plot.1'))?.fields.plant).toBe('oak');
+  });
+
+  it('gives the first writer of a key ownership of it', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.putWorldEntry(claim('g:alice', 'plot.1', { plant: 'oak' }));
+
+    const stolen = await store.putWorldEntry(claim('g:bob', 'plot.1', { plant: 'fern' }));
+
+    expect(stolen).toEqual({ ok: false, reason: 'conflict' });
+    expect((await store.getWorldEntry('shared-garden', 'plot.1'))?.fields.plant).toBe('oak');
+  });
+
+  it('keeps createdAt across an owner’s edits and refreshes updatedAt', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.putWorldEntry(claim('g:alice', 'plot.1', { plant: 'oak' }));
+    const first = await store.getWorldEntry('shared-garden', 'plot.1');
+
+    await store.putWorldEntry(claim('g:alice', 'plot.1', { plant: 'fern' }));
+    const second = await store.getWorldEntry('shared-garden', 'plot.1');
+
+    expect(second?.createdAt).toBe(first?.createdAt);
+    expect(second?.fields.plant).toBe('fern');
+  });
+
+  it('replaces rather than merges, so a field cannot outlive the shape it belonged to', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.putWorldEntry(claim('g:alice', 'plot.1', { plant: 'oak', height: 3 }));
+    await store.putWorldEntry(claim('g:alice', 'plot.1', { plant: 'oak' }));
+
+    expect(await store.getWorldEntry('shared-garden', 'plot.1')).toMatchObject({ fields: { plant: 'oak' } });
+  });
+
+  it('holds a player to their quota, and charges nothing for editing what they own', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.putWorldEntry(claim('g:alice', 'plot.1', { plant: 'oak' }));
+    await store.putWorldEntry(claim('g:alice', 'plot.2', { plant: 'oak' }));
+
+    expect(await store.putWorldEntry(claim('g:alice', 'plot.3', { plant: 'oak' }))).toEqual({
+      ok: false,
+      reason: 'quota',
+    });
+    // Re-editing an owned entry cannot change the total, so it must not be refused.
+    expect(await store.putWorldEntry(claim('g:alice', 'plot.1', { plant: 'fern' }))).toMatchObject({ ok: true });
+    // And the quota is per person: another player is unaffected.
+    expect(await store.putWorldEntry(claim('g:bob', 'plot.3', { plant: 'oak' }))).toMatchObject({ ok: true });
+    expect(await store.countWorldEntries('shared-garden', 'g:alice')).toBe(2);
+  });
+
+  it('refuses to grow a world past the platform ceiling', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.putWorldEntry({ ...claim('g:alice', 'plot.1', { plant: 'oak' }), maxEntries: 1 });
+
+    const full = await store.putWorldEntry({ ...claim('g:bob', 'plot.2', { plant: 'oak' }), maxEntries: 1 });
+    expect(full).toEqual({ ok: false, reason: 'full' });
+  });
+
+  it('deletes only an entry its owner asks about', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.putWorldEntry(claim('g:alice', 'plot.1', { plant: 'oak' }));
+
+    expect(await store.deleteWorldEntry('shared-garden', 'plot.1', 'g:bob')).toBe(false);
+    expect(await store.deleteWorldEntry('shared-garden', 'missing', 'g:alice')).toBe(false);
+    expect(await store.deleteWorldEntry('shared-garden', 'plot.1', 'g:alice')).toBe(true);
+    expect(await store.getWorldEntry('shared-garden', 'plot.1')).toBeNull();
+  });
+
+  it('lists a whole world, whoever built it', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.putWorldEntry(claim('g:alice', 'plot.1', { plant: 'oak' }));
+    await store.putWorldEntry(claim('g:bob', 'plot.2', { plant: 'fern' }));
+
+    const entries = await store.listWorldEntries('shared-garden');
+    expect(entries.map((entry) => entry.key).sort()).toEqual(['plot.1', 'plot.2']);
+  });
+
+  it('erases one person across every world without touching anybody else', async () => {
+    // The collection-group path, which is the one that needs an index in production —
+    // there is no list of which worlds a person built in, so erasure has to sweep.
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.putWorldEntry(claim('g:alice', 'plot.1', { plant: 'oak' }));
+    await store.putWorldEntry({ ...claim('g:alice', 'stall.1', { plant: 'oak' }), worldId: 'market-square' });
+    await store.putWorldEntry(claim('g:bob', 'plot.2', { plant: 'fern' }));
+
+    expect(await store.listWorldsForUser('g:alice')).toEqual(['market-square', 'shared-garden']);
+    expect(await store.deleteWorldEntriesForUser('g:alice')).toBe(2);
+
+    expect(await store.listWorldsForUser('g:alice')).toEqual([]);
+    expect((await store.listWorldEntries('shared-garden')).map((entry) => entry.key)).toEqual(['plot.2']);
+    expect(await store.listWorldEntries('market-square')).toEqual([]);
+  });
+
+  it('reports nothing to erase for somebody who never built anything', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    expect(await store.listWorldsForUser('g:nobody')).toEqual([]);
+    expect(await store.deleteWorldEntriesForUser('g:nobody')).toBe(0);
   });
 });
 
