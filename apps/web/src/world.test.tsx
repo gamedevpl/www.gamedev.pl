@@ -62,8 +62,12 @@ describe('parseWorldMessage', () => {
     for (let index = 0; index < 13; index++) wide[`f${index}`] = index;
     expect(parseWorldMessage(frame({ t: 'commons:put', key: 'plot.1', fields: wide }))).toBeNull();
 
-    const huge = { note: 'x'.repeat(16 * 1024) };
-    expect(parseWorldMessage(frame({ t: 'commons:put', key: 'plot.1', fields: huge }))).toBeNull();
+    // Pinned either side of the API's own 4 KiB entry cap: a payload the server would
+    // certainly reject must not become a request, and one it might accept must.
+    expect(parseWorldMessage(frame({ t: 'commons:put', key: 'p', fields: { note: 'x'.repeat(5 * 1024) } }))).toBeNull();
+    expect(
+      parseWorldMessage(frame({ t: 'commons:put', key: 'p', fields: { note: 'x'.repeat(3 * 1024) } })),
+    ).not.toBeNull();
   });
 
   it('drops fields that cannot be serialized at all', () => {

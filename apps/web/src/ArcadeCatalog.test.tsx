@@ -168,3 +168,55 @@ describe('ArcadeCatalog lazy media', () => {
     });
   });
 });
+
+describe('ArcadeCatalog shared-world badge', () => {
+  beforeEach(async () => {
+    installIntersectionObserverMock();
+    await i18n.changeLanguage('en');
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('badges only the games that declare a shared world', async () => {
+    // The badge is a promise about other people being there, which is a stronger claim
+    // than the rest of the card makes — worth pinning that it appears on exactly the
+    // entries that earned it and on no others.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(ArcadeCatalog, {
+          catalogStatus: 'ready',
+          catalogError: null,
+          catalogEntries: [
+            { ...entries[0]!, slug: 'shared-one', title: 'Shared One', world: 'shared' as const },
+            { ...entries[1]!, slug: 'solo-one', title: 'Solo One', world: null },
+          ],
+          onPlayGame: vi.fn(),
+          onPlayTogether: vi.fn(),
+          onRetryCatalog: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    const badges = container.querySelectorAll('.card-world-badge');
+    expect(badges).toHaveLength(1);
+    // Inside the badged card, not merely somewhere on the page.
+    const cards = [...container.querySelectorAll('.catalog-card')];
+    const badged = cards.find((card) => card.querySelector('.card-world-badge'));
+    expect(badged?.textContent).toContain('Shared One');
+    expect(badged?.textContent).not.toContain('Solo One');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+});

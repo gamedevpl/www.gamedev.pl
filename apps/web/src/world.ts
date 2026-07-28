@@ -27,10 +27,17 @@ const MAX_KEY_LENGTH = 64;
 const KEY_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$/;
 /**
  * Fields the shell will forward. The real check is the game's declared schema, applied
- * server-side; this only stops an obviously runaway payload from becoming a request.
+ * server-side; this only stops a runaway payload from becoming a request at all.
+ *
+ * `MAX_FIELDS_BYTES` mirrors the API's `MAX_WORLD_ENTRY_BYTES`, and mirroring it is the
+ * point: a looser bound here would forward writes the server is certain to reject,
+ * which is precisely the request this guard exists to save. The server measures the
+ * canonical stored value while this measures what the game sent, so the two are not
+ * byte-identical — but validation only ever shrinks an entry (unknown fields are
+ * refused, text is trimmed), so anything over this was never going to fit.
  */
 const MAX_FIELDS = 12;
-const MAX_FIELDS_BYTES = 8 * 1024;
+const MAX_FIELDS_BYTES = 4 * 1024;
 
 export type WorldRequest =
   | { t: 'commons:hello' }
