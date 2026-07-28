@@ -42,6 +42,13 @@ export interface CatalogEntry {
    * for telling a player what to expect, never for gating the bridge.
    */
   saves: 'player' | null;
+  /**
+   * `shared` when the game has a world every player of it writes into. Advisory in
+   * exactly the same way `saves` is — the bridge is live for every published game and
+   * only a game that asks gets a world — but it carries a heavier promise: "other
+   * people are here" is why somebody clicks, so it is worth being right about.
+   */
+  world: 'shared' | null;
   orientation: CatalogOrientation;
   touch: CatalogTouch | null;
   /**
@@ -156,10 +163,11 @@ export async function fetchCatalog(): Promise<CatalogEntry[]> {
     .filter(
       (
         entry,
-      ): entry is Omit<CatalogEntry, 'media' | 'multiplayer' | 'saves' | 'orientation' | 'touch'> & {
+      ): entry is Omit<CatalogEntry, 'media' | 'multiplayer' | 'saves' | 'world' | 'orientation' | 'touch'> & {
         media?: unknown;
         multiplayer?: unknown;
         saves?: unknown;
+        world?: unknown;
         orientation?: unknown;
         touch?: unknown;
       } =>
@@ -177,6 +185,7 @@ export async function fetchCatalog(): Promise<CatalogEntry[]> {
       media: parseCatalogMedia(entry.media),
       multiplayer: parseCatalogMultiplayer((entry as { multiplayer?: unknown }).multiplayer),
       saves: entry.saves === 'player' ? ('player' as const) : null,
+      world: entry.world === 'shared' ? ('shared' as const) : null,
       orientation: parseCatalogOrientation(entry.orientation),
       touch: parseCatalogTouch(entry.touch),
       submittedBy: parseCatalogSubmittedBy(

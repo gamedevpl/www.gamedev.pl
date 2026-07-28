@@ -3728,6 +3728,21 @@ body.player-open {
   color: var(--muted);
 }
 
+/* Shares the saves badge's shape, but not its quiet: a shared world IS a call to
+   action — other people are already in there — so it keeps a colour of its own. */
+.card-world-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border: 1px solid var(--lime, #7fe08a);
+  border-radius: 999px;
+  color: var(--lime, #7fe08a);
+  font-size: 0.7rem;
+  font-weight: 700;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
 .party-btn {
   border-color: var(--turquoise) !important;
   color: var(--turquoise) !important;

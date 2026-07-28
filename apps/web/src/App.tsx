@@ -202,6 +202,7 @@ export function App() {
         media: null,
         multiplayer: null,
         saves: null,
+        world: null,
         // A deep link that beat the catalog: assume no preference rather than
         // nagging someone to rotate for a game whose spec we haven't read yet.
         // The effect above swaps in the real entry once the catalog lands.

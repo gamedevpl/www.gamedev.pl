@@ -39,6 +39,7 @@ describe('catalog helpers', () => {
         },
         multiplayer: null,
         saves: null,
+        world: null,
         orientation: 'any',
         touch: null,
         submittedBy: null,
@@ -143,5 +144,42 @@ describe('catalog helpers', () => {
     );
 
     await expect(fetchCatalog()).rejects.toThrow('failed to load catalog');
+  });
+});
+
+describe('shared-world metadata', () => {
+  it('reads `world: shared` and refuses anything else', async () => {
+    const entry = (slug: string, world: unknown) => ({
+      slug,
+      title: slug,
+      genre: '',
+      controls: '',
+      status: 'published',
+      world,
+    });
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          entry('a', 'shared'),
+          entry('b', 'Shared'),
+          entry('c', 'private'),
+          entry('d', true),
+          entry('e', undefined),
+        ]),
+      ),
+    );
+
+    const parsed = await fetchCatalog();
+
+    expect(parsed.map((game) => [game.slug, game.world])).toEqual([
+      ['a', 'shared'],
+      // Anything unrecognised degrades to "no world", the same direction `saves`
+      // degrades in: over-claiming badges a game as shared when nothing is there,
+      // which is a worse first visit than no badge at all.
+      ['b', null],
+      ['c', null],
+      ['d', null],
+      ['e', null],
+    ]);
   });
 });

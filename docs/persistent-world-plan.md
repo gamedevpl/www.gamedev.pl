@@ -211,7 +211,7 @@ a deeper run played elsewhere.
 Not built, deliberately: no UI beyond the catalog badge — no "your progress is saved"
 toast, and no per-game "delete my progress" control outside what a game offers itself.
 
-### P2 — Shared asynchronous worlds (capabilities 1+3+5, "Ultima-lite")
+### P2 — Shared asynchronous worlds (capabilities 1+3+5, "Ultima-lite") ✅ built
 
 The platform, not the game, owns a **typed world store**: named zones holding a keyed
 document set with a `GAME.json`-declared schema. Games mutate it through bridge commands;
@@ -227,6 +227,66 @@ string fields. Presence and light liveness ride the existing relay.
   off, and it is still there when strangers walk past it.
 - It is also the cheapest possible way to learn the **moderation and griefing** lessons
   (§9) before any real-time engineering exists.
+
+**What shipped**, and the decisions worth knowing before extending it:
+
+| Piece                        | Where                                                                                                                                                                           |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GameKit.createCommons(...)` | games repo `shared/modules/commons.ts` (+ `commons` in `GAME_KIT_MODULES`, both copies of the lockstep contract)                                                                |
+| Author rules and CI          | games repo `tools/validate.ts` **Check 22** — `world: shared` frontmatter, the module, a `createCommons(` call, and a typed field spec must all agree                           |
+| The declared shape           | each game's `GAME.json` `world` block, parsed by [`world-schema.ts`](../apps/api/src/world-schema.ts), fetched per slug by [`world-source.ts`](../apps/api/src/world-source.ts) |
+| Shell half of the bridge     | [`apps/web/src/world.ts`](../apps/web/src/world.ts), mounted by `GameTheater` on the published slug                                                                             |
+| API                          | [`apps/api/src/worlds.ts`](../apps/api/src/worlds.ts) — public `GET /api/games/:slug/world`, session-gated `PUT`/`DELETE .../world/:key`                                        |
+| Storage                      | `worlds/{worldId}/worldEntries/{key}` (`store.ts`), erasure in [`erase-player-signals.ts`](../apps/api/src/erase-player-signals.ts)                                             |
+
+1. **A world entry is stored as real fields, unlike a save.** The inversion is
+   deliberate: a save's shape is the game's private business, so it is an opaque blob;
+   a world entry is read by every other player, so its shape is declared in advance and
+   validated field by field. Only scalars survive validation, which is also why
+   Firestore's constraints never come up here.
+2. **A declaration that does not fully parse yields no world at all.** Not a world with
+   the good fields and no rules for the bad ones — failing open would mean an
+   unvalidated free-text field shown to strangers, which is the exact outcome the
+   declaration exists to prevent. The routes 404, the module reports `unavailable`, and
+   the game stays playable.
+3. **Reads are public; writes need an account.** A world nobody may look at until they
+   have signed in shows an empty field to precisely the visitor deciding whether an
+   account is worth having. `writable` is reported, so a game says "sign in to plant
+   something" instead of letting a player act into a void.
+4. **Games never learn who wrote an entry.** They get `mine` and `ownerTag`, a hash
+   salted per world — enough to see that three plots belong to one stranger, not enough
+   to learn anything about them, and different in every world so no game can correlate
+   its visitors against another's.
+5. **Ownership and quota are settled inside the write transaction.** Both are races that
+   a check-then-write loses quietly: two players claiming one empty plot in the same
+   second, and one player with two tabs spending their last quota slot twice.
+6. **Erasure sweeps every world by collection group**, because nothing records which
+   worlds a person built in. That needs a COLLECTION_GROUP index on `worldEntries.ownerUid`
+   — provisioned in `infra/setup-gcp.sh`, and its absence was caught by
+   `firestore-indexes.test.ts` rather than in production, which is the third time that
+   guard has paid for itself. The erase report names the worlds, and says out loud that
+   removing an entry changes what other players see.
+7. **`worldId` is opaque and happens to equal the slug today.** Per-creator, seasonal or
+   instanced worlds are then a new id rather than a migration of every stored path.
+
+**The first game that uses it** is `wanderers-green` in the games repo: a walled green
+where you tend wildflowers alone and may plant three things of your own for strangers to
+find. Two things about it are worth copying rather than just reading. Its wildflowers are
+generated from tile coordinates, so the green is worth walking before anybody has planted
+in it — a game whose only content is other players' work shows an empty field to its
+first visitor and cannot be captured in CI at all. And its entry key is the tile
+(`tile.<col>.<row>`), so the platform's generic first-writer-owns-the-key rule _is_ the
+game's "first person to plant here keeps it", with no game logic server-side.
+
+Its greetings come from a fixed word bank rather than being typed. Text one stranger
+writes and another reads is the hardest part of a shared world, and a bank makes every
+possible message one somebody already read. The platform moderates the field regardless,
+so a game that opens it up later changes nothing about the contract.
+
+Not built, deliberately: **presence**. Knowing who is in a world _right now_ is the
+natural next thing to want, but it is a liveness problem rather than a storage one, it
+rides the relay rather than the store, and building it here would have blurred the one
+line P2 is meant to hold — that a world is a document set with rules, not a session.
 
 ### P3 — Authoritative real-time zones (capabilities 2+3+4, "the real thing")
 
@@ -362,10 +422,13 @@ snapshotting, hibernation) is platform code written once, tested once, shared by
    game that uses it~~ — **done** (see §5); `lantern-depths` is the game. Retrofitting an
    existing persistence-shaped title (`four-seasons-farm`, `tiny-empire`) is now an
    ordinary content change rather than a spike.
-2. **P2 seed world** (the learning vehicle): one first-party cooperative world — e.g. a
-   shared town garden with plots, planting, and a notice board. Small enough to build like
-   `tactics-duel` was; enough to exercise schema, quotas, moderation, presence, and the
-   "log off, come back, it's still there" magic that is the actual point.
+2. ~~**P2 seed world** (the learning vehicle): one first-party cooperative world — e.g. a
+   shared town garden with plots, planting, and a notice board~~ — **done** (see §5);
+   `wanderers-green` is the garden. It exercised schema, quotas, ownership and moderation;
+   presence was deliberately left out, being a liveness problem rather than a storage one.
+   The learning that cost the most: a shared world needs enough content of its own to be
+   worth visiting empty, or its first visitor — and every CI capture run — sees a field
+   with nothing in it.
 3. **P3 paper spike only**: pick the isolate technology and write the determinism CI check
    against an existing captured game — _before_ designing anything else, because if
    agent-written sims can't reliably pass the determinism gate, P3's premise fails and we
