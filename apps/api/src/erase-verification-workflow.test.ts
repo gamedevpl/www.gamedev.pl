@@ -39,6 +39,16 @@ describe('verify-erase workflow', () => {
     expect(workflow).toContain('npm run verify:erase -w @gamedevpl/api');
   });
 
+  it('names the project in a variable the Firestore client reads', () => {
+    // `new Firestore()` is constructed with no project argument, so google-auth resolves
+    // one from GCLOUD_PROJECT / GOOGLE_CLOUD_PROJECT, the credential file, or the metadata
+    // server. A runner has no metadata server and the WIF credential carries no project,
+    // so anything else — a plausible-looking PROJECT_ID, say — leaves the job failing with
+    // "Unable to detect a Project Id" after it has already authenticated, which reads as a
+    // broken credential rather than a misnamed variable.
+    expect(workflow).toMatch(/^\s*(GCLOUD_PROJECT|GOOGLE_CLOUD_PROJECT): 'gamedevpl'$/m);
+  });
+
   it('authenticates as the verifier account, never the deployer', () => {
     expect(workflow).toContain(VERIFIER_SA);
     expect(workflow.replace(/^\s*#.*$/gm, '')).not.toContain(DEPLOYER_SA);

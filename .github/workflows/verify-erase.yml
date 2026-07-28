@@ -43,7 +43,16 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     env:
-      PROJECT_ID: 'gamedevpl'
+      # The name the Firestore client actually reads. `new Firestore()` takes no project
+      # argument, and google-auth resolves one from GCLOUD_PROJECT / GOOGLE_CLOUD_PROJECT,
+      # the credential file, or the metadata server — a runner has no metadata server and
+      # the WIF credential file carries no project, so without this the job fails with
+      # "Unable to detect a Project Id in the current environment". Set here rather than
+      # left to whatever google-github-actions/auth happens to export, because the failure
+      # is at the end of a job that has already authenticated and looks like a broken
+      # credential rather than a missing variable. Named PROJECT_ID here once; it was
+      # read by nothing.
+      GOOGLE_CLOUD_PROJECT: 'gamedevpl'
       WIF_PROVIDER: 'projects/334141807880/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
       # Deliberately not github-actions-deployer. That account can ship code but has no
       # Firestore role, and giving it one would hand every deploy the ability to read
