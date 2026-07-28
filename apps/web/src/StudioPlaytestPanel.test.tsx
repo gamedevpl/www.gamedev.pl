@@ -75,10 +75,17 @@ describe('StudioPlaytestPanel theater', () => {
     expect(document.body.classList.contains('player-open')).toBe(true);
 
     const exit = container.querySelector('.exit-btn') as HTMLButtonElement;
+    expect(exit).not.toBeNull();
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    expect(onExit).toHaveBeenCalledTimes(1);
+
     await act(async () => {
       exit.click();
     });
-    expect(onExit).toHaveBeenCalledTimes(1);
+    expect(onExit).toHaveBeenCalledTimes(2);
 
     root.unmount();
     expect(document.body.classList.contains('player-open')).toBe(false);

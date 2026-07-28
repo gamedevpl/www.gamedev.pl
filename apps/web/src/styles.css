@@ -5841,7 +5841,8 @@ body.player-open {
   flex-direction: column;
   box-shadow: none;
   animation: fadeIn 0.2s ease-out;
-  touch-action: none;
+  /* Do not set touch-action:none on the theater root — the pause note sheet scrolls
+     and touch-action intersects with ancestors. Hold gestures on the game surface. */
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
@@ -5935,6 +5936,8 @@ body.player-open {
   padding-bottom: env(safe-area-inset-bottom);
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
+  /* Game surface only — keep this off the note sheet ancestors. */
+  touch-action: none;
 }
 
 .studio-playtest-theater .game-frame {
@@ -5997,7 +6000,8 @@ body.player-open {
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
   box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
-  touch-action: manipulation;
+  /* Explicit pan so a long note sheet scrolls on phones (theater no longer sets none). */
+  touch-action: pan-y;
   -webkit-user-select: text;
   user-select: text;
   animation: fadeIn 0.2s ease-out;

@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchPublishedGame } from './catalog.js';
 import { GameFrame } from './GameFrame.js';
-import { useCreatorPlaytest, type PlaytestInstrumentation } from './gamePlayer.js';
+import { useCreatorPlaytest, useGamePlayer, type PlaytestInstrumentation } from './gamePlayer.js';
 import { PixelIcon } from './PixelIcon.js';
 import {
   getSubmissionPreview,
@@ -105,6 +105,7 @@ function toContext(
 export function StudioPlaytestPanel({ game, published, onExit }: StudioPlaytestPanelProps) {
   const { t } = useTranslation();
   const frameRef = useRef<HTMLIFrameElement | null>(null);
+  const exitRef = useRef<HTMLButtonElement | null>(null);
   const [html, setHtml] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -115,6 +116,15 @@ export function StudioPlaytestPanel({ game, published, onExit }: StudioPlaytestP
 
   const active = Boolean(html);
   const { paused, snapshot, instrumentation, pause, resume, clearSnapshot } = useCreatorPlaytest(frameRef, active);
+
+  // Stable exit for Escape (window + iframe bridge) — same pattern as GameTheater.
+  const onExitRef = useRef(onExit);
+  onExitRef.current = onExit;
+  const requestExit = useCallback(() => {
+    onExitRef.current();
+  }, []);
+  // Escape inside the sandboxed game never reaches the parent — the bridge relays it.
+  useGamePlayer(frameRef, active, requestExit);
 
   useEffect(() => {
     let cancelled = false;
@@ -152,12 +162,24 @@ export function StudioPlaytestPanel({ game, published, onExit }: StudioPlaytestP
     };
   }, [game.token, game.slug, published, t, clearSnapshot]);
 
-  // Same scroll lock as GameTheater — fixed overlay must own the viewport.
+  // Scroll lock + Escape + focus handoff while the theater owns the viewport.
   useEffect(() => {
     if (!html) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
     document.body.classList.add('player-open');
-    return () => document.body.classList.remove('player-open');
-  }, [html]);
+    exitRef.current?.focus();
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') requestExit();
+    };
+    window.addEventListener('keydown', onKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      document.body.classList.remove('player-open');
+      previouslyFocused?.focus?.();
+    };
+  }, [html, requestExit]);
 
   const attachedPng = snapshot?.pngBase64 ?? null;
   const trimmed = text.trim();
@@ -236,6 +258,7 @@ export function StudioPlaytestPanel({ game, published, onExit }: StudioPlaytestP
                 type="button"
                 className="secondary-btn exit-btn"
                 onClick={onExit}
+                ref={exitRef}
                 aria-label={t('catalog.exitPlayer', { defaultValue: 'Close' })}
                 title={t('catalog.exitPlayer', { defaultValue: 'Close' })}
               >
