@@ -743,7 +743,29 @@ at all and feeds the only autonomous-eligible class.
 
 ### Phase IL-3 — Suggest (agent in the loop, human approves everything)
 
-- Babysitter analyst run (scheduled) producing `suggestions/` from scorecards.
+- ✅ **The router** (2026-07-28): [suggestions.ts](../apps/api/src/suggestions.ts) classifies
+  each scorecard as defect / friction / design-change / healthy / insufficient-data, with
+  the evidence behind the call, surfaced at `GET /api/admin/suggestions`.
+
+  **The decision is rules over numbers, never a model over text.** Every input is computed
+  by this service — session counts, error rates, stall rates, progression drops, vote
+  tallies. The attacker-controlled strings (`errorSamples`, `progressLabels`,
+  `feedbackThemes`) cannot move a game between classes, cannot raise its priority, and
+  cannot cause anything to be filed; they travel alongside under `untrustedContext` for a
+  human to read. That is this phase's ⚠️ answered by construction rather than by care: the
+  routing logic has no reason to look at them, so it does not.
+
+  Findings are positional rather than quoting — "players who reached one landmark never
+  reached the next", not the landmark's game-authored name — so no untrusted text lands in
+  the sentence that reads as this system speaking.
+
+  **Computed on read, persisted nowhere, files nothing.** A suggestion engine that will
+  eventually point a coding agent at somebody's game should be watched saying what it
+  *would* do before it does any of it. `healthy` and `insufficient-data` are returned
+  rather than filtered, so a game being passed over is visible and distinguishable from
+  the router never having run.
+
+- 📋 Babysitter analyst run (scheduled) persisting `suggestions/` from the router above.
 - Suggestion inbox UI; Approve → structured improvement issue (evidence-fenced)
   → Copilot **via the relay**, with a stall alert on `issue-filed` → no PR.
 - Measurement records written at merge; 14-day post-change comparison.

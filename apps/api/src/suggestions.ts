@@ -1,0 +1,223 @@
+import type { Scorecard } from './store.js';
+
+/**
+ * The suggestion router (docs/improvement-loop-plan.md IL-3 "Suggest").
+ *
+ * Turns a scorecard into "what, if anything, is worth an agent's time on this game, and
+ * who is allowed to decide" — the Defect / Friction / Design-change split the plan has
+ * carried since its first draft.
+ *
+ * **The decision is rules over numbers, never a model over text.** Every input to the
+ * classification below is computed by this service: session counts, error counts, stall
+ * rates, progression drops, vote tallies. The attacker-controlled strings a scorecard
+ * carries — `errorSamples`, `progressLabels`, `feedbackThemes` — cannot move a game
+ * between classes, cannot raise its priority, and cannot cause an issue to be filed. They
+ * travel alongside as *evidence for a human to read*, fenced and labelled.
+ *
+ * That is a deliberate reading of the plan's warning that this is "the phase that will
+ * want to interpolate error messages into an agent's instructions". The cheapest way not
+ * to do that is for the routing logic to have no reason to look at them.
+ *
+ * **Nothing here files anything.** A suggestion is a proposal with an evidence block and a
+ * route; who acts on it, and whether an implementer is even available, is a separate
+ * decision the plan deliberately keeps human. Computing this on read — before any of it is
+ * persisted or sent anywhere — is what lets an operator see what the router *would* say
+ * before it says it to anyone.
+ */
+
+/** Below this many sessions a game has not been measured enough to act on. */
+export const MIN_SESSIONS_TO_ROUTE = 20;
+
+/** Share of sessions reporting an uncaught error before it reads as a defect. */
+export const DEFECT_ERROR_RATE = 0.1;
+
+/** Share of sessions whose frames stalled before it reads as a defect. */
+export const DEFECT_STALL_RATE = 0.15;
+
+/** How steep a progression drop has to be to read as a difficulty cliff. */
+export const FRICTION_DROP_RATE = 0.6;
+
+/** Share of votes that are negative before it reads as a design complaint. */
+export const DESIGN_DOWNVOTE_RATE = 0.4;
+
+/** Minimum votes before a ratio means anything at all. */
+export const MIN_VOTES_TO_JUDGE = 5;
+
+export type SuggestionClass =
+  /** Implementation violates the spec or crashes. The plan's autonomous-eligible class. */
+  | 'defect'
+  /** Spec-compatible tuning — a difficulty cliff, a rate, a timing. Suggest by default. */
+  | 'friction'
+  /** The spec itself has to change. Always the creator's call. */
+  | 'design-change'
+  /** Measured, and nothing stands out. Worth saying so rather than inventing work. */
+  | 'healthy'
+  /** Not measured enough to say anything. Distinct from healthy, and must stay distinct. */
+  | 'insufficient-data';
+
+export interface SuggestionEvidence {
+  /** Plain-language statement of the measurement that triggered the route. */
+  finding: string;
+  /** The numbers behind it. Computed here; safe to interpolate anywhere. */
+  metrics: Record<string, number | null>;
+}
+
+export interface Suggestion {
+  slug: string;
+  class: SuggestionClass;
+  /** Higher acts first. Derived from severity × how many players it reaches. */
+  priority: number;
+  /** Why this class, in terms of measurements. Never contains player or game text. */
+  evidence: SuggestionEvidence[];
+  /**
+   * Strings a game or a player supplied, carried for a human to read alongside the
+   * numbers. Never inputs to the routing decision, and never safe to paste into an
+   * agent's instructions unfenced — the field name is the warning.
+   */
+  untrustedContext: {
+    errorSamples: Array<{ message: string; count: number }>;
+    progressLabels: Array<{ label: string; sessions: number }>;
+    feedbackThemes: Array<{ theme: string; count: number }>;
+  };
+  /** The scorecard this was derived from, so a stale suggestion is visible as stale. */
+  computedFrom: string;
+}
+
+/**
+ * The steepest single drop between consecutive progression landmarks.
+ *
+ * Progression labels are ordered by how many sessions reached them, so consecutive pairs
+ * are the funnel. The *label text* is untrusted and is not read here — only the counts,
+ * which this service derived. A game can name its levels anything it likes without moving
+ * itself into a class.
+ */
+function steepestProgressionDrop(
+  labels: Array<{ label: string; sessions: number }>,
+): { from: number; to: number; rate: number } | null {
+  let worst: { from: number; to: number; rate: number } | null = null;
+  for (let index = 0; index + 1 < labels.length; index += 1) {
+    const from = labels[index].sessions;
+    const to = labels[index + 1].sessions;
+    if (from <= 0) continue;
+    const rate = (from - to) / from;
+    if (!worst || rate > worst.rate) worst = { from, to, rate };
+  }
+  return worst;
+}
+
+/**
+ * Routes one scorecard.
+ *
+ * Pure, so every judgement is testable without a database or a model — which matters more
+ * here than usual, because this is the function that decides whether a coding agent gets
+ * pointed at somebody's game.
+ */
+export function routeScorecard(card: Scorecard): Suggestion {
+  const sessions = card.sessions.count;
+  const untrustedContext = {
+    errorSamples: card.untrusted.errorSamples,
+    progressLabels: card.untrusted.progressLabels,
+    feedbackThemes: card.untrusted.feedbackThemes ?? [],
+  };
+  const base = { slug: card.slug, untrustedContext, computedFrom: card.computedAt };
+
+  // Absence of evidence, first and unconditionally. Every threshold below is a ratio, and
+  // a ratio over three sessions is noise wearing a decimal point.
+  if (sessions < MIN_SESSIONS_TO_ROUTE) {
+    return {
+      ...base,
+      class: 'insufficient-data',
+      priority: 0,
+      evidence: [
+        {
+          finding: `Only ${sessions} sessions in the window; ${MIN_SESSIONS_TO_ROUTE} needed before a rate means anything.`,
+          metrics: { sessions, required: MIN_SESSIONS_TO_ROUTE },
+        },
+      ],
+    };
+  }
+
+  const errorRate = card.health.errors / sessions;
+  const drop = steepestProgressionDrop(card.untrusted.progressLabels);
+  const votes = card.votes.up + card.votes.down;
+  const downvoteRate = votes === 0 ? 0 : card.votes.down / votes;
+
+  // Defect first: it is the only class the plan lets an agent act on unattended, and a
+  // game that crashes is not a game with a difficulty problem.
+  if (errorRate >= DEFECT_ERROR_RATE || card.health.stallRate >= DEFECT_STALL_RATE) {
+    const evidence: SuggestionEvidence[] = [];
+    if (errorRate >= DEFECT_ERROR_RATE) {
+      evidence.push({
+        finding: `Uncaught errors in ${Math.round(errorRate * 100)}% of sessions.`,
+        metrics: { errors: card.health.errors, sessions, errorRate },
+      });
+    }
+    if (card.health.stallRate >= DEFECT_STALL_RATE) {
+      evidence.push({
+        finding: `Frames stalled in ${Math.round(card.health.stallRate * 100)}% of ticks.`,
+        metrics: { stallRate: card.health.stallRate, stalledTicks: card.health.stalledTicks },
+      });
+    }
+    return { ...base, class: 'defect', priority: severity(errorRate, card.health.stallRate) * sessions, evidence };
+  }
+
+  if (drop && drop.rate >= FRICTION_DROP_RATE) {
+    return {
+      ...base,
+      class: 'friction',
+      priority: drop.rate * sessions,
+      evidence: [
+        {
+          // Deliberately positional: naming the landmark would put a game-authored string
+          // into the finding, and the finding is the part that reads as ours.
+          finding: `${Math.round(drop.rate * 100)}% of players who reached one landmark never reached the next.`,
+          metrics: { reached: drop.from, thenReached: drop.to, dropRate: drop.rate, sessions },
+        },
+      ],
+    };
+  }
+
+  if (votes >= MIN_VOTES_TO_JUDGE && downvoteRate >= DESIGN_DOWNVOTE_RATE) {
+    return {
+      ...base,
+      class: 'design-change',
+      priority: downvoteRate * sessions,
+      evidence: [
+        {
+          finding: `${Math.round(downvoteRate * 100)}% of votes are negative, with no crash or progression cliff to explain it.`,
+          metrics: { up: card.votes.up, down: card.votes.down, downvoteRate, sessions },
+        },
+      ],
+    };
+  }
+
+  return {
+    ...base,
+    class: 'healthy',
+    priority: 0,
+    evidence: [
+      {
+        finding: `${sessions} sessions with no error, stall, progression cliff or vote signal above threshold.`,
+        metrics: { sessions, errorRate, stallRate: card.health.stallRate, downvoteRate },
+      },
+    ],
+  };
+}
+
+/** Severity of a defect, 0–1, so priority orders crashes above stutters. */
+function severity(errorRate: number, stallRate: number): number {
+  return Math.min(1, Math.max(errorRate, stallRate));
+}
+
+/**
+ * Routes every scorecard, worst first.
+ *
+ * `healthy` and `insufficient-data` are kept rather than filtered out: an operator asking
+ * "what does the router think" needs to see that a game was looked at and passed over.
+ * Silence would be indistinguishable from the router never having run.
+ */
+export function routeAll(scorecards: Scorecard[]): Suggestion[] {
+  return scorecards
+    .map(routeScorecard)
+    .sort((a, b) => b.priority - a.priority || a.slug.localeCompare(b.slug));
+}
