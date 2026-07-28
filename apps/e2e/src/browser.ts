@@ -198,13 +198,18 @@ const EXPECTED_NOISE: { pattern: RegExp; why: string }[] = [
     // NetworkError — GSI logs both as console.error. Those are statements about
     // the browser profile, not about the button.
     //
+    // Chrome logs the empty-account-list outcome two ways depending on its version:
+    //   old: "[GSI_LOGGER]: FedCM Provider's accounts list is empty"
+    //   new: "Provider's accounts list is empty."  (bare, no prefix)
+    // Both are noise; the pattern covers both.
+    //
     // Narrow on purpose: a client id or origin that is actually wrong fails
     // differently and loudly ("The given origin is not allowed for the given client
     // ID", plus a 403 on the button request), and those must keep failing the gate.
     // That pair is what wedged every deploy between 18:41 and 23:0x UTC on
     // 2026-07-27, when the candidate revision's host was missing from the OAuth
     // client's authorised JavaScript origins.
-    pattern: /\[GSI_LOGGER\]: FedCM (?:get\(\) rejects with NetworkError|.*Provider's accounts list is empty)/,
+    pattern: /Provider's accounts list is empty|\[GSI_LOGGER\]: FedCM get\(\) rejects with NetworkError/,
     why: 'a fresh CI browser has no Google session, so FedCM cannot mint a token',
   },
 ];
