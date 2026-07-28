@@ -105,7 +105,7 @@ describe('SubmissionStatusView', () => {
     expect(frame?.getAttribute('src')).toContain('/preview/newest');
     // The document is unreviewed agent output, so the frame must isolate it. Without
     // allow-same-origin it lands in an opaque origin with no reach into this app.
-    expect(frame?.getAttribute('sandbox')).toBe('allow-scripts');
+    expect(frame?.getAttribute('sandbox')).toBe('allow-scripts allow-pointer-lock');
     expect(container.textContent).toContain('You can walk the puppy now.');
 
     await act(async () => {
@@ -283,7 +283,7 @@ describe('SubmissionStatusView', () => {
 
     expect(fetchSpy).toHaveBeenCalledWith('/api/games/sky-dodge');
     const iframe = container.querySelector('iframe[title="Sky Dodge"]');
-    expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts');
+    expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts allow-pointer-lock');
     // Runs via srcDoc (no external origin), wrapped with the embed bridge in the
     // player — so the original document is contained, not exact.
     const srcdoc = iframe?.getAttribute('srcdoc') ?? '';
@@ -347,7 +347,7 @@ describe('SubmissionStatusView', () => {
       await flushEffects();
     });
     const iframe = container.querySelector('iframe[title="Space Runner"]');
-    expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts');
+    expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts allow-pointer-lock');
     expect(iframe?.getAttribute('srcdoc') ?? '').toContain('gdpl-player');
 
     await act(async () => {

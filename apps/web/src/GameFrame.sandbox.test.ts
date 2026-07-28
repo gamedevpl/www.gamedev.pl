@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 describe('Sandbox Invariant Security Guard', () => {
-  it('renders GameFrame with strictly sandbox="allow-scripts"', () => {
+  it('renders GameFrame with strictly sandbox="allow-scripts allow-pointer-lock"', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -20,7 +20,7 @@ describe('Sandbox Invariant Security Guard', () => {
 
     const iframe = container.querySelector('iframe');
     expect(iframe).not.toBeNull();
-    expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts');
+    expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts allow-pointer-lock');
 
     act(() => {
       root.unmount();
