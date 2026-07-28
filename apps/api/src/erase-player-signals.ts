@@ -50,20 +50,35 @@ import type { Store } from './store.js';
  * still-building index reports it as already present, which reads as "the fix did not
  * work" and invites the operator to conclude the tool is broken.
  *
+ * Two indexes carry this command — `playerFeedback.uid` and, since P2 added the world
+ * listing, `worldEntries.ownerUid` — so the hint has to name which of them failed. Sending
+ * an operator to check the wrong collection costs them the debugging session.
+ *
  * Returns null for anything else — an unrecognised failure should be shown as-is, not
- * dressed up as an index problem. That includes an index error naming some *other* query:
- * this command depends on exactly one index, so a hint is only honest when the message
- * says so. Confidently misidentifying the failure is worse than staying quiet, because a
- * raw error sends an operator to read it while a wrong hint sends them somewhere useless.
+ * dressed up as an index problem. That includes an index error naming a collection this
+ * command never queries: it belongs to some other caller, and answering it with "provision
+ * playerFeedback.uid" points at something already fine. Confidently misidentifying the
+ * failure is worse than staying quiet, because a raw error sends an operator to read it
+ * while a wrong hint sends them somewhere useless.
  */
 export function indexHint(message: string): string | null {
   const isIndexFailure = message.includes('FAILED_PRECONDITION') && message.includes('index');
-  const namesOurIndex = message.includes('playerFeedback') && message.includes('uid');
-  if (!isIndexFailure || !namesOurIndex) return null;
+  if (!isIndexFailure) return null;
+  // Two collection-group indexes carry this command now — feedback since it was written,
+  // and world entries since P2. Naming the one that actually failed matters: sending an
+  // operator to check `playerFeedback` when `worldEntries` is the missing one costs them
+  // the whole debugging session.
+  const failed =
+    message.includes('playerFeedback') && message.includes('uid')
+      ? 'playerFeedback.uid'
+      : message.includes('worldEntries') && message.includes('ownerUid')
+        ? 'worldEntries.ownerUid'
+        : null;
+  if (!failed) return null;
   return message.includes('not ready yet')
-    ? 'The index exists and is still building. Wait a minute and run this again — re-running\n' +
-        'infra/setup-gcp.sh will not help; it will report the index as already present.'
-    : 'The playerFeedback.uid collection-group index is missing. Run infra/setup-gcp.sh\n' +
+    ? `The ${failed} index exists and is still building. Wait a minute and run this again —\n` +
+        're-running infra/setup-gcp.sh will not help; it will report the index as already present.'
+    : `The ${failed} collection-group index is missing. Run infra/setup-gcp.sh\n` +
         '(step 7), wait for the build to finish, then run this again.';
 }
 
@@ -98,20 +113,35 @@ export async function erasePlayerSignals(options: ErasePlayerSignalsOptions): Pr
   const { store, uid } = options;
   const dryRun = options.dryRun ?? false;
 
-  // Feedback goes first, and the order is load-bearing rather than incidental.
+  // Every step that needs a Firestore index runs before every step that writes, and that
+  // order is load-bearing rather than incidental.
   //
-  // It is the only step that needs a Firestore index, so it is the only step that can fail
-  // for a reason unrelated to the data — a missing or still-building index throws
-  // 9 FAILED_PRECONDITION. The vote walk needs no index at all: `listDocuments`, document
-  // reads, and single-document transactions. Running feedback first therefore means an
-  // index failure happens before anything has been written, so the CLI can tell an operator
-  // "nothing was erased" and have that be true. With the walk first, a failure here would
-  // have cleared every vote and then reported that nothing happened.
+  // An index-backed query is the only kind of step here that can fail for a reason
+  // unrelated to the data — a missing or still-building index throws 9 FAILED_PRECONDITION.
+  // The vote walk needs no index at all: `listDocuments`, document reads, and
+  // single-document transactions. Doing the indexed reads first therefore means such a
+  // failure happens before anything has been written, so the CLI can tell an operator
+  // "nothing was erased" and have that be true.
+  //
+  // There are two of them now. Feedback has needed one since this was written; listing a
+  // person's worlds has needed a second since P2 added `worldEntries.ownerUid`, and that
+  // one was originally left down beside its delete — which quietly broke this guarantee,
+  // because a missing world index would have wiped feedback, votes and saves first and
+  // then thrown. Both are pinned by tests; if someone moves either below a write, they
+  // fail.
   //
   // Count and delete run the same `where('uid','==',uid)` predicate over the same
   // collection group, differing only in `.count()` versus `.get()`. That matters more than
   // it looks: a dry run is the only thing standing between an operator and an irreversible
   // delete, so it must not be able to see a different set of rows than the delete will.
+  // Listing worlds goes first because it is the one indexed step that is a *pure* read.
+  // Feedback cannot take that position: on a real run its query and its delete are the
+  // same call, so whichever indexed step runs first, feedback is already gone by the time
+  // a later one could fail. Listing is also what lets the report name the worlds rather
+  // than count them — "your plantings in these two games are gone" is the sentence an
+  // operator has to be able to say back to the person who asked.
+  const worldsErased = await store.listWorldsForUser(uid);
+
   const feedbackDeleted = dryRun
     ? await store.countPlayerFeedbackByUid(uid)
     : await store.deletePlayerFeedbackByUid(uid);
@@ -133,9 +163,6 @@ export async function erasePlayerSignals(options: ErasePlayerSignalsOptions): Pr
   const savesDeleted = (await store.listGameSaves(uid)).map((save) => save.slug).sort();
   if (!dryRun && savesDeleted.length > 0) await store.deleteGameSaves(uid);
 
-  // Same list-then-delete shape and for the same reason: the report has to name the
-  // worlds, not count them.
-  const worldsErased = await store.listWorldsForUser(uid);
   if (!dryRun && worldsErased.length > 0) await store.deleteWorldEntriesForUser(uid);
 
   return { uid, votesCleared, feedbackDeleted, savesDeleted, worldsErased, dryRun };
