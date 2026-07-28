@@ -19,6 +19,8 @@ import { registerEmailRoutes } from './email-routes.js';
 import { registerGameSaveRoutes, type GameSaveRoutesOptions } from './game-saves.js';
 import { registerWorldRoutes, type WorldRoutesOptions } from './worlds.js';
 import { createWorldSchemaSourceFromEnv } from './world-source.js';
+import { registerZoneRoutes, type ZoneRoutesOptions } from './zones.js';
+import { createZoneSchemaSourceFromEnv } from './zone-source.js';
 import { resolveLocalGamesDir } from './local-games-repo.js';
 import { registerMultiplayerRoutes, type MultiplayerRoutesOptions } from './mp.js';
 import { registerNotificationRoutes } from './notifications.js';
@@ -66,6 +68,7 @@ export interface BuildAppOptions {
   gameSaveRoutes?: Omit<GameSaveRoutesOptions, 'store'>;
   /** Seams for shared worlds; defaults to a live games-repo-backed schema source. */
   worldRoutes?: Partial<Omit<WorldRoutesOptions, 'store'>>;
+  zoneRoutes?: Partial<ZoneRoutesOptions>;
   /** Seams for written player feedback; defaults to a live catalog-backed slug gate. */
   playerFeedbackRoutes?: Omit<PlayerFeedbackRoutesOptions, 'store' | 'contentChecker'>;
   /** Seams for the nightly scorecard sweep; defaults to OIDC-or-deny-all from env. */
@@ -243,6 +246,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     contentChecker,
     worlds: await createWorldSchemaSourceFromEnv(envPublishedSlugs),
     ...options.worldRoutes,
+  });
+
+  // Admission to authoritative zones (docs/persistent-world-plan.md P3). This service
+  // mints tickets and says where to take them; the simulation itself runs in the
+  // separate gamedev-world host (docs/p3-zone-host-infra.md), which never sees a
+  // session. With ZONE_HOST_URL unset there is no host, so the route 404s and every
+  // game plays on exactly as it did — the same posture push takes without its keys.
+  await registerZoneRoutes(app, {
+    zones: await createZoneSchemaSourceFromEnv(envPublishedSlugs),
+    ...options.zoneRoutes,
   });
 
   // Written player feedback (docs/improvement-loop-plan.md, signal source #1). Keyed

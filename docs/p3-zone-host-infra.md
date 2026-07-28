@@ -21,7 +21,7 @@ Three properties of a zone decide almost everything:
    optimization bolted on later — it is the contract. An empty zone snapshots to
    Firestore and stops existing as a process; `wake(state, elapsedMs, rng)` is how the
    world catches up when someone returns. So "stateful process with a lifetime"
-   really means "stateful process with a lifetime *bounded by its sockets*".
+   really means "stateful process with a lifetime _bounded by its sockets_".
 2. **Instance death is survivable by design.** §8 already says it: an instance dying is
    an unscheduled hibernate. Snapshots plus an event log bound the loss to seconds, and
    the determinism gate proves resume works (`resumeFromSnapshotWithAlignment` in the
@@ -31,7 +31,7 @@ Three properties of a zone decide almost everything:
 3. **The whole platform's workload fits in one core for a long time.** A tick is
    metered at 8 ms p99, so one vCPU sustains on the order of a dozen zones at 10 Hz
    with room to spare, and a zone is at most 16 sockets. The scaling question is real
-   but not urgent; the question that is urgent is cost at *zero*.
+   but not urgent; the question that is urgent is cost at _zero_.
 
 Property 1 has a happy consequence on Cloud Run specifically: under request-based
 billing, a WebSocket connection is a long-running request, and an instance with a
@@ -87,7 +87,7 @@ ceiling, WebSockets only.
 - **Deploys are rare and graceful by construction.** The service redeploys when zone
   host code changes, not when the website does. On SIGTERM it snapshots every active
   zone inside the termination grace period and closes sockets with a `resume` reason;
-  clients re-dial and the world continues — an *scheduled* unscheduled-hibernate.
+  clients re-dial and the world continues — an _scheduled_ unscheduled-hibernate.
 - **The routing problem stays deferred but not foreclosed.** At max-instances 1 the
   zone directory (§8's `zoneId → instance` map) is trivially the service URL. The join
   handshake already returns the host URL per zone (see the protocol), so scaling out
@@ -116,7 +116,7 @@ deploy-script change.
 
 ### D — Stateful edge (Cloudflare Durable Objects / PartyKit)
 
-Shape-wise the best fit on the market — a Durable Object *is* "an actor with storage
+Shape-wise the best fit on the market — a Durable Object _is_ "an actor with storage
 and hibernation". Rejected on posture, not on fit: new vendor, new credentials, new
 ToS surface for untrusted-code execution, and the isolate decision already made
 (`isolated-vm` inside our own cage) does not port. The multiplayer plan rejected
@@ -124,7 +124,7 @@ third-party realtime for the same reasons and nothing has changed.
 
 ### Session affinity, addressed because §8 names it
 
-`--session-affinity` pins a *client* to an instance, not a *room* — two players of one
+`--session-affinity` pins a _client_ to an instance, not a _room_ — two players of one
 zone still land on two instances. It was the wrong tool for party rooms (§4.6) and it
 is the wrong tool here, at any instance count. What replaces it when scale-out comes is
 the zone directory: the shell asks the API where zone Z lives and dials that URL. Not
@@ -139,11 +139,11 @@ needed at max-instances 1; designed for now, built later.
 `--timeout 3600`, WebSockets, europe-west1. The main API mints HMAC zone tickets;
 the world service verifies them and owns nothing else about identity.
 
-| | zero traffic | low traffic (beta) | failure mode |
-| --- | --- | --- | --- |
-| Compute | $0 (no instances) | ~$0.09/active-hour, first ~50 h/mo free | capped by max-instances 1 |
-| Firestore | storage only (pennies) | 1 snapshot write / zone / 30 s while active | bounded by snapshot cadence |
-| The bill scales with | — | concurrent play | never with number of worlds |
+|                      | zero traffic           | low traffic (beta)                          | failure mode                |
+| -------------------- | ---------------------- | ------------------------------------------- | --------------------------- |
+| Compute              | $0 (no instances)      | ~$0.09/active-hour, first ~50 h/mo free     | capped by max-instances 1   |
+| Firestore            | storage only (pennies) | 1 snapshot write / zone / 30 s while active | bounded by snapshot cadence |
+| The bill scales with | —                      | concurrent play                             | never with number of worlds |
 
 ---
 
@@ -184,9 +184,9 @@ cadence as the loss bound; runtime budget enforcement as the cost bound.
 
 **Later, with named triggers:**
 
-- *Zone directory + max-instances > 1* — when one vCPU's worth of concurrent zones is
+- _Zone directory + max-instances > 1_ — when one vCPU's worth of concurrent zones is
   routinely exceeded (metric: sustained tick-budget saturation, not a date).
-- *Move to a VM or committed-use pricing* — when active hours make Cloud Run the
+- _Move to a VM or committed-use pricing_ — when active hours make Cloud Run the
   expensive option (>~150 always-occupied hours/month, ~$13/mo crossover).
-- *quickjs-wasm fallback* — if the `isolated-vm` build breaks and stays broken; costs
+- _quickjs-wasm fallback_ — if the `isolated-vm` build breaks and stays broken; costs
   ~20× CPU, still ~2.7% of a core per zone at 10 Hz, swap is contained to one module.
