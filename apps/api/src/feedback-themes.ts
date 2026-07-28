@@ -20,9 +20,11 @@ import { sanitizeCreatorText } from './submission-status.js';
  *
  * Three clamps keep the blast radius to "an operator reads a wrong phrase":
  *
- * 1. **A minimum number of rows.** A "theme" drawn from one person's note is just that
- *    person's words, re-published into a document explicitly designed not to carry them.
- *    Summarizing is only meaningful — and only de-identifying — across several writers.
+ * 1. **A minimum number of rows, and a minimum support per theme.** A "theme" drawn from
+ *    one person's note is just that person's words, re-published into a document
+ *    explicitly designed not to carry them. Summarizing is only meaningful — and only
+ *    de-identifying — across several writers, so a game needs several notes *and* each
+ *    theme needs to appear in more than one of them.
  * 2. **Length and count ceilings**, so a model talked into emitting an essay produces a
  *    truncated phrase rather than a payload.
  * 3. **Sanitization**, so a theme cannot carry markdown or HTML into anything that renders
@@ -92,8 +94,17 @@ export function clampThemes(raw: Array<{ theme: string; count: number }>, consid
     // A model can report any number it likes, including one implying more evidence than
     // exists. The count is only meaningful relative to the notes actually read, so it is
     // clamped to them rather than trusted.
-    const reported = Number.isFinite(candidate.count) ? Math.floor(candidate.count) : 1;
-    clamped.push({ theme, count: Math.min(Math.max(reported, 1), consideredRows) });
+    const reported = Number.isFinite(candidate.count) ? Math.floor(candidate.count) : 0;
+    const count = Math.min(reported, consideredRows);
+
+    // Recurrence is enforced here and not only asked for in the prompt. A theme supported
+    // by a single note is that person's words with a summary's clothes on — the exact
+    // thing MIN_FEEDBACK_FOR_THEMES exists to prevent, arriving by a different door. The
+    // prompt says "only themes that appear in more than one note"; a prompt is a request,
+    // and this is the part that holds when the request is ignored.
+    if (count < 2) continue;
+
+    clamped.push({ theme, count });
 
     if (clamped.length >= MAX_THEMES) break;
   }

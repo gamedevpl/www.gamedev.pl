@@ -677,7 +677,13 @@ export interface Store {
   getVoteCounts(slug: string): Promise<GameVoteCounts>;
   /** Appends one already-moderated, already-sanitized feedback row. Returns it with its id. */
   addPlayerFeedback(slug: string, uid: string, text: string): Promise<PlayerFeedbackRecord>;
-  /** A game's feedback, newest first. No consumer yet (IL-2 theme extraction is next); exists now so capture is verifiable. */
+  /**
+   * A game's feedback, newest first.
+   *
+   * `limit` bounds the read for the scorecard sweep's theme extraction, so one game with
+   * thousands of notes cannot dominate a nightly job. Unbounded without it, because the
+   * erase preview needs every row it is about to delete.
+   */
   listPlayerFeedback(slug: string, opts?: { limit?: number }): Promise<PlayerFeedbackRecord[]>;
   /**
    * How many feedback rows a game has, without reading them.

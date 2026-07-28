@@ -648,10 +648,14 @@ at all and feeds the only autonomous-eligible class.
     notes as data while the clamp assumes the fence failed.
   - **A three-note floor, which is a privacy rule and not a quality one.** A "theme" drawn
     from one note is that person's words re-published into the document specifically
-    designed not to carry them. Below the floor the text is never even read.
-  - **Model output is clamped, not trusted**: length, count, dedupe, sanitize, and a
-    support count bounded by the notes actually read — an unclamped `count: 9999` reads to
-    an agent as a mandate when three people said it.
+    designed not to carry them. Below the floor the text is never even read — and a theme
+    supported by only one note is dropped even above it, since the same objection arrives
+    by a different door when a model summarizes a lone outlier.
+  - **Model output is clamped, not trusted**: length, count, dedupe, sanitize, a support
+    count bounded by the notes actually read, and recurrence required rather than merely
+    requested. An unclamped `count: 9999` reads to an agent as a mandate when three people
+    said it; the prompt asks for both properties, and the clamp is what holds when it is
+    ignored.
   - **Absence stays absence.** Too little feedback, extraction switched off, and extraction
     failed all produce `[]`, and the panel renders no block at all rather than an empty
     heading. Cost is bounded by a per-sweep call budget, and when that budget binds the

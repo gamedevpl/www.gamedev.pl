@@ -34,10 +34,26 @@ describe('clampThemes', () => {
 
   it('never reports more support than notes it read', () => {
     // A model can return any number. Left alone, an inflated count is evidence an agent
-    // would weigh — "40 players said this" reads as a mandate when three did.
+    // would weigh — "9999 players said this" reads as a mandate when three did.
     expect(clampThemes([{ theme: 'too hard', count: 9999 }], 3)).toEqual([{ theme: 'too hard', count: 3 }]);
-    expect(clampThemes([{ theme: 'too hard', count: 0 }], 3)).toEqual([{ theme: 'too hard', count: 1 }]);
-    expect(clampThemes([{ theme: 'too hard', count: Number.NaN }], 3)).toEqual([{ theme: 'too hard', count: 1 }]);
+  });
+
+  it('drops a theme only one player supports', () => {
+    // The privacy floor arriving by a different door: a theme backed by a single note is
+    // that person's words with a summary's clothes on. The prompt asks for recurrence;
+    // this is what holds when the prompt is ignored.
+    expect(clampThemes([{ theme: 'too hard', count: 1 }], 10)).toEqual([]);
+  });
+
+  it('drops a theme whose support it cannot believe at all', () => {
+    // Zero and NaN are not "assume one" — an unusable count is no evidence of recurrence,
+    // and inventing the minimum would manufacture the very support being checked for.
+    expect(clampThemes([{ theme: 'too hard', count: 0 }], 3)).toEqual([]);
+    expect(clampThemes([{ theme: 'too hard', count: Number.NaN }], 3)).toEqual([]);
+  });
+
+  it('cannot report recurrence when there were not two notes to recur across', () => {
+    expect(clampThemes([{ theme: 'too hard', count: 5 }], 1)).toEqual([]);
   });
 
   it('truncates a theme that tries to be a payload rather than a label', () => {
