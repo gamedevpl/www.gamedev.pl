@@ -26,6 +26,23 @@ describe('the beta splash fits a small phone', () => {
     }
   });
 
+  it('centres the card without making an overflowing one unreachable', () => {
+    const query = css.slice(css.indexOf('@media (max-height: 720px)'));
+    // Comments here explain what NOT to use, so strip them before asserting absence.
+    const splash = query
+      .slice(query.indexOf('.beta-splash {'), query.indexOf('.beta-splash__card {'))
+      .replace(/\/\*[\s\S]*?\*\//g, '');
+    // Centring a flex item that overflows puts its top edge where it cannot be
+    // scrolled to. `safe center` expresses the intent but older Safari drops it and
+    // falls back to plain `center` — the bug it was meant to avoid. Auto margins on
+    // the card do the same job with no support caveat.
+    expect(splash).toContain('align-items: flex-start');
+    expect(splash).not.toContain('align-items: center');
+    expect(splash).not.toContain('safe center');
+    const card = query.slice(query.indexOf('.beta-splash__card {'));
+    expect(card.slice(0, 200)).toMatch(/margin-top: auto;\s*margin-bottom: auto;/);
+  });
+
   it('never hides the legal links to make room', () => {
     // Anything may be trimmed except the two links that have to be reachable on the
     // screen where signing in happens.

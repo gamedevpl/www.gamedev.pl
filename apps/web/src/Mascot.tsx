@@ -471,10 +471,15 @@ export function InteractiveMascot({
      * iOS only hands out orientation events if you ask from inside a user gesture, so
      * the ask has to be attached to something the visitor already wants to do. Poking
      * the mascot is exactly that, which is why there is no separate "enable motion"
-     * button: he wakes up to the phone's tilt the first time you touch him. Safe to
-     * call every time — it is a no-op once granted, and on Android entirely.
+     * button: he wakes up to the phone's tilt the first time you touch him.
+     *
+     * Called unguarded on purpose. Gating on `needsPermission` would read the result
+     * of an effect that may not have run yet on a fast first poke, and losing that
+     * race means the prompt never appears. `request()` already no-ops when there is
+     * nothing to ask — on Android it returns immediately — so the guard bought
+     * nothing and could only cost the one interaction that matters.
      */
-    if (reactsToTilt && device.needsPermission) device.request();
+    if (reactsToTilt) device.request();
 
     const next = POKE_REACTIONS[reactionIndex.current % POKE_REACTIONS.length]!;
     reactionIndex.current += 1;

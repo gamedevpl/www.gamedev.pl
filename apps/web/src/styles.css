@@ -3410,12 +3410,18 @@ body.player-open {
 @media (max-height: 720px) {
   .beta-splash {
     padding: 12px;
-    /* Still centred on a roomy screen, but a card taller than the viewport starts at
-       the top instead of having its head cut off as well as its feet. */
-    align-items: safe center;
+    /* Centring a flex item that overflows pushes its top edge past the container's,
+       where it cannot be scrolled back to — the head gets cut off as well as the feet.
+       `align-items: safe center` says exactly that, but older Safari drops the whole
+       declaration as invalid and silently falls back to plain `center`, which is the
+       bug. Auto margins do the same job with no support story: they centre while there
+       is free space and collapse to zero when there is not. */
+    align-items: flex-start;
   }
 
   .beta-splash__card {
+    margin-top: auto;
+    margin-bottom: auto;
     padding: 24px 20px;
     border-radius: 14px;
   }
