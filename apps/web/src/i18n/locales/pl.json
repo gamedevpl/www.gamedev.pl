@@ -418,9 +418,7 @@
       "sending": "Zatrzymuję…",
       "error": "Nie udało się teraz zatrzymać tej gry. Spróbuj ponownie za chwilę."
     },
-    "playableTitle": "Zagraj teraz",
-    "playableHint": "Wczesna wersja prosto z warsztatu — surowa, niedokończona i już grywalna. Powiedz, co zmienić, póki to łatwe.",
-    "playableUpdated": "Zaktualizowano {{time}}"
+    "playableHint": "Wczesna wersja prosto z warsztatu — surowa, niedokończona i już grywalna. Powiedz, co zmienić, póki to łatwe."
   },
   "suggestions": {
     "dodge": "Unikaj spadających skał",

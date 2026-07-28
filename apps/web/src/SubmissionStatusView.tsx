@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { GameFrame } from './GameFrame.js';
 import { GameTheater } from './GameTheater.js';
 import { PixelIcon, type PixelIconName } from './PixelIcon.js';
 import {
@@ -149,8 +148,11 @@ export function SubmissionStatusView({
   // Which game (if any) is open in the full-viewport theater. The draft's HTML is
   // snapshotted at launch (`launchedHtml`) so a background refresh doesn't reload
   // the game out from under the player mid-session — reopening picks up the latest.
-  const [playing, setPlaying] = useState<'draft' | 'published' | null>(null);
+  // Channel builds use `launchedSrc` instead: unreviewed agent output stays on the
+  // iframe's `src`, never fetched into the parent.
+  const [playing, setPlaying] = useState<'draft' | 'channel' | 'published' | null>(null);
   const [launchedHtml, setLaunchedHtml] = useState<string | null>(null);
+  const [launchedSrc, setLaunchedSrc] = useState<string | null>(null);
 
   // Tracks the PR head SHA the currently-displayed preview was built from, so we
   // only re-fetch (and reload the iframe) when the agent has actually pushed new
@@ -174,6 +176,7 @@ export function SubmissionStatusView({
     setIsInvalidToken(false);
     setPlaying(null);
     setLaunchedHtml(null);
+    setLaunchedSrc(null);
     setPreview(null);
     setPreviewLoading(false);
     setPreviewRefreshing(false);
@@ -296,12 +299,25 @@ export function SubmissionStatusView({
   const openDraft = () => {
     if (!preview) return;
     setLaunchedHtml(preview.html);
+    setLaunchedSrc(null);
     setPlaying('draft');
+  };
+  const openChannelBuild = (item: BuildPlayableItem) => {
+    setLaunchedSrc(buildPlayableUrl(token, item));
+    setLaunchedHtml(null);
+    setPlaying('channel');
   };
   const closeTheater = () => {
     setPlaying(null);
     setLaunchedHtml(null);
+    setLaunchedSrc(null);
   };
+
+  const latestChannelBuild = status?.playable?.[0] ?? null;
+  // PR preview wins when both exist — same PlayCard, theater on click. An inline
+  // iframe for the channel build used to sit under that card and doubled the "play"
+  // surface; Studio's own playtest already learned inset frames are unplayable on
+  // phones, so everything playable here opens the theater.
 
   return (
     <>
@@ -406,6 +422,18 @@ export function SubmissionStatusView({
                 cta={t('statusView.playDraft')}
                 onPlay={openDraft}
               />
+            ) : latestChannelBuild ? (
+              <PlayCard
+                badge={
+                  <>
+                    <span className="live-dot" aria-hidden="true" /> {t('statusView.previewBadge')}
+                  </>
+                }
+                title={submittedTitle ?? latestChannelBuild.slug ?? t('statusView.previewGameTitle')}
+                subtitle={latestChannelBuild.label ?? t('statusView.playableHint')}
+                cta={t('statusView.playDraft')}
+                onPlay={() => openChannelBuild(latestChannelBuild)}
+              />
             ) : previewLoading ? (
               <p className="status-preview-pending">
                 <span className="status-preview-spinner" aria-hidden="true" /> {t('statusView.previewLoading')}
@@ -424,14 +452,10 @@ export function SubmissionStatusView({
             {status.status !== 'published' && status.status !== 'abandoned' ? (
               <FeedbackPanel
                 token={token}
-                building={!preview}
+                building={!preview && !latestChannelBuild}
                 onSent={(text) => setPendingRevisions((current) => [...current, { text, at: Date.now() }])}
               />
             ) : null}
-
-            {/* Above the feed on purpose: a playable build outranks any description of
-                one, and it is available minutes before the first commit. */}
-            <PlayableBuildPanel token={token} playable={status.playable ?? []} />
 
             <BuildProgressPanel
               token={token}
@@ -473,6 +497,15 @@ export function SubmissionStatusView({
           title={previewTitle}
           badge={{ icon: 'wrench', label: t('statusView.draftBadge') }}
           source={{ html: launchedHtml }}
+          onExit={closeTheater}
+        />
+      ) : null}
+
+      {playing === 'channel' && launchedSrc != null ? (
+        <GameTheater
+          title={submittedTitle ?? latestChannelBuild?.slug ?? t('statusView.previewGameTitle')}
+          badge={{ icon: 'wrench', label: t('statusView.draftBadge') }}
+          source={{ src: launchedSrc }}
           onExit={closeTheater}
         />
       ) : null}
@@ -831,38 +864,6 @@ function buildActivityFeed(
 
   // Newest first — that's what makes the build feel live.
   return entries.filter((entry) => Number.isFinite(entry.at)).sort((a, b) => b.at - a.at);
-}
-
-/**
- * The game as it stands right now, playable, before anything has been committed.
- *
- * This is the earliest honest answer to the only question the creator can really
- * judge: is it any fun. `npm run create` leaves a playable starter on disk about a
- * minute into a build, and a watcher pushes whatever compiles from then on — so this
- * panel typically appears long before the first screenshot and many minutes before the
- * first commit. It is deliberately loaded by URL into a sandboxed frame rather than
- * fetched and inlined: the document is unreviewed agent output.
- */
-function PlayableBuildPanel({ token, playable }: { token: string; playable: BuildPlayableItem[] }) {
-  const { t, i18n } = useTranslation();
-  const latest = playable[0];
-  if (!latest) return null;
-
-  return (
-    <section className="status-playable" aria-live="polite">
-      <h3>{t('statusView.playableTitle')}</h3>
-      {/* The agent's own caption when it wrote one — untrusted text, rendered as text. */}
-      <p className="status-playable-hint">{latest.label ?? t('statusView.playableHint')}</p>
-      <div className="status-playable-frame">
-        <GameFrame title={latest.slug ?? t('statusView.playableTitle')} src={buildPlayableUrl(token, latest)} />
-      </div>
-      {latest.createdAt ? (
-        <p className="status-playable-time">
-          {t('statusView.playableUpdated', { time: formatRelativeTime(latest.createdAt, i18n.language) })}
-        </p>
-      ) : null}
-    </section>
-  );
 }
 
 function BuildProgressPanel({

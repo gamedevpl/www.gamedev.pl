@@ -58,7 +58,7 @@ describe('SubmissionStatusView', () => {
     });
   });
 
-  it('offers the latest playable build in a sandboxed frame, before any commit exists', async () => {
+  it('offers the latest channel build via Play the draft → theater, before any commit exists', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     // Still queued: no pull request, no commit, no committed capture. This is the
     // ten-minute stretch a watcher fills, and the whole reason the route exists.
@@ -86,6 +86,17 @@ describe('SubmissionStatusView', () => {
       await flushEffects();
     });
 
+    // Same surface as the PR draft: a PlayCard, nothing embedded inline.
+    expect(container.querySelector('iframe')).toBeNull();
+    expect(container.textContent).toContain('You can walk the puppy now.');
+    const playDraft = container.querySelector<HTMLButtonElement>('.status-play-cta');
+    expect(playDraft?.textContent).toContain('Play the draft');
+
+    await act(async () => {
+      playDraft?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+
     const frame = container.querySelector('iframe.game-frame') as HTMLIFrameElement | null;
     expect(frame).not.toBeNull();
     // Newest wins: an older build is history, not the thing to play.
@@ -93,7 +104,6 @@ describe('SubmissionStatusView', () => {
     // The document is unreviewed agent output, so the frame must isolate it. Without
     // allow-same-origin it lands in an opaque origin with no reach into this app.
     expect(frame?.getAttribute('sandbox')).toBe('allow-scripts');
-    expect(container.textContent).toContain('You can walk the puppy now.');
 
     await act(async () => {
       root.unmount();
