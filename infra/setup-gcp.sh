@@ -128,7 +128,7 @@ done
 echo "==> 7/8 Ensuring the COLLECTION_GROUP indexes the operator reads need"
 FIELD_ACCESS_TOKEN="$(gcloud auth print-access-token --project="$PROJECT_ID")"
 # group:field:order — one line per COLLECTION_GROUP single-field index.
-CG_INDEXES="scorecard:computedAt:DESCENDING playerFeedback:uid:ASCENDING"
+CG_INDEXES="scorecard:computedAt:DESCENDING playerFeedback:uid:ASCENDING worldEntries:ownerUid:ASCENDING"
 for ENTRY in $CG_INDEXES; do
   CG_GROUP="${ENTRY%%:*}"
   CG_REST="${ENTRY#*:}"

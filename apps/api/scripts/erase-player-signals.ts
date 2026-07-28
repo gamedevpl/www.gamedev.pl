@@ -54,8 +54,21 @@ async function main(): Promise<void> {
   console.log(
     `  saves:    ${result.savesDeleted.length}${result.savesDeleted.length ? ` (${result.savesDeleted.join(', ')})` : ''}`,
   );
-  if (result.votesCleared.length === 0 && result.feedbackDeleted === 0 && result.savesDeleted.length === 0) {
-    console.log('  nothing found — this account left no votes, feedback, or saved progress.');
+  console.log(
+    `  worlds:   ${result.worldsErased.length}${result.worldsErased.length ? ` (${result.worldsErased.join(', ')})` : ''}`,
+  );
+  if (
+    result.votesCleared.length === 0 &&
+    result.feedbackDeleted === 0 &&
+    result.savesDeleted.length === 0 &&
+    result.worldsErased.length === 0
+  ) {
+    console.log('  nothing found — this account left no votes, feedback, saved progress, or world entries.');
+  }
+  if (result.worldsErased.length > 0) {
+    // Worth saying out loud: unlike the rest of this report, these removals change
+    // what other players see the next time they open the game.
+    console.log('  note: world entries were visible to other players; removing them changes those games.');
   }
   console.log('  play telemetry: not applicable (carries no uid by design).');
 }

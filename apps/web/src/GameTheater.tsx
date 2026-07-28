@@ -10,6 +10,7 @@ import { ShareGameButton } from './ShareGameButton.js';
 import { VoteWidget } from './VoteWidget.js';
 import { useGamePlayer } from './gamePlayer.js';
 import { useGameSaveBridge } from './gameSave.js';
+import { useWorldBridge } from './world.js';
 import { useScreenWakeLock } from './useScreenWakeLock.js';
 
 /** A game to run, sourced either from raw assembled HTML or a published slug. */
@@ -123,6 +124,12 @@ export function GameTheater({
   // against a format the next build changes is worse than no progress at all. Games
   // that never open a slot cost nothing here; the bridge simply stays quiet.
   useGameSaveBridge(frameRef, reportSlug);
+
+  // Shared worlds, for the games that declare one (P2). Keyed on the published slug
+  // for the same reason and one more: a world is *shared*, so entries a draft wrote
+  // against a shape it is about to change would be visible to every other player as
+  // something the game can no longer render.
+  useWorldBridge(frameRef, reportSlug);
 
   // The game reports its own (localized) title over the bridge. Prefer it: on a
   // direct `/play/<slug>` link there's no catalog entry to take a title from, so

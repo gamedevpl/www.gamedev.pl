@@ -87,6 +87,14 @@ export const privacyEn: LegalDocument = {
               'Until you delete your account, or delete the progress from within the game',
             ],
             [
+              'What you build or leave in a game’s shared world (for example a plot you plant or a note you ' +
+                'pin) — stored with your account identifier so only you can change or remove it. Other players ' +
+                'see what you made, but never who made it: the game is shown a code, not your name or account',
+              'Letting players build a shared place together across visits',
+              'Art. 6(1)(b) — performance of a contract',
+              'Until you delete your account, or remove it from within the game',
+            ],
+            [
               'The moderation outcome for your description (whether it was rejected and why)',
               'Preventing unlawful or harmful content from being created',
               'Art. 6(1)(c) — legal obligation (Digital Services Act), and 6(1)(f) — our legitimate interest in a ' +
@@ -292,8 +300,9 @@ export const privacyEn: LegalDocument = {
           text:
             `You can ask us to delete your account at any time by writing to [${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL}). ` +
             'We then remove your account data, email address, notification subscriptions, the votes and written ' +
-            'feedback you left on games, your saved progress in games that keep it, and the link between your ' +
-            'submissions and you.',
+            'feedback you left on games, your saved progress in games that keep it, anything you built in a ' +
+            'game’s shared world, and the link between your submissions and you. Removing what you built ' +
+            'from a shared world also removes it from what other players see there.',
         },
         {
           kind: 'p',
