@@ -20,21 +20,22 @@
 Unblocks code that is already deployed and dormant. Publishes **nothing** publicly: there
 is no App Store listing at this stage.
 
-- [ ] **A1.** Enrol in the [Apple Developer Program](https://developer.apple.com/programs/enroll/) as an **Individual**. ~$99/yr. Approval usually 24–48h.
+- [x] **A1.** Enrolled as **Individual** 2026-07-28. Team ID `ZLSCSP42P9`.
       Do *not* attempt organization enrolment — it needs a legal entity and a D-U-N-S number.
-- [ ] **A2.** In [Certificates, Identifiers & Profiles](https://developer.apple.com/account/resources/identifiers/list) → **Identifiers** → **+** → **App IDs** → App.
-      Bundle ID `pl.gamedev.app` (reverse-DNS, must be globally unique). Enable the **Sign in with Apple** capability.
-- [ ] **A3.** Identifiers → **+** → **Services IDs**. Identifier `pl.gamedev.web`.
-      **Description** = what users see on the Apple sign-in sheet — set it to `Gamedev.pl`. Enable **Sign in with Apple**.
-- [ ] **A4.** On that Services ID → **Configure**:
-      - Primary App ID: the one from A2
-      - **Domains and Subdomains**: `www.gamedev.pl`
-      - **Return URLs**: `https://www.gamedev.pl/` — exact, trailing slash, https (Apple rejects every `http://` URL)
-- [ ] **A5.** Download Apple's domain-verification file and send it to Claude — it must be served at
-      `https://www.gamedev.pl/.well-known/apple-developer-domain-association.txt`. **Claude does this**, then you click Verify.
-- [ ] **A6.** Tell Claude the Services ID. **Claude sets** repo Actions *variables* (not secrets — both values are public):
-      `APPLE_SERVICES_ID=pl.gamedev.web`, `APPLE_CLIENT_IDS=pl.gamedev.web`, redeploys, and verifies
-      `/api/health` reports `appleSignIn: true`.
+- [x] **A2.** App ID `pl.gamedev.app`, Sign in with Apple enabled.
+      Note: the **Description** field accepts only letters, numbers and spaces — `Gamedev.pl` is rejected for the dot, so it is `Gamedev`.
+- [x] **A3.** Services ID `pl.gamedev.web` (description `Gamedev`).
+      Services IDs are **under Identifiers** via the filter dropdown, *not* the left-nav "Services" section, which is a different feature.
+- [x] **A4.** Web Authentication Configuration: primary App ID `pl.gamedev.app`,
+      domain `www.gamedev.pl`, return URL `https://www.gamedev.pl/` (exact, trailing slash, https —
+      Apple rejects every `http://` URL, which is why this flow cannot be tested below a deployed origin).
+- [x] **A5.** ~~Download Apple's domain-verification file~~ — **not required, and the console never offered it.**
+      Apple validates the web flow against the **registered Return URLs**; the
+      `apple-developer-domain-association.txt` file belongs to the private-email relay service, which this
+      product deliberately does not use. If a future need appears, the Download button lives in the panel
+      behind the **+** next to *Website URLs*.
+- [x] **A6.** Repo Actions *variables* set 2026-07-28 (not secrets — both values are public):
+      `APPLE_SERVICES_ID=pl.gamedev.web`, `APPLE_CLIENT_IDS=pl.gamedev.web`.
 - [ ] **A7.** You sign in with Apple on https://www.gamedev.pl once, from a device with an Apple ID.
       **Choose "Share My Email", not Hide My Email**, for the first test — the relay path deliberately
       does not link to an existing account.
