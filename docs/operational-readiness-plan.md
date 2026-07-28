@@ -15,8 +15,8 @@ as 📋 open, and [`closed-beta-launch-plan.md`](./closed-beta-launch-plan.md) e
 deferred Firestore backups "until before public launch". This document is that revisit.
 
 **The operating principle:** one operator, near-zero budget, GCP-native everything. No
-Datadog, no PagerDuty, no 24/7 on-call. The bar is not "enterprise SRE"; it is *no silent
-data loss, no silent outage, and a written recovery path for every plausible failure* —
+Datadog, no PagerDuty, no 24/7 on-call. The bar is not "enterprise SRE"; it is _no silent
+data loss, no silent outage, and a written recovery path for every plausible failure_ —
 proportionate to a beta whose users we can still personally apologize to, hardened in steps
 that track the GTM stages.
 
@@ -24,39 +24,39 @@ that track the GTM stages.
 
 ## 1. What exists today (audit, 2026-07-27)
 
-| Area | State |
-| ---- | ----- |
-| Delivery | ✅ Strong for the size: CI gate → candidate revision → smoke test (anon + authenticated) → traffic promotion, keyless OIDC. Rollback is *possible* (Cloud Run revisions) but undocumented and undrilled |
-| Uptime signal | ⚠️ Accidental only — the Cloud Scheduler notify-sweep hits the API every 2 min and the deploy smoke probes on each push. Nobody is alerted if either starts failing |
-| Metrics | ⚠️ Cloud Run defaults (request count, latency, 5xx, instances) exist but no dashboard assembles them and no alert reads them |
-| Alerting | ❌ None. A 100%-5xx night is discovered at breakfast |
-| Backups | ❌ None. No Firestore PITR, no exports. A bad script, a compromised credential, or a fat-fingered console delete is unrecoverable |
-| Product telemetry | ✅ Genuinely good: per-game health ([`telemetry-health.ts`](../apps/api/src/telemetry-health.ts)), visit funnel, operator views behind `ADMIN_UIDS` — but it measures *games*, not the *platform* |
-| Logs | ⚠️ Cloud Logging collects stdout; no log-based metrics, no alerts on error patterns |
-| Cost visibility | ❌ No billing budget/alert. GTM Stage 2's stated failure mode is "a launch spike that burns the monthly budget in a day" — nothing would announce it |
-| Incident response | ❌ No runbook. Knowledge lives in the owner's head and in scattered doc callouts |
+| Area                   | State                                                                                                                                                                                                               |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Delivery               | ✅ Strong for the size: CI gate → candidate revision → smoke test (anon + authenticated) → traffic promotion, keyless OIDC. Rollback is _possible_ (Cloud Run revisions) but undocumented and undrilled             |
+| Uptime signal          | ⚠️ Accidental only — the Cloud Scheduler notify-sweep hits the API every 2 min and the deploy smoke probes on each push. Nobody is alerted if either starts failing                                                 |
+| Metrics                | ⚠️ Cloud Run defaults (request count, latency, 5xx, instances) exist but no dashboard assembles them and no alert reads them                                                                                        |
+| Alerting               | ❌ None. A 100%-5xx night is discovered at breakfast                                                                                                                                                                |
+| Backups                | ❌ None. No Firestore PITR, no exports. A bad script, a compromised credential, or a fat-fingered console delete is unrecoverable                                                                                   |
+| Product telemetry      | ✅ Genuinely good: per-game health ([`telemetry-health.ts`](../apps/api/src/telemetry-health.ts)), visit funnel, operator views behind `ADMIN_UIDS` — but it measures _games_, not the _platform_                   |
+| Logs                   | ⚠️ Cloud Logging collects stdout; no log-based metrics, no alerts on error patterns                                                                                                                                 |
+| Cost visibility        | ❌ No billing budget/alert. GTM Stage 2's stated failure mode is "a launch spike that burns the monthly budget in a day" — nothing would announce it                                                                |
+| Incident response      | ❌ No runbook. Knowledge lives in the owner's head and in scattered doc callouts                                                                                                                                    |
 | IaC / deploy hardening | ⚠️ Shell scripts + `cloudbuild.yaml`; no `environment:` protection on deploy; action pinning is mixed — the Google auth/gcloud actions are SHA-pinned, first-party `actions/checkout`/`setup-node` are major-tagged |
 
 ### Data inventory (what a backup must cover)
 
-| Data | Where | Replaceable? |
-| ---- | ----- | ------------ |
-| `users` (+ `notifications`, `pushSubscriptions`), `waitlist`, `accessTokens` | Firestore (europe-central2) | ❌ Irreplaceable — identity, consent, beta access |
-| `submissions` (+ `events`, `messages`, `shots`), `usage/{uid}/counters`, `games/{slug}/votes` | Firestore | ❌ Irreplaceable — creator history, attribution, quotas, votes |
-| `telemetry/{date}/…` (events, visits) | Firestore | ⚠️ Semi — losing history hurts the improvement loop but breaks nothing |
-| Game sources + `SPEC.md` files | Private GitHub repo `gamedevpl/www.gamedev.pl-games` | ⚠️ GitHub is the only copy; also a *runtime* dependency (below) |
-| Secrets | GCP Secret Manager | ⚠️ Recreatable with effort; rotation recipes documented in [`deployment.md`](./deployment.md) |
-| Platform code | This repo + forks/clones | ✅ Effectively safe |
-| DNS zone | AWS Route 53 | ⚠️ Small but critical (apex/www + Resend mail records); no exported copy |
+| Data                                                                                          | Where                                                | Replaceable?                                                                                  |
+| --------------------------------------------------------------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `users` (+ `notifications`, `pushSubscriptions`), `waitlist`, `accessTokens`                  | Firestore (europe-central2)                          | ❌ Irreplaceable — identity, consent, beta access                                             |
+| `submissions` (+ `events`, `messages`, `shots`), `usage/{uid}/counters`, `games/{slug}/votes` | Firestore                                            | ❌ Irreplaceable — creator history, attribution, quotas, votes                                |
+| `telemetry/{date}/…` (events, visits)                                                         | Firestore                                            | ⚠️ Semi — losing history hurts the improvement loop but breaks nothing                        |
+| Game sources + `SPEC.md` files                                                                | Private GitHub repo `gamedevpl/www.gamedev.pl-games` | ⚠️ GitHub is the only copy; also a _runtime_ dependency (below)                               |
+| Secrets                                                                                       | GCP Secret Manager                                   | ⚠️ Recreatable with effort; rotation recipes documented in [`deployment.md`](./deployment.md) |
+| Platform code                                                                                 | This repo + forks/clones                             | ✅ Effectively safe                                                                           |
+| DNS zone                                                                                      | AWS Route 53                                         | ⚠️ Small but critical (apex/www + Resend mail records); no exported copy                      |
 
 ### Single points of failure worth naming
 
 1. **`--max-instances 1`.** Required by the in-memory multiplayer relay. It is the scaling
-   ceiling for the *entire* API and also an availability fact: every deploy or instance
+   ceiling for the _entire_ API and also an availability fact: every deploy or instance
    restart drops all live party rooms. Accepted for beta; must fall before Stage 2 spikes
    ([`roadmap.md`](./roadmap.md) Phase 5 🔴).
-2. **GitHub as runtime storage.** ✅ *Largely resolved 2026-07-27 by the games snapshot
-   (item 10)* — published games and the catalog are served from
+2. **GitHub as runtime storage.** ✅ _Largely resolved 2026-07-27 by the games snapshot
+   (item 10)_ — published games and the catalog are served from
    `gs://gamedevpl-games-snapshots`, not from GitHub at request time. What remains: the
    preview and draft routes still read the private games repo live
    ([`github-client.ts`](../apps/api/src/github-client.ts) has retries but no last-good
@@ -73,7 +73,7 @@ that track the GTM stages.
 
 ## 2. The strategy: three gates aligned to GTM stages
 
-Each gate is a *prerequisite* for the corresponding GTM move, phrased so it can be verified,
+Each gate is a _prerequisite_ for the corresponding GTM move, phrased so it can be verified,
 not vibed. Costs are noted because the budget posture is ~zero: everything in Gates O1–O2
 lands in GCP free tiers or single-digit złoty per month.
 
@@ -87,7 +87,7 @@ The floor: no silent data loss, no silent outage.
    within a week".
 2. **Daily Firestore export to GCS.** A Cloud Scheduler job calling the managed
    `exportDocuments` API into a dedicated bucket (same EU region, 30-day lifecycle delete,
-   bucket-level retention lock optional). Exports are the *escape hatch PITR is not*: they
+   bucket-level retention lock optional). Exports are the _escape hatch PITR is not_: they
    survive database deletion and project-level mistakes. Pennies per month at this volume.
 3. **One restore drill, written down.** Restore yesterday's export into a scratch database,
    read a document back, delete the scratch. An untested backup is a hypothesis. The
@@ -119,7 +119,7 @@ alert armed; expiry dates written down.
 
 ### Gate O2 — while Stage 1 runs (weeks 2–12; hundreds of users)
 
-Seeing trends, catching the failures that matter to *this* product, and containing the
+Seeing trends, catching the failures that matter to _this_ product, and containing the
 GitHub dependency.
 
 1. **One Cloud Monitoring dashboard** ("gamedev-ops"): request rate and p50/p95/p99, 5xx,
@@ -127,7 +127,7 @@ GitHub dependency.
    in-process), container CPU/memory, Firestore reads/writes, uptime-check status, current
    month spend. One page the operator glances at with coffee.
 2. **Log-based metrics + alerts on the product's own failure modes** — this is where
-   generic monitoring stops and *our* observability starts. The API should emit structured
+   generic monitoring stops and _our_ observability starts. The API should emit structured
    log lines (it already logs via Fastify; add explicit error-class fields where missing)
    for:
    - catalog/game fetch failures against GitHub (the runtime dependency,
@@ -138,8 +138,8 @@ GitHub dependency.
      alert, not a metric". Cheapest implementation: the existing notify-sweep already
      iterates open submissions; make it log a `stalled_submission` line the alert matches.
    - relay anomalies (room-not-found spikes — the symptom of a second instance).
-3. **Blunt the GitHub runtime dependency.** ✅ *Shipped 2026-07-27, and more strongly than
-   proposed here.* Instead of an in-process last-good cache serving stale on GitHub
+3. **Blunt the GitHub runtime dependency.** ✅ _Shipped 2026-07-27, and more strongly than
+   proposed here._ Instead of an in-process last-good cache serving stale on GitHub
    5xx/timeout, published games and the catalog are baked to Cloud Storage at merge time
    and served from there — so a GitHub outage is already "newest game is late" for
    published play, and steady-state API-rate-limit exposure is cut to the bake job. See
@@ -148,7 +148,7 @@ GitHub dependency.
    to a GCS bucket (weekly is fine; the repo is small and append-mostly). Covers both
    GitHub-side loss and account lockout.
 5. **Client-side app-shell error visibility.** Game errors are already captured via the
-   bridge; errors in the *app shell* (React) are not. Wire `window.onerror`/unhandled
+   bridge; errors in the _app shell_ (React) are not. Wire `window.onerror`/unhandled
    rejection into the existing telemetry write path (respecting its privacy invariants —
    no URLs with tokens, no user text) so "the site is white-screening on Safari" is
    observable without a user report. Evaluate before adding any third-party (Sentry adds a
@@ -186,11 +186,11 @@ sequencing per [`content-safety-plan.md`](./content-safety-plan.md)).
    - finish action pinning to commit SHAs — the Google auth/gcloud actions already are;
      `actions/checkout` and `actions/setup-node` remain major-tagged;
    - a drilled rollback: `gcloud run services update-traffic gamedev-app
-     --to-revisions <previous>=100` executed once for real and timed.
+--to-revisions <previous>=100` executed once for real and timed.
 5. **IaC for the now-stable resource set.** The roadmap's precondition ("IaC only after
    resources exist") is met. Terraform (or plain declarative scripts, but versioned) for:
    service + domain mapping, scheduler jobs, alert policies, budget, buckets, IAM. The
-   payoff is not elegance — it is that the *monitoring and backup config itself* stops
+   payoff is not elegance — it is that the _monitoring and backup config itself_ stops
    being click-ops that silently drifts or vanishes.
 6. **Set explicit SLOs and write them down**, so "is it good enough to open?" is a number:
    suggested v1 — play path availability 99.5%/30d, p95 catalog < 1.5s warm, submission
@@ -204,7 +204,7 @@ resolved; alert policies and buckets are in code; SLO doc merged.
 
 ## 3. Burst resilience — two scenarios walked to the point of failure
 
-The GTM plan is *designed to produce bursts*: every shared game link is a landing page,
+The GTM plan is _designed to produce bursts_: every shared game link is a landing page,
 party mode is physically viral, and Stage 2 aims launch spikes on purpose. So "what happens
 in a burst" is not a tail risk — it is the success case. Walked concretely against the code
 and config as of 2026-07-27.
@@ -217,19 +217,19 @@ Cloud Run defaults apply: ~80 concurrent requests, 1 vCPU. From scale-to-zero, t
 wave eats a cold start. Then, in the order things actually break:
 
 1. **GitHub rate-limit lockout (the first real breakage).** Catalog and every game bundle
-   are fetched from the private games repo *live, per request* — [`github-client.ts`](../apps/api/src/github-client.ts)
+   are fetched from the private games repo _live, per request_ — [`github-client.ts`](../apps/api/src/github-client.ts)
    retries and honors `Retry-After`, but nothing caches. A fine-grained PAT has a
    5,000 req/h ceiling plus opaque secondary limits. A few hundred curious visitors
    browsing the catalog and opening games can spend that budget in minutes — after which
    **catalog and play return errors for everyone** until the window resets. A viral moment
    converts itself into a self-inflicted, hour-long outage at precisely the moment the
-   growth loop was working. This coupling — *visitors × GitHub API calls* — is the single
+   growth loop was working. This coupling — _visitors × GitHub API calls_ — is the single
    most burst-fragile fact in the system.
 2. **Concurrency saturation.** Past ~80 concurrent requests the single instance queues
    briefly, then sheds with 429/5xx. Static assets, API calls, telemetry flushes, and
    party-mode WebSockets all compete for the same slots and the same vCPU — there is no
    CDN in front, so even the app shell's first loads are origin traffic (immutable cache
-   headers only help *repeat* visitors).
+   headers only help _repeat_ visitors).
 3. **Party mode degrades ungracefully.** Relay frames share the saturated instance, so
    controllers lag; and any deploy or instance restart during the burst drops every live
    room. Per-connection frame caps exist ([`mp.ts`](../apps/api/src/mp.ts):
@@ -244,7 +244,7 @@ wave eats a cold start. Then, in the order things actually break:
   disappears. Everything else on this list is tuning; this one removes a cliff.
 - **Set resources explicitly** (O2): pick `--concurrency`, `--cpu`, `--memory` from a load
   test instead of inheriting defaults silently — likely 2 vCPU + higher concurrency once
-  the cache makes requests cheap. Document *why* in the deploy script, next to the
+  the cache makes requests cheap. Document _why_ in the deploy script, next to the
   max-instances warning.
 - **Event mode** (runbook, O2): before a planned spike or meetup — `--min-instances 1`
   (no cold start, ~pennies per day, flip back after), quotas lowered, dashboard open.
@@ -262,19 +262,19 @@ Creation is the expensive, slow, externally-dependent path, and its only throttl
 **per-user**: `checkAndIncrementQuota` enforces a daily cap per creator, but N invited
 creators × quota = a global spend bounded only by how many people we invited. There is no
 global cap, no pause switch — "lower the quotas", which the GTM plan's launch checklist
-assumes, currently means *editing env vars and redeploying*. In failure order:
+assumes, currently means _editing env vars and redeploying_. In failure order:
 
 1. **Cost burn, silently.** Every submission is a moderation call plus an agent run — the
-   dominant COGS. A burst is first of all a *budget event*, and until O1's billing alerts
+   dominant COGS. A burst is first of all a _budget event_, and until O1's billing alerts
    exist, nothing announces it before the invoice.
 2. **The agent queue backs up and trust collapses.** Copilot capacity is fixed and slow
    (minutes per game, limited concurrency). A burst turns "building…" into hours of
    silence; creators see a quiet agent, retry, file feedback — adding load to the same
    queue. [`improvement-loop-plan.md`](./improvement-loop-plan.md) already calls a stalled
-   `issue-filed` an alert; in a burst it is the *normal state* unless arrivals are shaped.
+   `issue-filed` an alert; in a burst it is the _normal state_ unless arrivals are shaped.
 3. **GitHub secondary rate limits on rapid issue creation.** Bursty writes from one PAT
    trip abuse detection — jeopardizing the same token the play path depends on (until the
-   cache lands, a creator burst can take down *play*). [`risks-and-open-questions.md`](./risks-and-open-questions.md)
+   cache lands, a creator burst can take down _play_). [`risks-and-open-questions.md`](./risks-and-open-questions.md)
    B3 flagged this for public submission; bursts make it a beta concern too.
 4. **The sweep grows with the backlog.** notify-sweep iterates all open submissions every
    2 min; a large backlog makes the platform's own heartbeat heavier exactly when the
@@ -299,32 +299,32 @@ assumes, currently means *editing env vars and redeploying*. In failure order:
 
 The two scenarios fail differently and the plan should say so plainly: **a player burst
 breaks availability; a creator burst breaks economics and trust.** The player posture is
-*cache + shed + protect play*; the creator posture is *cap + queue + communicate*. Both
-share one rule: the switch that saves you must exist — and be config — *before* the burst,
+_cache + shed + protect play_; the creator posture is _cap + queue + communicate_. Both
+share one rule: the switch that saves you must exist — and be config — _before_ the burst,
 because during one, a redeploy is itself a risk (it drops every party room).
 
 ## 4. Alert catalog (target state after O2)
 
-All email-channel, all Cloud Monitoring native. The bar for adding an alert: *would the
-operator act on it within a day?* Anything else is a dashboard line, not an alert.
+All email-channel, all Cloud Monitoring native. The bar for adding an alert: _would the
+operator act on it within a day?_ Anything else is a dashboard line, not an alert.
 
-| # | Signal | Condition | Gate |
-| - | ------ | --------- | ---- |
-| A1 | Uptime check `/api/health` | 2 consecutive fails from 2+ regions | O1 |
-| A2 | Cloud Run 5xx | >5% over 10 min, or >20 absolute in 10 min | O1 |
-| A3 | notify-sweep executions | ≥3 consecutive failures | O1 |
-| A4 | Firestore export job | any failure | O1 |
-| A5 | Billing budget | 50% / 90% / 100% of monthly cap | O1 |
-| A6 | Catalog/GitHub fetch errors (log metric) | sustained >0 over 15 min | O2 |
-| A7 | Submission filing failure (log metric) | any occurrence | O2 |
-| A8 | Stalled submission (`issue-filed`, no PR) | age > 6h | O2 |
-| A9 | Instance count | >1 while relay is in-process | O2 |
-| A10 | p95 latency | >2s sustained 15 min (tune after baseline) | O2 |
-| A11 | GitHub API rate-limit headroom | `x-ratelimit-remaining` < 1,000 (log metric) | O2 |
-| A12 | Request shedding | 429s from Cloud Run (concurrency ceiling hit) | O2 |
-| A13 | Creation queue depth / global cap | open submissions > threshold, or global daily cap tripped | O2 |
+| #   | Signal                                    | Condition                                                 | Gate |
+| --- | ----------------------------------------- | --------------------------------------------------------- | ---- |
+| A1  | Uptime check `/api/health`                | 2 consecutive fails from 2+ regions                       | O1   |
+| A2  | Cloud Run 5xx                             | >5% over 10 min, or >20 absolute in 10 min                | O1   |
+| A3  | notify-sweep executions                   | ≥3 consecutive failures                                   | O1   |
+| A4  | Firestore export job                      | any failure                                               | O1   |
+| A5  | Billing budget                            | 50% / 90% / 100% of monthly cap                           | O1   |
+| A6  | Catalog/GitHub fetch errors (log metric)  | sustained >0 over 15 min                                  | O2   |
+| A7  | Submission filing failure (log metric)    | any occurrence                                            | O2   |
+| A8  | Stalled submission (`issue-filed`, no PR) | age > 6h                                                  | O2   |
+| A9  | Instance count                            | >1 while relay is in-process                              | O2   |
+| A10 | p95 latency                               | >2s sustained 15 min (tune after baseline)                | O2   |
+| A11 | GitHub API rate-limit headroom            | `x-ratelimit-remaining` < 1,000 (log metric)              | O2   |
+| A12 | Request shedding                          | 429s from Cloud Run (concurrency ceiling hit)             | O2   |
+| A13 | Creation queue depth / global cap         | open submissions > threshold, or global daily cap tripped | O2   |
 
-Plus two *calendar* alerts that no monitoring system will fire: PAT expiries
+Plus two _calendar_ alerts that no monitoring system will fire: PAT expiries
 (`github-token`, `GAMES_REPO_TOKEN`) and the annual domain/DNS renewal.
 
 ## 5. Runbooks (the bus-factor mitigation)
@@ -340,7 +340,7 @@ actually performing it. Initial set, in priority order:
    dependency, Firestore, bad deploy), and the degradation ladder (submissions off →
    private-beta wall up → static apology).
 4. **Rotate each secret** — mostly links into [`deployment.md`](./deployment.md), which
-   already has the recipes; the runbook adds the *order* and the verification step.
+   already has the recipes; the runbook adds the _order_ and the verification step.
 5. **Launch-day spike procedure** (O3) — quotas down, dashboard up, thresholds for
    flipping gates.
 6. **Event mode** (O2, from §3) — pre-warm with `--min-instances 1`, lower the global
@@ -389,7 +389,7 @@ Conventions, borrowed from [`closed-beta-launch-plan.md`](./closed-beta-launch-p
 items are numbered and ordered — work top to bottom within a gate; **[OWNER]** marks steps
 needing gcloud/console/billing access an agent does not have; everything else is agent
 work in this repo. Mark items **DONE (commit / date / how verified)** in place. An item is
-not DONE until its *Verify* line has actually been performed.
+not DONE until its _Verify_ line has actually been performed.
 
 ### O1 — the floor (target: ~2 weeks; blocks further invites)
 
@@ -399,8 +399,8 @@ not DONE until its *Verify* line has actually been performed.
 2. 📋 **[OWNER] Backup bucket + daily export.** Create `gs://gamedevpl-firestore-backups`
    (region `europe-central2`, 30-day lifecycle delete), a Cloud Scheduler job calling the
    managed `exportDocuments` API daily, and a service account with `datastore.importExportAdmin`
-   + bucket write. Script it into `infra/setup-gcp.sh` (agent can draft; owner runs).
-   — Verify: an export object exists in the bucket the next morning.
+   - bucket write. Script it into `infra/setup-gcp.sh` (agent can draft; owner runs).
+     — Verify: an export object exists in the bucket the next morning.
 3. 📋 **[OWNER] Restore drill.** Import yesterday's export into a scratch database, read
    back one `users` doc, delete the scratch DB. Write what actually happened into
    `docs/runbooks/restore-firestore.md` (item 9 creates the skeleton).
@@ -432,7 +432,7 @@ not DONE until its *Verify* line has actually been performed.
 10. ✅ **DONE** — PR #260 + games#74, merged 2026-07-27, commit `cc84b4f0`.
     **Superseded by the bake-at-merge snapshot, which is stronger than the last-good
     cache this item planned: GitHub is no longer on the published-play path at all**, so
-    there is no live GitHub call left to serve stale *from*. A merge to the games repo
+    there is no live GitHub call left to serve stale _from_. A merge to the games repo
     bakes every published game into `gs://gamedevpl-games-snapshots` and flips
     `current.json`; the site serves those bytes, and GitHub is demoted to a fallback for
     games missing from the snapshot. Design, takedown caveat and rollback procedure:
@@ -441,7 +441,7 @@ not DONE until its *Verify* line has actually been performed.
     and 356 media baked with 0 failures; snapshot bytes character-identical to what the
     GitHub path assembles; zero "falling back to GitHub" warnings on catalog/play once
     the pointer TTL rolled over.
-    — Residual work this does *not* cover, both small and startable now:
+    — Residual work this does _not_ cover, both small and startable now:
     - 📋 **Timeout on snapshot GCS fetches** (`apps/api/src/game-snapshot.ts`): a 2–5s
       `AbortSignal`, so a hung — as opposed to failed — Storage connection cannot stall
       the play route. The fallback triggers on error, not on a socket that never answers.

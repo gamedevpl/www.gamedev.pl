@@ -13,10 +13,28 @@ import { MAX_PROJECT_BYTES as ASSEMBLE_MAX } from './assemble.js';
 
 describe('games-repo-contract (website half)', () => {
   it('keeps the serve budget at the Check 4 total (games-repo MAX_BUNDLE_BYTES)', () => {
-    expect(MAX_PROJECT_BYTES).toBe(366_027);
+    expect(MAX_PROJECT_BYTES).toBe(382_027);
     expect(GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES).toBe(MAX_PROJECT_BYTES);
     // assemble.ts must re-export the same number — a second literal would drift.
     expect(ASSEMBLE_MAX).toBe(MAX_PROJECT_BYTES);
+  });
+
+  it('keeps the fixtures/games-repo assemble-contract snapshot in lockstep', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const { fileURLToPath } = await import('node:url');
+    const path = await import('node:path');
+    const fixturePath = path.join(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../fixtures/games-repo/shared/assemble-contract.json',
+    );
+    const fixture = JSON.parse(await readFile(fixturePath, 'utf8')) as {
+      maxProjectBytes: number;
+      gameKitModules: string[];
+      authorBudgetBytes: number;
+    };
+    expect(fixture.maxProjectBytes).toBe(MAX_PROJECT_BYTES);
+    expect(fixture.authorBudgetBytes).toBe(GAME_BUDGET_BYTES);
+    expect(fixture.gameKitModules).toEqual([...GAME_KIT_MODULES]);
   });
 
   it('lists GameKit modules in the post-draw-surface canonical order', () => {
@@ -77,7 +95,7 @@ describe('games-repo source extractors', () => {
       const GAMEKIT_HOST_PAUSE_BYTES = 1_473;
       const GAMEKIT_MASCOT_DRAW_BYTES = 679;
       const GAMEKIT_HEADROOM_BYTES = 75_237;
-      const GAMEKIT_GFX3D_BYTES = 40_000;
+      const GAMEKIT_GFX3D_BYTES = 56_000;
       const MAX_BUNDLE_BYTES =
         GAME_BUDGET_BYTES +
         GAMEKIT_TOUCH_BYTES +
