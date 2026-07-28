@@ -1584,9 +1584,17 @@ export class FirestoreStore implements Store {
     const snap = await this.previewsCollection(issueNumber).select('createdAt').orderBy('createdAt', 'desc').get();
     const stale = snap.docs.slice(keep);
     if (!stale.length) return 0;
-    const batch = this.db.batch();
-    for (const doc of stale) batch.delete(doc.ref);
-    await batch.commit();
+    // Chunked, because a Firestore batch takes at most 500 operations. Steady state is
+    // one deletion per push, so this never matters — until pruning falls behind (a spell
+    // of write errors while the watcher keeps pushing), at which point a single batch
+    // would start failing permanently and previews would grow without bound. The cheap
+    // loop is what stops a transient fault from becoming a permanent one.
+    const BATCH_LIMIT = 500;
+    for (let start = 0; start < stale.length; start += BATCH_LIMIT) {
+      const batch = this.db.batch();
+      for (const doc of stale.slice(start, start + BATCH_LIMIT)) batch.delete(doc.ref);
+      await batch.commit();
+    }
     return stale.length;
   }
 

@@ -1610,10 +1610,6 @@ export async function registerSubmissionRoutes(
    * This serves unreviewed agent output as executable HTML, which is the most dangerous
    * thing in this file, so the defences are layered and none of them is decorative:
    *
-   *  - The document is served from a *different origin* than the site whenever
-   *    PREVIEW_ORIGIN is configured, and the browser is told to sandbox it besides. A
-   *    game bundle is self-contained and offline by construction, so it needs no access
-   *    to the site's origin, cookies, or storage to run correctly.
    *  - `Content-Security-Policy: sandbox` is the header form of the iframe attribute, so
    *    the restriction holds even if the document is opened directly rather than framed.
    *    `allow-scripts` is granted because a game is nothing without it; `allow-same-origin`
@@ -1624,6 +1620,12 @@ export async function registerSubmissionRoutes(
    *    fails, so an injected exfiltration payload has nowhere to send anything.
    *  - `X-Content-Type-Options: nosniff` and `Content-Disposition: inline` keep the
    *    response from being reinterpreted as anything other than what it is.
+   *
+   * No `frame-ancestors`: the web app may be served from a different origin than this API
+   * (`VITE_API_BASE_URL`), and restricting it would block the status page from framing the
+   * preview in exactly those deployments. It would also buy nothing — the URL is reachable
+   * only with the creator's submission token, and a document already confined to an opaque
+   * origin has nothing worth clickjacking.
    *
    * Caching is short and private. A preview is superseded within minutes and belongs to
    * one creator's build; it must not sit in a shared cache the way published media can.
@@ -1670,7 +1672,7 @@ export async function registerSubmissionRoutes(
             'Content-Security-Policy',
             "sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; " +
               "style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:; " +
-              "connect-src 'none'; form-action 'none'; frame-ancestors 'self'; base-uri 'none'",
+              "connect-src 'none'; form-action 'none'; base-uri 'none'",
           )
           .header('X-Content-Type-Options', 'nosniff')
           .header('Content-Disposition', 'inline')

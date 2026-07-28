@@ -436,6 +436,10 @@ describe('agent build channel', () => {
     // A game bundle is offline by construction, so nothing legitimate needs the network.
     expect(csp).toContain("connect-src 'none'");
     expect(csp).toContain("form-action 'none'");
+    // Deliberately absent: the web app may live on a different origin than the API
+    // (VITE_API_BASE_URL), and frame-ancestors would block the status page from
+    // framing its own preview in exactly those deployments.
+    expect(csp).not.toContain('frame-ancestors');
     expect(page.headers['x-content-type-options']).toBe('nosniff');
     expect(page.headers['cache-control']).toContain('private');
   });
