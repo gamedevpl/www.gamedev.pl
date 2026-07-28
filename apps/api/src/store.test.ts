@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { InMemoryStore, TELEMETRY_COLLECTION, TELEMETRY_RETENTION_DAYS, telemetryExpiresAt } from './store.js';
 
 describe('InMemoryStore', () => {
@@ -153,5 +153,38 @@ describe('telemetry retention', () => {
     // A TTL policy is scoped to a collection group. Sharing `events` with
     // `submissions/{n}/events` would put one retention rule over both.
     expect(TELEMETRY_COLLECTION).not.toBe('events');
+  });
+});
+
+describe('InMemoryStore build previews', () => {
+  const ISSUE = 4242;
+
+  async function push(store: InMemoryStore, label: string) {
+    await store.appendBuildPreview(ISSUE, { slug: 'sky-dodge', label, data: '<html></html>' } as never);
+    // Same keep count the agent channel uses, so the interaction under test is the real one.
+    await store.pruneBuildPreviews(ISSUE, 4);
+  }
+
+  it('keeps append order across a prune, even within a single millisecond', async () => {
+    // `pruneBuildPreviews` writes the array back sorted newest-first, so after the first
+    // prune the last element is the *oldest*. `appendBuildPreview` used to read that
+    // element to decide whether to bump the timestamp, which meant the bump stopped
+    // firing exactly when previews were arriving fast enough to need it — two appends in
+    // one millisecond then tied on `createdAt` and were ordered by a random UUID.
+    //
+    // The clock is frozen so every append genuinely lands on the same tick: the ordering
+    // then depends on nothing but the bump, and the test fails every run instead of one
+    // in eight.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-28T09:00:00.000Z'));
+    try {
+      const store = new InMemoryStore();
+      for (let index = 0; index < 7; index += 1) await push(store, `build ${index}`);
+
+      const newest = await store.listBuildPreviews(ISSUE);
+      expect(newest.map((preview) => preview.label)).toEqual(['build 6', 'build 5', 'build 4', 'build 3']);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

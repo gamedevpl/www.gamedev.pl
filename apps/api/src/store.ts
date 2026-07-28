@@ -1037,10 +1037,19 @@ export class InMemoryStore implements Store {
     // tests (and occasionally in prod) land on the same tick; bump so "newest"
     // matches append order instead of UUID tie-breaks.
     const nowIso = new Date().toISOString();
-    const lastCreatedAt = existing[existing.length - 1]?.createdAt;
+    // The newest by value, not by position. `pruneBuildPreviews` writes the array back
+    // sorted newest-first, so after the first prune the last element is the *oldest* — and
+    // reading it here silently disabled this bump, letting two appends in the same
+    // millisecond tie on `createdAt` and be ordered by a random UUID instead.
+    const newestCreatedAt = existing.reduce<string | undefined>(
+      (newest, entry) => (newest === undefined || entry.createdAt > newest ? entry.createdAt : newest),
+      undefined,
+    );
     const createdAt =
       preview.createdAt ??
-      (lastCreatedAt && lastCreatedAt >= nowIso ? new Date(Date.parse(lastCreatedAt) + 1).toISOString() : nowIso);
+      (newestCreatedAt && newestCreatedAt >= nowIso
+        ? new Date(Date.parse(newestCreatedAt) + 1).toISOString()
+        : nowIso);
     const record: BuildPreview = {
       ...preview,
       id: randomUUID(),
