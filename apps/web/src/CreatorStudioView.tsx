@@ -427,6 +427,11 @@ export function CreatorStudioView({
                     <SubmissionStatusView
                       token={selectedGame.token}
                       embedded
+                      // Feeds the live pill's elapsed timer. With the numeric ETA gone, "Live · 12m"
+                      // is the only thing on this tab saying the build is still moving — a bare
+                      // "Live" next to the header's status pill reads like a second, contradictory
+                      // status instead of a heartbeat.
+                      submittedAt={Date.parse(selectedGame.createdAt)}
                       onRetry={
                         onRetryConcept
                           ? (concept) => {
