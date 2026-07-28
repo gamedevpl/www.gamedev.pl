@@ -409,6 +409,45 @@ export interface PlayerFeedbackRecord {
 }
 
 /**
+ * One player's saved progress in one game (docs/persistent-world-plan.md P1).
+ *
+ * Stored at `users/{uid}/gameSaves/{slug}` — under the *player*, not under the game,
+ * and that is a deliberate correction rather than a coin flip. Votes live at
+ * `games/{slug}/votes/{uid}` with the uid as a document id, which is why erasing one
+ * person's votes needs a walk across every game in the catalog (see
+ * `erase-player-signals.ts` for the long version). Saves are the same shape of data —
+ * per-player, per-game, erasable on request — so putting them under the uid makes
+ * "delete everything this person has" a single subcollection read instead of a walk
+ * that grows with the catalog.
+ *
+ * `data` is an **opaque JSON string**, never a parsed object, for three reasons that
+ * each bite on their own: Firestore rejects nested arrays outright (a game saving a 2D
+ * grid is not exotic), it strips `undefined`, and it constrains field names — none of
+ * which a game author can be expected to know or a validator can usefully enforce on a
+ * blob whose shape is the game's business. Storing the string also makes the size cap
+ * exact, since the thing measured is the thing stored.
+ */
+export interface GameSaveRecord {
+  slug: string;
+  /** Opaque game-authored JSON, capped at MAX_GAME_SAVE_BYTES. Never parsed here. */
+  data: string;
+  /** The save-format version the game stamped, so it can migrate its own old saves. */
+  version: number;
+  updatedAt: string;
+}
+
+/**
+ * Ceiling on one save, in bytes of UTF-8. Mirrored by `MAX_SAVE_BYTES` in the games
+ * repo's `shared/modules/save.ts`, which refuses an oversized value in the author's
+ * console rather than letting it fail as a 413 in front of a player.
+ *
+ * 32 KB is far below Firestore's ~1 MiB document limit, and that headroom is the point:
+ * this is a budget for level numbers, unlocks and high scores. A game that needs more
+ * is describing a world, which is P2's problem and wants a different schema.
+ */
+export const MAX_GAME_SAVE_BYTES = 32 * 1024;
+
+/**
  * Attacker-controlled strings, quarantined in their own object on purpose.
  *
  * Everything else on a scorecard is a number this service computed. These two are
@@ -665,6 +704,15 @@ export interface Store {
   clearVote(slug: string, uid: string): Promise<GameVoteCounts>;
   /** A game's aggregate vote counts — the public read, no uid involved. */
   getVoteCounts(slug: string): Promise<GameVoteCounts>;
+  /** One player's save for one game, or null if they have none. */
+  getGameSave(uid: string, slug: string): Promise<GameSaveRecord | null>;
+  /** Writes (or replaces) one player's save. The caller has already size-checked `data`. */
+  putGameSave(uid: string, slug: string, data: string, version: number): Promise<GameSaveRecord>;
+  deleteGameSave(uid: string, slug: string): Promise<void>;
+  /** Every save a person has, across games — the erase path's read. */
+  listGameSaves(uid: string): Promise<GameSaveRecord[]>;
+  /** Deletes every save a person has. Returns how many went. */
+  deleteGameSaves(uid: string): Promise<number>;
   /** Appends one already-moderated, already-sanitized feedback row. Returns it with its id. */
   addPlayerFeedback(slug: string, uid: string, text: string): Promise<PlayerFeedbackRecord>;
   /** A game's feedback, newest first. No consumer yet (IL-2 theme extraction is next); exists now so capture is verifiable. */
@@ -808,6 +856,8 @@ export class InMemoryStore implements Store {
   private votes = new Map<string, Map<string, VoteValue>>();
   // slug -> feedback rows, newest last (reversed on read)
   private playerFeedback = new Map<string, PlayerFeedbackRecord[]>();
+  // uid -> (slug -> saved progress)
+  private gameSaves = new Map<string, Map<string, GameSaveRecord>>();
   // slug -> current scorecard
   private scorecards = new Map<string, Scorecard>();
   // tokenId -> personal access token record
@@ -1263,6 +1313,33 @@ export class InMemoryStore implements Store {
 
   async getVoteCounts(slug: string): Promise<GameVoteCounts> {
     return this.voteCounts(slug);
+  }
+
+  async getGameSave(uid: string, slug: string): Promise<GameSaveRecord | null> {
+    const found = this.gameSaves.get(uid)?.get(slug);
+    return found ? { ...found } : null;
+  }
+
+  async putGameSave(uid: string, slug: string, data: string, version: number): Promise<GameSaveRecord> {
+    const record: GameSaveRecord = { slug, data, version, updatedAt: new Date().toISOString() };
+    const forUser = this.gameSaves.get(uid) ?? new Map<string, GameSaveRecord>();
+    forUser.set(slug, record);
+    this.gameSaves.set(uid, forUser);
+    return { ...record };
+  }
+
+  async deleteGameSave(uid: string, slug: string): Promise<void> {
+    this.gameSaves.get(uid)?.delete(slug);
+  }
+
+  async listGameSaves(uid: string): Promise<GameSaveRecord[]> {
+    return [...(this.gameSaves.get(uid)?.values() ?? [])].map((record) => ({ ...record }));
+  }
+
+  async deleteGameSaves(uid: string): Promise<number> {
+    const count = this.gameSaves.get(uid)?.size ?? 0;
+    this.gameSaves.delete(uid);
+    return count;
   }
 
   async addPlayerFeedback(slug: string, uid: string, text: string): Promise<PlayerFeedbackRecord> {
@@ -1982,6 +2059,58 @@ export class FirestoreStore implements Store {
   async getVoteCounts(slug: string): Promise<GameVoteCounts> {
     const snap = await this.gameRef(slug).get();
     return FirestoreStore.readVoteCounts(snap.data());
+  }
+
+  // Under the player, keyed by slug — see GameSaveRecord for why this is not
+  // `games/{slug}/saves/{uid}` the way votes are.
+  private gameSaveRef(uid: string, slug: string) {
+    return this.db.collection('users').doc(uid).collection('gameSaves').doc(slug);
+  }
+
+  async getGameSave(uid: string, slug: string): Promise<GameSaveRecord | null> {
+    const snap = await this.gameSaveRef(uid, slug).get();
+    if (!snap.exists) return null;
+    const data = snap.data() ?? {};
+    return {
+      slug,
+      data: typeof data.data === 'string' ? data.data : '',
+      version: typeof data.version === 'number' ? data.version : 0,
+      updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : '',
+    };
+  }
+
+  async putGameSave(uid: string, slug: string, data: string, version: number): Promise<GameSaveRecord> {
+    const record: GameSaveRecord = { slug, data, version, updatedAt: new Date().toISOString() };
+    // `set` without merge: a save is a whole snapshot of the player's progress, and
+    // merging would leave fields from an older shape alive beside a newer one — a
+    // state the game never actually wrote.
+    await this.gameSaveRef(uid, slug).set({ data, version, updatedAt: record.updatedAt });
+    return record;
+  }
+
+  async deleteGameSave(uid: string, slug: string): Promise<void> {
+    await this.gameSaveRef(uid, slug).delete();
+  }
+
+  async listGameSaves(uid: string): Promise<GameSaveRecord[]> {
+    const snap = await this.db.collection('users').doc(uid).collection('gameSaves').get();
+    return snap.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        slug: doc.id,
+        data: typeof data.data === 'string' ? data.data : '',
+        version: typeof data.version === 'number' ? data.version : 0,
+        updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : '',
+      };
+    });
+  }
+
+  async deleteGameSaves(uid: string): Promise<number> {
+    // `listDocuments` rather than `get`: this only needs the references to delete, and
+    // a person's saves may be tens of kilobytes each that nobody is going to read.
+    const refs = await this.db.collection('users').doc(uid).collection('gameSaves').listDocuments();
+    for (const ref of refs) await ref.delete();
+    return refs.length;
   }
 
   async addPlayerFeedback(slug: string, uid: string, text: string): Promise<PlayerFeedbackRecord> {

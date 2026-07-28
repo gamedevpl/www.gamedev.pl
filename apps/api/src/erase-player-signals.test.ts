@@ -10,8 +10,7 @@ describe('indexHint', () => {
     'playerFeedback and field uid. That index is not ready yet. See its status here: ' +
     'https://console.firebase.google.com/v1/r/project/gamedevpl/firestore/indexes?create_exemption=Cl';
 
-  const neverCreated =
-    '9 FAILED_PRECONDITION: no matching index found for collection playerFeedback and field uid.';
+  const neverCreated = '9 FAILED_PRECONDITION: no matching index found for collection playerFeedback and field uid.';
 
   it('tells an operator to wait, not to re-run setup, while the index builds', () => {
     const hint = indexHint(stillBuilding);
@@ -42,7 +41,9 @@ describe('indexHint', () => {
     // collection is a real failure the operator must read, and answering it with
     // "provision playerFeedback.uid" sends them to fix something already fine.
     expect(
-      indexHint('9 FAILED_PRECONDITION: The query requires a COLLECTION_GROUP_DESC index for collection scorecard and field computedAt.'),
+      indexHint(
+        '9 FAILED_PRECONDITION: The query requires a COLLECTION_GROUP_DESC index for collection scorecard and field computedAt.',
+      ),
     ).toBeNull();
   });
 });
@@ -69,6 +70,10 @@ describe('erasePlayerSignals', () => {
     await store.addPlayerFeedback('brick-storm', 'g:leaver', 'level two is a wall');
     await store.addPlayerFeedback('brick-storm', 'g:stayer', 'the controls feel great');
     await store.addPlayerFeedback('rock-blaster', 'g:leaver', 'asteroids spawn on top of me');
+
+    await store.putGameSave('g:leaver', 'crypt-delver', '{"level":7}', 1);
+    await store.putGameSave('g:leaver', 'brick-storm', '{"best":4200}', 1);
+    await store.putGameSave('g:stayer', 'crypt-delver', '{"level":2}', 1);
   });
 
   it('removes the leaver’s votes and feedback across every game', async () => {
@@ -88,6 +93,18 @@ describe('erasePlayerSignals', () => {
 
     expect(await store.getVote('brick-storm', 'g:stayer')).toBe('up');
     expect((await store.listPlayerFeedback('brick-storm'))[0]?.text).toContain('controls feel great');
+    expect((await store.getGameSave('g:stayer', 'crypt-delver'))?.data).toBe('{"level":2}');
+  });
+
+  it('removes the leaver’s saved progress in every game, and names the games', async () => {
+    // Saved progress is the newest thing the privacy notice promises to erase, and the
+    // easiest to forget: unlike a vote it has no public trace, so nothing would look
+    // wrong on the site if it were quietly left behind.
+    const result = await erasePlayerSignals({ store, uid: 'g:leaver' });
+
+    expect(result.savesDeleted).toEqual(['brick-storm', 'crypt-delver']);
+    expect(await store.getGameSave('g:leaver', 'crypt-delver')).toBeNull();
+    expect(await store.getGameSave('g:leaver', 'brick-storm')).toBeNull();
   });
 
   it('keeps the public vote tallies honest after the erase', async () => {
@@ -108,11 +125,13 @@ describe('erasePlayerSignals', () => {
     expect(result.dryRun).toBe(true);
     expect(result.votesCleared.sort()).toEqual(['brick-storm', 'rock-blaster']);
     expect(result.feedbackDeleted).toBe(2);
+    expect(result.savesDeleted).toEqual(['brick-storm', 'crypt-delver']);
 
     // Still all there.
     expect(await store.getVote('brick-storm', 'g:leaver')).toBe('up');
     expect(await store.listPlayerFeedback('rock-blaster')).toHaveLength(1);
     expect(await store.getVoteCounts('brick-storm')).toEqual({ up: 2, down: 0 });
+    expect(await store.getGameSave('g:leaver', 'crypt-delver')).not.toBeNull();
   });
 
   it('is a no-op for an account that never voted or wrote anything', async () => {
@@ -120,6 +139,7 @@ describe('erasePlayerSignals', () => {
 
     expect(result.votesCleared).toEqual([]);
     expect(result.feedbackDeleted).toBe(0);
+    expect(result.savesDeleted).toEqual([]);
     // And nobody else was disturbed by the attempt.
     expect(await store.getVoteCounts('brick-storm')).toEqual({ up: 2, down: 0 });
   });
@@ -133,6 +153,7 @@ describe('erasePlayerSignals', () => {
 
     expect(actual.feedbackDeleted).toBe(preview.feedbackDeleted);
     expect(actual.votesCleared).toEqual(preview.votesCleared);
+    expect(actual.savesDeleted).toEqual(preview.savesDeleted);
   });
 
   it('writes nothing when the feedback query fails', async () => {

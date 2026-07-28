@@ -38,6 +38,7 @@ describe('catalog helpers', () => {
           video: 'gameplay.mp4',
         },
         multiplayer: null,
+        saves: null,
         orientation: 'any',
         touch: null,
         submittedBy: null,

@@ -107,6 +107,7 @@ describe('getCatalog', () => {
           video: 'gameplay.mp4',
         },
         multiplayer: null,
+        saves: null,
         orientation: 'any',
         submittedBy: null,
       },
@@ -137,6 +138,7 @@ describe('getCatalog', () => {
         status: 'published',
         media: null,
         multiplayer: null,
+        saves: null,
         orientation: 'any',
         submittedBy: null,
       },
@@ -274,6 +276,7 @@ describe('getCatalog', () => {
         touch: 'gamekit',
         orientation: 'portrait',
         multiplayer: null,
+        saves: null,
         media: { screenshots: [{ name: 'opening', file: 'opening.png' }], video: 'gameplay.mp4' },
       },
       {
@@ -311,6 +314,7 @@ describe('getCatalog', () => {
         touch: 'gamekit',
         orientation: 'portrait',
         multiplayer: null,
+        saves: null,
         media: { screenshots: [{ name: 'opening', file: 'opening.png' }], video: 'gameplay.mp4' },
         submittedBy: null,
       },
@@ -324,9 +328,36 @@ describe('getCatalog', () => {
         touch: 'controllers',
         orientation: 'any',
         multiplayer: { mode: 'controllers', minPlayers: 2, maxPlayers: 4 },
+        saves: null,
         media: null,
         submittedBy: null,
       },
+    ]);
+  });
+
+  it('carries the saves declaration through the committed catalog, and only for the one valid value', async () => {
+    const committed = [
+      { slug: 'crypt-delver', title: 'Crypt Delver', status: 'published', saves: 'player' },
+      { slug: 'brick-storm', title: 'Brick Storm', status: 'published', saves: 'world' },
+      { slug: 'sky-dodge', title: 'Sky Dodge', status: 'published' },
+    ];
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/contents/catalog.json')) {
+        return new Response(JSON.stringify(committed), { status: 200 });
+      }
+      throw new Error(`unexpected request: ${url}`);
+    }) as unknown as typeof fetch;
+
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+    const catalog = await client.getCatalog('main');
+
+    // `player` is the only mode; anything else — a typo, or a value from a games repo
+    // newer than this deploy — reads as "does not save" rather than failing the catalog.
+    expect(catalog.map((entry) => [entry.slug, entry.saves])).toEqual([
+      ['crypt-delver', 'player'],
+      ['brick-storm', null],
+      ['sky-dodge', null],
     ]);
   });
 
@@ -383,6 +414,7 @@ describe('getCatalog', () => {
         status: 'published',
         orientation: 'any',
         multiplayer: null,
+        saves: null,
         media: null,
         submittedBy: null,
       },
@@ -540,7 +572,9 @@ describe('getGameSources', () => {
     expect(sources?.gameJs).toContain('"coin":"data:audio/wav;base64,AwQ="');
     // Games-repo contract: selected name as a string, plus a one-entry tracks map.
     expect(sources?.gameJs).toContain('window.__GAME_AUDIO_MUSIC__ = "menu-theme";');
-    expect(sources?.gameJs).toContain('window.__GAME_MUSIC_TRACKS__ = Object.freeze({"menu-theme":{"loop":true,"data":"data:audio/mpeg;base64,AAA="}});');
+    expect(sources?.gameJs).toContain(
+      'window.__GAME_MUSIC_TRACKS__ = Object.freeze({"menu-theme":{"loop":true,"data":"data:audio/mpeg;base64,AAA="}});',
+    );
     expect(sources?.gameJs).not.toContain('other-theme');
     expect(sources?.gameJs.indexOf('window.GameKit =')).toBeLessThan(
       sources?.gameJs.indexOf('GameKit.createInput') ?? 0,
@@ -596,7 +630,9 @@ describe('getGameSources', () => {
     expect(sources?.gameJs).toContain('GameKit.gfx = true');
     expect(sources?.gameJs).toContain('GameKit.actors = true');
     expect(sources?.gameJs).toContain('GameKit.world = true');
-    expect(sources?.gameJs.indexOf('GameKit.world = true')).toBeLessThan(sources?.gameJs.indexOf('GameKit.gfx = true') ?? 0);
+    expect(sources?.gameJs.indexOf('GameKit.world = true')).toBeLessThan(
+      sources?.gameJs.indexOf('GameKit.gfx = true') ?? 0,
+    );
     expect(() => new Function(sources?.gameJs ?? '')).not.toThrow();
   });
 
@@ -633,18 +669,21 @@ describe('getGameSources', () => {
     {
       label: '.ts suffix',
       entry: "import { startGame } from './game/runtime.ts'; startGame();",
-      runtimeImport: "import type { Score } from './model.ts'; export function startGame(): void { const score: Score = { value: 3 }; GameKit.mount({ score }); }",
+      runtimeImport:
+        "import type { Score } from './model.ts'; export function startGame(): void { const score: Score = { value: 3 }; GameKit.mount({ score }); }",
     },
     {
       // TypeScript's Node ESM convention — import path says .js, source file is .ts.
       label: '.js suffix',
       entry: "import { startGame } from './game/runtime.js'; startGame();",
-      runtimeImport: "import type { Score } from './model.js'; export function startGame(): void { const score: Score = { value: 3 }; GameKit.mount({ score }); }",
+      runtimeImport:
+        "import type { Score } from './model.js'; export function startGame(): void { const score: Score = { value: 3 }; GameKit.mount({ score }); }",
     },
     {
       label: 'extensionless',
       entry: "import { startGame } from './game/runtime'; startGame();",
-      runtimeImport: "import type { Score } from './model'; export function startGame(): void { const score: Score = { value: 3 }; GameKit.mount({ score }); }",
+      runtimeImport:
+        "import type { Score } from './model'; export function startGame(): void { const score: Score = { value: 3 }; GameKit.mount({ score }); }",
     },
   ])('bundles a game-local TypeScript module graph from GitHub ($label)', async ({ entry, runtimeImport }) => {
     const files = new Map<string, string | Uint8Array>([

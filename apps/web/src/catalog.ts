@@ -36,6 +36,12 @@ export interface CatalogEntry {
   status: string;
   media: CatalogMedia | null;
   multiplayer: CatalogMultiplayer | null;
+  /**
+   * `player` when the game keeps progress for signed-in players. Advisory: whether a
+   * save slot is opened is decided by whether the running game asks for one, so this is
+   * for telling a player what to expect, never for gating the bridge.
+   */
+  saves: 'player' | null;
   orientation: CatalogOrientation;
   touch: CatalogTouch | null;
   /**
@@ -150,9 +156,10 @@ export async function fetchCatalog(): Promise<CatalogEntry[]> {
     .filter(
       (
         entry,
-      ): entry is Omit<CatalogEntry, 'media' | 'multiplayer' | 'orientation' | 'touch'> & {
+      ): entry is Omit<CatalogEntry, 'media' | 'multiplayer' | 'saves' | 'orientation' | 'touch'> & {
         media?: unknown;
         multiplayer?: unknown;
+        saves?: unknown;
         orientation?: unknown;
         touch?: unknown;
       } =>
@@ -169,6 +176,7 @@ export async function fetchCatalog(): Promise<CatalogEntry[]> {
       ...entry,
       media: parseCatalogMedia(entry.media),
       multiplayer: parseCatalogMultiplayer((entry as { multiplayer?: unknown }).multiplayer),
+      saves: entry.saves === 'player' ? ('player' as const) : null,
       orientation: parseCatalogOrientation(entry.orientation),
       touch: parseCatalogTouch(entry.touch),
       submittedBy: parseCatalogSubmittedBy(

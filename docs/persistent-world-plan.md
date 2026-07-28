@@ -1,11 +1,15 @@
 # Persistent shared worlds — concept exploration
 
-Status: 💭 **Concept exploration, not scheduled.** This document answers the question
+Status: **P1 built 2026-07-28. P2 and P3 remain 💭 concept exploration, not scheduled.**
+This document answers the question
 _"if we wanted a game like Ultima Online on this platform, how could we achieve it?"_ —
-written 2026-07-28 against the shipped party-mode architecture
-([multiplayer-plan.md](./multiplayer-plan.md)). Nothing here is committed roadmap; the value
-is that the phasing below decomposes an MMO into steps that are each independently shippable
-products, so the platform can walk toward this without betting on the destination.
+written against the shipped party-mode architecture
+([multiplayer-plan.md](./multiplayer-plan.md)). The value is that the phasing below
+decomposes an MMO into steps that are each independently shippable products, so the platform
+can walk toward this without betting on the destination.
+
+**[P1 (durable per-player state)](#p1--durable-per-player-state-capability-1-built) is
+implemented and gated**, in both repos. Nothing beyond it is committed roadmap.
 
 ---
 
@@ -14,13 +18,13 @@ products, so the platform can walk toward this without betting on the destinatio
 An MMO with a shared persistent world is not one feature. It is five capabilities stacked,
 and they have very different costs on this platform:
 
-| #   | Capability             | What it means                                                              | UO example                                  |
-| --- | ---------------------- | -------------------------------------------------------------------------- | ------------------------------------------- |
-| 1   | **Durable identity**   | A character that survives sessions: inventory, skills, position            | Log out in Britain, log back in in Britain  |
-| 2   | **Shared simultaneity**| Other players visibly act in real time in the same space                   | Watching someone chop a tree next to you    |
-| 3   | **Independent world**  | The world evolves when you're not there                                    | Your house stands; crops grow; mobs respawn |
-| 4   | **Scale via space**    | Zoning and interest management — you only receive what is near you         | Britain and Minoc don't share a netcode fate|
-| 5   | **Social permanence**  | Chat, guilds, trade, reputation — durable player-to-player artifacts       | The player-run economy, and its scammers    |
+| #   | Capability              | What it means                                                        | UO example                                   |
+| --- | ----------------------- | -------------------------------------------------------------------- | -------------------------------------------- |
+| 1   | **Durable identity**    | A character that survives sessions: inventory, skills, position      | Log out in Britain, log back in in Britain   |
+| 2   | **Shared simultaneity** | Other players visibly act in real time in the same space             | Watching someone chop a tree next to you     |
+| 3   | **Independent world**   | The world evolves when you're not there                              | Your house stands; crops grow; mobs respawn  |
+| 4   | **Scale via space**     | Zoning and interest management — you only receive what is near you   | Britain and Minoc don't share a netcode fate |
+| 5   | **Social permanence**   | Chat, guilds, trade, reputation — durable player-to-player artifacts | The player-run economy, and its scammers     |
 
 Capability 1 is a persistence feature. Capability 2 is a networking feature (partly shipped —
 see §2). Capability 3 is the genuinely new and hard one here, because it forces the question
@@ -82,11 +86,11 @@ definition** — the entire safety model is "execution, not inspection"
 So the question "who simulates the persistent world?" has exactly three possible answers,
 and the whole design space falls out of choosing among them:
 
-| Option | The world is simulated by…                        | Trust story                                                                 | Fails at                                                                    |
-| ------ | -------------------------------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| **A**  | A player's browser (host-authoritative, persisted) | Same cage as today; host is a player, so the host can cheat                 | Cheating, world offline when nobody hosts, host-migration conflicts         |
-| **B**  | The platform, via **generic typed primitives**     | No game code runs server-side at all; server enforces schema + quotas       | Can't express real game rules server-side; logic-level cheating possible    |
-| **C**  | The game's **own sim code in a server-side cage**  | The iframe invariant gets a twin: an isolate with no I/O, message-only      | New trust surface; requires the deterministic-sim contract (§6); infra cost |
+| Option | The world is simulated by…                         | Trust story                                                            | Fails at                                                                    |
+| ------ | -------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| **A**  | A player's browser (host-authoritative, persisted) | Same cage as today; host is a player, so the host can cheat            | Cheating, world offline when nobody hosts, host-migration conflicts         |
+| **B**  | The platform, via **generic typed primitives**     | No game code runs server-side at all; server enforces schema + quotas  | Can't express real game rules server-side; logic-level cheating possible    |
+| **C**  | The game's **own sim code in a server-side cage**  | The iframe invariant gets a twin: an isolate with no I/O, message-only | New trust surface; requires the deterministic-sim contract (§6); infra cost |
 
 The platform's honest path is **A → B → C in that order**, because:
 
@@ -141,11 +145,11 @@ flowchart TB
 
 ## 5. The phases — each one a product on its own
 
-### P1 — Durable per-player state (capability 1)
+### P1 — Durable per-player state (capability 1) ✅ built
 
 A `save` GameKit module: the game asks the bridge to persist a small versioned blob, keyed
 `(uid, slug)`; the shell forwards to a new authenticated API route; Firestore stores it
-(size-capped ~32 KB, schema-versioned, covered by the existing erasure path).
+(size-capped 32 KB, schema-versioned, covered by the existing erasure path).
 
 - Unlocks a whole genre the catalog quietly wants already — many SPECs say "no persistence"
   only because there was no way to have it (`four-seasons-farm` is persistence-shaped).
@@ -153,6 +157,45 @@ A `save` GameKit module: the game asks the bridge to persist a small versioned b
   offline-only rule is unchanged (the _bridge_ is the channel, exactly like `party`).
 - Signed-in players only; a game must degrade gracefully to sessionless play (the module
   reports `available: false`, same feature-detection pattern as `createParty`).
+
+**What shipped**, and the decisions worth knowing before extending it:
+
+| Piece                             | Where                                                                                                                                   |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `GameKit.createSave({ version })` | games repo `shared/modules/save.ts` (+ `save` in `GAME_KIT_MODULES`, both copies of the lockstep contract)                              |
+| Author rules and CI               | games repo `tools/validate.ts` **Check 21** — `saves: player` frontmatter, module, and `createSave(` must all agree, in both directions |
+| Shell half of the bridge          | [`apps/web/src/gameSave.ts`](../apps/web/src/gameSave.ts), mounted by `GameTheater` on the published slug                               |
+| API                               | [`apps/api/src/game-saves.ts`](../apps/api/src/game-saves.ts) — `GET`/`PUT`/`DELETE /api/games/:slug/save`                              |
+| Storage                           | `users/{uid}/gameSaves/{slug}` (`store.ts`), erasure in [`erase-player-signals.ts`](../apps/api/src/erase-player-signals.ts)            |
+
+1. **The save is an opaque JSON string, not a parsed object.** Firestore rejects nested
+   arrays outright, strips `undefined`, and constrains field names — a game saving a 2D
+   grid is completely ordinary and would have failed at runtime, in production, for one
+   game, long after the in-memory tests went green. Storing the string also makes the byte
+   cap exact, because the thing measured is the thing stored. Pinned by a test in
+   `store-firestore.test.ts` whose fake refuses nested arrays like the real client.
+2. **Saves live under the player, not under the game.** Votes went
+   `games/{slug}/votes/{uid}`, which is why erasing one person's votes needs a walk across
+   the whole catalog. Saves are the same shape of data, so the layout was chosen to keep
+   the erase path a single subcollection delete as the catalog grows.
+3. **A stale-version save is never handed back as `data`.** It arrives as `staleData`, so
+   a shape the game's current code did not write can never reach logic that has moved on.
+   Migration is opt-in; the default is a clean start, which cannot crash a game.
+4. **The bridge is on for every published game, not only for games flagged as saving.**
+   Nothing happens until a game announces itself, and only a game that selected the module
+   ever does — so the capability is derived from behavior rather than from a declaration
+   that could have drifted, the same reasoning as touch support. The catalog's `saves`
+   field is therefore advisory: it drives the "Saves progress" badge, never the bridge.
+5. **Writes are serialized end to end.** The module coalesces (one write per few seconds,
+   newest value only) and the shell keeps at most one request in flight — the failure a
+   save system is never forgiven for is an older write landing after a newer one.
+6. **Drafts cannot save.** A draft is rebuilt commit by commit and its save format may
+   change under the player; the slug gate is the published catalog, like votes.
+
+Not built, deliberately: no UI beyond the catalog badge (no "your progress is saved"
+toast, no per-game "delete my progress" control outside what a game offers itself), and
+no first-party game using it yet — the retrofit named in §10 is the natural next step and
+is what would exercise the whole path against real play.
 
 ### P2 — Shared asynchronous worlds (capabilities 1+3+5, "Ultima-lite")
 
@@ -194,18 +237,25 @@ simulation and a view**, and CI proves the split mechanically.
 
 ```jsonc
 // GAME.json
-{ "engine": { "modules": ["…", "world-sim"] },
-  "world": { "tick_hz": 10, "max_players_per_zone": 16 } }
+{ "engine": { "modules": ["…", "world-sim"] }, "world": { "tick_hz": 10, "max_players_per_zone": 16 } }
 ```
 
 ```js
 // sim.js — pure, deterministic, runs in the server isolate AND in every client for prediction
-export function init(seed) { /* → initial zone state */ }
-export function tick(state, events, rng) { /* → next state; events = [{slot, k, v}, join, leave] */ }
-export function wake(state, elapsedMs, rng) { /* → state after hibernation (crops grew) */ }
+export function init(seed) {
+  /* → initial zone state */
+}
+export function tick(state, events, rng) {
+  /* → next state; events = [{slot, k, v}, join, leave] */
+}
+export function wake(state, elapsedMs, rng) {
+  /* → state after hibernation (crops grew) */
+}
 
 // view.js — runs only in the sandboxed iframe; renders state, never mutates it
-export function render(draw, state, myPlayerId) { /* … */ }
+export function render(draw, state, myPlayerId) {
+  /* … */
+}
 ```
 
 No DOM, no `Date`, no `Math.random`, no floating wall-clock in `sim.js` — the platform
@@ -272,7 +322,7 @@ snapshotting, hibernation) is platform code written once, tested once, shared by
 
 - **Identity vs. the guest ethos.** Party mode's guests are anonymous and ephemeral —
   correct for a couch. A persistent character requires durable identity. Proposed line:
-  guests can *visit* a world anonymously (read-only or sandboxed presence), but persistence
+  guests can _visit_ a world anonymously (read-only or sandboxed presence), but persistence
   requires sign-in, with a "claim this character" upgrade moment. Never a sign-in wall in
   front of first play.
 - **Moderation of persistent creations.** A griefer's obscene tower _stays built_. P2 needs
@@ -294,8 +344,10 @@ snapshotting, hibernation) is platform code written once, tested once, shared by
 
 ## 10. What to prototype first
 
-1. **P1 spike** (small): `save` module + bridge + route + erasure coverage, retrofit one
-   persistence-shaped game. Proves the bridge-to-Firestore seam end to end.
+1. ~~**P1 spike** (small): `save` module + bridge + route + erasure coverage~~ — **done**
+   (see §5). What remains of this step is the other half: **retrofit one
+   persistence-shaped game** (`four-seasons-farm`, `tiny-empire` and `crypt-delver` are all
+   shaped for it) so the seam is exercised by real play rather than only by tests.
 2. **P2 seed world** (the learning vehicle): one first-party cooperative world — e.g. a
    shared town garden with plots, planting, and a notice board. Small enough to build like
    `tactics-duel` was; enough to exercise schema, quotas, moderation, presence, and the

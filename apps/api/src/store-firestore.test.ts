@@ -34,10 +34,42 @@ function rejectUndefined(data: Record<string, unknown>, path = ''): void {
   }
 }
 
-/** Minimal Firestore stand-in: enough surface for the user and waitlist writes. */
+/**
+ * Firestore also refuses an array whose elements are arrays — there is no "nested
+ * array" value in its data model at all. That constraint is the reason a game save is
+ * stored as an opaque JSON *string*: a game saving a 2D grid is completely ordinary,
+ * and a parsed-object column would have rejected it at runtime, in production, for one
+ * game, long after every in-memory test went green.
+ */
+class NestedArrayError extends Error {
+  constructor(field: string) {
+    super(`Cannot use "array" as an array value (found in field "${field}").`);
+  }
+}
+
+function rejectNestedArrays(value: unknown, path = '', insideArray = false): void {
+  if (Array.isArray(value)) {
+    if (insideArray) throw new NestedArrayError(path);
+    for (const entry of value) rejectNestedArrays(entry, path, true);
+    return;
+  }
+  if (value && typeof value === 'object') {
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+      rejectNestedArrays(entry, path ? `${path}.${key}` : key, false);
+    }
+  }
+}
+
+/** Minimal Firestore stand-in: enough surface for the user, waitlist and save writes. */
 function fakeFirestore() {
   const docs = new Map<string, Record<string, unknown>>();
   const key = (collection: string, id: string) => `${collection}/${id}`;
+
+  /** Document ids directly under `path` — not those in deeper subcollections. */
+  const idsUnder = (path: string) =>
+    [...docs.keys()]
+      .filter((stored) => stored.startsWith(`${path}/`) && !stored.slice(path.length + 1).includes('/'))
+      .map((stored) => stored.slice(path.length + 1));
 
   const makeRef = (collection: string, id: string) => ({
     id,
@@ -49,13 +81,26 @@ function fakeFirestore() {
     }),
     set: async (data: Record<string, unknown>, options?: { merge?: boolean }) => {
       rejectUndefined(data);
+      rejectNestedArrays(data);
       const previous = options?.merge ? (docs.get(key(collection, id)) ?? {}) : {};
       docs.set(key(collection, id), { ...previous, ...data });
     },
+    delete: async () => {
+      docs.delete(key(collection, id));
+    },
+    collection: (sub: string) => makeCollection(`${collection}/${id}/${sub}`),
+  });
+
+  const makeCollection = (path: string) => ({
+    doc: (id: string) => makeRef(path, id),
+    listDocuments: async () => idsUnder(path).map((id) => makeRef(path, id)),
+    get: async () => ({
+      docs: idsUnder(path).map((id) => ({ id, data: () => docs.get(key(path, id)) ?? {} })),
+    }),
   });
 
   const db = {
-    collection: (collection: string) => ({ doc: (id: string) => makeRef(collection, id) }),
+    collection: (collection: string) => makeCollection(collection),
     runTransaction: async <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => {
       const tx = {
         get: (ref: ReturnType<typeof makeRef>) => ref.get(),
@@ -150,7 +195,91 @@ describe('FirestoreStore.upsertWaitlistEntry', () => {
   });
 });
 
+describe('FirestoreStore game saves', () => {
+  it('stores a save whose contents Firestore could never hold as fields', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    // A 2D grid and an explicit null: the first is impossible as a Firestore array, the
+    // second is fine — both survive intact because the blob is written as a string.
+    const data = JSON.stringify({
+      grid: [
+        [1, 2],
+        [3, 4],
+      ],
+      carried: null,
+      name: 'Ada',
+    });
+
+    await store.putGameSave('g:alice', 'crypt-delver', data, 2);
+
+    const saved = await store.getGameSave('g:alice', 'crypt-delver');
+    expect(saved?.data).toBe(data);
+    expect(saved?.version).toBe(2);
+    expect(saved?.slug).toBe('crypt-delver');
+  });
+
+  it('answers null for a player with no save in that game', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.putGameSave('g:alice', 'crypt-delver', '{"level":1}', 1);
+
+    expect(await store.getGameSave('g:alice', 'other-game')).toBeNull();
+    expect(await store.getGameSave('g:bob', 'crypt-delver')).toBeNull();
+  });
+
+  it('replaces rather than merges, so an old field cannot outlive the shape it belonged to', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+
+    await store.putGameSave('g:alice', 'crypt-delver', '{"level":1,"gold":5}', 1);
+    await store.putGameSave('g:alice', 'crypt-delver', '{"level":2}', 1);
+
+    expect((await store.getGameSave('g:alice', 'crypt-delver'))?.data).toBe('{"level":2}');
+  });
+
+  it('lists and erases one player’s saves without touching another’s', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.putGameSave('g:alice', 'crypt-delver', '{"level":1}', 1);
+    await store.putGameSave('g:alice', 'brick-storm', '{"best":9}', 1);
+    await store.putGameSave('g:bob', 'crypt-delver', '{"level":3}', 1);
+
+    expect((await store.listGameSaves('g:alice')).map((save) => save.slug).sort()).toEqual([
+      'brick-storm',
+      'crypt-delver',
+    ]);
+
+    expect(await store.deleteGameSaves('g:alice')).toBe(2);
+    expect(await store.listGameSaves('g:alice')).toEqual([]);
+    expect((await store.getGameSave('g:bob', 'crypt-delver'))?.data).toBe('{"level":3}');
+  });
+
+  it('deletes a single game’s save on request', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.putGameSave('g:alice', 'crypt-delver', '{"level":1}', 1);
+    await store.putGameSave('g:alice', 'brick-storm', '{"best":9}', 1);
+
+    await store.deleteGameSave('g:alice', 'crypt-delver');
+
+    expect(await store.getGameSave('g:alice', 'crypt-delver')).toBeNull();
+    expect(await store.getGameSave('g:alice', 'brick-storm')).not.toBeNull();
+  });
+});
+
 describe('the fake itself', () => {
+  it('rejects a nested array the way the real client does', () => {
+    // If this ever stops throwing, the argument for storing saves as a string has
+    // quietly lost its evidence — and the test above would pass for the wrong reason.
+    const { db } = fakeFirestore();
+    return expect(
+      db
+        .collection('users')
+        .doc('x')
+        .set({ grid: [[1, 2]] } as never),
+    ).rejects.toThrow(/Cannot use "array" as an array value/);
+  });
+
   it('rejects undefined the way the real client does, so these tests can fail', () => {
     // Guards against the fake quietly accepting everything, which would make every
     // assertion above meaningless.

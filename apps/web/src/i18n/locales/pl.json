@@ -136,7 +136,8 @@
     "play": "Zagraj",
     "playingBadge": "Gramy",
     "remix": "Zremiksuj",
-    "platformAuthor": "gamedev.pl"
+    "platformAuthor": "gamedev.pl",
+    "savesBadge": "Zapisuje postępy"
   },
   "studio": {
     "title": "Aktywne Projekty i Śledzenie",

@@ -80,6 +80,13 @@ export const privacyEn: LegalDocument = {
               'Until you delete your account',
             ],
             [
+              'Your progress in games that keep it (for example a level reached or items unlocked) — stored with ' +
+                'your account identifier so the game can hand it back to you on your next visit',
+              'Letting you continue a game where you left off',
+              'Art. 6(1)(b) — performance of a contract',
+              'Until you delete your account, or delete the progress from within the game',
+            ],
+            [
               'The moderation outcome for your description (whether it was rejected and why)',
               'Preventing unlawful or harmful content from being created',
               'Art. 6(1)(c) — legal obligation (Digital Services Act), and 6(1)(f) — our legitimate interest in a ' +
@@ -285,7 +292,8 @@ export const privacyEn: LegalDocument = {
           text:
             `You can ask us to delete your account at any time by writing to [${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL}). ` +
             'We then remove your account data, email address, notification subscriptions, the votes and written ' +
-            'feedback you left on games, and the link between your submissions and you.',
+            'feedback you left on games, your saved progress in games that keep it, and the link between your ' +
+            'submissions and you.',
         },
         {
           kind: 'p',

@@ -9,6 +9,7 @@ import { ReportGameButton } from './ReportGameButton.js';
 import { ShareGameButton } from './ShareGameButton.js';
 import { VoteWidget } from './VoteWidget.js';
 import { useGamePlayer } from './gamePlayer.js';
+import { useGameSaveBridge } from './gameSave.js';
 import { useScreenWakeLock } from './useScreenWakeLock.js';
 
 /** A game to run, sourced either from raw assembled HTML or a published slug. */
@@ -115,6 +116,13 @@ export function GameTheater({
   // own chrome, and this covers the game iframe, which holds focus while playing
   // and swallows its own key events.
   const player = useGamePlayer(frameRef, true, requestExit, dismissMore);
+
+  // Durable progress for games that ask for it (docs/persistent-world-plan.md P1).
+  // Keyed on `reportSlug` — the *published* slug — for the same reason the vote and
+  // feedback widgets are: a draft is rebuilt commit by commit, and progress saved
+  // against a format the next build changes is worse than no progress at all. Games
+  // that never open a slot cost nothing here; the bridge simply stays quiet.
+  useGameSaveBridge(frameRef, reportSlug);
 
   // The game reports its own (localized) title over the bridge. Prefer it: on a
   // direct `/play/<slug>` link there's no catalog entry to take a title from, so

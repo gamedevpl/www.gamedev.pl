@@ -84,6 +84,13 @@ export const privacyPl: LegalDocument = {
               'Do usunięcia konta',
             ],
             [
+              'Twoje postępy w grach, które je zapisują (np. osiągnięty poziom lub odblokowane przedmioty) — ' +
+                'zapisywane wraz z identyfikatorem Twojego konta, aby gra mogła je przywrócić przy kolejnej wizycie',
+              'Umożliwienie Ci kontynuowania gry od miejsca, w którym ją przerwałeś',
+              'art. 6 ust. 1 lit. b — wykonanie umowy',
+              'Do usunięcia konta lub do usunięcia postępów z poziomu samej gry',
+            ],
+            [
               'Wynik moderacji Twojego opisu (czy i dlaczego został odrzucony)',
               'Niedopuszczenie do powstania treści bezprawnych lub szkodliwych',
               'art. 6 ust. 1 lit. c — obowiązek prawny (akt o usługach cyfrowych) oraz lit. f — nasz prawnie ' +
@@ -295,7 +302,8 @@ export const privacyPl: LegalDocument = {
           text:
             `Możesz w każdej chwili poprosić o usunięcie konta, pisząc na [${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL}). ` +
             'Usuwamy wtedy dane Twojego konta, adres e-mail, subskrypcje powiadomień, oddane przez Ciebie głosy i ' +
-            'wpisane uwagi do gier oraz powiązanie zgłoszeń z Twoją osobą.',
+            'wpisane uwagi do gier, zapisane postępy w grach, które je przechowują, oraz powiązanie zgłoszeń z ' +
+            'Twoją osobą.',
         },
         {
           kind: 'p',

@@ -1,4 +1,4 @@
-// Erase a person's player-side contributions — votes and written feedback.
+// Erase a person's player-side contributions — votes, written feedback, saved progress.
 //
 //   npm run player:erase -w @gamedevpl/api -- g:12345 --dry-run
 //   npm run player:erase -w @gamedevpl/api -- g:12345 --confirm
@@ -51,8 +51,11 @@ async function main(): Promise<void> {
     `  votes:    ${result.votesCleared.length}${result.votesCleared.length ? ` (${result.votesCleared.join(', ')})` : ''}`,
   );
   console.log(`  feedback: ${result.feedbackDeleted}`);
-  if (result.votesCleared.length === 0 && result.feedbackDeleted === 0) {
-    console.log('  nothing found — this account left no votes or feedback.');
+  console.log(
+    `  saves:    ${result.savesDeleted.length}${result.savesDeleted.length ? ` (${result.savesDeleted.join(', ')})` : ''}`,
+  );
+  if (result.votesCleared.length === 0 && result.feedbackDeleted === 0 && result.savesDeleted.length === 0) {
+    console.log('  nothing found — this account left no votes, feedback, or saved progress.');
   }
   console.log('  play telemetry: not applicable (carries no uid by design).');
 }

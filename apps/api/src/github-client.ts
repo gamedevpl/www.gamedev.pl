@@ -207,6 +207,13 @@ export interface CatalogGameEntry {
    */
   multiplayer: CatalogGameMultiplayer | null;
   /**
+   * `player` when the game keeps per-player progress (`saves: player` in SPEC.md
+   * frontmatter), null when every visit starts fresh. Advisory metadata for the
+   * catalog UI only: whether a save slot is actually opened is decided by whether the
+   * running game asks for one, not by this field.
+   */
+  saves: CatalogGameSaves | null;
+  /**
    * The orientation the game was designed for, from `orientation:` in SPEC.md
    * frontmatter. Design intent nothing in the source can reveal, so unlike touch
    * support it is authored rather than derived. Defaults to 'any'; the player
@@ -237,6 +244,17 @@ export interface CatalogGameMultiplayer {
   mode: 'controllers';
   minPlayers: number;
   maxPlayers: number;
+}
+
+export type CatalogGameSaves = 'player';
+
+/**
+ * `player` is the only mode that exists. Anything else — a typo, a value from a newer
+ * games repo — degrades to null rather than failing the catalog, matching how malformed
+ * multiplayer metadata degrades a game to single-player.
+ */
+function parseSaves(value: unknown): CatalogGameSaves | null {
+  return value === 'player' ? 'player' : null;
 }
 
 /** Platform ceiling on player slots — mirrors SLOT_COLORS in mp.ts. */
@@ -1017,6 +1035,7 @@ ${gameJs}`;
           status,
           media: parseGameMedia(mediaMetadata),
           multiplayer: parseMultiplayer(frontmatter),
+          saves: parseSaves(frontmatter.saves),
           orientation: parseOrientation(frontmatter),
           submittedBy: parseSubmittedBy(frontmatter.submitted_by),
         });
@@ -1087,6 +1106,7 @@ function parseCommittedCatalog(raw: string): CatalogGameEntry[] | null {
       status,
       media: parseCommittedMedia(candidate.media),
       multiplayer: parseCommittedMultiplayer(candidate.multiplayer),
+      saves: parseSaves(candidate.saves),
       orientation: GAME_ORIENTATIONS.has(orientationRaw as CatalogGameOrientation)
         ? (orientationRaw as CatalogGameOrientation)
         : 'any',

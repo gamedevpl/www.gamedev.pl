@@ -14,6 +14,7 @@ import { createGenerator } from './generator.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { registerContactRoutes, type ContactRoutesOptions } from './contact.js';
 import { registerEmailRoutes } from './email-routes.js';
+import { registerGameSaveRoutes, type GameSaveRoutesOptions } from './game-saves.js';
 import { registerMultiplayerRoutes, type MultiplayerRoutesOptions } from './mp.js';
 import { registerNotificationRoutes } from './notifications.js';
 import { registerPlayerFeedbackRoutes, type PlayerFeedbackRoutesOptions } from './player-feedback.js';
@@ -51,6 +52,8 @@ export interface BuildAppOptions {
   telemetryRoutes?: Omit<TelemetryRoutesOptions, 'store'>;
   /** Seams for game votes; defaults to a live catalog-backed slug gate. */
   voteRoutes?: Omit<VoteRoutesOptions, 'store'>;
+  /** Seams for per-player game saves; defaults to a live catalog-backed slug gate. */
+  gameSaveRoutes?: Omit<GameSaveRoutesOptions, 'store'>;
   /** Seams for written player feedback; defaults to a live catalog-backed slug gate. */
   playerFeedbackRoutes?: Omit<PlayerFeedbackRoutesOptions, 'store' | 'contentChecker'>;
   /** Seams for the nightly scorecard sweep; defaults to OIDC-or-deny-all from env. */
@@ -204,6 +207,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     store,
     publishedSlugs: envPublishedSlugs,
     ...options.voteRoutes,
+  });
+
+  // Durable per-player progress (docs/persistent-world-plan.md P1). Same slug gate as
+  // votes, but unlike votes there is no public read at all: a save belongs to exactly
+  // one person and is meaningless to anyone else, so every method here needs a session.
+  // The game never calls this — the shell does, on the game's behalf, over the bridge.
+  await registerGameSaveRoutes(app, {
+    store,
+    publishedSlugs: envPublishedSlugs,
+    ...options.gameSaveRoutes,
   });
 
   // Written player feedback (docs/improvement-loop-plan.md, signal source #1). Keyed
