@@ -2,12 +2,13 @@
 
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   angleDelta,
   gravityAlignment,
   isFreeFall,
   shakeJerk,
+  SHAKE_DELIGHT_AT,
   tiltFromOrientation,
   useDeviceTilt,
   type DeviceTilt,
@@ -94,6 +95,19 @@ describe('dropping the phone', () => {
   });
 });
 
+/**
+ * jsdom's DeviceMotionEvent constructor drops the init dictionary, so the payload is
+ * attached to a plain Event instead. The hook only ever reads the property.
+ */
+function motion(x: number, y: number, z: number): Event {
+  const event = new Event('devicemotion');
+  Object.assign(event, { accelerationIncludingGravity: { x, y, z } });
+  return event;
+}
+
+// Without this React warns and does not promise to flush effects inside act().
+(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
 /** Mount a hook and expose its latest value. */
 function renderTilt(enabled: boolean) {
   const container = document.createElement('div');
@@ -173,5 +187,130 @@ describe('useDeviceTilt', () => {
 
     addSpy.mockRestore();
     removeSpy.mockRestore();
+  });
+});
+
+/**
+ * The gesture semantics — hold times, hysteresis, streak window, consecutive-sample
+ * gating — are the load-bearing part and none of it is visible in the pure helpers.
+ * These drive the real hook with real events and a clock under test control, so the
+ * thresholds cannot drift silently (Copilot review on #313).
+ */
+describe('gesture recognition', () => {
+  const HELD = [0, 9.8, 0] as const;
+  const OVER = [0, -9.8, 0] as const;
+  let clock = 0;
+
+  const send = (sample: readonly [number, number, number]) =>
+    act(() => {
+      window.dispatchEvent(motion(sample[0], sample[1], sample[2]));
+    });
+  const advance = (ms: number) => {
+    clock += ms;
+  };
+
+  beforeEach(() => {
+    // Well past every cooldown, so the start of the clock is never what is under test.
+    clock = 50_000;
+    vi.spyOn(performance, 'now').mockImplementation(() => clock);
+    vi.stubGlobal('DeviceOrientationEvent', function DeviceOrientationEvent() {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('makes you hold a flip before believing it', () => {
+    const probe = renderTilt(true);
+    send(HELD); // establishes which way was up
+
+    send(OVER);
+    advance(120);
+    send(OVER);
+    // A shake swings through every angle; reacting instantly would fire flips constantly.
+    expect(probe.latest().upsideDown).toBe(false);
+    expect(probe.latest().gestureSeq).toBe(0);
+
+    advance(300); // now past FLIP_HOLD_MS in total
+    send(OVER);
+    expect(probe.latest().gesture).toBe('flip');
+    expect(probe.latest().upsideDown).toBe(true);
+
+    probe.unmount();
+  });
+
+  it('reports being turned back the right way', () => {
+    const probe = renderTilt(true);
+    send(HELD);
+    send(OVER);
+    advance(400);
+    send(OVER);
+    expect(probe.latest().upsideDown).toBe(true);
+
+    send(HELD);
+    expect(probe.latest().gesture).toBe('right-side-up');
+    expect(probe.latest().upsideDown).toBe(false);
+    probe.unmount();
+  });
+
+  it('escalates a shake streak, and forgets it once you stop', () => {
+    const probe = renderTilt(true);
+    send(HELD);
+
+    // Each jump is well over the jerk threshold, and stays aligned with the baseline
+    // so the flip detector has nothing to say about it.
+    send([0, 40, 0]);
+    expect(probe.latest().gesture).toBe('shake');
+    expect(probe.latest().shakeStreak).toBe(1);
+
+    advance(950); // past the cooldown, inside the streak window
+    send(HELD);
+    expect(probe.latest().shakeStreak).toBe(2);
+
+    advance(950);
+    send([0, 40, 0]);
+    expect(probe.latest().shakeStreak).toBe(SHAKE_DELIGHT_AT);
+
+    // Stop for longer than the streak window and the next one starts over.
+    advance(3_000);
+    send(HELD);
+    expect(probe.latest().shakeStreak).toBe(1);
+    probe.unmount();
+  });
+
+  it('ignores a shake that arrives inside the cooldown', () => {
+    const probe = renderTilt(true);
+    send(HELD);
+    send([0, 40, 0]);
+    const afterFirst = probe.latest().gestureSeq;
+
+    advance(100);
+    send(HELD);
+    expect(probe.latest().gestureSeq).toBe(afterFirst);
+    probe.unmount();
+  });
+
+  it('wants two falling samples in a row before calling it a drop', () => {
+    const probe = renderTilt(true);
+    send(HELD);
+
+    send([0.1, 0.1, 0.1]);
+    expect(probe.latest().gestureSeq).toBe(0); // one reading could be noise
+
+    send([0.2, 0.1, 0.2]);
+    expect(probe.latest().gesture).toBe('freefall');
+    probe.unmount();
+  });
+
+  it('does not let a single odd reading accumulate into a drop', () => {
+    const probe = renderTilt(true);
+    send(HELD);
+
+    send([0.1, 0.1, 0.1]);
+    send(HELD); // back to rest — the run is broken
+    send([0.1, 0.1, 0.1]);
+    expect(probe.latest().gestureSeq).toBe(0);
+    probe.unmount();
   });
 });

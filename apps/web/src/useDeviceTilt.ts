@@ -93,7 +93,7 @@ export type Vec3 = { x: number; y: number; z: number };
 export function gravityAlignment(baseline: Vec3, current: Vec3): number {
   const baseLength = Math.hypot(baseline.x, baseline.y, baseline.z);
   const currentLength = Math.hypot(current.x, current.y, current.z);
-  if (baseLength < 1 || currentLength < 1) return 0;
+  if (baseLength < FREE_FALL_MS2 || currentLength < FREE_FALL_MS2) return 0;
   const dot = baseline.x * current.x + baseline.y * current.y + baseline.z * current.z;
   return clamp(dot / (baseLength * currentLength));
 }
@@ -157,7 +157,9 @@ export function useDeviceTilt(enabled: boolean): DeviceTilt {
   const smoothed = useRef<Tilt>({ x: 0, y: 0 });
   const published = useRef<Tilt>({ x: 0, y: 0 });
   const lastAccel = useRef<Vec3 | null>(null);
-  const lastShakeAt = useRef(0);
+  // −Infinity, not 0: `performance.now()` counts from page load, so a 0 sentinel
+  // silently swallows a gesture made within one cooldown of the page opening.
+  const lastShakeAt = useRef(Number.NEGATIVE_INFINITY);
   const streak = useRef(0);
   /**
    * Captured once and deliberately NOT reset by a shake, unlike the tilt baseline.
@@ -168,7 +170,7 @@ export function useDeviceTilt(enabled: boolean): DeviceTilt {
   const flippedSince = useRef(0);
   const flipped = useRef(false);
   const fallingSamples = useRef(0);
-  const lastFallAt = useRef(0);
+  const lastFallAt = useRef(Number.NEGATIVE_INFINITY);
 
   const emit = useCallback((kind: MascotGesture) => {
     setGesture((previous) => ({ seq: previous.seq + 1, kind }));
@@ -311,7 +313,7 @@ export function useDeviceTilt(enabled: boolean): DeviceTilt {
       smoothed.current = { x: 0, y: 0 };
       published.current = { x: 0, y: 0 };
     };
-  }, [listening]);
+  }, [listening, emit]);
 
   return {
     supported,
