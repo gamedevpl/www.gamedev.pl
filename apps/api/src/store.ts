@@ -982,12 +982,20 @@ export class InMemoryStore implements Store {
     issueNumber: number,
     preview: Omit<BuildPreview, 'id' | 'createdAt'> & { createdAt?: string },
   ): Promise<BuildPreview> {
+    const existing = this.buildPreviews.get(issueNumber) ?? [];
+    // ISO timestamps only have millisecond precision. Rapid back-to-back pushes in
+    // tests (and occasionally in prod) land on the same tick; bump so "newest"
+    // matches append order instead of UUID tie-breaks.
+    const nowIso = new Date().toISOString();
+    const lastCreatedAt = existing[existing.length - 1]?.createdAt;
+    const createdAt =
+      preview.createdAt ??
+      (lastCreatedAt && lastCreatedAt >= nowIso ? new Date(Date.parse(lastCreatedAt) + 1).toISOString() : nowIso);
     const record: BuildPreview = {
       ...preview,
       id: randomUUID(),
-      createdAt: preview.createdAt ?? new Date().toISOString(),
+      createdAt,
     };
-    const existing = this.buildPreviews.get(issueNumber) ?? [];
     existing.push(record);
     this.buildPreviews.set(issueNumber, existing);
     return { ...record };

@@ -5039,7 +5039,6 @@ body.player-open {
   }
 }
 
-<<<<<<< HEAD
 /* The playable build panel on the status page.
    Sized so the game is genuinely playable rather than a thumbnail — this is the first
    thing a creator can actually judge, and it arrives before any commit. */
@@ -5118,13 +5117,10 @@ body.player-open {
   font-variant-numeric: tabular-nums;
 }
 
-/* CREATOR CONTROL PANEL (/studio) */
-=======
 /* CREATOR CONTROL PANEL (/studio)
    Reuses home/status tokens: section-title, panel, my-game-card, chip/health-window
    tabs, funnel-stats, status-feedback, status-play-badge. Keep Studio from inventing
    a parallel visual language. */
->>>>>>> 04304604 (fix(studio): align Creator Studio with site design system)
 .studio-panel {
   max-width: 1100px;
   margin: 0 auto;
@@ -5876,4 +5872,40 @@ body.player-open {
     border-radius: 16px;
     border-bottom: 1px solid var(--panel-border);
   }
+}
+
+/* The playable build panel on the status page.
+   Sized so the game is genuinely playable rather than a thumbnail — this is the first
+   thing a creator can actually judge, and it arrives before any commit. */
+.status-playable {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  border: 1px solid var(--border, #333);
+  border-radius: 8px;
+}
+
+.status-playable h3 {
+  margin: 0 0 0.25rem;
+}
+
+.status-playable-hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+.status-playable-frame {
+  position: relative;
+  width: 100%;
+  /* Matches the aspect the games themselves are laid out for. */
+  aspect-ratio: 4 / 3;
+  max-height: 70vh;
+  overflow: hidden;
+  border-radius: 6px;
+}
+
+.status-playable-time {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  opacity: 0.7;
 }
