@@ -46,7 +46,7 @@
     "navArcade": "Arcade",
     "navStudio": "Studio",
     "navFeed": "Strumień Agentów",
-    "mySpecs": "Moje Aktywne Specyfikacje ({{count}})"
+    "activeBuilds": "w trakcie: {{count}}"
   },
   "hero": {
     "mainTitle": "Zamień dowolny pomysł w grywalną grę",

@@ -443,10 +443,16 @@ export function SubmissionStatusView({
 
             {previewError && !preview ? <p className="error">{previewError}</p> : null}
 
-            <div className="status-footer-actions">
-              <a className="inline-link" href="/">
-                {t('statusView.backHome')}
-              </a>
+            {/* Embedded in Creator Studio the panel is a tab, not a page: the header
+                already carries "Back to home", and a second escape hatch a screen
+                below it just reads as two different ways out. Stopping the build has
+                no such duplicate, so it stays either way. */}
+            <div className={`status-footer-actions${embedded ? ' is-embedded' : ''}`}>
+              {!embedded ? (
+                <a className="inline-link" href="/">
+                  {t('statusView.backHome')}
+                </a>
+              ) : null}
               {!TERMINAL_STATUSES.has(status.status) ? <AbandonControl token={token} /> : null}
             </div>
           </>
