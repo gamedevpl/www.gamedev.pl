@@ -634,9 +634,28 @@ at all and feeds the only autonomous-eligible class.
   denies everything when its audience is unset, so an unconfigured deploy cannot be swept
   by anyone.
 
-- 📋 Feedback theme extraction through the genai seam. Note the scorecard deliberately
-  carries a feedback **count** and no text today: the moment text lands in this doc it is
-  on the path to an agent, so it arrives with the theme pass that summarizes it, not before.
+- ✅ **Feedback theme extraction** (2026-07-28): [feedback-themes.ts](../apps/api/src/feedback-themes.ts)
+  summarizes written feedback through the genai seam, and the sweep writes the result to
+  `untrusted.feedbackThemes`. The condition this item was always gated on is met — text now
+  reaches the scorecard only as a summary, never raw.
+
+  Four judgements worth carrying forward:
+
+  - **The output is untrusted twice over.** The input is player-written text; the output is
+    a model's summary _of_ player-written text, so it inherits that taint entirely — a
+    summary of an injection attempt is still attacker-influenced. Themes sit under
+    `untrusted` beside the error samples for the same reason, and the prompt fences the
+    notes as data while the clamp assumes the fence failed.
+  - **A three-note floor, which is a privacy rule and not a quality one.** A "theme" drawn
+    from one note is that person's words re-published into the document specifically
+    designed not to carry them. Below the floor the text is never even read.
+  - **Model output is clamped, not trusted**: length, count, dedupe, sanitize, and a
+    support count bounded by the notes actually read — an unclamped `count: 9999` reads to
+    an agent as a mandate when three people said it.
+  - **Absence stays absence.** Too little feedback, extraction switched off, and extraction
+    failed all produce `[]`, and the panel renders no block at all rather than an empty
+    heading. Cost is bounded by a per-sweep call budget, and when that budget binds the
+    result says so — otherwise "no themes" would silently mean "we stopped looking".
 - 📋 Scorecard panel on the game dashboard; digest notification type + weekly batch.
 - Exit: a creator can answer "is my game working, where do players drop off,
   what do they say" without any agent involvement.
