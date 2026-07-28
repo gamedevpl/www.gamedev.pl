@@ -141,3 +141,97 @@ describe('notification routes', () => {
     await app.close();
   });
 });
+
+describe('notification preferences', () => {
+  const sessionSecret = 'dev-session-secret-change-me';
+
+  async function appFor(store: InMemoryStore) {
+    return buildApp({ store, sessionSecret });
+  }
+
+  function auth(uid: string) {
+    return { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken(uid, sessionSecret)}` };
+  }
+
+  it('reports both switches as on for a fresh account', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:me' });
+    const app = await appFor(store);
+
+    const res = await app.inject({ method: 'GET', url: '/api/me/notification-preferences', headers: auth('g:me') });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ digest: true, email: true });
+    await app.close();
+  });
+
+  it('turns the digest off and back on again', async () => {
+    // The half that was missing entirely: an opt-out reachable only from an email link is
+    // a decision a person cannot revise.
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:me' });
+    const app = await appFor(store);
+
+    const off = await app.inject({
+      method: 'PUT',
+      url: '/api/me/notification-preferences',
+      headers: auth('g:me'),
+      payload: { digest: false },
+    });
+    expect(off.json()).toEqual({ digest: false, email: true });
+    expect((await store.getUser('g:me'))?.digestOptOutAt).toBeTruthy();
+
+    const on = await app.inject({
+      method: 'PUT',
+      url: '/api/me/notification-preferences',
+      headers: auth('g:me'),
+      payload: { digest: true },
+    });
+    expect(on.json()).toEqual({ digest: true, email: true });
+    expect((await store.getUser('g:me'))?.digestOptOutAt).toBeNull();
+    await app.close();
+  });
+
+  it('lets someone who unsubscribed by email come back', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:me' });
+    await store.setEmailUnsubscribed('g:me', '2026-07-01T00:00:00.000Z');
+    const app = await appFor(store);
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/me/notification-preferences',
+      headers: auth('g:me'),
+      payload: { email: true },
+    });
+
+    expect(res.json()).toEqual({ digest: true, email: true });
+    await app.close();
+  });
+
+  it('leaves a switch it was not told about alone', async () => {
+    // A client that knows about one preference must not reset another it has never heard
+    // of — the shape of bug that silently re-subscribes people.
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:me' });
+    await store.setEmailUnsubscribed('g:me', '2026-07-01T00:00:00.000Z');
+    const app = await appFor(store);
+
+    await app.inject({
+      method: 'PUT',
+      url: '/api/me/notification-preferences',
+      headers: auth('g:me'),
+      payload: { digest: false },
+    });
+
+    expect((await store.getUser('g:me'))?.emailUnsubscribedAt).toBe('2026-07-01T00:00:00.000Z');
+    await app.close();
+  });
+
+  it('requires a session', async () => {
+    const app = await appFor(new InMemoryStore());
+    const res = await app.inject({ method: 'GET', url: '/api/me/notification-preferences' });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+});

@@ -25,6 +25,17 @@ export interface User {
   /** Global one-click email kill switch — set by the unsubscribe endpoint. */
   emailUnsubscribedAt?: string | null;
   /**
+   * Opted out of the weekly creator digest specifically, across every channel.
+   *
+   * Separate from `emailUnsubscribedAt` because the two are different requests. The digest
+   * is the only notification we send that nobody asked for on the day it arrives; the rest
+   * are transactional ("your game is published"), and someone who wants to stop the weekly
+   * summary almost certainly still wants those. One switch for both would make "stop
+   * emailing me every Monday" cost a creator the message they actually care about — which
+   * is how a notification system trains people to turn everything off.
+   */
+  digestOptOutAt?: string | null;
+  /**
    * Recent days (`yyyy-mm-dd`) on which this account made an authenticated request,
    * newest first and capped at `ACTIVE_DAYS_KEPT`.
    *
@@ -341,7 +352,26 @@ export function telemetryExpiresAt(at: string): Date {
 // Transactional creator events (docs/notifications-plan.md). Deliberately minimal —
 // queued/in_review are not notified. New types must pass the "would the user thank
 // us?" test before being added.
-export type NotificationType = 'submission.building' | 'submission.published' | 'submission.needs_changes';
+export type NotificationType =
+  | 'submission.building'
+  | 'submission.published'
+  | 'submission.needs_changes'
+  /**
+   * Weekly summary of how a creator's published games are doing
+   * (docs/improvement-loop-plan.md IL-2). Unlike the three above it is not tied to one
+   * submission, which is why its id is keyed by week rather than by issue number.
+   */
+  | 'creator.digest';
+
+/**
+ * The types that are about one submission, and so can render "«game title» happened".
+ *
+ * Split out because the digest cannot: it spans every game a creator owns and carries
+ * counts instead of a title. Keeping it a derived type rather than a hand-written list
+ * means a fourth submission event joins the email and push copy automatically, while a
+ * second non-submission event has to be thought about.
+ */
+export type SubmissionNotificationType = Exclude<NotificationType, 'creator.digest'>;
 
 export interface StoredNotification {
   /** Deterministic id (e.g. `sub-142-published`) so emission is idempotent. */
@@ -602,6 +632,8 @@ export interface Store {
   upsertUser(userData: Partial<User> & { uid: string }): Promise<User>;
   /** Set (or clear, with null) the global email-unsubscribe timestamp for a user. */
   setEmailUnsubscribed(uid: string, at: string | null): Promise<void>;
+  /** Set (or clear, with null) the weekly-digest opt-out for a user. */
+  setDigestOptOut(uid: string, at: string | null): Promise<void>;
   createSubmission(issueNumber: number, ownerUid: string, title: string): Promise<SubmissionRecord>;
   getSubmission(issueNumber: number): Promise<SubmissionRecord | null>;
   setSubmissionNotifiedStatus(issueNumber: number, status: SubmissionStatus): Promise<void>;
@@ -931,6 +963,7 @@ export class InMemoryStore implements Store {
       // Preserve email prefs across logins — a re-login must not resubscribe.
       locale: userData.locale ?? existing?.locale,
       emailUnsubscribedAt: existing?.emailUnsubscribedAt ?? null,
+      digestOptOutAt: existing?.digestOptOutAt ?? null,
       // Carried explicitly. Omitting it silently discarded every write from the
       // activity hook in `auth.ts`, whose only purpose is to persist this field.
       activeDays: userData.activeDays ?? existing?.activeDays,
@@ -943,6 +976,11 @@ export class InMemoryStore implements Store {
   async setEmailUnsubscribed(uid: string, at: string | null): Promise<void> {
     const existing = this.users.get(uid);
     if (existing) this.users.set(uid, { ...existing, emailUnsubscribedAt: at });
+  }
+
+  async setDigestOptOut(uid: string, at: string | null): Promise<void> {
+    const existing = this.users.get(uid);
+    if (existing) this.users.set(uid, { ...existing, digestOptOutAt: at });
   }
 
   async createSubmission(issueNumber: number, ownerUid: string, title: string): Promise<SubmissionRecord> {
@@ -1580,6 +1618,10 @@ export class FirestoreStore implements Store {
 
   async setEmailUnsubscribed(uid: string, at: string | null): Promise<void> {
     await this.db.collection('users').doc(uid).set({ emailUnsubscribedAt: at }, { merge: true });
+  }
+
+  async setDigestOptOut(uid: string, at: string | null): Promise<void> {
+    await this.db.collection('users').doc(uid).set({ digestOptOutAt: at }, { merge: true });
   }
 
   async createSubmission(issueNumber: number, ownerUid: string, title: string): Promise<SubmissionRecord> {

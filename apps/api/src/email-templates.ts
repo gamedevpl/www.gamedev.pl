@@ -6,7 +6,7 @@
 // notification mails described in docs/notifications-plan.md.
 
 import type { EmailMessage } from './mailer.js';
-import type { NotificationType } from './store.js';
+import type { SubmissionNotificationType } from './store.js';
 
 export type Locale = 'en' | 'pl';
 
@@ -121,7 +121,10 @@ export interface NotificationEmailParams {
   unsubscribeUrl: string;
 }
 
-const notificationCopy: Record<NotificationType, Record<Locale, { subject: string; lead: string; cta: string }>> = {
+const notificationCopy: Record<
+  SubmissionNotificationType,
+  Record<Locale, { subject: string; lead: string; cta: string }>
+> = {
   'submission.published': {
     en: { subject: 'Your game is live on gamedev.pl', lead: 'is published and ready to play.', cta: 'Play it' },
     pl: {
@@ -152,7 +155,7 @@ const unsubscribeLine: Record<Locale, string> = {
  */
 export function submissionPushContent(
   locale: Locale,
-  type: NotificationType,
+  type: SubmissionNotificationType,
   title: string,
 ): { title: string; body: string } {
   const copy = notificationCopy[type][locale];
@@ -162,7 +165,7 @@ export function submissionPushContent(
 export function submissionNotificationMessage(
   to: string,
   locale: Locale,
-  type: NotificationType,
+  type: SubmissionNotificationType,
   params: NotificationEmailParams,
 ): EmailMessage {
   const copy = notificationCopy[type][locale];
@@ -194,6 +197,81 @@ export function submissionNotificationMessage(
     // RFC 2369: lets mail clients surface a native unsubscribe control.
     headers: { 'List-Unsubscribe': `<${params.unsubscribeUrl}>` },
   };
+}
+
+/**
+ * The weekly creator digest (docs/improvement-loop-plan.md IL-2).
+ *
+ * Its own copy rather than another entry in `notificationCopy`, because that shape is
+ * "«game title» happened" and a digest has no single game. The counts are numbers this
+ * system computed — no player-written text reaches an email, which is the reason the
+ * digest reports how many notes arrived rather than what they said.
+ */
+export interface DigestEmailParams {
+  games: number;
+  sessions: number;
+  votesUp: number;
+  votesDown: number;
+  feedback: number;
+  actionUrl: string;
+  unsubscribeUrl: string;
+}
+
+/**
+ * Labelled counts rather than a sentence, in both languages, and deliberately so.
+ *
+ * A sentence has to agree with its numbers: English needs "1 session" vs "2 sessions", and
+ * Polish needs three forms (1 sesja / 2–4 sesje / 5+ sesji) that a binary conditional gets
+ * wrong for exactly the range a small game lands in. Labels do not agree with anything, so
+ * every value is correct without a plural-rules table nobody would maintain.
+ */
+const digestCopy: Record<Locale, { subject: string; cta: string; line: (p: DigestEmailParams) => string }> = {
+  en: {
+    subject: 'Your games this week on gamedev.pl',
+    cta: 'See the details',
+    line: (p) =>
+      `Sessions: ${p.sessions} · Games: ${p.games} · ${p.votesUp}👍 ${p.votesDown}👎 · ` +
+      `Notes from players: ${p.feedback}`,
+  },
+  pl: {
+    subject: 'Twoje gry w tym tygodniu na gamedev.pl',
+    cta: 'Zobacz szczegóły',
+    line: (p) =>
+      `Sesje: ${p.sessions} · Gry: ${p.games} · ${p.votesUp}👍 ${p.votesDown}👎 · ` +
+      `Wiadomości od graczy: ${p.feedback}`,
+  },
+};
+
+export function digestNotificationMessage(to: string, locale: Locale, params: DigestEmailParams): EmailMessage {
+  const copy = digestCopy[locale];
+  const actionUrl = escapeHtml(params.actionUrl);
+  const unsub = escapeHtml(params.unsubscribeUrl);
+  const line = copy.line(params);
+
+  const text = [line, '', `${copy.cta}: ${params.actionUrl}`, '', `${unsubscribeLine[locale]} ${params.unsubscribeUrl}`]
+    .join('\n');
+
+  const html = [
+    `<p>${escapeHtml(line)}</p>`,
+    `<p><a href="${actionUrl}">${escapeHtml(copy.cta)}</a></p>`,
+    `<p style="color:#888;font-size:12px">${escapeHtml(unsubscribeLine[locale])} <a href="${unsub}">${escapeHtml(
+      params.unsubscribeUrl,
+    )}</a></p>`,
+  ].join('\n');
+
+  return {
+    to,
+    subject: copy.subject,
+    text,
+    html,
+    headers: { 'List-Unsubscribe': `<${params.unsubscribeUrl}>` },
+  };
+}
+
+/** Push copy for a digest — same numbers, shorter. */
+export function digestPushContent(locale: Locale, params: DigestEmailParams): { title: string; body: string } {
+  const copy = digestCopy[locale];
+  return { title: copy.subject, body: copy.line(params) };
 }
 
 export interface ContactEmailParams {

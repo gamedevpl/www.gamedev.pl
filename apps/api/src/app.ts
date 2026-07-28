@@ -22,6 +22,7 @@ import { registerMultiplayerRoutes, type MultiplayerRoutesOptions } from './mp.j
 import { registerNotificationRoutes } from './notifications.js';
 import { registerPlayerFeedbackRoutes, type PlayerFeedbackRoutesOptions } from './player-feedback.js';
 import { registerPushRoutes } from './push-routes.js';
+import { registerDigestRoutes, type DigestRoutesOptions } from './digest.js';
 import { registerScorecardRoutes, type ScorecardRoutesOptions } from './scorecard.js';
 import { createInternalAuthVerifierFromEnv } from './internal-auth.js';
 import { registerRefineRoute, type SpecRefiner } from './refine.js';
@@ -65,6 +66,7 @@ export interface BuildAppOptions {
   playerFeedbackRoutes?: Omit<PlayerFeedbackRoutesOptions, 'store' | 'contentChecker'>;
   /** Seams for the nightly scorecard sweep; defaults to OIDC-or-deny-all from env. */
   scorecardRoutes?: Partial<Omit<ScorecardRoutesOptions, 'store'>>;
+  digestRoutes?: Partial<Omit<DigestRoutesOptions, 'store'>>;
   /** Seams for the public contact form (mailer fake in tests). */
   contactRoutes?: ContactRoutesOptions;
   // Private beta allowlist — uids (comma-separated) allowed to sign in and access gated routes
@@ -253,6 +255,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     store,
     internalAuthVerifier: createInternalAuthVerifierFromEnv(process.env, 'scorecardSweep'),
     ...options.scorecardRoutes,
+  });
+
+  // The weekly digest (docs/improvement-loop-plan.md IL-2): tells creators what happened
+  // with their games without their having to come and look. Reads the scorecards the sweep
+  // above produced, so the two can never disagree about the numbers.
+  await registerDigestRoutes(app, {
+    store,
+    internalAuthVerifier: createInternalAuthVerifierFromEnv(process.env, 'digestSweep'),
+    ...options.digestRoutes,
   });
 
   // Issuing personal access tokens (docs/agent-access-tokens.md) — the credential that

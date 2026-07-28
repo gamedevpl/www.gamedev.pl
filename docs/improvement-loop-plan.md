@@ -674,10 +674,70 @@ at all and feeds the only autonomous-eligible class.
     failed all produce `[]`, and the panel renders no block at all rather than an empty
     heading. Cost is bounded by a per-sweep call budget, and when that budget binds the
     result says so — otherwise "no themes" would silently mean "we stopped looking".
+- ✅ **Creator Studio** (`/studio`, #236): the creator's own shelf, build status, playtest
+  and stats surface, with per-game play health from `/api/me/studio/health`.
+- ✅ **Weekly creator digest** (2026-07-28): [digest.ts](../apps/api/src/digest.ts) —
+  `POST /api/internal/digest-sweep`, one notification per creator per ISO week, riding the
+  existing notification seam so it reaches the bell, email and Web Push with no new
+  delivery path.
 
-- 📋 Scorecard panel on the game dashboard; digest notification type + weekly batch.
-  ✅ Creator Studio (`/studio`) ships the scorecard panel + improve prompt for the
-  creator's own games; digest / suggestion inbox remain open.
+  Built from **scorecards, not raw events**: the nightly sweep has already paid for the
+  aggregation, so a digest is a few document reads per creator, and the digest and the
+  studio cannot disagree about a number because both read the same document.
+
+  It also *enumerates* from scorecards rather than from recently-published submissions.
+  Publication date must not decide who hears from us: the creator of an older game that is
+  still being played is exactly who a "your games are still being played" message is for,
+  and listing recent publications would have silently dropped them.
+
+  Two silences are the design, not omissions:
+
+  - **No evidence, no digest.** A creator whose games nobody played gets nothing rather
+    than a message full of zeros — manufactured evidence of exactly the kind the rest of
+    this system avoids, and a weekly "0 sessions" is a reason to stop opening them.
+  - **Nothing changed, no digest.** A rolling 28-day window barely moves week to week, so
+    identical numbers are suppressed. The comparison is the *previous digest's own params*
+    — the notification already is the record of what the creator was last told, and a
+    second copy of that fact is a second thing that can drift from it.
+
+  **Opting out is per-digest, not per-channel.** The digest is the only notification
+  nobody asked for on the day it arrives — the rest are transactional — so its unsubscribe
+  link narrows to `?scope=digest` and sets `digestOptOutAt` rather than the global email
+  kill switch. Clicking "unsubscribe" on a weekly summary must not also silence "your game
+  is published", which is the message the creator actually wants; losing it is how one
+  unwanted email costs us every wanted one. The opt-out covers **push as well as email**,
+  because someone who asked to stop the weekly summary meant the summary, not just the
+  envelope it came in — and a weekly push is the version they cannot fix from an inbox.
+
+  The same switch is reachable from the app: `GET`/`PUT /api/me/notification-preferences`
+  behind the notification bell, so someone who reads the digest in the bell can stop it
+  without hunting for an email, and someone who unsubscribed can come back. `PUT` touches
+  only the keys it is sent, so a client that knows about one preference cannot reset
+  another it has never heard of.
+
+  **No feedback themes travel this path.** Themes are player-written text summarized by a
+  model: safe to render to a signed-in creator in the studio where they carry that label,
+  and not something to push into an inbox stripped of it and forwarded onward. The digest
+  reports how many notes arrived and links to the place built to show them.
+
+  Provisioning — again its own audience, since the audience is the endpoint URL:
+
+  ```bash
+  SWEEP_URL="$(gcloud run services describe gamedev-app --region europe-west1 \
+    --project gamedevpl --format 'value(status.url)')/api/internal/digest-sweep"
+  SA=notify-sweep@gamedevpl.iam.gserviceaccount.com
+  # Redeploy with DIGEST_SWEEP_AUDIENCE="$SWEEP_URL" set, then:
+  gcloud scheduler jobs create http digest-sweep --location europe-west1 --project gamedevpl \
+    --schedule '0 9 * * 1' --uri "$SWEEP_URL" --http-method POST \
+    --oidc-service-account-email "$SA" --oidc-token-audience "$SWEEP_URL"
+  ```
+
+  Closed until that job and env var exist, like every other internal sweep.
+
+- 📋 Votes and feedback themes in the studio. `/api/me/studio/health` recomputes from raw
+  events, so it can answer "is my game working" and "where do players drop off" but not
+  "what do they say" — votes, feedback counts and themes exist only on the scorecard. The
+  last of IL-2's three exit questions, and the smallest remaining piece of it.
 - Exit: a creator can answer "is my game working, where do players drop off,
   what do they say" without any agent involvement.
 

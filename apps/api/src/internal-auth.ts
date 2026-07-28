@@ -62,6 +62,7 @@ export class DenyAllInternalAuthVerifier implements InternalAuthVerifier {
 const AUDIENCE_ENV_VAR = {
   notifySweep: 'NOTIFY_SWEEP_AUDIENCE',
   scorecardSweep: 'SCORECARD_SWEEP_AUDIENCE',
+  digestSweep: 'DIGEST_SWEEP_AUDIENCE',
 } as const;
 
 export type InternalSweep = keyof typeof AUDIENCE_ENV_VAR;
