@@ -107,6 +107,38 @@ age band**, never a birthdate; store it on the user record; treat signed-out vis
 the most restrictive band. Terms already require 16+, so the band is mostly confirmatory.
 This does touch the privacy policy and is a lawyer-review item in T0.
 
+### T1b — WebKit in games CI (4.7's engine clause)
+
+4.7 requires mini apps to run on **standard WebKit and JavaScriptCore** — no custom JS
+engine, no alternative renderer — and, more sharply, that the software *"only use
+capabilities available in a standard WebKit view (e.g. it must open and run natively in
+Safari without modifications)"*.
+
+The first half we satisfy by construction: Capacitor uses WKWebView, games are plain
+HTML/JS/CSS in a sandboxed iframe, and this repo ships no engine. It also retroactively
+vindicates the appendix's rejection of a "custom native rendering bridge" for games — that
+option would have violated this outright, so **the decision rule "the native boundary may
+move outward but never inward" now has store policy behind it, not only architecture.**
+
+The second half is **not covered, and the plan previously claimed it was.** The appendix
+lists "WebKit as a first-class CI target" among costs already absorbed in M0. It is not:
+the games repo's capture/validate harness drives **headless Chrome only**
+(`tools/capture.ts`), and `apps/e2e` is Chromium-only. No game has ever been executed in
+WebKit before publication.
+
+- [ ] Add a WebKit run to games CI — Playwright's `webkit` is the cheap route, and it is the
+      same engine family as WKWebView even though it is not literally Safari.
+- [ ] Scope by risk first: 67 of 73 games ride shared GameKit, so a WebKit-clean GameKit
+      carries most of the catalog. The **3 `native` games** are where per-game risk is
+      concentrated. Prove GameKit first, then sweep.
+- [ ] Decide whether WebKit is a **blocking** check or a reported one. Blocking is right
+      eventually; making it blocking on day one may fail games that are merely imperfect
+      rather than broken.
+
+This is worth doing whether or not the store apps ever ship: iOS Safari is a large share of
+mobile traffic today, and a Chromium-only pipeline is how a Safari-broken game reaches
+production unnoticed.
+
 ### T2 — Universal links + software index (4.7.4)
 
 - [ ] Serve `/.well-known/apple-app-site-association` (JSON, no extension, correct
