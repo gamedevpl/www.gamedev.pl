@@ -1,5 +1,15 @@
 import type { LegalDocId } from './legal/types.js';
 
+/** Creator Studio work surface. Persisted in the URL so a refresh or shared link
+ * reopens the same tab on the same game. */
+export type StudioTab = 'overview' | 'build' | 'playtest' | 'stats' | 'improve' | 'feedback';
+
+const STUDIO_TABS = new Set<StudioTab>(['overview', 'build', 'playtest', 'stats', 'improve', 'feedback']);
+
+export function isStudioTab(value: string): value is StudioTab {
+  return STUDIO_TABS.has(value as StudioTab);
+}
+
 export type AppRoute =
   | { view: 'home' }
   // A published game being played. The slug is a stable permalink, so refreshing
@@ -21,7 +31,8 @@ export type AppRoute =
   | { view: 'health' }
   // Creator control panel: own games, draft build (ex-status), playtest, improve.
   // `/status/:token` is accepted as an alias and resolves here too.
-  | { view: 'studio'; token?: string }
+  // Optional `tab` deep-links into a work surface (`/studio/:token/build`).
+  | { view: 'studio'; token?: string; tab?: StudioTab }
   // Privacy policy and terms. Reachable without a session — someone deciding whether
   // to sign in has to be able to read what signing in would mean first.
   | { view: 'legal'; doc: LegalDocId }
@@ -95,9 +106,19 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
     return { view: 'studio' };
   }
 
-  const studioMatch = normalizedPath.match(/^\/studio\/([^/]+)$/);
+  // `/studio/:token` or `/studio/:token/:tab`. A bare second segment that is not a
+  // known tab stays a token-only deep link (tokens are opaque capability strings).
+  const studioMatch = normalizedPath.match(/^\/studio\/([^/]+)(?:\/([^/]+))?$/);
   if (studioMatch?.[1]) {
-    return { view: 'studio', token: decodeURIComponent(studioMatch[1]) };
+    const token = decodeURIComponent(studioMatch[1]);
+    const tabSegment = studioMatch[2] ? decodeURIComponent(studioMatch[2]) : undefined;
+    if (!tabSegment) {
+      return { view: 'studio', token };
+    }
+    if (!isStudioTab(tabSegment)) {
+      return { view: 'notFound' };
+    }
+    return { view: 'studio', token, tab: tabSegment };
   }
 
   // Hybrid join: /join/<code>#<token> — credential stays out of the request line.
@@ -134,9 +155,14 @@ export function draftPath(slug: string): string {
   return `/draft/${encodeURIComponent(slug)}`;
 }
 
-/** Creator control panel. Optional token deep-links into one game on the shelf. */
-export function studioPath(token?: string): string {
-  return token ? `/studio/${encodeURIComponent(token)}` : '/studio';
+/**
+ * Creator control panel. Optional token deep-links into one game on the shelf;
+ * optional tab deep-links into a work surface on that game.
+ */
+export function studioPath(token?: string, tab?: StudioTab): string {
+  if (!token) return '/studio';
+  const base = `/studio/${encodeURIComponent(token)}`;
+  return tab ? `${base}/${tab}` : base;
 }
 
 /** QR / share URL path+fragment for a multiplayer lobby guest. */

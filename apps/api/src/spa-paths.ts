@@ -14,6 +14,8 @@ const PLAY_PREFIX_PATTERN = /^\/(play|ay|ai)\/([^/]+)$/;
 const DRAFT_PATTERN = /^\/draft\/([^/]+)$/;
 const STATUS_PATTERN = /^\/status\/([^/]+)$/;
 const JOIN_PATTERN = /^\/join\/([A-Z0-9]{6})$/;
+/** `/studio`, `/studio/:token`, `/studio/:token/:tab` — keep aligned with router.ts. */
+const STUDIO_PATTERN = /^\/studio(?:\/[^/]+(?:\/(?:overview|build|playtest|stats|improve|feedback))?)?$/;
 /** Last path segment looks like a file (`sw.js`, `icon.png`, `foo.woff2`). */
 const STATIC_ASSET_PATTERN = /\/[^/]+\.[a-zA-Z0-9]+$/;
 
@@ -47,6 +49,8 @@ export function isKnownSpaShellPath(urlOrPath: string): boolean {
   if (pathname === '/privacy' || pathname === '/terms' || pathname === '/health' || pathname === '/contact') {
     return true;
   }
+
+  if (STUDIO_PATTERN.test(pathname)) return true;
 
   const statusMatch = pathname.match(STATUS_PATTERN);
   if (statusMatch?.[1]) return true;

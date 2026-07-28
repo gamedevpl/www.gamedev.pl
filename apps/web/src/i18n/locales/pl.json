@@ -164,7 +164,8 @@
   },
   "studioPanel": {
     "title": "Studio Twórcy",
-    "subtitle": "Zarządzaj grami, sprawdzaj jak się grają i proś o ulepszenia.",
+    "kicker": "Dla twórców",
+    "subtitle": "Twoje gry, buildy, playtesty i ulepszenia — w jednym miejscu.",
     "signInHint": "Zaloguj się, aby zobaczyć zlecone gry i ich statystyki.",
     "backHome": "Wróć na start",
     "loading": "Ładujemy Twoje gry…",
@@ -414,11 +415,6 @@
     "shareCopied": "Skopiowano!",
     "checksFailed": "Automatyczne testy tej wersji nie przechodzą. Agent zwykle to zauważa i poprawia — nie musisz nic robić.",
     "tryAgain": "Spróbuj z tym pomysłem jeszcze raz",
-    "eta": {
-      "unknown": "Większość gier jest gotowa w niecałą godzinę.",
-      "typical": "Takie gry powstają zwykle około {{minutes}} min.",
-      "overrun": "Ta powstaje dłużej niż typowe {{minutes}} min. Większe pomysły tak mają — możesz zamknąć tę stronę, damy Ci znać."
-    },
     "abandon": {
       "start": "Zatrzymaj tę grę",
       "confirm": "Zatrzymać tworzenie tej gry?",

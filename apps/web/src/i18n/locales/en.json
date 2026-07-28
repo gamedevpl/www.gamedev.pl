@@ -164,9 +164,10 @@
   },
   "studioPanel": {
     "title": "Creator Studio",
-    "subtitle": "Manage your games, check how they play, and ask for improvements.",
+    "kicker": "For creators",
+    "subtitle": "Your games, builds, playtests, and improvements — in one place.",
     "signInHint": "Sign in to see the games you commissioned and their play stats.",
-    "backHome": "Back home",
+    "backHome": "Back to home",
     "loading": "Loading your games…",
     "loadError": "Could not load your studio right now. Try again in a moment.",
     "empty": "You have not commissioned a game yet.",
@@ -414,11 +415,6 @@
     "shareCopied": "Copied!",
     "checksFailed": "Automatic checks are failing on this build. The agent usually notices and fixes it — no action needed from you.",
     "tryAgain": "Try this idea again",
-    "eta": {
-      "unknown": "Most games are ready within an hour.",
-      "typical": "Games like this usually take about {{minutes}} min.",
-      "overrun": "This one is taking longer than the usual {{minutes}} min. Bigger ideas do — you can close this page, we will notify you."
-    },
     "abandon": {
       "start": "Stop this build",
       "confirm": "Stop building this game?",

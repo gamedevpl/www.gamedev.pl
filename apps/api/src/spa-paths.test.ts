@@ -36,6 +36,10 @@ describe('isKnownSpaShellPath', () => {
     '/ai/sky-dodge',
     '/draft/space-runner',
     '/status/tok-abc',
+    '/studio',
+    '/studio/tok-abc',
+    '/studio/tok-abc/build',
+    '/studio/tok-abc/playtest',
     '/join/K7M3QP',
   ])('treats %s as a known shell path (HTTP 200)', (path) => {
     expect(isKnownSpaShellPath(path)).toBe(true);
@@ -50,6 +54,8 @@ describe('isKnownSpaShellPath', () => {
     '/draft/',
     '/draft/..%2Fadmin',
     '/health/brick-storm',
+    '/studio/tok-abc/nope',
+    '/studio/tok-abc/build/extra',
     '/join/lower1',
     '/join/TOOLONG9',
     '/join/K7M3QP/extra',
