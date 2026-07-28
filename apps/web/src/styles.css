@@ -5731,8 +5731,8 @@ body.player-open {
   border: 1px solid var(--panel-border);
   border-radius: 14px;
   overflow: hidden;
-  background: radial-gradient(circle at 50% 20%, rgba(56, 189, 248, 0.1), transparent 55%), #0a0e12;
-  min-height: 280px;
+  background: #05080c;
+  min-height: 0;
 }
 
 .studio-playtest-stage.is-paused {
@@ -5740,16 +5740,50 @@ body.player-open {
   box-shadow: 0 0 24px rgba(0, 228, 172, 0.08);
 }
 
-.studio-playtest-stage .game-frame {
+.studio-playtest-viewport {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
-  aspect-ratio: 16 / 10;
-  min-height: 240px;
+  background: #000;
+  /* Games are landscape — give the stage the width budget, not side padding. */
+  min-height: 0;
+}
+
+.studio-playtest-stage .game-frame {
+  width: min(100%, calc(70vh * 16 / 9));
+  aspect-ratio: 16 / 9;
+  max-height: 70vh;
+  min-height: 180px;
   height: auto;
   border: 0;
   border-radius: 0;
   box-shadow: none;
   display: block;
-  background: transparent;
+  background: #000;
+}
+
+.studio-playtest-rotate {
+  position: absolute;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: 12px;
+  right: 12px;
+  margin-inline: auto;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(12, 18, 24, 0.88);
+  border: 1px solid rgba(0, 228, 172, 0.32);
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 600;
+  pointer-events: none;
+  z-index: 2;
 }
 
 .studio-playtest-controls {
@@ -5872,6 +5906,50 @@ body.player-open {
     padding: 18px 16px;
   }
 
+  /* Playtest needs every horizontal pixel — bleed the stage edge-to-edge and keep
+     chrome padding only on the text/controls around it. */
+  .studio-panel.is-playtesting {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .studio-panel.is-playtesting .studio-panel-header,
+  .studio-panel.is-playtesting .studio-empty,
+  .studio-panel.is-playtesting .studio-empty-state,
+  .studio-panel.is-playtesting .studio-game-switcher,
+  .studio-panel.is-playtesting .studio-tabs,
+  .studio-panel.is-playtesting .studio-playtest-hint,
+  .studio-panel.is-playtesting .studio-playtest-prompt,
+  .studio-panel.is-playtesting .studio-muted,
+  .studio-panel.is-playtesting .error {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .studio-panel.is-playtesting .studio-detail {
+    padding: 12px 0 18px;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+
+  .studio-panel.is-playtesting .studio-playtest-stage {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+
+  .studio-panel.is-playtesting .studio-playtest-stage .game-frame {
+    width: 100%;
+    max-height: min(56vw, 48vh);
+    min-height: 160px;
+  }
+
+  .studio-panel.is-playtesting .studio-playtest-controls {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
   .studio-tabs {
     flex-wrap: nowrap;
     overflow-x: auto;
@@ -5886,6 +5964,13 @@ body.player-open {
 
   .studio-picker {
     width: 100%;
+  }
+}
+
+@media (max-width: 800px) and (orientation: landscape) {
+  .studio-panel.is-playtesting .studio-playtest-stage .game-frame {
+    width: min(100%, calc(78vh * 16 / 9));
+    max-height: 78vh;
   }
 }
 

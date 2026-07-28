@@ -251,7 +251,7 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryCo
   );
 
   return (
-    <section className="studio-panel">
+    <section className={`studio-panel${tab === 'playtest' ? ' is-playtesting' : ''}`}>
       <header className="studio-panel-header">
         <div>
           <h1 className="section-title">{t('studioPanel.title')}</h1>
