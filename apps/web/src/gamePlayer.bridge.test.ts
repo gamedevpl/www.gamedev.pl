@@ -125,6 +125,10 @@ describe('the injected bridge reports health', () => {
     // jsdom's cross-realm postMessage into an iframe is unreliable; dispatch the
     // host envelope the same way the real parent would deliver it.
     const bridge = runBridge('<canvas id="game" width="40" height="20"></canvas>');
+    const pauseEvents: Event[] = [];
+    const resumeEvents: Event[] = [];
+    bridge.frameWindow.document.addEventListener('gdpl-pause', (event) => pauseEvents.push(event));
+    bridge.frameWindow.document.addEventListener('gdpl-resume', (event) => resumeEvents.push(event));
 
     bridge.frameWindow.dispatchEvent(
       new bridge.frameWindow.MessageEvent('message', {
@@ -139,6 +143,7 @@ describe('the injected bridge reports health', () => {
     expect(snap?.paused).toBe(true);
     expect(snap?.reason).toBe('pause');
     expect(bridge.frameWindow.document.getElementById('gdpl-pause-overlay')).not.toBeNull();
+    expect(pauseEvents).toHaveLength(1);
 
     bridge.frameWindow.dispatchEvent(
       new bridge.frameWindow.MessageEvent('message', {
@@ -148,38 +153,7 @@ describe('the injected bridge reports health', () => {
     await delivered();
     expect(bridge.received.some((message) => message.type === 'resumed')).toBe(true);
     expect(bridge.frameWindow.document.getElementById('gdpl-pause-overlay')).toBeNull();
-    bridge.stop();
-  });
-
-  it('holds requestAnimationFrame callbacks while paused so the sim actually stops', async () => {
-    const bridge = runBridge('<canvas id="game" width="8" height="8"></canvas>');
-    let ticks = 0;
-    const frameWindow = bridge.frameWindow as Window & typeof globalThis;
-
-    bridge.frameWindow.dispatchEvent(
-      new bridge.frameWindow.MessageEvent('message', {
-        data: { source: 'gdpl-host', type: 'pause' },
-      }),
-    );
-    await delivered();
-
-    const heldId = frameWindow.requestAnimationFrame(() => {
-      ticks += 1;
-    });
-    // Give any eager rAF polyfill a turn — held callbacks must not run while paused.
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(ticks).toBe(0);
-
-    // Cancelling a held id must drop it so resume does not flush a stale frame.
-    frameWindow.cancelAnimationFrame(heldId);
-    bridge.frameWindow.dispatchEvent(
-      new bridge.frameWindow.MessageEvent('message', {
-        data: { source: 'gdpl-host', type: 'resume' },
-      }),
-    );
-    await delivered();
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(ticks).toBe(0);
+    expect(resumeEvents).toHaveLength(1);
     bridge.stop();
   });
 });

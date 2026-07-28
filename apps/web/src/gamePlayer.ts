@@ -45,56 +45,11 @@ const BRIDGE = `(function(){
     var r=e&&e.reason;post({type:'error',message:String((r&&r.message)||r||'unhandled rejection').slice(0,200)});
   });
   var frames=0,paused=false,overlay=null,lastAlive=0;
-  // Freeze game loops without games-repo cooperation. Overlay alone only veiled the
-  // canvas while rAF/timers kept ticking (Creator Studio pause felt broken). Patch
-  // globals early so games that look up requestAnimationFrame each frame are held;
-  // already-scheduled native callbacks may run once more, then re-enter the patch.
-  var _raf=window.requestAnimationFrame&&window.requestAnimationFrame.bind(window);
-  var _caf=window.cancelAnimationFrame&&window.cancelAnimationFrame.bind(window);
-  var _si=window.setInterval.bind(window);
-  var heldRaf=[],rafSeq=0,heldRafIds={},audioCtxs=[];
-  if(_raf){
-    window.requestAnimationFrame=function(cb){
-      if(!paused)return _raf(cb);
-      var id=++rafSeq;
-      heldRaf.push({id:id,cb:cb});
-      heldRafIds[id]=1;
-      return id;
-    };
-    window.cancelAnimationFrame=function(id){
-      if(heldRafIds[id]){
-        heldRaf=heldRaf.filter(function(h){return h.id!==id;});
-        delete heldRafIds[id];
-        return;
-      }
-      if(_caf)_caf(id);
-    };
-  }
-  var OrigAC=window.AudioContext||window.webkitAudioContext;
-  if(OrigAC){
-    var WrapAC=function(){
-      var ctx=new OrigAC();
-      try{audioCtxs.push(ctx);}catch(err){}
-      if(paused&&ctx.suspend)try{ctx.suspend();}catch(err){}
-      return ctx;
-    };
-    WrapAC.prototype=OrigAC.prototype;
-    window.AudioContext=WrapAC;
-    if('webkitAudioContext'in window)window.webkitAudioContext=WrapAC;
-  }
-  function suspendAudio(yes){
-    for(var i=0;i<audioCtxs.length;i++){
-      var c=audioCtxs[i];
-      try{if(yes){if(c.suspend)c.suspend();}else if(c.resume)c.resume();}catch(err){}
-    }
-  }
-  function flushHeldRaf(){
-    var q=heldRaf;heldRaf=[];heldRafIds={};
-    if(!_raf)return;
-    for(var i=0;i<q.length;i++){(function(cb){_raf(function(t){try{cb(t);}catch(err){}});}(q[i].cb));}
-  }
-  if(_raf){(function tick(){frames++;requestAnimationFrame(tick);})();}
-  _si(function(){lastAlive=frames;post({type:'alive',frames:frames});frames=0;},5000);
+  // Freeze is owned by GameKit (gdpl-pause / gdpl-resume on document). The bridge
+  // only dispatches those events, shows the veil, and snapshots — it does not patch
+  // requestAnimationFrame or AudioContext.
+  if('requestAnimationFrame'in window){(function tick(){frames++;requestAnimationFrame(tick);})();}
+  setInterval(function(){lastAlive=frames;post({type:'alive',frames:frames});frames=0;},5000);
   function largestCanvas(){
     var best=null,area=0,list=document.querySelectorAll('canvas');
     for(var i=0;i<list.length;i++){
@@ -194,12 +149,9 @@ const BRIDGE = `(function(){
       var png=capturePng();
       document.dispatchEvent(new CustomEvent('gdpl-pause'));
       showOverlay();
-      suspendAudio(true);
       sendSnapshot('pause',png);
     }else{
       hideOverlay();
-      suspendAudio(false);
-      flushHeldRaf();
       document.dispatchEvent(new CustomEvent('gdpl-resume'));
       post({type:'resumed'});
     }
@@ -231,24 +183,12 @@ const HIDE_CHROME = `#game-title,#game-desc,.game-controls,.hint{display:none!im
 
 /**
  * Injects the player bridge + hide-chrome style into an assembled game document
- * so it can run headless-of-its-own-chrome inside the app's player.
- *
- * Prefers `<head>` (then `<body>`, then `</body>`, then append) so rAF / AudioContext
- * patches land before game scripts schedule their loops — pause in Creator Studio
- * depends on that ordering.
+ * so it can run headless-of-its-own-chrome inside the app's player. Falls back to
+ * appending if there's no </body> (assembled games always have one, but be safe).
  */
 export function embedGameHtml(html: string): string {
   const inject = `<style id="gdpl-embed">${HIDE_CHROME}</style><script>${BRIDGE}</script>`;
-  if (/<head\b[^>]*>/i.test(html)) {
-    return html.replace(/<head\b[^>]*>/i, (open) => `${open}${inject}`);
-  }
-  if (/<body\b[^>]*>/i.test(html)) {
-    return html.replace(/<body\b[^>]*>/i, (open) => `${open}${inject}`);
-  }
-  if (html.includes('</body>')) {
-    return html.replace('</body>', `${inject}</body>`);
-  }
-  return html + inject;
+  return html.includes('</body>') ? html.replace('</body>', `${inject}</body>`) : html + inject;
 }
 
 /** en/pl are the only locales games ship strings for; anything else maps to en. */

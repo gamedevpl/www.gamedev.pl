@@ -2,17 +2,16 @@ import { describe, it, expect } from 'vitest';
 import { embedGameHtml, withGameLocale } from './gamePlayer.js';
 
 describe('embedGameHtml', () => {
-  it('injects the hide-chrome style and bridge script in <head> before game body work', () => {
+  it('injects the hide-chrome style and bridge script before </body>', () => {
     const html = '<html><head></head><body><canvas id="game"></canvas></body></html>';
     const out = embedGameHtml(html);
 
-    // Style + script land inside the document early so pause patches precede game loops.
+    // Style + script land inside the document, before the closing body tag.
     expect(out).toContain('<style id="gdpl-embed">');
     expect(out).toContain('#game-title,#game-desc,.game-controls,.hint{display:none!important}');
     expect(out).toContain('gdpl-player');
-    expect(out.indexOf('<style id="gdpl-embed">')).toBeGreaterThan(out.indexOf('<head'));
-    expect(out.indexOf('<style id="gdpl-embed">')).toBeLessThan(out.indexOf('</head>'));
-    expect(out.indexOf('<script>')).toBeLessThan(out.indexOf('<body'));
+    expect(out.indexOf('<style id="gdpl-embed">')).toBeLessThan(out.indexOf('</body>'));
+    expect(out.indexOf('<script>')).toBeLessThan(out.indexOf('</body>'));
     // Original game content is preserved.
     expect(out).toContain('<canvas id="game">');
   });
@@ -25,12 +24,6 @@ describe('embedGameHtml', () => {
     expect(out).toContain("type:'key'");
   });
 
-  it('falls back to <body> when there is no <head>', () => {
-    const out = embedGameHtml('<html><body><canvas id="game"></canvas></body></html>');
-    expect(out.indexOf('<style id="gdpl-embed">')).toBeGreaterThan(out.indexOf('<body'));
-    expect(out.indexOf('<style id="gdpl-embed">')).toBeLessThan(out.indexOf('<canvas'));
-  });
-
   it('appends the injection when there is no </body>', () => {
     const out = embedGameHtml('<canvas id="game"></canvas>');
     expect(out.startsWith('<canvas id="game"></canvas>')).toBe(true);
@@ -38,11 +31,14 @@ describe('embedGameHtml', () => {
     expect(out).toContain('<script>');
   });
 
-  it('freezes requestAnimationFrame while the host asks for pause', () => {
+  it('dispatches gdpl-pause / gdpl-resume so GameKit can freeze the sim', () => {
     const out = embedGameHtml('<html><head></head><body></body></html>');
-    expect(out).toContain('heldRaf');
-    expect(out).toContain('flushHeldRaf');
-    expect(out).toContain('suspendAudio');
+    expect(out).toContain("CustomEvent('gdpl-pause')");
+    expect(out).toContain("CustomEvent('gdpl-resume')");
+    // Freeze is GameKit's job — the bridge must not patch globals.
+    expect(out).not.toContain('heldRaf');
+    expect(out).not.toContain('flushHeldRaf');
+    expect(out).not.toContain('suspendAudio');
   });
 });
 
