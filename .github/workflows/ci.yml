@@ -44,6 +44,11 @@ jobs:
   # Cross-repo lockstep with gamedevpl/www.gamedev.pl-games (issue #247). The unit
   # tests above already pin this repo's half + a GameKit-shaped fixture; this job
   # fetches the live assemble/validate sources when GAMES_REPO_TOKEN is configured.
+  #
+  # Drift fails this job. A games repo that cannot be read — GAMES_REPO_TOKEN out of
+  # quota (it is shared with the snapshot bake), expired, or GitHub down — annotates
+  # and passes, because it compared nothing and so is no evidence of drift. Set
+  # GAMES_CONTRACT_REQUIRE_REMOTE=1 below to demand the live comparison instead.
   games_repo_contract:
     name: Games-repo contract
     runs-on: ubuntu-latest

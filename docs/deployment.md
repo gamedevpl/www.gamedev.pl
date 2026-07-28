@@ -93,6 +93,18 @@ a single `--set-secrets` list.
 without an auth challenge. Access is controlled by `PRIVATE_BETA` and the beta allowlist
 instead. Delete the secret when you are sure nothing references it.
 
+**`GAMES_REPO_TOKEN` is one hourly REST budget shared by two very different consumers.**
+The CI lockstep check spends 2 requests per run; the snapshot bake spends roughly a
+thousand — one per source and media file across every published game — and runs on every
+`games-published` dispatch. When bakes come in bursts, the PAT's ~5,000 requests/hour is
+reachable, and everything else holding that token starts seeing `403`. The contract check
+therefore treats an unreadable games repo as _no evidence about drift_: it annotates the
+job with GitHub's own quota headers and passes, rather than reddening every PR in this
+repo over a shared budget. Real drift still fails. Set
+`GAMES_CONTRACT_REQUIRE_REMOTE=1` on the job to demand the live comparison and fail when
+it cannot be made. A bake that 403s **does** stay red — that one is a real outage, since
+it means the snapshot did not refresh.
+
 **Opening the site to everyone** is a config change, not a code change: set `PRIVATE_BETA=false`
 on the service (and clear the allowlists if you want). Nothing needs redeploying from source.
 
