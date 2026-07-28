@@ -160,9 +160,7 @@ export function SubmissionStatusView({
   const previewInFlightRef = useRef(false);
 
   const currentTrackingUrl = useMemo(
-    () =>
-      trackingUrl ??
-      new URL(embedded ? studioPath(token) : statusPath(token), window.location.href).toString(),
+    () => trackingUrl ?? new URL(embedded ? studioPath(token) : statusPath(token), window.location.href).toString(),
     [token, trackingUrl, embedded],
   );
 

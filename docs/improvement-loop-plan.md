@@ -448,7 +448,7 @@ considerably:
   and improve accept optional `context.screenshotPng` + `instrumentation` (fenced
   as data; PNG stored as a creator playtest shot). True game-loop pause still
   needs games-repo cooperation (`gdpl-pause` CustomEvent); today the overlay +
-  frame capture freeze the *moment* for the prompt even when the sim keeps
+  frame capture freeze the _moment_ for the prompt even when the sim keeps
   ticking under the veil.
 - 📋 **Suggestion inbox** — cards with insight → evidence → proposed change →
   [Approve → files issue] / [Dismiss with reason]. Dismissal reasons feed router
@@ -671,6 +671,7 @@ at all and feeds the only autonomous-eligible class.
     failed all produce `[]`, and the panel renders no block at all rather than an empty
     heading. Cost is bounded by a per-sweep call budget, and when that budget binds the
     result says so — otherwise "no themes" would silently mean "we stopped looking".
+
 - 📋 Scorecard panel on the game dashboard; digest notification type + weekly batch.
   ✅ Creator Studio (`/studio`) ships the scorecard panel + improve prompt for the
   creator's own games; digest / suggestion inbox remain open.

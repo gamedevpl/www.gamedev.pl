@@ -1,8 +1,8 @@
 import type { Store } from './store.js';
 
 /**
- * Erase everything a person contributed *as a player*: their votes and their written
- * feedback.
+ * Erase everything a person contributed *as a player*: their votes, their written
+ * feedback, and their saved game progress.
  *
  * This exists because the privacy notice promises it. Section 8 says account deletion
  * removes "the votes and written feedback you left on games", and until now that was a
@@ -25,6 +25,10 @@ import type { Store } from './store.js';
  *   walking the games and clearing each one — and cleared through `clearVote` rather than
  *   deleted directly, because the aggregate counts live on the parent game document and a
  *   raw delete would leave `votesUp`/`votesDown` overstating reality forever.
+ * - **Saves live under the player** (`users/{uid}/gameSaves/{slug}`), so erasing them is
+ *   one subcollection delete with no query, no index, and no walk. That is the vote
+ *   layout's lesson applied rather than repeated — the schema was chosen so this
+ *   function would stay cheap as the catalog grows.
  *
  * The walk looks like something a collection-group query should replace, and it cannot be:
  * `collectionGroup('votes').where(FieldPath.documentId(), '==', uid)` throws, because a
@@ -69,6 +73,8 @@ export interface ErasePlayerSignalsResult {
   votesCleared: string[];
   /** Feedback rows found (and deleted, unless this was a dry run). */
   feedbackDeleted: number;
+  /** Games whose saved progress was found (and deleted, unless this was a dry run). */
+  savesDeleted: string[];
   dryRun: boolean;
 }
 
@@ -112,5 +118,11 @@ export async function erasePlayerSignals(options: ErasePlayerSignalsOptions): Pr
     if (!dryRun) await store.clearVote(slug, uid);
   }
 
-  return { uid, votesCleared, feedbackDeleted, dryRun };
+  // Listed before deleting even on a real run, so the report names the games rather
+  // than just counting them — "your progress in these five games is gone" is the
+  // sentence an operator has to be able to say back to the person who asked.
+  const savesDeleted = (await store.listGameSaves(uid)).map((save) => save.slug).sort();
+  if (!dryRun && savesDeleted.length > 0) await store.deleteGameSaves(uid);
+
+  return { uid, votesCleared, feedbackDeleted, savesDeleted, dryRun };
 }

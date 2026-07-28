@@ -63,10 +63,7 @@ describe('clampThemes', () => {
   });
 
   it('strips markup so a theme cannot carry structure into whatever renders it', () => {
-    const [theme] = clampThemes(
-      [{ theme: '<script>alert(1)</script> **bold** [link](http://x.test)', count: 2 }],
-      5,
-    );
+    const [theme] = clampThemes([{ theme: '<script>alert(1)</script> **bold** [link](http://x.test)', count: 2 }], 5);
 
     expect(theme.theme).not.toContain('<script>');
     expect(theme.theme).not.toContain('**');
@@ -101,7 +98,15 @@ describe('clampThemes', () => {
   });
 
   it('drops themes that sanitize away to nothing', () => {
-    expect(clampThemes([{ theme: '***', count: 2 }, { theme: '   ', count: 2 }], 5)).toEqual([]);
+    expect(
+      clampThemes(
+        [
+          { theme: '***', count: 2 },
+          { theme: '   ', count: 2 },
+        ],
+        5,
+      ),
+    ).toEqual([]);
   });
 });
 

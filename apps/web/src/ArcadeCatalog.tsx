@@ -226,6 +226,14 @@ function CatalogCard({
                 <PixelIcon name="phone" size={12} /> {t('party.playersBadge', { max: entry.multiplayer.maxPlayers })}
               </span>
             )}
+            {/* Says what the game will do, not what this visitor will get: a signed-out
+                player sees the badge and no save, which is the honest ordering — the
+                promise belongs to the game, and signing in is what claims it. */}
+            {entry.saves === 'player' && (
+              <span className="card-saves-badge">
+                <PixelIcon name="clock" size={12} /> {t('catalog.savesBadge')}
+              </span>
+            )}
           </h3>
           <p className="card-author">
             {t('player.byAuthor', {

@@ -92,7 +92,10 @@ describe('replaceBuildManifest', () => {
   const manifest = { revision: 'cafef00d', shell: ['/index.html', '/assets/index-abc.js'] };
 
   it('replaces the placeholder with the real manifest', () => {
-    const result = replaceBuildManifest("const BUILD = { revision: 'dev', shell: [] }; // __BUILD_MANIFEST__", manifest);
+    const result = replaceBuildManifest(
+      "const BUILD = { revision: 'dev', shell: [] }; // __BUILD_MANIFEST__",
+      manifest,
+    );
 
     expect(result).toBe(buildManifestLine(manifest));
     expect(result).toContain('"revision":"cafef00d"');

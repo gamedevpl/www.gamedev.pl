@@ -402,10 +402,7 @@ export type PlaytestSnapshot = {
  * frame — pause/capture asks the injected bridge, which replies with a full
  * viewport composite (canvases / videos / images) plus live health fields.
  */
-export function useCreatorPlaytest(
-  frameRef: MutableRefObject<HTMLIFrameElement | null>,
-  active: boolean,
-) {
+export function useCreatorPlaytest(frameRef: MutableRefObject<HTMLIFrameElement | null>, active: boolean) {
   const [paused, setPaused] = useState(false);
   const [snapshot, setSnapshot] = useState<PlaytestSnapshot | null>(null);
   const [instrumentation, setInstrumentation] = useState<PlaytestInstrumentation>({
@@ -508,4 +505,3 @@ export function useCreatorPlaytest(
 
   return { paused, snapshot, instrumentation, pause, resume, capture, clearSnapshot };
 }
-

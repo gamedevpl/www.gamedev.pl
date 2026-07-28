@@ -30,17 +30,7 @@ const MAX_VISIT_MS = 24 * 60 * 60 * 1000;
 /** How far back an event may be dated from its flush — bounds client-supplied offsets. */
 const MAX_BACKDATE_MS = 6 * 60 * 60 * 1000;
 
-const RouteKindSchema = z.enum([
-  'home',
-  'play',
-  'draft',
-  'status',
-  'join',
-  'legal',
-  'health',
-  'studio',
-  'notFound',
-]);
+const RouteKindSchema = z.enum(['home', 'play', 'draft', 'status', 'join', 'legal', 'health', 'studio', 'notFound']);
 /**
  * Creation-funnel steps. A closed enum rather than a free string, for the same reason
  * every other field here is bounded: this reaches a grouping key, and the endpoint is

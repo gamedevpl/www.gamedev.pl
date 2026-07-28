@@ -3610,7 +3610,8 @@ body.player-open {
    this app that is never viewed on a desktop.
    --------------------------------------------------------------------------- */
 
-.card-party-badge {
+.card-party-badge,
+.card-saves-badge {
   display: inline-block;
   margin-left: 8px;
   padding: 2px 8px;
@@ -3621,6 +3622,13 @@ body.player-open {
   font-weight: 700;
   vertical-align: middle;
   white-space: nowrap;
+}
+
+/* Quieter than the party badge on purpose: "play together" is a call to action, while
+   "saves progress" is a fact about the game that should not compete with it. */
+.card-saves-badge {
+  border-color: var(--muted);
+  color: var(--muted);
 }
 
 .party-btn {

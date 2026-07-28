@@ -136,7 +136,8 @@
     "play": "Play Game",
     "playingBadge": "Playing",
     "remix": "Remix Game",
-    "platformAuthor": "gamedev.pl"
+    "platformAuthor": "gamedev.pl",
+    "savesBadge": "Saves progress"
   },
   "studio": {
     "title": "Active Projects & Tracker",

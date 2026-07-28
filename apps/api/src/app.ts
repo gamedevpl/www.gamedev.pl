@@ -15,6 +15,7 @@ import { createGenerator } from './generator.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { registerContactRoutes, type ContactRoutesOptions } from './contact.js';
 import { registerEmailRoutes } from './email-routes.js';
+import { registerGameSaveRoutes, type GameSaveRoutesOptions } from './game-saves.js';
 import { resolveLocalGamesDir } from './local-games-repo.js';
 import { registerMultiplayerRoutes, type MultiplayerRoutesOptions } from './mp.js';
 import { registerNotificationRoutes } from './notifications.js';
@@ -55,6 +56,8 @@ export interface BuildAppOptions {
   telemetryRoutes?: Omit<TelemetryRoutesOptions, 'store'>;
   /** Seams for game votes; defaults to a live catalog-backed slug gate. */
   voteRoutes?: Omit<VoteRoutesOptions, 'store'>;
+  /** Seams for per-player game saves; defaults to a live catalog-backed slug gate. */
+  gameSaveRoutes?: Omit<GameSaveRoutesOptions, 'store'>;
   /** Seams for written player feedback; defaults to a live catalog-backed slug gate. */
   playerFeedbackRoutes?: Omit<PlayerFeedbackRoutesOptions, 'store' | 'contentChecker'>;
   /** Seams for the nightly scorecard sweep; defaults to OIDC-or-deny-all from env. */
@@ -210,6 +213,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     ...options.voteRoutes,
   });
 
+  // Durable per-player progress (docs/persistent-world-plan.md P1). Same slug gate as
+  // votes, but unlike votes there is no public read at all: a save belongs to exactly
+  // one person and is meaningless to anyone else, so every method here needs a session.
+  // The game never calls this — the shell does, on the game's behalf, over the bridge.
+  await registerGameSaveRoutes(app, {
+    store,
+    publishedSlugs: envPublishedSlugs,
+    ...options.gameSaveRoutes,
+  });
+
   // Written player feedback (docs/improvement-loop-plan.md, signal source #1). Keyed
   // by slug and gated the same way votes are; unlike votes it requires a session to
   // even read the tradeoff (there is no public read here — feedback has no public
@@ -251,10 +264,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const nodeEnv = process.env.NODE_ENV;
   const githubToken = options.submissionRoutes?.githubToken ?? process.env.GITHUB_TOKEN;
   const localGames =
-    nodeEnv !== 'production' &&
-    nodeEnv !== 'test' &&
-    !githubToken &&
-    !options.submissionRoutes?.githubClient
+    nodeEnv !== 'production' && nodeEnv !== 'test' && !githubToken && !options.submissionRoutes?.githubClient
       ? await resolveLocalGamesDir()
       : null;
   const submissionTokenSecret =
@@ -263,9 +273,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     (localGames ? 'local-development-submission-secret' : undefined);
   await registerCreatorStudioRoutes(app, {
     store,
-    mintStatusToken: submissionTokenSecret
-      ? (issueNumber) => mintToken(issueNumber, submissionTokenSecret)
-      : undefined,
+    mintStatusToken: submissionTokenSecret ? (issueNumber) => mintToken(issueNumber, submissionTokenSecret) : undefined,
   });
 
   app.get('/api/health', async () => ({ status: 'ok', provider: generator.name, privateBeta }));

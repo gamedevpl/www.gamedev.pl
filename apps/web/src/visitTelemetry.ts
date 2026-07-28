@@ -26,16 +26,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
  */
 
 /** Where a visit is, coarsely. Route parameters (tokens, slugs) never travel. */
-export type VisitRouteKind =
-  | 'home'
-  | 'play'
-  | 'draft'
-  | 'status'
-  | 'join'
-  | 'legal'
-  | 'health'
-  | 'studio'
-  | 'notFound';
+export type VisitRouteKind = 'home' | 'play' | 'draft' | 'status' | 'join' | 'legal' | 'health' | 'studio' | 'notFound';
 
 export type VisitEvent =
   | {

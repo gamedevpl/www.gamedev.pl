@@ -337,7 +337,7 @@ registry gains FCM/APNs token rows alongside the web-push subscriptions it alrea
 
 **One bug worth recording, because a browser found it and review would not have.**
 `npx serve` answers `/index.html` with a 301 to `/index`, so `cache.add` stored a
-*redirected* response — and `respondWith` refuses a redirected response for a navigation
+_redirected_ response — and `respondWith` refuses a redirected response for a navigation
 request. Every controlled navigation therefore failed to the browser's own error page,
 while an uncontrolled first load looked perfect. It is caused by an ordinary clean-URL
 rule on the host, not by anything in the worker. Production was checked afterwards and

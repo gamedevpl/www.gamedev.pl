@@ -99,9 +99,12 @@ export async function registerCreatorStudioRoutes(
   const { store } = options;
   const now = options.now ?? Date.now;
 
-  function requireUser(request: { user?: { uid: string; tier?: string } | null }, reply: {
-    status: (code: number) => { send: (body: unknown) => unknown };
-  }): boolean {
+  function requireUser(
+    request: { user?: { uid: string; tier?: string } | null },
+    reply: {
+      status: (code: number) => { send: (body: unknown) => unknown };
+    },
+  ): boolean {
     if (!request.user) {
       reply.status(401).send({ error: 'authentication required' });
       return false;

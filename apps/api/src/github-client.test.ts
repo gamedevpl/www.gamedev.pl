@@ -109,6 +109,7 @@ describe('getCatalog', () => {
           video: 'gameplay.mp4',
         },
         multiplayer: null,
+        saves: null,
         orientation: 'any',
         submittedBy: null,
       },
@@ -139,6 +140,7 @@ describe('getCatalog', () => {
         status: 'published',
         media: null,
         multiplayer: null,
+        saves: null,
         orientation: 'any',
         submittedBy: null,
       },
@@ -276,6 +278,7 @@ describe('getCatalog', () => {
         touch: 'gamekit',
         orientation: 'portrait',
         multiplayer: null,
+        saves: null,
         media: { screenshots: [{ name: 'opening', file: 'opening.png' }], video: 'gameplay.mp4' },
       },
       {
@@ -313,6 +316,7 @@ describe('getCatalog', () => {
         touch: 'gamekit',
         orientation: 'portrait',
         multiplayer: null,
+        saves: null,
         media: { screenshots: [{ name: 'opening', file: 'opening.png' }], video: 'gameplay.mp4' },
         submittedBy: null,
       },
@@ -326,9 +330,36 @@ describe('getCatalog', () => {
         touch: 'controllers',
         orientation: 'any',
         multiplayer: { mode: 'controllers', minPlayers: 2, maxPlayers: 4 },
+        saves: null,
         media: null,
         submittedBy: null,
       },
+    ]);
+  });
+
+  it('carries the saves declaration through the committed catalog, and only for the one valid value', async () => {
+    const committed = [
+      { slug: 'crypt-delver', title: 'Crypt Delver', status: 'published', saves: 'player' },
+      { slug: 'brick-storm', title: 'Brick Storm', status: 'published', saves: 'world' },
+      { slug: 'sky-dodge', title: 'Sky Dodge', status: 'published' },
+    ];
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/contents/catalog.json')) {
+        return new Response(JSON.stringify(committed), { status: 200 });
+      }
+      throw new Error(`unexpected request: ${url}`);
+    }) as unknown as typeof fetch;
+
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+    const catalog = await client.getCatalog('main');
+
+    // `player` is the only mode; anything else — a typo, or a value from a games repo
+    // newer than this deploy — reads as "does not save" rather than failing the catalog.
+    expect(catalog.map((entry) => [entry.slug, entry.saves])).toEqual([
+      ['crypt-delver', 'player'],
+      ['brick-storm', null],
+      ['sky-dodge', null],
     ]);
   });
 
@@ -385,6 +416,7 @@ describe('getCatalog', () => {
         status: 'published',
         orientation: 'any',
         multiplayer: null,
+        saves: null,
         media: null,
         submittedBy: null,
       },

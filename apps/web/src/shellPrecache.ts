@@ -72,10 +72,7 @@ export function shellAssetEntries(emittedFileNames: Iterable<string>): string[] 
  * Truncated to 16 hex characters: this only has to distinguish consecutive deploys of one
  * site, and it ends up in a cache name a human may well read in devtools.
  */
-export function shellRevision(
-  contents: Iterable<string | Uint8Array>,
-  hash: (input: Uint8Array) => string,
-): string {
+export function shellRevision(contents: Iterable<string | Uint8Array>, hash: (input: Uint8Array) => string): string {
   const chunks: Uint8Array[] = [];
   const encoder = new TextEncoder();
 
@@ -118,9 +115,7 @@ export function buildManifestLine(manifest: ShellManifest): string {
  */
 export function replaceBuildManifest(source: string, manifest: ShellManifest): string {
   if (!BUILD_MANIFEST_MARKER.test(source)) {
-    throw new Error(
-      'sw.js is missing its `// __BUILD_MANIFEST__` line; the shell precache manifest has nowhere to go',
-    );
+    throw new Error('sw.js is missing its `// __BUILD_MANIFEST__` line; the shell precache manifest has nowhere to go');
   }
   return source.replace(BUILD_MANIFEST_MARKER, buildManifestLine(manifest));
 }

@@ -134,8 +134,7 @@ describe('the injected bridge reports health', () => {
     await delivered();
 
     const snap = bridge.received.find((message) => message.type === 'snapshot') as
-      | (BridgeMessage & { png?: string | null; paused?: boolean; reason?: string })
-      | undefined;
+      (BridgeMessage & { png?: string | null; paused?: boolean; reason?: string }) | undefined;
     expect(snap?.source).toBe('gdpl-player');
     expect(snap?.paused).toBe(true);
     expect(snap?.reason).toBe('pause');

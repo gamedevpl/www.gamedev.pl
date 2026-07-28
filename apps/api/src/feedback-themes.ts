@@ -84,7 +84,9 @@ export function clampThemes(raw: Array<{ theme: string; count: number }>, consid
   for (const candidate of raw) {
     // Single-line: a theme is a label. Newlines in one would let a model lay out
     // something that reads as structure wherever it is later displayed.
-    const theme = sanitizeCreatorText(candidate.theme ?? '', { singleLine: true }).slice(0, MAX_THEME_LENGTH).trim();
+    const theme = sanitizeCreatorText(candidate.theme ?? '', { singleLine: true })
+      .slice(0, MAX_THEME_LENGTH)
+      .trim();
     if (!theme) continue;
 
     const key = theme.toLowerCase();
