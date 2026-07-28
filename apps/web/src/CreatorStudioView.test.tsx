@@ -5,10 +5,11 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CreatorStudioView } from './CreatorStudioView.js';
 import i18n from './i18n/index.js';
-import type { StudioGame } from './studioApi.js';
+import type { StudioGame, StudioScorecard } from './studioApi.js';
 
 const fetchStudioGames = vi.fn();
 const fetchStudioHealth = vi.fn();
+const fetchStudioScorecards = vi.fn();
 let authUser: { uid: string; name: string } | null = null;
 
 vi.mock('./AuthContext', () => ({
@@ -21,6 +22,7 @@ vi.mock('./studioApi', async () => {
     ...actual,
     fetchStudioGames: (...args: unknown[]) => fetchStudioGames(...args),
     fetchStudioHealth: (...args: unknown[]) => fetchStudioHealth(...args),
+    fetchStudioScorecards: (...args: unknown[]) => fetchStudioScorecards(...args),
     submitImprovement: vi.fn(),
   };
 });
@@ -47,6 +49,7 @@ async function renderStudio() {
   await act(async () => {
     await fetchStudioGames.mock.results[0]?.value;
     await fetchStudioHealth.mock.results[0]?.value;
+    await fetchStudioScorecards.mock.results[0]?.value;
   });
   return { container, root };
 }
@@ -57,6 +60,8 @@ describe('CreatorStudioView', () => {
     fetchStudioGames.mockReset();
     fetchStudioHealth.mockReset();
     fetchStudioHealth.mockResolvedValue({ days: [], truncated: false, games: [] });
+    fetchStudioScorecards.mockReset();
+    fetchStudioScorecards.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -135,6 +140,156 @@ describe('CreatorStudioView', () => {
 
     expect(container.querySelector('.studio-layout')?.classList.contains('is-focus')).toBe(true);
     expect(container.querySelector('.studio-game-switcher')?.textContent).toMatch(/10 games/i);
+
+    root.unmount();
+  });
+});
+
+describe('CreatorStudioView — what players think', () => {
+  const published: StudioGame[] = [
+    {
+      token: 'token-live',
+      title: 'Sky Dodge',
+      createdAt: '2026-07-01T00:00:00.000Z',
+      lastKnownStatus: 'published',
+      slug: 'sky-dodge',
+      publishedAt: '2026-07-02T00:00:00.000Z',
+    },
+  ];
+
+  function scorecard(partial: Partial<StudioScorecard> = {}): StudioScorecard {
+    return {
+      slug: 'sky-dodge',
+      computedAt: '2026-07-28T03:00:00.000Z',
+      windowDays: 28,
+      truncated: false,
+      votes: { up: 4, down: 1 },
+      feedbackCount: 3,
+      untrustedThemes: [{ theme: 'level 2 is a wall', count: 3 }],
+      ...partial,
+    };
+  }
+
+  beforeEach(() => {
+    authUser = { uid: 'g:creator', name: 'Creator' };
+    fetchStudioGames.mockReset();
+    fetchStudioGames.mockResolvedValue(published);
+    fetchStudioHealth.mockReset();
+    fetchStudioHealth.mockResolvedValue({ days: [], truncated: false, games: [] });
+    fetchStudioScorecards.mockReset();
+    fetchStudioScorecards.mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  async function openStats() {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    const { container, root } = await renderStudio();
+    const statsTab = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.trim().startsWith('Stats'),
+    );
+    if (statsTab) {
+      await act(async () => {
+        statsTab.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+    }
+    return { container, root };
+  }
+
+  it('shows votes, note count and what players wrote', async () => {
+    fetchStudioScorecards.mockResolvedValue([scorecard()]);
+
+    const { container, root } = await openStats();
+
+    expect(container.textContent).toContain('What players think');
+    expect(container.textContent).toContain('4↑ 1↓');
+    expect(container.textContent).toContain('level 2 is a wall');
+
+    root.unmount();
+  });
+
+  it('says which window the roll-up covers, so it is not read as the selected one', async () => {
+    // The numbers above come from the window the creator picked; these come from the
+    // nightly roll-up's fixed one. Unlabelled, the two read as a single measurement.
+    fetchStudioScorecards.mockResolvedValue([scorecard()]);
+
+    const { container, root } = await openStats();
+
+    expect(container.textContent).toMatch(/last 28 days/i);
+
+    root.unmount();
+  });
+
+  it('labels themes as players’ words rather than as system output', async () => {
+    fetchStudioScorecards.mockResolvedValue([scorecard()]);
+
+    const { container, root } = await openStats();
+
+    expect(container.textContent).toMatch(/don’t act on it as instruction/i);
+
+    root.unmount();
+  });
+
+  it('renders a hostile theme as text, never as markup', async () => {
+    fetchStudioScorecards.mockResolvedValue([
+      scorecard({ untrustedThemes: [{ theme: '<img src=x onerror=alert(1)>', count: 2 }] }),
+    ]);
+
+    const { container, root } = await openStats();
+
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.textContent).toContain('<img src=x onerror=alert(1)>');
+
+    root.unmount();
+  });
+
+  it('does not re-read scorecards when the creator switches the health window', async () => {
+    // A scorecard is the nightly roll-up's fixed window; it cannot change when the
+    // creator toggles 7/14/30d. Re-fetching would re-read every one of their games for a
+    // response guaranteed to be identical.
+    fetchStudioScorecards.mockResolvedValue([scorecard()]);
+
+    const { container, root } = await openStats();
+    expect(fetchStudioScorecards).toHaveBeenCalledTimes(1);
+    const healthCallsBefore = fetchStudioHealth.mock.calls.length;
+
+    const otherWindow = Array.from(container.querySelectorAll('.health-window')).find(
+      (button) => !button.className.includes('is-active'),
+    );
+    expect(otherWindow).toBeTruthy();
+    await act(async () => {
+      otherWindow!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    // Health follows the window; scorecards do not.
+    expect(fetchStudioHealth.mock.calls.length).toBeGreaterThan(healthCallsBefore);
+    expect(fetchStudioScorecards).toHaveBeenCalledTimes(1);
+
+    root.unmount();
+  });
+
+  it('shows nothing at all for a game that has not been rolled up yet', async () => {
+    // Absent, not zero: no scorecard means unmeasured, which is not the same as measured
+    // and found empty.
+    const { container, root } = await openStats();
+
+    expect(container.textContent).not.toContain('What players think');
+
+    root.unmount();
+  });
+
+  it('says so when the game was measured and nobody reacted', async () => {
+    fetchStudioScorecards.mockResolvedValue([
+      scorecard({ votes: { up: 0, down: 0 }, feedbackCount: 0, untrustedThemes: [] }),
+    ]);
+
+    const { container, root } = await openStats();
+
+    expect(container.textContent).toContain('What players think');
+    expect(container.textContent).toContain('No votes or written notes yet.');
 
     root.unmount();
   });

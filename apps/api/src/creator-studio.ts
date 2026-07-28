@@ -49,6 +49,37 @@ export interface CreatorHealthResponse {
 }
 
 /**
+ * The parts of a game's scorecard the health route cannot produce.
+ *
+ * Deliberately **not** the whole scorecard. Health recomputes over a window the creator
+ * picks (7/14/30d); a scorecard is a fixed 28-day roll. Returning its session counts too
+ * would put two numbers labelled "sessions" on one screen, disagreeing, with nothing
+ * saying why — so this carries only what recomputation genuinely cannot supply, and the
+ * window it was measured over travels with it.
+ */
+export interface CreatorScorecardSummary {
+  slug: string;
+  computedAt: string;
+  /** Days the sweep actually read — the window these numbers describe. */
+  windowDays: number;
+  truncated: boolean;
+  votes: { up: number; down: number };
+  feedbackCount: number;
+  /**
+   * Recurring themes distilled from written feedback.
+   *
+   * Player-written text, summarized by a model that read player-written text: safe to
+   * render to the creator as text, never safe to hand an agent as instruction. It reaches
+   * the client under a name that says so.
+   */
+  untrustedThemes: Array<{ theme: string; count: number }>;
+}
+
+export interface CreatorScorecardsResponse {
+  scorecards: CreatorScorecardSummary[];
+}
+
+/**
  * Reads play events for a fixed set of slugs under one shared document budget.
  *
  * Per-slug queries (not a full-partition scan) so a quiet creator's niche game is not
@@ -178,6 +209,48 @@ export async function registerCreatorStudioRoutes(
     const games = summarizeGameHealth(events).filter((game) => owned.has(game.slug));
 
     const body: CreatorHealthResponse = { days: scanned, truncated, games };
+    return reply.send(body);
+  });
+
+  /**
+   * Votes and feedback themes for the creator's own published games.
+   *
+   * The third of IL-2's exit questions — "what do they say" — which the health route above
+   * cannot answer at any window size, because votes, feedback and themes are not derived
+   * from play events at all. Reads the scorecards the nightly sweep already wrote: cheap
+   * (one document per game), and it means the studio and the weekly digest cannot report
+   * different numbers, since both read the same document.
+   *
+   * A game with no scorecard is simply absent from the list rather than present with
+   * zeros — it has not been measured, which is not the same as having been measured as
+   * nothing.
+   */
+  app.get('/api/me/studio/scorecards', async (request, reply) => {
+    if (!requireUser(request, reply)) return;
+
+    const records = await store.listSubmissionsByOwner(request.user!.uid, { limit: MAX_STUDIO_GAMES });
+    const slugs = [
+      ...new Set(
+        records
+          .filter((record) => !record.abandonedAt && record.slug && record.publishedAt)
+          .map((record) => record.slug as string),
+      ),
+    ];
+
+    const cards = await Promise.all(slugs.map((slug) => store.getScorecard(slug)));
+    const scorecards: CreatorScorecardSummary[] = cards
+      .filter((card): card is NonNullable<typeof card> => card !== null)
+      .map((card) => ({
+        slug: card.slug,
+        computedAt: card.computedAt,
+        windowDays: card.window.days.length,
+        truncated: card.window.truncated,
+        votes: card.votes,
+        feedbackCount: card.feedback.count,
+        untrustedThemes: card.untrusted.feedbackThemes ?? [],
+      }));
+
+    const body: CreatorScorecardsResponse = { scorecards };
     return reply.send(body);
   });
 }

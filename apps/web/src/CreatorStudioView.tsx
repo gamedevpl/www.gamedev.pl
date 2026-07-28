@@ -19,9 +19,11 @@ import { SubmissionStatusView } from './SubmissionStatusView.js';
 import {
   fetchStudioGames,
   fetchStudioHealth,
+  fetchStudioScorecards,
   submitImprovement,
   type StudioApiError,
   type StudioGame,
+  type StudioScorecard,
 } from './studioApi.js';
 
 /**
@@ -86,6 +88,7 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryCo
   const [authOpen, setAuthOpen] = useState(false);
   const [games, setGames] = useState<StudioGame[]>([]);
   const [healthRows, setHealthRows] = useState<GameHealth[]>([]);
+  const [scorecards, setScorecards] = useState<StudioScorecard[]>([]);
   const [healthDays, setHealthDays] = useState<string[]>([]);
   const [truncated, setTruncated] = useState(false);
   const [days, setDays] = useState(7);
@@ -108,6 +111,7 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryCo
     if (!user) {
       setGames([]);
       setHealthRows([]);
+      setScorecards([]);
       setLoading(false);
       return;
     }
@@ -141,8 +145,37 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryCo
     };
   }, [user, days, t]);
 
+  // Keyed on `user` alone, deliberately: a scorecard is the nightly roll-up's fixed window
+  // and does not move when the creator switches 7/14/30d. Fetching it in the effect above
+  // re-read every one of their games on each toggle, for a response that could not change.
+  //
+  // Tolerated separately too — a creator should still get their shelf and play health if
+  // this fails, and an empty list renders as "not measured yet", which is what a failure
+  // means to them anyway.
+  useEffect(() => {
+    if (!user) {
+      setScorecards([]);
+      return;
+    }
+
+    let cancelled = false;
+    fetchStudioScorecards()
+      .then((cards) => {
+        if (!cancelled) setScorecards(cards);
+      })
+      .catch(() => {
+        if (!cancelled) setScorecards([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
   const selectedGame = useMemo(() => games.find((game) => game.token === selected) ?? null, [games, selected]);
   const selectedHealth = selectedGame ? healthFor(selectedGame, healthRows) : null;
+  const selectedScorecard =
+    selectedGame?.slug ? (scorecards.find((card) => card.slug === selectedGame.slug) ?? null) : null;
   const visibleGames = useMemo(
     () => filterStudioGames(games, { filter: shelfFilter, query: shelfQuery }),
     [games, shelfFilter, shelfQuery],
@@ -368,6 +401,7 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryCo
                     days={days}
                     healthDays={healthDays}
                     truncated={truncated}
+                    scorecard={selectedScorecard}
                     onDaysChange={setDays}
                   />
                 ) : null}
@@ -662,6 +696,7 @@ function StatsTab({
   days,
   healthDays,
   truncated,
+  scorecard,
   onDaysChange,
 }: {
   game: StudioGame;
@@ -669,6 +704,7 @@ function StatsTab({
   days: number;
   healthDays: string[];
   truncated: boolean;
+  scorecard: StudioScorecard | null;
   onDaysChange: (days: number) => void;
 }) {
   const { t } = useTranslation();
@@ -736,6 +772,8 @@ function StatsTab({
         </ul>
       )}
 
+      <PlayerReactions scorecard={scorecard} />
+
       {health && health.errorSamples.length > 0 ? (
         <div className="studio-error-samples">
           <h3 className="health-section-title">{t('studioPanel.stats.errorSamples')}</h3>
@@ -744,6 +782,67 @@ function StatsTab({
               <li key={sample.message}>
                 <code>{sample.message}</code>
                 <span className="health-error-count">×{sample.count}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Votes and what players wrote — the third question the stats tab has to answer.
+ *
+ * Separated visually from the numbers above because it is measured over a different
+ * window: the health block recomputes over the window the creator picked, while these come
+ * from the nightly scorecard's fixed roll. Two windows on one screen is fine; two windows
+ * that look like one is not, so the period is stated.
+ *
+ * Themes are player-written text summarized by a model. React escapes them, which is what
+ * makes showing them safe; the label is what stops them being mistaken for something the
+ * system is asserting.
+ */
+function PlayerReactions({ scorecard }: { scorecard: StudioScorecard | null }) {
+  const { t } = useTranslation();
+
+  // Absent, not zero: no scorecard means this game has not been rolled up yet, which is
+  // not the same as a game measured and found to have no reactions.
+  if (!scorecard) return null;
+
+  const themes = scorecard.untrustedThemes;
+  const nothingYet = scorecard.votes.up === 0 && scorecard.votes.down === 0 && scorecard.feedbackCount === 0;
+
+  return (
+    <div className="studio-reactions">
+      <h3 className="health-section-title">{t('studioPanel.stats.reactions')}</h3>
+      <p className="studio-stats-range">{t('studioPanel.stats.reactionsWindow', { days: scorecard.windowDays })}</p>
+
+      {nothingYet ? (
+        <p className="studio-empty">{t('studioPanel.stats.reactionsEmpty')}</p>
+      ) : (
+        <ul className="funnel-stats">
+          <li>
+            <span className="funnel-stat-value">
+              {scorecard.votes.up}↑ {scorecard.votes.down}↓
+            </span>
+            <span className="funnel-stat-label">{t('studioPanel.stats.votes')}</span>
+          </li>
+          <li>
+            <span className="funnel-stat-value">{scorecard.feedbackCount}</span>
+            <span className="funnel-stat-label">{t('studioPanel.stats.notes')}</span>
+          </li>
+        </ul>
+      )}
+
+      {themes.length > 0 ? (
+        <div className="studio-themes">
+          <h4 className="studio-themes-title">{t('studioPanel.stats.themes')}</h4>
+          <p className="health-note">{t('studioPanel.stats.themesNote')}</p>
+          <ul className="studio-theme-list">
+            {themes.map((entry) => (
+              <li key={entry.theme}>
+                {entry.theme} <span className="health-error-count">×{entry.count}</span>
               </li>
             ))}
           </ul>
