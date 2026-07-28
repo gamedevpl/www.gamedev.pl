@@ -89,6 +89,8 @@ describe('games-repo source extractors', () => {
         GAMEKIT_DRAW_SURFACE_BYTES +
         GAMEKIT_POINTER_RELEASE_BYTES +
         GAMEKIT_HOST_PAUSE_BYTES +
+        GAMEKIT_MASCOT_DRAW_BYTES +
+        GAMEKIT_HEADROOM_BYTES +
         GAMEKIT_GFX3D_BYTES;
     `;
     expect(extractMaxBundleBytes(source)).toBe(MAX_PROJECT_BYTES);
