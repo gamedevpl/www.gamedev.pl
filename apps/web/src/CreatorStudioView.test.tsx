@@ -246,6 +246,31 @@ describe('CreatorStudioView — what players think', () => {
     root.unmount();
   });
 
+  it('does not re-read scorecards when the creator switches the health window', async () => {
+    // A scorecard is the nightly roll-up's fixed window; it cannot change when the
+    // creator toggles 7/14/30d. Re-fetching would re-read every one of their games for a
+    // response guaranteed to be identical.
+    fetchStudioScorecards.mockResolvedValue([scorecard()]);
+
+    const { container, root } = await openStats();
+    expect(fetchStudioScorecards).toHaveBeenCalledTimes(1);
+    const healthCallsBefore = fetchStudioHealth.mock.calls.length;
+
+    const otherWindow = Array.from(container.querySelectorAll('.health-window')).find(
+      (button) => !button.className.includes('is-active'),
+    );
+    expect(otherWindow).toBeTruthy();
+    await act(async () => {
+      otherWindow!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    // Health follows the window; scorecards do not.
+    expect(fetchStudioHealth.mock.calls.length).toBeGreaterThan(healthCallsBefore);
+    expect(fetchStudioScorecards).toHaveBeenCalledTimes(1);
+
+    root.unmount();
+  });
+
   it('shows nothing at all for a game that has not been rolled up yet', async () => {
     // Absent, not zero: no scorecard means unmeasured, which is not the same as measured
     // and found empty.

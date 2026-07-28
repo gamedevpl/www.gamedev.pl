@@ -120,21 +120,13 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryCo
     setLoading(true);
     setError(null);
 
-    Promise.all([
-      fetchStudioGames(),
-      fetchStudioHealth(days),
-      // Tolerated separately: the scorecards read is the newest of the three, and a
-      // creator should still get their shelf and play health if it fails. An empty list
-      // renders as "not measured yet", which is what a failure means to them anyway.
-      fetchStudioScorecards().catch(() => []),
-    ])
-      .then(([shelf, health, cards]) => {
+    Promise.all([fetchStudioGames(), fetchStudioHealth(days)])
+      .then(([shelf, health]) => {
         if (cancelled) return;
         setGames(shelf);
         setHealthRows(health.games);
         setHealthDays(health.days);
         setTruncated(health.truncated);
-        setScorecards(cards);
         setLoading(false);
         setSelected((current) => {
           if (current && shelf.some((game) => game.token === current)) return current;
@@ -152,6 +144,33 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryCo
       cancelled = true;
     };
   }, [user, days, t]);
+
+  // Keyed on `user` alone, deliberately: a scorecard is the nightly roll-up's fixed window
+  // and does not move when the creator switches 7/14/30d. Fetching it in the effect above
+  // re-read every one of their games on each toggle, for a response that could not change.
+  //
+  // Tolerated separately too — a creator should still get their shelf and play health if
+  // this fails, and an empty list renders as "not measured yet", which is what a failure
+  // means to them anyway.
+  useEffect(() => {
+    if (!user) {
+      setScorecards([]);
+      return;
+    }
+
+    let cancelled = false;
+    fetchStudioScorecards()
+      .then((cards) => {
+        if (!cancelled) setScorecards(cards);
+      })
+      .catch(() => {
+        if (!cancelled) setScorecards([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   const selectedGame = useMemo(() => games.find((game) => game.token === selected) ?? null, [games, selected]);
   const selectedHealth = selectedGame ? healthFor(selectedGame, healthRows) : null;
