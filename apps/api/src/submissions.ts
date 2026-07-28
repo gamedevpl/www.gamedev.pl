@@ -18,6 +18,7 @@ import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo
 import { createMailerFromEnv, type Mailer } from './mailer.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { notifyOnTransition, type EmitDeps } from './notify.js';
+import { peekQuota } from './quota-gate.js';
 import { type BuildPreviewSummary, type BuildShotSummary, type Store } from './store.js';
 import {
   CREATOR_FEEDBACK_MARKER,
@@ -850,21 +851,38 @@ export async function registerSubmissionRoutes(
       return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
     }
 
-    // 2. Content moderation, before any quota is spent (docs/content-safety-plan.md Layer 1 & 1b)
+    const currentTime = now();
+    const dateStr = new Date(currentTime).toISOString().slice(0, 10);
+
+    // 2. Coarse per-IP rate limit. Ahead of moderation deliberately: moderation is
+    // `checkFields`, which is one *paid* Vertex call per field (two for a title and a
+    // concept), so a limiter that ran after it would cap submissions created while
+    // leaving the spend itself unbounded.
+    if (isRateLimited(submissionsByIp, request.ip, currentTime, maxSubmissionsPerWindow, rateLimitWindowMs)) {
+      return reply.status(429).send({ error: 'too many submissions, please try again later' });
+    }
+
+    // 3. Quota headroom, read-only — same reason as the limiter above: an account with
+    // no budget left must not be able to keep buying moderation calls. The spend is
+    // recorded further down, after moderation, so rejected content still costs the
+    // creator nothing.
+    if (store) {
+      const headroom = await peekQuota(store, request.user!.uid, dateStr, dailySubmissionQuota, 'submissions');
+      if (!headroom.allowed) {
+        if (headroom.tier === 'blocked') {
+          return reply.status(403).send({ error: 'account is blocked' });
+        }
+        return reply.status(429).send({ error: 'daily submission quota exceeded' });
+      }
+    }
+
+    // 4. Content moderation, before any quota is spent (docs/content-safety-plan.md Layer 1 & 1b)
     const moderation = await contentChecker.checkFields([parsed.data.title, parsed.data.concept]);
     if (!moderation.allowed) {
       return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
     }
 
-    const currentTime = now();
-
-    // 3. Coarse per-IP rate limit
-    if (isRateLimited(submissionsByIp, request.ip, currentTime, maxSubmissionsPerWindow, rateLimitWindowMs)) {
-      return reply.status(429).send({ error: 'too many submissions, please try again later' });
-    }
-
-    // 4. User daily quota check (only increment after payload & IP checks pass)
-    const dateStr = new Date(currentTime).toISOString().slice(0, 10);
+    // 5. User daily quota check (only increment after payload & IP checks pass)
     if (store) {
       const quota = await store.checkAndIncrementQuota(request.user!.uid, dateStr, dailySubmissionQuota, 'submissions');
       if (!quota.allowed) {

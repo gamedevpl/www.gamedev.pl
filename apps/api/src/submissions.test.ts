@@ -4,6 +4,7 @@ import { mintAgentToken } from './agent-token.js';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
+import type { ContentChecker } from './moderation.js';
 import { InMemoryStore, type Store } from './store.js';
 import { CREATOR_FEEDBACK_MARKER } from './submissions.js';
 import { mintToken } from './submission-token.js';
@@ -90,12 +91,14 @@ async function createApp(params: {
   dailySubmissionQuota?: number;
   dailyFeedbackQuota?: number;
   translator?: Translator;
+  contentChecker?: ContentChecker;
 }): Promise<{ app: FastifyInstance; store: Store; authHeaders: Record<string, string> }> {
   const store = params.store ?? new InMemoryStore();
   await store.upsertUser({ uid: 'g:test-user' });
   const app = await buildApp({
     store,
     sessionSecret,
+    ...(params.contentChecker ? { contentChecker: params.contentChecker } : {}),
     submissionRoutes: {
       githubToken: params.githubClient ? 'token' : undefined,
       submissionTokenSecret: params.submissionTokenSecret,
@@ -158,6 +161,85 @@ describe('submission routes authentication & quota', () => {
     });
     expect(exceeded.statusCode).toBe(429);
     expect(exceeded.json()).toEqual({ error: 'daily submission quota exceeded' });
+
+    await app.close();
+  });
+
+  /**
+   * Moderating a submission is `checkFields([title, concept])` — one *paid* Vertex call
+   * per field, so two per request. Both refusals below used to happen only after that
+   * spend, which made the quota and the limiter caps on submissions created rather than
+   * on what a single account could cost us.
+   */
+  function countingChecker() {
+    const state = {
+      calls: 0,
+      checker: {
+        async check() {
+          state.calls += 1;
+          return { allowed: true };
+        },
+        async checkFields(fields: string[]) {
+          state.calls += fields.length;
+          return { allowed: true };
+        },
+      } satisfies ContentChecker,
+    };
+    return state;
+  }
+
+  it('spends nothing on moderation once the daily quota is exhausted', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const moderation = countingChecker();
+    const { app, authHeaders } = await createApp({
+      githubClient,
+      submissionTokenSecret: secret,
+      dailySubmissionQuota: 1,
+      contentChecker: moderation.checker,
+    });
+
+    const body = { title: 'Game idea', concept: 'A concept long enough to pass validation rules.' };
+    const first = await app.inject({ method: 'POST', url: '/api/submissions', headers: authHeaders, payload: body });
+    expect(first.statusCode).toBe(200);
+    expect(moderation.calls).toBe(2);
+
+    const exceeded = await app.inject({ method: 'POST', url: '/api/submissions', headers: authHeaders, payload: body });
+    expect(exceeded.statusCode).toBe(429);
+    expect(moderation.calls).toBe(2);
+
+    await app.close();
+  });
+
+  it('spends nothing on moderation for a rate-limited submission', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const moderation = countingChecker();
+    // Quota above the per-IP ceiling of 5/hour, so the limiter is what refuses the 6th.
+    const { app, authHeaders } = await createApp({
+      githubClient,
+      submissionTokenSecret: secret,
+      dailySubmissionQuota: 1000,
+      contentChecker: moderation.checker,
+    });
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/submissions',
+        headers: authHeaders,
+        payload: { title: `Game ${attempt}`, concept: 'A concept long enough to pass validation rules.' },
+      });
+      expect(res.statusCode).toBe(200);
+    }
+    expect(moderation.calls).toBe(10);
+
+    const limited = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'One too many', concept: 'A concept long enough to pass validation rules.' },
+    });
+    expect(limited.statusCode).toBe(429);
+    expect(moderation.calls).toBe(10);
 
     await app.close();
   });

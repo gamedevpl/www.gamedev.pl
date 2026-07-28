@@ -30,6 +30,7 @@ import { registerTelemetryRoutes, type TelemetryRoutesOptions } from './telemetr
 import { registerVisitTelemetryRoutes } from './visit-telemetry.js';
 import { registerVoteRoutes, type VoteRoutesOptions } from './votes.js';
 import { createPublishedSlugGateFromEnv } from './published-slugs.js';
+import { peekQuota } from './quota-gate.js';
 import { registerRateLimit } from './rate-limit.js';
 import { isKnownSpaShellPath, looksLikeStaticAsset } from './spa-paths.js';
 
@@ -327,52 +328,75 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     }
   });
 
-  app.post('/api/generate-game', async (request, reply) => {
-    if (!request.user) {
-      return reply.status(401).send({ error: 'authentication required' });
-    }
-
-    // 1. Validate request payload first so malformed requests don't burn daily quota
-    const parsedRequest = GenerateRequestSchema.safeParse(request.body);
-    if (!parsedRequest.success) {
-      return reply.status(400).send({ error: parsedRequest.error.issues[0]?.message ?? 'invalid request' });
-    }
-
-    // 2. Content moderation, before any quota is spent (docs/content-safety-plan.md Layer 1 & 1b)
-    const moderation = await contentChecker.check(parsedRequest.data.prompt);
-    if (!moderation.allowed) {
-      return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
-    }
-
-    // 3. Daily user generation quota check
-    const dateStr = new Date().toISOString().slice(0, 10);
-    const quota = await store.checkAndIncrementQuota(request.user.uid, dateStr, dailyGenerationQuota, 'mocks');
-    if (!quota.allowed) {
-      if (quota.tier === 'blocked') {
-        return reply.status(403).send({ error: 'account is blocked' });
+  // Moderation on this route is a paid Vertex call, so the per-IP ceiling is what
+  // stops one account turning it into an unbounded bill. It is declared here rather
+  // than checked in the handler on purpose: the rate-limit hook runs *before* the
+  // handler body, so a refused request costs nothing at all. Same window as the
+  // sibling refine route, which is the pattern this follows throughout.
+  app.post(
+    '/api/generate-game',
+    { config: { rateLimit: { max: 30, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      if (!request.user) {
+        return reply.status(401).send({ error: 'authentication required' });
       }
-      return reply.status(429).send({ error: 'daily generation quota exceeded' });
-    }
 
-    const project = await generator.generate(parsedRequest.data.prompt);
-
-    // Generated code isn't schema-validatable — the client runs it in a sandboxed
-    // iframe. We only assemble it into one document and enforce basic hygiene here.
-    try {
-      const html = assembleGameHtml(project);
-      return { title: project.title, description: project.description, html };
-    } catch (error) {
-      if (
-        error instanceof EmptyProjectError ||
-        error instanceof ProjectTooLargeError ||
-        error instanceof CredentialLeakError
-      ) {
-        request.log.error({ err: error }, 'generated project failed hygiene checks');
-        return reply.status(502).send({ error: 'game generation failed' });
+      // 1. Validate request payload first so malformed requests don't burn daily quota
+      const parsedRequest = GenerateRequestSchema.safeParse(request.body);
+      if (!parsedRequest.success) {
+        return reply.status(400).send({ error: parsedRequest.error.issues[0]?.message ?? 'invalid request' });
       }
-      throw error;
-    }
-  });
+
+      const dateStr = new Date().toISOString().slice(0, 10);
+
+      // 2. Quota headroom, read-only. Moderation below costs money, so an account that
+      // is already out of budget must be turned away before we spend any — otherwise
+      // the daily limit caps games created but not dollars spent. The authoritative
+      // increment still happens after moderation (step 4), so rejected content remains
+      // free to the creator.
+      const headroom = await peekQuota(store, request.user.uid, dateStr, dailyGenerationQuota, 'mocks');
+      if (!headroom.allowed) {
+        if (headroom.tier === 'blocked') {
+          return reply.status(403).send({ error: 'account is blocked' });
+        }
+        return reply.status(429).send({ error: 'daily generation quota exceeded' });
+      }
+
+      // 3. Content moderation, before any quota is spent (docs/content-safety-plan.md Layer 1 & 1b)
+      const moderation = await contentChecker.check(parsedRequest.data.prompt);
+      if (!moderation.allowed) {
+        return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
+      }
+
+      // 4. Daily user generation quota check
+      const quota = await store.checkAndIncrementQuota(request.user.uid, dateStr, dailyGenerationQuota, 'mocks');
+      if (!quota.allowed) {
+        if (quota.tier === 'blocked') {
+          return reply.status(403).send({ error: 'account is blocked' });
+        }
+        return reply.status(429).send({ error: 'daily generation quota exceeded' });
+      }
+
+      const project = await generator.generate(parsedRequest.data.prompt);
+
+      // Generated code isn't schema-validatable — the client runs it in a sandboxed
+      // iframe. We only assemble it into one document and enforce basic hygiene here.
+      try {
+        const html = assembleGameHtml(project);
+        return { title: project.title, description: project.description, html };
+      } catch (error) {
+        if (
+          error instanceof EmptyProjectError ||
+          error instanceof ProjectTooLargeError ||
+          error instanceof CredentialLeakError
+        ) {
+          request.log.error({ err: error }, 'generated project failed hygiene checks');
+          return reply.status(502).send({ error: 'game generation failed' });
+        }
+        throw error;
+      }
+    },
+  );
 
   // In production (single Cloud Run service) the API also serves the built web app from the
   // same origin, so the browser makes only same-origin requests and no CORS is involved.
