@@ -60,6 +60,7 @@ survives only in this repo's early history.
 | [`remix-to-pr.md`](./remix-to-pr.md)                               | Spec for the player-remix → pull-request feature                                                       |
 | [`mobile-app-plan.md`](./mobile-app-plan.md)                       | iOS/Android strategy: mobile web → PWA → Capacitor store apps; games touch contract                    |
 | [`store-accounts-setup.md`](./store-accounts-setup.md)             | Owner checklist: Apple/Play enrolment, DSA trader status, signing keys                                 |
+| [`store-launch-plan.md`](./store-launch-plan.md)                   | Getting onto the App Store and Play: guideline 4.7 compliance, age rating, universal links, Capacitor  |
 | [`notifications-plan.md`](./notifications-plan.md)                 | Notify creators/players of transitions: detection sweep, per-user storage, in-app → email → push       |
 | [`creator-qa-plan.md`](./creator-qa-plan.md)                       | Clarifying-questions pass before spec freeze — raises the hit rate of the one-shot agent run           |
 | [`improvement-loop-plan.md`](./improvement-loop-plan.md)           | After publish: player signals → per-game scorecard → agent-assisted fixes and suggestions              |

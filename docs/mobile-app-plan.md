@@ -368,10 +368,18 @@ home screen, and iOS push delivered. M1 is closed end to end.
 > guideline 4.8, useful on the web the day it is configured, and reused unchanged by the
 > Capacitor build later. The rest of this list still waits.
 >
-> One precondition is **not** in this list and should be: `--max-instances 1` is hard-coded
-> in both deploy paths because multiplayer rooms are per-instance memory (Phase 5 of
-> [`roadmap.md`](./roadmap.md) flags it red). Store apps drive public traffic into that one
-> container. It is a launch blocker for M2, not a detail.
+> **The rest of M2 is now planned in [`store-launch-plan.md`](./store-launch-plan.md)**,
+> because the bullet list below turned out to describe the small half of the work. Guideline
+> 4.7 makes this repo responsible for *every published game* satisfying the full App Review
+> Guidelines, and the catalog grows on every merge — so 4.7 compliance has to be CI-enforced
+> in the games repo, and two of its clauses (age rating, universal links) are unbuilt
+> features rather than wrapper details.
+>
+> `--max-instances 1` is also a precondition, but it was mislabelled here as an M2 blocker.
+> It is hard-coded in both deploy paths because multiplayer rooms are per-instance memory
+> (Phase 5 of [`roadmap.md`](./roadmap.md) flags it red), and what it actually gates is
+> **public traffic of any kind** — the web public beta reaches it first. It belongs to the
+> closed-beta exit, upstream of M2.
 
 - ✅ **Sign in with Apple** — see the auth section above. Web-side and API-side both done;
   the Capacitor adapter feeds the same `/api/auth/apple` with a bundle-ID audience.
@@ -394,11 +402,18 @@ home screen, and iOS push delivered. M1 is closed end to end.
 
 ## Risks & mitigations
 
-- **Apple rejects the catalog as an "HTML5 game store" (4.7)** — _the_ existential risk
-  for M2. Mitigations: games are free, run in-app, no external purchase links, human
-  curation gate is a strong review-notes story; if rejected anyway, the fallback is the
-  PWA (M1), which no store can veto. Do not build M2 features that only make sense with
-  store approval before approval exists.
+- **Guideline 4.7** — this was written as "Apple rejects the catalog as an HTML5 game
+  store", _the_ existential risk. That framing is now wrong in both directions and was
+  corrected 2026-07-28 against the current guidelines. 4.7 **explicitly permits** HTML5 and
+  JavaScript mini games, so there is no coin-flip on whether a catalog is allowed. What it
+  does instead is make this repo **responsible for every game in it** — one non-compliant
+  game rejects the whole app — and since the catalog grows by agent PR, that is a permanent
+  obligation rather than a gate. The mitigation is mechanical enforcement in games-repo CI,
+  planned in [`store-launch-plan.md`](./store-launch-plan.md). Two clauses are unbuilt
+  features: 4.7.5 (age rating + restriction) and 4.7.4 (universal links). Two are already
+  satisfied *architecturally* by the sandbox — 4.7.2 and 4.7.3 — which must not be softened
+  for the Capacitor build. If review goes badly the fallback is still the PWA, which now
+  carries the whole functional case including iOS push.
 - **UGC review friction (1.2 / Play UGC)**: report/block must be visibly present at
   first submission — build it in M2 scope, not after rejection.
 - **Agent-built games regress on touch**: ✅ largely closed — Check 13 rejects a
