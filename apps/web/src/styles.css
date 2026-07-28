@@ -4911,6 +4911,74 @@ body.player-open {
 }
 
 /*
+ * The header mark needs its own idle, because the shared one is invisible at its size.
+ *
+ * Every other mascot on the site renders at 64–96px, where `mascot-breathe` reads
+ * nicely. The mark is 35px wide against a 70-unit viewBox — a 0.5 scale — so the same
+ * keyframes come out as 1.5px of travel spread over 2.8 seconds. That is genuinely
+ * animating and genuinely imperceptible, which is the worst of both: it was reported
+ * twice as "not animated" while the animation was running the whole time.
+ *
+ * So: roughly double the breath, and end each cycle with a hop. The hop is what makes
+ * it legible — a periodic event the eye catches, rather than a drift it never will.
+ * transform-origin is already his feet, so he compresses into the jump and lands on
+ * them. Five classes to outrank the shared `.mascot--idle` rule above.
+ */
+.mascot.mascot--logo:not(.mascot--static).mascot--idle .mascot__body-group {
+  animation: mascot-logo-idle 5.6s ease-in-out infinite;
+}
+
+@keyframes mascot-logo-idle {
+  0%,
+  48%,
+  88%,
+  100% {
+    transform: translateY(0) scale(1, 1);
+  }
+  /* Two slow breaths… */
+  12%,
+  36% {
+    transform: translateY(-3px) scale(1.03, 0.97);
+  }
+  24% {
+    transform: translateY(0) scale(1, 1);
+  }
+  /* …then he hops. */
+  64% {
+    transform: translateY(-9px) scale(0.94, 1.08);
+  }
+  74% {
+    transform: translateY(0) scale(1.1, 0.9);
+  }
+  80% {
+    transform: translateY(-2px) scale(0.98, 1.02);
+  }
+}
+
+/*
+ * The blink needs the same treatment for the same reason: the lids are 5 units square,
+ * which is 2.5px here, and the shared keyframe shows them for about 138ms. Holding a
+ * little longer is the difference between a blink and a dropped frame.
+ */
+.mascot--logo:not(.mascot--static) .mascot__lid {
+  animation-name: mascot-logo-blink;
+  animation-duration: 5.6s;
+}
+
+@keyframes mascot-logo-blink {
+  0%,
+  30%,
+  38%,
+  100% {
+    opacity: 0;
+  }
+  32%,
+  36% {
+    opacity: 1;
+  }
+}
+
+/*
  * The header mark breathes and blinks like every other mascot on the site — it is the
  * one instance every visitor sees, so freezing it was the wrong instance to freeze.
  * Hovering the logo promotes that idle breath to the excited hop, which gives the
