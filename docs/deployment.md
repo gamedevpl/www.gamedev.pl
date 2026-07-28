@@ -94,10 +94,16 @@ without an auth challenge. Access is controlled by `PRIVATE_BETA` and the beta a
 instead. Delete the secret when you are sure nothing references it.
 
 **`GAMES_REPO_TOKEN` is one hourly REST budget shared by two very different consumers.**
-The CI lockstep check spends 2 requests per run; the snapshot bake spends roughly a
-thousand — one per source and media file across every published game — and runs on every
-`games-published` dispatch. When bakes come in bursts, the PAT's ~5,000 requests/hour is
-reachable, and everything else holding that token starts seeing `403`. The contract check
+The CI lockstep check spends 2 requests per run. The snapshot bake used to spend roughly a
+thousand — one per source and media file across every published game — on every
+`games-published` dispatch, and on 2026-07-28 that emptied the PAT's ~5,000 requests/hour
+and 403'd everything else holding it, CI included. The bake now downloads the games repo
+as **one tarball** (`fetchGamesRepoArchive`), so a full bake costs 1 request instead of
+~1,000; see [`games-snapshot.md`](./games-snapshot.md). If that download fails it falls
+back to per-file reads, which is slower and expensive but still bakes.
+
+A shared budget can still run out — the site's own serving reads go through the separate
+`github-token`, but nothing stops a burst of manual re-bakes. The contract check
 therefore treats an unreadable games repo as _no evidence about drift_: it annotates the
 job with GitHub's own quota headers and passes, rather than reddening every PR in this
 repo over a shared budget. Real drift still fails. Set

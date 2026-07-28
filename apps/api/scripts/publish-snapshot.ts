@@ -25,7 +25,8 @@
 
 import { publishSnapshot } from '../src/game-snapshot-publish.js';
 import { createGcsSnapshotStore, type GameSnapshotWriter, type SnapshotPointer } from '../src/game-snapshot.js';
-import { createGitHubClient } from '../src/github-client.js';
+import { fetchGamesRepoArchive } from '../src/games-repo-archive.js';
+import { createGitHubClient, type RepoFileSource } from '../src/github-client.js';
 
 function readFlag(name: string): string | null {
   const index = process.argv.indexOf(`--${name}`);
@@ -65,7 +66,27 @@ async function main(): Promise<void> {
     fail('GAMES_SNAPSHOT_BUCKET is required (or pass --dry-run)');
   }
 
-  const client = createGitHubClient({ token, repo });
+  // One tarball instead of a read per file. A bake touches nearly every file in
+  // the games repo, and the per-file version cost ~1,000 requests against a token
+  // shared with CI — enough, at a bake per push, to exhaust its hourly budget and
+  // 403 everything else holding it. If the download fails the bake still runs the
+  // old way: slower and expensive, but a stale snapshot is worse.
+  let files: RepoFileSource | undefined;
+  try {
+    const archive = await fetchGamesRepoArchive({ repo, ref, token });
+    files = archive;
+    console.log(
+      `snapshot publish: archive ${repo}@${ref} — ${archive.fileCount} files, ` +
+        `${(archive.byteCount / 1024 / 1024).toFixed(1)} MiB, 1 request`,
+    );
+  } catch (error: unknown) {
+    console.warn(
+      `snapshot publish: archive download failed (${error instanceof Error ? error.message : String(error)}) — ` +
+        'falling back to per-file contents reads',
+    );
+  }
+
+  const client = createGitHubClient({ token, repo, files });
   const writer = dryRun ? createDryRunWriter() : createGcsSnapshotStore({ bucket });
 
   console.log(`snapshot publish: ${repo}@${ref} → ${dryRun ? '(dry run, nothing written)' : `gs://${bucket}`}`);
