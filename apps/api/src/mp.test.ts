@@ -405,7 +405,7 @@ describe('websocket relay', () => {
     // costs the opener nothing while holding memory and a descriptor on a service
     // documented as running a single instance.
     const app = await createApp({ maxSocketsPerIp: 2 });
-    await app.listen({ port: 0 });
+    await app.listen({ port: 0, host: '127.0.0.1' });
     const url = wsUrl(app);
 
     const first = await openSocket(url);
@@ -428,7 +428,7 @@ describe('websocket relay', () => {
     // A flood never sends `hello`, so those sockets hold no room — releasing only
     // joined ones would leak the ceiling to exactly the connections it bounds.
     const app = await createApp({ maxSocketsPerIp: 1 });
-    await app.listen({ port: 0 });
+    await app.listen({ port: 0, host: '127.0.0.1' });
     const url = wsUrl(app);
 
     const first = await openSocket(url);
