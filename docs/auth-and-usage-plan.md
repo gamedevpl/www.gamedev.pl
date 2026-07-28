@@ -169,3 +169,66 @@ the coarse outer layer (and is the only limiter on `/api/auth/*`).
    require sign-in.
 2. **Quota numbers**: 5 submissions/day/user to start? Who besides you gets `trusted`?
 3. **Consent screen branding**: app name, logo, support email (owner supplies in GCP console).
+
+---
+
+## Sign in with Apple (built 2026-07-28, dormant until configured)
+
+Added ahead of the mobile plan's M2 store apps, where it stops being optional: App Store
+guideline 4.8 requires it beside Google in any app offering a third-party login. It is
+offered on the **web** too rather than app-only, which is
+[`mobile-app-plan.md`](./mobile-app-plan.md) open question 2's working answer turned into
+code — otherwise a creator who signs up through the iOS app cannot reach their own games
+from a desktop browser.
+
+**It is off right now.** Every piece is in the tree and tested, and nothing renders or
+responds until the two environment variables below are set. `/api/auth/apple` answers
+`503`, and the button does not paint.
+
+### What the owner has to do (none of it can be done from the repo)
+
+1. Join the **Apple Developer Program** (~$99/yr). Everything below needs it, including
+   the web-only flow — there is no free tier for Sign in with Apple.
+2. Create an **App ID** and enable the *Sign in with Apple* capability on it.
+3. Create a **Services ID** (e.g. `pl.gamedev.web`) — this is the *web* client, distinct
+   from the app's bundle ID — and enable *Sign in with Apple* on it.
+4. Under that Services ID, configure:
+   - **Domain**: `www.gamedev.pl`, then complete Apple's domain-verification file check.
+   - **Return URL**: `https://www.gamedev.pl/` — must be https and must match exactly.
+     Apple rejects every `http://` origin, which is why this flow **cannot be exercised
+     from localhost or from a preview build**; a deployed https origin is the only place
+     it can be tested at all.
+5. Set two repo-level Actions **variables** (not secrets — both values are public):
+   - `APPLE_SERVICES_ID` — the Services ID from step 3. Baked into the web bundle at
+     build time; empty means the button stays hidden.
+   - `APPLE_CLIENT_IDS` — comma-separated audiences the API will accept. Today that is
+     just the Services ID; when the M2 iOS app exists, add its bundle ID here rather than
+     standing up a second verifier.
+
+`infra/deploy-api.sh` reads the same two names from the environment for a manual deploy.
+
+### Design notes worth keeping
+
+- **Account linking is the point, not a bonus.** Every beta creator's games hang off a
+  `g:<sub>` uid. An Apple button that minted a fresh `a:<sub>` would drop the first person
+  who tapped it into an empty account, with their work apparently gone and no
+  self-service way back. So `resolveAppleAccount` signs them into the existing account
+  when the Apple token carries a **verified, non-relay** address matching exactly one
+  user. An ambiguous match creates a new account instead of guessing — signing somebody
+  into the wrong account is unrecoverable, handing them a spare one is not.
+- **Hide My Email is a known, accepted limitation.** A creator who picks it gets a
+  per-app `@privaterelay.appleid.com` address that no allowlist and no existing account
+  can match, so they land in a new account and, under private beta, are refused and sent
+  to the waitlist. Correct, but it will read as a bug when it first happens — the fix is
+  an explicit "link an Apple ID" action on an already-signed-in account, not looser
+  matching.
+- **`email_verified` arrives as a boolean *or* the string `"true"`**, depending on the
+  flow. `Boolean("false")` is `true`, so a direct read of that claim fails **open** on the
+  one flag gating the allowlist. `appleClaimFlag` exists solely for this and is pinned by
+  a test.
+- **The audience is a set and the algorithm is pinned.** One verifier serves both the web
+  Services ID and the future bundle ID; `algorithms: ['RS256']` is what refuses the
+  classic JWT algorithm-confusion forgery.
+- **Apple sends the display name exactly once**, in the body of the first authorization
+  and never in the token. The web client forwards it on that one request; a later sign-in
+  carries none and must not blank the stored one.

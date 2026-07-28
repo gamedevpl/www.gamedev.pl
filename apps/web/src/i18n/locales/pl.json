@@ -427,6 +427,7 @@
   },
   "auth": {
     "signInWithGoogle": "Zaloguj się przez Google",
+    "signInWithApple": "Zaloguj się przez Apple",
     "signOut": "Wyloguj się",
     "authWallTitle": "Zaloguj się przez Google, aby tworzyć gry",
     "authWallSubtitle": "Tworzenie specyfikacji gier i podglądu wymaga zalogowanego konta Google.",

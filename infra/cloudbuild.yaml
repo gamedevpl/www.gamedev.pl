@@ -4,6 +4,7 @@
 substitutions:
   _IMAGE: '' # e.g. europe-central2-docker.pkg.dev/PROJECT/gamedev/api:latest
   _GOOGLE_OAUTH_CLIENT_ID: ''
+  _APPLE_SERVICES_ID: ''
 steps:
   - name: gcr.io/cloud-builders/docker
     args:
@@ -12,6 +13,8 @@ steps:
       - 'apps/api/Dockerfile'
       - '--build-arg'
       - 'VITE_GOOGLE_OAUTH_CLIENT_ID=${_GOOGLE_OAUTH_CLIENT_ID}'
+      - '--build-arg'
+      - 'VITE_APPLE_SERVICES_ID=${_APPLE_SERVICES_ID}'
       - '-t'
       - '${_IMAGE}'
       - '.'

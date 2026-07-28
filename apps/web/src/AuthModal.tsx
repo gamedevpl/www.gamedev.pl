@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { AppleSignInButton } from './AppleSignInButton.js';
 import { GoogleSignInButton } from './GoogleSignInButton.js';
 import { Mascot } from './Mascot.js';
 import { PixelIcon } from './PixelIcon.js';
@@ -43,6 +44,7 @@ export function AuthModal({ isOpen, onClose, title, subtitle }: AuthModalProps) 
 
         <div className="auth-modal-body">
           <GoogleSignInButton onSuccess={onClose} onError={(errMsg) => setError(errMsg)} />
+          <AppleSignInButton onSuccess={onClose} onError={(errMsg) => setError(errMsg)} />
         </div>
       </div>
     </div>,

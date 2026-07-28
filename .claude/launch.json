@@ -24,6 +24,21 @@
       "runtimeExecutable": "env",
       "runtimeArgs": ["-u", "GITHUB_TOKEN", "PRIVATE_BETA=true", "npm", "run", "dev"],
       "port": 5173
+    },
+    {
+      "name": "dev-apple-signin",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "-u",
+        "GITHUB_TOKEN",
+        "PRIVATE_BETA=true",
+        "APPLE_CLIENT_IDS=pl.gamedev.web.local",
+        "VITE_APPLE_SERVICES_ID=pl.gamedev.web.local",
+        "npm",
+        "run",
+        "dev"
+      ],
+      "port": 5173
     }
   ]
 }

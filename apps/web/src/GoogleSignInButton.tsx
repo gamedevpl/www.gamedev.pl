@@ -76,6 +76,13 @@ export function GoogleSignInButton({ onSuccess, onError }: GoogleSignInButtonPro
       size: 'large',
       text: 'signin_with',
       shape: 'rectangular',
+      // Pinned so this button and the Sign in with Apple one below it are the same size.
+      // Left to itself the widget sizes to its own label — 223px in Polish, wider in
+      // English — so any width chosen for the Apple button is wrong in some locale.
+      // Sizing the *container* to fit its widest child instead does not work: the widget
+      // measures its parent while laying out, and a `fit-content` parent collapses it to
+      // zero on a cold load (it survives an HMR patch, which is how that nearly shipped).
+      width: 240,
     });
     window.google.accounts.id.prompt();
   }, [scriptLoaded, signInWithGoogleToken, onSuccess, onError]);

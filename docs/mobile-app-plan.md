@@ -183,10 +183,17 @@ This landed in M0 because _nothing else matters if the games themselves reject f
   token → existing `POST /api/auth/google` → same session cookie inside the shell's
   WebView (cookies work fine in the shell; it's _Google's page_ that refuses WebViews,
   and native sign-in avoids loading it).
-- **Sign in with Apple** (required by 4.8): new verifier alongside
-  `GoogleAuthVerifier` in `apps/api/src/auth.ts` — Apple ID tokens are JWTs verified
-  against Apple's JWKS; account keyed by Apple `sub` in the same Firestore user model.
-  Web gets it too (Apple JS) so accounts stay portable across vehicles.
+- ✅ **Sign in with Apple** (required by 4.8) — **built 2026-07-28**, ahead of the rest of
+  M2 because it is the one M2 item that needs no store account to write and pays off on
+  the web immediately. `apps/api/src/apple-auth.ts` verifies Apple's RS256 ID tokens
+  against their JWKS with a *set* of audiences, so the same route serves the web Services
+  ID and the future iOS bundle ID. Accounts are keyed `a:<sub>` in the same Firestore
+  model — except when `apple-account.ts` can prove, from a verified non-relay email, that
+  the person already has a Google account here, in which case they sign into it. Dormant
+  until `APPLE_SERVICES_ID` / `APPLE_CLIENT_IDS` are set; see
+  [`auth-and-usage-plan.md`](./auth-and-usage-plan.md) for what the owner must create in
+  the Apple Developer portal, and note that **no part of this flow can be tested below a
+  deployed https origin** — Apple rejects `http://` return URLs.
 
 ### Push delivery
 
@@ -355,8 +362,22 @@ Safari's Share sheet reaches "Add to Home Screen" from this manifest, or that th
 installed app gets push on iOS — which is the whole reason M1 exists. Those ride along
 with M0's outstanding device pass.
 
-### M2 — Store apps (Capacitor) 📋
+### M2 — Store apps (Capacitor) 🚧 (shell-agnostic groundwork started)
 
+> **Started out of order, deliberately.** M2 cannot *complete* without an Apple Developer
+> account, a Play account, signing certs and store listings — none of which live in this
+> repo. What can be built without them is the part the plan already identified as
+> shell-agnostic, and Sign in with Apple (✅ 2026-07-28) is the first of it: required by
+> guideline 4.8, useful on the web the day it is configured, and reused unchanged by the
+> Capacitor build later. The rest of this list still waits.
+>
+> One precondition is **not** in this list and should be: `--max-instances 1` is hard-coded
+> in both deploy paths because multiplayer rooms are per-instance memory (Phase 5 of
+> [`roadmap.md`](./roadmap.md) flags it red). Store apps drive public traffic into that one
+> container. It is a launch blocker for M2, not a detail.
+
+- ✅ **Sign in with Apple** — see the auth section above. Web-side and API-side both done;
+  the Capacitor adapter feeds the same `/api/auth/apple` with a bundle-ID audience.
 - Capacitor workspace (`apps/mobile/`) wrapping the built SPA; iOS + Android projects,
   CI builds via the existing pinned-actions posture ([`deployment.md`](./deployment.md)).
 - Native adapters: Google sign-in, Sign in with Apple (+ API verifier), push
@@ -406,8 +427,12 @@ with M0's outstanding device pass.
 
 1. **Should guests' controller page get PWA install nudges?** Working answer: no —
    zero-friction is the point; nudge only after a repeat visit.
-2. **Sign in with Apple on web too, or app-only?** Working answer: web too, otherwise
-   an Apple-account creator can't reach their games from a desktop browser.
+2. ~~**Sign in with Apple on web too, or app-only?**~~ **DECIDED AND BUILT 2026-07-28:
+   web too.** The verifier, the `/api/auth/apple` route, account linking and the web
+   button all exist and are tested; the feature is dormant until the owner creates a
+   Services ID (setup steps in [`auth-and-usage-plan.md`](./auth-and-usage-plan.md)).
+   Everything about it is shell-agnostic — the M2 iOS app adds its bundle ID to
+   `APPLE_CLIENT_IDS` and reuses the same route.
 3. **One store app or player-app + creator-app?** Working answer: one app; creation is
    a form + status view, not a heavy tool, and two listings double compliance cost.
 4. **Monetization in-app?** Working answer: none anywhere in the app (also the safest

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AppleSignInButton } from './AppleSignInButton.js';
 import { useAuth } from './AuthContext.js';
 import { GoogleSignInButton } from './GoogleSignInButton.js';
 import { InteractiveMascot } from './Mascot.js';
@@ -11,6 +12,10 @@ export function ClosedBetaSplash() {
   const { joinWaitlist, waitlistStatus } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [idToken, setIdToken] = useState<string | null>(null);
+  // Which button produced `idToken`. The waitlist re-verifies it server-side, and the two
+  // providers' tokens are not interchangeable — sending an Apple token to the Google
+  // verifier would reject the very person the waitlist exists to catch.
+  const [idTokenProvider, setIdTokenProvider] = useState<'google' | 'apple'>('google');
   const [waitlistState, setWaitlistState] = useState<WaitlistState>('idle');
   const isBlocked = error != null;
 
@@ -18,7 +23,7 @@ export function ClosedBetaSplash() {
     if (!idToken || waitlistState === 'joining' || waitlistState === 'joined') return;
     setWaitlistState('joining');
     try {
-      await joinWaitlist(idToken, i18n.language);
+      await joinWaitlist(idToken, i18n.language, idTokenProvider);
       setWaitlistState('joined');
     } catch {
       setWaitlistState('error');
@@ -83,6 +88,14 @@ export function ClosedBetaSplash() {
             onError={(msg, token) => {
               setError(msg);
               setIdToken(token ?? null);
+              setIdTokenProvider('google');
+            }}
+          />
+          <AppleSignInButton
+            onError={(msg, token) => {
+              setError(msg);
+              setIdToken(token ?? null);
+              setIdTokenProvider('apple');
             }}
           />
         </div>

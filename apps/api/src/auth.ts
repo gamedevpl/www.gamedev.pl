@@ -4,6 +4,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { OAuth2Client } from 'google-auth-library';
 import { z } from 'zod';
 import { isAccessTokenExpired, looksLikeAccessToken, parseAccessToken, verifyTokenSecret } from './access-token.js';
+import { resolveAppleAccount } from './apple-account.js';
+import { createAppleAuthVerifierFromEnv, parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { readBearerToken } from './bearer.js';
 import { withActiveDay, type Store, type User } from './store.js';
 
@@ -185,6 +187,14 @@ export interface AuthPluginOptions {
   sessionSecretPrev?: string;
   googleClientId?: string;
   googleAuthVerifier?: GoogleAuthVerifier;
+  /**
+   * Sign in with Apple. Absent in every environment where the owner has not created a
+   * Services ID yet, which is why `/api/auth/apple` answers 503 rather than assuming a
+   * verifier exists — the store apps (mobile-app-plan.md M2) need this, guideline 4.8
+   * requires it beside Google, and the web app gets it so an Apple-account creator can
+   * still reach their games from a desktop.
+   */
+  appleAuthVerifier?: AppleAuthVerifier;
   // Private beta: when true, /api/auth/google rejects uids/emails not in the allowlists
   privateBeta?: boolean;
   betaAllowedUids?: Set<string>;
@@ -195,9 +205,26 @@ const GoogleAuthSchema = z.object({
   idToken: z.string().trim().min(1, 'idToken is required'),
 });
 
+const AppleAuthSchema = z.object({
+  idToken: z.string().trim().min(1, 'idToken is required'),
+  /**
+   * Apple's ID token carries no name claim, ever. The display name arrives exactly once —
+   * in the body of the *first* authorization, alongside the token — and Apple never sends
+   * it again, so a client that drops it has permanently lost the creator's name.
+   *
+   * Client-asserted and therefore untrusted: it is a label, never an identifier, and
+   * nothing authorizes on it. Bounded here so it cannot be used to write an unbounded
+   * string into Firestore.
+   */
+  name: z.string().trim().max(80).optional(),
+});
+
 const WaitlistSchema = z.object({
   idToken: z.string().trim().min(1, 'idToken is required'),
   locale: z.string().trim().max(10).optional(),
+  // Which provider minted `idToken`. Defaults to Google because every waitlist entry
+  // predating Sign in with Apple came from there.
+  provider: z.enum(['google', 'apple']).optional(),
 });
 
 function isRateLimited(
@@ -230,6 +257,13 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
   const sessionSecretPrev = options.sessionSecretPrev ?? process.env.SESSION_SECRET_PREV;
 
   const verifier = options.googleAuthVerifier ?? new DefaultGoogleAuthVerifier(googleClientId);
+
+  // Gated independently of Google: Apple sign-in is configured the day the owner creates
+  // a Services ID and not before, so until then `/api/auth/apple` must be an honest 503
+  // rather than a route that fails deep inside token verification.
+  const appleVerifier = options.appleAuthVerifier ?? createAppleAuthVerifierFromEnv();
+  const isAppleConfigured =
+    Boolean(options.appleAuthVerifier) || parseAppleClientIds(process.env.APPLE_CLIENT_IDS).length > 0;
 
   const authRateLimitWindowMs = 60 * 60 * 1000;
   const maxAuthRequestsPerWindow = 20;
@@ -449,6 +483,101 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
     },
   );
 
+  /**
+   * Sign in with Apple.
+   *
+   * Same shape as `/api/auth/google` — verify a provider token, apply the beta allowlist,
+   * mint the same session cookie — and deliberately a separate route rather than a
+   * `provider` branch inside that one, because the two differ in every detail that
+   * matters: which claims exist, which of them are trustworthy, and whether the resulting
+   * identity is allowed to be new (see `resolveAppleAccount`).
+   */
+  app.post(
+    '/api/auth/apple',
+    { config: { rateLimit: { max: maxAuthRequestsPerWindow, timeWindow: authRateLimitWindowMs } } },
+    async (request, reply) => {
+      if (!isAuthConfigured) {
+        return reply.status(503).send({ error: 'authentication is not configured' });
+      }
+      if (!isAppleConfigured) {
+        return reply.status(503).send({ error: 'sign in with apple is not configured' });
+      }
+
+      const currentTime = Date.now();
+      if (isRateLimited(authAttemptsByIp, request.ip, currentTime, maxAuthRequestsPerWindow, authRateLimitWindowMs)) {
+        return reply.status(429).send({ error: 'too many login attempts, please try again later' });
+      }
+
+      const parseResult = AppleAuthSchema.safeParse(request.body);
+      if (!parseResult.success) {
+        return reply.status(400).send({ error: parseResult.error.issues[0]?.message ?? 'invalid request' });
+      }
+
+      try {
+        const applePayload = await appleVerifier.verifyIdToken(parseResult.data.idToken);
+
+        // Resolves onto the creator's existing Google account when the verified,
+        // non-relay address matches exactly one. Reads only — nothing is written until
+        // the allowlist below has had its say.
+        const resolution = await resolveAppleAccount(store, applePayload);
+        const uid = resolution.uid;
+
+        // Identical rule to the Google path, run against the *resolved* uid: a creator
+        // already on the allowlist by their Google uid must not be turned away for
+        // arriving through a different button.
+        if (options.privateBeta) {
+          const emailLower = resolution.email?.toLowerCase() ?? '';
+          const allowed =
+            (options.betaAllowedUids?.has(uid) ?? false) ||
+            (emailLower !== '' && (options.betaAllowedEmails?.has(emailLower) ?? false)) ||
+            (await store.isWaitlistApproved(uid, emailLower));
+          if (!allowed) {
+            const waitlistEntry = await store.getWaitlistEntry(uid);
+            return reply.status(403).send({
+              error: 'private beta — sign-ups are closed',
+              waitlistStatus: waitlistEntry?.status ?? null,
+            });
+          }
+        }
+
+        const user = await store.upsertUser({
+          uid,
+          // Only ever the linkable address. Writing a relay address here would overwrite a
+          // linked account's real email with a forwarding alias, breaking the notification
+          // emails that account already receives.
+          email: resolution.email,
+          // Apple sends the name once and never again, so an absent one must leave any
+          // stored name alone — which `upsertUser` already does for undefined.
+          name: parseResult.data.name || undefined,
+        });
+
+        if (user.tier === 'blocked') {
+          return reply.status(403).send({ error: 'account is blocked' });
+        }
+
+        if (resolution.linkedTo) {
+          request.log.info(
+            { appleSub: applePayload.sub, linkedUid: uid },
+            'apple sign-in linked to an existing account by verified email',
+          );
+        }
+
+        reply.setCookie(SESSION_COOKIE_NAME, mintSessionToken(uid, effectiveSessionSecret), {
+          path: '/',
+          httpOnly: true,
+          secure: isProd,
+          sameSite: 'lax',
+          maxAge: DEFAULT_SESSION_DURATION_SECONDS,
+        });
+
+        return { user };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'apple token verification failed';
+        return reply.status(401).send({ error: message });
+      }
+    },
+  );
+
   // Deliberately usable WITHOUT a session — the caller is by definition someone
   // whose sign-in was just rejected (not on the private-beta allowlist). Shares
   // the auth rate limiter since it's the same abuse surface (unauthenticated
@@ -473,21 +602,41 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
       }
 
       try {
-        const googleUser = await verifier.verifyIdToken(parseResult.data.idToken);
-        const uid = `g:${googleUser.sub}`;
-        // Same rule as the beta allowlist: an unverified email claim must never be stored.
-        const email = googleUser.emailVerified && googleUser.email ? googleUser.email : undefined;
+        // An Apple user whose sign-in was just refused needs the same door as a Google
+        // one. Without this branch the beta's only way in is a Google account, which
+        // makes the Apple button a dead end for exactly the people it was added for.
+        let uid: string;
+        let email: string | undefined;
+        let name: string | undefined;
+
+        if (parseResult.data.provider === 'apple') {
+          if (!isAppleConfigured) {
+            return reply.status(503).send({ error: 'sign in with apple is not configured' });
+          }
+          const applePayload = await appleVerifier.verifyIdToken(parseResult.data.idToken);
+          const resolution = await resolveAppleAccount(store, applePayload);
+          uid = resolution.uid;
+          // Already excludes unverified and relay addresses. A relay address on the
+          // waitlist would be a row the owner cannot recognise when approving.
+          email = resolution.email;
+        } else {
+          const googleUser = await verifier.verifyIdToken(parseResult.data.idToken);
+          uid = `g:${googleUser.sub}`;
+          // Same rule as the beta allowlist: an unverified email claim must never be stored.
+          email = googleUser.emailVerified && googleUser.email ? googleUser.email : undefined;
+          name = googleUser.name;
+        }
 
         const entry = await store.upsertWaitlistEntry({
           uid,
           email,
-          name: googleUser.name,
+          name,
           locale: parseResult.data.locale,
         });
 
         return { status: 'ok', waitlistStatus: entry.status };
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'google token verification failed';
+        const message = err instanceof Error ? err.message : 'token verification failed';
         return reply.status(401).send({ error: message });
       }
     },

@@ -20,6 +20,11 @@
 #
 # Optional env vars:
 #   GOOGLE_OAUTH_CLIENT_ID=... (public client ID for Sign in with Google)
+#   APPLE_SERVICES_ID=...      (Sign in with Apple Services ID; also baked into the web
+#                               bundle so the button can render. Empty = button hidden)
+#   APPLE_CLIENT_IDS=...       (comma-separated audiences the API will accept: the
+#                               Services ID above, plus the iOS bundle ID once the M2
+#                               store app exists. Empty = /api/auth/apple returns 503)
 #   WEB_ORIGIN=...             (CORS allowed origins)
 #   PRIVATE_BETA=true          (gate all data reads behind a session + allowlist)
 #   BETA_ALLOWED_UIDS=...      (comma-separated g:<sub> values)
@@ -54,6 +59,11 @@ GAMES_REPO="${GAMES_REPO:-gamedevpl/www.gamedev.pl-games}"
 # something instead of being always true.
 GAMES_SNAPSHOT_BUCKET="${GAMES_SNAPSHOT_BUCKET-${PROJECT_ID}-games-snapshots}"
 GOOGLE_OAUTH_CLIENT_ID="${GOOGLE_OAUTH_CLIENT_ID:-334141807880-t8qsj5n6p3g9imbs3jfut82cecvr87pu.apps.googleusercontent.com}"
+# Both default to empty: Sign in with Apple stays off until the owner creates a Services
+# ID, and off means an honest 503 plus a hidden button rather than a half-wired one.
+APPLE_SERVICES_ID="${APPLE_SERVICES_ID:-}"
+# Defaults to the Services ID, which is the whole audience list until an iOS build exists.
+APPLE_CLIENT_IDS="${APPLE_CLIENT_IDS:-$APPLE_SERVICES_ID}"
 WEB_ORIGIN="${WEB_ORIGIN:-https://gamedev-app-334141807880.europe-west1.run.app,https://www.gamedev.pl,https://gamedev.pl}"
 # Apex → www 301 canonicalization (app-side; Cloud Run mappings can't redirect).
 CANONICAL_HOST="${CANONICAL_HOST:-www.gamedev.pl}"
@@ -84,7 +94,8 @@ gcloud artifacts repositories describe "$REPO" --location "$REGION" --project "$
 
 echo "==> Building image via Cloud Build: ${IMAGE}"
 gcloud builds submit "$REPO_ROOT" --config "$REPO_ROOT/infra/cloudbuild.yaml" \
-  --substitutions "_IMAGE=${IMAGE},_GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}" --project "$PROJECT_ID"
+  --substitutions "_IMAGE=${IMAGE},_GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID},_APPLE_SERVICES_ID=${APPLE_SERVICES_ID}" \
+  --project "$PROJECT_ID"
 
 # Wire whichever secrets exist into one --set-secrets list (multiple --set-secrets
 # flags overwrite each other, so mappings must be joined). Submissions need BOTH
@@ -136,6 +147,9 @@ if [ -n "${CANONICAL_HOST:-}" ]; then
 fi
 if [ -n "$GOOGLE_OAUTH_CLIENT_ID" ]; then
   ENV_VARS="${ENV_VARS}|GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}"
+fi
+if [ -n "$APPLE_CLIENT_IDS" ]; then
+  ENV_VARS="${ENV_VARS}|APPLE_CLIENT_IDS=${APPLE_CLIENT_IDS}"
 fi
 if [ -n "$BETA_ALLOWED_UIDS" ]; then
   ENV_VARS="${ENV_VARS}|BETA_ALLOWED_UIDS=${BETA_ALLOWED_UIDS}"

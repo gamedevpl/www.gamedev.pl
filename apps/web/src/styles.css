@@ -3191,7 +3191,11 @@ body.player-open {
 
 .auth-modal-body {
   display: flex;
-  justify-content: center;
+  /* A column since Sign in with Apple joined Google here: side by side, the two providers
+     read as one compound control and neither fits a 320px screen at a usable width. */
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
   margin-top: 16px;
 }
 
@@ -3307,7 +3311,9 @@ body.player-open {
 
 .beta-splash__signin {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
   margin-bottom: 20px;
 }
 
@@ -6117,3 +6123,65 @@ body.player-open {
   /* Player text is arbitrary length and script; wrap instead of overflowing the card. */
   overflow-wrap: anywhere;
 }
+
+/* Sign in with Apple
+   ------------------
+   Drawn here rather than by Apple's SDK so it can match the height and width of the
+   Google widget sitting above it. Apple's HIG allows a custom button provided the mark,
+   the wording and the black-on-white/white-on-black treatment are theirs — what is not
+   allowed is inventing a label or recolouring the logo. */
+.apple-sign-in-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  /* Matches the `width: 240` pinned on the Google widget in GoogleSignInButton.tsx —
+     left to itself that widget sizes to its own label and is 223px in Polish, so the two
+     have to be fixed together or they disagree in some locale. 40px is Google's "large"
+     preset height, the tallest their branding rules allow. */
+  width: 240px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #000;
+  border-radius: 4px;
+  background: #000;
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.apple-sign-in-btn:hover:not(:disabled) {
+  background: #1a1a1a;
+}
+
+.apple-sign-in-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.apple-sign-in-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.apple-sign-in-mark {
+  width: 15px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+/* The tap floor from the M0 responsive audit. Google's own widget maxes out at 40px and
+   cannot be raised without breaking their branding rules, but ours can. */
+@media (pointer: coarse) {
+  .apple-sign-in-btn {
+    height: 44px;
+  }
+}
+
+/* No narrow-screen override. Letting this button shrink to its container made it 230px
+   at 360px wide while the Google widget stayed at its fixed 240 — a visible mismatch in
+   exactly the viewport most creators use. Google's widget does not shrink, so neither
+   does this one; whatever the narrow-width behaviour is, the two share it. */

@@ -427,6 +427,7 @@
   },
   "auth": {
     "signInWithGoogle": "Sign in with Google",
+    "signInWithApple": "Sign in with Apple",
     "signOut": "Sign Out",
     "authWallTitle": "Sign in with Google to Build & Create",
     "authWallSubtitle": "Creating game specifications and instant mock previews requires a signed-in Google account.",

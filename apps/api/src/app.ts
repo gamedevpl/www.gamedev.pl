@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import { registerAccessTokenRoutes } from './access-token-routes.js';
 import { registerAdminRoutes } from './admin.js';
+import { parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
 import { registerCreatorStudioRoutes } from './creator-studio.js';
 import { createGenerator } from './generator.js';
@@ -47,6 +48,8 @@ export interface BuildAppOptions {
   sessionSecretPrev?: string;
   googleClientId?: string;
   googleAuthVerifier?: GoogleAuthVerifier;
+  /** Seam for Sign in with Apple; defaults to JWKS-or-deny-all from APPLE_CLIENT_IDS. */
+  appleAuthVerifier?: AppleAuthVerifier;
   dailyGenerationQuota?: number;
   submissionRoutes?: SubmissionRoutesOptions;
   contentChecker?: ContentChecker;
@@ -143,6 +146,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     sessionSecretPrev: options.sessionSecretPrev,
     googleClientId: options.googleClientId,
     googleAuthVerifier: options.googleAuthVerifier,
+    appleAuthVerifier: options.appleAuthVerifier,
     privateBeta,
     betaAllowedUids,
     betaAllowedEmails,
@@ -276,7 +280,19 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     mintStatusToken: submissionTokenSecret ? (issueNumber) => mintToken(issueNumber, submissionTokenSecret) : undefined,
   });
 
-  app.get('/api/health', async () => ({ status: 'ok', provider: generator.name, privateBeta }));
+  /**
+   * `appleSignIn` tells the web app whether this server can actually verify an Apple
+   * token. The button also needs a Services ID baked in at build time, so it renders only
+   * when both halves agree — otherwise a web build carrying the ID would show a working
+   * button in front of a server that answers 503, and the failure would land on the user
+   * instead of on whoever forgot the env var.
+   */
+  app.get('/api/health', async () => ({
+    status: 'ok',
+    provider: generator.name,
+    privateBeta,
+    appleSignIn: Boolean(options.appleAuthVerifier) || parseAppleClientIds(process.env.APPLE_CLIENT_IDS).length > 0,
+  }));
 
   app.get('/api/version', async () => ({ name: 'gamedev-pl', version: '0.0.0' }));
 
