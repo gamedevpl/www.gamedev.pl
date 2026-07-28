@@ -84,6 +84,9 @@ describe('parsePathRoute', () => {
     });
     expect(parsePathRoute('/studio/tok/playtest')).toEqual({ view: 'studio', token: 'tok', tab: 'playtest' });
     expect(parsePathRoute('/studio/tok/nope')).toEqual({ view: 'notFound' });
+    // The stubbed feedback surface is gone from the UI, so its path is gone too —
+    // otherwise a deep link resolves to a tab with nothing to render.
+    expect(parsePathRoute('/studio/tok/feedback')).toEqual({ view: 'notFound' });
     // Trailing slash is not a studio deep-link.
     expect(parsePathRoute('/studio/')).toEqual({ view: 'notFound' });
   });

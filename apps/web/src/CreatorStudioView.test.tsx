@@ -173,6 +173,27 @@ describe('CreatorStudioView', () => {
 
     root.unmount();
   });
+
+  it('falls back to the default tab when the deep-linked one does not exist for the game', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    // token-0 is still building, so Stats has nothing to show for it.
+    fetchStudioGames.mockResolvedValue(manyGames(2));
+    window.history.replaceState(null, '', '/studio/token-0/stats');
+
+    const { container, root, onNavigate } = await renderStudio({ selectedToken: 'token-0', selectedTab: 'stats' });
+
+    // Landed on Build, and the URL was corrected in place rather than pushed.
+    const activeTab = container.querySelector('[role="tab"][aria-selected="true"]');
+    expect(activeTab?.textContent).toContain('Build');
+    expect(onNavigate).toHaveBeenCalledWith('/studio/token-0/build', { replace: true });
+    // No tab may exist in the URL that has no button to leave it by.
+    const tabLabels = Array.from(container.querySelectorAll('[role="tab"]')).map((button) => button.textContent);
+    expect(tabLabels.some((label) => label?.includes('Player feedback'))).toBe(false);
+
+    root.unmount();
+  });
 });
 
 describe('CreatorStudioView — what players think', () => {

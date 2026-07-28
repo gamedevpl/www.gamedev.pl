@@ -206,21 +206,6 @@ export async function getSubmissionPreview(token: string): Promise<SubmissionPre
 }
 
 /**
- * How long recent builds actually took. Used to turn "your game is in the queue"
- * into an expectation the creator can plan around. Null median = not enough data
- * yet; the UI falls back to a range.
- */
-export async function getBuildStats(): Promise<{ medianMinutes: number | null; sampleSize: number }> {
-  const response = await fetch(`${API_BASE}/api/submissions/stats`, { credentials: 'include' });
-
-  if (!response.ok) {
-    await throwResponseError(response);
-  }
-
-  return (await response.json()) as { medianMinutes: number | null; sampleSize: number };
-}
-
-/**
  * The read-only, shareable form of a draft: addressed by slug like a published game,
  * with no status token involved — so a shared link can't send change requests.
  */

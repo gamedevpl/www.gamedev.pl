@@ -60,19 +60,19 @@ Section anchors like `#studio` in `SplitHero.tsx` are **not** app routes; leave 
 
 Same path shapes, without the `#`:
 
-| Path                    | `AppRoute`                                                                                             |
-| ----------------------- | ------------------------------------------------------------------------------------------------------ |
-| `/`                     | `{ view: 'home' }`                                                                                     |
-| `/play/<slug>`          | `{ view: 'play', slug }` (canonical)                                                                   |
-| `/ay/<slug>`            | same play view — rewritten to `/play/<slug>`                                                           |
-| `/ai/<slug>`            | same play view — rewritten to `/play/<slug>`                                                           |
-| `/draft/<slug>`         | `{ view: 'draft', slug }`                                                                              |
-| `/status/<token>`       | `{ view: 'status', token }`                                                                            |
-| `/health`               | `{ view: 'health' }`                                                                                   |
-| `/studio`               | `{ view: 'studio' }`                                                                                   |
-| `/studio/<token>`       | `{ view: 'studio', token }` — deep-link                                                                |
-| `/studio/<token>/<tab>` | `{ view: 'studio', token, tab }` — `tab` is `overview`/`build`/`playtest`/`stats`/`improve`/`feedback` |
-| `/join/<code>/…`        | `{ view: 'join', code, token }` — see § Join                                                           |
+| Path                    | `AppRoute`                                                                                  |
+| ----------------------- | ------------------------------------------------------------------------------------------- |
+| `/`                     | `{ view: 'home' }`                                                                          |
+| `/play/<slug>`          | `{ view: 'play', slug }` (canonical)                                                        |
+| `/ay/<slug>`            | same play view — rewritten to `/play/<slug>`                                                |
+| `/ai/<slug>`            | same play view — rewritten to `/play/<slug>`                                                |
+| `/draft/<slug>`         | `{ view: 'draft', slug }`                                                                   |
+| `/status/<token>`       | `{ view: 'studio', token }` — legacy alias, canonicalised to `/studio/<token>/<tab>`        |
+| `/health`               | `{ view: 'health' }`                                                                        |
+| `/studio`               | `{ view: 'studio' }`                                                                        |
+| `/studio/<token>`       | `{ view: 'studio', token }` — deep-link                                                     |
+| `/studio/<token>/<tab>` | `{ view: 'studio', token, tab }` — `tab` is `overview`/`build`/`playtest`/`stats`/`improve` |
+| `/join/<code>/…`        | `{ view: 'join', code, token }` — see § Join                                                |
 
 No `/game/` segment — everything playable is a game; `/play` (and the `/ay` /
 `/ai` aliases) is enough. Emitters always write `/play/<slug>`.

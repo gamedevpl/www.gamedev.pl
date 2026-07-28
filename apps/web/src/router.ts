@@ -2,9 +2,9 @@ import type { LegalDocId } from './legal/types.js';
 
 /** Creator Studio work surface. Persisted in the URL so a refresh or shared link
  * reopens the same tab on the same game. */
-export type StudioTab = 'overview' | 'build' | 'playtest' | 'stats' | 'improve' | 'feedback';
+export type StudioTab = 'overview' | 'build' | 'playtest' | 'stats' | 'improve';
 
-const STUDIO_TABS = new Set<StudioTab>(['overview', 'build', 'playtest', 'stats', 'improve', 'feedback']);
+const STUDIO_TABS = new Set<StudioTab>(['overview', 'build', 'playtest', 'stats', 'improve']);
 
 export function isStudioTab(value: string): value is StudioTab {
   return STUDIO_TABS.has(value as StudioTab);
@@ -106,8 +106,9 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
     return { view: 'studio' };
   }
 
-  // `/studio/:token` or `/studio/:token/:tab`. A bare second segment that is not a
-  // known tab stays a token-only deep link (tokens are opaque capability strings).
+  // `/studio/:token` or `/studio/:token/:tab`. A third segment that is not a known
+  // tab is a 404 rather than a silent fallback to the token-only view: it keeps the
+  // client in step with the API's shell allowlist, which serves those paths a real 404.
   const studioMatch = normalizedPath.match(/^\/studio\/([^/]+)(?:\/([^/]+))?$/);
   if (studioMatch?.[1]) {
     const token = decodeURIComponent(studioMatch[1]);

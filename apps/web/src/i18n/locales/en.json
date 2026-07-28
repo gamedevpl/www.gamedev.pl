@@ -45,7 +45,6 @@
     "navPrompt": "Create Game",
     "navArcade": "Arcade",
     "navStudio": "Studio",
-    "navMyGames": "My Games",
     "navFeed": "Agent Stream",
     "mySpecs": "My Active Specs ({{count}})"
   },
@@ -194,8 +193,7 @@
       "build": "Build",
       "playtest": "Playtest",
       "stats": "Stats",
-      "improve": "Improve",
-      "feedback": "Player feedback"
+      "improve": "Improve"
     },
     "overview": {
       "status": "Status",
@@ -258,10 +256,6 @@
       "rateLimit": "Too many requests just now. Please wait a moment and try again.",
       "rejected": "That request could not be accepted. Please rephrase and try again.",
       "error": "Could not send the request right now. Please try again."
-    },
-    "feedback": {
-      "title": "Player feedback — coming soon",
-      "body": "Written player comments and vote themes will land here once capture ships. Your play stats above already show how sessions go."
     }
   },
   "submit": {

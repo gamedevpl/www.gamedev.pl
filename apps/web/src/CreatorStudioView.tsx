@@ -31,7 +31,7 @@ import {
  *
  * One place for the whole creator loop: shelf of owned games, the draft Build
  * (former status / "dev studio" page), playtest-with-pause prompting, play
- * health, and post-publish improve. Player-feedback analysis is stubbed.
+ * health, and post-publish improve.
  *
  * Shelf scales past a handful of games: compact rows, search/filter once the
  * list grows, and on narrow viewports a game switcher (picker sheet) so the
@@ -53,6 +53,16 @@ const STATUS_ICONS: Record<SubmissionState, PixelIconName> = {
 
 const WINDOWS = [1, 7, 30];
 
+/** Tab strip order, and the label each tab carries. */
+const TAB_ORDER: readonly StudioTab[] = ['overview', 'build', 'playtest', 'stats', 'improve'];
+const TAB_LABELS: Record<StudioTab, string> = {
+  overview: 'studioPanel.tabs.overview',
+  build: 'studioPanel.tabs.build',
+  playtest: 'studioPanel.tabs.playtest',
+  stats: 'studioPanel.tabs.stats',
+  improve: 'studioPanel.tabs.improve',
+};
+
 type NavigateOptions = { replace?: boolean };
 
 type CreatorStudioViewProps = {
@@ -71,10 +81,14 @@ function defaultTabFor(game: StudioGame | null): StudioTab {
   return isStudioGamePublished(game) ? 'overview' : 'build';
 }
 
+/**
+ * Which surfaces exist for this game. Must stay in step with the rendered tab list
+ * below: a tab that resolves but has no button and no panel is a blank work surface.
+ */
 function tabAvailable(game: StudioGame, tab: StudioTab): boolean {
   const published = isStudioGamePublished(game);
   if (tab === 'build') return !published;
-  if (tab === 'stats' || tab === 'feedback') return published;
+  if (tab === 'stats') return published;
   return true;
 }
 
@@ -283,13 +297,9 @@ export function CreatorStudioView({
     />
   );
 
-  const tabItems = [
-    ['overview', 'studioPanel.tabs.overview'],
-    ...(!selectedGame || isStudioGamePublished(selectedGame) ? [] : ([['build', 'studioPanel.tabs.build']] as const)),
-    ['playtest', 'studioPanel.tabs.playtest'],
-    ...(selectedGame && isStudioGamePublished(selectedGame) ? ([['stats', 'studioPanel.tabs.stats']] as const) : []),
-    ['improve', 'studioPanel.tabs.improve'],
-  ] as const;
+  // Derived from the same predicate the router uses, so a deep-linked tab can never
+  // resolve to a surface with no button to leave it by.
+  const tabItems = selectedGame ? TAB_ORDER.filter((id) => tabAvailable(selectedGame, id)) : [];
 
   return (
     <section className={`studio-panel${tab === 'playtest' ? ' is-playtesting' : ''}`}>
@@ -377,7 +387,7 @@ export function CreatorStudioView({
               </div>
 
               <div className="studio-tabs" role="tablist" aria-label={t('studioPanel.title')}>
-                {tabItems.map(([id, labelKey]) => (
+                {tabItems.map((id) => (
                   <button
                     key={id}
                     type="button"
@@ -386,7 +396,7 @@ export function CreatorStudioView({
                     className={`studio-tab${tab === id ? ' is-active' : ''}`}
                     onClick={() => openTab(id)}
                   >
-                    {t(labelKey)}
+                    {t(TAB_LABELS[id])}
                   </button>
                 ))}
               </div>

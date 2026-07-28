@@ -2957,13 +2957,6 @@ body.player-open {
   color: var(--turquoise);
 }
 
-/* Build-time expectation, right under the phase description. */
-.status-eta {
-  margin: -6px 0 12px;
-  font-size: 0.85rem;
-  color: var(--muted);
-}
-
 /* CI is red on this build — stated plainly, without alarm. */
 .status-warning {
   display: flex;
@@ -5898,10 +5891,6 @@ body.player-open {
   color: var(--error);
 }
 
-.studio-overview-status {
-  margin-bottom: 16px;
-}
-
 .studio-overview {
   display: flex;
   flex-direction: column;
@@ -5974,30 +5963,6 @@ body.player-open {
 
 .studio-improve {
   margin: 0;
-}
-
-.studio-coming-soon {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  color: var(--muted);
-  padding: 20px 18px;
-  border-radius: 12px;
-  border: 1px dashed var(--panel-border);
-  background: rgba(13, 17, 21, 0.4);
-}
-
-.studio-coming-soon h3 {
-  margin: 0 0 4px;
-  color: var(--text);
-  font-size: 1.05rem;
-}
-
-.studio-coming-soon p {
-  margin: 0;
-  max-width: 36rem;
-  line-height: 1.45;
-  font-size: 0.95rem;
 }
 
 .studio-build .status-panel.is-embedded {

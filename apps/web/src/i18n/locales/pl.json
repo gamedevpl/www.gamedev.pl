@@ -45,7 +45,6 @@
     "navPrompt": "Stwórz Grę",
     "navArcade": "Arcade",
     "navStudio": "Studio",
-    "navMyGames": "Moje Gry",
     "navFeed": "Strumień Agentów",
     "mySpecs": "Moje Aktywne Specyfikacje ({{count}})"
   },
@@ -194,8 +193,7 @@
       "build": "Build",
       "playtest": "Playtest",
       "stats": "Statystyki",
-      "improve": "Ulepsz",
-      "feedback": "Opinie graczy"
+      "improve": "Ulepsz"
     },
     "overview": {
       "status": "Status",
@@ -258,10 +256,6 @@
       "rateLimit": "Zbyt wiele próśb naraz. Poczekaj chwilę i spróbuj ponownie.",
       "rejected": "Tej prośby nie udało się przyjąć. Przeformułuj i spróbuj ponownie.",
       "error": "Nie udało się teraz wysłać prośby. Spróbuj ponownie."
-    },
-    "feedback": {
-      "title": "Opinie graczy — wkrótce",
-      "body": "Komentarze graczy i tematy głosów pojawią się tu, gdy capture będzie gotowy. Statystyki powyżej już pokazują, jak przebiegają sesje."
     }
   },
   "submit": {

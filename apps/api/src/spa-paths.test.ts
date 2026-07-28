@@ -55,6 +55,7 @@ describe('isKnownSpaShellPath', () => {
     '/draft/..%2Fadmin',
     '/health/brick-storm',
     '/studio/tok-abc/nope',
+    '/studio/tok-abc/feedback',
     '/studio/tok-abc/build/extra',
     '/join/lower1',
     '/join/TOOLONG9',
