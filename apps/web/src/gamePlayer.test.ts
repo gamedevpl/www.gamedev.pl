@@ -2,16 +2,16 @@ import { describe, it, expect } from 'vitest';
 import { embedGameHtml, withGameLocale } from './gamePlayer.js';
 
 describe('embedGameHtml', () => {
-  it('injects the hide-chrome style and bridge script before </body>', () => {
+  it('injects the hide-chrome style and bridge script in <head> before game code', () => {
     const html = '<html><head></head><body><canvas id="game"></canvas></body></html>';
     const out = embedGameHtml(html);
 
-    // Style + script land inside the document, before the closing body tag.
+    // Style + script land inside <head> so rAF patches precede game scripts.
     expect(out).toContain('<style id="gdpl-embed">');
     expect(out).toContain('#game-title,#game-desc,.game-controls,.hint{display:none!important}');
     expect(out).toContain('gdpl-player');
-    expect(out.indexOf('<style id="gdpl-embed">')).toBeLessThan(out.indexOf('</body>'));
-    expect(out.indexOf('<script>')).toBeLessThan(out.indexOf('</body>'));
+    expect(out.indexOf('<style id="gdpl-embed">')).toBeLessThan(out.indexOf('</head>'));
+    expect(out.indexOf('<script>')).toBeLessThan(out.indexOf('</head>'));
     // Original game content is preserved.
     expect(out).toContain('<canvas id="game">');
   });
@@ -31,14 +31,15 @@ describe('embedGameHtml', () => {
     expect(out).toContain('<script>');
   });
 
-  it('dispatches gdpl-pause / gdpl-resume so GameKit can freeze the sim', () => {
+  it('holds rAF on pause and still dispatches gdpl-pause for GameKit', () => {
     const out = embedGameHtml('<html><head></head><body></body></html>');
     expect(out).toContain("CustomEvent('gdpl-pause')");
     expect(out).toContain("CustomEvent('gdpl-resume')");
-    // Freeze is GameKit's job — the bridge must not patch globals.
-    expect(out).not.toContain('heldRaf');
-    expect(out).not.toContain('flushHeldRaf');
-    expect(out).not.toContain('suspendAudio');
+    // Bridge freeze is required — GameKit alone keeps draw() running, and older
+    // assembled docs never listen for gdpl-pause.
+    expect(out).toContain('heldRaf');
+    expect(out).toContain('flushHeldRaf');
+    expect(out).toContain('suspendAudio');
   });
 });
 

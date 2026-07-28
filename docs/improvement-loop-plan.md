@@ -446,12 +446,12 @@ considerably:
 - 📋 **Pause-and-prompt enrichment** — first cut ships: bridge `pause` / `resume` /
   `capture`, host accumulates error/alive/progress during the playtest, feedback
   and improve accept optional `context.screenshotPng` + `instrumentation` (fenced
-  as data; PNG stored as a creator playtest shot). The bridge dispatches
-  `gdpl-pause` / `gdpl-resume` CustomEvents (plus overlay + snapshot); GameKit
-  freezes the sim and suspends audio when those fire
+  as data; PNG stored as a creator playtest shot). The bridge holds
+  `requestAnimationFrame` / suspends `AudioContext`s (injects in `<head>` so
+  patches land before game loops), shows overlay + snapshot, and also dispatches
+  `gdpl-pause` / `gdpl-resume` for GameKit
   ([www.gamedev.pl-games#110](https://github.com/gamedevpl/www.gamedev.pl-games/pull/110)).
-  The shell does not patch `requestAnimationFrame` / `AudioContext`. Studio
-  playtest assumes landscape and goes edge-to-edge on narrow screens with a
+  Studio playtest assumes landscape and goes edge-to-edge on narrow screens with a
   rotate nudge when the phone is upright.
 - 📋 **Suggestion inbox** — cards with insight → evidence → proposed change →
   [Approve → files issue] / [Dismiss with reason]. Dismissal reasons feed router
@@ -674,6 +674,7 @@ at all and feeds the only autonomous-eligible class.
     failed all produce `[]`, and the panel renders no block at all rather than an empty
     heading. Cost is bounded by a per-sweep call budget, and when that budget binds the
     result says so — otherwise "no themes" would silently mean "we stopped looking".
+
 - ✅ **Creator Studio** (`/studio`, #236): the creator's own shelf, build status, playtest
   and stats surface, with per-game play health from `/api/me/studio/health`.
 - ✅ **Weekly creator digest** (2026-07-28): [digest.ts](../apps/api/src/digest.ts) —
@@ -685,7 +686,7 @@ at all and feeds the only autonomous-eligible class.
   aggregation, so a digest is a few document reads per creator, and the digest and the
   studio cannot disagree about a number because both read the same document.
 
-  It also *enumerates* from scorecards rather than from recently-published submissions.
+  It also _enumerates_ from scorecards rather than from recently-published submissions.
   Publication date must not decide who hears from us: the creator of an older game that is
   still being played is exactly who a "your games are still being played" message is for,
   and listing recent publications would have silently dropped them.
@@ -696,7 +697,7 @@ at all and feeds the only autonomous-eligible class.
     than a message full of zeros — manufactured evidence of exactly the kind the rest of
     this system avoids, and a weekly "0 sessions" is a reason to stop opening them.
   - **Nothing changed, no digest.** A rolling 28-day window barely moves week to week, so
-    identical numbers are suppressed. The comparison is the *previous digest's own params*
+    identical numbers are suppressed. The comparison is the _previous digest's own params_
     — the notification already is the record of what the creator was last told, and a
     second copy of that fact is a second thing that can drift from it.
 
