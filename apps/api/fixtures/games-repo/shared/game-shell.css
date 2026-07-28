@@ -16,6 +16,13 @@ body {
   display: flex;
   justify-content: center;
   min-height: 100vh;
+  /* Match the player embed: no iOS long-press loupe / callout on the play surface. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+  overscroll-behavior: none;
 }
 
 .wrap {
@@ -46,6 +53,9 @@ canvas {
   border-radius: 12px;
   background: #05060b;
   touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .game-controls {
