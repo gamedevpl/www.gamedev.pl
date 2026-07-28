@@ -36,11 +36,13 @@ is no App Store listing at this stage.
       behind the **+** next to _Website URLs_.
 - [x] **A6.** Repo Actions _variables_ set 2026-07-28 (not secrets — both values are public):
       `APPLE_SERVICES_ID=pl.gamedev.web`, `APPLE_CLIENT_IDS=pl.gamedev.web`.
-- [ ] **A7.** You sign in with Apple on https://www.gamedev.pl once, from a device with an Apple ID.
-      **Choose "Share My Email", not Hide My Email**, for the first test — the relay path deliberately
-      does not link to an existing account.
+- [x] **A7.** Verified in production 2026-07-28: signing in with Apple landed the owner in their
+      **existing** account with their games — account linking working against real Apple tokens.
+      (Use "Share My Email", not Hide My Email: the relay path deliberately cannot link.)
 
-**Phase A ends here and is worth doing on its own**, independent of any store app.
+**Phase A is complete.** Sign in with Apple is live on the web. Remaining Apple nit: the
+sign-in sheet reads "sign in to **Gamedev**" because the Services ID description field
+rejects the dot in `Gamedev.pl` — same alphanumeric-and-spaces rule as the App ID.
 
 ---
 

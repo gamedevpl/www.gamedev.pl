@@ -191,8 +191,9 @@ This landed in M0 because _nothing else matters if the games themselves reject f
   against their JWKS with a _set_ of audiences, so the same route serves the web Services
   ID and the future iOS bundle ID. Accounts are keyed `a:<sub>` in the same Firestore
   model — except when `apple-account.ts` can prove, from a verified non-relay email, that
-  the person already has a Google account here, in which case they sign into it. Dormant
-  until `APPLE_SERVICES_ID` / `APPLE_CLIENT_IDS` are set; see
+  the person already has a Google account here, in which case they sign into it. **Live in
+  production since 2026-07-28** (Services ID `pl.gamedev.web`), and the linking path is
+  verified against real Apple tokens, not only tests. See
   [`auth-and-usage-plan.md`](./auth-and-usage-plan.md) for what the owner must create in
   the Apple Developer portal, and note that **no part of this flow can be tested below a
   deployed https origin** — Apple rejects `http://` return URLs.
@@ -423,10 +424,9 @@ home screen, and iOS push delivered. M1 is closed end to end.
 
 1. **Should guests' controller page get PWA install nudges?** Working answer: no —
    zero-friction is the point; nudge only after a repeat visit.
-2. ~~**Sign in with Apple on web too, or app-only?**~~ **DECIDED AND BUILT 2026-07-28:
-   web too.** The verifier, the `/api/auth/apple` route, account linking and the web
-   button all exist and are tested; the feature is dormant until the owner creates a
-   Services ID (setup steps in [`auth-and-usage-plan.md`](./auth-and-usage-plan.md)).
+2. ~~**Sign in with Apple on web too, or app-only?**~~ **DECIDED, BUILT AND LIVE
+   2026-07-28: web too.** The verifier, the `/api/auth/apple` route, account linking and
+   the web button are all in production against Services ID `pl.gamedev.web`.
    Everything about it is shell-agnostic — the M2 iOS app adds its bundle ID to
    `APPLE_CLIENT_IDS` and reuses the same route.
 3. **One store app or player-app + creator-app?** Working answer: one app; creation is

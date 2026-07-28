@@ -172,7 +172,7 @@ the coarse outer layer (and is the only limiter on `/api/auth/*`).
 
 ---
 
-## Sign in with Apple (built 2026-07-28, dormant until configured)
+## Sign in with Apple (built and **live** 2026-07-28)
 
 Added ahead of the mobile plan's M2 store apps, where it stops being optional: App Store
 guideline 4.8 requires it beside Google in any app offering a third-party login. It is
@@ -181,9 +181,16 @@ offered on the **web** too rather than app-only, which is
 code — otherwise a creator who signs up through the iOS app cannot reach their own games
 from a desktop browser.
 
-**It is off right now.** Every piece is in the tree and tested, and nothing renders or
-responds until the two environment variables below are set. `/api/auth/apple` answers
-`503`, and the button does not paint.
+**It is on.** Services ID `pl.gamedev.web` was created 2026-07-28 and both variables are
+set, so `/api/health` reports `appleSignIn: true` and the button paints. Verified end to
+end in production the same day, including the part that mattered: signing in with Apple
+landed the owner in their **existing** Google-created account with their games, rather
+than a fresh one — account linking working against real Apple tokens, not just tests.
+
+**Domain verification turned out not to be part of this flow.** The console never offered
+an association file, and none was needed: Apple validates the web flow against the
+registered **Return URLs**. `apple-developer-domain-association.txt` belongs to the
+private-email relay service, which this product deliberately does not use.
 
 ### What the owner has to do (none of it can be done from the repo)
 
