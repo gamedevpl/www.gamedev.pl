@@ -7,6 +7,7 @@ import {
   type GameHealth,
   type PartitionScanBudget,
 } from './telemetry-health.js';
+import { routeAll, type Suggestion } from './suggestions.js';
 import { summarizeVisitFunnel, type VisitFunnel } from './visit-funnel.js';
 import { summarizeCreatorMetrics, type CreatorMetrics } from './creator-metrics.js';
 import {
@@ -82,6 +83,13 @@ export interface VisitsResponse {
 
 /** Scorecards one request returns. The catalog is ~82 games, so this is the whole set. */
 const MAX_SCORECARDS = 200;
+
+export interface SuggestionsResponse {
+  /** Worst first. Includes games the router passed over, so silence is legible. */
+  suggestions: Suggestion[];
+  /** Null when the scorecard sweep has never written anything for the router to read. */
+  computedFrom: string | null;
+}
 
 export interface ScorecardsResponse {
   /** Newest computation first, so a stale sweep sorts to the bottom. */
@@ -238,6 +246,29 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
    * `untrusted` block travels verbatim — safe here because it is rendered as text, and
    * the field name is what stops it being pasted into an agent prompt later.
    */
+  /**
+   * What the IL-3 router would say about every game it can see.
+   *
+   * Computed on read and persisted nowhere, deliberately: this is a suggestion engine
+   * that will eventually file issues against people's games, and the honest order is to
+   * let an operator watch what it *would* do for a while before it does anything. Nothing
+   * here files, assigns, or notifies.
+   */
+  app.get('/api/admin/suggestions', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) {
+      return reply.status(404).send({ error: 'not found' });
+    }
+
+    const scorecards = await store.listScorecards({ limit: MAX_SCORECARDS });
+    const body: SuggestionsResponse = {
+      suggestions: routeAll(scorecards),
+      // Same freshness caveat as the scorecards read: the router is only as current as the
+      // sweep behind it, and a stale answer should be visible as stale rather than trusted.
+      computedFrom: scorecards[0]?.computedAt ?? null,
+    };
+    return reply.send(body);
+  });
+
   app.get('/api/admin/scorecards', async (request, reply) => {
     if (!isAdminSession(request, adminUids)) {
       return reply.status(404).send({ error: 'not found' });
