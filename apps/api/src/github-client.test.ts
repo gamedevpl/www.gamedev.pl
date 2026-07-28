@@ -1,4 +1,6 @@
+import { gzipSync } from 'node:zlib';
 import { describe, expect, it, vi } from 'vitest';
+import { fetchGamesRepoArchive } from './games-repo-archive.js';
 import { createGitHubClient, resolveGameTypeScriptPath } from './github-client.js';
 
 describe('resolveGameTypeScriptPath', () => {
@@ -540,7 +542,9 @@ describe('getGameSources', () => {
     expect(sources?.gameJs).toContain('"coin":"data:audio/wav;base64,AwQ="');
     // Games-repo contract: selected name as a string, plus a one-entry tracks map.
     expect(sources?.gameJs).toContain('window.__GAME_AUDIO_MUSIC__ = "menu-theme";');
-    expect(sources?.gameJs).toContain('window.__GAME_MUSIC_TRACKS__ = Object.freeze({"menu-theme":{"loop":true,"data":"data:audio/mpeg;base64,AAA="}});');
+    expect(sources?.gameJs).toContain(
+      'window.__GAME_MUSIC_TRACKS__ = Object.freeze({"menu-theme":{"loop":true,"data":"data:audio/mpeg;base64,AAA="}});',
+    );
     expect(sources?.gameJs).not.toContain('other-theme');
     expect(sources?.gameJs.indexOf('window.GameKit =')).toBeLessThan(
       sources?.gameJs.indexOf('GameKit.createInput') ?? 0,
@@ -596,7 +600,9 @@ describe('getGameSources', () => {
     expect(sources?.gameJs).toContain('GameKit.gfx = true');
     expect(sources?.gameJs).toContain('GameKit.actors = true');
     expect(sources?.gameJs).toContain('GameKit.world = true');
-    expect(sources?.gameJs.indexOf('GameKit.world = true')).toBeLessThan(sources?.gameJs.indexOf('GameKit.gfx = true') ?? 0);
+    expect(sources?.gameJs.indexOf('GameKit.world = true')).toBeLessThan(
+      sources?.gameJs.indexOf('GameKit.gfx = true') ?? 0,
+    );
     expect(() => new Function(sources?.gameJs ?? '')).not.toThrow();
   });
 
@@ -633,18 +639,21 @@ describe('getGameSources', () => {
     {
       label: '.ts suffix',
       entry: "import { startGame } from './game/runtime.ts'; startGame();",
-      runtimeImport: "import type { Score } from './model.ts'; export function startGame(): void { const score: Score = { value: 3 }; GameKit.mount({ score }); }",
+      runtimeImport:
+        "import type { Score } from './model.ts'; export function startGame(): void { const score: Score = { value: 3 }; GameKit.mount({ score }); }",
     },
     {
       // TypeScript's Node ESM convention — import path says .js, source file is .ts.
       label: '.js suffix',
       entry: "import { startGame } from './game/runtime.js'; startGame();",
-      runtimeImport: "import type { Score } from './model.js'; export function startGame(): void { const score: Score = { value: 3 }; GameKit.mount({ score }); }",
+      runtimeImport:
+        "import type { Score } from './model.js'; export function startGame(): void { const score: Score = { value: 3 }; GameKit.mount({ score }); }",
     },
     {
       label: 'extensionless',
       entry: "import { startGame } from './game/runtime'; startGame();",
-      runtimeImport: "import type { Score } from './model'; export function startGame(): void { const score: Score = { value: 3 }; GameKit.mount({ score }); }",
+      runtimeImport:
+        "import type { Score } from './model'; export function startGame(): void { const score: Score = { value: 3 }; GameKit.mount({ score }); }",
     },
   ])('bundles a game-local TypeScript module graph from GitHub ($label)', async ({ entry, runtimeImport }) => {
     const files = new Map<string, string | Uint8Array>([
@@ -810,5 +819,98 @@ describe('findLinkedPR', () => {
     const client = createGitHubClient({ token: 'test-token', repo, fetchImpl: fetchImpl as unknown as typeof fetch });
 
     await expect(client.findLinkedPR(7)).rejects.toThrow('Bad credentials');
+  });
+});
+
+describe('archive-backed file source', () => {
+  const BLOCK = 512;
+  const ROOT = 'gamedevpl-www.gamedev.pl-games-3f8a1c9';
+
+  const gameFiles = new Map<string, string | Uint8Array>([
+    ['games/coin-catcher/index.html', '<canvas id="game"></canvas>'],
+    ['games/coin-catcher/game.ts', 'const game: { update(): void } = { update() {} }; GameKit.mount(game);'],
+    ['games/coin-catcher/style.css', '.game { color: gold; }'],
+    ['games/coin-catcher/SPEC.md', specMd({ title: 'Coin Catcher' })],
+    ['games/coin-catcher/GAME.json', JSON.stringify({ engine: { modules: ['input'] } })],
+    ['games/coin-catcher/media/opening.png', new Uint8Array([0x89, 0x50, 0x4e, 0x47])],
+    ['shared/game-shell.css', '.shell { display: grid; }'],
+    ['shared/modules/core.ts', 'const version: number = 1; window.GameKit = { mount() {} };'],
+    ['shared/modules/input.ts', 'GameKit.createInput = function (): void {};'],
+  ]);
+
+  function tarball(): Buffer {
+    const blocks = [...gameFiles].map(([name, body]) => {
+      const payload = Buffer.from(body as Uint8Array | string);
+      const header = Buffer.alloc(BLOCK);
+      header.write(`${ROOT}/${name}`, 0, 100, 'utf8');
+      header.write(`${payload.length.toString(8).padStart(11, '0')} `, 124, 12, 'utf8');
+      header.write('0', 156, 1, 'utf8');
+      header.write('ustar\0', 257, 6, 'utf8');
+      return Buffer.concat([header, payload, Buffer.alloc((BLOCK - (payload.length % BLOCK)) % BLOCK)]);
+    });
+    return gzipSync(Buffer.concat([...blocks, Buffer.alloc(BLOCK * 2)]));
+  }
+
+  /** The contents API: one request per file. */
+  function createContentsFetch() {
+    return vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const path = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+      const value = gameFiles.get(path);
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    });
+  }
+
+  it('assembles a game identically to the contents API, and stops asking GitHub for files', async () => {
+    const contentsFetch = createContentsFetch();
+    const viaApi = await createGitHubClient({
+      token: 'test-token',
+      repo,
+      fetchImpl: contentsFetch as unknown as typeof fetch,
+    }).getGameSources('main', 'coin-catcher');
+    // The old path: index.html, game.ts, style.css, SPEC.md, GAME.json, shell css, core, input.
+    expect(contentsFetch.mock.calls.length).toBeGreaterThan(5);
+
+    const archiveFetch = vi.fn(async () => new Response(tarball()));
+    const files = await fetchGamesRepoArchive({
+      repo,
+      ref: 'main',
+      token: 'test-token',
+      fetchImpl: archiveFetch as unknown as typeof fetch,
+    });
+    const forbiddenFetch = (async () => {
+      throw new Error('the archive path must not read files over the API');
+    }) as unknown as typeof fetch;
+    const viaArchive = await createGitHubClient({
+      token: 'test-token',
+      repo,
+      fetchImpl: forbiddenFetch,
+      files,
+    }).getGameSources('main', 'coin-catcher');
+
+    expect(viaArchive).toEqual(viaApi);
+    expect(archiveFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('serves media bytes from the archive too', async () => {
+    const files = await fetchGamesRepoArchive({
+      repo,
+      ref: 'main',
+      token: 'test-token',
+      fetchImpl: (async () => new Response(tarball())) as unknown as typeof fetch,
+    });
+    const client = createGitHubClient({
+      token: 'test-token',
+      repo,
+      fetchImpl: (() => {
+        throw new Error('must not fetch');
+      }) as unknown as typeof fetch,
+      files,
+    });
+
+    const bytes = await client.getGameMedia('main', 'coin-catcher', 'opening.png');
+    expect(Buffer.from(bytes ?? [])).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    await expect(client.getGameMedia('main', 'coin-catcher', 'absent.png')).resolves.toBeNull();
   });
 });
