@@ -24,6 +24,11 @@ export const GAME_KIT_MODULES = [
   'save',
   'commons',
   'mascot',
+  // P3's zone module (docs/persistent-world-plan.md). Opt-in and, at ~9 KiB transpiled,
+  // charged to the author budget the way `save` and `commons` are rather than to the
+  // platform allowances — so MAX_PROJECT_BYTES does not move for it. Only `gfx3d` was
+  // large enough to need a reserve of its own.
+  'zone',
 ] as const;
 
 export type GameKitModuleName = (typeof GAME_KIT_MODULES)[number];
