@@ -160,11 +160,6 @@ export function StudioPlaytestPanel({ game, published, onExit }: StudioPlaytestP
     return () => document.body.classList.remove('player-open');
   }, [html]);
 
-  useEffect(() => {
-    if (!html) return;
-    exitRef.current?.focus();
-  }, [html]);
-
   const attachedPng = snapshot?.pngBase64 ?? null;
   const trimmed = text.trim();
   const promptOpen = Boolean(paused || snapshot);
