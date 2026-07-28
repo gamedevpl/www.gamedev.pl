@@ -225,18 +225,23 @@ export function CreatorStudioView({
   );
   const liveCount = useMemo(() => games.filter((game) => isStudioGamePublished(game)).length, [games]);
 
-  // Keep the visible tab + URL aligned with the selected game and any deep-link tab.
+  // Keep the visible tab aligned with the selected game. Only write the
+  // capability token into the URL when the route already carried one (a deep
+  // link, or an earlier explicit pick via selectGame/openTab). Bare `/studio`
+  // keeps shelf selection local so a screenshot or history entry doesn't mint a
+  // token the creator never asked for.
   useEffect(() => {
     if (!selected) return;
     const game = games.find((entry) => entry.token === selected);
     if (!game) return;
     const next = resolveTab(game, selectedTab);
     setTab(next);
+    if (!selectedToken) return;
     const canonical = studioPath(game.token, next);
     if (window.location.pathname !== canonical) {
       onNavigate(canonical, { replace: true });
     }
-  }, [selected, selectedTab, games, onNavigate]);
+  }, [selected, selectedTab, selectedToken, games, onNavigate]);
 
   useEffect(() => {
     if (!pickerOpen) return;

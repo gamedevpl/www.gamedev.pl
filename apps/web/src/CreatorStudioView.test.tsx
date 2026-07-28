@@ -194,6 +194,32 @@ describe('CreatorStudioView', () => {
 
     root.unmount();
   });
+
+  it('keeps a capability token out of the URL on bare /studio until a game is picked', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue(manyGames(2));
+    window.history.replaceState(null, '', '/studio');
+
+    const { container, root, onNavigate } = await renderStudio();
+
+    // First game is selected in the UI for convenience…
+    expect(container.querySelector('.studio-shelf-item.is-active')?.textContent).toContain('Game 1');
+    // …but the address bar stays token-free until an explicit pick.
+    expect(onNavigate).not.toHaveBeenCalled();
+
+    const second = Array.from(container.querySelectorAll('.studio-shelf-item')).find((item) =>
+      item.textContent?.includes('Game 2'),
+    );
+    expect(second).toBeTruthy();
+    await act(async () => {
+      second!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onNavigate).toHaveBeenCalledWith('/studio/token-1/overview');
+
+    root.unmount();
+  });
 });
 
 describe('CreatorStudioView — what players think', () => {
