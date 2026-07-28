@@ -46,7 +46,7 @@
     "navArcade": "Arcade",
     "navStudio": "Studio",
     "navFeed": "Agent Stream",
-    "mySpecs": "My Active Specs ({{count}})"
+    "activeBuilds": "{{count}} in progress"
   },
   "hero": {
     "mainTitle": "Turn any idea into a playable web game",

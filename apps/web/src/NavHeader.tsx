@@ -9,7 +9,8 @@ import { PixelIcon } from './PixelIcon.js';
 import githubIcon from './assets/github-mark-white.svg';
 
 type NavHeaderProps = {
-  activeSpecsCount: number;
+  /** Builds currently in flight for the signed-in creator. Server-derived, not a local tally. */
+  activeBuildCount: number;
   onNavigate: (sectionId: string) => void;
   /** In-app home navigation (avoids a full reload / beforeunload while a game is open). */
   onHome: () => void;
@@ -17,7 +18,7 @@ type NavHeaderProps = {
   onStudio: () => void;
 };
 
-export function NavHeader({ activeSpecsCount, onNavigate, onHome, onStudio }: NavHeaderProps) {
+export function NavHeader({ activeBuildCount, onNavigate, onHome, onStudio }: NavHeaderProps) {
   const { t } = useTranslation();
   const { user, logout } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -110,7 +111,15 @@ export function NavHeader({ activeSpecsCount, onNavigate, onHome, onStudio }: Na
                 }}
               >
                 <PixelIcon name="wrench" size={14} /> {t('header.navStudio')}
-                {activeSpecsCount > 0 && <span className="specs-count-badge">{activeSpecsCount}</span>}
+                {activeBuildCount > 0 && (
+                  // The bare number reads as "Studio 2" to a screen reader; say what it counts.
+                  <span
+                    className="specs-count-badge"
+                    aria-label={t('header.activeBuilds', { count: activeBuildCount })}
+                  >
+                    {activeBuildCount}
+                  </span>
+                )}
               </button>
 
               {/* Controls that live in the header bar on a desktop but cannot fit
