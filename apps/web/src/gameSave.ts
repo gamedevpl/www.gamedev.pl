@@ -27,8 +27,8 @@ const MAX_SAVE_BYTES = 32 * 1024;
 
 export type SaveRequest =
   | { t: 'save:hello'; version: number }
-  /** An explicit re-read. `rid` lets the reply reach the `load()` call that asked. */
-  | { t: 'save:load'; rid: number }
+  /** An explicit re-read, answered with the same `save:state` frame as the handshake. */
+  | { t: 'save:load' }
   | { t: 'save:put'; data: string; version: number }
   | { t: 'save:clear' };
 
@@ -45,12 +45,7 @@ function toVersion(value: unknown): number {
 export function parseGameSaveMessage(raw: unknown): SaveRequest | null {
   if (!isObject(raw) || raw.ns !== BRIDGE_NAMESPACE || raw.v !== PROTOCOL_VERSION) return null;
   if (raw.t === 'save:hello') return { t: 'save:hello', version: toVersion(raw.version) };
-  if (raw.t === 'save:load') {
-    // rid 0 is the module's own retry, which nothing is awaiting; any positive id is a
-    // `load()` call waiting for its answer.
-    const rid = typeof raw.rid === 'number' && Number.isFinite(raw.rid) && raw.rid >= 0 ? Math.trunc(raw.rid) : 0;
-    return { t: 'save:load', rid };
-  }
+  if (raw.t === 'save:load') return { t: 'save:load' };
   if (raw.t === 'save:put') {
     // A game that posts a non-string, or something enormous, is buggy or hostile. Drop
     // it here: forwarding would spend a request to be told what we already know.
@@ -118,7 +113,6 @@ export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement |
 
       if (message.t === 'save:hello' || message.t === 'save:load') {
         if (message.t === 'save:hello') currentVersion = message.version;
-        const rid = message.t === 'save:load' ? message.rid : 0;
         try {
           const save = await fetchGameSave(slug!);
           if (cancelled) return;
@@ -126,8 +120,8 @@ export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement |
           // treats that as "unavailable" and the game plays on without saving.
           postToGame(
             save
-              ? { t: 'save:state', rid, available: true, data: save.data, version: save.version }
-              : { t: 'save:state', rid, available: false, retryable: false },
+              ? { t: 'save:state', available: true, data: save.data, version: save.version }
+              : { t: 'save:state', available: false, retryable: false },
           );
         } catch {
           // A read that failed is also "no slot" as far as the game is concerned —
@@ -135,7 +129,7 @@ export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement |
           // not read. But it is a *different* no: `retryable` tells the module this one
           // is worth one more attempt, so a blip at boot does not silently cost the
           // player their save for the rest of the session.
-          if (!cancelled) postToGame({ t: 'save:state', rid, available: false, retryable: true });
+          if (!cancelled) postToGame({ t: 'save:state', available: false, retryable: true });
         }
         return;
       }

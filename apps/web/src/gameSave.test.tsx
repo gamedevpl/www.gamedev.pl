@@ -26,13 +26,7 @@ describe('parseGameSaveMessage', () => {
       version: 2,
     });
     expect(parseGameSaveMessage(frame({ t: 'save:clear' }))).toEqual({ t: 'save:clear' });
-    expect(parseGameSaveMessage(frame({ t: 'save:load', rid: 3 }))).toEqual({ t: 'save:load', rid: 3 });
-  });
-
-  it('normalizes a nonsense request id to the module’s own retry', () => {
-    for (const rid of [-1, 'x', undefined, Infinity, NaN]) {
-      expect(parseGameSaveMessage(frame({ t: 'save:load', rid }))).toEqual({ t: 'save:load', rid: 0 });
-    }
+    expect(parseGameSaveMessage(frame({ t: 'save:load' }))).toEqual({ t: 'save:load' });
   });
 
   it('drops anything outside the namespace or protocol version', () => {
@@ -205,16 +199,14 @@ describe('useGameSaveBridge', () => {
     expect(toGame[0]).toMatchObject({ t: 'save:ack', ok: false });
   });
 
-  it('answers an explicit load, echoing the request id back to the caller', async () => {
+  it('answers an explicit load with the current stored value', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ data: '{"deepest":4}', version: 1, updatedAt: 'now' }));
     const { fromGame } = mount();
 
-    fromGame({ t: 'save:load', rid: 7 });
+    fromGame({ t: 'save:load' });
 
     await waitFor(() => expect(toGame).toHaveLength(1));
-    // Without the id echoed back, a reply cannot be matched to the `load()` that asked
-    // for it, and a game with two reads in flight resolves the wrong one.
-    expect(toGame[0]).toMatchObject({ t: 'save:state', rid: 7, available: true, data: '{"deepest":4}' });
+    expect(toGame[0]).toMatchObject({ t: 'save:state', available: true, data: '{"deepest":4}' });
   });
 
   it('tells the game a signed-out slot is not worth retrying', async () => {
