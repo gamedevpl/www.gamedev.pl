@@ -83,10 +83,14 @@ describe.skipIf(!prereq.ok)('error and edge routes', () => {
     expect(describeProblems(watcher.drain())).toBe('');
   });
 
-  it('tells the visitor an expired tracking token is invalid', async () => {
+  it('lands legacy /status links in Creator Studio instead of a dead page', async () => {
+    // `/status/:token` is an alias for `/studio/:token`. An unknown token no longer
+    // renders the old "invalid tracking link" panel — Studio loads the creator's
+    // shelf (empty for this bot identity) and stays usable.
     await visit(page, '/status/deadbeefdeadbeef', 3_000);
 
-    expect(await bodyText()).toMatch(/invalid|expired|nieprawidłow|wygasł/i);
+    expect(new URL(page.url()).pathname).toMatch(/^\/studio(\/|$)/);
+    expect(await bodyText()).toMatch(/creator studio|studio twórcy/i);
     expect(describeProblems(watcher.drain())).toBe('');
   });
 
