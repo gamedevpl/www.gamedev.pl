@@ -346,21 +346,25 @@ As built by the spike, which differs from the original sketch in three places �
 declaration is a `zone` block rather than an engine module, it names the event kinds the
 server will accept, and `init` receives the generator as well as the seed:
 
-```jsonc
-// GAME.json
+In `GAME.json` — strict JSON, because that is what parses it:
+
+```json
 {
   "zone": {
     "tickHz": 10,
     "maxPlayers": 16,
-    // The vocabulary a client may send. Generic validation, exactly as P2's world
-    // schema does for entries — an undeclared event is one the sim can never receive.
     "inputs": [
       { "k": "move", "type": "enum", "values": ["n", "s", "e", "w"] },
-      { "k": "douse", "type": "none" },
-    ],
-  },
+      { "k": "douse", "type": "none" }
+    ]
+  }
 }
 ```
+
+`inputs` is the vocabulary a client may send, and the server accepts nothing outside it —
+generic validation, exactly the stance P2's world schema takes for entries. An undeclared
+event is one the sim can never actually receive, which is also what lets CI build a legal
+event stream to test against.
 
 ```ts
 // sim.ts — pure, deterministic; runs in the server isolate AND in every client for prediction

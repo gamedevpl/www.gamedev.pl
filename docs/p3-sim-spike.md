@@ -41,9 +41,9 @@ export function tick(state: ZoneState, events: ZoneEvent[], rng: () => number): 
 export function wake(state: ZoneState, elapsedMs: number, rng: () => number): ZoneState;
 ```
 
-Four things must agree, the same pattern Checks 12, 21 and 22 already use: `zone:
-authoritative` in SPEC.md frontmatter, a `zone` block in GAME.json, a `sim.ts` on disk,
-and a game that imports it. The last one is the interesting requirement — the client
+Four things must agree, the same pattern Checks 12, 21 and 22 already use: the
+`zone: authoritative` key in SPEC.md frontmatter, a `zone` block in GAME.json, a
+`sim.ts` on disk, and a game that imports it. The last is the interesting one — the client
 running the very same simulation the server arbitrates with is what stops the rules
 drifting between what a player sees and what is true.
 
