@@ -21,6 +21,9 @@ type GameFrameProps = GameFrameSource & {
  * `allow-same-origin` puts the code in an opaque origin — it can't reach this
  * app's DOM, storage, or cookies. That isolation is the safety boundary for
  * arbitrary generated code (the same model itch.io / CodePen use).
+ *
+ * `allow-pointer-lock` is additive and does not weaken the opaque-origin
+ * boundary: scene3d FPS games may request mouse-look after a user gesture.
  */
 export function GameFrame(props: GameFrameProps) {
   const localRef = useRef<HTMLIFrameElement>(null);
@@ -43,7 +46,7 @@ export function GameFrame(props: GameFrameProps) {
     // Focusing the element is not enough on its own: the focus has to land *inside*
     // the game's document, and a document that commits after we focused the element
     // takes it back. `focus()` is one of the few methods callable across an opaque
-    // origin, so this works under sandbox="allow-scripts".
+    // origin, so this works under sandbox="allow-scripts allow-pointer-lock".
     frame.contentWindow?.focus();
   }, [iframeRef]);
 
@@ -59,7 +62,7 @@ export function GameFrame(props: GameFrameProps) {
       ref={iframeRef}
       className="game-frame"
       title={props.title}
-      sandbox="allow-scripts"
+      sandbox="allow-scripts allow-pointer-lock"
       src={props.src}
       srcDoc={srcDoc}
       // The load event is the reliable moment to focus: the game's document exists

@@ -1159,9 +1159,7 @@ export class InMemoryStore implements Store {
     );
     const createdAt =
       preview.createdAt ??
-      (newestCreatedAt && newestCreatedAt >= nowIso
-        ? new Date(Date.parse(newestCreatedAt) + 1).toISOString()
-        : nowIso);
+      (newestCreatedAt && newestCreatedAt >= nowIso ? new Date(Date.parse(newestCreatedAt) + 1).toISOString() : nowIso);
     const record: BuildPreview = {
       ...preview,
       id: randomUUID(),

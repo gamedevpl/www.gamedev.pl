@@ -429,7 +429,7 @@ describe('agent build channel', () => {
     // This document is unreviewed agent output executed in the creator's browser. Each
     // of these is load-bearing, so each is asserted rather than assumed.
     const csp = page.headers['content-security-policy'] as string;
-    expect(csp).toContain('sandbox allow-scripts');
+    expect(csp).toContain('sandbox allow-scripts allow-pointer-lock');
     // Never granted: with it, the sandbox would share the site's origin and the
     // document could reach the creator's session.
     expect(csp).not.toContain('allow-same-origin');

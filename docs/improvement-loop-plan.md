@@ -107,7 +107,7 @@ Two signals already exist and cost nothing to fold in:
 ### The transport already exists: extend the player bridge
 
 Games are offline-only, self-contained HTML/CSS/JS running in an iframe with
-`sandbox="allow-scripts"` and **no** `allow-same-origin`
+`sandbox="allow-scripts allow-pointer-lock"` and **no** `allow-same-origin`
 ([GameFrame.tsx](../apps/web/src/GameFrame.tsx)); preview builds additionally get
 a `default-src 'none'` CSP with no `connect-src`, which blocks fetch, XHR,
 WebSocket and beacons outright ([assemble.ts](../apps/api/src/assemble.ts)). A
@@ -750,7 +750,7 @@ at all and feeds the only autonomous-eligible class.
   the evidence behind the call, surfaced at `GET /api/admin/suggestions`.
 
   **The decision is rules over numbers, never a model over text** — and the invariant is
-  about *text* specifically, because the looser version would be false:
+  about _text_ specifically, because the looser version would be false:
 
   - No untrusted **string** reaches the routing decision. Error messages, progression
     labels and feedback themes are never read, compared or matched.
@@ -759,7 +759,7 @@ at all and feeds the only autonomous-eligible class.
     landmark.
   - **Counts are signal, and a game produces some of them.** It emits its own `progress`
     markers and its own uncaught errors, so it can influence which class it lands in. That
-    is not a hole: those events *are* the measurement, and a game that makes itself look
+    is not a hole: those events _are_ the measurement, and a game that makes itself look
     broken has asked to be looked at, which is all a suggestion is.
 
   A game can raise its own hand; it cannot put words in our mouth. That is this phase's ⚠️
@@ -771,7 +771,7 @@ at all and feeds the only autonomous-eligible class.
 
   **Computed on read, persisted nowhere, files nothing.** A suggestion engine that will
   eventually point a coding agent at somebody's game should be watched saying what it
-  *would* do before it does any of it. `healthy` and `insufficient-data` are returned
+  _would_ do before it does any of it. `healthy` and `insufficient-data` are returned
   rather than filtered, so a game being passed over is visible and distinguishable from
   the router never having run.
 

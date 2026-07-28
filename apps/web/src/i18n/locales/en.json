@@ -294,7 +294,7 @@
     "activity2": "New spec submission received for Coin Catcher v2",
     "activity3": "Static game bundle published to gamedev.pl catalog",
     "securityTitle": "Sandboxed Security Invariant",
-    "securityBody": "Generated code is untrusted and executes inside an isolated iframe with sandbox=\"allow-scripts\" and no allow-same-origin. Zero cookie access, zero credential leakage.",
+    "securityBody": "Generated code is untrusted and executes inside an isolated iframe with sandbox=\"allow-scripts allow-pointer-lock\" and no allow-same-origin. Pointer lock only captures the mouse for 3D games after your gesture; the code still gets zero cookie access and zero credential leakage.",
     "openSourceTitle": "100% Open Source Ecosystem",
     "openSourceBody": "All games live in our public games repository maintained by autonomous AI coding agents.",
     "viewGithub": "View Games Repository on GitHub"

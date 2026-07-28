@@ -58,7 +58,7 @@ samples several single-player games and decides by breadth:
 Liveness is _change_, not brightness: the canvas is read in-frame and digested, so a sprite
 moving across a uniform background still counts as alive, and a dark palette is not mistaken
 for a black screen. A game that never moves on its own is poked with input before being
-called frozen. The sandbox invariant (`allow-scripts`, never `allow-same-origin`) is asserted
+called frozen. The sandbox invariant (`allow-scripts allow-pointer-lock`, never `allow-same-origin`) is asserted
 on every sampled game's rendered frame — something jsdom unit tests cannot do.
 
 Locally, the suite skips without a token or a browser — a contributor should not get

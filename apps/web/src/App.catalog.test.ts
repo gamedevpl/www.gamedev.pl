@@ -116,7 +116,7 @@ describe('catalog playback', () => {
     window.removeEventListener(NAVIGATE_EVENT, onNavigate);
 
     const iframe = container.querySelector('iframe[title="Sky Dodge"]');
-    expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts');
+    expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts allow-pointer-lock');
     // The game document comes from our API and runs via srcDoc — no external origin.
     // In the player it's wrapped with the embed bridge (hides in-game chrome and
     // relays sound to the header), so the original document is contained, not exact.
