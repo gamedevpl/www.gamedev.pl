@@ -77,6 +77,16 @@ describe('parsePathRoute', () => {
   it('parses the creator studio route', () => {
     expect(parsePathRoute('/studio')).toEqual({ view: 'studio' });
     expect(parsePathRoute('/studio/abc%2Ftoken')).toEqual({ view: 'studio', token: 'abc/token' });
+    expect(parsePathRoute('/studio/abc%2Ftoken/build')).toEqual({
+      view: 'studio',
+      token: 'abc/token',
+      tab: 'build',
+    });
+    expect(parsePathRoute('/studio/tok/playtest')).toEqual({ view: 'studio', token: 'tok', tab: 'playtest' });
+    expect(parsePathRoute('/studio/tok/nope')).toEqual({ view: 'notFound' });
+    // The stubbed feedback surface is gone from the UI, so its path is gone too —
+    // otherwise a deep link resolves to a tab with nothing to render.
+    expect(parsePathRoute('/studio/tok/feedback')).toEqual({ view: 'notFound' });
     // Trailing slash is not a studio deep-link.
     expect(parsePathRoute('/studio/')).toEqual({ view: 'notFound' });
   });
@@ -138,7 +148,13 @@ describe('path builders', () => {
   it('builds a studio path that round-trips', () => {
     expect(studioPath()).toBe('/studio');
     expect(studioPath('tok')).toBe('/studio/tok');
+    expect(studioPath('a b', 'stats')).toBe('/studio/a%20b/stats');
     expect(parsePathRoute(studioPath('a b'))).toEqual({ view: 'studio', token: 'a b' });
+    expect(parsePathRoute(studioPath('tok', 'improve'))).toEqual({
+      view: 'studio',
+      token: 'tok',
+      tab: 'improve',
+    });
   });
 
   it('builds a hybrid join path that round-trips', () => {

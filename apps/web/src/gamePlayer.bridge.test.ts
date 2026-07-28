@@ -121,6 +121,25 @@ describe('the injected bridge reports health', () => {
     bridge.stop();
   });
 
+  it('cancels contextmenu and selectstart so iOS cannot open the callout over the game', () => {
+    const bridge = runBridge('<canvas id="game"></canvas>');
+
+    const contextMenu = new bridge.frameWindow.MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+    });
+    const selectStart = new bridge.frameWindow.Event('selectstart', {
+      bubbles: true,
+      cancelable: true,
+    });
+
+    expect(bridge.frameWindow.dispatchEvent(contextMenu)).toBe(false);
+    expect(contextMenu.defaultPrevented).toBe(true);
+    expect(bridge.frameWindow.dispatchEvent(selectStart)).toBe(false);
+    expect(selectStart.defaultPrevented).toBe(true);
+    bridge.stop();
+  });
+
   it('pauses and resumes on host command, posting a snapshot', async () => {
     // jsdom's cross-realm postMessage into an iframe is unreliable; dispatch the
     // host envelope the same way the real parent would deliver it.

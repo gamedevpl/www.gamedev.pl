@@ -39,9 +39,21 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
  * (382_027, matching games-repo `shared/assemble-contract.json` `maxProjectBytes`).
  * Not a round KiB: the platform side is an explicit sum of named allowances.
  *
- * Last moved by games-repo gfx3d B7: `gfx3d` 40_000→56_000 on the headroom baseline.
+ * Last moved by games-repo #117 (Scene3D B7): `gfx3d` 40_000 → 56_000 (+16_000,
+ * 366_027 → 382_027) for procedural textures, point lights and bloom.
  *
- * Before that, Scene3D B0/B1: +40_000 (`gfx3d`) on the #102 baseline (326_027 → 366_027).
+ * Before that, games-repo #113 (the voxel and third-person pilots): `gfx3d`
+ * 32_000 → 40_000 (+8_000, 358_027 → 366_027) for the scene3d template and the
+ * chase camera those pilots share. Same opt-in shape as the band below.
+ *
+ * Before that, games-repo #111 (the `gfx3d` kit): +32_000 (`gfx3d`) for an
+ * opt-in Lambert-mesh scene module measured at ~31.5 KiB transpiled. It is only
+ * inlined when a `GAME.json` asks for it, so unlike the allowances below it is
+ * not bytes every game pays — but the cap is a single number, and a gfx3d game
+ * that clears Check 4 over there has to assemble here to be playable at all.
+ * That is the same shape as the touch-layer drift that put block-cascade and
+ * rooftop-dash live answering 422.
+ *
  * Before that, games-repo #102: +679 (`mascotDraw`) and +75_237 (`headroom`) — 30% of
  * the 250_790 ceiling — plus earlier host-pause / touch steer raises.
  */

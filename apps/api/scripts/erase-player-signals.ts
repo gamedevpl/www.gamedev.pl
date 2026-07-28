@@ -78,9 +78,10 @@ main().catch((error) => {
   console.error(message);
 
   const hint = indexHint(message);
-  // Safe to state as fact: the feedback query is the only step needing an index and it
-  // runs before any vote is cleared, so an index failure happens before the first write.
-  // `erasePlayerSignals` has a test pinning that order for exactly this claim.
+  // Safe to state as fact: both steps needing an index — the world listing and the
+  // feedback query — run before anything is written, so an index failure happens before
+  // the first write. `erasePlayerSignals` has a test per index pinning that order for
+  // exactly this claim.
   if (hint) console.error(`\n${hint}\nNothing was erased — this failed before the first write.`);
 
   process.exit(1);

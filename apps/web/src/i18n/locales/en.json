@@ -45,9 +45,8 @@
     "navPrompt": "Create Game",
     "navArcade": "Arcade",
     "navStudio": "Studio",
-    "navMyGames": "My Games",
     "navFeed": "Agent Stream",
-    "mySpecs": "My Active Specs ({{count}})"
+    "activeBuilds": "{{count}} in progress"
   },
   "hero": {
     "mainTitle": "Turn any idea into a playable web game",
@@ -165,9 +164,10 @@
   },
   "studioPanel": {
     "title": "Creator Studio",
-    "subtitle": "Manage your games, check how they play, and ask for improvements.",
+    "kicker": "For creators",
+    "subtitle": "Your games, builds, playtests, and improvements — in one place.",
     "signInHint": "Sign in to see the games you commissioned and their play stats.",
-    "backHome": "Back home",
+    "backHome": "Back to home",
     "loading": "Loading your games…",
     "loadError": "Could not load your studio right now. Try again in a moment.",
     "empty": "You have not commissioned a game yet.",
@@ -194,8 +194,7 @@
       "build": "Build",
       "playtest": "Playtest",
       "stats": "Stats",
-      "improve": "Improve",
-      "feedback": "Player feedback"
+      "improve": "Improve"
     },
     "overview": {
       "status": "Status",
@@ -258,10 +257,6 @@
       "rateLimit": "Too many requests just now. Please wait a moment and try again.",
       "rejected": "That request could not be accepted. Please rephrase and try again.",
       "error": "Could not send the request right now. Please try again."
-    },
-    "feedback": {
-      "title": "Player feedback — coming soon",
-      "body": "Written player comments and vote themes will land here once capture ships. Your play stats above already show how sessions go."
     }
   },
   "submit": {
@@ -415,11 +410,6 @@
     "shareCopied": "Copied!",
     "checksFailed": "Automatic checks are failing on this build. The agent usually notices and fixes it — no action needed from you.",
     "tryAgain": "Try this idea again",
-    "eta": {
-      "unknown": "Most games are ready within an hour.",
-      "typical": "Games like this usually take about {{minutes}} min.",
-      "overrun": "This one is taking longer than the usual {{minutes}} min. Bigger ideas do — you can close this page, we will notify you."
-    },
     "abandon": {
       "start": "Stop this build",
       "confirm": "Stop building this game?",
@@ -428,9 +418,7 @@
       "sending": "Stopping…",
       "error": "We couldn't stop this build right now. Please try again in a moment."
     },
-    "playableTitle": "Play it now",
-    "playableHint": "An early build, straight from the workshop — rough, unfinished, and already playable. Tell them what to change while it is easy.",
-    "playableUpdated": "Updated {{time}}"
+    "playableHint": "An early build, straight from the workshop — rough, unfinished, and already playable. Tell them what to change while it is easy."
   },
   "suggestions": {
     "dodge": "Dodge the falling rocks",
