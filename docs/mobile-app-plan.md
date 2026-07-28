@@ -324,23 +324,28 @@ registry gains FCM/APNs token rows alongside the web-push subscriptions it alrea
   track**. M1 no longer owns any push work; it only makes the app installable so iOS gets
   push too.
 - ✅ Exit criterion: **installed PWA opens to a rendered shell in under a second on a cold
-  API.** Measured at **84 ms** with the server **stopped** — connection refused, not
-  merely cold — and 63 ms for a `/play/<slug>` deep link. The document came from the
-  precache (proved by serving an `index.html` that differed from the cached copy), fonts
-  reported `transferSize: 0`, and the app rendered its full chrome with all five API
-  calls failing. Roughly a factor of ten inside the budget, against a harsher condition
-  than the criterion asks for.
+  API.** Locally, **84 ms** with the server **stopped** — connection refused, not merely
+  cold — and 63 ms for a `/play/<slug>` deep link and 112 ms for `/studio`. The document
+  came from the precache (proved by serving an `index.html` that differed from the cached
+  copy), fonts reported `transferSize: 0`, and the app rendered its full chrome with all
+  five API calls failing.
+  - **Confirmed on production 2026-07-28** (deployed with `ceac65ee`): the worker
+    installs, activates and precaches all nine shell files with `redirected: false`, and a
+    controlled reload of `https://www.gamedev.pl/` renders in **53 ms** (responseStart 20
+    ms) with every `/assets/*` entry at `transferSize: 0`. An order of magnitude inside
+    the budget, on the real host.
 
 **One bug worth recording, because a browser found it and review would not have.**
 `npx serve` answers `/index.html` with a 301 to `/index`, so `cache.add` stored a
 *redirected* response — and `respondWith` refuses a redirected response for a navigation
 request. Every controlled navigation therefore failed to the browser's own error page,
 while an uncontrolled first load looked perfect. It is caused by an ordinary clean-URL
-rule on the host, not by anything in the worker, so production's `@fastify/static` may
-never have tripped it; the point is that a server-side redirect rule nobody associates
-with the app can take the whole installed app down. Documents are now stored rebuilt via
-`putDocument`, the navigation path re-checks `redirected`, and `shellPrecache.test.ts`
-pins both ends.
+rule on the host, not by anything in the worker. Production was checked afterwards and
+does **not** redirect (`/index.html` → 200, `cache-control: no-cache`), so this would not
+have shipped broken — but it made the local `web-dist` preview completely unusable, and
+the same rule appearing on a CDN in front of the service would take the whole installed
+app down for returning visitors. Documents are now stored rebuilt via `putDocument`, the
+navigation path re-checks `redirected`, and `shellPrecache.test.ts` pins both ends.
 
 **What a real device still adds.** Everything above was verified in a desktop browser at
 mobile viewport, which has a mouse. It cannot tell us that Chrome's own installability
