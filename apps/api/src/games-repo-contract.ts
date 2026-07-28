@@ -33,16 +33,13 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
 /**
  * Sum of GameKit platform allowances outside the author budget (touch, restart,
  * music, touch hint, progress, universal input, pointer poll, draw surface,
- * pointer release, host pause, gfx3d, …). Together with {@link GAME_BUDGET_BYTES} this
- * must equal games-repo `MAX_BUNDLE_BYTES` (290_111, matching games-repo
- * `shared/assemble-contract.json` `maxProjectBytes`). Not a round KiB: the
- * platform side is an explicit sum of named allowances, not a padded
- * `42 * 1024` block.
+ * pointer release, host pause, mascot draw, headroom, gfx3d, …). Together with
+ * {@link GAME_BUDGET_BYTES} this must equal games-repo `MAX_BUNDLE_BYTES`
+ * (366_027, matching games-repo `shared/assemble-contract.json` `maxProjectBytes`).
  *
- * Last moved by games-repo gfx3d (+40_000 reserve for opt-in WebGL scene module)
- * on top of host-pause (+1_473). Prior: games-repo PR #103 touch +266.
+ * Last moved for games-repo Scene3D (40 KiB gfx3d) on the host-pause + mascotDraw + headroom baseline (326027).
  */
-export const GAMEKIT_PLATFORM_BYTES = 85_311;
+export const GAMEKIT_PLATFORM_BYTES = 161_227;
 
 /** Combined html+js+css size cap — must match games-repo `MAX_BUNDLE_BYTES`. */
 export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
