@@ -117,7 +117,9 @@ describe('SubmissionStatusView', () => {
     expect(frame).not.toBeNull();
     // srcdoc + bridge — same path as a PR draft, so theater chrome actually works.
     expect(frame?.getAttribute('srcdoc') ?? '').toContain('gdpl-player');
-    expect(frame?.getAttribute('sandbox')).toBe('allow-scripts');
+    // The theater frame is a GameFrame, so it carries the pointer-lock sandbox this
+    // branch adds. Additive only — still no allow-same-origin, still opaque origin.
+    expect(frame?.getAttribute('sandbox')).toBe('allow-scripts allow-pointer-lock');
 
     await act(async () => {
       root.unmount();
