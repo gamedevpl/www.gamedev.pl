@@ -709,6 +709,12 @@ at all and feeds the only autonomous-eligible class.
   because someone who asked to stop the weekly summary meant the summary, not just the
   envelope it came in — and a weekly push is the version they cannot fix from an inbox.
 
+  The same switch is reachable from the app: `GET`/`PUT /api/me/notification-preferences`
+  behind the notification bell, so someone who reads the digest in the bell can stop it
+  without hunting for an email, and someone who unsubscribed can come back. `PUT` touches
+  only the keys it is sent, so a client that knows about one preference cannot reset
+  another it has never heard of.
+
   **No feedback themes travel this path.** Themes are player-written text summarized by a
   model: safe to render to a signed-in creator in the studio where they carry that label,
   and not something to push into an inbox stripped of it and forwarded onward. The digest

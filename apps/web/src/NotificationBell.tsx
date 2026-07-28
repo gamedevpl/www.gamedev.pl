@@ -4,8 +4,11 @@ import { useAuth } from './AuthContext.js';
 import {
   clearNotifications,
   fetchNotifications,
+  fetchNotificationPreferences,
   markNotificationsRead,
+  updateNotificationPreferences,
   type AppNotification,
+  type NotificationPreferences,
   type NotificationType,
 } from './notificationsApi.js';
 import { pushUiState, subscribeToPush, unsubscribeFromPush, type PushUiState } from './pushApi.js';
@@ -20,6 +23,10 @@ const FALLBACK: Record<NotificationType, { title: string; body: string }> = {
   'submission.published': { title: 'Your game is live!', body: '“{{title}}” is published — tap to play.' },
   'submission.building': { title: 'Your game is building', body: 'Work has started on “{{title}}”.' },
   'submission.needs_changes': { title: 'Your submission needs changes', body: '“{{title}}” needs another look.' },
+  'creator.digest': {
+    title: 'Your games this week',
+    body: 'Sessions: {{sessions}} · Games: {{games}} · {{votesUp}}👍 {{votesDown}}👎 · Notes from players: {{feedback}}',
+  },
 };
 
 export function NotificationBell() {
@@ -28,6 +35,8 @@ export function NotificationBell() {
   const [items, setItems] = useState<AppNotification[]>([]);
   const [open, setOpen] = useState(false);
   const [push, setPush] = useState<PushUiState>({ show: false, subscribed: false, permission: 'default' });
+  const [prefs, setPrefs] = useState<NotificationPreferences | null>(null);
+  const [prefsBusy, setPrefsBusy] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -110,6 +119,35 @@ export function NotificationBell() {
 
   // Close on outside click / Escape.
   useEffect(() => {
+    // Fetched on open rather than on mount: the badge does not depend on preferences, and
+    // every signed-in page renders this bell.
+    if (!open || !user || prefs) return;
+    let cancelled = false;
+    fetchNotificationPreferences()
+      .then((loaded) => {
+        if (!cancelled) setPrefs(loaded);
+      })
+      // A preferences read that fails just leaves the switches hidden; it must not take
+      // the notification list down with it.
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [open, user, prefs]);
+
+  const toggleDigest = useCallback(async () => {
+    if (!prefs) return;
+    setPrefsBusy(true);
+    try {
+      setPrefs(await updateNotificationPreferences({ digest: !prefs.digest }));
+    } catch {
+      // Leave the previous value showing rather than a state the server did not confirm.
+    } finally {
+      setPrefsBusy(false);
+    }
+  }, [prefs]);
+
+  useEffect(() => {
     if (!open) return;
     const onClick = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
@@ -190,6 +228,21 @@ export function NotificationBell() {
                 </li>
               ))}
             </ul>
+          )}
+
+          {prefs && (
+            <div className="notif-push">
+              <button
+                type="button"
+                className={prefs.digest ? 'notif-push-toggle is-on' : 'notif-push-toggle'}
+                onClick={() => void toggleDigest()}
+                disabled={prefsBusy}
+              >
+                {prefs.digest
+                  ? t('notifications.prefs.digestOn', { defaultValue: 'Weekly summary on' })
+                  : t('notifications.prefs.digestOff', { defaultValue: 'Weekly summary off' })}
+              </button>
+            </div>
           )}
 
           {push.show && (
