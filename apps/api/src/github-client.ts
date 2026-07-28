@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { build, transform } from 'esbuild';
 import { GAME_KIT_MODULES } from './games-repo-contract.js';
+import { isRateLimitResponse } from './github-rate-limit.js';
 
 interface CreateIssueInput {
   title: string;
@@ -368,10 +369,23 @@ export interface GitHubClient {
   getCatalog(ref: string): Promise<CatalogGameEntry[]>;
 }
 
+/**
+ * Where this client reads repo files from. The default is GitHub's contents API,
+ * one request per file; the snapshot bake supplies an archive downloaded once
+ * (`fetchGamesRepoArchive`) instead, which is the same files at 1/1000th the
+ * request count. Reads that are not plain file reads — GraphQL, issues, PRs —
+ * always go to the API.
+ */
+export interface RepoFileSource {
+  readText(path: string, ref: string): Promise<string | null>;
+  readBytes(path: string, ref: string): Promise<Uint8Array | null>;
+}
+
 export interface GitHubClientOptions {
   token: string;
   repo: string;
   fetchImpl?: typeof fetch;
+  files?: RepoFileSource;
 }
 
 interface GraphQLResponse<T> {
@@ -428,18 +442,6 @@ function createRequestGate(limit: number) {
   };
 }
 
-/**
- * True for responses that indicate GitHub's rate limiting rather than a real,
- * permanent failure — a primary-limit 403 carries `x-ratelimit-remaining: 0`, a
- * secondary-limit 403 carries `Retry-After`, and 429 is always a limit. A bare 403
- * with neither header is a genuine permission problem and must not be retried.
- */
-function isRateLimitResponse(response: Response): boolean {
-  if (response.status === 429) return true;
-  if (response.status !== 403) return false;
-  return response.headers.get('retry-after') !== null || response.headers.get('x-ratelimit-remaining') === '0';
-}
-
 export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
   const { token, repo } = options;
   // Whether this token may read `statusCheckRollup`. Assumed yes, flipped off for the
@@ -471,8 +473,8 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
     }
   }
 
-  /** Reads a file's raw bytes from the contents API; null when it doesn't exist on `ref`. */
-  async function readRawFile(path: string, ref: string): Promise<string | null> {
+  /** Reads a file as text from the contents API; null when it doesn't exist on `ref`. */
+  async function readRawFileFromApi(path: string, ref: string): Promise<string | null> {
     const url = `https://api.github.com/repos/${repo}/contents/${path}?ref=${encodeURIComponent(ref)}`;
     const response = await githubFetch(url, {
       headers: {
@@ -490,7 +492,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
     return response.text();
   }
 
-  async function readRawBytes(path: string, ref: string): Promise<Uint8Array | null> {
+  async function readRawBytesFromApi(path: string, ref: string): Promise<Uint8Array | null> {
     const url = `https://api.github.com/repos/${repo}/contents/${path}?ref=${encodeURIComponent(ref)}`;
     const response = await githubFetch(url, {
       headers: {
@@ -506,6 +508,12 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
     }
     return new Uint8Array(await response.arrayBuffer());
   }
+
+  // One seam for every file read in this client. The bake swaps in an archive
+  // (`games-repo-archive.ts`) so a whole snapshot costs one download instead of a
+  // read per file, and every line of assembly below stays the same either way.
+  const readRawFile = options.files ? options.files.readText : readRawFileFromApi;
+  const readRawBytes = options.files ? options.files.readBytes : readRawBytesFromApi;
 
   async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
     const response = await githubFetch(url, {

@@ -15,6 +15,27 @@ export interface SessionPayload {
   uid: string;
   iat: number;
   exp: number;
+  /**
+   * Provenance: present (and only ever `'token'`) when this cookie was minted by
+   * exchanging a personal access token at `/api/auth/session`, absent when a human
+   * signed in with Google.
+   *
+   * It exists because the operator surfaces are session-only on purpose — see
+   * `isAdminSession` — so that a leaked PAT cannot widen its own privileges. Without
+   * a record of where a cookie came from, the exchange would launder token authority
+   * into session authority and hand a token holder the one thing that check exists to
+   * deny: minting further tokens. Carrying it in the signed payload (rather than
+   * checking the admin list at exchange time) is what makes the property hold no
+   * matter when an account joins that list.
+   *
+   * Absent on every cookie minted before this field existed, and those all read as
+   * ordinary sessions. Right for the Google ones; briefly wrong for any the exchange
+   * handed out beforehand, which keep satisfying the session-only checks until they
+   * expire. That window is one session lifetime (12h) and closes on its own; rotating
+   * SESSION_SECRET at deploy closes it immediately, which is worth doing if a PAT for
+   * an admin account was ever exchanged.
+   */
+  src?: 'token';
 }
 
 export class InvalidSessionError extends Error {
@@ -84,11 +105,13 @@ export function mintSessionToken(
   secret: string,
   durationSeconds = DEFAULT_SESSION_DURATION_SECONDS,
   nowSeconds = Math.floor(Date.now() / 1000),
+  source?: 'token',
 ): string {
   const payload: SessionPayload = {
     uid,
     iat: nowSeconds,
     exp: nowSeconds + durationSeconds,
+    ...(source === 'token' ? { src: source } : {}),
   };
   const encodedPayload = Buffer.from(JSON.stringify(payload)).toString('base64url');
   const signature = createHmac('sha256', secret).update(encodedPayload).digest('base64url');
@@ -131,7 +154,10 @@ export function readSessionToken(
       throw new InvalidSessionError('session expired');
     }
 
-    return payload;
+    // Normalized to the one meaningful value rather than passed through: `src` feeds
+    // an authorization decision, so anything that is not exactly 'token' must read as
+    // "no claim made" instead of reaching a caller as an unexpected shape.
+    return { ...payload, ...(payload.src === 'token' ? { src: 'token' as const } : { src: undefined }) };
   } catch (err) {
     if (err instanceof InvalidSessionError) throw err;
     throw new InvalidSessionError('failed to parse session payload');
@@ -211,23 +237,25 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
 
   await app.register(cookie);
 
-  const getSessionUser = async (request: FastifyRequest): Promise<{ user: User | null; needsRenewal: boolean }> => {
+  const getSessionUser = async (
+    request: FastifyRequest,
+  ): Promise<{ user: User | null; needsRenewal: boolean; fromToken: boolean }> => {
     const cookieToken = request.cookies[SESSION_COOKIE_NAME];
-    if (!cookieToken) return { user: null, needsRenewal: false };
+    if (!cookieToken) return { user: null, needsRenewal: false, fromToken: false };
 
     try {
-      const { uid, exp } = readSessionToken(cookieToken, effectiveSessionSecret, sessionSecretPrev);
+      const { uid, exp, src } = readSessionToken(cookieToken, effectiveSessionSecret, sessionSecretPrev);
       const user = await store.getUser(uid);
       if (!user) {
-        return { user: null, needsRenewal: false };
+        return { user: null, needsRenewal: false, fromToken: false };
       }
 
       const now = Math.floor(Date.now() / 1000);
       const needsRenewal = exp - now < HALF_LIFE_SECONDS;
 
-      return { user, needsRenewal };
+      return { user, needsRenewal, fromToken: src === 'token' };
     } catch {
-      return { user: null, needsRenewal: false };
+      return { user: null, needsRenewal: false, fromToken: false };
     }
   };
 
@@ -287,7 +315,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
 
   app.addHook('onRequest', async (request) => {
     if (!isAuthConfigured) return;
-    const { user, needsRenewal } = await getSessionUser(request);
+    const { user, needsRenewal, fromToken } = await getSessionUser(request);
     if (!user) {
       // No cookie session — fall back to a personal access token. Deliberately second:
       // a browser that has both should be treated as the human it is.
@@ -304,7 +332,10 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
 
     request.user = user;
     request.needsSessionRenewal = needsRenewal;
-    request.authMethod = 'session';
+    // A cookie minted from a PAT still reports 'token': the credential behind this
+    // request is the token, and every session-only check must see that rather than
+    // the cookie it was traded for.
+    request.authMethod = fromToken ? 'token' : 'session';
 
     /**
      * Record that this account was active today.
@@ -326,7 +357,17 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
 
   app.addHook('onSend', async (request, reply) => {
     if (isAuthConfigured && request.user && request.needsSessionRenewal && request.user.tier !== 'blocked') {
-      const renewedToken = mintSessionToken(request.user.uid, effectiveSessionSecret);
+      // Provenance survives renewal, or a token-derived cookie would quietly become a
+      // genuine one after six hours and regain exactly the authority it was denied.
+      // `needsSessionRenewal` is only ever set on the cookie path, so 'token' here
+      // means a token-derived session rather than a bare Bearer request.
+      const renewedToken = mintSessionToken(
+        request.user.uid,
+        effectiveSessionSecret,
+        DEFAULT_SESSION_DURATION_SECONDS,
+        undefined,
+        request.authMethod === 'token' ? 'token' : undefined,
+      );
       reply.setCookie(SESSION_COOKIE_NAME, renewedToken, {
         path: '/',
         httpOnly: true,
@@ -462,9 +503,15 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
    * product's fetch layer.
    *
    * Not a new privilege and not a bypass: the caller must already hold a valid token for
-   * the account, and what comes back is a session for that same account with the same
-   * lifetime as any other. It is the same shape as `/api/auth/google` — verify a
+   * the account, and what comes back is a session for that same account carrying the same
+   * authority the token had. It is the same shape as `/api/auth/google` — verify a
    * credential the caller already has, hand back the cookie the browser needs.
+   *
+   * That "same authority" is enforced, not assumed: the cookie is stamped `src: 'token'`
+   * so the session-only operator surfaces keep refusing it. Without the stamp this route
+   * was a real escalation — a leaked PAT for an admin account could be traded for a
+   * cookie that satisfied `isAdminSession` and then mint further tokens, which is exactly
+   * the self-renewing credential the token design exists to prevent.
    *
    * Session auth is deliberately *not* accepted here: a cookie cannot be used to mint a
    * fresh cookie, so this can never be used to launder an about-to-expire session.
@@ -477,23 +524,38 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
         return reply.status(503).send({ error: 'authentication is not configured' });
       }
 
-      if (!request.user || request.authMethod !== 'token') {
+      // Resolved from the Authorization header rather than read off `request.authMethod`:
+      // a cookie minted *here* also reports 'token', so trusting the method alone would
+      // let a derived cookie mint an endless succession of fresh ones — self-renewing
+      // past the revocation of the very PAT it came from, and reopening the "a cookie
+      // cannot mint a cookie" hole this route is documented to close. The exchange has
+      // to be driven by the credential itself, every time.
+      const tokenUser = await getAccessTokenUser(request);
+      if (!tokenUser) {
         return reply.status(401).send({ error: 'a personal access token is required' });
       }
 
-      if (request.user.tier === 'blocked') {
+      if (tokenUser.tier === 'blocked') {
         return reply.status(403).send({ error: 'account is blocked' });
       }
 
-      reply.setCookie(SESSION_COOKIE_NAME, mintSessionToken(request.user.uid, effectiveSessionSecret), {
-        path: '/',
-        httpOnly: true,
-        secure: isProd,
-        sameSite: 'lax',
-        maxAge: DEFAULT_SESSION_DURATION_SECONDS,
-      });
+      // Stamped with its provenance so it stays a token's authority in cookie form:
+      // the session-only operator surfaces refuse it exactly as they refuse the
+      // Bearer header it was traded for. Everything the SPA actually needs a cookie
+      // for — which is the whole point of this route — works unchanged.
+      reply.setCookie(
+        SESSION_COOKIE_NAME,
+        mintSessionToken(tokenUser.uid, effectiveSessionSecret, DEFAULT_SESSION_DURATION_SECONDS, undefined, 'token'),
+        {
+          path: '/',
+          httpOnly: true,
+          secure: isProd,
+          sameSite: 'lax',
+          maxAge: DEFAULT_SESSION_DURATION_SECONDS,
+        },
+      );
 
-      return { user: request.user };
+      return { user: tokenUser };
     },
   );
 

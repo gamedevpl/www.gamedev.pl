@@ -7,6 +7,14 @@ import {
   type GameHealth,
   type PartitionScanBudget,
 } from './telemetry-health.js';
+import {
+  createDefaultThemeExtractor,
+  MAX_FEEDBACK_ROWS,
+  MIN_FEEDBACK_FOR_THEMES,
+  NoopThemeExtractor,
+  type FeedbackTheme,
+  type ThemeExtractor,
+} from './feedback-themes.js';
 import type { Scorecard, Store, TelemetryEvent } from './store.js';
 
 /**
@@ -44,13 +52,29 @@ export const SCORECARD_WINDOW_DAYS = 28;
  */
 const SWEEP_BUDGET: PartitionScanBudget = { perDay: 5_000, total: 50_000 };
 
+/**
+ * Games that may get a theme-extraction call in one sweep.
+ *
+ * Each call costs a model request, and this job runs unattended every night, so the guard
+ * has to be a ceiling rather than good intentions. When it binds the sweep says so in its
+ * result — a cap that silently drops games would make "no themes" ambiguous between "too
+ * little feedback" and "we stopped looking", and the whole point of `feedbackThemes` is
+ * that an empty list means the former.
+ */
+const THEME_CALL_BUDGET = 40;
+
 export interface ScorecardSweepDeps {
   store: Store;
   now?: () => number;
   windowDays?: number;
   budget?: PartitionScanBudget;
+  /** Summarizes written feedback. Defaults to doing nothing, so a sweep never calls a model by accident. */
+  themeExtractor?: ThemeExtractor;
+  themeCallBudget?: number;
   /** Called per game that could not be written, so a failure has a cause and not just a count. */
   onError?: (slug: string, error: unknown) => void;
+  /** Called when theme extraction failed for a game; the scorecard is still written without themes. */
+  onThemeError?: (slug: string, error: unknown) => void;
 }
 
 export interface ScorecardSweepResult {
@@ -61,6 +85,10 @@ export interface ScorecardSweepResult {
   written: number;
   /** Games whose write failed; the sweep continues past them rather than aborting. */
   failed: number;
+  /** Games themes were extracted for. */
+  themed: number;
+  /** True when `themeCallBudget` bound before every eligible game was summarized. */
+  themesTruncated: boolean;
 }
 
 /**
@@ -71,7 +99,7 @@ export interface ScorecardSweepResult {
  */
 export function buildScorecard(
   health: GameHealth,
-  extras: { votes: { up: number; down: number }; feedbackCount: number },
+  extras: { votes: { up: number; down: number }; feedbackCount: number; feedbackThemes?: FeedbackTheme[] },
   window: { days: string[]; truncated: boolean },
   computedAt: string,
 ): Scorecard {
@@ -111,6 +139,10 @@ export function buildScorecard(
     untrusted: {
       errorSamples: health.errorSamples,
       progressLabels: health.progressLabels,
+      // Always present, never undefined: Firestore rejects `undefined` field values and
+      // this client sets no `ignoreUndefinedProperties`, so an absent theme list would
+      // fail the write for every game at once rather than for one.
+      feedbackThemes: extras.feedbackThemes ?? [],
     },
   };
 }
@@ -139,15 +171,48 @@ export async function runScorecardSweep(deps: ScorecardSweepDeps): Promise<Score
   const computedAt = new Date(currentTime).toISOString();
   const rows = summarizeGameHealth(events);
 
+  const themeExtractor = deps.themeExtractor ?? new NoopThemeExtractor();
+  const themeCallBudget = deps.themeCallBudget ?? THEME_CALL_BUDGET;
+
   let written = 0;
   let failed = 0;
+  let themed = 0;
+  let themeCalls = 0;
+  let themesTruncated = false;
+
   for (const health of rows) {
     try {
       const [votes, feedbackCount] = await Promise.all([
         store.getVoteCounts(health.slug),
         store.countPlayerFeedback(health.slug),
       ]);
-      await store.putScorecard(health.slug, buildScorecard(health, { votes, feedbackCount }, window, computedAt));
+
+      // The count gate comes first so a game below the floor costs no read of its notes.
+      // Reading the text at all is the step worth avoiding: those rows are people's words,
+      // and the fewer places they are loaded the smaller the surface for them to leak into
+      // something that was never meant to carry them.
+      let feedbackThemes: FeedbackTheme[] = [];
+      if (feedbackCount >= MIN_FEEDBACK_FOR_THEMES) {
+        if (themeCalls >= themeCallBudget) {
+          themesTruncated = true;
+        } else {
+          themeCalls += 1;
+          try {
+            const notes = await store.listPlayerFeedback(health.slug, { limit: MAX_FEEDBACK_ROWS });
+            feedbackThemes = await themeExtractor.extract(notes.map((note) => note.text));
+            if (feedbackThemes.length > 0) themed += 1;
+          } catch (error) {
+            // A model being slow or unavailable must not cost a game its scorecard. The
+            // numbers are the part an agent acts on; themes are commentary alongside them.
+            deps.onThemeError?.(health.slug, error);
+          }
+        }
+      }
+
+      await store.putScorecard(
+        health.slug,
+        buildScorecard(health, { votes, feedbackCount, feedbackThemes }, window, computedAt),
+      );
       written += 1;
     } catch (error) {
       // One unwritable game must not cost every later game its scorecard — the same
@@ -164,7 +229,7 @@ export async function runScorecardSweep(deps: ScorecardSweepDeps): Promise<Score
     }
   }
 
-  return { days: scanned, truncated, written, failed };
+  return { days: scanned, truncated, written, failed, themed, themesTruncated };
 }
 
 export interface ScorecardRoutesOptions {
@@ -174,10 +239,15 @@ export interface ScorecardRoutesOptions {
   now?: () => number;
   windowDays?: number;
   budget?: PartitionScanBudget;
+  /** Injected by tests; production builds one from the environment. */
+  themeExtractor?: ThemeExtractor;
 }
 
 export async function registerScorecardRoutes(app: FastifyInstance, options: ScorecardRoutesOptions): Promise<void> {
   const { store, internalAuthVerifier } = options;
+  // Resolved once per app rather than per request: building it is cheap and lazy, and a
+  // per-request construction would be a per-request chance to reach for credentials.
+  const themeExtractor = options.themeExtractor ?? createDefaultThemeExtractor();
 
   // Cloud Scheduler POSTs here nightly with an OIDC token, exactly as the notification
   // sweep does. The rate ceiling is a runaway guard, not the access control — OIDC is.
@@ -195,7 +265,13 @@ export async function registerScorecardRoutes(app: FastifyInstance, options: Sco
           now: options.now,
           windowDays: options.windowDays,
           budget: options.budget,
+          themeExtractor,
           onError: (slug, error) => request.log.error({ err: error, slug }, 'scorecard write failed'),
+          // Warn, not error: the scorecard still gets written, so this degrades the doc
+          // rather than losing it. Silence would be wrong either way — an extractor that
+          // has been failing every night is invisible in the result, where a game with
+          // nothing to summarize looks exactly the same.
+          onThemeError: (slug, error) => request.log.warn({ err: error, slug }, 'feedback theme extraction failed'),
         });
         // Logged at error level when anything failed: a nightly job nobody watches is
         // exactly the kind that fails quietly for weeks, and `failed > 0` is the signal.

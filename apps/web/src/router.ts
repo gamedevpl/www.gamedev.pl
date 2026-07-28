@@ -2,7 +2,6 @@ import type { LegalDocId } from './legal/types.js';
 
 export type AppRoute =
   | { view: 'home' }
-  | { view: 'status'; token: string }
   // A published game being played. The slug is a stable permalink, so refreshing
   // (or sharing the URL) reopens the same game instead of dropping back to the
   // catalog. Only published games are permalinkable — generated/party stages are
@@ -20,6 +19,9 @@ export type AppRoute =
   // renders nothing unless the API recognises the caller as an admin, and the API
   // answers 404 to everyone else.
   | { view: 'health' }
+  // Creator control panel: own games, draft build (ex-status), playtest, improve.
+  // `/status/:token` is accepted as an alias and resolves here too.
+  | { view: 'studio'; token?: string }
   // Privacy policy and terms. Reachable without a session — someone deciding whether
   // to sign in has to be able to read what signing in would mean first.
   | { view: 'legal'; doc: LegalDocId }
@@ -64,7 +66,9 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
 
   const statusMatch = normalizedPath.match(/^\/status\/([^/]+)$/);
   if (statusMatch?.[1]) {
-    return { view: 'status', token: decodeURIComponent(statusMatch[1]) };
+    // Legacy status URLs land in Creator Studio — the draft Build tab is the
+    // former status / "dev studio" page, now unified with playtest + improve.
+    return { view: 'studio', token: decodeURIComponent(statusMatch[1]) };
   }
 
   const playMatch = normalizedPath.match(PLAY_PREFIX_PATTERN);
@@ -87,6 +91,15 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
     return { view: 'health' };
   }
 
+  if (normalizedPath === '/studio') {
+    return { view: 'studio' };
+  }
+
+  const studioMatch = normalizedPath.match(/^\/studio\/([^/]+)$/);
+  if (studioMatch?.[1]) {
+    return { view: 'studio', token: decodeURIComponent(studioMatch[1]) };
+  }
+
   // Hybrid join: /join/<code>#<token> — credential stays out of the request line.
   const joinMatch = normalizedPath.match(/^\/join\/([A-Z0-9]{6})$/);
   if (joinMatch?.[1] && fragment && /^[A-Za-z0-9_-]+$/.test(fragment)) {
@@ -96,8 +109,9 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
   return { view: 'notFound' };
 }
 
+/** @deprecated Prefer {@link studioPath}. Kept so old `/status/` links and call sites still resolve. */
 export function statusPath(token: string): string {
-  return `/status/${encodeURIComponent(token)}`;
+  return studioPath(token);
 }
 
 /** Canonical play URL. Emit this; `/ay/<slug>` and `/ai/<slug>` only as inbound aliases. */
@@ -118,6 +132,11 @@ export function canonicalPlayPath(pathname: string): string | null {
 
 export function draftPath(slug: string): string {
   return `/draft/${encodeURIComponent(slug)}`;
+}
+
+/** Creator control panel. Optional token deep-links into one game on the shelf. */
+export function studioPath(token?: string): string {
+  return token ? `/studio/${encodeURIComponent(token)}` : '/studio';
 }
 
 /** QR / share URL path+fragment for a multiplayer lobby guest. */

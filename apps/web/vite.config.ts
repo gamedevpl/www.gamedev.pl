@@ -1,8 +1,12 @@
 import react from '@vitejs/plugin-react';
+import { createHash } from 'node:crypto';
+import { readFile, writeFile } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import path from 'node:path';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vite';
 import { isKnownSpaShellPath, looksLikeStaticAsset } from '../api/src/spa-paths.js';
+import { replaceBuildManifest, shellAssetEntries, shellRevision } from './src/shellPrecache.js';
 
 const apiTarget = process.env.VITE_API_TARGET ?? 'http://127.0.0.1:3001';
 
@@ -65,8 +69,37 @@ function forceStatus(res: ServerResponse, status: number): void {
   }) as WriteHead;
 }
 
+/**
+ * Bake the built shell's asset list into `dist/sw.js` (see `src/shellPrecache.ts`).
+ *
+ * Runs in `writeBundle`, once the hashed files exist on disk and Vite has copied
+ * `public/sw.js` over — so both the names and the bytes being hashed are final. The
+ * later `scripts/precompress.mjs` pass then compresses the rewritten worker, not the
+ * placeholder one, because it is a separate step that runs after the whole build.
+ */
+function shellPrecache(): Plugin {
+  return {
+    name: 'shell-precache',
+    apply: 'build',
+    async writeBundle(options, bundle) {
+      const outDir = options.dir ?? 'dist';
+      const shell = shellAssetEntries(Object.keys(bundle));
+
+      const contents = await Promise.all(shell.map((entry) => readFile(path.join(outDir, entry.slice(1)))));
+      const revision = shellRevision(contents, (input) => createHash('sha256').update(input).digest('hex'));
+
+      const swPath = path.join(outDir, 'sw.js');
+      const source = await readFile(swPath, 'utf8');
+      await writeFile(swPath, replaceBuildManifest(source, { revision, shell }));
+
+      const bytes = contents.reduce((sum, buffer) => sum + buffer.byteLength, 0);
+      this.info(`shell precache: ${shell.length} files, ${(bytes / 1024).toFixed(0)} kB, revision ${revision}`);
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), spaProper404()],
+  plugins: [react(), spaProper404(), shellPrecache()],
   server: {
     port: 5173,
     proxy: {

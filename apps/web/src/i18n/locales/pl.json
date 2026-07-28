@@ -34,7 +34,7 @@
     "statusOnline": "Sieć Agentów Online",
     "navPrompt": "Stwórz Grę",
     "navArcade": "Arcade",
-    "navStudio": "Moje Projekty",
+    "navStudio": "Studio",
     "navMyGames": "Moje Gry",
     "navFeed": "Strumień Agentów",
     "mySpecs": "Moje Aktywne Specyfikacje ({{count}})"
@@ -152,6 +152,99 @@
     "remixHeader": "Remiksowanie: {{title}}",
     "remixHint": "Tworzysz wariant specyfikacji na podstawie istniejącej gry."
   },
+  "studioPanel": {
+    "title": "Studio Twórcy",
+    "subtitle": "Zarządzaj grami, sprawdzaj jak się grają i proś o ulepszenia.",
+    "signInHint": "Zaloguj się, aby zobaczyć zlecone gry i ich statystyki.",
+    "backHome": "Wróć na start",
+    "loading": "Ładujemy Twoje gry…",
+    "loadError": "Nie udało się wczytać studia. Spróbuj za chwilę.",
+    "empty": "Nie zleciłeś jeszcze żadnej gry.",
+    "createFirst": "Stwórz pierwszą grę",
+    "shelfAria": "Twoje gry",
+    "shelf": {
+      "heading": "Twoje gry",
+      "count": "{{count}} gier",
+      "searchLabel": "Szukaj wśród swoich gier",
+      "searchPlaceholder": "Szukaj po tytule lub slugu…",
+      "filterAria": "Filtruj gry",
+      "filters": {
+        "all": "Wszystkie",
+        "building": "W budowie",
+        "live": "Na żywo"
+      },
+      "noMatches": "Żadna gra nie pasuje do tego wyszukiwania.",
+      "switcher": "Zmień grę",
+      "pickerTitle": "Wybierz grę",
+      "closePicker": "Zamknij listę gier"
+    },
+    "tabs": {
+      "overview": "Przegląd",
+      "build": "Build",
+      "playtest": "Playtest",
+      "stats": "Statystyki",
+      "improve": "Ulepsz",
+      "feedback": "Opinie graczy"
+    },
+    "overview": {
+      "status": "Status",
+      "created": "Utworzono",
+      "published": "Opublikowano",
+      "sessions": "Ostatnia gra",
+      "play": "gry",
+      "openBuild": "Otwórz build",
+      "playtest": "Playtest i prompt",
+      "abandon": "Zatrzymaj build",
+      "abandonConfirm": "Potwierdź zatrzymanie"
+    },
+    "playtest": {
+      "hint": "Zagraj, wstrzymaj w momencie wartym zmiany i wyślij prośbę z tym widokiem oraz sygnałami z sesji.",
+      "loading": "Ładujemy grywalny build…",
+      "loadError": "Nie ma jeszcze grywalnego buildu. Sprawdź zakładkę Build i spróbuj, gdy pojawi się podgląd.",
+      "pause": "Wstrzymaj i zanotuj",
+      "resume": "Wznów",
+      "played": "{{seconds}}s gry",
+      "errorCount": "{{count}} błędów",
+      "promptTitle": "Co tu zmienić?",
+      "promptHint": "Notatka idzie do agenta buildu (szkic) albo otwiera zgłoszenie ulepszenia (opublikowane). Wstrzymany widok i sygnały sesji jadą jako dane.",
+      "shotCaption": "Widok z momentu wstrzymania",
+      "noShot": "Nie udało się przechwycić widoku — sam tekst i tak zostanie wysłany.",
+      "placeholder": "np. Kolec przy prawej krawędzi jest niesprawiedliwy — dodaj checkpoint tuż przed nim…",
+      "submit": "Wyślij z tym momentem"
+    },
+    "stats": {
+      "noSlug": "Statystyki pojawią się, gdy gra otrzyma slug roboczy lub publikacyjny.",
+      "range": "Zmierzone {{from}} → {{to}}",
+      "truncated": "Dzień osiągnął limit odczytów — te liczby to dolna granica, nie suma.",
+      "empty": "Brak sesji w tym oknie.",
+      "sessions": "Sesje",
+      "bounces": "Odejścia",
+      "medianPlay": "Mediana gry",
+      "totalPlay": "Łączny czas",
+      "errors": "Błędy",
+      "stallRate": "Zacięcia",
+      "medianFps": "Mediana FPS",
+      "errorSamples": "Częste błędy"
+    },
+    "improve": {
+      "titleDraft": "Poproś o zmianę w wersji roboczej",
+      "titlePublished": "Poproś o ulepszenie",
+      "hintDraft": "Opisz, co zmienić. Agent buildu podejmie to na otwartym pull requeście.",
+      "hintPublished": "Opisz, jak ulepszyć żywą grę. Otworzy to nowe zgłoszenie w repozytorium gier dla agenta.",
+      "placeholder": "np. Poziom drugi jest za trudny — dodaj checkpoint i spowolnij przeszkody…",
+      "submit": "Wyślij prośbę",
+      "sending": "Wysyłanie…",
+      "sent": "Wysłano",
+      "quota": "Dzienny limit ulepszeń wyczerpany. Spróbuj jutro.",
+      "rateLimit": "Zbyt wiele próśb naraz. Poczekaj chwilę i spróbuj ponownie.",
+      "rejected": "Tej prośby nie udało się przyjąć. Przeformułuj i spróbuj ponownie.",
+      "error": "Nie udało się teraz wysłać prośby. Spróbuj ponownie."
+    },
+    "feedback": {
+      "title": "Opinie graczy — wkrótce",
+      "body": "Komentarze graczy i tematy głosów pojawią się tu, gdy capture będzie gotowy. Statystyki powyżej już pokazują, jak przebiegają sesje."
+    }
+  },
   "submit": {
     "title": "Zgłoś nową specyfikację gry",
     "description": "Opisz w co chcesz zagrać. Autonomiczny agent zrealizuje Twój pomysł jako Pull Request na GitHubie.",
@@ -197,7 +290,8 @@
     "liveCount": "w trakcie: {{count}}",
     "checking": "Sprawdzam…",
     "play": "Zagraj",
-    "open": "Otwórz"
+    "open": "Otwórz",
+    "openStudio": "Studio"
   },
   "draft": {
     "title": "Gra w budowie",
@@ -468,10 +562,24 @@
     "draft": "Gra w trakcie tworzenia",
     "join": "Dołącz do gry",
     "health": "Telemetria",
+    "studio": "Studio Twórcy",
     "notFound": "Nie znaleziono strony",
     "contact": "Kontakt",
     "playNamed": "Graj: {{title}}",
     "draftNamed": "Szkic: {{title}}",
-    "statusNamed": "Status · {{title}}"
+    "statusNamed": "Status · {{title}}",
+    "studioNamed": "Studio · {{title}}"
+  },
+  "pwa": {
+    "ariaLabel": "Zainstaluj tę aplikację",
+    "installTitle": "Dodaj Gamedev.pl do ekranu głównego",
+    "installBody": "Otwiera się na pełnym ekranie w około sekundę, nawet przy wolnym połączeniu — i dzięki temu możemy dać znać, gdy Twoja gra trafi do serwisu.",
+    "installAction": "Zainstaluj",
+    "iosStepShare": "Dotknij przycisku Udostępnij",
+    "iosStepAdd": "Wybierz „Do ekranu początkowego”",
+    "dismiss": "Nie teraz",
+    "updateTitle": "Nowa wersja Gamedev.pl jest gotowa.",
+    "updateAction": "Odśwież",
+    "updateDismiss": "Zamknij"
   }
 }

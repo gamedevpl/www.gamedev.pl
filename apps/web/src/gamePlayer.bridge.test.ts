@@ -120,4 +120,34 @@ describe('the injected bridge reports health', () => {
     expect(bridge.received.filter((m) => m.type === 'pointer').map((m) => m.source)).toEqual(['gdpl-player']);
     bridge.stop();
   });
+
+  it('pauses and resumes on host command, posting a snapshot', async () => {
+    // jsdom's cross-realm postMessage into an iframe is unreliable; dispatch the
+    // host envelope the same way the real parent would deliver it.
+    const bridge = runBridge('<canvas id="game" width="40" height="20"></canvas>');
+
+    bridge.frameWindow.dispatchEvent(
+      new bridge.frameWindow.MessageEvent('message', {
+        data: { source: 'gdpl-host', type: 'pause' },
+      }),
+    );
+    await delivered();
+
+    const snap = bridge.received.find((message) => message.type === 'snapshot') as
+      (BridgeMessage & { png?: string | null; paused?: boolean; reason?: string }) | undefined;
+    expect(snap?.source).toBe('gdpl-player');
+    expect(snap?.paused).toBe(true);
+    expect(snap?.reason).toBe('pause');
+    expect(bridge.frameWindow.document.getElementById('gdpl-pause-overlay')).not.toBeNull();
+
+    bridge.frameWindow.dispatchEvent(
+      new bridge.frameWindow.MessageEvent('message', {
+        data: { source: 'gdpl-host', type: 'resume' },
+      }),
+    );
+    await delivered();
+    expect(bridge.received.some((message) => message.type === 'resumed')).toBe(true);
+    expect(bridge.frameWindow.document.getElementById('gdpl-pause-overlay')).toBeNull();
+    bridge.stop();
+  });
 });

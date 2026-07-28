@@ -187,6 +187,8 @@ export interface UsageCounters {
   refines: number;
   feedback: number;
   playerFeedback: number;
+  /** Creator-requested improvements on already-published games (studio control panel). */
+  improvements: number;
 }
 
 /**
@@ -466,6 +468,16 @@ export interface ScorecardUntrusted {
   errorSamples: Array<{ message: string; count: number }>;
   /** Landmarks reached, most-reached first — the drop-off curve, when a game emits any. */
   progressLabels: Array<{ label: string; sessions: number }>;
+  /**
+   * Recurring themes distilled from written feedback, most-supported first.
+   *
+   * Empty when a game had too few notes to summarize, when extraction is switched off, or
+   * when it failed — all three are an absence of evidence and must render as one. Belongs
+   * here rather than beside `feedback.count` because a summary of player-written text
+   * inherits that text's taint: safe to show an operator, never safe to hand an agent as
+   * instruction. Optional because scorecards written before this existed do not have it.
+   */
+  feedbackThemes?: Array<{ theme: string; count: number }>;
 }
 
 /**
@@ -715,8 +727,14 @@ export interface Store {
   deleteGameSaves(uid: string): Promise<number>;
   /** Appends one already-moderated, already-sanitized feedback row. Returns it with its id. */
   addPlayerFeedback(slug: string, uid: string, text: string): Promise<PlayerFeedbackRecord>;
-  /** A game's feedback, newest first. No consumer yet (IL-2 theme extraction is next); exists now so capture is verifiable. */
-  listPlayerFeedback(slug: string): Promise<PlayerFeedbackRecord[]>;
+  /**
+   * A game's feedback, newest first.
+   *
+   * `limit` bounds the read for the scorecard sweep's theme extraction, so one game with
+   * thousands of notes cannot dominate a nightly job. Unbounded without it, because the
+   * erase preview needs every row it is about to delete.
+   */
+  listPlayerFeedback(slug: string, opts?: { limit?: number }): Promise<PlayerFeedbackRecord[]>;
   /**
    * How many feedback rows a game has, without reading them.
    *
@@ -827,7 +845,15 @@ export function compareScorecards(a: Scorecard, b: Scorecard): number {
 
 /** A zeroed counter set — the shape every usage read falls back to. */
 function emptyUsageCounters(): UsageCounters {
-  return { submissions: 0, previews: 0, mocks: 0, refines: 0, feedback: 0, playerFeedback: 0 };
+  return {
+    submissions: 0,
+    previews: 0,
+    mocks: 0,
+    refines: 0,
+    feedback: 0,
+    playerFeedback: 0,
+    improvements: 0,
+  };
 }
 
 /** Newest first, with the id as a stable tie-break for same-millisecond events. */
@@ -1006,12 +1032,20 @@ export class InMemoryStore implements Store {
     issueNumber: number,
     preview: Omit<BuildPreview, 'id' | 'createdAt'> & { createdAt?: string },
   ): Promise<BuildPreview> {
+    const existing = this.buildPreviews.get(issueNumber) ?? [];
+    // ISO timestamps only have millisecond precision. Rapid back-to-back pushes in
+    // tests (and occasionally in prod) land on the same tick; bump so "newest"
+    // matches append order instead of UUID tie-breaks.
+    const nowIso = new Date().toISOString();
+    const lastCreatedAt = existing[existing.length - 1]?.createdAt;
+    const createdAt =
+      preview.createdAt ??
+      (lastCreatedAt && lastCreatedAt >= nowIso ? new Date(Date.parse(lastCreatedAt) + 1).toISOString() : nowIso);
     const record: BuildPreview = {
       ...preview,
       id: randomUUID(),
-      createdAt: preview.createdAt ?? new Date().toISOString(),
+      createdAt,
     };
-    const existing = this.buildPreviews.get(issueNumber) ?? [];
     existing.push(record);
     this.buildPreviews.set(issueNumber, existing);
     return { ...record };
@@ -1350,8 +1384,9 @@ export class InMemoryStore implements Store {
     return record;
   }
 
-  async listPlayerFeedback(slug: string): Promise<PlayerFeedbackRecord[]> {
-    return [...(this.playerFeedback.get(slug) ?? [])].reverse();
+  async listPlayerFeedback(slug: string, opts?: { limit?: number }): Promise<PlayerFeedbackRecord[]> {
+    const newestFirst = [...(this.playerFeedback.get(slug) ?? [])].reverse();
+    return opts?.limit === undefined ? newestFirst : newestFirst.slice(0, opts.limit);
   }
 
   async countPlayerFeedback(slug: string): Promise<number> {
@@ -2121,8 +2156,12 @@ export class FirestoreStore implements Store {
     return record;
   }
 
-  async listPlayerFeedback(slug: string): Promise<PlayerFeedbackRecord[]> {
-    const snap = await this.feedbackCollection(slug).orderBy('createdAt', 'desc').get();
+  async listPlayerFeedback(slug: string, opts?: { limit?: number }): Promise<PlayerFeedbackRecord[]> {
+    // Unbounded by default because the erase preview and the operator read both want
+    // everything; the sweep passes a limit so one game with thousands of notes cannot
+    // dominate a nightly job's read budget.
+    const ordered = this.feedbackCollection(slug).orderBy('createdAt', 'desc');
+    const snap = await (opts?.limit === undefined ? ordered : ordered.limit(opts.limit)).get();
     return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<PlayerFeedbackRecord, 'id'>) }));
   }
 

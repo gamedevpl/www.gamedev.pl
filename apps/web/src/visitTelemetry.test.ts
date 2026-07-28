@@ -112,8 +112,10 @@ describe('route kinds follow the real router', () => {
     ['/privacy', 'legal'],
     ['/terms', 'legal'],
     ['/contact', 'legal'],
-    ['/status/some-token', 'status'],
+    ['/status/some-token', 'studio'],
     ['/health', 'health'],
+    ['/studio', 'studio'],
+    ['/studio/some-token', 'studio'],
     ['/nope', 'notFound'],
   ])('reads %s as %s', (pathname, expected) => {
     expect(routeKind(parsePathRoute(pathname, '').view)).toBe(expected);
@@ -122,7 +124,7 @@ describe('route kinds follow the real router', () => {
   it('reduces a parameterized route to its kind, never its parameters', () => {
     const route = parsePathRoute('/status/secret-capability-token', '');
     const kind = routeKind(route.view);
-    expect(kind).toBe('status');
+    expect(kind).toBe('studio');
     expect(JSON.stringify(kind)).not.toContain('secret');
   });
 });

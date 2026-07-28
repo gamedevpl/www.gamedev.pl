@@ -11,8 +11,12 @@
 > **Progress since the first draft (2026-07-25).** The strategy below is unchanged; the
 > milestone boundaries have shifted because work landed out of the planned order:
 >
+> - ✅ **M1 (PWA) is built** as of 2026-07-28 — manifest, precached app shell, offline
+>   page, Android install prompt, iOS Add-to-Home-Screen hint, and an update banner. Its
+>   exit criterion is met by measurement (84 ms to a rendered shell with the server
+>   stopped). See the M1 section for what shipped and what still needs a device.
 > - ✅ **Web push is live** (desktop + Android), shipped via the notifications track, not
->   M1. `apps/web/public/sw.js` (push-only worker), `apps/web/src/pushApi.ts`,
+>   M1. `apps/web/public/sw.js` (now the shell-cache + push worker), `apps/web/src/pushApi.ts`,
 >   `apps/api/src/push-routes.ts` / `pusher.ts`, VAPID wiring, and a **per-user push
 >   subscription registry** in `apps/api/src/store.ts` all exist and are verified in prod.
 >   This plan had scheduled push into M1 and the token registry into M2 — **both are now
@@ -55,10 +59,11 @@ with nothing built for them. Most of that has since been answered; what is left:
 
 - The web app's responsive pass is finished (see the progress note); every surface has
   been audited at 320/360/375px in both locales. `GameTheater` now has its wake-lock,
-  orientation nudge, safe-area insets and on-screen back. Still missing entirely: a PWA
-  manifest, offline caching, and any install path. There is a service worker (`sw.js`) but
-  it is deliberately **push-only** — it caches nothing and intercepts no fetches, and
-  `apps/web/public/` contains nothing else.
+  orientation nudge, safe-area insets and on-screen back. The PWA gap named here — no
+  manifest, no offline caching, no install path, and a `sw.js` that was deliberately
+  push-only — **is closed** (M1, 2026-07-28): `public/` now carries the manifest, the
+  icons and the offline page, and the worker precaches the shell and serves navigations
+  from it while still touching nothing under `/api`.
 - Published games have a touch contract, enforced in CI rather than by convention, and
   the website now reads it: the derived `touch` value travels from the games repo's
   committed `catalog.json` through `/api/catalog` to a **Keyboard only** badge on the
@@ -273,18 +278,82 @@ registry gains FCM/APNs token rows alongside the web-push subscriptions it alrea
   a phone: it has a mouse, so `(pointer: coarse)` never matched, and every touch rule
   here was verified through its `max-width` half.
 
-### M1 — PWA 📋 (push already done; only the shell remains)
+### M1 — PWA ✅ (built and verified 2026-07-28; awaiting the same real-device pass as M0)
 
-- 📋 Web app manifest (name, icons, `display: standalone`, theme `#1d2123`/`#00e4ac`),
-  a service worker that precaches the shell (extend the existing push-only `sw.js` — never
-  cache game bundles; they stay sandboxed and cross-origin), offline fallback page, custom
-  install prompt on Android, "Add to Home Screen" hint on iOS.
+- ✅ **Web app manifest + icons + iOS meta** (`apps/web/public/manifest.webmanifest`,
+  `public/icons/`, the `apple-*` tags in `index.html`). Shipped ahead of the rest in
+  `2e22421e`. Theme colour is `#0f1418`, the app's own background, not the
+  `#1d2123`/`#00e4ac` this plan guessed at before the palette existed. No `orientation`
+  in the manifest on purpose: the game theater needs landscape.
+- ✅ **The shell is precached** (`public/sw.js` + `src/shellPrecache.ts` + the
+  `shell-precache` plugin in `vite.config.ts`). Each build's `index.html` and the exact
+  hashed JS/CSS/woff2 it references are installed together into a cache named for a
+  revision hashed from their contents, and `activate` deletes every other cache — so a
+  cached document can never reference a bundle a later deploy removed. Navigations are
+  answered from that cache, which is what makes the exit criterion reachable at all.
+  - The manifest is **baked into the worker** rather than `importScripts`-ed, so every
+    deploy makes `sw.js` byte-different and no browser's update check can miss it. That
+    is the difference between a shell that is one navigation stale and one that is stale
+    until the visitor clears their site data.
+  - `.woff` is excluded (every browser old enough to need it over `.woff2` is far too old
+    to have a service worker); source maps and images are excluded.
+- ✅ **Nothing under `/api` is ever cached** — catalog, published game HTML, game media
+  and telemetry all go to the network as if the worker were not installed, as do all
+  cross-origin and non-GET requests. Games stay sandboxed and served fresh; the worker
+  must never become a second, invisible copy of the games repo. Verified in a browser:
+  an `/api` request leaves the cache at 9 entries with no `/api` key.
+- ✅ **Offline fallback page** (`public/offline.html`, precached). Now genuinely a last
+  resort rather than the main event: with the shell cached, an offline navigation gets
+  the actual app, which renders its own honest retry states.
+- ✅ **Install prompt on Android** — `beforeinstallprompt` captured at boot in `main.tsx`
+  (it fires during load; a listener attached on mount is always too late) and re-offered
+  by `InstallPrompt.tsx` on our terms.
+- ✅ **"Add to Home Screen" hint on iOS** — same component, instructional variant, shown
+  only where the Share-sheet instructions are actually true: not in Chrome/Firefox/Edge
+  for iOS, and not in the Facebook/Instagram webviews, which cannot install at all.
+- ✅ **Neither is shown to a controller guest or a first-time visitor**, which is open
+  question 1's working answer turned into `pwa.ts`: repeat visit required, dismissal
+  remembered for 30 days, never when already standalone, and the component is mounted
+  only inside the signed-in app so the join route and the beta splash never reach it.
+- ✅ **An update banner** (`AppUpdateBanner.tsx`), which is not in the original bullet
+  list and is the honest price of precaching. The worker announces itself when it
+  replaces an earlier build and the banner offers a one-tap reload, so a stale shell
+  lasts as long as someone ignores a banner rather than lasting silently.
 - ✅ Web-push registration + per-user subscription registry + `submission.published`
   delivered over web push on desktop/Android — **already shipped via the notifications
   track**. M1 no longer owns any push work; it only makes the app installable so iOS gets
   push too.
-- Exit criterion: **installed PWA opens to a rendered shell in under a second on a cold
-  API** (the Android-push half of the original criterion is already met in the browser).
+- ✅ Exit criterion: **installed PWA opens to a rendered shell in under a second on a cold
+  API.** Locally, **84 ms** with the server **stopped** — connection refused, not merely
+  cold — and 63 ms for a `/play/<slug>` deep link and 112 ms for `/studio`. The document
+  came from the precache (proved by serving an `index.html` that differed from the cached
+  copy), fonts reported `transferSize: 0`, and the app rendered its full chrome with all
+  five API calls failing.
+  - **Confirmed on production 2026-07-28** (deployed with `ceac65ee`): the worker
+    installs, activates and precaches all nine shell files with `redirected: false`, and a
+    controlled reload of `https://www.gamedev.pl/` renders in **53 ms** (responseStart 20
+    ms) with every `/assets/*` entry at `transferSize: 0`. An order of magnitude inside
+    the budget, on the real host.
+
+**One bug worth recording, because a browser found it and review would not have.**
+`npx serve` answers `/index.html` with a 301 to `/index`, so `cache.add` stored a
+_redirected_ response — and `respondWith` refuses a redirected response for a navigation
+request. Every controlled navigation therefore failed to the browser's own error page,
+while an uncontrolled first load looked perfect. It is caused by an ordinary clean-URL
+rule on the host, not by anything in the worker. Production was checked afterwards and
+does **not** redirect (`/index.html` → 200, `cache-control: no-cache`), so this would not
+have shipped broken — but it made the local `web-dist` preview completely unusable, and
+the same rule appearing on a CDN in front of the service would take the whole installed
+app down for returning visitors. Documents are now stored rebuilt via `putDocument`, the
+navigation path re-checks `redirected`, and `shellPrecache.test.ts` pins both ends.
+
+**What a real device still adds.** Everything above was verified in a desktop browser at
+mobile viewport, which has a mouse. It cannot tell us that Chrome's own installability
+heuristics fire on the deployed origin (it withheld `beforeinstallprompt` locally, so the
+Android banner was exercised through a dispatched event of the same shape), that iOS
+Safari's Share sheet reaches "Add to Home Screen" from this manifest, or that the
+installed app gets push on iOS — which is the whole reason M1 exists. Those ride along
+with M0's outstanding device pass.
 
 ### M2 — Store apps (Capacitor) 📋
 
@@ -319,8 +388,16 @@ registry gains FCM/APNs token rows alongside the web-push subscriptions it alrea
   declared, a regression cannot be papered over in frontmatter. The open half is the
   catalog filter, which would let a phone visitor avoid a `touch: none` game rather than
   be served a broken one; no such game exists today, so this is prevention, not triage.
-- **Cold-start latency reads as "app is broken" on mobile**: PWA shell cache (M1)
-  plus honest skeleton/retry states; revisit min-instances only if telemetry says so.
+- **Cold-start latency reads as "app is broken" on mobile**: ✅ closed by the M1 shell
+  cache — the chrome renders in under 100 ms with the API unreachable, and the parts that
+  need data show honest retry states instead of a blank page. Revisit min-instances only
+  if telemetry says so.
+- **A precached shell serves a stale build** — the risk the shell cache introduces, and
+  the reason the old worker cached nothing. Mitigated on three sides: whole-build caches
+  keyed by a content revision (never a mix of old and new), the manifest baked into the
+  worker so every deploy is a detectable update on every browser, and a user-visible
+  update banner. What remains is one navigation's worth of staleness, which is the
+  standard cost of the pattern and is now visible rather than silent.
 - **Capacitor WebView drift** (old Android System WebView versions): set a floor
   (Chromium ≥ 100), show an update screen below it — same honesty pattern as the
   unavailable-game states.
@@ -347,10 +424,13 @@ plus one small feature (surfacing `touch` in the catalog). The honest blocker on
 declaring M0 finished is not code: it is that the exit criterion requires real phones,
 and only part of it has been walked so far.
 
-M1 is now small (manifest + offline shell; push is done) and independent — and it is the
-only route to push on iOS, which needs an installed PWA. QR-party v1 **already exists**,
-so that M2 precondition is met; M2 still waits on the public-beta content-safety gates
-(the in-app report action depends on the moderation queue).
+M1 is **built** (2026-07-28): manifest, precached shell, offline page, install path on
+both platforms, and an update banner. Its own exit criterion is met by measurement; what
+it shares with M0 is the device pass, and one device session now closes both — the same
+phone that browses the catalog can install the app and confirm iOS push, which is the
+only reason M1 was on the roadmap. QR-party v1 **already exists**, so that M2
+precondition is met; M2 still waits on the public-beta content-safety gates (the in-app
+report action depends on the moderation queue).
 
 ---
 

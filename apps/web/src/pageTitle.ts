@@ -26,10 +26,10 @@ export function brandedNamedTitle(template: string, title: string): string {
 export type DocumentTitleCopy = {
   /** Full home title, e.g. "Gamedev.pl — Describe a game, play it". */
   home: string;
-  status: string;
   draft: string;
   join: string;
   health: string;
+  studio: string;
   privacy: string;
   terms: string;
   contact: string;
@@ -38,16 +38,16 @@ export type DocumentTitleCopy = {
   playNamed: string;
   /** Prefixed template for a draft's real name, e.g. "Draft {{title}}". */
   draftNamed: string;
-  /** Prefixed template for a tracked submission name, e.g. "Status · {{title}}". */
-  statusNamed: string;
+  /** Prefixed template when studio is deep-linked to a named game. */
+  studioNamed: string;
 };
 
 export type DocumentTitleContext = {
   copy: DocumentTitleCopy;
   /** Known title for the game on a `/play/<slug>` route (catalog or humanized slug). */
   playTitle?: string | null;
-  /** Known title for a `/status/<token>` submission (from localStorage, if any). */
-  statusTitle?: string | null;
+  /** Known title for a `/studio/<token>` (or legacy `/status/<token>`) submission. */
+  studioTitle?: string | null;
   /** Real draft name once `/draft/<slug>` finishes loading; null while pending. */
   draftTitle?: string | null;
   /** Title of an ephemeral theater open on the home route (generated / party). */
@@ -68,20 +68,24 @@ export function resolveDocumentTitle(route: AppRoute, ctx: DocumentTitleContext)
       return ctx.draftTitle?.trim()
         ? brandedNamedTitle(ctx.copy.draftNamed, ctx.draftTitle)
         : brandedPageTitle(ctx.copy.draft);
-    case 'status':
-      return ctx.statusTitle?.trim()
-        ? brandedNamedTitle(ctx.copy.statusNamed, ctx.statusTitle)
-        : brandedPageTitle(ctx.copy.status);
     case 'join':
       return brandedPageTitle(ctx.copy.join);
     case 'health':
       return brandedPageTitle(ctx.copy.health);
+    case 'studio':
+      return ctx.studioTitle?.trim()
+        ? brandedNamedTitle(ctx.copy.studioNamed, ctx.studioTitle)
+        : brandedPageTitle(ctx.copy.studio);
     case 'legal':
       return brandedPageTitle(route.doc === 'privacy' ? ctx.copy.privacy : ctx.copy.terms);
     case 'contact':
       return brandedPageTitle(ctx.copy.contact);
     case 'notFound':
       return brandedPageTitle(ctx.copy.notFound);
+    default: {
+      const _exhaustive: never = route;
+      return _exhaustive;
+    }
   }
 }
 

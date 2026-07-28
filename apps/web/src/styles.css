@@ -5082,3 +5082,984 @@ body.player-open {
   font-size: 0.8rem;
   opacity: 0.7;
 }
+
+/* Feedback themes on the scorecard panel (docs/improvement-loop-plan.md IL-2).
+   Uses the existing panel-card tone rather than a new colour: these are player-authored
+   strings shown for reading, so they should look like content, not like a system status
+   that an operator might act on. */
+.scorecard-themes {
+  margin-top: 1.5rem;
+}
+
+.scorecard-themes h3 {
+  font-size: 1rem;
+  margin: 0 0 0.25rem;
+}
+
+.scorecard-theme-game {
+  background: var(--panel-card);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-top: 0.75rem;
+}
+
+.scorecard-theme-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.scorecard-theme-list li {
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  /* Player text can be any length and any script; wrap rather than overflow the card. */
+  overflow-wrap: anywhere;
+}
+
+.scorecard-theme-count {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* CREATOR CONTROL PANEL (/studio)
+   Reuses home/status tokens: section-title, panel, my-game-card, chip/health-window
+   tabs, funnel-stats, status-feedback, status-play-badge. Keep Studio from inventing
+   a parallel visual language. */
+.studio-panel {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+
+.studio-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.studio-panel-header .section-title {
+  margin: 0 0 6px;
+}
+
+.studio-panel-header .panel-copy {
+  max-width: 36rem;
+}
+
+.studio-layout {
+  display: grid;
+  grid-template-columns: minmax(200px, 260px) 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.studio-shelf {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: sticky;
+  top: 1rem;
+  max-height: calc(100vh - 2rem);
+  min-height: 0;
+}
+
+.studio-shelf-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.studio-shelf-heading {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+
+.studio-shelf-count {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.studio-shelf-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.studio-shelf-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid var(--panel-border);
+  background: rgba(13, 17, 21, 0.55);
+  color: var(--muted);
+}
+
+.studio-shelf-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 9px 0;
+  outline: none;
+}
+
+.studio-shelf-search input::placeholder {
+  color: var(--muted);
+}
+
+.studio-shelf-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.studio-shelf-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.studio-shelf-filter.is-active {
+  color: #08241d;
+  background: var(--turquoise);
+  border-color: var(--turquoise);
+}
+
+.studio-shelf-filter-count {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+.studio-shelf-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+  -webkit-overflow-scrolling: touch;
+}
+
+.studio-shelf-empty {
+  margin: 0;
+  padding: 12px 4px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* Compact rows — denser than home-rail cards so 10+ games stay scannable. */
+.studio-shelf-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'status meta'
+    'title title';
+  column-gap: 8px;
+  row-gap: 2px;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--panel-card);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s,
+    background 0.2s;
+}
+
+.studio-shelf-item:hover {
+  border-color: var(--turquoise);
+  background: rgba(0, 228, 172, 0.04);
+}
+
+.studio-shelf-item.is-active {
+  border-color: rgba(0, 228, 172, 0.45);
+  box-shadow: 0 0 14px rgba(0, 228, 172, 0.1);
+}
+
+.studio-shelf-item.is-live {
+  border-color: rgba(45, 212, 191, 0.35);
+}
+
+.studio-shelf-status {
+  grid-area: status;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.45px;
+  color: var(--muted);
+  min-width: 0;
+}
+
+.studio-shelf-status.is-live {
+  color: var(--turquoise);
+}
+
+.studio-shelf-status.is-published {
+  color: var(--accent-blue);
+}
+
+.studio-shelf-title {
+  grid-area: title;
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.25;
+}
+
+.studio-shelf-meta {
+  grid-area: meta;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+  justify-self: end;
+  align-self: center;
+}
+
+.studio-detail {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 24px;
+  min-width: 0;
+}
+
+.studio-detail-head {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.studio-detail-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.studio-detail-head h2 {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  overflow-wrap: anywhere;
+}
+
+.studio-game-switcher {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: linear-gradient(180deg, rgba(0, 228, 172, 0.06), transparent 70%), rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s,
+    background 0.2s;
+}
+
+.studio-game-switcher:hover {
+  border-color: rgba(0, 228, 172, 0.45);
+  box-shadow: 0 0 18px rgba(0, 228, 172, 0.08);
+}
+
+.studio-game-switcher-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.studio-game-switcher-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.45px;
+  color: var(--muted);
+}
+
+.studio-game-switcher-count {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--turquoise);
+  white-space: nowrap;
+}
+
+.studio-game-switcher-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-game-switcher .studio-slug {
+  flex-shrink: 0;
+}
+
+/* 5+ games: collapse the shelf after selection so the selected game owns the page. */
+.studio-layout.is-focus {
+  grid-template-columns: 1fr;
+}
+
+.studio-layout.is-focus > .studio-shelf {
+  display: none;
+}
+
+.studio-layout.is-focus .studio-game-switcher {
+  display: flex;
+}
+
+.studio-layout.is-focus .studio-detail-title-row {
+  display: none;
+}
+
+.studio-layout.is-focus .studio-detail {
+  max-width: 920px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.studio-picker-backdrop {
+  z-index: 1100;
+  align-items: flex-end;
+}
+
+.studio-picker {
+  position: relative;
+  width: min(440px, 100%);
+  max-height: min(85vh, 720px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 16px 20px;
+  border-radius: 16px 16px 0 0;
+  border: 1px solid var(--panel-border);
+  border-bottom: 0;
+  background: var(--panel);
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.studio-picker-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-right: 2rem;
+}
+
+.studio-picker-header h2 {
+  margin: 0 0 4px;
+  font-size: 1.15rem;
+}
+
+.studio-picker-header p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.studio-picker .studio-shelf-list {
+  max-height: none;
+  flex: 1;
+}
+
+.studio-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.studio-slug {
+  color: var(--turquoise);
+  font-size: 0.85rem;
+  background: rgba(0, 228, 172, 0.08);
+  border: 1px solid rgba(0, 228, 172, 0.2);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+/* Chip-style tabs — same grammar as .chip-btn / .health-window. */
+.studio-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 18px;
+  padding: 0 0 14px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.studio-tab {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--panel-border);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.studio-tab:hover {
+  color: #fff;
+  border-color: var(--turquoise);
+  background: rgba(0, 228, 172, 0.08);
+}
+
+.studio-tab.is-active {
+  color: #08241d;
+  background: var(--turquoise);
+  border-color: var(--turquoise);
+  box-shadow: 0 0 12px var(--turquoise-glow);
+}
+
+.studio-tab.is-active:hover {
+  color: #08241d;
+  filter: brightness(1.05);
+}
+
+.studio-tab-panel {
+  min-width: 0;
+}
+
+.studio-empty,
+.studio-empty-state {
+  color: var(--muted);
+  padding: 1.5rem 0;
+}
+
+.studio-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.studio-error {
+  color: var(--error);
+}
+
+.studio-overview-status {
+  margin-bottom: 16px;
+}
+
+.studio-facts {
+  margin: 0 0 1.25rem;
+}
+
+.studio-fact-suffix {
+  margin-left: 0.35rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.studio-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.studio-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.studio-stats-range {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.studio-error-samples {
+  margin-top: 0.5rem;
+}
+
+.studio-error-samples .health-section-title {
+  margin-top: 0.5rem;
+}
+
+.studio-error-samples ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.studio-error-samples li {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  background: var(--panel-card);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+}
+
+.studio-error-samples code {
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+
+.studio-improve {
+  margin: 0;
+}
+
+.studio-coming-soon {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  color: var(--muted);
+  padding: 20px 18px;
+  border-radius: 12px;
+  border: 1px dashed var(--panel-border);
+  background: rgba(13, 17, 21, 0.4);
+}
+
+.studio-coming-soon h3 {
+  margin: 0 0 4px;
+  color: var(--text);
+  font-size: 1.05rem;
+}
+
+.studio-coming-soon p {
+  margin: 0;
+  max-width: 36rem;
+  line-height: 1.45;
+  font-size: 0.95rem;
+}
+
+.studio-build .status-panel.is-embedded {
+  box-shadow: none;
+  border: none;
+  padding: 0;
+  background: transparent;
+  margin: 0;
+}
+
+.studio-playtest-hint,
+.studio-muted {
+  color: var(--muted);
+  margin: 0 0 0.75rem;
+}
+
+.studio-playtest-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 20%, rgba(56, 189, 248, 0.1), transparent 55%), #0a0e12;
+  min-height: 280px;
+}
+
+.studio-playtest-stage.is-paused {
+  border-color: rgba(0, 228, 172, 0.35);
+  box-shadow: 0 0 24px rgba(0, 228, 172, 0.08);
+}
+
+.studio-playtest-stage .game-frame {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  min-height: 240px;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  display: block;
+  background: transparent;
+}
+
+.studio-playtest-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--panel-border);
+  background: rgba(22, 28, 34, 0.92);
+}
+
+.studio-playtest-controls .primary-btn,
+.studio-playtest-controls .secondary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.studio-playtest-meta {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.studio-playtest-prompt {
+  margin-top: 16px;
+}
+
+.studio-playtest-shot {
+  margin: 0 0 12px;
+  max-width: 22rem;
+}
+
+.studio-playtest-shot img {
+  display: block;
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: #000;
+}
+
+.studio-playtest-shot figcaption {
+  margin-top: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.studio-playtest-errors {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.studio-playtest-errors li {
+  background: rgba(255, 107, 107, 0.08);
+  border: 1px solid rgba(255, 107, 107, 0.22);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.studio-playtest-errors code {
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+  color: var(--error);
+}
+
+.my-games-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.my-games-studio-btn {
+  padding: 0.35rem 0.7rem;
+  font-size: 0.8rem;
+}
+
+@media (max-width: 800px) {
+  .studio-layout {
+    grid-template-columns: 1fr;
+  }
+
+  /* Narrow viewports always focus after selection — even a short shelf costs scroll. */
+  .studio-layout.is-game-open > .studio-shelf {
+    display: none;
+  }
+
+  .studio-layout.is-game-open .studio-game-switcher {
+    display: flex;
+  }
+
+  .studio-layout.is-game-open .studio-detail-title-row {
+    display: none;
+  }
+
+  .studio-layout.is-game-open .studio-detail {
+    max-width: none;
+    margin: 0;
+  }
+
+  .studio-game-switcher-title {
+    font-size: 1rem;
+  }
+
+  .studio-shelf {
+    position: static;
+    max-height: none;
+  }
+
+  .studio-panel-header {
+    flex-direction: column;
+  }
+
+  .studio-detail {
+    padding: 18px 16px;
+  }
+
+  .studio-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    mask-image: linear-gradient(90deg, #000 85%, transparent);
+  }
+
+  .studio-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .studio-picker {
+    width: 100%;
+  }
+}
+
+@media (min-width: 801px) {
+  .studio-picker-backdrop {
+    align-items: center;
+  }
+
+  .studio-picker {
+    border-radius: 16px;
+    border-bottom: 1px solid var(--panel-border);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Installed-app chrome: the install offer and the "new version" notice.
+   Both are bottom-anchored bars mounted only inside the signed-in app, and both
+   are the last thing that should ever cover a running game — App.tsx unmounts
+   them while a game is on stage, so they need no z-index race with the theater.
+   --------------------------------------------------------------------------- */
+
+.install-prompt,
+.app-update {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  /* Clear of the iOS home indicator and of Android's gesture bar. */
+  bottom: max(12px, env(safe-area-inset-bottom));
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 auto;
+  max-width: 560px;
+  padding: 12px 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  background: rgba(22, 28, 34, 0.96);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  animation: install-prompt-in 220ms ease-out;
+}
+
+@keyframes install-prompt-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .install-prompt,
+  .app-update {
+    animation: none;
+  }
+}
+
+.install-prompt__icon {
+  flex-shrink: 0;
+  color: var(--turquoise);
+}
+
+.install-prompt__copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.install-prompt__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.install-prompt__body {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* The iOS variant is instructions, not a button — numbered so "first this, then
+   that" survives being skimmed, which is how anyone reads a bar like this. */
+.install-prompt__steps {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.install-prompt__steps li {
+  /* Keeps the inline Share glyph on the text baseline instead of riding above it. */
+  vertical-align: middle;
+}
+
+.install-prompt__steps svg {
+  vertical-align: -2px;
+  color: var(--accent-blue);
+}
+
+.install-prompt__actions,
+.app-update__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.install-prompt__install,
+.app-update__reload {
+  padding: 9px 14px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.install-prompt__close,
+.app-update__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.install-prompt__close:hover,
+.app-update__close:hover {
+  color: var(--text);
+  border-color: var(--panel-border);
+}
+
+.app-update__icon {
+  flex-shrink: 0;
+  color: var(--turquoise);
+}
+
+.app-update__text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* Both bars carry a dismiss control, and a dismiss control that is hard to hit is
+   how a helpful bar becomes a trap. Same 44px floor as the rest of M0. */
+@media (pointer: coarse), (max-width: 768px) {
+  .install-prompt__close,
+  .app-update__close {
+    width: 44px;
+    height: 44px;
+  }
+
+  .install-prompt__install,
+  .app-update__reload {
+    min-height: 44px;
+  }
+}
+
+/* On the narrowest phones the row cannot hold icon + copy + two controls without
+   the copy collapsing to a couple of characters per line, so the actions drop to
+   their own full-width row underneath. */
+@media (max-width: 400px) {
+  .install-prompt {
+    flex-wrap: wrap;
+  }
+
+  .install-prompt__copy {
+    /* Beats flex-wrap's default of keeping the icon and copy on one line only if
+       they happen to fit; this forces the actions below rather than squeezing. */
+    flex-basis: calc(100% - 32px);
+  }
+
+  .install-prompt__actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .install-prompt__install {
+    flex: 1;
+  }
+}

@@ -117,6 +117,27 @@ GAMES_REPO_TOKEN=... npm run snapshot:publish -- --dry-run
 GAMES_REPO_TOKEN=... GAMES_SNAPSHOT_BUCKET=... npm run snapshot:publish
 ```
 
+### How the bake reads the games repo
+
+**One tarball, not a read per file.** A bake touches nearly everything in the games
+repo — sources, media, catalog — and reading that through the contents API cost about a
+thousand requests per run. `GAMES_REPO_TOKEN` is shared with CI's `contract:games-repo`
+check, so at a bake per push to the games repo those bursts emptied the PAT's hourly
+budget and 403'd both jobs (2026-07-28).
+
+`fetchGamesRepoArchive` ([`games-repo-archive.ts`](../apps/api/src/games-repo-archive.ts))
+downloads `GET /repos/<repo>/tarball/<ref>` once and hands `createGitHubClient` a
+`RepoFileSource` backed by it. Assembly logic is untouched — the same
+`getGameSources` / `getGameMedia` / `getCatalog` run against archive bytes instead of
+API responses, so there is no second implementation of "what a served game is" to drift.
+Only `games/`, `shared/` and `catalog.json` are retained in memory; `tools/` and `docs/`
+are dropped as they stream past.
+
+The archive is pinned to the ref it was downloaded for and refuses reads for any other —
+otherwise a PR preview could be quietly served files baked from `main`. If the download
+fails, the bake logs it and falls back to per-file contents reads: slower and expensive,
+but a stale snapshot is worse than an expensive one.
+
 ### A game that fails to bake
 
 It stays in the snapshot catalog and simply gets no game object, so its play route

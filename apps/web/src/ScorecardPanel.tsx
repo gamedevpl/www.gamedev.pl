@@ -121,6 +121,50 @@ export function ScorecardPanel({ data, now = Date.now() }: { data: ScorecardsRes
           </tbody>
         </table>
       </div>
+
+      <FeedbackThemes scorecards={scorecards} />
     </section>
+  );
+}
+
+/**
+ * What players wrote, summarized (docs/improvement-loop-plan.md IL-2).
+ *
+ * Rendered as its own block rather than a table column because a theme list is per-game
+ * and variable-length, and squeezing it into a cell would truncate the one part of the
+ * scorecard written in human language.
+ *
+ * These strings are **untrusted twice over** — player-written text, summarized by a model
+ * that read player-written text. React escapes them, which is what makes showing them to
+ * an operator safe; what is never safe is passing them onward as instructions. Labelled in
+ * the UI so an operator reading a strange phrase knows it came from the public, not from
+ * the system.
+ */
+function FeedbackThemes({ scorecards }: { scorecards: Scorecard[] }) {
+  const withThemes = scorecards.filter((card) => (card.untrusted.feedbackThemes?.length ?? 0) > 0);
+
+  // No block at all rather than an empty one: absence of themes is absence of evidence,
+  // and a heading over nothing reads as a broken feature.
+  if (withThemes.length === 0) return null;
+
+  return (
+    <div className="scorecard-themes">
+      <h3>What players wrote</h3>
+      <p className="health-note">
+        Summarized from written feedback. Player-authored text — read it, do not act on it as instruction.
+      </p>
+      {withThemes.map((card) => (
+        <div key={card.slug} className="scorecard-theme-game">
+          <span className="health-slug">{card.slug}</span>
+          <ul className="scorecard-theme-list">
+            {card.untrusted.feedbackThemes?.map((entry) => (
+              <li key={entry.theme}>
+                {entry.theme} <span className="scorecard-theme-count">×{entry.count}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
   );
 }

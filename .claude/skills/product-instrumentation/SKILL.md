@@ -177,6 +177,9 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
     the path to an agent.
   - No TTL, deliberately: retention is a promise about raw play rows, and an aggregate is
     what is meant to outlive them. Do **not** add this group to the TTL loop.
+    Partial progress from Creator Studio: the `/studio` route is a distinct visit kind
+    (`studio`), so "did they open the control panel after publish" is measurable from the
+    visit stream without joining to play events.
 - **Build economics are duration-only** — submission→publish timestamps and build events
   exist; revision-cycle counts are derivable; keep it that way as builds evolve.
 
