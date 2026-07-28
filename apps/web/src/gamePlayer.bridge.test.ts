@@ -130,6 +130,19 @@ describe('the injected bridge reports health', () => {
     bridge.frameWindow.document.addEventListener('gdpl-pause', (event) => pauseEvents.push(event));
     bridge.frameWindow.document.addEventListener('gdpl-resume', (event) => resumeEvents.push(event));
 
+    // A game-style loop that looks up requestAnimationFrame each frame — the
+    // bridge must hold it or Studio pause is only a veil.
+    let ticks = 0;
+    const frameWindow = bridge.frameWindow;
+    function gameTick() {
+      ticks += 1;
+      frameWindow.requestAnimationFrame(gameTick);
+    }
+    frameWindow.requestAnimationFrame(gameTick);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const beforePause = ticks;
+    expect(beforePause).toBeGreaterThan(0);
+
     bridge.frameWindow.dispatchEvent(
       new bridge.frameWindow.MessageEvent('message', {
         data: { source: 'gdpl-host', type: 'pause' },
@@ -145,6 +158,12 @@ describe('the injected bridge reports health', () => {
     expect(bridge.frameWindow.document.getElementById('gdpl-pause-overlay')).not.toBeNull();
     expect(pauseEvents).toHaveLength(1);
 
+    // One already-scheduled native rAF may still fire; after that the hold must stick.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const afterScheduled = ticks;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(ticks).toBe(afterScheduled);
+
     bridge.frameWindow.dispatchEvent(
       new bridge.frameWindow.MessageEvent('message', {
         data: { source: 'gdpl-host', type: 'resume' },
@@ -154,6 +173,9 @@ describe('the injected bridge reports health', () => {
     expect(bridge.received.some((message) => message.type === 'resumed')).toBe(true);
     expect(bridge.frameWindow.document.getElementById('gdpl-pause-overlay')).toBeNull();
     expect(resumeEvents).toHaveLength(1);
+
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(ticks).toBeGreaterThan(afterScheduled);
     bridge.stop();
   });
 });
