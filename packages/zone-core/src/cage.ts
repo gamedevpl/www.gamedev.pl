@@ -189,7 +189,13 @@ function scrubScript(): string {
 export async function createIsolatedVmCage(): Promise<SimCage> {
   let ivm: IsolatedVmModule;
   try {
-    ivm = (await import('isolated-vm')) as unknown as IsolatedVmModule;
+    // The specifier is a variable so the compiler does not try to resolve it. That is
+    // the whole point of an optional dependency: `npm ci` on a machine with no C++
+    // toolchain legitimately skips it, and a build that fails there would make every
+    // contributor pay for a native addon only the world service needs. The structural
+    // types at the bottom of this file are what keep the call sites checked regardless.
+    const nativeCage = 'isolated-vm';
+    ivm = (await import(nativeCage)) as unknown as IsolatedVmModule;
   } catch (error) {
     throw new SimCageUnavailableError(
       'isolated-vm is not installed, so there is no cage to run a zone in. It is a native ' +

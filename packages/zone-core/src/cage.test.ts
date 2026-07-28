@@ -12,11 +12,38 @@ import { CLOCK_SIM, COUNTER_SIM, INCOMPLETE_SIM, RANDOM_SIM, TEST_SIM_MATH_JS } 
  * The same suite runs against both cages, which is the actual claim being tested: the
  * scrubbing is portable, so swapping the cage is a safety and cost decision rather than
  * a behaviour one. If these ever diverge, the spike's "cheap to revisit" stops being true.
+ *
+ * `isolated-vm` is a native addon and an optional dependency, so it is genuinely absent on
+ * some machines — a plain `npm ci` on a runner without a working C++ toolchain skips it.
+ * Its suites are skipped there rather than failed, because a red build on a contributor's
+ * laptop for a dependency only the world service needs would teach people to ignore red
+ * builds. Two things stop that skip from quietly becoming permanent: the absence is
+ * announced rather than silent, and the tests that encode the *safety* half of this —
+ * that a missing isolate is a refusal to start rather than a downgrade — run either way.
+ * The addon itself is built and exercised where it has to work, in `apps/world/Dockerfile`.
  */
+
+const isolate = await probeIsolate();
+if (!isolate) {
+  console.warn(
+    '[zone-core] isolated-vm is not installed; its cage suites are skipped. ' +
+      'The production refusal path is still covered below.',
+  );
+}
+
+async function probeIsolate(): Promise<SimCage | null> {
+  try {
+    const cage = await createIsolatedVmCage();
+    cage.dispose();
+    return cage;
+  } catch {
+    return null;
+  }
+}
 
 const CAGES: Array<[string, () => Promise<SimCage> | SimCage]> = [
   ['node:vm', () => createNodeVmCage()],
-  ['isolated-vm', () => createIsolatedVmCage()],
+  ...(isolate ? ([['isolated-vm', () => createIsolatedVmCage()]] as Array<[string, () => Promise<SimCage>]>) : []),
 ];
 
 function load(cage: SimCage, bundleJs: string) {
@@ -115,7 +142,7 @@ describe.each(CAGES)('%s cage', (_name, make) => {
   });
 });
 
-describe('isolated-vm cage specifics', () => {
+describe.skipIf(!isolate)('isolated-vm cage specifics', () => {
   it('stops a runaway tick instead of hanging the instance', async () => {
     const cage = await createIsolatedVmCage();
     const sim = await cage.load({
@@ -156,9 +183,22 @@ describe('assertProductionCage', () => {
     expect(() => assertProductionCage(createNodeVmCage(), undefined)).not.toThrow();
   });
 
-  it('allows the isolate in production', async () => {
+  it.skipIf(!isolate)('allows the isolate in production', async () => {
     const cage = await createIsolatedVmCage();
     expect(() => assertProductionCage(cage, 'production')).not.toThrow();
     cage.dispose();
+  });
+
+  it('says what to do about a missing isolate rather than falling back to one that is not a cage', async () => {
+    // Runs whether or not the addon is installed, because this is the half that matters
+    // when it is not: the service must refuse to start, and the message must name the
+    // reason. A downgrade to node:vm here would be silent and would be the whole P3
+    // safety story quietly deleted.
+    if (isolate) {
+      expect(() => assertProductionCage(createNodeVmCage(), 'production')).toThrow(/not a security boundary/);
+      return;
+    }
+    await expect(createIsolatedVmCage()).rejects.toThrow(SimCageUnavailableError);
+    await expect(createIsolatedVmCage()).rejects.toThrow(/native addon|not installed/);
   });
 });
