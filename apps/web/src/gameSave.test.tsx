@@ -189,6 +189,47 @@ describe('useGameSaveBridge', () => {
     expect(JSON.parse(fetchMock.mock.calls[1][1].body).data).toBe('{"level":3}');
   });
 
+  it('sends an explicit version 0 rather than substituting one', async () => {
+    // 0 is a valid version the API accepts, and it is falsy — the shape of bug that
+    // rewrites a value the game stated plainly and shows up much later as version skew.
+    fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
+    const { fromGame } = mount();
+
+    fromGame({ t: 'save:hello', version: 5 });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    fromGame({ t: 'save:put', data: '{"level":1}', version: 0 });
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).version).toBe(0);
+  });
+
+  it('finishes draining after unmount instead of racing the queued write', async () => {
+    // Exiting the player mid-write is ordinary. If the drain stopped here and cleanup
+    // fired the queued value as a second parallel request, it could land before the one
+    // already in flight — the out-of-order write this serialization exists to prevent.
+    const resolvers: Array<() => void> = [];
+    fetchMock.mockImplementation(
+      () => new Promise<Response>((resolve) => resolvers.push(() => resolve(jsonResponse({ ok: true })))),
+    );
+    const { fromGame } = mount();
+
+    fromGame({ t: 'save:put', data: '{"level":1}', version: 1 });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    fromGame({ t: 'save:put', data: '{"level":2}', version: 1 });
+
+    act(() => root!.unmount());
+    root = null;
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    resolvers[0]();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).data).toBe('{"level":2}');
+    // Exactly two: the queued value went out once, in order — not also from cleanup.
+    resolvers[1]?.();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('reports a failed write without throwing at the game', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ error: 'nope' }, 500));
     const { fromGame } = mount();

@@ -101,6 +101,20 @@ function fakeFirestore() {
 
   const db = {
     collection: (collection: string) => makeCollection(collection),
+    // Deletes are staged and applied on commit, like the real client — so a test that
+    // forgets to commit sees nothing deleted rather than passing by accident.
+    batch: () => {
+      const staged: Array<() => void> = [];
+      return {
+        delete: (ref: { id: string; delete: () => Promise<void> }) => {
+          staged.push(() => void ref.delete());
+        },
+        commit: async () => {
+          for (const apply of staged) apply();
+          staged.length = 0;
+        },
+      };
+    },
     runTransaction: async <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => {
       const tx = {
         get: (ref: ReturnType<typeof makeRef>) => ref.get(),

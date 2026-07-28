@@ -2144,7 +2144,18 @@ export class FirestoreStore implements Store {
     // `listDocuments` rather than `get`: this only needs the references to delete, and
     // a person's saves may be tens of kilobytes each that nobody is going to read.
     const refs = await this.db.collection('users').doc(uid).collection('gameSaves').listDocuments();
-    for (const ref of refs) await ref.delete();
+    if (refs.length === 0) return 0;
+
+    // Chunked batches rather than a delete per document, for the same reason
+    // `deletePlayerFeedbackByUid` uses them: this runs inside an erasure request an
+    // operator has already accepted, and somebody who plays a lot of games is exactly
+    // the person whose deletion would otherwise be a long sequence of round trips.
+    // 400 per batch leaves headroom under Firestore's 500-write limit.
+    for (let index = 0; index < refs.length; index += 400) {
+      const batch = this.db.batch();
+      for (const ref of refs.slice(index, index + 400)) batch.delete(ref);
+      await batch.commit();
+    }
     return refs.length;
   }
 

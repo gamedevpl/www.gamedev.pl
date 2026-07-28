@@ -1,4 +1,4 @@
-import { useEffect, useRef, type MutableRefObject } from 'react';
+import { useEffect, type MutableRefObject } from 'react';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
 import { deleteGameSave, fetchGameSave, putGameSave } from './gameSaveApi.js';
 
@@ -66,17 +66,23 @@ export function parseGameSaveMessage(raw: unknown): SaveRequest | null {
  * which is the one failure mode of a save system nobody forgives.
  */
 export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement | null>, slug: string | undefined) {
-  // Held in a ref so the effect below stays keyed on the slug alone; a queued write must
-  // survive re-renders, and re-subscribing on every render would drop it.
-  const pendingRef = useRef<{ data: string; version: number } | null>(null);
-
   useEffect(() => {
     if (!slug) return;
     let cancelled = false;
     let writing = false;
-    let currentVersion = 1;
+    /**
+     * The newest value waiting to be written, owned by this effect run.
+     *
+     * Deliberately not a ref shared across runs: the effect is keyed on the slug, so a
+     * value surviving into the next run would be one game's progress queued against the
+     * next game's save slot.
+     */
+    let pending: { data: string; version: number } | null = null;
 
     function postToGame(payload: Record<string, unknown>) {
+      // Nothing is sent to a frame we have already torn down — but the write itself
+      // still completes; see the drain loop.
+      if (cancelled) return;
       // The frame is sandboxed to an opaque origin, so '*' is the only possible target;
       // the game in turn only accepts messages whose source is its parent.
       frameRef.current?.contentWindow?.postMessage({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload }, '*');
@@ -86,9 +92,14 @@ export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement |
       if (writing) return;
       writing = true;
       try {
-        while (pendingRef.current && !cancelled) {
-          const next = pendingRef.current;
-          pendingRef.current = null;
+        // Keeps draining after unmount on purpose. Stopping on `cancelled` would leave
+        // a queued value for the cleanup below to send as a *second*, parallel request,
+        // which could land before the one already in flight — reintroducing exactly the
+        // out-of-order write this serialization exists to prevent. The acks are what
+        // gets suppressed once the frame is gone, not the writes.
+        while (pending) {
+          const next = pending;
+          pending = null;
           try {
             await putGameSave(slug!, next.data, next.version);
             postToGame({ t: 'save:ack', ok: true });
@@ -112,7 +123,6 @@ export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement |
       if (!message) return;
 
       if (message.t === 'save:hello' || message.t === 'save:load') {
-        if (message.t === 'save:hello') currentVersion = message.version;
         try {
           const save = await fetchGameSave(slug!);
           if (cancelled) return;
@@ -135,13 +145,16 @@ export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement |
       }
 
       if (message.t === 'save:put') {
-        pendingRef.current = { data: message.data, version: message.version || currentVersion };
+        // `message.version` verbatim, with no fallback: the parser has already replaced
+        // an absent or nonsense version with 1, so a `||` here would only ever fire for
+        // an explicit version 0 — silently rewriting the one value a game stated plainly.
+        pending = { data: message.data, version: message.version };
         void drainWrites();
         return;
       }
 
       if (message.t === 'save:clear') {
-        pendingRef.current = null;
+        pending = null;
         try {
           await deleteGameSave(slug!);
           if (!cancelled) postToGame({ t: 'save:ack', ok: true });
@@ -158,9 +171,14 @@ export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement |
       // Exiting the player is the most common way a session ends, and the module's own
       // flush on `pagehide` has just handed us the last value. Send it: `keepalive` on
       // the request means it completes even though this component is going away.
-      const last = pendingRef.current;
-      pendingRef.current = null;
-      if (last) void putGameSave(slug, last.data, last.version).catch(() => undefined);
+      //
+      // Only when no drain is running. If one is, it owns `pending` and will send it in
+      // order; firing it here as well would race two writes for the same slot.
+      const last = pending;
+      if (last && !writing) {
+        pending = null;
+        void putGameSave(slug, last.data, last.version).catch(() => undefined);
+      }
     };
   }, [frameRef, slug]);
 }
