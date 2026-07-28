@@ -131,6 +131,9 @@ describe('runDigestSweep', () => {
     expect(notification.type).toBe('creator.digest');
     expect(notification.id).toBe(digestId('2026-W31'));
     expect(notification.params).toMatchObject({ games: '1', sessions: '12', feedback: '3' });
+    // The studio is where the numbers behind the digest live, per game, with the themes
+    // the digest itself does not carry. Anywhere else makes the reader go looking.
+    expect(notification.link).toBe('/studio');
   });
 
   it('sends nothing to a creator whose games nobody played', async () => {

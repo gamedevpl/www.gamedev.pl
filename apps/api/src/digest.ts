@@ -58,11 +58,13 @@ const NOTIFICATION_SCAN_LIMIT = 200;
 /**
  * Where a digest sends the creator.
  *
- * A digest spans every game they own, so it cannot deep-link to one. Today that means the
- * home page, which carries the "my games" rail; when the creator studio lands this becomes
- * `/studio`, and this constant is the only line that changes.
+ * A digest spans every game they own, so it cannot deep-link to one — it links to the
+ * shelf. `/studio` is where the numbers behind the digest actually live: the same
+ * scorecards, per game, with the feedback themes the digest deliberately does not carry.
+ * Sending someone to the home page instead would make them hunt for what the message was
+ * about.
  */
-const DIGEST_LINK = '/';
+const DIGEST_LINK = '/studio';
 
 export interface DigestTotals {
   /** Games with a scorecard — i.e. games with evidence, not games owned. */
