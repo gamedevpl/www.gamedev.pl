@@ -5,7 +5,7 @@ import { AuthModal } from './AuthModal.js';
 import type { GameHealth } from './healthApi.js';
 import { PixelIcon, type PixelIconName } from './PixelIcon.js';
 import { formatRelativeTime } from './relativeTime.js';
-import { studioPath } from './router.js';
+import { studioPath, type StudioTab } from './router.js';
 import { abandonSubmission, submitFeedback, type SubmissionApiError, type SubmissionState } from './submissionApi.js';
 import { StudioPlaytestPanel } from './StudioPlaytestPanel.js';
 import {
@@ -31,11 +31,14 @@ import {
  *
  * One place for the whole creator loop: shelf of owned games, the draft Build
  * (former status / "dev studio" page), playtest-with-pause prompting, play
- * health, and post-publish improve. Player-feedback analysis is stubbed.
+ * health, and post-publish improve.
  *
  * Shelf scales past a handful of games: compact rows, search/filter once the
  * list grows, and on narrow viewports a game switcher (picker sheet) so the
  * work surface is not buried under ten cards.
+ *
+ * Selection + active tab live in the URL (`/studio/:token/:tab`) so a refresh
+ * or shared link reopens the same work surface.
  */
 
 const STATUS_ICONS: Record<SubmissionState, PixelIconName> = {
@@ -50,12 +53,24 @@ const STATUS_ICONS: Record<SubmissionState, PixelIconName> = {
 
 const WINDOWS = [1, 7, 30];
 
-type StudioTab = 'overview' | 'build' | 'playtest' | 'stats' | 'improve' | 'feedback';
+/** Tab strip order, and the label each tab carries. */
+const TAB_ORDER: readonly StudioTab[] = ['overview', 'build', 'playtest', 'stats', 'improve'];
+const TAB_LABELS: Record<StudioTab, string> = {
+  overview: 'studioPanel.tabs.overview',
+  build: 'studioPanel.tabs.build',
+  playtest: 'studioPanel.tabs.playtest',
+  stats: 'studioPanel.tabs.stats',
+  improve: 'studioPanel.tabs.improve',
+};
+
+type NavigateOptions = { replace?: boolean };
 
 type CreatorStudioViewProps = {
   /** Deep-link into a specific game when present. */
   selectedToken?: string;
-  onNavigate: (path: string) => void;
+  /** Deep-link into a work-surface tab when present. */
+  selectedTab?: StudioTab;
+  onNavigate: (path: string, options?: NavigateOptions) => void;
   onPlay: (slug: string) => void;
   /** Loads a failed/abandoned concept back into the home hero prompt. */
   onRetryConcept?: (concept: string) => void;
@@ -64,6 +79,22 @@ type CreatorStudioViewProps = {
 function defaultTabFor(game: StudioGame | null): StudioTab {
   if (!game) return 'overview';
   return isStudioGamePublished(game) ? 'overview' : 'build';
+}
+
+/**
+ * Which surfaces exist for this game. Must stay in step with the rendered tab list
+ * below: a tab that resolves but has no button and no panel is a blank work surface.
+ */
+function tabAvailable(game: StudioGame, tab: StudioTab): boolean {
+  const published = isStudioGamePublished(game);
+  if (tab === 'build') return !published;
+  if (tab === 'stats') return published;
+  return true;
+}
+
+function resolveTab(game: StudioGame, requested?: StudioTab): StudioTab {
+  if (requested && tabAvailable(game, requested)) return requested;
+  return defaultTabFor(game);
 }
 
 function formatSeconds(seconds: number): string {
@@ -82,7 +113,13 @@ function healthFor(game: StudioGame, rows: GameHealth[]): GameHealth | null {
   return rows.find((row) => row.slug === game.slug) ?? null;
 }
 
-export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryConcept }: CreatorStudioViewProps) {
+export function CreatorStudioView({
+  selectedToken,
+  selectedTab,
+  onNavigate,
+  onPlay,
+  onRetryConcept,
+}: CreatorStudioViewProps) {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const [authOpen, setAuthOpen] = useState(false);
@@ -95,7 +132,7 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryCo
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(selectedToken ?? null);
-  const [tab, setTab] = useState<StudioTab>('overview');
+  const [tab, setTab] = useState<StudioTab>(selectedTab ?? 'overview');
   const [shelfQuery, setShelfQuery] = useState('');
   const [shelfFilter, setShelfFilter] = useState<StudioShelfFilter>('all');
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -188,17 +225,23 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryCo
   );
   const liveCount = useMemo(() => games.filter((game) => isStudioGamePublished(game)).length, [games]);
 
+  // Keep the visible tab aligned with the selected game. Only write the
+  // capability token into the URL when the route already carried one (a deep
+  // link, or an earlier explicit pick via selectGame/openTab). Bare `/studio`
+  // keeps shelf selection local so a screenshot or history entry doesn't mint a
+  // token the creator never asked for.
   useEffect(() => {
-    if (selectedGame) {
-      setTab((current) => {
-        // Keep the user on a tab that still exists for this game.
-        if (current === 'build' && isStudioGamePublished(selectedGame)) return 'overview';
-        if (current === 'stats' && !isStudioGamePublished(selectedGame)) return 'build';
-        if (current === 'feedback' && !isStudioGamePublished(selectedGame)) return 'improve';
-        return current;
-      });
+    if (!selected) return;
+    const game = games.find((entry) => entry.token === selected);
+    if (!game) return;
+    const next = resolveTab(game, selectedTab);
+    setTab(next);
+    if (!selectedToken) return;
+    const canonical = studioPath(game.token, next);
+    if (window.location.pathname !== canonical) {
+      onNavigate(canonical, { replace: true });
     }
-  }, [selectedGame]);
+  }, [selected, selectedTab, selectedToken, games, onNavigate]);
 
   useEffect(() => {
     if (!pickerOpen) return;
@@ -218,10 +261,17 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryCo
 
   function selectGame(token: string) {
     const next = games.find((game) => game.token === token) ?? null;
+    const nextTab = defaultTabFor(next);
     setSelected(token);
-    setTab(defaultTabFor(next));
+    setTab(nextTab);
     setPickerOpen(false);
-    onNavigate(studioPath(token));
+    onNavigate(studioPath(token, nextTab));
+  }
+
+  function openTab(next: StudioTab) {
+    if (!selectedGame || !tabAvailable(selectedGame, next)) return;
+    setTab(next);
+    onNavigate(studioPath(selectedGame.token, next));
   }
 
   if (!user) {
@@ -229,6 +279,7 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryCo
       <section className="studio-panel">
         <header className="studio-panel-header">
           <div>
+            <p className="studio-kicker">{t('studioPanel.kicker')}</p>
             <h1 className="section-title">{t('studioPanel.title')}</h1>
             <p className="panel-copy">{t('studioPanel.signInHint')}</p>
           </div>
@@ -251,15 +302,20 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryCo
     />
   );
 
+  // Derived from the same predicate the router uses, so a deep-linked tab can never
+  // resolve to a surface with no button to leave it by.
+  const tabItems = selectedGame ? TAB_ORDER.filter((id) => tabAvailable(selectedGame, id)) : [];
+
   return (
     <section className={`studio-panel${tab === 'playtest' ? ' is-playtesting' : ''}`}>
       <header className="studio-panel-header">
         <div>
+          <p className="studio-kicker">{t('studioPanel.kicker')}</p>
           <h1 className="section-title">{t('studioPanel.title')}</h1>
           <p className="panel-copy">{t('studioPanel.subtitle')}</p>
         </div>
-        <button type="button" className="secondary-btn" onClick={() => onNavigate('/')}>
-          {t('studioPanel.backHome')}
+        <button type="button" className="studio-home-link" onClick={() => onNavigate('/')}>
+          <PixelIcon name="undo" size={12} /> {t('studioPanel.backHome')}
         </button>
       </header>
 
@@ -327,33 +383,25 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryCo
                   <PixelIcon name="expand" size={12} />
                 </button>
                 <div className="studio-detail-title-row">
-                  <h2>{selectedGame.title}</h2>
-                  {selectedGame.slug ? <code className="studio-slug">{selectedGame.slug}</code> : null}
+                  <div className="studio-detail-title-block">
+                    <h2>{selectedGame.title}</h2>
+                    {selectedGame.slug ? <code className="studio-slug">{selectedGame.slug}</code> : null}
+                  </div>
+                  <StudioStatusPill game={selectedGame} />
                 </div>
               </div>
 
               <div className="studio-tabs" role="tablist" aria-label={t('studioPanel.title')}>
-                {(
-                  [
-                    ['overview', 'studioPanel.tabs.overview'],
-                    ...(!isStudioGamePublished(selectedGame) ? ([['build', 'studioPanel.tabs.build']] as const) : []),
-                    ['playtest', 'studioPanel.tabs.playtest'],
-                    ...(isStudioGamePublished(selectedGame) ? ([['stats', 'studioPanel.tabs.stats']] as const) : []),
-                    ['improve', 'studioPanel.tabs.improve'],
-                    ...(isStudioGamePublished(selectedGame)
-                      ? ([['feedback', 'studioPanel.tabs.feedback']] as const)
-                      : []),
-                  ] as const
-                ).map(([id, labelKey]) => (
+                {tabItems.map((id) => (
                   <button
                     key={id}
                     type="button"
                     role="tab"
                     aria-selected={tab === id}
                     className={`studio-tab${tab === id ? ' is-active' : ''}`}
-                    onClick={() => setTab(id)}
+                    onClick={() => openTab(id)}
                   >
-                    {t(labelKey)}
+                    {t(TAB_LABELS[id])}
                   </button>
                 ))}
               </div>
@@ -363,8 +411,8 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryCo
                   <OverviewTab
                     game={selectedGame}
                     health={selectedHealth}
-                    onOpenBuild={() => setTab('build')}
-                    onOpenPlaytest={() => setTab('playtest')}
+                    onOpenBuild={() => openTab('build')}
+                    onOpenPlaytest={() => openTab('playtest')}
                     onPlay={() => selectedGame.slug && onPlay(selectedGame.slug)}
                     onRemoved={(token) => {
                       setGames((prev) => prev.filter((game) => game.token !== token));
@@ -395,7 +443,7 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryCo
                   <StudioPlaytestPanel
                     game={selectedGame}
                     published={isStudioGamePublished(selectedGame)}
-                    onExit={() => setTab('overview')}
+                    onExit={() => openTab('overview')}
                   />
                 ) : null}
 
@@ -412,16 +460,6 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryCo
                 ) : null}
 
                 {tab === 'improve' ? <ImproveTab game={selectedGame} /> : null}
-
-                {tab === 'feedback' ? (
-                  <div className="studio-coming-soon">
-                    <PixelIcon name="eye" size={18} />
-                    <div>
-                      <h3>{t('studioPanel.feedback.title')}</h3>
-                      <p>{t('studioPanel.feedback.body')}</p>
-                    </div>
-                  </div>
-                ) : null}
               </div>
             </div>
           ) : null}
@@ -473,6 +511,22 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryCo
         </div>
       ) : null}
     </section>
+  );
+}
+
+function StudioStatusPill({ game }: { game: StudioGame }) {
+  const { t } = useTranslation();
+  const published = isStudioGamePublished(game);
+  const statusLabel = game.lastKnownStatus
+    ? t(`statusView.states.${game.lastKnownStatus}.label`)
+    : t('myGames.checking');
+  const live = game.lastKnownStatus ? STUDIO_LIVE_STATUSES.has(game.lastKnownStatus) : false;
+
+  return (
+    <span className={`status-play-badge studio-status-pill${published || live ? ' is-live' : ''}`}>
+      {(published || live) && <span className="live-dot" aria-hidden="true" />}
+      {statusLabel}
+    </span>
   );
 }
 
@@ -629,20 +683,8 @@ function OverviewTab({
     }
   }
 
-  const statusLabel = game.lastKnownStatus
-    ? t(`statusView.states.${game.lastKnownStatus}.label`)
-    : t('myGames.checking');
-  const live = game.lastKnownStatus ? STUDIO_LIVE_STATUSES.has(game.lastKnownStatus) : false;
-
   return (
     <div className="studio-overview">
-      <div className="studio-overview-status">
-        <span className={`status-play-badge${published || live ? ' is-live' : ''}`}>
-          {(published || live) && <span className="live-dot" aria-hidden="true" />}
-          {statusLabel}
-        </span>
-      </div>
-
       <ul className="funnel-stats studio-facts">
         <li>
           <span className="funnel-stat-value">{formatRelativeTime(Date.parse(game.createdAt), i18n.language)}</span>

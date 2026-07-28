@@ -45,7 +45,6 @@
     "navPrompt": "Stwórz Grę",
     "navArcade": "Arcade",
     "navStudio": "Studio",
-    "navMyGames": "Moje Gry",
     "navFeed": "Strumień Agentów",
     "mySpecs": "Moje Aktywne Specyfikacje ({{count}})"
   },
@@ -165,7 +164,8 @@
   },
   "studioPanel": {
     "title": "Studio Twórcy",
-    "subtitle": "Zarządzaj grami, sprawdzaj jak się grają i proś o ulepszenia.",
+    "kicker": "Dla twórców",
+    "subtitle": "Twoje gry, buildy, playtesty i ulepszenia — w jednym miejscu.",
     "signInHint": "Zaloguj się, aby zobaczyć zlecone gry i ich statystyki.",
     "backHome": "Wróć na start",
     "loading": "Ładujemy Twoje gry…",
@@ -194,8 +194,7 @@
       "build": "Build",
       "playtest": "Playtest",
       "stats": "Statystyki",
-      "improve": "Ulepsz",
-      "feedback": "Opinie graczy"
+      "improve": "Ulepsz"
     },
     "overview": {
       "status": "Status",
@@ -258,10 +257,6 @@
       "rateLimit": "Zbyt wiele próśb naraz. Poczekaj chwilę i spróbuj ponownie.",
       "rejected": "Tej prośby nie udało się przyjąć. Przeformułuj i spróbuj ponownie.",
       "error": "Nie udało się teraz wysłać prośby. Spróbuj ponownie."
-    },
-    "feedback": {
-      "title": "Opinie graczy — wkrótce",
-      "body": "Komentarze graczy i tematy głosów pojawią się tu, gdy capture będzie gotowy. Statystyki powyżej już pokazują, jak przebiegają sesje."
     }
   },
   "submit": {
@@ -415,11 +410,6 @@
     "shareCopied": "Skopiowano!",
     "checksFailed": "Automatyczne testy tej wersji nie przechodzą. Agent zwykle to zauważa i poprawia — nie musisz nic robić.",
     "tryAgain": "Spróbuj z tym pomysłem jeszcze raz",
-    "eta": {
-      "unknown": "Większość gier jest gotowa w niecałą godzinę.",
-      "typical": "Takie gry powstają zwykle około {{minutes}} min.",
-      "overrun": "Ta powstaje dłużej niż typowe {{minutes}} min. Większe pomysły tak mają — możesz zamknąć tę stronę, damy Ci znać."
-    },
     "abandon": {
       "start": "Zatrzymaj tę grę",
       "confirm": "Zatrzymać tworzenie tej gry?",

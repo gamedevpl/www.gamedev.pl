@@ -463,16 +463,20 @@ export function App() {
     [pendingSpec, qaQuestions],
   );
 
-  function navigate(path: string) {
+  const navigate = useCallback((path: string, options?: { replace?: boolean }) => {
     // Update the URL (the source of truth) and the route synchronously so
     // navigation is immediate (and testable) without waiting for popstate.
-    window.history.pushState(null, '', path);
-    // pushState is silent, so announce the navigation for anything living outside
-    // this component (see NAVIGATE_EVENT). Dispatched before the state update so a
-    // listener reading window.location sees the URL we just pushed.
+    if (options?.replace) {
+      window.history.replaceState(null, '', path);
+    } else {
+      window.history.pushState(null, '', path);
+    }
+    // pushState/replaceState are silent, so announce the navigation for anything
+    // living outside this component (see NAVIGATE_EVENT). Dispatched before the
+    // state update so a listener reading window.location sees the URL we just set.
     window.dispatchEvent(new CustomEvent(NAVIGATE_EVENT, { detail: { path } }));
     setRoute(readLocationRoute());
-  }
+  }, []);
 
   function handlePlayGame(game: CatalogEntry) {
     // Published games are permalinked: drive play through the URL so a refresh or
@@ -587,6 +591,7 @@ export function App() {
         ) : route.view === 'studio' ? (
           <CreatorStudioView
             selectedToken={route.token}
+            selectedTab={route.tab}
             onNavigate={navigate}
             onPlay={(slug) => navigate(playPath(slug))}
             onRetryConcept={(concept) => {

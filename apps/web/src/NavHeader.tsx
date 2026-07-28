@@ -98,21 +98,20 @@ export function NavHeader({ activeSpecsCount, onNavigate, onHome, onStudio }: Na
               <button className="nav-link" onClick={() => handleNavClick('arcade')}>
                 <PixelIcon name="gamepad" size={14} /> {t('header.navArcade')}
               </button>
-              <button className="nav-link" onClick={() => handleNavClick('my-games')}>
-                <PixelIcon name="folder" size={14} /> {t('header.navMyGames')}
+              {/* Studio is the creator home. The home page only keeps a short
+                  "your games" gist; the full shelf + build/playtest/improve loop
+                  lives here. Always offered — unsigned visitors get the sign-in
+                  prompt inside Studio rather than a dead "My Games" scroll target. */}
+              <button
+                className="nav-link"
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  onStudio();
+                }}
+              >
+                <PixelIcon name="wrench" size={14} /> {t('header.navStudio')}
                 {activeSpecsCount > 0 && <span className="specs-count-badge">{activeSpecsCount}</span>}
               </button>
-              {user ? (
-                <button
-                  className="nav-link"
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    onStudio();
-                  }}
-                >
-                  <PixelIcon name="wrench" size={14} /> {t('header.navStudio')}
-                </button>
-              ) : null}
 
               {/* Controls that live in the header bar on a desktop but cannot fit
                   beside it on a phone. Hidden above the mobile breakpoint, where
