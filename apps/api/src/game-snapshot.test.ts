@@ -150,7 +150,7 @@ describe('snapshot reads', () => {
     fake.raw.mockResolvedValueOnce(new Response('nope', { status: 500 }));
 
     // A 500 must not look like "not published" — serving tells the two apart to
-    // decide between falling back to GitHub and answering 404.
+    // decide between 503 (snapshot unreachable) and 404 / 502 (miss / incomplete).
     await expect(createStore(fake).getPointer()).rejects.toThrow(/500/);
   });
 

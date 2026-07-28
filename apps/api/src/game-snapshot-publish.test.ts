@@ -193,7 +193,7 @@ describe('publishSnapshot', () => {
 });
 
 describe('publishSnapshot failure handling', () => {
-  it('reports a game it could not bake without failing the whole publish', async () => {
+  it('bakes what it can but does not advance the pointer when anything fails', async () => {
     const { client } = createClientStub({
       catalog: [catalogEntry('good'), catalogEntry('broken')],
       sourcesBySlug: { good: gameSources(), broken: null },
@@ -204,10 +204,14 @@ describe('publishSnapshot failure handling', () => {
 
     expect(result.published).toBe(1);
     expect(result.failures).toEqual([{ slug: 'broken', reason: 'game sources not found on ref' }]);
-    expect(spy.pointer).not.toBeNull();
+    expect(spy.games.has('good')).toBe(true);
+    // Without a serve-time GitHub fallback, flipping the pointer on a partial
+    // bake would half-publish failed games. Leave current.json where it is.
+    expect(spy.pointer).toBeNull();
+    expect(spy.order).not.toContain('pointer');
   });
 
-  it('keeps an unbakeable game in the snapshot catalog so it is not silently unpublished', async () => {
+  it('still writes the full catalog under the new id for debugging, without publishing it', async () => {
     const { client } = createClientStub({
       catalog: [catalogEntry('good'), catalogEntry('broken')],
       sourcesBySlug: { good: gameSources(), broken: null },
@@ -216,14 +220,15 @@ describe('publishSnapshot failure handling', () => {
 
     await publishSnapshot({ client, writer: spy.writer, ref, now: fixedNow });
 
-    // Catalog membership is the games repo's decision, not this job's. The game
-    // stays listed and its play route falls back to GitHub — exactly what it did
-    // before the snapshot existed.
+    // Catalog membership is the games repo's decision, not this job's. The
+    // objects are written for debugging, but the pointer stays put so failed
+    // games are not half-published and successful ones are not silently dropped.
     expect(spy.catalog?.map((entry) => entry.slug)).toEqual(['good', 'broken']);
     expect(spy.games.has('broken')).toBe(false);
+    expect(spy.pointer).toBeNull();
   });
 
-  it('treats a game that fails the hygiene gate as a failure, not a bad snapshot', async () => {
+  it('treats a game that fails the hygiene gate as a failure, not a published snapshot', async () => {
     const { client } = createClientStub({
       catalog: [catalogEntry('empty')],
       sourcesBySlug: { empty: gameSources({ gameJs: '   ' }) },
@@ -234,7 +239,7 @@ describe('publishSnapshot failure handling', () => {
 
     expect(result.published).toBe(0);
     expect(result.failures[0]?.slug).toBe('empty');
-    expect(spy.pointer?.gameCount).toBe(0);
+    expect(spy.pointer).toBeNull();
   });
 
   it('carries on when one game is missing a declared media file', async () => {
@@ -251,6 +256,7 @@ describe('publishSnapshot failure handling', () => {
     expect(result.published).toBe(1);
     expect(result.mediaFiles).toBe(0);
     expect(result.failures).toEqual([]);
+    expect(spy.pointer).not.toBeNull();
   });
 
   it('bakes an empty catalog without writing a broken pointer', async () => {

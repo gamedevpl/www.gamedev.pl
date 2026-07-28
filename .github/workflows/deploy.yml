@@ -40,8 +40,8 @@ jobs:
       REPO: 'gamedev'
       GAMES_REPO: 'gamedevpl/www.gamedev.pl-games'
       # Pre-assembled published games (apps/api/src/game-snapshot.ts), written by
-      # publish-games.yml. Unset would simply mean every play rebuilds from GitHub
-      # again — serving treats the snapshot as a fast path, never a requirement.
+      # publish-games.yml. When set, published catalog / play / media are served
+      # only from the snapshot; unset is the local/dev opt-out (GitHub / fixtures).
       GAMES_SNAPSHOT_BUCKET: 'gamedevpl-games-snapshots'
       WIF_PROVIDER: 'projects/334141807880/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
       WIF_SERVICE_ACCOUNT: 'github-actions-deployer@gamedevpl.iam.gserviceaccount.com'

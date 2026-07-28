@@ -190,8 +190,8 @@ gcloud storage buckets add-iam-policy-binding "gs://${SNAPSHOT_BUCKET}" \
 # Old snapshots are dead weight once the pointer moves past them, but they are
 # also the rollback path, so they are kept for a quarter rather than a day. If the
 # games repo ever goes 90 days without a merge the live snapshot ages out and
-# serving falls back to GitHub — degraded, not broken, which is the right way for
-# a cost control to fail.
+# published serving returns 503 until a fresh bake restores current.json — the
+# lifecycle rule is a cost control, not a soft degrade to GitHub.
 LIFECYCLE_FILE="$(mktemp)"
 cat > "$LIFECYCLE_FILE" <<'EOF'
 {

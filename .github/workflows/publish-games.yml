@@ -17,10 +17,10 @@ name: Publish games snapshot
 # authority follows the snapshot catalog, so if the dispatch stops arriving —
 # an expired or under-permissioned SITE_DISPATCH_TOKEN, a games-repo workflow
 # failing before it reaches that step — nothing else retires the current snapshot
-# and the site serves a frozen catalog indefinitely. That failure is silent on this
-# side: serving falls back to GitHub only for games *missing* from the snapshot,
-# never for stale ones. The schedule bounds that staleness at a day, and re-bakes a
-# takedown that a failed publish left serving.
+# and the site serves a frozen catalog indefinitely. A partial bake no longer
+# advances the pointer (no published-serve GitHub fallback), so a failed publish
+# also leaves the previous good snapshot live. The schedule bounds that staleness
+# at a day, and re-bakes a takedown that a failed publish left serving.
 
 on:
   repository_dispatch:

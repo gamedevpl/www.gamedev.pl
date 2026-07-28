@@ -53,9 +53,35 @@ export interface SnapshotMedia {
 }
 
 /**
+ * The snapshot is configured but cannot answer the request: no `current.json`,
+ * an empty pointer, or a Storage / transport failure. Published serve routes map
+ * this to 503 and must not assemble from GitHub.
+ */
+export class SnapshotUnavailableError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = 'SnapshotUnavailableError';
+  }
+}
+
+/**
+ * The snapshot catalog says the game (or media) is published, but the baked
+ * object is missing — a bake inconsistency. Published serve routes map this to
+ * 502 and must not assemble from GitHub.
+ */
+export class SnapshotIncompleteError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = 'SnapshotIncompleteError';
+  }
+}
+
+/**
  * The read side, used by the serve routes. Every method throws on transport
  * failure and resolves to null on a genuine miss, so callers can tell "snapshot
- * is unreachable, fall back to GitHub" apart from "this game isn't published".
+ * is unreachable" apart from "this object is not in the current snapshot".
+ * When a reader is configured, published routes treat either outcome as a hard
+ * failure — they do not fall back to GitHub.
  */
 export interface GameSnapshotReader {
   getPointer(): Promise<SnapshotPointer | null>;
@@ -315,10 +341,10 @@ async function safeBodyText(response: Response): Promise<string> {
 /**
  * Builds the reader the serve routes use, or null when no bucket is configured.
  *
- * Absent configuration is a supported state, not an error: local development and
- * tests run without a bucket, and production keeps working from GitHub if the
- * snapshot is switched off. Serving is written so the snapshot is a fast path,
- * never a requirement.
+ * Absent configuration is a supported opt-out, not a fallback from a configured
+ * bucket: local development, fixtures, and `local-games-repo` leave
+ * `GAMES_SNAPSHOT_BUCKET` unset and serve from GitHub / the local tree. When the
+ * env var is set, published catalog / play / media routes require the snapshot.
  */
 export function createSnapshotReaderFromEnv(env: NodeJS.ProcessEnv = process.env): GameSnapshotReader | null {
   const bucket = env.GAMES_SNAPSHOT_BUCKET?.trim();

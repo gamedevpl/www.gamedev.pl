@@ -7,8 +7,9 @@ import { InMemoryStore } from './store.js';
 import { NoopTranslator } from './translate.js';
 
 /**
- * The serve half of the snapshot: published games are read from the bucket, and
- * every way that can fail falls back to the GitHub path the site used before.
+ * The serve half of the snapshot: when configured, published games are read
+ * only from the bucket. Misses and Storage errors fail the request — they do
+ * not assemble from GitHub. Unset snapshotReader keeps the GitHub / local path.
  */
 
 const sessionSecret = 'dev-session-secret-change-me';
@@ -120,40 +121,39 @@ describe('playing a published game', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ slug: 'bubble-pop', title: 'Bubble Pop', html: '<!doctype html><p>baked</p>' });
-    // The point of the whole change: no source fan-out, no esbuild bundle.
     expect(getGameSources).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it('falls back to GitHub for a game that is not in the snapshot', async () => {
+  it('returns 502 when the slug is published but the game object is missing', async () => {
     const { githubClient, getGameSources } = createGithubStub([catalogEntry('bubble-pop')]);
     const snapshot = createSnapshotStub({ catalog: [catalogEntry('bubble-pop')], games: {} });
     const app = await createApp({ githubClient, snapshotReader: snapshot.reader });
 
     const response = await app.inject({ method: 'GET', url: '/api/games/bubble-pop' });
 
-    expect(response.statusCode).toBe(200);
-    expect(response.json().html).toContain('from github');
-    expect(getGameSources).toHaveBeenCalledWith('main', 'bubble-pop');
+    expect(response.statusCode).toBe(502);
+    expect(response.json().error).toBe('game snapshot incomplete');
+    expect(getGameSources).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it('falls back to GitHub when the snapshot bucket is unreachable', async () => {
-    const { githubClient, getGameSources } = createGithubStub([catalogEntry('bubble-pop')]);
+  it('returns 503 when the snapshot bucket is unreachable', async () => {
+    const { githubClient, getGameSources, getCatalog } = createGithubStub([catalogEntry('bubble-pop')]);
     const snapshot = createSnapshotStub({ failWith: new Error('storage 503') });
     const app = await createApp({ githubClient, snapshotReader: snapshot.reader });
 
     const response = await app.inject({ method: 'GET', url: '/api/games/bubble-pop' });
 
-    // A Storage outage must degrade to the old behaviour, not to a broken site.
-    expect(response.statusCode).toBe(200);
-    expect(response.json().html).toContain('from github');
-    expect(getGameSources).toHaveBeenCalled();
+    expect(response.statusCode).toBe(503);
+    expect(response.json().error).toBe('game snapshot unavailable');
+    expect(getCatalog).not.toHaveBeenCalled();
+    expect(getGameSources).not.toHaveBeenCalled();
     await app.close();
   });
 
   it('still refuses a slug the catalog does not publish', async () => {
-    const { githubClient } = createGithubStub([]);
+    const { githubClient, getGameSources } = createGithubStub([]);
     const snapshot = createSnapshotStub({
       catalog: [],
       games: { sneaky: { slug: 'sneaky', title: 'Sneaky', html: '<!doctype html>' } },
@@ -165,6 +165,7 @@ describe('playing a published game', () => {
     // Publication is decided by the catalog, not by what happens to sit in the
     // bucket — a stale object must never resurrect an unpublished game.
     expect(response.statusCode).toBe(404);
+    expect(getGameSources).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -197,27 +198,28 @@ describe('the catalog', () => {
     await app.close();
   });
 
-  it('falls back to GitHub before any snapshot has been published', async () => {
+  it('returns 503 when no snapshot has been published yet', async () => {
     const { githubClient, getCatalog } = createGithubStub([catalogEntry('from-github')]);
     const snapshot = createSnapshotStub({ catalog: null });
     const app = await createApp({ githubClient, snapshotReader: snapshot.reader });
 
     const response = await app.inject({ method: 'GET', url: '/api/catalog' });
 
-    expect(response.json().map((entry: CatalogGameEntry) => entry.slug)).toEqual(['from-github']);
-    expect(getCatalog).toHaveBeenCalled();
+    expect(response.statusCode).toBe(503);
+    expect(response.json().error).toBe('catalog snapshot unavailable');
+    expect(getCatalog).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it('falls back to GitHub when the snapshot read fails', async () => {
+  it('returns 503 when the snapshot read fails', async () => {
     const { githubClient, getCatalog } = createGithubStub([catalogEntry('from-github')]);
     const snapshot = createSnapshotStub({ failWith: new Error('storage 503') });
     const app = await createApp({ githubClient, snapshotReader: snapshot.reader });
 
     const response = await app.inject({ method: 'GET', url: '/api/catalog' });
 
-    expect(response.statusCode).toBe(200);
-    expect(getCatalog).toHaveBeenCalled();
+    expect(response.statusCode).toBe(503);
+    expect(getCatalog).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -256,20 +258,42 @@ describe('gallery media', () => {
     await app.close();
   });
 
-  it('falls back to GitHub when the file is not in the snapshot', async () => {
+  it('returns 404 when the file is allowlisted but missing from the snapshot', async () => {
     const { githubClient, getGameMedia } = createGithubStub([withMedia]);
     const snapshot = createSnapshotStub({ catalog: [withMedia], media: {} });
     const app = await createApp({ githubClient, snapshotReader: snapshot.reader });
 
     const response = await app.inject({ method: 'GET', url: '/api/games/bubble-pop/media/opening.png' });
 
-    expect(response.statusCode).toBe(200);
-    expect(getGameMedia).toHaveBeenCalledWith('main', 'bubble-pop', 'opening.png');
+    expect(response.statusCode).toBe(404);
+    expect(getGameMedia).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('returns 503 when the snapshot media read fails', async () => {
+    const { githubClient, getGameMedia } = createGithubStub([withMedia]);
+    // Catalog succeeds so the allowlist can run; only the media object read fails.
+    const getCatalog = vi.fn(async () => [withMedia]);
+    const getMedia = vi.fn(async () => {
+      throw new Error('storage 503');
+    });
+    const reader: GameSnapshotReader = {
+      getPointer: vi.fn(async () => null),
+      getCatalog,
+      getGame: vi.fn(async () => null),
+      getMedia,
+    };
+    const app = await createApp({ githubClient, snapshotReader: reader });
+
+    const response = await app.inject({ method: 'GET', url: '/api/games/bubble-pop/media/opening.png' });
+
+    expect(response.statusCode).toBe(503);
+    expect(getGameMedia).not.toHaveBeenCalled();
     await app.close();
   });
 
   it('still rejects a filename the catalog does not vouch for', async () => {
-    const { githubClient } = createGithubStub([withMedia]);
+    const { githubClient, getGameMedia } = createGithubStub([withMedia]);
     const snapshot = createSnapshotStub({
       catalog: [withMedia],
       media: { 'bubble-pop/secret.png': Buffer.from('should-not-be-served') },
@@ -281,6 +305,7 @@ describe('gallery media', () => {
     // The catalog allowlist runs before the snapshot is consulted, so a stray
     // object in the bucket cannot widen what the API will serve.
     expect(response.statusCode).toBe(404);
+    expect(getGameMedia).not.toHaveBeenCalled();
     await app.close();
   });
 });
