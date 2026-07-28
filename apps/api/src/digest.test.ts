@@ -217,6 +217,28 @@ describe('runDigestSweep', () => {
     expect(await store.listNotifications('g:alice')).toHaveLength(1);
   });
 
+  it('sends nothing to a creator who opted out of the digest', async () => {
+    await played('brick-storm', 12, 3);
+    await store.setDigestOptOut('g:alice', '2026-07-20T00:00:00.000Z');
+
+    const result = await runDigestSweep({ store, now });
+
+    expect(result.sent).toBe(0);
+    expect(result.optedOut).toBe(1);
+    expect(await store.listNotifications('g:alice')).toEqual([]);
+  });
+
+  it('still sends to a creator who unsubscribed from email but not the digest', async () => {
+    // The two switches mean different things. A global email unsubscribe silences the
+    // email channel — the in-app bell and push are still theirs to receive.
+    await played('brick-storm', 12, 3);
+    await store.setEmailUnsubscribed('g:alice', '2026-07-20T00:00:00.000Z');
+
+    const result = await runDigestSweep({ store, now });
+
+    expect(result.sent).toBe(1);
+  });
+
   it('leaves automation accounts alone', async () => {
     await store.upsertUser({ uid: 'bot:e2e' });
     await store.createSubmission(2, 'bot:e2e', 'Bot Game');

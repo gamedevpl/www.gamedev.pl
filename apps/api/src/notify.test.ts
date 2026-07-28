@@ -3,6 +3,7 @@ import { InMemoryStore } from './store.js';
 import { ConsoleMailer, type EmailMessage, type Mailer } from './mailer.js';
 import {
   absoluteAppUrl,
+  emitDigestNotification,
   emitSubmissionNotification,
   notifyOnTransition,
   statusToEvent,
@@ -388,5 +389,62 @@ describe('emitSubmissionNotification email fan-out', () => {
     await emitSubmissionNotification({ ...emailDeps(), mailer: throwing }, event);
     const list = await store.listNotifications('g:owner');
     expect(list[0].emailedAt).toBeNull();
+  });
+});
+
+describe('digest opt-out', () => {
+  function recordingPusher(sent: unknown[]) {
+    return {
+      name: 'test',
+      async send(subscription: { endpoint: string }, payload: unknown) {
+        sent.push({ endpoint: subscription.endpoint, payload });
+        return { outcome: 'sent' as const };
+      },
+    };
+  }
+
+  const digestEvent = {
+    uid: 'g:owner',
+    id: 'digest-2026-W31',
+    params: { games: '2', sessions: '30', votesUp: '4', votesDown: '1', feedback: '3' },
+    link: '/',
+    createdAt: '2026-07-28T09:00:00.000Z',
+  };
+
+  it('does not push a digest to someone who opted out', async () => {
+    // The version of this they cannot fix from an inbox: unsubscribing by email leaves
+    // push untouched, so without this the weekly ping keeps arriving forever.
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:owner', email: 'owner@example.com' });
+    await store.savePushSubscription('g:owner', { endpoint: 'https://push.test/a', keys: { p256dh: 'k', auth: 'a' } });
+    await store.setDigestOptOut('g:owner', '2026-07-20T00:00:00.000Z');
+
+    const sent: unknown[] = [];
+    await emitDigestNotification({ store, pusher: recordingPusher(sent) }, digestEvent);
+
+    expect(sent).toEqual([]);
+  });
+
+  it('still pushes a build notification to the same person', async () => {
+    // The opt-out is about the digest, not about them.
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:owner', email: 'owner@example.com' });
+    await store.savePushSubscription('g:owner', { endpoint: 'https://push.test/a', keys: { p256dh: 'k', auth: 'a' } });
+    await store.setDigestOptOut('g:owner', '2026-07-20T00:00:00.000Z');
+
+    const sent: unknown[] = [];
+    await emitSubmissionNotification(
+      { store, pusher: recordingPusher(sent) },
+      {
+        uid: 'g:owner',
+        type: 'submission.published' as const,
+        issueNumber: 42,
+        gameTitle: 'Sky Dodge',
+        statusToken: 'tok',
+        slug: 'sky-dodge',
+      },
+    );
+
+    expect(sent).toHaveLength(1);
   });
 });

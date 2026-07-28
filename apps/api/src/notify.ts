@@ -99,9 +99,14 @@ async function maybeSendEmail(deps: EmitDeps, uid: string, notification: StoredN
 
     const appBaseUrl = deps.appBaseUrl ?? process.env.APP_BASE_URL?.trim() ?? 'https://www.gamedev.pl';
     const actionUrl = absoluteAppUrl(appBaseUrl, notification.link);
+    // A digest's unsubscribe narrows to the digest. Clicking "unsubscribe" on a weekly
+    // summary must not also silence "your game is published" — that is the message the
+    // creator actually wants, and losing it is how one unwanted email costs us every
+    // wanted one.
+    const unsubscribePath = `/api/email/unsubscribe?token=${mintUnsubscribeToken(uid, unsubscribeSecret)}`;
     const unsubscribeUrl = absoluteAppUrl(
       appBaseUrl,
-      `/api/email/unsubscribe?token=${mintUnsubscribeToken(uid, unsubscribeSecret)}`,
+      notification.type === 'creator.digest' ? `${unsubscribePath}&scope=digest` : unsubscribePath,
     );
     const locale = normalizeLocale(user.locale);
     const message =
@@ -134,6 +139,11 @@ async function maybePush(deps: EmitDeps, uid: string, notification: StoredNotifi
   try {
     const [user, subscriptions] = await Promise.all([deps.store.getUser(uid), deps.store.listPushSubscriptions(uid)]);
     if (subscriptions.length === 0) return;
+    // The digest opt-out is per-notification, not per-channel: someone who asked to stop
+    // the weekly summary meant the summary, not just the email carrying it. Without this
+    // an unsubscribed creator keeps getting pushed every Monday, which is the version of
+    // this bug they cannot fix from their inbox.
+    if (notification.type === 'creator.digest' && user?.digestOptOutAt) return;
 
     const appBaseUrl = deps.appBaseUrl ?? process.env.APP_BASE_URL?.trim() ?? 'https://www.gamedev.pl';
     const locale = normalizeLocale(user?.locale);

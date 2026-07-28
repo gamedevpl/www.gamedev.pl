@@ -25,7 +25,13 @@ export async function registerEmailRoutes(app: FastifyInstance, options: EmailRo
   const secret = options.unsubscribeSecret ?? process.env.SESSION_SECRET;
 
   app.get('/api/email/unsubscribe', { config: { rateLimit: { max: 30, timeWindow: '1 hour' } } }, async (request, reply) => {
-    const token = (request.query as { token?: string }).token;
+    const query = request.query as { token?: string; scope?: string };
+    const token = query.token;
+    // The scope only ever *narrows* what the token already authorizes — a token good for
+    // "stop all email" is being used to ask for less than that — so it needs no signature
+    // of its own. Anything unrecognised falls back to the full unsubscribe, which is the
+    // safe direction for a link someone clicked to make mail stop.
+    const digestOnly = query.scope === 'digest';
     if (!secret || !token) {
       return reply.type('text/html').status(400).send(page('Invalid link', 'This unsubscribe link is not valid.'));
     }
@@ -43,7 +49,21 @@ export async function registerEmailRoutes(app: FastifyInstance, options: EmailRo
       throw error;
     }
 
-    await options.store.setEmailUnsubscribed(uid, new Date().toISOString());
+    const now = new Date().toISOString();
+    if (digestOnly) {
+      await options.store.setDigestOptOut(uid, now);
+      return reply
+        .type('text/html')
+        .send(
+          page(
+            'Weekly digest off',
+            'You will no longer receive the weekly summary of how your games are doing — by email or push. ' +
+              'You will still get messages about your own builds, such as when a game is published.',
+          ),
+        );
+    }
+
+    await options.store.setEmailUnsubscribed(uid, now);
     return reply
       .type('text/html')
       .send(

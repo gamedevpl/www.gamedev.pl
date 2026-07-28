@@ -25,6 +25,17 @@ export interface User {
   /** Global one-click email kill switch — set by the unsubscribe endpoint. */
   emailUnsubscribedAt?: string | null;
   /**
+   * Opted out of the weekly creator digest specifically, across every channel.
+   *
+   * Separate from `emailUnsubscribedAt` because the two are different requests. The digest
+   * is the only notification we send that nobody asked for on the day it arrives; the rest
+   * are transactional ("your game is published"), and someone who wants to stop the weekly
+   * summary almost certainly still wants those. One switch for both would make "stop
+   * emailing me every Monday" cost a creator the message they actually care about — which
+   * is how a notification system trains people to turn everything off.
+   */
+  digestOptOutAt?: string | null;
+  /**
    * Recent days (`yyyy-mm-dd`) on which this account made an authenticated request,
    * newest first and capped at `ACTIVE_DAYS_KEPT`.
    *
@@ -621,6 +632,8 @@ export interface Store {
   upsertUser(userData: Partial<User> & { uid: string }): Promise<User>;
   /** Set (or clear, with null) the global email-unsubscribe timestamp for a user. */
   setEmailUnsubscribed(uid: string, at: string | null): Promise<void>;
+  /** Set (or clear, with null) the weekly-digest opt-out for a user. */
+  setDigestOptOut(uid: string, at: string | null): Promise<void>;
   createSubmission(issueNumber: number, ownerUid: string, title: string): Promise<SubmissionRecord>;
   getSubmission(issueNumber: number): Promise<SubmissionRecord | null>;
   setSubmissionNotifiedStatus(issueNumber: number, status: SubmissionStatus): Promise<void>;
@@ -950,6 +963,7 @@ export class InMemoryStore implements Store {
       // Preserve email prefs across logins — a re-login must not resubscribe.
       locale: userData.locale ?? existing?.locale,
       emailUnsubscribedAt: existing?.emailUnsubscribedAt ?? null,
+      digestOptOutAt: existing?.digestOptOutAt ?? null,
       // Carried explicitly. Omitting it silently discarded every write from the
       // activity hook in `auth.ts`, whose only purpose is to persist this field.
       activeDays: userData.activeDays ?? existing?.activeDays,
@@ -962,6 +976,11 @@ export class InMemoryStore implements Store {
   async setEmailUnsubscribed(uid: string, at: string | null): Promise<void> {
     const existing = this.users.get(uid);
     if (existing) this.users.set(uid, { ...existing, emailUnsubscribedAt: at });
+  }
+
+  async setDigestOptOut(uid: string, at: string | null): Promise<void> {
+    const existing = this.users.get(uid);
+    if (existing) this.users.set(uid, { ...existing, digestOptOutAt: at });
   }
 
   async createSubmission(issueNumber: number, ownerUid: string, title: string): Promise<SubmissionRecord> {
@@ -1599,6 +1618,10 @@ export class FirestoreStore implements Store {
 
   async setEmailUnsubscribed(uid: string, at: string | null): Promise<void> {
     await this.db.collection('users').doc(uid).set({ emailUnsubscribedAt: at }, { merge: true });
+  }
+
+  async setDigestOptOut(uid: string, at: string | null): Promise<void> {
+    await this.db.collection('users').doc(uid).set({ digestOptOutAt: at }, { merge: true });
   }
 
   async createSubmission(issueNumber: number, ownerUid: string, title: string): Promise<SubmissionRecord> {

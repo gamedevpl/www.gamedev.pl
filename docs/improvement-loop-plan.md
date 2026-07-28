@@ -700,6 +700,15 @@ at all and feeds the only autonomous-eligible class.
     — the notification already is the record of what the creator was last told, and a
     second copy of that fact is a second thing that can drift from it.
 
+  **Opting out is per-digest, not per-channel.** The digest is the only notification
+  nobody asked for on the day it arrives — the rest are transactional — so its unsubscribe
+  link narrows to `?scope=digest` and sets `digestOptOutAt` rather than the global email
+  kill switch. Clicking "unsubscribe" on a weekly summary must not also silence "your game
+  is published", which is the message the creator actually wants; losing it is how one
+  unwanted email costs us every wanted one. The opt-out covers **push as well as email**,
+  because someone who asked to stop the weekly summary meant the summary, not just the
+  envelope it came in — and a weekly push is the version they cannot fix from an inbox.
+
   **No feedback themes travel this path.** Themes are player-written text summarized by a
   model: safe to render to a signed-in creator in the studio where they carry that label,
   and not something to push into an inbox stripped of it and forwarded onward. The digest

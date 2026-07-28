@@ -166,6 +166,8 @@ export interface DigestSweepResult {
   creators: number;
   /** Digests actually created. */
   sent: number;
+  /** Creators who asked not to receive the digest. */
+  optedOut: number;
   /** Skipped because their games had no evidence this window. */
   skippedEmpty: number;
   /** Skipped because the numbers had not moved since their last digest. */
@@ -214,12 +216,21 @@ export async function runDigestSweep(deps: DigestSweepDeps): Promise<DigestSweep
   }
 
   let sent = 0;
+  let optedOut = 0;
   let skippedEmpty = 0;
   let skippedUnchanged = 0;
   let failed = 0;
 
   for (const [uid, cards] of cardsByOwner) {
     try {
+      // Checked before any work: an opted-out creator costs no reads, and the sweep's
+      // counters describe who was actually considered.
+      const user = await store.getUser(uid);
+      if (user?.digestOptOutAt) {
+        optedOut += 1;
+        continue;
+      }
+
       const totals = buildDigestTotals(cards);
       if (isEmptyDigest(totals)) {
         skippedEmpty += 1;
@@ -248,7 +259,7 @@ export async function runDigestSweep(deps: DigestSweepDeps): Promise<DigestSweep
     }
   }
 
-  return { weekKey, truncated, creators: cardsByOwner.size, sent, skippedEmpty, skippedUnchanged, failed };
+  return { weekKey, truncated, creators: cardsByOwner.size, sent, optedOut, skippedEmpty, skippedUnchanged, failed };
 }
 
 /** The params of the most recent digest this creator received, or null if they have none. */
