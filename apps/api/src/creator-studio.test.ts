@@ -236,12 +236,29 @@ describe('GET /api/me/studio/scorecards', () => {
     // The health route recomputes over a window the creator picks; a scorecard is a fixed
     // roll. Two numbers labelled "sessions" disagreeing on one screen is the bug this
     // response shape exists to prevent.
-    await store.putScorecard('sky-dodge', card('sky-dodge'));
+    //
+    // Asserted as an exact key set rather than by searching the serialized body: themes are
+    // player-written text, so a player who writes "too many sessions" would otherwise fail
+    // this test against a route that is behaving perfectly.
+    await store.putScorecard('sky-dodge', card('sky-dodge', {
+      untrusted: {
+        errorSamples: [],
+        progressLabels: [],
+        feedbackThemes: [{ theme: 'too many sessions before the finishRate improves', count: 3 }],
+      },
+    }));
 
     const body = (await get()).json() as CreatorScorecardsResponse;
 
-    expect(JSON.stringify(body)).not.toContain('sessions');
-    expect(JSON.stringify(body)).not.toContain('finishRate');
+    expect(Object.keys(body.scorecards[0]).sort()).toEqual([
+      'computedAt',
+      'feedbackCount',
+      'slug',
+      'truncated',
+      'untrustedThemes',
+      'votes',
+      'windowDays',
+    ]);
   });
 
   it('omits a game with no scorecard rather than reporting zeros', async () => {
