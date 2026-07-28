@@ -24,7 +24,7 @@ import {
   type ReactNode,
 } from 'react';
 import { MASCOT_IDLE_SPANS, MASCOT_SOLID_SPANS } from './mascotSpans.js';
-import { useDeviceTilt } from './useDeviceTilt.js';
+import { SHAKE_DELIGHT_AT, useDeviceTilt, type MascotGesture } from './useDeviceTilt.js';
 
 export type MascotEmotion =
   'idle' | 'happy' | 'curious' | 'thinking' | 'excited' | 'confused' | 'sad' | 'proud' | 'wave' | 'busy';
@@ -387,6 +387,9 @@ export function InteractiveMascot({
   const [emotion, setEmotion] = useState<MascotEmotion>(idleEmotion);
   const [look, setLook] = useState<MascotLook>({ x: 0, y: 0 });
   const [poking, setPoking] = useState(false);
+  /** Which gesture is currently being answered, for the one-shot motion classes. */
+  const [flourish, setFlourish] = useState<MascotGesture | null>(null);
+  const upsideDownRef = useRef(false);
   const [reduceMotion, setReduceMotion] = useState(false);
   const reduceMotionRef = useRef(false);
 
@@ -417,21 +420,49 @@ export function InteractiveMascot({
   // concerned — both end up as a look vector. Reduced motion opts out entirely.
   const device = useDeviceTilt(reactsToTilt && !reduceMotion);
 
-  // Shake him and he gets dizzy. Skips the first render: shakeCount starts at 0 and
-  // reaching 1 is the first real shake.
+  /*
+   * How he answers each thing you can do to the phone. Skips the first render:
+   * `gestureSeq` starts at 0 and reaching 1 is the first real gesture.
+   *
+   * Shaking escalates on purpose. One shake and he is dizzy, which is the joke; keep
+   * going and he decides he likes it, which is the better joke and the reason to try
+   * it twice. Being turned over is the only reaction that persists — it lasts as long
+   * as you hold it there — so it gets its own state rather than a timer.
+   */
   useEffect(() => {
-    if (device.shakeCount === 0) return;
+    if (device.gestureSeq === 0) return;
+    const reaction: MascotEmotion =
+      device.gesture === 'freefall'
+        ? 'excited'
+        : device.gesture === 'flip'
+          ? 'sad'
+          : device.gesture === 'right-side-up'
+            ? 'happy'
+            : device.shakeStreak >= SHAKE_DELIGHT_AT
+              ? 'excited'
+              : 'confused';
+
     pokingRef.current = true;
     setPoking(true);
-    setEmotion('confused');
+    setEmotion(reaction);
+    // The tumble is the payoff for keeping at it — a single shake just makes him
+    // dizzy, and spinning him every time would spend the joke immediately.
+    const earnedTumble = device.gesture !== 'shake' || device.shakeStreak >= SHAKE_DELIGHT_AT;
+    setFlourish(earnedTumble ? device.gesture : null);
     if (pokeTimer.current) clearTimeout(pokeTimer.current);
     pokeTimer.current = setTimeout(() => {
       pokingRef.current = false;
       setPoking(false);
-      setEmotion(hoveredRef.current ? 'curious' : idleEmotion);
+      setFlourish(null);
+      // Still upside down when the reaction expires? Then he stays unhappy about it.
+      setEmotion(upsideDownRef.current ? 'sad' : hoveredRef.current ? 'curious' : idleEmotion);
       pokeTimer.current = null;
     }, POKE_HOLD_MS);
-  }, [device.shakeCount, idleEmotion]);
+    // `gestureSeq` is the trigger; the rest is read at the moment it changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [device.gestureSeq]);
+
+  upsideDownRef.current = device.upsideDown;
 
   // Reduced motion still gets the emotion swap — only tilt/boop are suppressed.
   const settleEmotion = () => (hoveredRef.current ? 'curious' : idleEmotion);
@@ -514,7 +545,13 @@ export function InteractiveMascot({
     <button
       ref={rootRef}
       type="button"
-      className={['mascot-interactive', poking ? 'mascot-interactive--poking' : null, className]
+      className={[
+        'mascot-interactive',
+        poking ? 'mascot-interactive--poking' : null,
+        device.upsideDown ? 'mascot-interactive--upside-down' : null,
+        flourish ? `mascot-interactive--${flourish}` : null,
+        className,
+      ]
         .filter(Boolean)
         .join(' ')}
       aria-label={pokeLabel}

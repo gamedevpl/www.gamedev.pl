@@ -3,7 +3,15 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { angleDelta, shakeJerk, tiltFromOrientation, useDeviceTilt, type DeviceTilt } from './useDeviceTilt.js';
+import {
+  angleDelta,
+  gravityAlignment,
+  isFreeFall,
+  shakeJerk,
+  tiltFromOrientation,
+  useDeviceTilt,
+  type DeviceTilt,
+} from './useDeviceTilt.js';
 
 describe('tilt maths', () => {
   it('takes the short way round the circle', () => {
@@ -39,6 +47,50 @@ describe('tilt maths', () => {
     const still = { x: 0, y: 9.8, z: 0 };
     expect(shakeJerk(still, still)).toBe(0);
     expect(shakeJerk(still, { x: 0, y: -9.8, z: 0 })).toBeCloseTo(19.6, 1);
+  });
+});
+
+describe('turning the phone over', () => {
+  const held = { x: 0, y: 9.8, z: 0 };
+
+  it('measures against how you were holding it, not against an axis', () => {
+    expect(gravityAlignment(held, held)).toBeCloseTo(1, 3);
+    expect(gravityAlignment(held, { x: 0, y: -9.8, z: 0 })).toBeCloseTo(-1, 3);
+    expect(gravityAlignment(held, { x: 9.8, y: 0, z: 0 })).toBeCloseTo(0, 3);
+  });
+
+  /**
+   * The point of doing it this way: a device whose axes are signed the other way
+   * round still reports "same as I started" as +1 and "turned over" as −1, because
+   * the quantity is an angle between two of its own readings. Guessing an absolute
+   * axis sign wrong would invert the whole feature on half the devices.
+   */
+  it('is independent of which way the axes are signed', () => {
+    const heldOtherConvention = { x: 0, y: -9.8, z: 0 };
+    expect(gravityAlignment(heldOtherConvention, heldOtherConvention)).toBeCloseTo(1, 3);
+    expect(gravityAlignment(heldOtherConvention, { x: 0, y: 9.8, z: 0 })).toBeCloseTo(-1, 3);
+  });
+
+  it('works for a phone that started flat on a table', () => {
+    const flat = { x: 0, y: 0, z: 9.8 };
+    expect(gravityAlignment(flat, { x: 0, y: 0, z: -9.8 })).toBeCloseTo(-1, 3);
+  });
+
+  it('refuses to guess a direction from a falling sample', () => {
+    // No usable "down" while falling — 0 keeps it clear of both flip thresholds.
+    expect(gravityAlignment(held, { x: 0.1, y: 0.1, z: 0.1 })).toBe(0);
+    expect(gravityAlignment({ x: 0, y: 0, z: 0 }, held)).toBe(0);
+  });
+});
+
+describe('dropping the phone', () => {
+  it('knows a fall from a hold', () => {
+    // At rest something reads ~9.8; in free fall the accelerometer sees ~nothing.
+    expect(isFreeFall({ x: 0, y: 0, z: 0 })).toBe(true);
+    expect(isFreeFall({ x: 0.4, y: -0.9, z: 1.1 })).toBe(true);
+    expect(isFreeFall({ x: 0, y: 9.8, z: 0 })).toBe(false);
+    // A brisk wave is high-magnitude, not low — it must not read as a drop.
+    expect(isFreeFall({ x: 4, y: 14, z: 3 })).toBe(false);
   });
 });
 
