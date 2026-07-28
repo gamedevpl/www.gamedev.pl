@@ -219,6 +219,11 @@ const BRIDGE = `(function(){
     if(e.key==='Escape'){post({type:'key',key:'Escape'});}
   });
   addEventListener('pointerdown',function(){post({type:'pointer'});},{passive:true});
+  // iOS Safari: long-press on the canvas opens the callout (Copy / Translate / Look Up)
+  // and the text-selection loupe ("mini zoom"). CSS covers most of it; these kill the
+  // remaining native handlers. Games have no selectable document chrome in the player.
+  addEventListener('contextmenu',function(e){e.preventDefault();});
+  addEventListener('selectstart',function(e){e.preventDefault();});
   function init(){
     sendMeta();
     var s=el('sound-toggle');
@@ -228,7 +233,20 @@ const BRIDGE = `(function(){
   if(document.readyState==='loading')addEventListener('DOMContentLoaded',init);else init();
 })();`;
 
-const HIDE_CHROME = `#game-title,#game-desc,.game-controls,.hint{display:none!important}`;
+// Hide the game's own chrome (the app theater shows title/desc/sound instead), and
+  // strip iOS long-press chrome inside the opaque-origin frame — parent CSS cannot
+  // reach in here. Without this, a hold on iPhone SE pops the selection loupe and
+  // the Copy / Translate / Look Up callout over the playfield.
+const HIDE_CHROME =
+  `#game-title,#game-desc,.game-controls,.hint{display:none!important}` +
+  `html,body,canvas,img,video{` +
+  `-webkit-touch-callout:none;` +
+  `-webkit-user-select:none;` +
+  `user-select:none;` +
+  `-webkit-tap-highlight-color:transparent;` +
+  `touch-action:none;` +
+  `overscroll-behavior:none` +
+  `}`;
 
 /**
  * Injects the player bridge + hide-chrome style into an assembled game document

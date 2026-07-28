@@ -28,6 +28,28 @@ describe('Sandbox Invariant Security Guard', () => {
     document.body.removeChild(container);
   });
 
+  it('prevents the context menu on the iframe element (iOS callout backstop)', () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(createElement(GameFrame, { title: 'Test Game', html: '<html><body></body></html>', embed: true }));
+    });
+
+    const iframe = container.querySelector('iframe.game-frame') as HTMLIFrameElement;
+    expect(iframe).not.toBeNull();
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    iframe.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+
+    act(() => {
+      root.unmount();
+    });
+    document.body.removeChild(container);
+  });
+
   it('guarantees no source file in apps/web/src introduces allow-same-origin or dangerous sandbox permissions in code', () => {
     const srcDir = path.resolve(__dirname);
     const files = fs.readdirSync(srcDir, { recursive: true }) as string[];
