@@ -568,5 +568,17 @@
     "draftNamed": "Szkic: {{title}}",
     "statusNamed": "Status · {{title}}",
     "studioNamed": "Studio · {{title}}"
+  },
+  "pwa": {
+    "ariaLabel": "Zainstaluj tę aplikację",
+    "installTitle": "Dodaj Gamedev.pl do ekranu głównego",
+    "installBody": "Otwiera się na pełnym ekranie w około sekundę, nawet przy wolnym połączeniu — i dzięki temu możemy dać znać, gdy Twoja gra trafi do serwisu.",
+    "installAction": "Zainstaluj",
+    "iosStepShare": "Dotknij przycisku Udostępnij",
+    "iosStepAdd": "Wybierz „Do ekranu początkowego”",
+    "dismiss": "Nie teraz",
+    "updateTitle": "Nowa wersja Gamedev.pl jest gotowa.",
+    "updateAction": "Odśwież",
+    "updateDismiss": "Zamknij"
   }
 }

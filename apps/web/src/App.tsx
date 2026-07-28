@@ -24,6 +24,8 @@ import {
 import { LegalPage } from './LegalPage.js';
 import { ContactPage } from './ContactPage.js';
 import { NotFoundPage } from './NotFoundPage.js';
+import { AppUpdateBanner } from './AppUpdateBanner.js';
+import { InstallPrompt } from './InstallPrompt.js';
 import { SiteFooter } from './SiteFooter.js';
 import { resolveDocumentTitle } from './pageTitle.js';
 import { useDocumentTitle } from './useDocumentTitle.js';
@@ -714,6 +716,14 @@ export function App() {
       {/* Hidden while a game is on stage: the player is a full-viewport fixed overlay,
           and a footer scrolling underneath it is chrome nobody can reach anyway. */}
       {!stageContent && <SiteFooter />}
+
+      {/* Same reasoning, and then some: both of these are bottom-anchored bars, and a
+          bar over a running game is worse than merely unreachable. Mounting them here —
+          inside the signed-in app, past the join and splash early returns — is also what
+          keeps the install nudge away from controller guests (mobile-app-plan.md, open
+          question 1) and from visitors who have not got in yet. */}
+      {!stageContent && <InstallPrompt />}
+      {!stageContent && <AppUpdateBanner />}
 
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
     </div>

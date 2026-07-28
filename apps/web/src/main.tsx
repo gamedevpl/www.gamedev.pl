@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { App } from './App.js';
 import { AuthProvider } from './AuthContext.js';
+import { recordVisit, watchInstallPrompt } from './pwa.js';
 import { startVisitTracking } from './visitTelemetry.js';
 import './i18n/index.js';
 import './styles.css';
@@ -9,6 +10,19 @@ import './styles.css';
 // Started before the first render: the visit has to be recorded as it lands, and a tree
 // that has already chosen a route has passed the moment being measured.
 startVisitTracking();
+
+/*
+ * Both of these have to happen at boot rather than from the component that uses them.
+ *
+ * `watchInstallPrompt` because Chrome fires `beforeinstallprompt` during load and only
+ * honours a synchronous `preventDefault()`; a listener attached on mount never sees it.
+ *
+ * `recordVisit` because "has this person been here before" must count every session,
+ * including the ones spent on the beta splash or a controller page — routes where the
+ * install banner deliberately never renders and so could never do the counting itself.
+ */
+watchInstallPrompt();
+recordVisit();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

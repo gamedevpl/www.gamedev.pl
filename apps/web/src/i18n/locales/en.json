@@ -568,5 +568,17 @@
     "draftNamed": "Draft {{title}}",
     "statusNamed": "Status · {{title}}",
     "studioNamed": "Studio · {{title}}"
+  },
+  "pwa": {
+    "ariaLabel": "Install this app",
+    "installTitle": "Keep Gamedev.pl on your home screen",
+    "installBody": "Opens full screen in about a second, even on a slow connection — and it is how we can tell you the moment your game goes live.",
+    "installAction": "Install",
+    "iosStepShare": "Tap the Share button",
+    "iosStepAdd": "Choose \"Add to Home Screen\"",
+    "dismiss": "Not now",
+    "updateTitle": "A new version of Gamedev.pl is ready.",
+    "updateAction": "Reload",
+    "updateDismiss": "Dismiss"
   }
 }

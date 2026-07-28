@@ -5873,3 +5873,185 @@ body.player-open {
     border-bottom: 1px solid var(--panel-border);
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Installed-app chrome: the install offer and the "new version" notice.
+   Both are bottom-anchored bars mounted only inside the signed-in app, and both
+   are the last thing that should ever cover a running game — App.tsx unmounts
+   them while a game is on stage, so they need no z-index race with the theater.
+   --------------------------------------------------------------------------- */
+
+.install-prompt,
+.app-update {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  /* Clear of the iOS home indicator and of Android's gesture bar. */
+  bottom: max(12px, env(safe-area-inset-bottom));
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 auto;
+  max-width: 560px;
+  padding: 12px 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  background: rgba(22, 28, 34, 0.96);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  animation: install-prompt-in 220ms ease-out;
+}
+
+@keyframes install-prompt-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .install-prompt,
+  .app-update {
+    animation: none;
+  }
+}
+
+.install-prompt__icon {
+  flex-shrink: 0;
+  color: var(--turquoise);
+}
+
+.install-prompt__copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.install-prompt__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.install-prompt__body {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* The iOS variant is instructions, not a button — numbered so "first this, then
+   that" survives being skimmed, which is how anyone reads a bar like this. */
+.install-prompt__steps {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.install-prompt__steps li {
+  /* Keeps the inline Share glyph on the text baseline instead of riding above it. */
+  vertical-align: middle;
+}
+
+.install-prompt__steps svg {
+  vertical-align: -2px;
+  color: var(--accent-blue);
+}
+
+.install-prompt__actions,
+.app-update__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.install-prompt__install,
+.app-update__reload {
+  padding: 9px 14px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.install-prompt__close,
+.app-update__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.install-prompt__close:hover,
+.app-update__close:hover {
+  color: var(--text);
+  border-color: var(--panel-border);
+}
+
+.app-update__icon {
+  flex-shrink: 0;
+  color: var(--turquoise);
+}
+
+.app-update__text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* Both bars carry a dismiss control, and a dismiss control that is hard to hit is
+   how a helpful bar becomes a trap. Same 44px floor as the rest of M0. */
+@media (pointer: coarse), (max-width: 768px) {
+  .install-prompt__close,
+  .app-update__close {
+    width: 44px;
+    height: 44px;
+  }
+
+  .install-prompt__install,
+  .app-update__reload {
+    min-height: 44px;
+  }
+}
+
+/* On the narrowest phones the row cannot hold icon + copy + two controls without
+   the copy collapsing to a couple of characters per line, so the actions drop to
+   their own full-width row underneath. */
+@media (max-width: 400px) {
+  .install-prompt {
+    flex-wrap: wrap;
+  }
+
+  .install-prompt__copy {
+    /* Beats flex-wrap's default of keeping the icon and copy on one line only if
+       they happen to fit; this forces the actions below rather than squeezing. */
+    flex-basis: calc(100% - 32px);
+  }
+
+  .install-prompt__actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .install-prompt__install {
+    flex: 1;
+  }
+}
