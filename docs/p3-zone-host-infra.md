@@ -87,7 +87,7 @@ ceiling, WebSockets only.
 - **Deploys are rare and graceful by construction.** The service redeploys when zone
   host code changes, not when the website does. On SIGTERM it snapshots every active
   zone inside the termination grace period and closes sockets with a `resume` reason;
-  clients re-dial and the world continues — an _scheduled_ unscheduled-hibernate.
+  clients re-dial and the world continues — a _scheduled_ unscheduled-hibernate.
 - **The routing problem stays deferred but not foreclosed.** At max-instances 1 the
   zone directory (§8's `zoneId → instance` map) is trivially the service URL. The join
   handshake already returns the host URL per zone (see the protocol), so scaling out
