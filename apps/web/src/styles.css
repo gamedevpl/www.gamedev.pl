@@ -3254,6 +3254,11 @@ body.player-open {
 /* CLOSED BETA SPLASH */
 .beta-splash {
   min-height: 100vh;
+  /* iOS resolves 100vh to the LARGE viewport — the one you get with the toolbars
+     retracted — so a screen centred in it sits partly behind Safari's bottom bar
+     until you scroll. dvh tracks the visible viewport instead. Kept as a second
+     declaration so browsers without dvh keep the vh line. */
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3391,6 +3396,86 @@ body.player-open {
   color: #ff8080;
   font-size: 0.95rem;
   margin: 0;
+}
+
+/*
+ * Short screens — an iPhone SE is 375×667, and Safari's bars leave about 553px of
+ * that actually visible. The desktop card wants 678px, so the legal links sat behind
+ * the toolbar: the terms have to be reachable on the screen where you sign in, not a
+ * scroll away. Everything below trims vertical rhythm only; nothing is hidden.
+ *
+ * Keyed on height rather than width because the constraint is vertical — this also
+ * catches a phone held in landscape, where a width query would not fire.
+ */
+@media (max-height: 720px) {
+  .beta-splash {
+    padding: 12px;
+    /* Still centred on a roomy screen, but a card taller than the viewport starts at
+       the top instead of having its head cut off as well as its feet. */
+    align-items: safe center;
+  }
+
+  .beta-splash__card {
+    padding: 24px 20px;
+    border-radius: 14px;
+  }
+
+  /* CSS wins over the SVG's width/height attributes, so the mascot shrinks without
+     the component needing to know anything about the viewport. */
+  .beta-splash__mascot .mascot {
+    width: 68px;
+    height: 58px;
+  }
+
+  .beta-splash__mascot {
+    margin-bottom: 10px;
+  }
+
+  .beta-splash__logo {
+    font-size: 1.4rem;
+    margin-bottom: 12px;
+  }
+
+  .beta-splash__headline {
+    font-size: 1.3rem;
+    margin-bottom: 8px;
+  }
+
+  .beta-splash__sub {
+    font-size: 0.92rem;
+    margin-bottom: 14px;
+  }
+
+  .beta-splash__badge {
+    margin-bottom: 16px;
+  }
+
+  .beta-splash__signin {
+    margin-bottom: 14px;
+  }
+
+  .beta-splash__footer {
+    margin-top: 12px;
+  }
+
+  /* Only a margin that already exists is trimmed — the confirm/rejected lines sit at
+     margin 0 and must stay there, or the blocked state grows instead of shrinking. */
+  .beta-splash__blocked-msg {
+    font-size: 0.92rem;
+    margin-bottom: 12px;
+  }
+
+  .beta-splash__legal {
+    margin-top: 0.7rem;
+  }
+
+  /* The invite-only panel adds a message and a button, and it only ever appears after
+     the visitor has read the pitch and tried to sign in — so on a short screen the
+     pitch is what gives way, rather than the legal links dropping off the bottom
+     again. Progressive enhancement: without :has() the card scrolls, as it does now. */
+  .beta-splash__card:has(.beta-splash__blocked) .beta-splash__sub {
+    display: none;
+  }
 }
 
 /* Creator Q&A Clarifications */
