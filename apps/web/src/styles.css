@@ -3254,6 +3254,11 @@ body.player-open {
 /* CLOSED BETA SPLASH */
 .beta-splash {
   min-height: 100vh;
+  /* iOS resolves 100vh to the LARGE viewport — the one you get with the toolbars
+     retracted — so a screen centred in it sits partly behind Safari's bottom bar
+     until you scroll. dvh tracks the visible viewport instead. Kept as a second
+     declaration so browsers without dvh keep the vh line. */
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3391,6 +3396,92 @@ body.player-open {
   color: #ff8080;
   font-size: 0.95rem;
   margin: 0;
+}
+
+/*
+ * Short screens — an iPhone SE is 375×667, and Safari's bars leave about 553px of
+ * that actually visible. The desktop card wants 678px, so the legal links sat behind
+ * the toolbar: the terms have to be reachable on the screen where you sign in, not a
+ * scroll away. Everything below trims vertical rhythm only; nothing is hidden.
+ *
+ * Keyed on height rather than width because the constraint is vertical — this also
+ * catches a phone held in landscape, where a width query would not fire.
+ */
+@media (max-height: 720px) {
+  .beta-splash {
+    padding: 12px;
+    /* Centring a flex item that overflows pushes its top edge past the container's,
+       where it cannot be scrolled back to — the head gets cut off as well as the feet.
+       `align-items: safe center` says exactly that, but older Safari drops the whole
+       declaration as invalid and silently falls back to plain `center`, which is the
+       bug. Auto margins do the same job with no support story: they centre while there
+       is free space and collapse to zero when there is not. */
+    align-items: flex-start;
+  }
+
+  .beta-splash__card {
+    margin-top: auto;
+    margin-bottom: auto;
+    padding: 24px 20px;
+    border-radius: 14px;
+  }
+
+  /* CSS wins over the SVG's width/height attributes, so the mascot shrinks without
+     the component needing to know anything about the viewport. */
+  .beta-splash__mascot .mascot {
+    width: 68px;
+    height: 58px;
+  }
+
+  .beta-splash__mascot {
+    margin-bottom: 10px;
+  }
+
+  .beta-splash__logo {
+    font-size: 1.4rem;
+    margin-bottom: 12px;
+  }
+
+  .beta-splash__headline {
+    font-size: 1.3rem;
+    margin-bottom: 8px;
+  }
+
+  .beta-splash__sub {
+    font-size: 0.92rem;
+    margin-bottom: 14px;
+  }
+
+  .beta-splash__badge {
+    margin-bottom: 16px;
+  }
+
+  .beta-splash__signin {
+    margin-bottom: 14px;
+  }
+
+  .beta-splash__footer {
+    margin-top: 12px;
+  }
+
+  /* Only a margin that already exists is trimmed — the confirm/rejected lines sit at
+     margin 0 and must stay there, or the blocked state grows instead of shrinking. */
+  .beta-splash__blocked-msg {
+    font-size: 0.92rem;
+    margin-bottom: 12px;
+  }
+
+  .beta-splash__legal {
+    margin-top: 0.7rem;
+  }
+
+  /* The invite-only panel adds a message and a button, and it only ever appears after
+     the visitor has read the pitch and tried to sign in — so on a short screen the
+     pitch is what gives way, rather than the legal links dropping off the bottom
+     again. Progressive enhancement: without :has() the card scrolls, as it does now. */
+  .beta-splash__card:has(.beta-splash__blocked) .beta-splash__sub {
+    display: none;
+  }
 }
 
 /* Creator Q&A Clarifications */
@@ -4817,6 +4908,16 @@ body.player-open {
 
 .mascot--logo {
   color: var(--turquoise);
+}
+
+/*
+ * The header mark breathes and blinks like every other mascot on the site — it is the
+ * one instance every visitor sees, so freezing it was the wrong instance to freeze.
+ * Hovering the logo promotes that idle breath to the excited hop, which gives the
+ * brand link a reaction of its own instead of borrowing the text underline.
+ */
+.logo:hover .mascot--logo:not(.mascot--static) .mascot__body-group {
+  animation: mascot-bounce 0.55s ease-in-out infinite;
 }
 
 .mascot-moment {

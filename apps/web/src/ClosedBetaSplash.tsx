@@ -39,6 +39,7 @@ export function ClosedBetaSplash() {
         <InteractiveMascot
           className="beta-splash__mascot"
           idleEmotion="wave"
+          reactsToTilt
           size={96}
           pokeLabel={t('mascot.poke')}
         />

@@ -9,7 +9,8 @@
  * waving arm). `staticPose` freezes everything; `prefers-reduced-motion` does too.
  *
  * `InteractiveMascot` wraps the SVG in a button: hover peeks, click cycles
- * reactions, and the face tracks the pointer a little.
+ * reactions, and the face tracks the pointer a little. With `reactsToTilt` he also
+ * leans with the phone's own orientation and gets dizzy when it is shaken.
  */
 
 import {
@@ -23,6 +24,7 @@ import {
   type ReactNode,
 } from 'react';
 import { MASCOT_IDLE_SPANS, MASCOT_SOLID_SPANS } from './mascotSpans.js';
+import { useDeviceTilt } from './useDeviceTilt.js';
 
 export type MascotEmotion =
   'idle' | 'happy' | 'curious' | 'thinking' | 'excited' | 'confused' | 'sad' | 'proud' | 'wave' | 'busy';
@@ -35,7 +37,11 @@ type MascotProps = {
   size?: number;
   className?: string;
   title?: string;
-  /** When true, all motion is forced off (e.g. tiny nav mark). */
+  /**
+   * When true, all motion is forced off. Nothing in the app sets this today — the
+   * header mark breathes like every other instance — but a still frame is what a
+   * favicon/OG rasteriser or a print stylesheet would want.
+   */
   staticPose?: boolean;
   /** Nudge face cutouts toward a point — no-op on the baked idle silhouette. */
   look?: MascotLook;
@@ -275,14 +281,7 @@ function BlinkLids() {
   );
 }
 
-export function Mascot({
-  emotion = 'idle',
-  size = 48,
-  className,
-  title,
-  staticPose = false,
-  look,
-}: MascotProps) {
+export function Mascot({ emotion = 'idle', size = 48, className, title, staticPose = false, look }: MascotProps) {
   const reactId = useId().replace(/:/g, '');
   const maskId = `mascot-mask-${reactId}`;
   const height = Math.round((size * 60) / 70);
@@ -350,14 +349,7 @@ export function Mascot({
 }
 
 /** Playful reactions cycled when the visitor pokes the splash mascot. */
-const POKE_REACTIONS: readonly MascotEmotion[] = [
-  'excited',
-  'happy',
-  'curious',
-  'proud',
-  'thinking',
-  'confused',
-];
+const POKE_REACTIONS: readonly MascotEmotion[] = ['excited', 'happy', 'curious', 'proud', 'thinking', 'confused'];
 
 const POKE_HOLD_MS = 1400;
 
@@ -368,6 +360,11 @@ type InteractiveMascotProps = {
   idleEmotion?: MascotEmotion;
   /** Accessible name for the poke control. */
   pokeLabel: string;
+  /**
+   * Lean and look with the phone's own tilt, and get dizzy when it is shaken.
+   * Off by default: it costs two window listeners and, on iOS, a permission prompt.
+   */
+  reactsToTilt?: boolean;
 };
 
 /**
@@ -379,6 +376,7 @@ export function InteractiveMascot({
   className,
   idleEmotion = 'wave',
   pokeLabel,
+  reactsToTilt = false,
 }: InteractiveMascotProps) {
   const rootRef = useRef<HTMLButtonElement>(null);
   const pokeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -415,6 +413,26 @@ export function InteractiveMascot({
     };
   }, []);
 
+  // Tilting the phone is the same gesture as moving the pointer, as far as he is
+  // concerned — both end up as a look vector. Reduced motion opts out entirely.
+  const device = useDeviceTilt(reactsToTilt && !reduceMotion);
+
+  // Shake him and he gets dizzy. Skips the first render: shakeCount starts at 0 and
+  // reaching 1 is the first real shake.
+  useEffect(() => {
+    if (device.shakeCount === 0) return;
+    pokingRef.current = true;
+    setPoking(true);
+    setEmotion('confused');
+    if (pokeTimer.current) clearTimeout(pokeTimer.current);
+    pokeTimer.current = setTimeout(() => {
+      pokingRef.current = false;
+      setPoking(false);
+      setEmotion(hoveredRef.current ? 'curious' : idleEmotion);
+      pokeTimer.current = null;
+    }, POKE_HOLD_MS);
+  }, [device.shakeCount, idleEmotion]);
+
   // Reduced motion still gets the emotion swap — only tilt/boop are suppressed.
   const settleEmotion = () => (hoveredRef.current ? 'curious' : idleEmotion);
 
@@ -449,6 +467,20 @@ export function InteractiveMascot({
   };
 
   const handlePoke = () => {
+    /*
+     * iOS only hands out orientation events if you ask from inside a user gesture, so
+     * the ask has to be attached to something the visitor already wants to do. Poking
+     * the mascot is exactly that, which is why there is no separate "enable motion"
+     * button: he wakes up to the phone's tilt the first time you touch him.
+     *
+     * Called unguarded on purpose. Gating on `needsPermission` would read the result
+     * of an effect that may not have run yet on a fast first poke, and losing that
+     * race means the prompt never appears. `request()` already no-ops when there is
+     * nothing to ask — on Android it returns immediately — so the guard bought
+     * nothing and could only cost the one interaction that matters.
+     */
+    if (reactsToTilt) device.request();
+
     const next = POKE_REACTIONS[reactionIndex.current % POKE_REACTIONS.length]!;
     reactionIndex.current += 1;
     pokingRef.current = true;
@@ -463,10 +495,19 @@ export function InteractiveMascot({
     }, POKE_HOLD_MS);
   };
 
+  /*
+   * A finger on him beats the phone's own angle — otherwise the mascot keeps staring
+   * off to one side while you are actively touching him. `look` is only non-zero while
+   * a pointer is over him, and `resetLook` zeroes it on leave, so this needs no extra
+   * state to decide which source is live.
+   */
+  const pointerLeads = look.x !== 0 || look.y !== 0;
+  const effectiveLook = pointerLeads || !device.active ? look : device.tilt;
+
   const tiltStyle: CSSProperties | undefined = reduceMotion
     ? undefined
     : {
-        transform: `rotate(${(look.x * 7).toFixed(2)}deg) translateY(${(look.y * 2).toFixed(2)}px)`,
+        transform: `rotate(${(effectiveLook.x * 7).toFixed(2)}deg) translateY(${(effectiveLook.y * 2).toFixed(2)}px)`,
       };
 
   return (
@@ -497,7 +538,7 @@ export function InteractiveMascot({
       {/* Tilt lives on an inner span so the button can still run the poke squash. */}
       <span className="mascot-interactive__tilt" style={tiltStyle}>
         {/* Button owns the accessible name; keep the SVG presentational to avoid a double announce. */}
-        <Mascot emotion={emotion} size={size} look={reduceMotion ? undefined : look} />
+        <Mascot emotion={emotion} size={size} look={reduceMotion ? undefined : effectiveLook} />
       </span>
     </button>
   );
