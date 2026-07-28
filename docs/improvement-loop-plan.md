@@ -1,10 +1,15 @@
 # Game Improvement Loop: feedback-driven, agent-assisted iteration
 
-> Status: ✅ **IL-1 (Capture) is complete** (2026-07-26); IL-2's read path
-> (operator health view, votes, creator return, `end`/`score`/`progress` depth
-> reads) is also live, and IL-2's remaining pieces (scheduled aggregation,
-> feedback-theme extraction, the creator-facing scorecard) and IL-3 onward are
-> still design. Revised against the shipped platform (first drafted 2026-07-23) —
+> Status: ✅ **IL-1 (Capture) complete** (2026-07-26) and ✅ **IL-2 (Distill)
+> complete** (2026-07-28) — scheduled aggregation, feedback-theme extraction and
+> the creator-facing scorecard all shipped, so a creator can now answer all three
+> of IL-2's exit questions without an agent. **IL-3 is one slice in**: the router
+> classifies live scorecards at `GET /api/admin/suggestions`, and the rest of the
+> phase is blocked two independent ways — the `@copilot` relay (a decision), and
+> the fact that no game yet routes to an actionable class (data volume; see the
+> first reading under IL-3). **IL-4 has not started**, correctly: it depends on
+> IL-3's exit, which is a merged and measured improvement.
+> Revised against the shipped platform (first drafted 2026-07-23) —
 > everything the first draft listed as a dependency is now live: catalog, player,
 > submission → Copilot → PR → publish, notifications (in-app + email + push), and
 > a live agent channel. The revision matters because three of the original design
@@ -736,12 +741,19 @@ at all and feeds the only autonomous-eligible class.
 
   Closed until that job and env var exist, like every other internal sweep.
 
-- 📋 Votes and feedback themes in the studio. `/api/me/studio/health` recomputes from raw
-  events, so it can answer "is my game working" and "where do players drop off" but not
-  "what do they say" — votes, feedback counts and themes exist only on the scorecard. The
-  last of IL-2's three exit questions, and the smallest remaining piece of it.
-- Exit: a creator can answer "is my game working, where do players drop off,
-  what do they say" without any agent involvement.
+- ✅ **Votes and feedback themes in the studio** (2026-07-28, #289):
+  [creator-studio.ts](../apps/api/src/creator-studio.ts) serves votes, feedback counts and
+  themes for a creator's own games, rendered in
+  [CreatorStudioView.tsx](../apps/web/src/CreatorStudioView.tsx). `/api/me/studio/health`
+  recomputes from raw events and so could never answer "what do they say" at any window
+  size — votes, feedback and themes are not derived from play events at all. This route
+  reads the scorecards the nightly sweep already wrote instead: one document per game, and
+  it means the studio and the weekly digest cannot report different numbers, because both
+  read the same document. A game with no scorecard is absent rather than present with
+  zeros — unmeasured is not measured-as-nothing, the same distinction the router makes.
+- ✅ **Exit met** (2026-07-28): a creator can answer all three questions — "is my game
+  working", "where do players drop off", "what do they say" — without any agent
+  involvement.
 
 ### Phase IL-3 — Suggest (agent in the loop, human approves everything)
 
@@ -775,7 +787,30 @@ at all and feeds the only autonomous-eligible class.
   rather than filtered, so a game being passed over is visible and distinguishable from
   the router never having run.
 
+- 🔍 **First reading against production, 2026-07-28.** The router was run over the live
+  scorecards the day it deployed, before anything was built on top of it. Of 21 games,
+  **20 routed to `insufficient-data` and one to `healthy`** (`apex-sprint`, 227 sessions).
+  No game reached `defect`, `friction` or `design-change`.
+
+  That is the correct answer, not a disappointing one: capture went live 2026-07-25, so a
+  three-day window against a floor of 20 sessions is mostly games nobody has played yet.
+  `cannon-fodder-squad` was nearest at 10. Three games — `breach-protocol`, `brick-storm`,
+  `settlers-of-the-north` — already carry `progressLabels`, so the friction path has real
+  input waiting behind volume rather than behind code.
+
+  **The consequence is a sequencing one, and it is why the next bullet has not been
+  built.** Persisting `suggestions/` today would persist twenty copies of "come back
+  later". The floor is the one number here nobody has validated against real traffic, and
+  the cheap way to validate it is to re-read the endpoint as sessions accumulate — not to
+  lower it until something fires, which is precisely the noise the floor exists to reject.
+
+  This is also the payoff of shipping the router computed-on-read: the reading cost one
+  HTTP request and changed the plan, where the same lesson learned after building
+  persistence and an inbox would have cost both.
+
 - 📋 Babysitter analyst run (scheduled) persisting `suggestions/` from the router above.
+  **Deliberately deferred** — see the first reading above. Waiting on data volume, not on
+  a design question.
 - Suggestion inbox UI; Approve → structured improvement issue (evidence-fenced)
   → Copilot **via the relay**, with a stall alert on `issue-filed` → no PR.
 - Measurement records written at merge; 14-day post-change comparison.
@@ -785,7 +820,11 @@ at all and feeds the only autonomous-eligible class.
   interpolated into an agent's instructions — this is the phase that will want to do
   exactly that. Fence or summarize it; the "evidence in, never raw text in" principle
   above is what this concretely means in practice.
-- Exit: first player-evidence-driven improvement merged and measured.
+- Exit: first player-evidence-driven improvement merged and measured. **Blocked two
+  independent ways**, and they want different remedies: the `@copilot` relay has no
+  working primitive for handing work to an agent (a decision), and as of the first
+  reading no game routes to an actionable class, so there is nothing to hand over even
+  if it did (data volume). Neither is unblocked by writing more of this phase.
 
 ### Phase IL-4 — Bounded autonomy
 
