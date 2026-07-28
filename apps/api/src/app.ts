@@ -10,10 +10,12 @@ import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLar
 import { registerAccessTokenRoutes } from './access-token-routes.js';
 import { registerAdminRoutes } from './admin.js';
 import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
+import { registerCreatorStudioRoutes } from './creator-studio.js';
 import { createGenerator } from './generator.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { registerContactRoutes, type ContactRoutesOptions } from './contact.js';
 import { registerEmailRoutes } from './email-routes.js';
+import { resolveLocalGamesDir } from './local-games-repo.js';
 import { registerMultiplayerRoutes, type MultiplayerRoutesOptions } from './mp.js';
 import { registerNotificationRoutes } from './notifications.js';
 import { registerPlayerFeedbackRoutes, type PlayerFeedbackRoutesOptions } from './player-feedback.js';
@@ -23,6 +25,7 @@ import { createInternalAuthVerifierFromEnv } from './internal-auth.js';
 import { registerRefineRoute, type SpecRefiner } from './refine.js';
 import { InMemoryStore, type Store } from './store.js';
 import { registerSubmissionRoutes, type SubmissionRoutesOptions } from './submissions.js';
+import { mintToken } from './submission-token.js';
 import { registerTelemetryRoutes, type TelemetryRoutesOptions } from './telemetry.js';
 import { registerVisitTelemetryRoutes } from './visit-telemetry.js';
 import { registerVoteRoutes, type VoteRoutesOptions } from './votes.js';
@@ -239,6 +242,30 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // a Google identity, or any bypass route. Same operator allowlist as the views above,
   // and session-only, so a token can never mint another.
   await registerAccessTokenRoutes(app, { store, adminUids });
+
+  // Creator control panel (docs/improvement-loop-plan.md IL-2 creator surface). Own
+  // shelf + per-game health for games this uid owns — not the operator catalog view.
+  // Secret resolution must stay byte-for-byte with registerSubmissionRoutes, or studio
+  // deep-link tokens will fail verification on the status/improve routes.
+  const nodeEnv = process.env.NODE_ENV;
+  const githubToken = options.submissionRoutes?.githubToken ?? process.env.GITHUB_TOKEN;
+  const localGames =
+    nodeEnv !== 'production' &&
+    nodeEnv !== 'test' &&
+    !githubToken &&
+    !options.submissionRoutes?.githubClient
+      ? await resolveLocalGamesDir()
+      : null;
+  const submissionTokenSecret =
+    options.submissionRoutes?.submissionTokenSecret ??
+    process.env.SUBMISSION_TOKEN_SECRET ??
+    (localGames ? 'local-development-submission-secret' : undefined);
+  await registerCreatorStudioRoutes(app, {
+    store,
+    mintStatusToken: submissionTokenSecret
+      ? (issueNumber) => mintToken(issueNumber, submissionTokenSecret)
+      : undefined,
+  });
 
   app.get('/api/health', async () => ({ status: 'ok', provider: generator.name, privateBeta }));
 

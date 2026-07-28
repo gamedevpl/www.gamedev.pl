@@ -91,7 +91,7 @@ describe('document title follows navigation', () => {
       window.dispatchEvent(new PopStateEvent('popstate'));
       await flushEffects();
     });
-    expect(document.title).toBe('Your game is in the works — Gamedev.pl');
+    expect(document.title).toBe('Creator Studio — Gamedev.pl');
 
     await act(async () => {
       window.history.pushState(null, '', '/health');
@@ -119,7 +119,7 @@ describe('document title follows navigation', () => {
     });
   });
 
-  it('uses a saved submission title on the status route', async () => {
+  it('uses a saved submission title on the studio (legacy status) route', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockPublicApis();
     await i18n.changeLanguage('en');
@@ -146,7 +146,7 @@ describe('document title follows navigation', () => {
       await flushEffects();
     });
 
-    expect(document.title).toBe('Status · Coin Catcher — Gamedev.pl');
+    expect(document.title).toBe('Studio · Coin Catcher — Gamedev.pl');
 
     await act(async () => {
       root.unmount();

@@ -187,6 +187,8 @@ export interface UsageCounters {
   refines: number;
   feedback: number;
   playerFeedback: number;
+  /** Creator-requested improvements on already-published games (studio control panel). */
+  improvements: number;
 }
 
 /**
@@ -795,7 +797,15 @@ export function compareScorecards(a: Scorecard, b: Scorecard): number {
 
 /** A zeroed counter set — the shape every usage read falls back to. */
 function emptyUsageCounters(): UsageCounters {
-  return { submissions: 0, previews: 0, mocks: 0, refines: 0, feedback: 0, playerFeedback: 0 };
+  return {
+    submissions: 0,
+    previews: 0,
+    mocks: 0,
+    refines: 0,
+    feedback: 0,
+    playerFeedback: 0,
+    improvements: 0,
+  };
 }
 
 /** Newest first, with the id as a stable tie-break for same-millisecond events. */
@@ -972,12 +982,20 @@ export class InMemoryStore implements Store {
     issueNumber: number,
     preview: Omit<BuildPreview, 'id' | 'createdAt'> & { createdAt?: string },
   ): Promise<BuildPreview> {
+    const existing = this.buildPreviews.get(issueNumber) ?? [];
+    // ISO timestamps only have millisecond precision. Rapid back-to-back pushes in
+    // tests (and occasionally in prod) land on the same tick; bump so "newest"
+    // matches append order instead of UUID tie-breaks.
+    const nowIso = new Date().toISOString();
+    const lastCreatedAt = existing[existing.length - 1]?.createdAt;
+    const createdAt =
+      preview.createdAt ??
+      (lastCreatedAt && lastCreatedAt >= nowIso ? new Date(Date.parse(lastCreatedAt) + 1).toISOString() : nowIso);
     const record: BuildPreview = {
       ...preview,
       id: randomUUID(),
-      createdAt: preview.createdAt ?? new Date().toISOString(),
+      createdAt,
     };
-    const existing = this.buildPreviews.get(issueNumber) ?? [];
     existing.push(record);
     this.buildPreviews.set(issueNumber, existing);
     return { ...record };

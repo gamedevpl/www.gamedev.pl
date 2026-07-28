@@ -34,7 +34,7 @@
     "statusOnline": "Agent Network Online",
     "navPrompt": "Create Game",
     "navArcade": "Arcade",
-    "navStudio": "My Projects",
+    "navStudio": "Studio",
     "navMyGames": "My Games",
     "navFeed": "Agent Stream",
     "mySpecs": "My Active Specs ({{count}})"
@@ -151,6 +151,99 @@
     "remixHeader": "Remixing: {{title}}",
     "remixHint": "You are creating a new spec variant based on this existing game."
   },
+  "studioPanel": {
+    "title": "Creator Studio",
+    "subtitle": "Manage your games, check how they play, and ask for improvements.",
+    "signInHint": "Sign in to see the games you commissioned and their play stats.",
+    "backHome": "Back home",
+    "loading": "Loading your games…",
+    "loadError": "Could not load your studio right now. Try again in a moment.",
+    "empty": "You have not commissioned a game yet.",
+    "createFirst": "Create your first game",
+    "shelfAria": "Your games",
+    "shelf": {
+      "heading": "Your games",
+      "count": "{{count}} games",
+      "searchLabel": "Search your games",
+      "searchPlaceholder": "Search by title or slug…",
+      "filterAria": "Filter games",
+      "filters": {
+        "all": "All",
+        "building": "Building",
+        "live": "Live"
+      },
+      "noMatches": "No games match that search.",
+      "switcher": "Switch game",
+      "pickerTitle": "Choose a game",
+      "closePicker": "Close game list"
+    },
+    "tabs": {
+      "overview": "Overview",
+      "build": "Build",
+      "playtest": "Playtest",
+      "stats": "Stats",
+      "improve": "Improve",
+      "feedback": "Player feedback"
+    },
+    "overview": {
+      "status": "Status",
+      "created": "Created",
+      "published": "Published",
+      "sessions": "Recent play",
+      "play": "played",
+      "openBuild": "Open build",
+      "playtest": "Playtest & prompt",
+      "abandon": "Stop build",
+      "abandonConfirm": "Confirm stop"
+    },
+    "playtest": {
+      "hint": "Play the game, pause on a moment worth changing, and send a request with that viewport and live instrumentation attached.",
+      "loading": "Loading the playable build…",
+      "loadError": "No playable build is ready yet. Check the Build tab and try again once a preview exists.",
+      "pause": "Pause & note",
+      "resume": "Resume",
+      "played": "{{seconds}}s played",
+      "errorCount": "{{count}} errors",
+      "promptTitle": "What should change here?",
+      "promptHint": "Your note goes to the build agent (draft) or opens an improvement issue (published). The paused viewport and session signals ride along as data.",
+      "shotCaption": "Viewport captured at pause",
+      "noShot": "No viewport frame was captured — the text request will still send.",
+      "placeholder": "e.g. The spike on the right edge is unfair — add a checkpoint just before it…",
+      "submit": "Send with this moment"
+    },
+    "stats": {
+      "noSlug": "Stats appear once this game has a draft or published slug.",
+      "range": "Measured {{from}} → {{to}}",
+      "truncated": "A day hit the read cap, so these counts are a floor rather than a total.",
+      "empty": "No play sessions in this window yet.",
+      "sessions": "Sessions",
+      "bounces": "Bounces",
+      "medianPlay": "Median play",
+      "totalPlay": "Total play",
+      "errors": "Errors",
+      "stallRate": "Stall rate",
+      "medianFps": "Median FPS",
+      "errorSamples": "Frequent errors"
+    },
+    "improve": {
+      "titleDraft": "Request a change on the draft",
+      "titlePublished": "Request an improvement",
+      "hintDraft": "Describe what to change. The build agent will pick this up on the open pull request.",
+      "hintPublished": "Describe how the live game should improve. This opens a new games-repo issue for an agent to work on.",
+      "placeholder": "e.g. Level two spikes too hard — add a checkpoint and slow the obstacles…",
+      "submit": "Send request",
+      "sending": "Sending…",
+      "sent": "Sent",
+      "quota": "Daily improvement quota reached. Try again tomorrow.",
+      "rateLimit": "Too many requests just now. Please wait a moment and try again.",
+      "rejected": "That request could not be accepted. Please rephrase and try again.",
+      "error": "Could not send the request right now. Please try again."
+    },
+    "feedback": {
+      "title": "Player feedback — coming soon",
+      "body": "Written player comments and vote themes will land here once capture ships. Your play stats above already show how sessions go."
+    }
+  },
   "submit": {
     "title": "Submit a new game spec",
     "description": "Describe what you want to play. An autonomous coding agent will implement it as a pull request on GitHub.",
@@ -196,7 +289,8 @@
     "liveCount": "{{count}} in progress",
     "checking": "Checking…",
     "play": "Play",
-    "open": "Open"
+    "open": "Open",
+    "openStudio": "Studio"
   },
   "draft": {
     "title": "A game in the making",
@@ -467,10 +561,12 @@
     "draft": "A game in the making",
     "join": "Join the game",
     "health": "Telemetry",
+    "studio": "Creator Studio",
     "notFound": "Page not found",
     "contact": "Contact",
     "playNamed": "Play {{title}}",
     "draftNamed": "Draft {{title}}",
-    "statusNamed": "Status · {{title}}"
+    "statusNamed": "Status · {{title}}",
+    "studioNamed": "Studio · {{title}}"
   }
 }

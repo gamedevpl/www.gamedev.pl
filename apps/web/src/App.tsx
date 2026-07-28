@@ -7,12 +7,20 @@ import { NavHeader } from './NavHeader.js';
 import { HeroPromptSection } from './HeroPromptSection.js';
 import { ArcadeCatalog } from './ArcadeCatalog.js';
 import { MyGamesRail } from './MyGamesRail.js';
+import { CreatorStudioView } from './CreatorStudioView.js';
 import { DraftView } from './DraftView.js';
 import { GameHealthView } from './GameHealthView.js';
 import { PixelIcon } from './PixelIcon.js';
-import { SubmissionStatusView } from './SubmissionStatusView.js';
 import { CreatorQA, type QAQuestion } from './CreatorQA.js';
-import { canonicalPlayPath, NAVIGATE_EVENT, parsePathRoute, statusPath, playPath, type AppRoute } from './router.js';
+import {
+  canonicalPlayPath,
+  NAVIGATE_EVENT,
+  parsePathRoute,
+  statusPath,
+  playPath,
+  studioPath,
+  type AppRoute,
+} from './router.js';
 import { LegalPage } from './LegalPage.js';
 import { ContactPage } from './ContactPage.js';
 import { NotFoundPage } from './NotFoundPage.js';
@@ -110,26 +118,28 @@ export function App() {
         ? (catalogEntries.find((game) => game.slug === route.slug)?.title ??
           (stageContent?.type === 'catalog' && stageContent.game.slug === route.slug ? stageContent.game.title : null))
         : null;
-    const statusTitle =
-      route.view === 'status' ? (savedSpecs.find((spec) => spec.token === route.token)?.title ?? null) : null;
+    const studioTitle =
+      route.view === 'studio' && route.token
+        ? (savedSpecs.find((spec) => spec.token === route.token)?.title ?? null)
+        : null;
 
     return resolveDocumentTitle(route, {
       copy: {
         home: t('pageTitle.home'),
-        status: t('pageTitle.status'),
         draft: t('pageTitle.draft'),
         join: t('pageTitle.join'),
         health: t('pageTitle.health'),
+        studio: t('pageTitle.studio'),
         privacy: t('legal.privacy'),
         terms: t('legal.terms'),
         contact: t('pageTitle.contact'),
         notFound: t('pageTitle.notFound'),
         playNamed: t('pageTitle.playNamed'),
         draftNamed: t('pageTitle.draftNamed'),
-        statusNamed: t('pageTitle.statusNamed'),
+        studioNamed: t('pageTitle.studioNamed'),
       },
       playTitle,
-      statusTitle,
+      studioTitle,
       draftTitle: route.view === 'draft' ? draftTitle : null,
       // Only surface ephemeral theaters while still on home — `/play/<slug>` already
       // carries its own title via playTitle, and leaving home must restore the home title.
@@ -501,6 +511,7 @@ export function App() {
           activeSpecsCount={savedSpecs.length}
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
+          onStudio={() => navigate(studioPath())}
         />
         <main className="content">
           <LegalPage doc={route.doc} onBack={() => navigate('/')} />
@@ -518,6 +529,7 @@ export function App() {
           activeSpecsCount={savedSpecs.length}
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
+          onStudio={() => navigate(studioPath())}
         />
         <main className="content">
           <ContactPage onBack={() => navigate('/')} />
@@ -536,6 +548,7 @@ export function App() {
           activeSpecsCount={savedSpecs.length}
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
+          onStudio={() => navigate(studioPath())}
         />
         <main className="content">
           <NotFoundPage onHome={() => navigate('/')} />
@@ -557,25 +570,28 @@ export function App() {
 
   return (
     <div className="app">
-      <NavHeader activeSpecsCount={savedSpecs.length} onNavigate={handleNavigateSection} onHome={() => navigate('/')} />
+      <NavHeader
+        activeSpecsCount={savedSpecs.length}
+        onNavigate={handleNavigateSection}
+        onHome={() => navigate('/')}
+        onStudio={() => navigate(studioPath())}
+      />
 
       <main className="content">
         {route.view === 'health' ? (
           <GameHealthView />
-        ) : route.view === 'draft' ? (
-          <DraftView slug={route.slug} onExit={() => navigate('/')} onDraftTitle={setDraftTitle} />
-        ) : route.view === 'status' ? (
-          <SubmissionStatusView
-            token={route.token}
-            submittedTitle={savedSpecs.find((spec) => spec.token === route.token)?.title}
-            submittedConcept={savedSpecs.find((spec) => spec.token === route.token)?.concept}
-            submittedAt={savedSpecs.find((spec) => spec.token === route.token)?.createdAt}
-            onRetry={(concept) => {
+        ) : route.view === 'studio' ? (
+          <CreatorStudioView
+            selectedToken={route.token}
+            onNavigate={navigate}
+            onPlay={(slug) => navigate(playPath(slug))}
+            onRetryConcept={(concept) => {
               setRetryPrompt(concept);
               setPendingScrollTarget('hero-prompt');
-              navigate('/');
             }}
           />
+        ) : route.view === 'draft' ? (
+          <DraftView slug={route.slug} onExit={() => navigate('/')} onDraftTitle={setDraftTitle} />
         ) : (
           <>
             <div id="hero-prompt">
@@ -601,6 +617,7 @@ export function App() {
                 refreshKey={myGamesRefreshKey}
                 onOpenStatus={(token) => navigate(statusPath(token))}
                 onPlayPublished={(slug) => navigate(playPath(slug))}
+                onOpenStudio={() => navigate(studioPath())}
               />
             )}
 
