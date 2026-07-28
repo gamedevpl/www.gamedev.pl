@@ -11,10 +11,12 @@
 > **Progress since the first draft (2026-07-25).** The strategy below is unchanged; the
 > milestone boundaries have shifted because work landed out of the planned order:
 >
-> - ✅ **M1 (PWA) is built** as of 2026-07-28 — manifest, precached app shell, offline
->   page, Android install prompt, iOS Add-to-Home-Screen hint, and an update banner. Its
->   exit criterion is met by measurement (84 ms to a rendered shell with the server
->   stopped). See the M1 section for what shipped and what still needs a device.
+> - ✅ **M0 and M1 are both complete** as of 2026-07-28, device pass included. M1 shipped
+>   the manifest, precached app shell, offline page, Android install prompt, iOS
+>   Add-to-Home-Screen hint, and an update banner; its exit criterion was met by
+>   measurement (53 ms to a rendered shell on prod with every asset served from cache) and
+>   then confirmed on a real iPhone — added to home screen, **iOS push delivered**. The
+>   plan's web/PWA phase is done; everything remaining is M2 store work.
 > - ✅ **Web push is live** (desktop + Android), shipped via the notifications track, not
 >   M1. `apps/web/public/sw.js` (now the shell-cache + push worker), `apps/web/src/pushApi.ts`,
 >   `apps/api/src/push-routes.ts` / `pusher.ts`, VAPID wiring, and a **per-user push
@@ -206,7 +208,7 @@ registry gains FCM/APNs token rows alongside the web-push subscriptions it alrea
 
 ## Milestones
 
-### M0 — Mobile-web hardening 🚧 (every build item done; awaiting a real-device pass)
+### M0 — Mobile-web hardening ✅ (complete 2026-07-28; device pass done)
 
 - ✅ Responsive pass over `App.tsx` surfaces, at 320px as well as 360px — one column,
   thumb-sized targets, safe-area insets, no horizontal scroll, no field under 16px.
@@ -272,20 +274,15 @@ registry gains FCM/APNs token rows alongside the web-push subscriptions it alrea
     the first one lands; a filter can follow it, not precede it.
   - An absent or unrecognised value parses to `null`, never `'none'`: the badge is a
     warning, so the SPEC-derived fallback path must not make every card show one.
-- 🚧 Exit criterion: **on a real iPhone and a real Android phone, sign in, browse, play a
-  touch game, submit a spec, and watch its status — comfortably.** This is the only
-  open item in M0, and it is the one item no agent can close. Partly met on
-  2026-07-25: the owner signed in, submitted a spec, answered the QA questions, and
-  played games from an iPhone SE, and reported two real bugs from that pass — a
-  cluttered prompt card and games with no way to restart on a phone — both since fixed
-  and confirmed live. **Still open: catalog browsing and general play on a real
-  device** have not been re-verified since, and the catalog card is precisely what
-  changed most on 2026-07-26. Everything in the list above has been driven in a
-  browser pane at 320/360/375px in both locales, which is a stand-in for a phone, not
-  a phone: it has a mouse, so `(pointer: coarse)` never matched, and every touch rule
-  here was verified through its `max-width` half.
+- ✅ Exit criterion: **on a real iPhone and a real Android phone, sign in, browse, play a
+  touch game, submit a spec, and watch its status — comfortably.** Met in two owner
+  passes. 2026-07-25: signed in, submitted a spec, answered the QA questions, and
+  played games from an iPhone SE — the two real bugs from that pass (cluttered prompt
+  card, no way to restart a game on a phone) were fixed and confirmed live.
+  **2026-07-28: the owner re-verified catalog browsing on a real device** — the one
+  piece that had changed most since the first pass — closing M0.
 
-### M1 — PWA ✅ (built and verified 2026-07-28; awaiting the same real-device pass as M0)
+### M1 — PWA ✅ (built, verified in prod, and device-confirmed 2026-07-28)
 
 - ✅ **Web app manifest + icons + iOS meta** (`apps/web/public/manifest.webmanifest`,
   `public/icons/`, the `apple-*` tags in `index.html`). Shipped ahead of the rest in
@@ -354,13 +351,12 @@ the same rule appearing on a CDN in front of the service would take the whole in
 app down for returning visitors. Documents are now stored rebuilt via `putDocument`, the
 navigation path re-checks `redirected`, and `shellPrecache.test.ts` pins both ends.
 
-**What a real device still adds.** Everything above was verified in a desktop browser at
-mobile viewport, which has a mouse. It cannot tell us that Chrome's own installability
-heuristics fire on the deployed origin (it withheld `beforeinstallprompt` locally, so the
-Android banner was exercised through a dispatched event of the same shape), that iOS
-Safari's Share sheet reaches "Add to Home Screen" from this manifest, or that the
-installed app gets push on iOS — which is the whole reason M1 exists. Those ride along
-with M0's outstanding device pass.
+**Device pass done (2026-07-28).** Everything above was first verified in a desktop
+browser at mobile viewport, which could not prove the three things that only a phone can:
+that iOS Safari's Share sheet reaches "Add to Home Screen" from this manifest, that the
+installed app actually launches, and that **push arrives on iOS from the installed PWA**
+— the whole reason M1 exists. The owner confirmed all three on a real device: added to
+home screen, and iOS push delivered. M1 is closed end to end.
 
 ### M2 — Store apps (Capacitor) 🚧 (shell-agnostic groundwork started)
 
@@ -442,20 +438,12 @@ with M0's outstanding device pass.
 
 ## Sequencing note
 
-M0 is pure web + games-repo work and directly serves the live closed-beta cohort
-([`closed-beta-launch-plan.md`](./closed-beta-launch-plan.md)). Its gating item — the
-games touch contract — is **done**, so what remains is the tail of the responsive audit
-plus one small feature (surfacing `touch` in the catalog). The honest blocker on
-declaring M0 finished is not code: it is that the exit criterion requires real phones,
-and only part of it has been walked so far.
-
-M1 is **built** (2026-07-28): manifest, precached shell, offline page, install path on
-both platforms, and an update banner. Its own exit criterion is met by measurement; what
-it shares with M0 is the device pass, and one device session now closes both — the same
-phone that browses the catalog can install the app and confirm iOS push, which is the
-only reason M1 was on the roadmap. QR-party v1 **already exists**, so that M2
-precondition is met; M2 still waits on the public-beta content-safety gates (the in-app
-report action depends on the moderation queue).
+M0 and M1 are **both closed** (2026-07-28), including the real-device pass that was their
+shared exit criterion: the owner browsed the catalog, added the app to an iPhone home
+screen, and received iOS push from the installed PWA. The web/PWA phase of this plan is
+finished. QR-party v1 **already exists**, so that M2 precondition is met; what M2 still
+waits on is entirely outside this repo — an Apple Developer account, a Play account,
+signing certs — plus the `--max-instances 1` launch blocker flagged in the M2 note.
 
 ---
 

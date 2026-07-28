@@ -144,12 +144,11 @@ roughly in order of how often they turn up real issues:
   `/play/<slug>` (see `apps/web/src/router.ts`).
 - **Multiplayer lobby** — click "Play together" on a catalog entry with `multiplayer` set;
   check the QR/join-link screen renders and the join URL matches `/join/<CODE>#<token>`.
-- **Header menu** (hamburger, top right) — items are `<button class="nav-link">`, not links;
-  they call `scrollIntoView` on a same-page section id (`#hero-prompt`, `#arcade`,
-  `#my-games`), not client-side routes. Don't be fooled by a URL that doesn't change — wait
-  for the smooth-scroll to actually land before screenshotting. `#my-games` only exists in the
-  DOM once `MyGamesRail` has at least one non-abandoned submission to show — for a fresh
-  bot identity with zero submissions, clicking "My Games" is a legitimate no-op.
+- **Header menu** (hamburger, top right) — items are `<button class="nav-link">`, not
+  always links. Create Game / Arcade still `scrollIntoView` on home sections
+  (`#hero-prompt`, `#arcade`). **Studio** navigates to `/studio` (the creator home);
+  the home page only keeps a short My Games gist. Don't expect a URL change for the
+  scroll items — wait for the smooth-scroll to land before screenshotting.
 - **Language toggle** (EN/PL) — check strings actually swap, not just the button state.
 - **Static/legal routes** — `/privacy`, `/terms`.
 - **Error paths** — an unknown path (→ `notFound` view, real 404), an unknown game slug at

@@ -41,8 +41,17 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
  * platform side is an explicit sum of named allowances, not a padded
  * `42 * 1024` block.
  *
- * Last moved for games-repo Scene3D B0/B1: +40_000 (`gfx3d`), the opt-in WebGL
- * scene-graph module, on top of the #102 baseline below (326_027 → 366_027).
+ * Last moved by games-repo #113 (the voxel and third-person pilots): `gfx3d`
+ * 32_000 → 40_000 (+8_000, 358_027 → 366_027) for the scene3d template and the
+ * chase camera those pilots share. Same opt-in shape as the band below.
+ *
+ * Before that, games-repo #111 (the `gfx3d` kit): +32_000 (`gfx3d`) for an
+ * opt-in Lambert-mesh scene module measured at ~31.5 KiB transpiled. It is only
+ * inlined when a `GAME.json` asks for it, so unlike the allowances below it is
+ * not bytes every game pays — but the cap is a single number, and a gfx3d game
+ * that clears Check 4 over there has to assemble here to be playable at all.
+ * That is the same shape as the touch-layer drift that put block-cascade and
+ * rooftop-dash live answering 422.
  *
  * Before that, games-repo #102 did two things: +679 (`mascotDraw`) for
  * `draw.mascot` on the createRenderer surface, and +75_237 (`headroom`) — 30% of

@@ -41,6 +41,19 @@ describe('embedGameHtml', () => {
     expect(out).toContain('flushHeldRaf');
     expect(out).toContain('suspendAudio');
   });
+
+  it('suppresses the iOS long-press loupe and Copy/Translate callout inside the frame', () => {
+    const out = embedGameHtml('<html><head></head><body><canvas id="game"></canvas></body></html>');
+
+    // CSS must land in the opaque-origin document — parent styles cannot reach it.
+    expect(out).toContain('-webkit-touch-callout:none');
+    expect(out).toContain('-webkit-user-select:none');
+    expect(out).toContain('user-select:none');
+    expect(out).toContain('touch-action:none');
+    // Event backstops for Safari versions that still open the callout under CSS alone.
+    expect(out).toContain("addEventListener('contextmenu'");
+    expect(out).toContain("addEventListener('selectstart'");
+  });
 });
 
 describe('withGameLocale', () => {

@@ -5,7 +5,6 @@ import { GameTheater } from './GameTheater.js';
 import { PixelIcon, type PixelIconName } from './PixelIcon.js';
 import {
   abandonSubmission,
-  getBuildStats,
   getSubmissionPreview,
   getSubmissionStatus,
   submitFeedback,
@@ -369,8 +368,6 @@ export function SubmissionStatusView({
               {t(`statusView.states.${status.status}.description`)}
             </p>
 
-            {!TERMINAL_STATUSES.has(status.status) ? <BuildEta submittedAt={submittedAt} /> : null}
-
             {status.progress?.checks === 'FAILURE' ? (
               <p className="status-warning">
                 <PixelIcon name="signal" size={13} /> {t('statusView.checksFailed')}
@@ -446,10 +443,16 @@ export function SubmissionStatusView({
 
             {previewError && !preview ? <p className="error">{previewError}</p> : null}
 
-            <div className="status-footer-actions">
-              <a className="inline-link" href="/">
-                {t('statusView.backHome')}
-              </a>
+            {/* Embedded in Creator Studio the panel is a tab, not a page: the header
+                already carries "Back to home", and a second escape hatch a screen
+                below it just reads as two different ways out. Stopping the build has
+                no such duplicate, so it stays either way. */}
+            <div className={`status-footer-actions${embedded ? ' is-embedded' : ''}`}>
+              {!embedded ? (
+                <a className="inline-link" href="/">
+                  {t('statusView.backHome')}
+                </a>
+              ) : null}
               {!TERMINAL_STATUSES.has(status.status) ? <AbandonControl token={token} /> : null}
             </div>
           </>
@@ -474,46 +477,6 @@ export function SubmissionStatusView({
         />
       ) : null}
     </>
-  );
-}
-
-/**
- * "Most games are ready in about N minutes" — measured from recently published
- * games, not invented. Once the build is past that estimate it switches to a
- * gentler line rather than silently going stale, which is the moment creators
- * otherwise assume something broke.
- */
-function BuildEta({ submittedAt }: { submittedAt?: number }) {
-  const { t } = useTranslation();
-  const [stats, setStats] = useState<{ medianMinutes: number | null; sampleSize: number } | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    getBuildStats()
-      .then((result) => {
-        if (!cancelled) setStats(result);
-      })
-      .catch(() => {
-        // No stats is not an error — the fallback copy covers it.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Three builds is the point where a median says more than it misleads.
-  const median = stats && stats.sampleSize >= 3 ? stats.medianMinutes : null;
-  if (median === null) {
-    return <p className="status-eta">{t('statusView.eta.unknown')}</p>;
-  }
-
-  const elapsedMinutes = submittedAt ? (Date.now() - submittedAt) / 60_000 : 0;
-  return (
-    <p className="status-eta">
-      {elapsedMinutes > median
-        ? t('statusView.eta.overrun', { minutes: median })
-        : t('statusView.eta.typical', { minutes: median })}
-    </p>
   );
 }
 
