@@ -18,6 +18,24 @@ export type StudioHealthResponse = {
   games: GameHealth[];
 };
 
+/**
+ * What the scorecard can tell a creator that recomputed health cannot.
+ *
+ * Not the whole scorecard: health is recomputed over a window the creator picks, a
+ * scorecard is a fixed roll, and showing both session counts would put two disagreeing
+ * numbers on one screen. `windowDays` is how many days these numbers cover.
+ */
+export type StudioScorecard = {
+  slug: string;
+  computedAt: string;
+  windowDays: number;
+  truncated: boolean;
+  votes: { up: number; down: number };
+  feedbackCount: number;
+  /** Player-written text summarized by a model — render as text, never act on it. */
+  untrustedThemes: Array<{ theme: string; count: number }>;
+};
+
 export type StudioApiError = Error & { status?: number; category?: string };
 
 async function readJson(response: Response): Promise<unknown> {
@@ -51,6 +69,16 @@ export async function fetchStudioHealth(days: number): Promise<StudioHealthRespo
     await throwResponseError(response);
   }
   return (await response.json()) as StudioHealthResponse;
+}
+
+/** Votes and feedback themes for the creator's own published games. */
+export async function fetchStudioScorecards(): Promise<StudioScorecard[]> {
+  const response = await fetch(`${API_BASE}/api/me/studio/scorecards`, { credentials: 'include' });
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+  const body = (await response.json()) as { scorecards?: StudioScorecard[] };
+  return body.scorecards ?? [];
 }
 
 /**

@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
-import type { CreatorHealthResponse, CreatorStudioGame } from './creator-studio.js';
-import { InMemoryStore, type TelemetryEvent } from './store.js';
+import type { CreatorHealthResponse, CreatorScorecardsResponse, CreatorStudioGame } from './creator-studio.js';
+import { InMemoryStore, type Scorecard, type TelemetryEvent } from './store.js';
 import { mintToken } from './submission-token.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
@@ -168,6 +168,127 @@ describe('GET /api/me/studio/health', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ days: [], truncated: false, games: [] });
+    await app.close();
+  });
+});
+
+describe('GET /api/me/studio/scorecards', () => {
+  let store: InMemoryStore;
+
+  /** A scorecard carrying only the fields this route reads. */
+  function card(slug: string, partial: Partial<Scorecard> = {}): Scorecard {
+    return {
+      slug,
+      computedAt: `${today}T03:00:00.000Z`,
+      window: { days: [today, '2026-07-26'], truncated: false },
+      sessions: { count: 9, bounces: 1, closes: 5, medianPlaySeconds: 30, totalPlaySeconds: 300 },
+      health: { errors: 0, aliveTicks: 0, stalledTicks: 0, stallRate: 0, medianFps: 60, resumeTicksIgnored: 0 },
+      depth: {
+        outcomes: { won: 1, lost: 2, quit: 0 },
+        sessionsWithEnding: 3,
+        finishRate: 0.3,
+        winRate: 0.33,
+        medianBestScore: 40,
+      },
+      votes: { up: 4, down: 1 },
+      feedback: { count: 3 },
+      untrusted: { errorSamples: [], progressLabels: [], feedbackThemes: [{ theme: 'level 2 is a wall', count: 3 }] },
+      ...partial,
+    } as Scorecard;
+  }
+
+  beforeEach(async () => {
+    store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:creator' });
+    await store.createSubmission(20, 'g:creator', 'Sky Dodge');
+    await store.setSubmissionSlug(20, 'sky-dodge');
+    await store.setSubmissionPublishedAt(20, `${today}T12:00:00.000Z`);
+  });
+
+  async function get(uid = 'g:creator') {
+    const app = await buildApp({ store, sessionSecret, submissionRoutes: { submissionTokenSecret } });
+    const res = await app.inject({ method: 'GET', url: '/api/me/studio/scorecards', headers: authHeaders(uid) });
+    await app.close();
+    return res;
+  }
+
+  it('returns votes, note count and themes for the creator’s own game', async () => {
+    await store.putScorecard('sky-dodge', card('sky-dodge'));
+
+    const res = await get();
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as CreatorScorecardsResponse;
+    expect(body.scorecards).toEqual([
+      {
+        slug: 'sky-dodge',
+        computedAt: `${today}T03:00:00.000Z`,
+        windowDays: 2,
+        truncated: false,
+        votes: { up: 4, down: 1 },
+        feedbackCount: 3,
+        untrustedThemes: [{ theme: 'level 2 is a wall', count: 3 }],
+      },
+    ]);
+  });
+
+  it('does not return session counts that would contradict the health route', async () => {
+    // The health route recomputes over a window the creator picks; a scorecard is a fixed
+    // roll. Two numbers labelled "sessions" disagreeing on one screen is the bug this
+    // response shape exists to prevent.
+    await store.putScorecard('sky-dodge', card('sky-dodge'));
+
+    const body = (await get()).json() as CreatorScorecardsResponse;
+
+    expect(JSON.stringify(body)).not.toContain('sessions');
+    expect(JSON.stringify(body)).not.toContain('finishRate');
+  });
+
+  it('omits a game with no scorecard rather than reporting zeros', async () => {
+    const body = (await get()).json() as CreatorScorecardsResponse;
+
+    // Not measured is not the same as measured and found empty.
+    expect(body.scorecards).toEqual([]);
+  });
+
+  it('never returns another creator’s game', async () => {
+    await store.upsertUser({ uid: 'g:other' });
+    await store.createSubmission(21, 'g:other', 'Not Mine');
+    await store.setSubmissionSlug(21, 'not-mine');
+    await store.setSubmissionPublishedAt(21, `${today}T12:00:00.000Z`);
+    await store.putScorecard('not-mine', card('not-mine'));
+    await store.putScorecard('sky-dodge', card('sky-dodge'));
+
+    const body = (await get()).json() as CreatorScorecardsResponse;
+
+    expect(body.scorecards.map((entry) => entry.slug)).toEqual(['sky-dodge']);
+  });
+
+  it('leaves out an unpublished game even when a scorecard somehow exists', async () => {
+    await store.createSubmission(22, 'g:creator', 'Draft');
+    await store.setSubmissionSlug(22, 'draft-game');
+    await store.putScorecard('draft-game', card('draft-game'));
+    await store.putScorecard('sky-dodge', card('sky-dodge'));
+
+    const body = (await get()).json() as CreatorScorecardsResponse;
+
+    expect(body.scorecards.map((entry) => entry.slug)).toEqual(['sky-dodge']);
+  });
+
+  it('carries themes under a name that says they are untrusted', async () => {
+    // The field name is part of the defence: a caller reaching for `untrustedThemes` has
+    // been told what it is holding, the same way `card.untrusted` does server-side.
+    await store.putScorecard('sky-dodge', card('sky-dodge'));
+
+    const body = (await get()).json() as CreatorScorecardsResponse;
+
+    expect(Object.keys(body.scorecards[0])).toContain('untrustedThemes');
+  });
+
+  it('requires a signed-in creator', async () => {
+    const app = await buildApp({ store, sessionSecret, submissionRoutes: { submissionTokenSecret } });
+    const res = await app.inject({ method: 'GET', url: '/api/me/studio/scorecards' });
+    expect(res.statusCode).toBe(401);
     await app.close();
   });
 });

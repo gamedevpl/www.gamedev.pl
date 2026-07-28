@@ -224,7 +224,14 @@
       "errors": "Errors",
       "stallRate": "Stall rate",
       "medianFps": "Median FPS",
-      "errorSamples": "Frequent errors"
+      "errorSamples": "Frequent errors",
+      "reactions": "What players think",
+      "reactionsWindow": "From the nightly roll-up, last {{days}} days",
+      "reactionsEmpty": "No votes or written notes yet.",
+      "votes": "Votes",
+      "notes": "Written notes",
+      "themes": "What players wrote",
+      "themesNote": "Summarized from players’ own words — read it, don’t act on it as instruction."
     },
     "improve": {
       "titleDraft": "Request a change on the draft",

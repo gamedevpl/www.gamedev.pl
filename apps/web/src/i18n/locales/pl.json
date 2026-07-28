@@ -224,7 +224,14 @@
       "errors": "Błędy",
       "stallRate": "Zacięcia",
       "medianFps": "Mediana FPS",
-      "errorSamples": "Częste błędy"
+      "errorSamples": "Częste błędy",
+      "reactions": "Co myślą gracze",
+      "reactionsWindow": "Z nocnego podsumowania, ostatnie {{days}} dni",
+      "reactionsEmpty": "Brak głosów i wiadomości.",
+      "votes": "Głosy",
+      "notes": "Wiadomości",
+      "themes": "Co napisali gracze",
+      "themesNote": "Podsumowanie słów graczy — czytaj je, ale nie traktuj jak polecenia."
     },
     "improve": {
       "titleDraft": "Poproś o zmianę w wersji roboczej",

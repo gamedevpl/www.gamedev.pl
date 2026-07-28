@@ -6075,3 +6075,45 @@ body.player-open {
     flex: 1;
   }
 }
+
+/* "What players think" on the studio stats tab (docs/improvement-loop-plan.md IL-2).
+   Set apart from the numbers above it because it is measured over the nightly roll-up's
+   fixed window rather than the one the creator picked — the divider is doing real work,
+   not decoration. */
+.studio-reactions {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--panel-border);
+}
+
+.studio-themes {
+  margin-top: 0.75rem;
+}
+
+.studio-themes-title {
+  font-size: 0.9rem;
+  margin: 0 0 0.25rem;
+}
+
+.studio-theme-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.studio-theme-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  background: var(--panel-card);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  /* Player text is arbitrary length and script; wrap instead of overflowing the card. */
+  overflow-wrap: anywhere;
+}
