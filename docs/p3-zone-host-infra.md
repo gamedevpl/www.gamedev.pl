@@ -1,0 +1,192 @@
+# P3 zone host — where it runs
+
+Status: **recommendation, awaiting approval. This document is the blocking gate for
+building the zone-host runtime** ([persistent-world-plan.md](./persistent-world-plan.md)
+§5 P3, §8). Protocol design and the shell transport proceed meanwhile — they are the
+same whatever answer this document gets.
+
+The question, stated by §8: the API runs on Cloud Run with `--max-instances 1`,
+scale-to-zero, and nothing pinned. An authoritative zone is a stateful process with a
+lifetime — it holds a live sim, ticks it at 5–20 Hz while players are connected, and
+must not evaporate mid-game. Where does that process live, what does it cost when
+nobody is playing, and what bounds the cost when they are?
+
+---
+
+## 1. The shape of the workload, before any vendor
+
+Three properties of a zone decide almost everything:
+
+1. **A zone only needs CPU while somebody is connected.** Hibernation is not an
+   optimization bolted on later — it is the contract. An empty zone snapshots to
+   Firestore and stops existing as a process; `wake(state, elapsedMs, rng)` is how the
+   world catches up when someone returns. So "stateful process with a lifetime"
+   really means "stateful process with a lifetime *bounded by its sockets*".
+2. **Instance death is survivable by design.** §8 already says it: an instance dying is
+   an unscheduled hibernate. Snapshots plus an event log bound the loss to seconds, and
+   the determinism gate proves resume works (`resumeFromSnapshotWithAlignment` in the
+   games repo harness is the same move the host makes). We therefore do not need pinned,
+   durable compute — we need compute that exists while sockets are open and dies
+   politely.
+3. **The whole platform's workload fits in one core for a long time.** A tick is
+   metered at 8 ms p99, so one vCPU sustains on the order of a dozen zones at 10 Hz
+   with room to spare, and a zone is at most 16 sockets. The scaling question is real
+   but not urgent; the question that is urgent is cost at *zero*.
+
+Property 1 has a happy consequence on Cloud Run specifically: under request-based
+billing, a WebSocket connection is a long-running request, and an instance with a
+request in flight has CPU allocated. **"CPU while somebody is connected" is exactly
+what Cloud Run's cheapest mode already sells.** A zone host that hibernates empty
+zones and closes their sockets drains itself to zero instances with no further
+mechanism.
+
+---
+
+## 2. Options
+
+### A — Host zones inside `gamedev-app` (the existing service)
+
+Cheapest to build: the process already exists, already speaks WebSockets (`mp.ts`),
+already holds the Firestore client, and at `--max-instances 1` there is no routing
+problem to solve.
+
+Rejected, for three reasons that compound:
+
+- **Deploy coupling.** `gamedev-app` deploys often — every website change restarts it,
+  and every restart is a forced mass-hibernate of every active zone. Party rooms accept
+  this (ephemeral by design); a persistent world that stutters every time a CSS file
+  ships would teach players the world is flaky. The zone host wants the opposite deploy
+  cadence from the website.
+- **The native addon lands in the critical image.** The production cage is
+  `isolated-vm` ([p3-sim-spike.md](./p3-sim-spike.md) §2), a compiled addon with a
+  history of quiet periods. Putting it in the image that serves the entire site makes
+  every site deploy hostage to that build, and a bad interaction takes down browsing,
+  not just zones.
+- **Head-of-line pressure.** Sim ticking is steady background CPU inside a process
+  whose other job is latency-sensitive request serving, sharing one instance that also
+  cannot scale out (mp.ts pins it). A runaway is metered per-tick, but the blast radius
+  of any miss is the whole platform.
+
+### B — A separate `gamedev-world` Cloud Run service ← **recommended**
+
+Same repo, same deploy tooling, its own image and its own lifecycle: min-instances 0,
+max-instances 1 (to start), request-based billing, timeout raised to the 60-minute
+ceiling, WebSockets only.
+
+- **Cost at zero is zero.** No sockets → hibernated zones → no instances. The idle
+  world is one Firestore document per zone (pennies per GiB-month), which is the §8
+  cost model verbatim: the bill scales with concurrent play, not with how many worlds
+  exist.
+- **Cost while occupied is small and bounded.** Priced at europe-west1 request-based
+  rates (~$0.000024/vCPU-s + ~$0.0000025/GiB-s), a 1 vCPU / 512 MiB instance costs
+  ≈ **$0.09 per active hour** — an hour in which *all* concurrent zones share that
+  instance. Cloud Run's free tier (180k vCPU-s/month) covers the first ~50 active
+  hours each month, which at closed-beta traffic is plausibly the whole bill.
+  A worst month — the instance somehow occupied 24/7 — caps at ≈ $65; §5 below is
+  what stops that happening by accident.
+- **Deploys are rare and graceful by construction.** The service redeploys when zone
+  host code changes, not when the website does. On SIGTERM it snapshots every active
+  zone inside the termination grace period and closes sockets with a `resume` reason;
+  clients re-dial and the world continues — an *scheduled* unscheduled-hibernate.
+- **The routing problem stays deferred but not foreclosed.** At max-instances 1 the
+  zone directory (§8's `zoneId → instance` map) is trivially the service URL. The join
+  handshake already returns the host URL per zone (see the protocol), so scaling out
+  later means standing up the directory and raising the cap — the wire protocol and
+  the shell do not change.
+- **Auth crosses origins the way §4.6 of the multiplayer plan already sketched.** The
+  service runs on its own origin, so session cookies do not reach it. The main API
+  stays the front door: an authenticated `POST` mints a short-lived HMAC zone ticket
+  (same `SESSION_SECRET`, distinct scope string, same shape as party room tokens), and
+  the shell presents it over the socket. The world service verifies tickets and never
+  sees a cookie.
+
+Costs of B, honestly: a second service to monitor, a second image to build (this is
+where the `isolated-vm` compile lives — contained, with the quickjs-wasm fallback one
+dependency swap away), and one more URL in the deploy script. All one-time.
+
+### C — An always-on VM (GCE)
+
+An `e2-small` in europe-west1 is ≈ $13–15/month and never cold. Rejected: it is the
+only option that costs money at zero traffic, and it re-introduces a class of work the
+platform has none of today — OS patching, restart supervision, image drift, SSH keys.
+The moment sustained load makes Cloud Run's active-hour pricing look expensive
+(roughly >150 always-occupied hours/month), this becomes the cheap option and the
+protocol does not care — but that moment is a success problem, and moving is a
+deploy-script change.
+
+### D — Stateful edge (Cloudflare Durable Objects / PartyKit)
+
+Shape-wise the best fit on the market — a Durable Object *is* "an actor with storage
+and hibernation". Rejected on posture, not on fit: new vendor, new credentials, new
+ToS surface for untrusted-code execution, and the isolate decision already made
+(`isolated-vm` inside our own cage) does not port. The multiplayer plan rejected
+third-party realtime for the same reasons and nothing has changed.
+
+### Session affinity, addressed because §8 names it
+
+`--session-affinity` pins a *client* to an instance, not a *room* — two players of one
+zone still land on two instances. It was the wrong tool for party rooms (§4.6) and it
+is the wrong tool here, at any instance count. What replaces it when scale-out comes is
+the zone directory: the shell asks the API where zone Z lives and dials that URL. Not
+needed at max-instances 1; designed for now, built later.
+
+---
+
+## 3. Recommendation
+
+**A separate `gamedev-world` Cloud Run service** (option B): same repo, own image with
+`isolated-vm` built in, request-based billing, `--min-instances 0 --max-instances 1`,
+`--timeout 3600`, WebSockets, europe-west1. The main API mints HMAC zone tickets;
+the world service verifies them and owns nothing else about identity.
+
+| | zero traffic | low traffic (beta) | failure mode |
+| --- | --- | --- | --- |
+| Compute | $0 (no instances) | ~$0.09/active-hour, first ~50 h/mo free | capped by max-instances 1 |
+| Firestore | storage only (pennies) | 1 snapshot write / zone / 30 s while active | bounded by snapshot cadence |
+| The bill scales with | — | concurrent play | never with number of worlds |
+
+---
+
+## 4. How hibernation bounds the cost (the mechanism, concretely)
+
+The lifecycle the host implements; every arrow that points at "nothing running" is
+where the money stops:
+
+1. **Occupied → ticking.** Zone lives in memory, ticks at its manifest `tickHz`,
+   snapshots to Firestore every 30 s (a full snapshot is ≤ 192 KiB by contract, one
+   document write; the event log since the last snapshot rides along for replay).
+2. **Last player leaves → hibernate.** Final snapshot, drop the sim, forget the zone.
+   No timers, no keep-alives, nothing that would hold CPU on an empty world. When the
+   last zone on the instance hibernates, the last socket is gone, the last request
+   ends, and Cloud Run drains the instance. This is the step that makes min-instances 0
+   honest.
+3. **Player arrives at a sleeping zone → wake.** Load snapshot, rebuild the realm,
+   fast-forward the rng by the recorded draw count, call `wake(state, elapsedMs, rng)`
+   once with real elapsed wall time. The game's own code decides what sleep meant —
+   capped catch-up is the game's business (Ember Watch caps at 600 ticks), bounded
+   wake cost is enforced by the platform (`MAX_WAKE_MS`).
+4. **Instance dies mid-game → unscheduled hibernate.** Loss is bounded by the snapshot
+   cadence plus the event log; clients reconnect (the party-mode reconnect muscle),
+   the zone wakes on the next instance, and the worst outcome is the last few seconds
+   replayed or lost. SIGTERM gets the graceful version of the same move.
+
+Runtime metering closes the loop on cost: `MAX_TICK_MS` and the state-size ceiling are
+enforced per tick in production (not only in CI), a zone that blows its budget is
+hibernated with prejudice rather than allowed to eat the instance, and the instance
+refuses new zones past its measured capacity instead of degrading every zone it holds.
+
+---
+
+## 5. What must be decided now vs. later
+
+**Now (this document):** option B; ticket-based auth through the main API; snapshot
+cadence as the loss bound; runtime budget enforcement as the cost bound.
+
+**Later, with named triggers:**
+
+- *Zone directory + max-instances > 1* — when one vCPU's worth of concurrent zones is
+  routinely exceeded (metric: sustained tick-budget saturation, not a date).
+- *Move to a VM or committed-use pricing* — when active hours make Cloud Run the
+  expensive option (>~150 always-occupied hours/month, ~$13/mo crossover).
+- *quickjs-wasm fallback* — if the `isolated-vm` build breaks and stays broken; costs
+  ~20× CPU, still ~2.7% of a core per zone at 10 Hz, swap is contained to one module.

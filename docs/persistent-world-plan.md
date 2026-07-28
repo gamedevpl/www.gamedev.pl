@@ -333,6 +333,11 @@ Four results change how the rest of P3 should be planned:
 The first task of P3 proper is now a small one: inject that math shim into the client
 bundle, closing the single gap the spike left open.
 
+The infra question §8 raises — where a stateful zone host with a lifetime actually runs,
+given `--max-instances 1` and nothing pinned — is answered in
+[p3-zone-host-infra.md](./p3-zone-host-infra.md): a separate `gamedev-world` Cloud Run
+service, scale-to-zero, with hibernation as the thing that makes zero honest.
+
 ---
 
 ## 6. The deterministic sim contract (the key idea)
@@ -451,6 +456,9 @@ section originally missed.
   **zone directory** in Firestore mapping `zoneId → instance`, so the shell dials the right
   host. Hibernation makes instance loss survivable by design — an instance dying is just
   an unscheduled hibernate (snapshot + event log replay on wake).
+  **Now decided and costed** in [p3-zone-host-infra.md](./p3-zone-host-infra.md): the
+  separate service, min-instances 0, with the directory deferred behind a named trigger
+  rather than built up front — at one instance it is the service URL.
 - **Cost model**: active zone ≈ one room's worth of sockets + one metered isolate at
   10 Hz. Empty zone ≈ one Firestore document. The bill scales with concurrent play, not
   with how many worlds exist — this is what makes "everyone can prompt an MMO" survivable.
