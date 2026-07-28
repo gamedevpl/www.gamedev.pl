@@ -194,8 +194,9 @@ const EXPECTED_NOISE: { pattern: RegExp; why: string }[] = [
   {
     // The closed-beta splash renders Google's sign-in button, and GSI initialises
     // FedCM as soon as it loads. A CI browser has no Google session, so the provider
-    // answers with an empty account list and GSI logs it as an error. It is a
-    // statement about the browser profile, not about the button.
+    // either answers with an empty account list or rejects the token get with a
+    // NetworkError — GSI logs both as console.error. Those are statements about
+    // the browser profile, not about the button.
     //
     // Narrow on purpose: a client id or origin that is actually wrong fails
     // differently and loudly ("The given origin is not allowed for the given client
@@ -203,8 +204,8 @@ const EXPECTED_NOISE: { pattern: RegExp; why: string }[] = [
     // That pair is what wedged every deploy between 18:41 and 23:0x UTC on
     // 2026-07-27, when the candidate revision's host was missing from the OAuth
     // client's authorised JavaScript origins.
-    pattern: /Provider's accounts list is empty/,
-    why: 'a fresh CI browser has no Google session, so FedCM reports no accounts',
+    pattern: /\[GSI_LOGGER\]: FedCM (?:get\(\) rejects with NetworkError|.*Provider's accounts list is empty)/,
+    why: 'a fresh CI browser has no Google session, so FedCM cannot mint a token',
   },
 ];
 
