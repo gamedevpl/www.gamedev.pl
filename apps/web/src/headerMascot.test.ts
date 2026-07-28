@@ -28,6 +28,30 @@ describe('the header mascot is alive', () => {
     );
   });
 
+  it('gives the mark its own idle, because the shared one is invisible at 35px', () => {
+    // 35px wide against a 70-unit viewBox is a 0.5 scale, so the shared keyframes
+    // came out as ~1.5px of travel over 2.8s — running, but not visible. It was
+    // reported as "not animated" twice while animating the whole time.
+    const css = read('styles.css');
+    expect(css).toMatch(
+      /\.mascot\.mascot--logo:not\(\.mascot--static\)\.mascot--idle \.mascot__body-group \{\s*animation: mascot-logo-idle/,
+    );
+    const frames = css.slice(css.indexOf('@keyframes mascot-logo-idle'));
+    // The hop is what makes it legible: an event the eye catches, not a drift.
+    expect(frames).toMatch(/translateY\(-9px\)/);
+  });
+
+  it('keeps the hover hop winning over that idle', () => {
+    // Both selectors carry the same weight once `:hover` is counted, so the only
+    // thing deciding it is source order. Move the hover rule above the idle rule and
+    // hovering the logo silently stops doing anything.
+    const css = read('styles.css');
+    const idleAt = css.indexOf('.mascot.mascot--logo:not(.mascot--static).mascot--idle .mascot__body-group');
+    const hoverAt = css.indexOf('.logo:hover .mascot--logo:not(.mascot--static) .mascot__body-group');
+    expect(idleAt).toBeGreaterThan(-1);
+    expect(hoverAt).toBeGreaterThan(idleAt);
+  });
+
   it('still lets prefers-reduced-motion win over both', () => {
     const css = read('styles.css');
     const reduced = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'));

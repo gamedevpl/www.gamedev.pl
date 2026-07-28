@@ -174,8 +174,9 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryCo
 
   const selectedGame = useMemo(() => games.find((game) => game.token === selected) ?? null, [games, selected]);
   const selectedHealth = selectedGame ? healthFor(selectedGame, healthRows) : null;
-  const selectedScorecard =
-    selectedGame?.slug ? (scorecards.find((card) => card.slug === selectedGame.slug) ?? null) : null;
+  const selectedScorecard = selectedGame?.slug
+    ? (scorecards.find((card) => card.slug === selectedGame.slug) ?? null)
+    : null;
   const visibleGames = useMemo(
     () => filterStudioGames(games, { filter: shelfFilter, query: shelfQuery }),
     [games, shelfFilter, shelfQuery],
@@ -391,7 +392,11 @@ export function CreatorStudioView({ selectedToken, onNavigate, onPlay, onRetryCo
                 ) : null}
 
                 {tab === 'playtest' ? (
-                  <StudioPlaytestPanel game={selectedGame} published={isStudioGamePublished(selectedGame)} />
+                  <StudioPlaytestPanel
+                    game={selectedGame}
+                    published={isStudioGamePublished(selectedGame)}
+                    onExit={() => setTab('overview')}
+                  />
                 ) : null}
 
                 {tab === 'stats' ? (

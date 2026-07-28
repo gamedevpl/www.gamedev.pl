@@ -211,6 +211,7 @@
       "hint": "Zagraj, wstrzymaj w momencie wartym zmiany i wyślij prośbę z tym widokiem oraz sygnałami z sesji.",
       "loading": "Ładujemy grywalny build…",
       "loadError": "Nie ma jeszcze grywalnego buildu. Sprawdź zakładkę Build i spróbuj, gdy pojawi się podgląd.",
+      "theaterAria": "Playtest · {{title}}",
       "pause": "Wstrzymaj i zanotuj",
       "resume": "Wznów",
       "played": "{{seconds}}s gry",
