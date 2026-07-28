@@ -685,6 +685,11 @@ at all and feeds the only autonomous-eligible class.
   aggregation, so a digest is a few document reads per creator, and the digest and the
   studio cannot disagree about a number because both read the same document.
 
+  It also *enumerates* from scorecards rather than from recently-published submissions.
+  Publication date must not decide who hears from us: the creator of an older game that is
+  still being played is exactly who a "your games are still being played" message is for,
+  and listing recent publications would have silently dropped them.
+
   Two silences are the design, not omissions:
 
   - **No evidence, no digest.** A creator whose games nobody played gets nothing rather

@@ -32,8 +32,28 @@ import { BOT_UID_PREFIX, type Scorecard, type Store } from './store.js';
  * the place built to show them.
  */
 
-/** Published games sampled per sweep. A ceiling, not an expectation. */
-const MAX_SUBMISSIONS_SAMPLED = 500;
+/**
+ * Scorecards sampled per sweep. A ceiling, not an expectation — and reported when it binds.
+ *
+ * The sweep starts from scorecards rather than from recently-published submissions, because
+ * a scorecard *is* the evidence this digest reports on. Enumerating creators by recent
+ * publication instead would silently drop the creator of an older game that is still being
+ * played — exactly the person a "your games are still being played" message is for — and
+ * would contradict this module's own "no scorecards, no digest" contract in the direction
+ * that loses digests rather than the one that stops sending them.
+ */
+const MAX_SCORECARDS_SAMPLED = 1_000;
+
+/**
+ * How far back to look for the creator's last digest.
+ *
+ * Bounded, so a long-lived account is not read in full every week. The bound's failure mode
+ * is worth stating because it decides the size: overrunning it makes an unchanged week look
+ * like a first digest, so the creator receives one duplicate — never a missed one. Between
+ * two digests a creator accumulates at most a few notifications per submission, so passing
+ * this would take dozens of builds in a single week.
+ */
+const NOTIFICATION_SCAN_LIMIT = 200;
 
 /**
  * Where a digest sends the creator.
@@ -138,6 +158,8 @@ export interface DigestSweepDeps extends EmitDeps {
 
 export interface DigestSweepResult {
   weekKey: string;
+  /** True when `MAX_SCORECARDS_SAMPLED` bound before every scorecard was read. */
+  truncated: boolean;
   /** Distinct creators considered. */
   creators: number;
   /** Digests actually created. */
@@ -162,18 +184,26 @@ export async function runDigestSweep(deps: DigestSweepDeps): Promise<DigestSweep
   const currentTime = now();
   const weekKey = isoWeekKey(currentTime);
 
-  const published = (await store.listRecentlyPublished(MAX_SUBMISSIONS_SAMPLED)).filter(
+  // Evidence first: every game the nightly sweep had something to say about, then back to
+  // who owns it. A game with no scorecard cannot produce a digest line, so it never needs
+  // to be enumerated.
+  const sampled = await store.listScorecards({ limit: MAX_SCORECARDS_SAMPLED });
+  const truncated = sampled.length >= MAX_SCORECARDS_SAMPLED;
+
+  const cardsByOwner = new Map<string, Scorecard[]>();
+  for (const card of sampled) {
+    const submission = await store.getSubmissionBySlug(card.slug);
+    // No submission means no creator on the platform to write to — most of the catalog
+    // predates the submission flow. Unpublished and abandoned games are not theirs to hear
+    // about either: a draft's numbers belong on the status page.
+    if (!submission?.publishedAt || submission.abandonedAt) continue;
     // Automation accounts are excluded for the same reason the creator metrics exclude
     // them: a digest addressed to a test harness is noise with a delivery cost.
-    (submission) => !submission.ownerUid.startsWith(BOT_UID_PREFIX),
-  );
+    if (submission.ownerUid.startsWith(BOT_UID_PREFIX)) continue;
 
-  const slugsByOwner = new Map<string, Set<string>>();
-  for (const submission of published) {
-    if (!submission.slug || submission.abandonedAt) continue;
-    const owned = slugsByOwner.get(submission.ownerUid) ?? new Set<string>();
-    owned.add(submission.slug);
-    slugsByOwner.set(submission.ownerUid, owned);
+    const owned = cardsByOwner.get(submission.ownerUid) ?? [];
+    owned.push(card);
+    cardsByOwner.set(submission.ownerUid, owned);
   }
 
   let sent = 0;
@@ -181,14 +211,10 @@ export async function runDigestSweep(deps: DigestSweepDeps): Promise<DigestSweep
   let skippedUnchanged = 0;
   let failed = 0;
 
-  for (const [uid, slugs] of slugsByOwner) {
+  for (const [uid, cards] of cardsByOwner) {
     try {
-      const cards = (await Promise.all([...slugs].map((slug) => store.getScorecard(slug)))).filter(
-        (card): card is Scorecard => card !== null,
-      );
-
       const totals = buildDigestTotals(cards);
-      if (cards.length === 0 || isEmptyDigest(totals)) {
+      if (isEmptyDigest(totals)) {
         skippedEmpty += 1;
         continue;
       }
@@ -215,12 +241,12 @@ export async function runDigestSweep(deps: DigestSweepDeps): Promise<DigestSweep
     }
   }
 
-  return { weekKey, creators: slugsByOwner.size, sent, skippedEmpty, skippedUnchanged, failed };
+  return { weekKey, truncated, creators: cardsByOwner.size, sent, skippedEmpty, skippedUnchanged, failed };
 }
 
 /** The params of the most recent digest this creator received, or null if they have none. */
 async function findPreviousDigest(store: Store, uid: string): Promise<Record<string, string> | null> {
-  const recent = await store.listNotifications(uid, { limit: 50 });
+  const recent = await store.listNotifications(uid, { limit: NOTIFICATION_SCAN_LIMIT });
   const previous = recent.find((notification) => notification.type === 'creator.digest');
   return previous?.params ?? null;
 }

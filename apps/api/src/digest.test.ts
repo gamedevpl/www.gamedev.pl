@@ -147,8 +147,27 @@ describe('runDigestSweep', () => {
   it('sends nothing when a game has no scorecard at all', async () => {
     const result = await runDigestSweep({ store, now });
 
-    expect(result.skippedEmpty).toBe(1);
+    // Not even considered: the sweep enumerates evidence, and a game with no scorecard
+    // has none to enumerate.
+    expect(result.creators).toBe(0);
     expect(await store.listNotifications('g:alice')).toEqual([]);
+  });
+
+  it('reaches the creator of an older game that is still being played', async () => {
+    // The bug this ordering fixes. Enumerating creators from recently-published
+    // submissions drops whoever published long enough ago to fall off that list — the
+    // exact person a "your games are still being played" message exists for. Starting
+    // from scorecards means publication date cannot decide who hears from us.
+    await store.createSubmission(99, 'g:veteran', 'Ancient Game');
+    await store.setSubmissionSlug(99, 'ancient-game');
+    await store.setSubmissionPublishedAt(99, '2024-01-01T00:00:00.000Z');
+    await store.upsertUser({ uid: 'g:veteran' });
+    await played('ancient-game', 40);
+
+    const result = await runDigestSweep({ store, now });
+
+    expect(result.sent).toBe(1);
+    expect(await store.listNotifications('g:veteran')).toHaveLength(1);
   });
 
   it('does not repeat itself when the numbers have not moved', async () => {
@@ -201,12 +220,24 @@ describe('runDigestSweep', () => {
     await played('brick-storm', 12);
     const failures: string[] = [];
     const brokenStore = Object.create(store) as InMemoryStore;
-    brokenStore.getScorecard = () => Promise.reject(new Error('firestore down'));
+    brokenStore.listNotifications = () => Promise.reject(new Error('firestore down'));
 
     const result = await runDigestSweep({ store: brokenStore, now, onError: (uid) => failures.push(uid) });
 
     expect(result.failed).toBe(1);
     expect(failures).toEqual(['g:alice']);
+  });
+
+  it('skips a game whose creator never published it', async () => {
+    await store.createSubmission(98, 'g:alice', 'Draft');
+    await store.setSubmissionSlug(98, 'draft-game');
+    await played('draft-game', 30);
+
+    const result = await runDigestSweep({ store, now });
+
+    // A draft's numbers belong on its status page; the digest is about live games.
+    expect(result.creators).toBe(0);
+    expect(await store.listNotifications('g:alice')).toEqual([]);
   });
 });
 
