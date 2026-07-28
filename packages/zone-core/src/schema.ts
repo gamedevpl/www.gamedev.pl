@@ -17,22 +17,12 @@
  * with, which is the exact outcome the declaration exists to prevent.
  */
 
-/** Mirrors games-repo `TICK_HZ_VALUES`. Bounded because the whole latency-tolerance
- *  argument for P3 rests on slow ticks; a game asking for 60 Hz has designed that
- *  tolerance away. */
-export const TICK_HZ_VALUES = [5, 10, 15, 20] as const;
-export type TickHz = (typeof TICK_HZ_VALUES)[number];
-
-/** Mirrors games-repo `MAX_PLAYERS_PER_ZONE`. A zone is a room-sized problem. */
-export const MAX_PLAYERS_PER_ZONE = 16;
+import { MAX_PLAYERS_PER_ZONE, RESERVED_EVENT_KINDS, TICK_HZ_VALUES, type TickHz } from './contract.js';
 
 /** Mirrors games-repo `MAX_ZONE_INPUT_KINDS` in validate.ts Check 23. */
 export const MAX_ZONE_INPUT_KINDS = 12;
 export const MAX_ZONE_ENUM_VALUES = 16;
 export const MAX_ZONE_ENUM_VALUE_LENGTH = 16;
-
-/** Mirrors games-repo `RESERVED_EVENT_KINDS`: the platform sends these, clients never do. */
-export const RESERVED_EVENT_KINDS = ['join', 'leave'] as const;
 
 const KIND_PATTERN = /^[a-z][a-zA-Z0-9]{0,15}$/;
 const ENUM_VALUE_PATTERN = /^[a-zA-Z0-9_-]{1,16}$/;

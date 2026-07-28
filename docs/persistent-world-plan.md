@@ -333,6 +333,11 @@ Four results change how the rest of P3 should be planned:
 The first task of P3 proper is now a small one: inject that math shim into the client
 bundle, closing the single gap the spike left open.
 
+**The host is now built** — `packages/zone-core` (the cage, the tick loop, the
+hibernation) and `apps/world` (the socket, the Firestore snapshots), with the shell half
+in `apps/web/src/zone/`. See [p3-zone-protocol.md](./p3-zone-protocol.md) for what
+travels between them and why a tick delta is an event list rather than a state diff.
+
 The infra question §8 raises — where a stateful zone host with a lifetime actually runs,
 given `--max-instances 1` and nothing pinned — is answered in
 [p3-zone-host-infra.md](./p3-zone-host-infra.md): a separate `gamedev-world` Cloud Run

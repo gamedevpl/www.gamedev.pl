@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { InMemoryStore } from './store.js';
-import { verifyZoneTicket } from './zone-ticket.js';
-import type { ZoneSchema } from './zone-schema.js';
+import { verifyZoneTicket } from '@gamedevpl/zone-core';
+import type { ZoneSchema } from '@gamedevpl/zone-core';
 import type { ZoneSchemaSource } from './zone-source.js';
 
 /**

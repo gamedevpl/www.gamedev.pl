@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { guestPlayerTag, mintZoneTicket, zonePlayerTag, ZONE_TICKET_TTL_MS } from './zone-ticket.js';
+import { guestPlayerTag, mintZoneTicket, zonePlayerTag, ZONE_TICKET_TTL_MS } from '@gamedevpl/zone-core';
 import type { ZoneSchemaSource } from './zone-source.js';
 
 /**

@@ -6,7 +6,7 @@ import {
   mintZoneTicket,
   verifyZoneTicket,
   zonePlayerTag,
-} from './zone-ticket.js';
+} from './ticket.js';
 
 /**
  * A zone ticket is the only thing that crosses from the API — which knows who you are —

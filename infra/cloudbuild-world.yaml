@@ -1,0 +1,24 @@
+# Builds the gamedev-world zone host image from the repo root using apps/world/Dockerfile
+# and pushes it to Artifact Registry. Invoked by infra/deploy-world.sh.
+#
+# Separate from cloudbuild.yaml because the two services deploy independently — that is
+# the point of splitting them (docs/p3-zone-host-infra.md §2).
+substitutions:
+  _IMAGE: '' # e.g. europe-west1-docker.pkg.dev/PROJECT/gamedev/world:latest
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - 'build'
+      - '-f'
+      - 'apps/world/Dockerfile'
+      - '-t'
+      - '${_IMAGE}'
+      - '.'
+images:
+  - '${_IMAGE}'
+options:
+  logging: CLOUD_LOGGING_ONLY
+  # isolated-vm is a native addon and compiling V8 bindings is the slow part of this
+  # build. The default machine type turns a five-minute image into a twenty-minute one.
+  machineType: 'E2_HIGHCPU_8'
+timeout: '1800s'

@@ -1,7 +1,7 @@
 import type { GitHubClient } from './github-client.js';
 import type { PublishedSlugGate } from './published-slugs.js';
 import { createGamesRepoClientFromEnv, createManifestBlockSource } from './manifest-source.js';
-import { parseZoneSchema, type ZoneSchema } from './zone-schema.js';
+import { parseZoneSchema, type ZoneSchema } from '@gamedevpl/zone-core';
 
 /**
  * "Does this game have an authoritative zone, and what may a client send it?"

@@ -1,9 +1,10 @@
 # P3 zone host — where it runs
 
-Status: **recommendation, awaiting approval. This document is the blocking gate for
-building the zone-host runtime** ([persistent-world-plan.md](./persistent-world-plan.md)
-§5 P3, §8). Protocol design and the shell transport proceed meanwhile — they are the
-same whatever answer this document gets.
+Status: **approved and built, 2026-07-28.** The recommendation below is what the zone
+host now is: `apps/world` deploys as a separate Cloud Run service via
+[`infra/deploy-world.sh`](../infra/deploy-world.sh), and §6 records what shipped against
+each claim. Nothing is live until `ZONE_HOST_URL` is set on the app service; until then
+admission 404s and every game plays exactly as it did.
 
 The question, stated by §8: the API runs on Cloud Run with `--max-instances 1`,
 scale-to-zero, and nothing pinned. An authoritative zone is a stateful process with a
@@ -190,3 +191,36 @@ cadence as the loss bound; runtime budget enforcement as the cost bound.
   expensive option (>~150 always-occupied hours/month, ~$13/mo crossover).
 - _quickjs-wasm fallback_ — if the `isolated-vm` build breaks and stays broken; costs
   ~20× CPU, still ~2.7% of a core per zone at 10 Hz, swap is contained to one module.
+
+---
+
+## 6. What shipped against this
+
+| Claim in this document                                   | Where it lives now                                                    |
+| -------------------------------------------------------- | --------------------------------------------------------------------- |
+| Separate service, own image, own cadence                 | `apps/world/`, `apps/world/Dockerfile`, `infra/cloudbuild-world.yaml` |
+| min-instances 0, max-instances 1, 60-min timeout         | `infra/deploy-world.sh`                                               |
+| HMAC tickets from the main API; host never sees a cookie | `packages/zone-core/src/ticket.ts`, `apps/api/src/zones.ts`           |
+| `isolated-vm` in production, `node:vm` never             | `packages/zone-core/src/cage.ts`, `assertProductionCage`              |
+| Hibernate on empty; instance drains                      | `Zone.hibernate`, `ZoneHost.pump`                                     |
+| Wake via `wake()` with rng draw alignment                | `Zone.wakeUp`, `SimInstance.restore`                                  |
+| Snapshot every 30 s; that is the loss bound              | `SNAPSHOT_EVERY_MS`, `Zone.persist`                                   |
+| Runtime metering, not only CI                            | `Zone.recordTickCost`, `Zone.measure`                                 |
+| SIGTERM is a scheduled hibernate                         | `ZoneHost.shutdown`, `apps/world/src/server.ts`                       |
+
+Three things about the build are worth knowing before changing any of it.
+
+**The metering clock is not the zone's clock.** `now` schedules ticks and stamps
+snapshots, and a test drives it in fixed jumps; `monotonicMs` is what measures how long a
+tick actually took. They were one parameter at first, which made the budget check measure
+the schedule instead of the work — it passed for a sim that spent 40 ms a tick.
+
+**Storability is decided inside the realm, before `JSON.stringify`.** Stringify does not
+refuse the values it cannot carry, it rewrites them: `Infinity` and `NaN` become `null`,
+a `Map` becomes `{}`, `-0` becomes `0`. By the time the host has a string to inspect the
+evidence is gone and the state looks perfectly storable — and keeps looking that way
+until the zone sleeps and wakes as a different world.
+
+**One timer drives every zone.** A per-zone interval would make an overloaded instance
+quietly late for everyone; one sweep makes "how many zones can this box afford?" a
+question with an answer, and `MAX_ZONES_PER_INSTANCE` is what it answers today.

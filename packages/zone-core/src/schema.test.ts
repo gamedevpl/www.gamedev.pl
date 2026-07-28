@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseZoneSchema, validateZoneInput, type ZoneSchema } from './zone-schema.js';
+import { parseZoneSchema, validateZoneInput, type ZoneSchema } from './schema.js';
 
 /**
  * A zone declaration is the vocabulary the server will accept and feed to a simulation

@@ -1,14 +1,14 @@
 # P3 zone protocol
 
-Status: **shipped (shell side), 2026-07-28.** The wire and bridge protocol for
+Status: **shipped, both ends, 2026-07-28.** The wire and bridge protocol for
 authoritative real-time zones ([persistent-world-plan.md](./persistent-world-plan.md)
-§5 P3). The shell half is built; the host that answers it is
-[p3-zone-host-infra.md](./p3-zone-host-infra.md) phase 3.
+§5 P3). The shell speaks it from `apps/web/src/zone/`; the host answers it from
+`apps/world/` (see [p3-zone-host-infra.md](./p3-zone-host-infra.md)).
 
-This is the reference the host is implemented against. The authority is the code —
-`apps/web/src/zone/protocol.ts` for the parsers, `apps/api/src/zone-schema.ts` for the
-declaration — and this document explains the parts of it that are decisions rather than
-mechanics.
+This is the reference both ends are implemented against. The authority is the code —
+`apps/web/src/zone/protocol.ts` for the client parsers, `packages/zone-core/src/schema.ts`
+for the declaration and the server-side input check — and this document explains the
+parts of it that are decisions rather than mechanics.
 
 ---
 
