@@ -154,8 +154,12 @@ curl -H "Authorization: Bearer $GAMEDEV_ACCESS_TOKEN" https://www.gamedev.pl/api
 **Driving a real browser** — the SPA authenticates with cookies
 (`credentials: 'include'`), so exchange the token for a session first.
 `POST /api/auth/session` accepts only a token (never a cookie, so a session can never
-launder itself into a fresh one) and returns the same cookie a Google sign-in would.
-The verified Playwright shape:
+launder itself into a fresh one) and returns the cookie the SPA needs. It is a normal
+session for that account in every way the app cares about, with one deliberate
+exception: it records that it came from a token, so it keeps getting 404 from the
+operator surfaces exactly as the Bearer header does. Without that the exchange would be
+a way around "a token can never mint another token" above — trade an admin account's
+token for a cookie, and mint again. The verified Playwright shape:
 
 ```js
 import { chromium, request } from 'playwright-core';

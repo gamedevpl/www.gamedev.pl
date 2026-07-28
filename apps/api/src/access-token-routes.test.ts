@@ -325,6 +325,82 @@ describe('authenticating with a personal access token', () => {
     expect(followUp.statusCode).toBe(200);
   });
 
+  /**
+   * The escalation these two guard against: a PAT issued for an *admin* account — and
+   * PATs exist precisely to sit in CI configs and agent VMs, where a human is not
+   * watching — traded here for a cookie that satisfies `isAdminSession`, then used to
+   * mint further tokens. Revoking the leaked original would accomplish nothing.
+   */
+  it('hands back a session carrying the token authority, not operator authority', async () => {
+    const app = await appWith(store, { betaAllowedUids: 'g:boss' });
+    const { token } = (await mintFor(app, 'g:boss', 'admin ci token')).json();
+
+    const exchanged = await app.inject({ method: 'POST', url: '/api/auth/session', headers: bearer(token) });
+    expect(exchanged.statusCode).toBe(200);
+    const setCookie = exchanged.headers['set-cookie'];
+    const cookie = String(Array.isArray(setCookie) ? setCookie[0] : setCookie).split(';')[0] as string;
+
+    // It is a genuinely working session for the account it names …
+    const me = await app.inject({ method: 'GET', url: '/api/auth/me', headers: { cookie } });
+    expect(me.statusCode).toBe(200);
+    expect(me.json().user.uid).toBe('g:boss');
+
+    // … and still refused everywhere a session-only check applies. 404, the same answer
+    // a non-admin gets, because whether an operator surface exists is not worth confirming.
+    const mintAgain = await app.inject({
+      method: 'POST',
+      url: '/api/admin/access-tokens',
+      headers: { cookie },
+      payload: { uid: 'bot:escalated', name: 'minted by a token' },
+    });
+    expect(mintAgain.statusCode).toBe(404);
+
+    const operatorView = await app.inject({
+      method: 'GET',
+      url: '/api/admin/telemetry/health',
+      headers: { cookie },
+    });
+    expect(operatorView.statusCode).toBe(404);
+  });
+
+  it('keeps that restriction across a session renewal', async () => {
+    // Renewal re-mints the cookie mid-flight. If provenance were dropped there, a
+    // token-derived session would silently become an ordinary one after six hours and
+    // regain the authority it was just denied.
+    const app = await appWith(store, { betaAllowedUids: 'g:boss' });
+
+    // A token-derived session already past its half-life, so the onSend hook renews it.
+    const aging = mintSessionToken('g:boss', sessionSecret, 60, undefined, 'token');
+    const renewed = await app.inject({
+      method: 'GET',
+      url: '/api/auth/me',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${aging}` },
+    });
+    expect(renewed.statusCode).toBe(200);
+    const rolled = renewed.headers['set-cookie'];
+    expect(rolled).toBeDefined();
+    const renewedCookie = String(Array.isArray(rolled) ? rolled[0] : rolled).split(';')[0] as string;
+
+    // The re-minted payload still says where it came from.
+    const encodedPayload = renewedCookie.split('=')[1]?.split('.')[0] as string;
+    expect(JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf8')).src).toBe('token');
+
+    const mintAgain = await app.inject({
+      method: 'POST',
+      url: '/api/admin/access-tokens',
+      headers: { cookie: renewedCookie },
+      payload: { uid: 'bot:escalated', name: 'minted after renewal' },
+    });
+    expect(mintAgain.statusCode).toBe(404);
+  });
+
+  it('still lets a real browser session reach the operator surfaces', async () => {
+    // The counterweight: the fix must not lock the operator out of their own tools.
+    const app = await appWith(store, { betaAllowedUids: 'g:boss' });
+    const res = await mintFor(app, 'bot:e2e');
+    expect(res.statusCode).toBe(201);
+  });
+
   it.each([
     ['a browser session', () => sessionHeaders('g:boss')],
     ['no credential', () => ({})],

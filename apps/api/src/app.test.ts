@@ -5,6 +5,7 @@ import packageJson from '../../../package.json';
 import { buildApp } from './app.js';
 import { MAX_PROJECT_BYTES } from './assemble.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
+import type { ContentChecker } from './moderation.js';
 import { InMemoryStore } from './store.js';
 
 function stubGenerator(project: Partial<GameProject>): GameGenerator {
@@ -22,6 +23,34 @@ function stubGenerator(project: Partial<GameProject>): GameGenerator {
 }
 
 const sessionSecret = 'dev-session-secret-change-me';
+
+/**
+ * A content checker that counts what a real one would *bill* us for.
+ *
+ * `VertexChecker.checkFields` makes one paid Gemini call per field, so this counts
+ * fields rather than invocations — the number these tests assert on is the number of
+ * Vertex calls the request would have cost in production.
+ */
+function countingChecker(verdict: { allowed: boolean; category?: string } = { allowed: true }) {
+  const state = {
+    calls: 0,
+    checker: {
+      async check() {
+        state.calls += 1;
+        return verdict as Awaited<ReturnType<ContentChecker['check']>>;
+      },
+      async checkFields(fields: string[]) {
+        state.calls += fields.length;
+        return verdict as Awaited<ReturnType<ContentChecker['checkFields']>>;
+      },
+    } satisfies ContentChecker,
+  };
+  return state;
+}
+
+function cookieFor(uid: string) {
+  return { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken(uid, sessionSecret)}` };
+}
 
 async function createAuthenticatedApp(generator?: GameGenerator) {
   const store = new InMemoryStore();
@@ -112,6 +141,81 @@ describe('api', () => {
     // Quota must not have been spent on a rejected prompt.
     const quota = await store.checkAndIncrementQuota('g:mod-test', new Date().toISOString().slice(0, 10), 20, 'mocks');
     expect(quota.current).toBe(1); // first real increment — the moderated attempt didn't count
+    await app.close();
+  });
+
+  /**
+   * Moderation is a paid Vertex call, so what matters on these paths is not only the
+   * status code but whether we were billed to produce it. Each of these used to spend
+   * money on every request: the quota capped games created, not dollars, and nothing
+   * capped the request rate at all.
+   */
+  it('spends nothing on moderation once the daily quota is exhausted', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:quota-test' });
+    const moderation = countingChecker();
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      contentChecker: moderation.checker,
+      dailyGenerationQuota: 1,
+    });
+
+    const payload = { prompt: 'a cheerful platformer' };
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/generate-game',
+      headers: cookieFor('g:quota-test'),
+      payload,
+    });
+    expect(first.statusCode).toBe(200);
+    expect(moderation.calls).toBe(1);
+
+    const second = await app.inject({
+      method: 'POST',
+      url: '/api/generate-game',
+      headers: cookieFor('g:quota-test'),
+      payload,
+    });
+    expect(second.statusCode).toBe(429);
+    // The refusal must be free — an out-of-budget account that still bills us on every
+    // attempt makes the daily limit a cap on games, not on cost.
+    expect(moderation.calls).toBe(1);
+
+    await app.close();
+  });
+
+  it('caps generate-game per IP so one account cannot bill us without limit', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:flood' });
+    const moderation = countingChecker();
+    // Quota deliberately far above the per-IP ceiling, so the limiter is what stops it.
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      contentChecker: moderation.checker,
+      dailyGenerationQuota: 10_000,
+    });
+
+    const send = () =>
+      app.inject({
+        method: 'POST',
+        url: '/api/generate-game',
+        headers: cookieFor('g:flood'),
+        payload: { prompt: 'another game' },
+      });
+
+    const statuses: number[] = [];
+    for (let attempt = 0; attempt < 31; attempt += 1) {
+      statuses.push((await send()).statusCode);
+    }
+
+    expect(statuses.filter((status) => status === 200)).toHaveLength(30);
+    expect(statuses.at(-1)).toBe(429);
+    // The 31st was refused by the rate-limit hook, which runs before the handler body —
+    // so it never reached the paid call.
+    expect(moderation.calls).toBe(30);
+
     await app.close();
   });
 
