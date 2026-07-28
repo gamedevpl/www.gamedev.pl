@@ -50,11 +50,16 @@ import type { Store } from './store.js';
  * still-building index reports it as already present, which reads as "the fix did not
  * work" and invites the operator to conclude the tool is broken.
  *
+ * Two indexes carry this command — `playerFeedback.uid` and, since P2 added the world
+ * listing, `worldEntries.ownerUid` — so the hint has to name which of them failed. Sending
+ * an operator to check the wrong collection costs them the debugging session.
+ *
  * Returns null for anything else — an unrecognised failure should be shown as-is, not
- * dressed up as an index problem. That includes an index error naming some *other* query:
- * this command depends on exactly one index, so a hint is only honest when the message
- * says so. Confidently misidentifying the failure is worse than staying quiet, because a
- * raw error sends an operator to read it while a wrong hint sends them somewhere useless.
+ * dressed up as an index problem. That includes an index error naming a collection this
+ * command never queries: it belongs to some other caller, and answering it with "provision
+ * playerFeedback.uid" points at something already fine. Confidently misidentifying the
+ * failure is worse than staying quiet, because a raw error sends an operator to read it
+ * while a wrong hint sends them somewhere useless.
  */
 export function indexHint(message: string): string | null {
   const isIndexFailure = message.includes('FAILED_PRECONDITION') && message.includes('index');
