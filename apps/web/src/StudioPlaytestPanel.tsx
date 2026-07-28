@@ -105,7 +105,6 @@ function toContext(
 export function StudioPlaytestPanel({ game, published, onExit }: StudioPlaytestPanelProps) {
   const { t } = useTranslation();
   const frameRef = useRef<HTMLIFrameElement | null>(null);
-  const exitRef = useRef<HTMLButtonElement | null>(null);
   const [html, setHtml] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -237,7 +236,6 @@ export function StudioPlaytestPanel({ game, published, onExit }: StudioPlaytestP
                 type="button"
                 className="secondary-btn exit-btn"
                 onClick={onExit}
-                ref={exitRef}
                 aria-label={t('catalog.exitPlayer', { defaultValue: 'Close' })}
                 title={t('catalog.exitPlayer', { defaultValue: 'Close' })}
               >
