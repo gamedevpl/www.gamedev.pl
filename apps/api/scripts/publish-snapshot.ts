@@ -4,12 +4,18 @@
  * This moves game assembly off the request path: instead of every cache-cold play
  * rebuilding a game from a fan-out of GitHub reads plus an esbuild bundle, a merge
  * to the games repo's default branch bakes every published game once and the site
- * serves the result. GitHub stays in the picture only for unmerged PR previews and
- * as the fallback when a game is missing from the snapshot.
+ * serves the result. GitHub stays the source of truth for content and for
+ * unmerged PR / draft previews; it is not a published-serve fallback when the
+ * snapshot bucket is configured.
+ *
+ * A non-empty failures list leaves `current.json` on the previous good snapshot
+ * (immutable objects under the new id may still be written for debugging) and
+ * exits non-zero — without a serve-time GitHub fallback, advancing the pointer
+ * on a partial bake would half-publish failed games.
  *
  * Run by .github/workflows/publish-games.yml on a repository_dispatch from the
- * games repo (and manually via workflow_dispatch). Safe to re-run: each run writes
- * a fresh immutable snapshot prefix and only then moves `current.json`.
+ * games repo (and manually via workflow_dispatch). Safe to re-run: each successful
+ * run writes a fresh immutable snapshot prefix and only then moves `current.json`.
  *
  * Environment:
  *   GAMES_SNAPSHOT_BUCKET  target GCS bucket (required unless --dry-run)
@@ -106,12 +112,11 @@ async function main(): Promise<void> {
   console.log(`  failures    : ${result.failures.length}`);
 
   if (result.failures.length > 0) {
-    // The pointer has already moved — a game that fails to bake falls back to the
-    // GitHub path and keeps working, so a partial snapshot is better than none.
-    // But a failure means a published game is no longer being served the cheap
-    // way, and the games repo's own gate should have caught it, so end red.
+    // The pointer was left unchanged — without a serve-time GitHub fallback,
+    // advancing it on a partial bake would half-publish failed games. The site
+    // keeps serving the previous good snapshot until a clean bake succeeds.
     console.error('');
-    console.error('games that could not be baked (serving falls back to GitHub for these):');
+    console.error('games that could not be baked (pointer not advanced; previous snapshot still live):');
     for (const failure of result.failures) {
       console.error(`  - ${failure.slug}: ${failure.reason}`);
     }

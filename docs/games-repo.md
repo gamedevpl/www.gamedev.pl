@@ -134,14 +134,15 @@ validation gate so it guards published bundles.
 
 ## Open questions
 
-- ~~**Where are published bundles hosted?**~~ **Resolved: a Cloud Storage snapshot,
-  with GitHub as fallback.** Merges to the games repo bake catalog, assembled HTML,
-  and media into `gs://…-games-snapshots`; the API prefers that snapshot on
-  `GET /api/catalog`, `GET /api/games/:slug`, and media routes, and falls back to
-  live GitHub reads (plus on-demand assemble) when the bucket is unset, a game
-  failed to bake, or Storage is down. PR / draft previews still read GitHub live.
-  The API remains the games origin — the bucket is not public. Details:
-  [`games-snapshot.md`](./games-snapshot.md).
+- ~~**Where are published bundles hosted?**~~ **Resolved: a Cloud Storage snapshot.**
+  Merges to the games repo bake catalog, assembled HTML, and media into
+  `gs://…-games-snapshots`. When `GAMES_SNAPSHOT_BUCKET` is set, the API serves
+  published `GET /api/catalog`, `GET /api/games/:slug`, and media routes **only**
+  from that snapshot — misses and Storage errors fail the request (503 / 502 /
+  404 as appropriate); they do not assemble from GitHub. Unset the env var for
+  local/dev. GitHub remains the source of truth for content (the bake reads it)
+  and for PR / draft previews. The API remains the games origin — the bucket is
+  not public. Details: [`games-snapshot.md`](./games-snapshot.md).
 - **Repository ownership and merge authority.** Agent PRs need a human gate initially,
   especially because review is also the moderation point.
 - **Submission identity, attribution, rights, and abuse controls.** These must be decided before

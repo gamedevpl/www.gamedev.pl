@@ -12,7 +12,12 @@ import {
   type GitHubClient,
   type LinkedPullRequest,
 } from './github-client.js';
-import { createSnapshotReaderFromEnv, type GameSnapshotReader } from './game-snapshot.js';
+import {
+  createSnapshotReaderFromEnv,
+  SnapshotIncompleteError,
+  SnapshotUnavailableError,
+  type GameSnapshotReader,
+} from './game-snapshot.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
@@ -390,7 +395,7 @@ export async function registerSubmissionRoutes(
   // that assert the GitHub-backed behaviour pass null).
   const snapshotReader = options.snapshotReader === undefined ? createSnapshotReaderFromEnv() : options.snapshotReader;
   if (snapshotReader) {
-    app.log.info('serving published games from the snapshot bucket, with GitHub as fallback');
+    app.log.info('serving published games from the snapshot bucket only (no GitHub fallback)');
   }
 
   const githubClient =
@@ -666,10 +671,15 @@ export async function registerSubmissionRoutes(
   /**
    * Where a catalog read actually comes from.
    *
-   * `forceFresh` deliberately skips the snapshot. It is only set by
-   * isSlugPublished for the publishing→published transition, and that is exactly
-   * the window where the snapshot is the stale source (it is baked a minute or
-   * two after the merge) and GitHub is the fresh one.
+   * When the snapshot is configured, published routes require it: a missing
+   * pointer or Storage error fails the request (503). `forceFresh` deliberately
+   * skips the snapshot — it is only set by isSlugPublished for the
+   * publishing→published transition, which is exactly the window where the
+   * snapshot is the stale source (baked a minute or two after the merge) and
+   * GitHub is the fresh one.
+   *
+   * Unset `GAMES_SNAPSHOT_BUCKET` (null snapshotReader) keeps the GitHub /
+   * local-dev path — that is an opt-out, not a fallback from a configured bucket.
    */
   async function loadCatalog(client: GitHubClient, forceFresh: boolean): Promise<CatalogGameEntry[]> {
     if (!forceFresh && snapshotReader) {
@@ -679,25 +689,29 @@ export async function registerSubmissionRoutes(
           return entries;
         }
       } catch (error) {
-        app.log.warn({ err: error }, 'snapshot catalog unavailable; falling back to GitHub');
+        if (error instanceof SnapshotUnavailableError) throw error;
+        app.log.warn({ err: error }, 'snapshot catalog unavailable');
+        throw new SnapshotUnavailableError('snapshot catalog unavailable', { cause: error });
       }
+      throw new SnapshotUnavailableError('snapshot catalog is not published');
     }
     return client.getCatalog(publishedRef);
   }
 
   /**
-   * Snapshot lookups never fail a request. A miss (game not in this snapshot) and
-   * a transport error both fall back to the GitHub path, so switching the bucket
-   * off, an unbaked game, and a Storage outage all degrade to exactly the
-   * behaviour the site had before the snapshot existed.
+   * Snapshot lookups for published routes. Transport errors throw
+   * SnapshotUnavailableError (503); a genuine miss returns null so the caller
+   * can decide between bake-inconsistency (502) and not-found (404). There is
+   * no GitHub escape hatch when snapshotReader is present.
    */
   async function readSnapshotGame(slug: string): Promise<{ slug: string; title: string; html: string } | null> {
     if (!snapshotReader) return null;
     try {
       return await snapshotReader.getGame(slug);
     } catch (error) {
-      app.log.warn({ err: error, slug }, 'snapshot game unavailable; falling back to GitHub');
-      return null;
+      if (error instanceof SnapshotUnavailableError) throw error;
+      app.log.warn({ err: error, slug }, 'snapshot game unavailable');
+      throw new SnapshotUnavailableError('snapshot game unavailable', { cause: error });
     }
   }
 
@@ -709,8 +723,9 @@ export async function registerSubmissionRoutes(
     try {
       return await snapshotReader.getMedia(slug, filename);
     } catch (error) {
-      app.log.warn({ err: error, slug, filename }, 'snapshot media unavailable; falling back to GitHub');
-      return null;
+      if (error instanceof SnapshotUnavailableError) throw error;
+      app.log.warn({ err: error, slug, filename }, 'snapshot media unavailable');
+      throw new SnapshotUnavailableError('snapshot media unavailable', { cause: error });
     }
   }
 
@@ -1998,6 +2013,10 @@ export async function registerSubmissionRoutes(
       const entries = await getCatalogEntries(githubClient);
       return reply.send(entries.filter((entry) => entry.status === 'published'));
     } catch (error) {
+      if (error instanceof SnapshotUnavailableError) {
+        request.log.error({ err: error }, 'snapshot catalog unavailable');
+        return reply.status(503).send({ error: 'catalog snapshot unavailable' });
+      }
       request.log.error({ err: error }, 'failed to load catalog');
       return reply.status(502).send({ error: 'failed to load catalog' });
     }
@@ -2046,9 +2065,12 @@ export async function registerSubmissionRoutes(
 
       // The catalog allowlist above still gates every read, so the snapshot can
       // only ever answer for a filename the validated metadata already vouches for.
-      const snapshotMedia = await readSnapshotMedia(parsedParams.data.slug, parsedParams.data.filename);
       let body: Buffer;
-      if (snapshotMedia) {
+      if (snapshotReader) {
+        const snapshotMedia = await readSnapshotMedia(parsedParams.data.slug, parsedParams.data.filename);
+        if (!snapshotMedia) {
+          return reply.status(404).send({ error: 'media not found' });
+        }
         body = snapshotMedia.body;
       } else {
         const media = await githubClient.getGameMedia(publishedRef, parsedParams.data.slug, parsedParams.data.filename);
@@ -2074,12 +2096,17 @@ export async function registerSubmissionRoutes(
 
       return sendMedia(request, reply, cacheEntry);
     } catch (error) {
+      if (error instanceof SnapshotUnavailableError) {
+        request.log.error({ err: error }, 'snapshot media unavailable');
+        return reply.status(503).send({ error: 'media snapshot unavailable' });
+      }
       request.log.error({ err: error }, 'failed to serve game media');
       return reply.status(502).send({ error: 'failed to load game media' });
     }
   });
 
-  // Play a published game: sources are fetched from the games repo's default
+  // Play a published game. When the snapshot is configured, the baked document
+  // is required; otherwise sources are fetched from the games repo's default
   // branch and assembled into one document for the sandboxed, opaque-origin
   // iframe — the same trust model as the preview endpoint. Only slugs present
   // in the catalog as published are served.
@@ -2104,11 +2131,13 @@ export async function registerSubmissionRoutes(
         return reply.status(404).send({ error: 'game not found' });
       }
 
-      // Baked at merge time by the same assembler this route would use, with the
-      // same CSP, provenance meta and credential scan already applied — so a hit
-      // skips the GitHub fan-out and the esbuild bundle entirely.
-      const snapshotGame = await readSnapshotGame(slug);
-      if (snapshotGame) {
+      if (snapshotReader) {
+        // Baked at merge time by the same assembler the GitHub path would use,
+        // with the same CSP, provenance meta and credential scan already applied.
+        const snapshotGame = await readSnapshotGame(slug);
+        if (!snapshotGame) {
+          throw new SnapshotIncompleteError(`published game "${slug}" is missing from the snapshot`);
+        }
         gameCache.set(slug, { value: snapshotGame, expiresAt: currentTime + gameTtlMs });
         return reply.send(snapshotGame);
       }
@@ -2133,6 +2162,17 @@ export async function registerSubmissionRoutes(
       gameCache.set(slug, { value, expiresAt: currentTime + gameTtlMs });
       return reply.send(value);
     } catch (error) {
+      if (error instanceof SnapshotUnavailableError) {
+        request.log.error({ err: error, slug }, 'snapshot game unavailable');
+        return reply.status(503).send({ error: 'game snapshot unavailable' });
+      }
+      if (error instanceof SnapshotIncompleteError) {
+        request.log.error({ err: error, slug }, 'snapshot game incomplete');
+        return reply.status(502).send({
+          error: 'game snapshot incomplete',
+          detail: error.message.replace(/\s+/g, ' ').trim().slice(0, 240),
+        });
+      }
       if (
         error instanceof EmptyProjectError ||
         error instanceof ProjectTooLargeError ||

@@ -1,7 +1,9 @@
 # Published-game snapshots
 
-**Status: ✅ built.** Serving reads the snapshot with a GitHub fallback; the bake runs
-on every merge to the games repo's `main`.
+**Status: ✅ built.** When `GAMES_SNAPSHOT_BUCKET` is set, published catalog / play /
+media are served **only** from the Cloud Storage snapshot. The bake runs on every
+merge to the games repo's `main`. Unset the env var for local/dev / fixtures /
+`local-games-repo` — that is an opt-out, not a fallback from a configured bucket.
 
 ## The problem
 
@@ -52,7 +54,7 @@ properties fall out of that:
 ## Who bakes, and why it is this side
 
 `scripts/publish-snapshot.ts` runs in _this_ repo and reuses `assembleGameHtml` — the
-same function the play route calls.
+same function the play route calls when the snapshot is not configured.
 
 The games repo has its own `tools/build.ts` that emits standalone HTML, and uploading
 that instead would have removed GitHub from the loop entirely. It was the wrong trade:
@@ -67,18 +69,26 @@ of truth for _what a served game is_, and the bake is where the two meet.
 
 ## Serving
 
-`apps/api/src/submissions.ts` consults the snapshot first on three routes:
+`apps/api/src/submissions.ts` reads the snapshot on three published routes when
+`GAMES_SNAPSHOT_BUCKET` is set:
 
-| Route                              | Snapshot hit                  | Snapshot miss or error     |
-| ---------------------------------- | ----------------------------- | -------------------------- |
-| `GET /api/catalog`                 | `snapshots/<id>/catalog.json` | `client.getCatalog(ref)`   |
-| `GET /api/games/:slug`             | pre-assembled document        | GitHub sources + esbuild   |
-| `GET /api/games/:slug/media/:file` | snapshot bytes                | `client.getGameMedia(...)` |
+| Route                              | Snapshot hit                  | Miss / error (bucket configured)                                           |
+| ---------------------------------- | ----------------------------- | -------------------------------------------------------------------------- |
+| `GET /api/catalog`                 | `snapshots/<id>/catalog.json` | No pointer / Storage error → **503** (no `client.getCatalog`)              |
+| `GET /api/games/:slug`             | pre-assembled document        | Storage error → **503**; published in catalog but object missing → **502** |
+| `GET /api/games/:slug/media/:file` | snapshot bytes                | Storage error → **503**; allowlisted but object missing → **404**          |
 
-**The snapshot is a fast path, never a requirement.** An unset `GAMES_SNAPSHOT_BUCKET`,
-a game that failed to bake, an unbaked media file and a Cloud Storage outage all
-degrade to exactly the behaviour the site had before this existed. That is deliberate:
-the fallback is the reason this change is safe to ship in one step.
+Slug not in the catalog → **404** (unchanged). Publication authority is the snapshot
+catalog, not “object exists in the bucket” — a stray object cannot resurrect a game.
+
+**When the bucket is configured, there is no GitHub assemble on the published serve
+path.** GitHub remains the source of truth for content (the bake reads it) and for
+draft / PR preview routes (unmerged heads have no snapshot). Unset
+`GAMES_SNAPSHOT_BUCKET` is the local/dev opt-out and restores the GitHub / fixtures /
+`local-games-repo` path.
+
+In-process caches (catalog TTL, game TTL, last-known catalog on refresh failure) still
+apply; they cache snapshot results, not a GitHub escape hatch.
 
 Two invariants survive unchanged, and are tested:
 
@@ -87,10 +97,11 @@ Two invariants survive unchanged, and are tested:
 - **Media is still gated by the catalog allowlist** before the snapshot is consulted, so
   a stray object cannot widen what the API will serve.
 
-One deliberate exception: `isSlugPublished` skips the snapshot when it forces a
-refresh. That only happens during the publishing→published transition, which is
-precisely the window where the snapshot is the stale source and GitHub is the fresh
-one.
+One deliberate exception: `isSlugPublished(..., { refreshOnMiss: true })` skips the
+snapshot when it forces a refresh (`forceFresh`). That only happens during the
+publishing→published transition, which is precisely the window where the snapshot is
+the stale source and GitHub is the fresh one — status correctness while the bake is
+still in flight.
 
 ## The publish path
 
@@ -100,7 +111,7 @@ merge to games-repo main
   → validate.yml: regenerate + commit catalog.json
   → validate.yml: repository_dispatch → this repo
   → publish-games.yml: npm run snapshot:publish
-  → objects written, then current.json moves
+  → objects written, then current.json moves (only if every game baked cleanly)
   → running instances pick it up within the pointer TTL (~1 min)
 ```
 
@@ -140,10 +151,14 @@ but a stale snapshot is worse than an expensive one.
 
 ### A game that fails to bake
 
-It stays in the snapshot catalog and simply gets no game object, so its play route
-falls back to GitHub — exactly what it did before. Dropping it from the catalog would
-silently unpublish a game because of a transient build failure, and catalog membership
-is the games repo's decision, not the bake job's.
+A non-empty `failures` list does **not** advance `current.json`. Immutable objects under
+the new snapshot id may still be written (including a full catalog listing) for
+debugging, but the site keeps serving the previous good snapshot. Failed games are not
+half-published, and successful peers are not silently dropped from a newly published
+catalog.
+
+Do **not** flip the pointer while omitting failed games from the new catalog — that
+would unpublish them. Prefer “pointer stays put”.
 
 The job still exits non-zero, because the games repo's own gate should have caught it.
 
@@ -189,8 +204,8 @@ runtime cannot rewrite what it serves. `infra/setup-gcp.sh` step 7 provisions al
 including a 90-day lifecycle rule on `snapshots/`.
 
 If the games repo ever goes 90 days without a merge, the live snapshot ages out and
-serving falls back to GitHub — degraded, not broken, which is the right way for a cost
-control to fail.
+published serving returns **503** until a fresh bake restores `current.json` — the
+lifecycle rule is a cost control, not a soft degrade to GitHub.
 
 ## What this does not solve
 
@@ -201,5 +216,8 @@ control to fail.
   object layout is already CDN-shaped for when that trade becomes worth making.
 - **Preview and draft routes still read GitHub live**, and should — an unmerged PR head
   has no snapshot, and that immediacy is the point of the creator's build channel.
+- **GitHub remains SoT for content and for the bake.** Removing the published-serve
+  fallback does not mean GitHub left the system; it means visitors no longer pay for
+  assembly when the snapshot is the configured source.
 - **`--max-instances 1`** remains the scaling ceiling (see `docs/roadmap.md`). This
   removes work from each request; it does not add instances.

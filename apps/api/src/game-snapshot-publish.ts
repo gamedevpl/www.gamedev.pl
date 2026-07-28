@@ -44,9 +44,14 @@ export interface PublishSnapshotResult {
   snapshotId: string;
   /** Games written to the snapshot. */
   published: number;
-  /** Games in the catalog that could not be baked; these fall back to GitHub. */
+  /**
+   * Games in the catalog that could not be baked. A non-empty list means the
+   * pointer was left on the previous good snapshot — immutable objects may still
+   * have been written under `snapshotId` for debugging.
+   */
   failures: PublishSnapshotFailure[];
   mediaFiles: number;
+  /** The pointer that was written, or that would have been written on failure. */
   pointer: SnapshotPointer;
 }
 
@@ -82,11 +87,12 @@ export async function publishSnapshot(options: PublishSnapshotOptions): Promise<
     }
   });
 
-  // The catalog is written whole, including games that failed to bake. Catalog
-  // membership is the games repo's decision, not this job's: dropping a game
-  // here would silently unpublish it because one bake failed. A game with no
-  // snapshot object simply falls back to the GitHub path at serve time, which is
-  // exactly what it did before this job existed.
+  // The catalog is written whole, including games that failed to bake — useful
+  // under the new snapshotId for debugging. Catalog membership is the games
+  // repo's decision, not this job's: dropping a failed game from a catalog that
+  // then becomes current would silently unpublish it. Instead, when anything
+  // failed, we leave `current.json` on the previous good snapshot so the site
+  // keeps serving a complete bake.
   await writer.putCatalog(snapshotId, published);
 
   const pointer: SnapshotPointer = {
@@ -96,10 +102,18 @@ export async function publishSnapshot(options: PublishSnapshotOptions): Promise<
     gameCount: publishedCount,
   };
 
+  if (failures.length > 0) {
+    log(
+      `snapshot ${snapshotId} not published: ${publishedCount} games baked, ${mediaFiles} media, ` +
+        `${failures.length} failed — pointer left unchanged`,
+    );
+    return { snapshotId, published: publishedCount, failures, mediaFiles, pointer };
+  }
+
   // Last, and only after every object is durable: until the pointer moves, the
   // half-written snapshot is invisible and the site keeps serving the previous one.
   await writer.putPointer(pointer);
-  log(`published snapshot ${snapshotId}: ${publishedCount} games, ${mediaFiles} media, ${failures.length} failed`);
+  log(`published snapshot ${snapshotId}: ${publishedCount} games, ${mediaFiles} media`);
 
   return { snapshotId, published: publishedCount, failures, mediaFiles, pointer };
 }
@@ -141,7 +155,8 @@ async function bakeGame(args: {
     const bytes = await client.getGameMedia(ref, entry.slug, filename);
     if (!bytes) {
       // Catalog metadata is generated from what is committed, so a gap here is
-      // odd but not fatal — the media route falls back to GitHub for this file.
+      // odd but not fatal to the game bake — the media route will 404 for this
+      // filename until a later bake catches up.
       continue;
     }
     await writer.putMedia(snapshotId, entry.slug, filename, {
