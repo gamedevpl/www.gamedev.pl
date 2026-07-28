@@ -261,6 +261,11 @@ export interface TelemetryEvent {
   value?: number;
   /** `end`: how the session finished. */
   outcome?: 'won' | 'lost' | 'quit';
+  /**
+   * `progress` / `end`: optional render backend from the game snapshot (B18).
+   * Fixed vocabulary only — never free text.
+   */
+  gfxBackend?: 'canvas2d' | 'webgl' | 'webgl3d';
 }
 
 /**
@@ -1159,9 +1164,7 @@ export class InMemoryStore implements Store {
     );
     const createdAt =
       preview.createdAt ??
-      (newestCreatedAt && newestCreatedAt >= nowIso
-        ? new Date(Date.parse(newestCreatedAt) + 1).toISOString()
-        : nowIso);
+      (newestCreatedAt && newestCreatedAt >= nowIso ? new Date(Date.parse(newestCreatedAt) + 1).toISOString() : nowIso);
     const record: BuildPreview = {
       ...preview,
       id: randomUUID(),

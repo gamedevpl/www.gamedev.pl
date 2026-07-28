@@ -19,9 +19,9 @@ export type TelemetryEvent =
   | { type: 'game_closed' }
   | { type: 'error'; message: string }
   | { type: 'alive'; frames: number }
-  | { type: 'progress'; label: string }
+  | { type: 'progress'; label: string; gfxBackend?: 'canvas2d' | 'webgl' | 'webgl3d' }
   | { type: 'score'; value: number }
-  | { type: 'end'; outcome: 'won' | 'lost' | 'quit' };
+  | { type: 'end'; outcome: 'won' | 'lost' | 'quit'; gfxBackend?: 'canvas2d' | 'webgl' | 'webgl3d' };
 
 /** Flush when this many events are queued, so a busy session does not sit on data. */
 const FLUSH_AT = 10;
@@ -178,14 +178,18 @@ export class TelemetrySession {
         // label stay welcome, since that is what a drop-off curve is made of.
         if (!this.labels.has(label) && this.labels.size >= MAX_DISTINCT_LABELS) return null;
         this.labels.add(label);
-        return { type: 'progress', label };
+        const gfxBackend = normalizeGfxBackend(event.gfxBackend);
+        return gfxBackend ? { type: 'progress', label, gfxBackend } : { type: 'progress', label };
       }
       case 'score':
         return Number.isFinite(event.value) ? { type: 'score', value: event.value } : null;
-      case 'end':
-        return event.outcome === 'won' || event.outcome === 'lost' || event.outcome === 'quit'
-          ? { type: 'end', outcome: event.outcome }
-          : null;
+      case 'end': {
+        if (event.outcome !== 'won' && event.outcome !== 'lost' && event.outcome !== 'quit') return null;
+        const gfxBackend = normalizeGfxBackend(event.gfxBackend);
+        return gfxBackend
+          ? { type: 'end', outcome: event.outcome, gfxBackend }
+          : { type: 'end', outcome: event.outcome };
+      }
       default:
         return null;
     }
@@ -195,6 +199,10 @@ export class TelemetrySession {
 function clampInt(value: unknown, min: number, max: number): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null;
   return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+function normalizeGfxBackend(value: unknown): 'canvas2d' | 'webgl' | 'webgl3d' | null {
+  return value === 'canvas2d' || value === 'webgl' || value === 'webgl3d' ? value : null;
 }
 
 /**

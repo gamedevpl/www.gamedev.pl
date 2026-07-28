@@ -128,6 +128,11 @@ export interface GameHealth {
    * never safe to interpolate into an agent's instructions.
    */
   progressLabels: Array<{ label: string; sessions: number }>;
+  /**
+   * Sessions that reported a render backend on `end` / `progress` (B18).
+   * Soft capture vs live WebGL — fixed vocabulary only.
+   */
+  gfxBackends: { canvas2d: number; webgl: number; webgl3d: number };
 }
 
 interface SessionState {
@@ -142,6 +147,8 @@ interface SessionState {
   bestScore: number | null;
   /** Landmarks this session reached, deduplicated — a replay is not extra reach. */
   labels: Set<string>;
+  /** Last reported render backend on progress/end (B18). */
+  gfxBackend: 'canvas2d' | 'webgl' | 'webgl3d' | null;
 }
 
 /**
@@ -219,6 +226,7 @@ export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
         reachedEnd: false,
         bestScore: null,
         labels: new Set(),
+        gfxBackend: null,
       };
       sessions.set(sessionId, state);
 
@@ -263,6 +271,9 @@ export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
             if (outcome !== 'won' && outcome !== 'lost' && outcome !== 'quit') break;
             outcomes[outcome] += 1;
             state.reachedEnd = true;
+            if (event.gfxBackend === 'canvas2d' || event.gfxBackend === 'webgl' || event.gfxBackend === 'webgl3d') {
+              state.gfxBackend = event.gfxBackend;
+            }
             break;
           }
           case 'score': {
@@ -276,6 +287,9 @@ export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
             if (typeof label !== 'string' || label.length === 0) break;
             if (state.labels.size < MAX_TRACKED_LABELS_PER_SESSION || state.labels.has(label)) {
               state.labels.add(label);
+            }
+            if (event.gfxBackend === 'canvas2d' || event.gfxBackend === 'webgl' || event.gfxBackend === 'webgl3d') {
+              state.gfxBackend = event.gfxBackend;
             }
             break;
           }
@@ -298,6 +312,10 @@ export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
     const bestScores = sessionStates.map((state) => state.bestScore).filter((score): score is number => score !== null);
     const sessionsWithEnding = sessionStates.filter((state) => state.reachedEnd).length;
     const decided = outcomes.won + outcomes.lost;
+    const gfxBackends = { canvas2d: 0, webgl: 0, webgl3d: 0 };
+    for (const state of sessionStates) {
+      if (state.gfxBackend) gfxBackends[state.gfxBackend] += 1;
+    }
 
     rows.push({
       slug,
@@ -325,6 +343,7 @@ export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
         .map(([label, sessionCount]) => ({ label, sessions: sessionCount }))
         .sort((a, b) => b.sessions - a.sessions || a.label.localeCompare(b.label))
         .slice(0, MAX_PROGRESS_LABELS),
+      gfxBackends,
     });
   }
 

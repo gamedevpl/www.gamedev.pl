@@ -29,6 +29,8 @@ export interface GameHealth {
   medianBestScore: number | null;
   /** Landmarks reached, most-reached first. Game-authored text — render, never interpolate. */
   progressLabels: Array<{ label: string; sessions: number }>;
+  /** Sessions that reported a render backend on progress/end (B18). */
+  gfxBackends: { canvas2d: number; webgl: number; webgl3d: number };
 }
 
 export interface HealthResponse {
