@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { describe, expect, it } from 'vitest';
+import WebSocket from 'ws';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import {
@@ -39,10 +40,25 @@ function lastFrame(socket: { sent: Array<Record<string, unknown>> }, type: strin
   return [...socket.sent].reverse().find((frame) => frame.t === type);
 }
 
-async function createApp(): Promise<FastifyInstance> {
+function wsUrl(app: FastifyInstance): string {
+  const address = app.server.address();
+  const port = typeof address === 'object' && address ? address.port : 0;
+  return `ws://127.0.0.1:${port}/api/mp/ws`;
+}
+
+/** Resolves once the connection is actually established, so the cap has counted it. */
+function openSocket(url: string): Promise<WebSocket> {
+  return new Promise((resolve, reject) => {
+    const socket = new WebSocket(url);
+    socket.on('open', () => resolve(socket));
+    socket.on('error', reject);
+  });
+}
+
+async function createApp(multiplayerRoutes?: { maxSocketsPerIp?: number }): Promise<FastifyInstance> {
   const store = new InMemoryStore();
   await store.upsertUser({ uid: 'g:test-user' });
-  return buildApp({ store, sessionSecret });
+  return buildApp({ store, sessionSecret, ...(multiplayerRoutes ? { multiplayerRoutes } : {}) });
 }
 
 describe('room tokens', () => {
@@ -375,6 +391,63 @@ describe('websocket relay', () => {
 
     hostSocket.close();
     guestSocket.close();
+    await app.close();
+  });
+
+  /**
+   * These two connect over real TCP rather than `injectWS`, because the cap keys on
+   * `request.ip` and an injected upgrade has no underlying socket for that getter to
+   * read — the connection is deliberately left uncapped in that case, so an injected
+   * socket cannot exercise the limit at all.
+   */
+  it('refuses more concurrent sockets than one address may hold', async () => {
+    // The websocket is the one door an anonymous guest reaches, and an idle socket
+    // costs the opener nothing while holding memory and a descriptor on a service
+    // documented as running a single instance.
+    const app = await createApp({ maxSocketsPerIp: 2 });
+    await app.listen({ port: 0 });
+    const url = wsUrl(app);
+
+    const first = await openSocket(url);
+    const second = await openSocket(url);
+
+    const third = new WebSocket(url);
+    const frames: Array<Record<string, unknown>> = [];
+    third.on('message', (data: Buffer) => frames.push(JSON.parse(data.toString()) as Record<string, unknown>));
+
+    await waitFor(() => frames.some((frame) => frame.t === 'closed'));
+    expect(frames.find((frame) => frame.t === 'closed')).toMatchObject({ reason: 'too_many_connections' });
+
+    first.close();
+    second.close();
+    third.close();
+    await app.close();
+  });
+
+  it('frees the allowance when a socket closes, even one that never joined', async () => {
+    // A flood never sends `hello`, so those sockets hold no room — releasing only
+    // joined ones would leak the ceiling to exactly the connections it bounds.
+    const app = await createApp({ maxSocketsPerIp: 1 });
+    await app.listen({ port: 0 });
+    const url = wsUrl(app);
+
+    const first = await openSocket(url);
+    await new Promise<void>((resolve) => {
+      first.on('close', () => resolve());
+      first.close();
+    });
+
+    // The replacement is admitted rather than refused: it reaches normal frame
+    // handling, which a connection over the cap never would.
+    const second = await openSocket(url);
+    const frames: Array<Record<string, unknown>> = [];
+    second.on('message', (data: Buffer) => frames.push(JSON.parse(data.toString()) as Record<string, unknown>));
+    second.send('not json');
+
+    await waitFor(() => frames.some((frame) => frame.t === 'closed'));
+    expect(frames.find((frame) => frame.t === 'closed')).toMatchObject({ reason: 'bad_frame' });
+
+    second.close();
     await app.close();
   });
 

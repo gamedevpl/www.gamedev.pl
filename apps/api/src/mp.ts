@@ -485,6 +485,37 @@ export interface MultiplayerRoutesOptions {
   registry?: RoomRegistry;
   /** Max rooms one IP may open per hour. */
   maxRoomsPerWindow?: number;
+  /** Max controller/host sockets one IP may hold open at once. */
+  maxSocketsPerIp?: number;
+}
+
+/**
+ * A shared screen plus a full lobby of phones is `MAX_SLOTS + 1` sockets, and they
+ * are normally on one household's wifi — so the default clears two simultaneous
+ * parties from a single address, leaving room for reconnect overlap.
+ */
+export const DEFAULT_MAX_SOCKETS_PER_IP = 24;
+
+/**
+ * The address to bucket a connection under, or null when it cannot be determined.
+ *
+ * `request.ip` is the value we want — `trustProxy` resolves the real client rather
+ * than Cloud Run's proxy, which is the whole reason app.ts sets it — but the getter
+ * reads `raw.socket.remoteAddress`, and an upgrade request with no underlying socket
+ * makes it throw rather than return undefined.
+ *
+ * Null (rather than a shared "unknown" bucket) is the deliberate choice: connections
+ * we cannot classify simply are not capped. Collapsing them together would let one
+ * unclassifiable transport exhaust a single bucket and lock everyone out of
+ * multiplayer — a cap that takes down the feature it protects is worse than no cap,
+ * and the fail-open case degrades to exactly the behaviour that shipped before this.
+ */
+function connectionAddress(request: FastifyRequest): string | null {
+  try {
+    return request.ip || null;
+  } catch {
+    return null;
+  }
 }
 
 const CreateSessionSchema = z.object({
@@ -519,6 +550,9 @@ export async function registerMultiplayerRoutes(
   const registry = options.registry ?? new RoomRegistry();
   const maxRoomsPerWindow = options.maxRoomsPerWindow ?? 30;
   const roomsByIp = new Map<string, number[]>();
+  const maxSocketsPerIp = options.maxSocketsPerIp ?? DEFAULT_MAX_SOCKETS_PER_IP;
+  /** Live socket count per address. Entries are deleted at zero, so this cannot grow. */
+  const socketsByIp = new Map<string, number>();
 
   // Hosting a room is an authenticated, rate-limited action. Guests never touch
   // this route — they arrive over the websocket with a room token instead.
@@ -545,7 +579,7 @@ export async function registerMultiplayerRoutes(
   // One websocket endpoint for both roles. The first frame decides which: a host
   // token attaches the shared screen, a guest token claims a controller slot.
   // Deliberately NO credential in the URL — query strings land in access logs.
-  app.get('/api/mp/ws', { websocket: true }, (socket) => {
+  app.get('/api/mp/ws', { websocket: true }, (socket, request) => {
     const limiter = new FrameLimiter();
     let role: 'none' | 'host' | 'guest' = 'none';
     let roomCode: string | null = null;
@@ -558,6 +592,36 @@ export async function registerMultiplayerRoutes(
         // socket already gone
       }
       socket.close(1000, reason);
+    };
+
+    // This is the one door an anonymous guest may reach, and until now nothing
+    // limited how many they could hold open. Everything *inside* a connection is
+    // bounded (4KB payloads, 2KB frames, 40 fps) but an idle socket costs memory and
+    // a file descriptor while costing the opener nothing — and multiplayer is
+    // documented as running on a single instance (see the note at the top of this
+    // file), so there is no second container to absorb a flood.
+    //
+    // The ceiling has to clear a real party comfortably: the phones and the shared
+    // screen are usually on the same wifi, so one household is legitimately
+    // MAX_SLOTS + 1 sockets at once, plus reconnect overlap.
+    const ip = connectionAddress(request);
+    if (ip !== null) {
+      const openForIp = socketsByIp.get(ip) ?? 0;
+      if (openForIp >= maxSocketsPerIp) {
+        closeWith('too_many_connections');
+        return;
+      }
+      socketsByIp.set(ip, openForIp + 1);
+    }
+
+    // Exactly once, whichever of close/error fires (both can, and both call onClose).
+    let released = false;
+    const releaseSocket = () => {
+      if (released || ip === null) return;
+      released = true;
+      const remaining = (socketsByIp.get(ip) ?? 1) - 1;
+      if (remaining > 0) socketsByIp.set(ip, remaining);
+      else socketsByIp.delete(ip);
     };
 
     const onMessage = (raw: unknown) => {
@@ -658,6 +722,10 @@ export async function registerMultiplayerRoutes(
     };
 
     const onClose = () => {
+      // Before the early return below: a socket that never sent `hello` has no room,
+      // and that is precisely the shape a flood takes — releasing only joined sockets
+      // would leak the ceiling to the connections it exists to bound.
+      releaseSocket();
       if (!roomCode) return;
       if (role === 'host') {
         // The shared screen going away ends the party — controllers are useless
