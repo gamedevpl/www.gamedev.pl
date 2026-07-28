@@ -33,19 +33,20 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
  * Sum of GameKit platform allowances outside the author budget (touch, restart,
  * music, touch hint, progress, universal input, pointer poll, draw surface,
  * pointer release, host pause, …). Together with {@link GAME_BUDGET_BYTES} this
- * must equal games-repo `MAX_BUNDLE_BYTES` (250_062, matching games-repo
+ * must equal games-repo `MAX_BUNDLE_BYTES` (250_111, matching games-repo
  * `shared/assemble-contract.json` `maxProjectBytes`). Not a round KiB: the
  * platform side is an explicit sum of named allowances, not a padded
  * `42 * 1024` block.
  *
- * Last moved by games-repo host-pause: +1_424 (`hostPause`) so Creator Studio /
- * theater can dispatch `gdpl-pause` / `gdpl-resume` without the shell patching
- * rAF. Before that, games-repo PR #103 raised `touch` 12_795 → 13_061 (+266)
- * when `createInput` began requiring an explicit steer decision. Every game is
- * served that layer whether it asked for it or not, so it is charged to the
- * platform side; charging it to authors would silently shrink what they may write.
+ * Last moved by games-repo host-pause: +1_473 (`hostPause`, includes
+ * `suspend().catch`) so Creator Studio / theater can dispatch `gdpl-pause` /
+ * `gdpl-resume` without the shell patching rAF. Before that, games-repo PR #103
+ * raised `touch` 12_795 → 13_061 (+266) when `createInput` began requiring an
+ * explicit steer decision. Every game is served that layer whether it asked for
+ * it or not, so it is charged to the platform side; charging it to authors would
+ * silently shrink what they may write.
  */
-export const GAMEKIT_PLATFORM_BYTES = 45_262;
+export const GAMEKIT_PLATFORM_BYTES = 45_311;
 
 /** Combined html+js+css size cap — must match games-repo `MAX_BUNDLE_BYTES`. */
 export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
