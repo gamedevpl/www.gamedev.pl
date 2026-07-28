@@ -1,113 +1,74 @@
 /**
- * Cross-repo lockstep check (issue #247).
+ * Cross-repo lockstep check (issue #247) — CI entry point.
  *
- * Fetches `tools/lib/assemble.ts` and `tools/validate.ts` from the games repo and
- * asserts they still match `games-repo-contract.ts` on this side:
+ * The check itself lives in `../src/games-repo-contract-check.ts`; this file is the
+ * environment, the logging, and the exit code. It asserts the games repo's
+ * `tools/lib/assemble.ts` and `tools/validate.ts` still match
+ * `games-repo-contract.ts` on this side:
  *   - GAME_KIT_MODULES order
  *   - MAX_BUNDLE_BYTES === MAX_PROJECT_BYTES
  *   - music injection contract (tracks + __GAME_AUDIO_MUSIC__ + readMusicCatalog)
  *
- * Requires GAMES_REPO_TOKEN (contents:read on the games repo). In CI, skip with a
- * warning when the secret is unset so forks / fresh clones still go green; set the
- * secret on gamedevpl/www.gamedev.pl so master and same-repo PRs catch drift.
+ * Requires GAMES_REPO_TOKEN (contents:read on the games repo). Drift fails. A games
+ * repo that cannot be read — no token, exhausted quota, GitHub down — warns and
+ * passes, because it is not evidence of drift; set GAMES_CONTRACT_REQUIRE_REMOTE=1
+ * to demand the live comparison instead.
  *
  * Usage: npm run contract:games-repo -w @gamedevpl/api
  */
 
-import {
-  extractGameKitModules,
-  extractMaxBundleBytes,
-  extractMusicContractSignals,
-  GAME_KIT_MODULES,
-  MAX_PROJECT_BYTES,
-} from '../src/games-repo-contract.js';
+import { runGamesRepoContractCheck } from '../src/games-repo-contract-check.js';
 
 const repo = (process.env.GAMES_REPO ?? 'gamedevpl/www.gamedev.pl-games').trim();
 const ref = (process.env.GAMES_PUBLISHED_REF ?? 'main').trim();
 const token = (process.env.GAMES_REPO_TOKEN ?? '').trim();
+const requireRemote = ['1', 'true', 'yes'].includes(
+  (process.env.GAMES_CONTRACT_REQUIRE_REMOTE ?? '').trim().toLowerCase(),
+);
 
-async function readGamesRepoFile(path: string): Promise<string> {
-  const url = `https://api.github.com/repos/${repo}/contents/${path}?ref=${encodeURIComponent(ref)}`;
-  const response = await fetch(url, {
-    headers: {
-      Accept: 'application/vnd.github.raw',
-      Authorization: `Bearer ${token}`,
-      'X-GitHub-Api-Version': '2022-11-28',
-      'User-Agent': 'gamedevpl-games-repo-contract-check',
-    },
-  });
-  if (!response.ok) {
-    throw new Error(`failed to read ${repo}@${ref}:${path} (${response.status} ${response.statusText})`);
+/** GitHub Actions renders `::warning::` on the job summary; elsewhere it is a plain line. */
+function annotate(title: string, message: string): void {
+  if (process.env.GITHUB_ACTIONS === 'true') {
+    console.log(`::warning title=${title}::${message.replace(/\n/g, ' ')}`);
   }
-  return response.text();
-}
-
-function fail(message: string): never {
-  console.error(`games-repo contract: ${message}`);
-  process.exit(1);
+  console.warn(`games-repo contract: ${message}`);
 }
 
 async function main(): Promise<void> {
-  if (!token) {
-    console.warn(
-      'games-repo contract: GAMES_REPO_TOKEN unset — skipping live fetch. ' +
-        'Unit tests still guard the website half; set a contents:read PAT on the ' +
-        'games repo as the GAMES_REPO_TOKEN Actions secret to enable the cross-repo check.',
-    );
-    return;
-  }
-
   console.log(`games-repo contract: checking ${repo}@${ref} against apps/api/src/games-repo-contract.ts`);
 
-  const [assembleSource, validateSource] = await Promise.all([
-    readGamesRepoFile('tools/lib/assemble.ts'),
-    readGamesRepoFile('tools/validate.ts'),
-  ]);
+  const outcome = await runGamesRepoContractCheck({
+    repo,
+    ref,
+    token,
+    log: (message) => console.log(message),
+  });
 
-  const remoteModules = extractGameKitModules(assembleSource);
-  const localModules = [...GAME_KIT_MODULES];
-  if (remoteModules.join(',') !== localModules.join(',')) {
-    fail(
-      `GAME_KIT_MODULES mismatch.\n  games-repo: ${remoteModules.join(', ')}\n  website:    ${localModules.join(', ')}`,
-    );
+  switch (outcome.kind) {
+    case 'ok':
+      console.log('games-repo contract: ok');
+      return;
+
+    case 'drift':
+      console.error(`games-repo contract: ${outcome.reason}`);
+      process.exit(1);
+      return;
+
+    case 'skipped':
+    case 'unreachable': {
+      const title =
+        outcome.kind === 'skipped' ? 'games-repo contract check skipped' : 'games-repo contract check could not run';
+      annotate(title, `${outcome.reason}\n  The two halves were NOT compared on this run.`);
+      if (requireRemote) {
+        console.error('games-repo contract: GAMES_CONTRACT_REQUIRE_REMOTE is set — treating this as a failure.');
+        process.exit(1);
+      }
+      return;
+    }
   }
-  console.log(`  ✓ GAME_KIT_MODULES (${remoteModules.length} modules)`);
-
-  const remoteBudget = extractMaxBundleBytes(validateSource);
-  if (remoteBudget !== MAX_PROJECT_BYTES) {
-    const assignLine =
-      validateSource
-        .split('\n')
-        .find((line) => /MAX_BUNDLE_BYTES\s*=/.test(line))
-        ?.trim() ?? '(assignment line not found)';
-    fail(
-      `MAX_BUNDLE_BYTES mismatch: games-repo=${remoteBudget} website MAX_PROJECT_BYTES=${MAX_PROJECT_BYTES}\n` +
-        `  games-repo assignment: ${assignLine}\n` +
-        `  Update GAMEKIT_PLATFORM_BYTES / MAX_PROJECT_BYTES in apps/api/src/games-repo-contract.ts to match.`,
-    );
-  }
-  console.log(`  ✓ MAX_BUNDLE_BYTES / MAX_PROJECT_BYTES (${remoteBudget})`);
-
-  const music = extractMusicContractSignals(assembleSource);
-  if (!music.injectsMusicName || !music.readsTracksKey || !music.readsMusicCatalog) {
-    const musicLines = assembleSource
-      .split('\n')
-      .map((line, index) => ({ line: line.trim(), n: index + 1 }))
-      .filter(({ line }) => /music|__GAME_AUDIO|__GAME_MUSIC|tracks/i.test(line))
-      .slice(0, 40)
-      .map(({ line, n }) => `  L${n}: ${line}`)
-      .join('\n');
-    fail(
-      `music contract mismatch in games-repo assemble.ts: ` +
-        `injectsMusicName=${music.injectsMusicName} readsTracksKey=${music.readsTracksKey} readsMusicCatalog=${music.readsMusicCatalog}\n` +
-        `relevant lines:\n${musicLines || '  (none)'}`,
-    );
-  }
-  console.log('  ✓ music contract (__GAME_AUDIO_MUSIC__ + tracks + readMusicCatalog)');
-
-  console.log('games-repo contract: ok');
 }
 
 main().catch((error: unknown) => {
-  fail(error instanceof Error ? error.message : String(error));
+  console.error(`games-repo contract: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`);
+  process.exit(1);
 });
