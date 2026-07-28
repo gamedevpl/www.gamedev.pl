@@ -192,10 +192,24 @@ A `save` GameKit module: the game asks the bridge to persist a small versioned b
 6. **Drafts cannot save.** A draft is rebuilt commit by commit and its save format may
    change under the player; the slug gate is the published catalog, like votes.
 
-Not built, deliberately: no UI beyond the catalog badge (no "your progress is saved"
-toast, no per-game "delete my progress" control outside what a game offers itself), and
-no first-party game using it yet — the retrofit named in §10 is the natural next step and
-is what would exercise the whole path against real play.
+7. **Loading is a method, not only a boot-time effect.** `save.load()` re-reads the slot
+   and returns the value. Without it a read that failed on a flaky connection would cost
+   a player saving for the entire session, since the opening handshake happens once —
+   so the shell now distinguishes "no slot for you" (signed out; permanent, never
+   retried) from "could not reach the slot" (retried exactly once), and an unavailable
+   slot can become available mid-session. Writes made while there was none are held
+   rather than dropped.
+
+**The first game that uses it** is `lantern-depths` in the games repo: a grid crawler
+where signed-in players resume at their deepest floor and everyone else starts at floor
+one, playing an identical game. It is worth reading as the reference for two reasons
+beyond being a demo — its floors are generated from their number alone (a stored floor
+number is only worth keeping if it names the same room next visit), and it reconciles
+with the stored record at the end of a run via `load()` rather than blindly overwriting
+a deeper run played elsewhere.
+
+Not built, deliberately: no UI beyond the catalog badge — no "your progress is saved"
+toast, and no per-game "delete my progress" control outside what a game offers itself.
 
 ### P2 — Shared asynchronous worlds (capabilities 1+3+5, "Ultima-lite")
 
@@ -344,10 +358,10 @@ snapshotting, hibernation) is platform code written once, tested once, shared by
 
 ## 10. What to prototype first
 
-1. ~~**P1 spike** (small): `save` module + bridge + route + erasure coverage~~ — **done**
-   (see §5). What remains of this step is the other half: **retrofit one
-   persistence-shaped game** (`four-seasons-farm`, `tiny-empire` and `crypt-delver` are all
-   shaped for it) so the seam is exercised by real play rather than only by tests.
+1. ~~**P1 spike** (small): `save` module + bridge + route + erasure coverage, and one
+   game that uses it~~ — **done** (see §5); `lantern-depths` is the game. Retrofitting an
+   existing persistence-shaped title (`four-seasons-farm`, `tiny-empire`) is now an
+   ordinary content change rather than a spike.
 2. **P2 seed world** (the learning vehicle): one first-party cooperative world — e.g. a
    shared town garden with plots, planting, and a notice board. Small enough to build like
    `tactics-duel` was; enough to exercise schema, quotas, moderation, presence, and the
