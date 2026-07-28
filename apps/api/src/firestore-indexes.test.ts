@@ -128,7 +128,7 @@ describe('COLLECTION_GROUP indexes', () => {
         'the group here and its field to CG_INDEXES in infra/setup-gcp.sh. If this went empty or ' +
         'lost an entry, the regex above stopped matching the code it guards — fix the regex, ' +
         'because a guard that matches nothing still passes and reads as coverage.',
-    ).toEqual(['playerFeedback', 'scorecard']);
+    ).toEqual(['playerFeedback', 'scorecard', 'worldEntries']);
   });
 
   it('provisions an index, in the right direction, for every constrained field', () => {

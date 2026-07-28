@@ -367,6 +367,18 @@ export interface GitHubClient {
    * unparseable SPEC.md are skipped.
    */
   getCatalog(ref: string): Promise<CatalogGameEntry[]>;
+  /**
+   * One game's raw GAME.json, parsed but not interpreted. Null when the game does not
+   * exist or its manifest is not JSON.
+   *
+   * Read per slug and on demand rather than folded into `getCatalog`, deliberately. The
+   * only caller is the shared-world route, which needs the `world` field spec — a
+   * nested object, so it cannot live in SPEC.md's flat frontmatter where the rest of a
+   * game's metadata does. Adding a manifest read to the catalog build would put another
+   * file fetch on every game on every refresh, and that fan-out has already caused one
+   * rate-limit outage. Worlds are rare; their manifests are fetched when asked for.
+   */
+  getGameManifest(ref: string, slug: string): Promise<Record<string, unknown> | null>;
 }
 
 /**
@@ -932,6 +944,26 @@ ${gameJs}`;
         return null;
       }
       return parseGameMedia(await readRawFile(`games/${slug}/media/metadata.json`, ref));
+    },
+
+    async getGameManifest(ref, slug) {
+      // Only well-formed slugs address a game directory; anything that could escape it
+      // is refused before it reaches the contents API.
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) {
+        return null;
+      }
+      const source = await readRawFile(`games/${slug}/GAME.json`, ref);
+      if (source === null) return null;
+      try {
+        const parsed: unknown = JSON.parse(source);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+          ? (parsed as Record<string, unknown>)
+          : null;
+      } catch {
+        // An unparseable manifest is a games-repo bug that CI would have caught. Here
+        // it must not become a 500 on a route a player is sitting in front of.
+        return null;
+      }
     },
 
     async getCatalog(ref) {
