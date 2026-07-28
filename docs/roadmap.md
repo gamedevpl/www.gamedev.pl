@@ -47,7 +47,7 @@ from the games repo by the API and served through the app
 ([github-client.ts](../apps/api/src/github-client.ts) builds the catalog straight
 from `games/` directories rather than depending on a public `catalog.json`), then run
 in the sandboxed iframe via `srcDoc`. Isolation comes from
-`sandbox="allow-scripts"` with no `allow-same-origin` plus an opaque origin — not
+`sandbox="allow-scripts allow-pointer-lock"` with no `allow-same-origin` plus an opaque origin — not
 from a separate hostname. The upside is decisive: **the games repo can be private**,
 and unmerged PR previews are playable. The invariant to keep in mind is that the
 assembler and the games repo's own `tools/lib/assemble.ts` must stay in lockstep;
