@@ -36,11 +36,11 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
  * music, touch hint, progress, universal input, pointer poll, draw surface,
  * pointer release, host pause, mascot draw, headroom, gfx3d, …). Together with
  * {@link GAME_BUDGET_BYTES} this must equal games-repo `MAX_BUNDLE_BYTES`
- * (413_687, matching games-repo `shared/assemble-contract.json` `maxProjectBytes`). Not a round KiB.
+ * (429_687, matching games-repo `shared/assemble-contract.json` `maxProjectBytes`). Not a round KiB.
  *
- * Last moved by games-repo gfx3d B10: `gfx3d` 56_000→80_000 (headroom baseline).
+ * Last moved by games-repo gfx3d B11: `gfx3d` 80_000→96_000 (headroom baseline).
  */
-export const GAMEKIT_PLATFORM_BYTES = 208_887;
+export const GAMEKIT_PLATFORM_BYTES = 224_887;
 
 /** Combined html+js+css size cap — must match games-repo `MAX_BUNDLE_BYTES`. */
 export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
