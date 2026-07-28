@@ -747,13 +747,21 @@ at all and feeds the only autonomous-eligible class.
   each scorecard as defect / friction / design-change / healthy / insufficient-data, with
   the evidence behind the call, surfaced at `GET /api/admin/suggestions`.
 
-  **The decision is rules over numbers, never a model over text.** Every input is computed
-  by this service — session counts, error rates, stall rates, progression drops, vote
-  tallies. The attacker-controlled strings (`errorSamples`, `progressLabels`,
-  `feedbackThemes`) cannot move a game between classes, cannot raise its priority, and
-  cannot cause anything to be filed; they travel alongside under `untrustedContext` for a
-  human to read. That is this phase's ⚠️ answered by construction rather than by care: the
-  routing logic has no reason to look at them, so it does not.
+  **The decision is rules over numbers, never a model over text** — and the invariant is
+  about *text* specifically, because the looser version would be false:
+
+  - No untrusted **string** reaches the routing decision. Error messages, progression
+    labels and feedback themes are never read, compared or matched.
+  - No untrusted **string** reaches a finding. Findings read as this system speaking, so
+    they quote nothing; a progression finding is positional rather than naming the
+    landmark.
+  - **Counts are signal, and a game produces some of them.** It emits its own `progress`
+    markers and its own uncaught errors, so it can influence which class it lands in. That
+    is not a hole: those events *are* the measurement, and a game that makes itself look
+    broken has asked to be looked at, which is all a suggestion is.
+
+  A game can raise its own hand; it cannot put words in our mouth. That is this phase's ⚠️
+  answered where it actually bites.
 
   Findings are positional rather than quoting — "players who reached one landmark never
   reached the next", not the landmark's game-authored name — so no untrusted text lands in

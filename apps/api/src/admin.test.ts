@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
-import { InMemoryStore, type TelemetryEvent, type VisitEvent } from './store.js';
+import { InMemoryStore, type Scorecard, type TelemetryEvent, type VisitEvent } from './store.js';
 import type { HealthResponse, ScorecardsResponse, VisitsResponse } from './admin.js';
 import { runScorecardSweep } from './scorecard.js';
 
@@ -383,7 +383,7 @@ describe('GET /api/admin/suggestions', () => {
   });
 
   it('routes the scorecards the sweep produced', async () => {
-    await store.putScorecard('crashy', {
+    const crashy: Scorecard = {
       slug: 'crashy',
       computedAt: '2026-07-28T03:00:00.000Z',
       window: { days: ['2026-07-28'], truncated: false },
@@ -393,7 +393,10 @@ describe('GET /api/admin/suggestions', () => {
       votes: { up: 0, down: 0 },
       feedback: { count: 0 },
       untrusted: { errorSamples: [{ message: 'TypeError: x is not a function', count: 50 }], progressLabels: [], feedbackThemes: [] },
-    } as never);
+    };
+    // Typed, not cast: this fixture is the only thing asserting the endpoint's shape, so a
+    // change to Scorecard should fail here rather than be absorbed.
+    await store.putScorecard('crashy', crashy);
 
     const app = await appWith(store);
     const res = await app.inject({ method: 'GET', url: '/api/admin/suggestions', headers: authHeaders('g:boss') });

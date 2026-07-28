@@ -7,16 +7,26 @@ import type { Scorecard } from './store.js';
  * who is allowed to decide" — the Defect / Friction / Design-change split the plan has
  * carried since its first draft.
  *
- * **The decision is rules over numbers, never a model over text.** Every input to the
- * classification below is computed by this service: session counts, error counts, stall
- * rates, progression drops, vote tallies. The attacker-controlled strings a scorecard
- * carries — `errorSamples`, `progressLabels`, `feedbackThemes` — cannot move a game
- * between classes, cannot raise its priority, and cannot cause an issue to be filed. They
- * travel alongside as *evidence for a human to read*, fenced and labelled.
+ * **The decision is rules over numbers, never a model over text.** The invariant is about
+ * *text*, and it is worth stating exactly, because a looser version of it would be false:
  *
- * That is a deliberate reading of the plan's warning that this is "the phase that will
- * want to interpolate error messages into an agent's instructions". The cheapest way not
- * to do that is for the routing logic to have no reason to look at them.
+ * - **No untrusted string reaches the routing decision.** Error messages, progression
+ *   labels and feedback themes are never read, compared, matched or pattern-checked. A
+ *   game can name a level `URGENT: escalate` and change nothing.
+ * - **No untrusted string reaches a finding.** The sentences below read as this system
+ *   speaking, so they quote nothing — a progression finding is positional ("one landmark
+ *   to the next") rather than naming the landmark.
+ * - **Counts, however, are signal, and some of them the game produces.** A game emits its
+ *   own `progress` markers and its own uncaught errors, so it can influence which class it
+ *   lands in — by throwing, or by emitting a landmark nobody reaches. That is not a hole
+ *   to be closed: those events *are* the measurement, and a game that makes itself look
+ *   broken has asked to be looked at, which is all a suggestion is. What it cannot do is
+ *   choose the words anyone reads, or reach anything downstream that treats text as
+ *   instruction.
+ *
+ * So the honest summary is: a game can raise its own hand; it cannot put words in our
+ * mouth. That is the plan's warning about interpolating error messages into an agent's
+ * instructions, answered where it actually bites.
  *
  * **Nothing here files anything.** A suggestion is a proposal with an evidence block and a
  * route; who acts on it, and whether an implementer is even available, is a separate
@@ -28,8 +38,14 @@ import type { Scorecard } from './store.js';
 /** Below this many sessions a game has not been measured enough to act on. */
 export const MIN_SESSIONS_TO_ROUTE = 20;
 
-/** Share of sessions reporting an uncaught error before it reads as a defect. */
-export const DEFECT_ERROR_RATE = 0.1;
+/**
+ * Uncaught errors *per session* before a game reads as a defect.
+ *
+ * Per session, not "share of sessions with an error": `health.errors` counts error events,
+ * so one session can contribute several and this ratio can exceed 1. Naming it a share
+ * would have produced findings like "errors in 340% of sessions".
+ */
+export const DEFECT_ERRORS_PER_SESSION = 0.1;
 
 /** Share of sessions whose frames stalled before it reads as a defect. */
 export const DEFECT_STALL_RATE = 0.15;
@@ -137,19 +153,19 @@ export function routeScorecard(card: Scorecard): Suggestion {
     };
   }
 
-  const errorRate = card.health.errors / sessions;
+  const errorsPerSession = card.health.errors / sessions;
   const drop = steepestProgressionDrop(card.untrusted.progressLabels);
   const votes = card.votes.up + card.votes.down;
   const downvoteRate = votes === 0 ? 0 : card.votes.down / votes;
 
   // Defect first: it is the only class the plan lets an agent act on unattended, and a
   // game that crashes is not a game with a difficulty problem.
-  if (errorRate >= DEFECT_ERROR_RATE || card.health.stallRate >= DEFECT_STALL_RATE) {
+  if (errorsPerSession >= DEFECT_ERRORS_PER_SESSION || card.health.stallRate >= DEFECT_STALL_RATE) {
     const evidence: SuggestionEvidence[] = [];
-    if (errorRate >= DEFECT_ERROR_RATE) {
+    if (errorsPerSession >= DEFECT_ERRORS_PER_SESSION) {
       evidence.push({
-        finding: `Uncaught errors in ${Math.round(errorRate * 100)}% of sessions.`,
-        metrics: { errors: card.health.errors, sessions, errorRate },
+        finding: `${card.health.errors} uncaught errors across ${sessions} sessions.`,
+        metrics: { errors: card.health.errors, sessions, errorsPerSession },
       });
     }
     if (card.health.stallRate >= DEFECT_STALL_RATE) {
@@ -158,7 +174,7 @@ export function routeScorecard(card: Scorecard): Suggestion {
         metrics: { stallRate: card.health.stallRate, stalledTicks: card.health.stalledTicks },
       });
     }
-    return { ...base, class: 'defect', priority: severity(errorRate, card.health.stallRate) * sessions, evidence };
+    return { ...base, class: 'defect', priority: severity(errorsPerSession, card.health.stallRate) * sessions, evidence };
   }
 
   if (drop && drop.rate >= FRICTION_DROP_RATE) {
@@ -197,16 +213,18 @@ export function routeScorecard(card: Scorecard): Suggestion {
     priority: 0,
     evidence: [
       {
-        finding: `${sessions} sessions with no error, stall, progression cliff or vote signal above threshold.`,
-        metrics: { sessions, errorRate, stallRate: card.health.stallRate, downvoteRate },
+        // "below threshold", not "none": a game with a handful of errors is healthy here,
+        // and saying "no error" would be a stronger claim than the router actually checked.
+        finding: `${sessions} sessions, with error, stall, progression and vote signals all below threshold.`,
+        metrics: { sessions, errorsPerSession, stallRate: card.health.stallRate, downvoteRate },
       },
     ],
   };
 }
 
 /** Severity of a defect, 0–1, so priority orders crashes above stutters. */
-function severity(errorRate: number, stallRate: number): number {
-  return Math.min(1, Math.max(errorRate, stallRate));
+function severity(errorsPerSession: number, stallRate: number): number {
+  return Math.min(1, Math.max(errorsPerSession, stallRate));
 }
 
 /**
