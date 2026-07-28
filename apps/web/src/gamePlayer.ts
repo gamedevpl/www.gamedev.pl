@@ -234,9 +234,9 @@ const BRIDGE = `(function(){
 })();`;
 
 // Hide the game's own chrome (the app theater shows title/desc/sound instead), and
-  // strip iOS long-press chrome inside the opaque-origin frame — parent CSS cannot
-  // reach in here. Without this, a hold on iPhone SE pops the selection loupe and
-  // the Copy / Translate / Look Up callout over the playfield.
+// strip iOS long-press chrome inside the opaque-origin frame — parent CSS cannot
+// reach in here. Without this, a hold on iPhone SE pops the selection loupe and
+// the Copy / Translate / Look Up callout over the playfield.
 const HIDE_CHROME =
   `#game-title,#game-desc,.game-controls,.hint{display:none!important}` +
   `html,body,canvas,img,video{` +
