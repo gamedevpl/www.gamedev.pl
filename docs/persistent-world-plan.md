@@ -49,7 +49,7 @@ shipped 2026-07-26) built several of the load-bearing pieces:
   room lifecycle. Today it relays only controller inputs for one shared screen, but the
   session plumbing (create/join/kick/reconnect-into-slot) is exactly what a "zone" needs.
 - **The bridge pattern** — games never touch the network. The sandboxed iframe
-  (`sandbox="allow-scripts"`, no-network CSP) talks `postMessage` to the trusted shell,
+  (`sandbox="allow-scripts allow-pointer-lock"`, no-network CSP) talks `postMessage` to the trusted shell,
   which owns the socket. This is the platform's answer to "untrusted code in a multiplayer
   system" and it extends unchanged to everything below.
 - **Durable storage with real discipline** — [`apps/api/src/store.ts`](../apps/api/src/store.ts)
@@ -117,7 +117,7 @@ The end-state (Phase P3) looks like this; earlier phases are strict subsets:
 ```mermaid
 flowchart TB
     subgraph Client["Each player's browser"]
-      View["Sandboxed iframe: view + predicted sim<br/>(sandbox=allow-scripts, no-network CSP — unchanged)"]
+      View["Sandboxed iframe: view + predicted sim<br/>(sandbox=allow-scripts allow-pointer-lock, no-network CSP — unchanged)"]
       Shell["Trusted shell: owns the socket"]
       View <-->|postMessage bridge| Shell
     end
@@ -299,7 +299,7 @@ snapshotting, hibernation) is platform code written once, tested once, shared by
 
 ## 7. Security invariants (extensions, no revisions)
 
-1. The iframe stays exactly `sandbox="allow-scripts"` with the no-network CSP, all phases.
+1. The iframe stays exactly `sandbox="allow-scripts allow-pointer-lock"` with the no-network CSP, all phases.
    New capability arrives only as typed, size-capped, rate-limited bridge messages.
 2. The P3 sim isolate is governed by the same doctrine as the iframe: no ambient authority,
    no I/O, message-only, metered. It is a **second cage, not a second trust decision** —

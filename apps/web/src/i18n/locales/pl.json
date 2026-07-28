@@ -298,7 +298,7 @@
     "activity2": "Otrzymano nową specyfikację dla Coin Catcher v2",
     "activity3": "Statyczna paczka gry opublikowana w katalogu gamedev.pl",
     "securityTitle": "Inwariant Bezpieczeństwa Sandboksa",
-    "securityBody": "Wygenerowany kod jest niezaufany i działa w odizolowanym iframe z sandbox=\"allow-scripts\" bez allow-same-origin. Zero dostępu do ciasteczek, zero wycieków poświadczeń.",
+    "securityBody": "Wygenerowany kod jest niezaufany i działa w odizolowanym iframe z sandbox=\"allow-scripts allow-pointer-lock\" bez allow-same-origin. Blokada wskaźnika jedynie przechwytuje mysz w grach 3D po Twoim geście; kod nadal ma zero dostępu do ciasteczek i zero wycieków poświadczeń.",
     "openSourceTitle": "Ekosystem 100% Open Source",
     "openSourceBody": "Wszystkie gry znajdują się w naszym publicznym repozytorium gier utrzymywanym przez agenty AI.",
     "viewGithub": "Zobacz Repozytorium Gier na GitHubie"

@@ -112,7 +112,7 @@ never be committed or pasted into a game, an issue, or a PR description. Full gu
 
 ## The one safety rule you must not break
 
-Generated games run **only** inside a sandboxed iframe with `sandbox="allow-scripts"` and
+Generated games run **only** inside a sandboxed iframe with `sandbox="allow-scripts allow-pointer-lock"` and
 **no `allow-same-origin`**. This is the entire reason it's safe to run arbitrary generated
 code. Do not add `allow-same-origin`, and do not render generated HTML/JS outside the iframe.
 See [`architecture.md`](./architecture.md#sandboxed-game-execution).

@@ -15,7 +15,7 @@ game: asynchronous, visible, and reviewable. The local deterministic generator r
 useful player-surface demo, not the future production backend.
 
 Games are unconstrained code, so safety comes from sandboxed execution. Every game runs inside
-an iframe with `sandbox="allow-scripts"` and no `allow-same-origin`, and production games are
+an iframe with `sandbox="allow-scripts allow-pointer-lock"` and no `allow-same-origin`, and production games are
 served from a separate cookieless origin.
 
 ## Visual identity

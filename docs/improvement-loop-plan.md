@@ -107,7 +107,7 @@ Two signals already exist and cost nothing to fold in:
 ### The transport already exists: extend the player bridge
 
 Games are offline-only, self-contained HTML/CSS/JS running in an iframe with
-`sandbox="allow-scripts"` and **no** `allow-same-origin`
+`sandbox="allow-scripts allow-pointer-lock"` and **no** `allow-same-origin`
 ([GameFrame.tsx](../apps/web/src/GameFrame.tsx)); preview builds additionally get
 a `default-src 'none'` CSP with no `connect-src`, which blocks fetch, XHR,
 WebSocket and beacons outright ([assemble.ts](../apps/api/src/assemble.ts)). A

@@ -79,7 +79,7 @@ with nothing built for them. Most of that has since been answered; what is left:
 These are facts, not preferences; any mobile strategy must satisfy all five.
 
 1. **Games are web content, permanently.** Every game is HTML/JS/CSS executed in an
-   `<iframe sandbox="allow-scripts">` from a cookieless origin
+   `<iframe sandbox="allow-scripts allow-pointer-lock">` from a cookieless origin
    ([`security-model.md`](./security-model.md)). A native app would still render games in
    a WebView. There is no native rendering to gain — which removes the main argument for
    React Native/Flutter/native rewrites.
@@ -137,7 +137,7 @@ flowchart TD
       C -->|native adapters| AD[Adapter layer:\nauth · push · QR scan · deep links]
     end
     SPA -->|/api/*| API[apps/api on Cloud Run]
-    SPA -->|iframe sandbox=allow-scripts| GAMES[(Games origin, cookieless)]
+    SPA -->|iframe sandbox=allow-scripts allow-pointer-lock| GAMES[(Games origin, cookieless)]
     AD -->|Google/Apple ID token| API
     API -->|gamedev_session cookie| SPA
     PUSH[FCM / APNs] --> C
@@ -186,7 +186,7 @@ This landed in M0 because _nothing else matters if the games themselves reject f
 - ✅ **Sign in with Apple** (required by 4.8) — **built 2026-07-28**, ahead of the rest of
   M2 because it is the one M2 item that needs no store account to write and pays off on
   the web immediately. `apps/api/src/apple-auth.ts` verifies Apple's RS256 ID tokens
-  against their JWKS with a *set* of audiences, so the same route serves the web Services
+  against their JWKS with a _set_ of audiences, so the same route serves the web Services
   ID and the future iOS bundle ID. Accounts are keyed `a:<sub>` in the same Firestore
   model — except when `apple-account.ts` can prove, from a verified non-relay email, that
   the person already has a Google account here, in which case they sign into it. Dormant
@@ -364,7 +364,7 @@ with M0's outstanding device pass.
 
 ### M2 — Store apps (Capacitor) 🚧 (shell-agnostic groundwork started)
 
-> **Started out of order, deliberately.** M2 cannot *complete* without an Apple Developer
+> **Started out of order, deliberately.** M2 cannot _complete_ without an Apple Developer
 > account, a Play account, signing certs and store listings — none of which live in this
 > repo. What can be built without them is the part the plan already identified as
 > shell-agnostic, and Sign in with Apple (✅ 2026-07-28) is the first of it: required by

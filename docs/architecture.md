@@ -59,7 +59,7 @@ It serves as a **local preview/development only** affordance to keep the player 
 Generated code is **not** trusted and **cannot** be statically sanitized or schema-validated. The security boundary is therefore enforced entirely by the browser sandbox at execution time:
 
 - The `html`, `js`, and `css` of a game are assembled into **one self-contained document**.
-- That document is loaded into an `<iframe>` with **`sandbox="allow-scripts"`** and **no `allow-same-origin`**.
+- That document is loaded into an `<iframe>` with **`sandbox="allow-scripts allow-pointer-lock"`** and **no `allow-same-origin`**.
 - **Consequences**: Generated code can run JavaScript and render visually, but it **cannot** access the parent page, read/write cookies, access `localStorage`, or make same-origin requests. A malicious or broken game is contained to its own throwaway, unique origin.
 
 > [!IMPORTANT]
@@ -75,7 +75,7 @@ flowchart TD
     Gen -->|GameProject html js css| API
     API -->|assemble & hygiene checks| API
     API -->|GameProject JSON| Web
-    Web -->|render as srcdoc| IF["Sandboxed iframe<br/>sandbox=allow-scripts<br/>NO allow-same-origin"]
+    Web -->|render as srcdoc| IF["Sandboxed iframe<br/>sandbox=allow-scripts allow-pointer-lock<br/>NO allow-same-origin"]
     IF -->|playable game| U
 ```
 
@@ -95,7 +95,7 @@ The project has pivoted away from hosting a multi-tenant agent execution pipelin
 flowchart TD
     U[Creator/Player] -->|browse / play| Web[www.gamedev.pl app]
     Web -->|fetch catalog.json & bundles| CDN[(Games CDN / Pages Origin)]
-    Web -->|render inside iframe| IF["Sandboxed iframe<br/>sandbox=allow-scripts<br/>NO allow-same-origin"]
+    Web -->|render inside iframe| IF["Sandboxed iframe<br/>sandbox=allow-scripts allow-pointer-lock<br/>NO allow-same-origin"]
     IF -->|playable game| U
 
     U -->|submit new game spec| Web

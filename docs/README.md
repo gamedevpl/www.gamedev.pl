@@ -23,25 +23,25 @@ survives only in this repo's early history.
 
 ## Current state
 
-| Aspect          | State                                                                                                                                            |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Branch          | `master` (default, live)                                                                                                                         |
-| Shape           | npm-workspaces monorepo (`apps/*`, `packages/*`)                                                                                                 |
-| Frontend        | `apps/web` — Vite + React + TypeScript                                                                                                           |
-| Backend         | `apps/api` — Fastify + TypeScript on Cloud Run (europe-west1)                                                                                    |
-| Game creation   | ✅ Live — spec → moderated submission → games-repo issue → coding agent PR → human review → publish                                              |
-| Execution model | ✅ Each game is assembled into one self-contained HTML doc and run in a **sandboxed iframe** (`sandbox="allow-scripts"`, no `allow-same-origin`) |
-| Games origin    | ✅ Served through the API rather than a public CDN, so the games repo can stay private and PR previews are playable                              |
-| Auth & quotas   | ✅ Google sign-in, per-user daily counters, closed-beta allowlist + waitlist                                                                     |
-| Notifications   | ✅ In-app bell, email with unsubscribe, Web Push (desktop/Android)                                                                               |
-| Multiplayer     | ✅ Party mode — one shared screen, phones as controllers (relay is in-process, hence `--max-instances 1`)                                        |
-| Mobile          | ✅ Every catalog game is playable with a thumb, **enforced in CI** from each game's source. No PWA/install path yet                              |
-| Generator seam  | `packages/game-generator` — deterministic **mock only**, a development preview route                                                             |
-| Local dev       | ✅ Whole product runs with no keys — bundled fixture games and a dev sign-in (`local-development.md`)                                            |
-| Legal           | ✅ Terms, privacy policy, AI disclosure, and a DSA notice-and-action route are published                                                         |
-| Orchestration   | 🗃️ Removed — self-hosted agent execution was abandoned for legal reasons (see `games-repo.md`)                                                   |
-| Deployment      | ✅ GitHub Actions → Cloud Run via Workload Identity Federation; no IaC (`infra/` is scripts)                                                     |
-| After publish   | 🚧 Visits and per-game health are measured and readable by the operator; acting on the signal is still design (`improvement-loop-plan.md`)       |
+| Aspect          | State                                                                                                                                                               |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Branch          | `master` (default, live)                                                                                                                                            |
+| Shape           | npm-workspaces monorepo (`apps/*`, `packages/*`)                                                                                                                    |
+| Frontend        | `apps/web` — Vite + React + TypeScript                                                                                                                              |
+| Backend         | `apps/api` — Fastify + TypeScript on Cloud Run (europe-west1)                                                                                                       |
+| Game creation   | ✅ Live — spec → moderated submission → games-repo issue → coding agent PR → human review → publish                                                                 |
+| Execution model | ✅ Each game is assembled into one self-contained HTML doc and run in a **sandboxed iframe** (`sandbox="allow-scripts allow-pointer-lock"`, no `allow-same-origin`) |
+| Games origin    | ✅ Served through the API rather than a public CDN, so the games repo can stay private and PR previews are playable                                                 |
+| Auth & quotas   | ✅ Google sign-in, per-user daily counters, closed-beta allowlist + waitlist                                                                                        |
+| Notifications   | ✅ In-app bell, email with unsubscribe, Web Push (desktop/Android)                                                                                                  |
+| Multiplayer     | ✅ Party mode — one shared screen, phones as controllers (relay is in-process, hence `--max-instances 1`)                                                           |
+| Mobile          | ✅ Every catalog game is playable with a thumb, **enforced in CI** from each game's source. No PWA/install path yet                                                 |
+| Generator seam  | `packages/game-generator` — deterministic **mock only**, a development preview route                                                                                |
+| Local dev       | ✅ Whole product runs with no keys — bundled fixture games and a dev sign-in (`local-development.md`)                                                               |
+| Legal           | ✅ Terms, privacy policy, AI disclosure, and a DSA notice-and-action route are published                                                                            |
+| Orchestration   | 🗃️ Removed — self-hosted agent execution was abandoned for legal reasons (see `games-repo.md`)                                                                      |
+| Deployment      | ✅ GitHub Actions → Cloud Run via Workload Identity Federation; no IaC (`infra/` is scripts)                                                                        |
+| After publish   | 🚧 Visits and per-game health are measured and readable by the operator; acting on the signal is still design (`improvement-loop-plan.md`)                          |
 
 ## Documents in this folder
 

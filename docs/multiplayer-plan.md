@@ -136,7 +136,7 @@ The join page is part of our own web shell (trusted code, normal origin) — **n
 ### 4.1 The sandbox constraint decides the topology
 
 The load-bearing invariant of this codebase: games run in an iframe with
-`sandbox="allow-scripts"`, **no** `allow-same-origin` (`GameFrame.tsx`), and served bundles
+`sandbox="allow-scripts allow-pointer-lock"`, **no** `allow-same-origin` (`GameFrame.tsx`), and served bundles
 carry a CSP with no `connect-src` — fetch/XHR/WebSocket are all blocked inside the game
 ([assemble.ts](../apps/api/src/assemble.ts)). Games are also validated to be offline-only and
 self-contained ([validate.mjs](https://github.com/gamedevpl/www.gamedev.pl-games) Check 6:
@@ -157,7 +157,7 @@ flowchart LR
     end
     subgraph Host["Host device (shared screen)"]
       Shell[Web shell - lobby, QR, bridge]
-      IF["Sandboxed iframe<br/>sandbox=allow-scripts, CSP no-network"]
+      IF["Sandboxed iframe<br/>sandbox=allow-scripts allow-pointer-lock, CSP no-network"]
       Shell <-->|postMessage - versioned bridge protocol| IF
     end
     C1 -->|WSS| S[Room relay - apps/api, Cloud Run]
@@ -321,7 +321,7 @@ gameplay, drawing, actors, gfx, effects, audio, party`) in both `tools/lib/assem
 
 ## 5. Security & privacy invariants (additions)
 
-1. Game iframes stay exactly `sandbox="allow-scripts"`; the no-network CSP stays on. The
+1. Game iframes stay exactly `sandbox="allow-scripts allow-pointer-lock"`; the no-network CSP stays on. The
    bridge is the only channel, and it is typed and rate-limited.
 2. Everything from a game or a guest phone is untrusted data: validate at the server edge AND
    in the shell; render nicknames escaped everywhere; nicknames go through the existing

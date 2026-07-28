@@ -1889,9 +1889,11 @@ export async function registerSubmissionRoutes(
    *
    *  - `Content-Security-Policy: sandbox` is the header form of the iframe attribute, so
    *    the restriction holds even if the document is opened directly rather than framed.
-   *    `allow-scripts` is granted because a game is nothing without it; `allow-same-origin`
-   *    deliberately is not, which leaves the document in an opaque origin with no access
-   *    to storage or cookies anywhere.
+   *    `allow-scripts` is granted because a game is nothing without it, and
+   *    `allow-pointer-lock` so scene3d previews behave like the published GameFrame
+   *    (the effective sandbox is the intersection of this header and the framing
+   *    iframe's attribute); `allow-same-origin` deliberately is not, which leaves the
+   *    document in an opaque origin with no access to storage or cookies anywhere.
    *  - `default-src 'none'` with inline script and style allowed matches what an assembled
    *    bundle actually is — everything embedded, nothing fetched. Any attempt to call home
    *    fails, so an injected exfiltration payload has nowhere to send anything.
@@ -1947,7 +1949,7 @@ export async function registerSubmissionRoutes(
         return reply
           .header(
             'Content-Security-Policy',
-            "sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; " +
+            "sandbox allow-scripts allow-pointer-lock; default-src 'none'; script-src 'unsafe-inline'; " +
               "style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:; " +
               "connect-src 'none'; form-action 'none'; base-uri 'none'",
           )
