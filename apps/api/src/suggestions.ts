@@ -174,7 +174,12 @@ export function routeScorecard(card: Scorecard): Suggestion {
         metrics: { stallRate: card.health.stallRate, stalledTicks: card.health.stalledTicks },
       });
     }
-    return { ...base, class: 'defect', priority: severity(errorsPerSession, card.health.stallRate) * sessions, evidence };
+    return {
+      ...base,
+      class: 'defect',
+      priority: severity(errorsPerSession, card.health.stallRate) * sessions,
+      evidence,
+    };
   }
 
   if (drop && drop.rate >= FRICTION_DROP_RATE) {
@@ -235,7 +240,5 @@ function severity(errorsPerSession: number, stallRate: number): number {
  * Silence would be indistinguishable from the router never having run.
  */
 export function routeAll(scorecards: Scorecard[]): Suggestion[] {
-  return scorecards
-    .map(routeScorecard)
-    .sort((a, b) => b.priority - a.priority || a.slug.localeCompare(b.slug));
+  return scorecards.map(routeScorecard).sort((a, b) => b.priority - a.priority || a.slug.localeCompare(b.slug));
 }

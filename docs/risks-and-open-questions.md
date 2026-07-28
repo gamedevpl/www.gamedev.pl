@@ -25,15 +25,15 @@ abuse before repository credentials are exposed through an API.
 
 ## Ongoing security risks
 
-| #   | Risk                            | Current direction                                                                           |
-| --- | ------------------------------- | ------------------------------------------------------------------------------------------- |
-| R1  | Sandbox regression              | Keep `sandbox="allow-scripts"` without `allow-same-origin`; add an automated invariant test |
-| R2  | Game network access             | Reject remote dependencies and publish a restrictive CSP on a separate cookieless origin    |
-| R3  | CPU/memory abuse                | Bundle limits, browser smoke tests, reporting, and takedown                                 |
-| R4  | Malicious or injected spec text | Treat specs as data, constrain agent PR scope, review before merge                          |
-| R5  | Supply-chain compromise         | Secretless PR checks, least-privilege workflows, pinned actions, protected publishing       |
-| R6  | Offensive/infringing content    | Human moderation, clear rights, and takedown procedures                                     |
-| R7  | Catalog or bundle tampering     | Schema validation, protected publishing, integrity/versioning, and rollback                 |
+| #   | Risk                            | Current direction                                                                                              |
+| --- | ------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| R1  | Sandbox regression              | Keep `sandbox="allow-scripts allow-pointer-lock"` without `allow-same-origin`; add an automated invariant test |
+| R2  | Game network access             | Reject remote dependencies and publish a restrictive CSP on a separate cookieless origin                       |
+| R3  | CPU/memory abuse                | Bundle limits, browser smoke tests, reporting, and takedown                                                    |
+| R4  | Malicious or injected spec text | Treat specs as data, constrain agent PR scope, review before merge                                             |
+| R5  | Supply-chain compromise         | Secretless PR checks, least-privilege workflows, pinned actions, protected publishing                          |
+| R6  | Offensive/infringing content    | Human moderation, clear rights, and takedown procedures                                                        |
+| R7  | Catalog or bundle tampering     | Schema validation, protected publishing, integrity/versioning, and rollback                                    |
 
 ## Open product and platform questions
 

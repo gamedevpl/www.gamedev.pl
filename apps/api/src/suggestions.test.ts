@@ -41,9 +41,14 @@ describe('routeScorecard — absence of evidence', () => {
     // The distinction the whole system keeps making: nothing observed is not the same as
     // observed and fine. Collapsing them would let a game with three sessions read as a
     // clean bill of health.
-    expect(classOf(card({ slug: 'quiet', sessions: { count: 3, bounces: 0, closes: 0, medianPlaySeconds: 5, totalPlaySeconds: 15 } }))).toBe(
-      'insufficient-data',
-    );
+    expect(
+      classOf(
+        card({
+          slug: 'quiet',
+          sessions: { count: 3, bounces: 0, closes: 0, medianPlaySeconds: 5, totalPlaySeconds: 15 },
+        }),
+      ),
+    ).toBe('insufficient-data');
   });
 
   it('refuses to route on a rate computed from too few sessions', () => {
@@ -246,7 +251,10 @@ describe('routeAll', () => {
   });
 
   it('keeps games it passed over, so silence is never mistaken for not having run', () => {
-    const routed = routeAll([card({ slug: 'fine' }), card({ slug: 'quiet', sessions: { count: 1, bounces: 0, closes: 0, medianPlaySeconds: 1, totalPlaySeconds: 1 } })]);
+    const routed = routeAll([
+      card({ slug: 'fine' }),
+      card({ slug: 'quiet', sessions: { count: 1, bounces: 0, closes: 0, medianPlaySeconds: 1, totalPlaySeconds: 1 } }),
+    ]);
 
     expect(routed.map((s) => s.class).sort()).toEqual(['healthy', 'insufficient-data']);
   });

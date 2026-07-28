@@ -25,7 +25,7 @@ multiplayer relay. Reports about the deployed site at https://www.gamedev.pl bel
 Particularly interesting:
 
 - **Anything that escapes the game sandbox.** Games are real, unconstrained code, rendered
-  in an `<iframe sandbox="allow-scripts">` with **no `allow-same-origin`**. That boundary is
+  in an `<iframe sandbox="allow-scripts allow-pointer-lock">` with **no `allow-same-origin`**. That boundary is
   the product's central safety assumption: a game must not be able to reach the parent page,
   cookies, storage, or any authenticated endpoint. A way around it is the most serious class
   of bug this project can have.

@@ -98,6 +98,9 @@ describe('SubmissionStatusView', () => {
     });
 
     // Same surface as the PR draft: a PlayCard, nothing embedded inline.
+    // #322 dropped the inline frame from this view; the pointer-lock sandbox this
+    // branch adds is still asserted where a frame is actually rendered — see the
+    // preview cases below and GameFrame.sandbox.test.ts.
     expect(container.querySelector('iframe')).toBeNull();
     expect(container.textContent).toContain('You can walk the puppy now.');
     // Newest wins: an older build is history, not the thing to play.
@@ -114,7 +117,9 @@ describe('SubmissionStatusView', () => {
     expect(frame).not.toBeNull();
     // srcdoc + bridge — same path as a PR draft, so theater chrome actually works.
     expect(frame?.getAttribute('srcdoc') ?? '').toContain('gdpl-player');
-    expect(frame?.getAttribute('sandbox')).toBe('allow-scripts');
+    // The theater frame is a GameFrame, so it carries the pointer-lock sandbox this
+    // branch adds. Additive only — still no allow-same-origin, still opaque origin.
+    expect(frame?.getAttribute('sandbox')).toBe('allow-scripts allow-pointer-lock');
 
     await act(async () => {
       root.unmount();
@@ -291,7 +296,7 @@ describe('SubmissionStatusView', () => {
 
     expect(fetchSpy).toHaveBeenCalledWith('/api/games/sky-dodge');
     const iframe = container.querySelector('iframe[title="Sky Dodge"]');
-    expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts');
+    expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts allow-pointer-lock');
     // Runs via srcDoc (no external origin), wrapped with the embed bridge in the
     // player — so the original document is contained, not exact.
     const srcdoc = iframe?.getAttribute('srcdoc') ?? '';
@@ -355,7 +360,7 @@ describe('SubmissionStatusView', () => {
       await flushEffects();
     });
     const iframe = container.querySelector('iframe[title="Space Runner"]');
-    expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts');
+    expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts allow-pointer-lock');
     expect(iframe?.getAttribute('srcdoc') ?? '').toContain('gdpl-player');
 
     await act(async () => {

@@ -155,7 +155,7 @@ the coarse outer layer (and is the only limiter on `/api/auth/*`).
    deps is theater. Likely dev-tooling chains; verify.
 2. **Alerting**: 5xx rate + catalog-fetch failure (runtime GitHub API dependency).
 3. **Invariants** (goes in `docs/security-model.md`): game iframes stay
-   `sandbox="allow-scripts"` with **no** `allow-same-origin` — _more_ critical once session
+   `sandbox="allow-scripts allow-pointer-lock"` with **no** `allow-same-origin` — _more_ critical once session
    cookies exist on the app origin; no secret reaches the browser; no tokens in URLs or
    localStorage; creator text is data, never instructions.
 4. **Login abuse**: per-IP limit on `/api/auth/*`; audience + issuer pinned; small
@@ -189,9 +189,9 @@ responds until the two environment variables below are set. `/api/auth/apple` an
 
 1. Join the **Apple Developer Program** (~$99/yr). Everything below needs it, including
    the web-only flow — there is no free tier for Sign in with Apple.
-2. Create an **App ID** and enable the *Sign in with Apple* capability on it.
-3. Create a **Services ID** (e.g. `pl.gamedev.web`) — this is the *web* client, distinct
-   from the app's bundle ID — and enable *Sign in with Apple* on it.
+2. Create an **App ID** and enable the _Sign in with Apple_ capability on it.
+3. Create a **Services ID** (e.g. `pl.gamedev.web`) — this is the _web_ client, distinct
+   from the app's bundle ID — and enable _Sign in with Apple_ on it.
 4. Under that Services ID, configure:
    - **Domain**: `www.gamedev.pl`, then complete Apple's domain-verification file check.
    - **Return URL**: `https://www.gamedev.pl/` — must be https and must match exactly.
@@ -222,7 +222,7 @@ responds until the two environment variables below are set. `/api/auth/apple` an
   to the waitlist. Correct, but it will read as a bug when it first happens — the fix is
   an explicit "link an Apple ID" action on an already-signed-in account, not looser
   matching.
-- **`email_verified` arrives as a boolean *or* the string `"true"`**, depending on the
+- **`email_verified` arrives as a boolean _or_ the string `"true"`**, depending on the
   flow. `Boolean("false")` is `true`, so a direct read of that claim fails **open** on the
   one flag gating the allowlist. `appleClaimFlag` exists solely for this and is pinned by
   a test.

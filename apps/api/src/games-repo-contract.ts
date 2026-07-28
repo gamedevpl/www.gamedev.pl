@@ -34,14 +34,18 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
 /**
  * Sum of GameKit platform allowances outside the author budget (touch, restart,
  * music, touch hint, progress, universal input, pointer poll, draw surface,
- * pointer release, host pause, mascot draw, …) plus a deliberate headroom band.
- * Together with {@link GAME_BUDGET_BYTES} this must equal games-repo
- * `MAX_BUNDLE_BYTES` (358_027, matching games-repo
+ * pointer release, host pause, mascot draw, gfx3d, …) plus a deliberate headroom
+ * band. Together with {@link GAME_BUDGET_BYTES} this must equal games-repo
+ * `MAX_BUNDLE_BYTES` (366_027, matching games-repo
  * `shared/assemble-contract.json` `maxProjectBytes`). Not a round KiB: the
  * platform side is an explicit sum of named allowances, not a padded
  * `42 * 1024` block.
  *
- * Last moved by games-repo #111 (the `gfx3d` kit): +32_000 (`gfx3d`) for an
+ * Last moved by games-repo #113 (the voxel and third-person pilots): `gfx3d`
+ * 32_000 → 40_000 (+8_000, 358_027 → 366_027) for the scene3d template and the
+ * chase camera those pilots share. Same opt-in shape as the band below.
+ *
+ * Before that, games-repo #111 (the `gfx3d` kit): +32_000 (`gfx3d`) for an
  * opt-in Lambert-mesh scene module measured at ~31.5 KiB transpiled. It is only
  * inlined when a `GAME.json` asks for it, so unlike the allowances below it is
  * not bytes every game pays — but the cap is a single number, and a gfx3d game
@@ -65,7 +69,7 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
  * it or not, so it is charged to the platform side; charging it to authors would
  * silently shrink what they may write.
  */
-export const GAMEKIT_PLATFORM_BYTES = 153_227;
+export const GAMEKIT_PLATFORM_BYTES = 161_227;
 
 /** Combined html+js+css size cap — must match games-repo `MAX_BUNDLE_BYTES`. */
 export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
