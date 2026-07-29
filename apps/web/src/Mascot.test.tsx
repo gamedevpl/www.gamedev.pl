@@ -212,6 +212,49 @@ describe('Mascot', () => {
     });
   });
 
+  it('mounts the pocket phone only when scrolling is driven, and toggles the live class', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(Mascot, { emotion: 'idle', size: 35, className: 'mascot--logo' }));
+    });
+    expect(container.querySelector('.mascot__phone')).toBeNull();
+
+    await act(async () => {
+      root.render(
+        createElement(Mascot, {
+          emotion: 'idle',
+          size: 35,
+          className: 'mascot--logo',
+          scrolling: false,
+        }),
+      );
+    });
+    expect(container.querySelector('.mascot__phone')).not.toBeNull();
+    expect(container.querySelector('.mascot--scrolling')).toBeNull();
+    expect(container.querySelector('.mascot__phone-feed-track')).not.toBeNull();
+    expect(container.querySelector('.mascot__phone-thumb')).not.toBeNull();
+
+    await act(async () => {
+      root.render(
+        createElement(Mascot, {
+          emotion: 'idle',
+          size: 35,
+          className: 'mascot--logo',
+          scrolling: true,
+        }),
+      );
+    });
+    expect(container.querySelector('.mascot.mascot--scrolling')).not.toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   // Regression: the body used to be one <rect> per span. Separate rects are
   // composited separately, so an antialiasing renderer left a seam on every row —
   // horizontal banding on the body, speckle once downscaled. One path fills solid.
