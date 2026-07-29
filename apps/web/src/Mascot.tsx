@@ -13,7 +13,7 @@
  * reactions, and the face tracks the pointer a little. With `reactsToTilt` he also
  * leans with the phone's own orientation and gets dizzy when it is shaken.
  * With `doesPullUps` (splash only) he occasionally climbs the card rim for a few
- * chin-ups when nothing else is happening — motion only, no redrawn limbs.
+ * chin-ups when nothing else is happening — same face and limbs, just motion.
  *
  * Pass `scrolling` (boolean) on the header mark: he pulls a tiny phone and mimes
  * scrolling a feed while the page moves. Omit the prop everywhere else so the
@@ -59,12 +59,6 @@ type MascotProps = {
    * every other instance.
    */
   scrolling?: boolean;
-  /**
-   * Pull-up pose on the splash card rim: same baked silhouette (no redrawn limbs —
-   * those always looked like a second pair of arms). Climb + chin bob + mouth seal
-   * carry the gag; the card border is the bar.
-   */
-  hanging?: boolean;
 };
 
 type Span = readonly [number, number, number];
@@ -211,24 +205,12 @@ const MOUTH_CURIOUS =
   'M20 13 L24 20 L28 12 L32 21 L36 11 L40 21 L44 12 L48 20 L52 13 L52 32 L48 26 L44 34 L40 25 L36 35 L32 26 L28 34 L24 27 L20 32 Z';
 const MOUTH_BUSY =
   'M20 13 L25 20 L30 12 L35 21 L40 11 L45 21 L50 13 L50 32 L45 26 L40 34 L35 25 L30 33 L25 26 L20 31 Z';
-/** Open mouth while hanging — sealed by `.mascot__mouth-seal` at chin-up peaks. */
-const MOUTH_HANG_BREATHE = 'M26 18 C30 30 40 30 44 18 C40 26 30 26 26 18 Z';
 
 // Traced once at module load — the spans never change.
 const IDLE_PATH = spansToOutlinePath(MASCOT_IDLE_SPANS);
 const SOLID_PATH = spansToOutlinePath(MASCOT_SOLID_SPANS);
 
-function cutoutsFor(emotion: MascotEmotion, hanging = false): ReactElement | null {
-  // Pull-ups: open mouth cutout stays punched; a body-coloured seal outside the
-  // mask covers it at chin-up peaks (hold breath) and lifts on the way down.
-  if (hanging) {
-    return (
-      <>
-        {eyeCrescents()}
-        <path className="mascot__mouth mascot__mouth--hang-breath" d={MOUTH_HANG_BREATHE} />
-      </>
-    );
-  }
+function cutoutsFor(emotion: MascotEmotion): ReactElement | null {
   switch (emotion) {
     case 'idle':
       return null;
@@ -314,16 +296,6 @@ function BlinkLids() {
 }
 
 /**
- * Body-coloured plug that seals the open hang-mouth hole at chin-up peaks.
- * Lives outside the face mask so the breath animation is not fighting mask opacity.
- */
-function HangMouthSeal() {
-  return (
-    <ellipse className="mascot__mouth-seal" cx="35" cy="24" rx="11" ry="9" fill="currentColor" aria-hidden="true" />
-  );
-}
-
-/**
  * Pocket phone the header mark pulls while the page scrolls.
  *
  * Sized for the 35px logo mark (0.5 of the 70-unit viewBox). A phone that fits
@@ -393,7 +365,6 @@ export function Mascot({
   staticPose = false,
   look,
   scrolling,
-  hanging = false,
 }: MascotProps) {
   const reactId = useId().replace(/:/g, '');
   const maskId = `mascot-mask-${reactId}`;
@@ -404,15 +375,13 @@ export function Mascot({
     `mascot--${emotion}`,
     staticPose ? 'mascot--static' : null,
     scrolling ? 'mascot--scrolling' : null,
-    hanging ? 'mascot--hanging' : null,
     className,
   ]
     .filter(Boolean)
     .join(' ');
-  const cutouts = cutoutsFor(emotion, hanging);
-  // Hanging always uses the solid+mask body so raised arms and breath mouths work.
-  const isIdle = !hanging && (emotion === 'idle' || cutouts == null);
-  const showWaveArm = !hanging && (emotion === 'wave' || emotion === 'excited');
+  const cutouts = cutoutsFor(emotion);
+  const isIdle = emotion === 'idle' || cutouts == null;
+  const showWaveArm = emotion === 'wave' || emotion === 'excited';
   const showPhone = scrolling !== undefined;
   // Keep the nudge small — past ~3px the mouth starts to clip the silhouette.
   const lookTransform =
@@ -459,8 +428,6 @@ export function Mascot({
           </>
         )}
 
-        {hanging ? <HangMouthSeal /> : null}
-
         <BlinkLids />
 
         {showWaveArm ? (
@@ -482,8 +449,8 @@ const POKE_HOLD_MS = 1400;
 
 /** First quiet stretch before he notices the card rim and climbs it. */
 export const PULLUP_FIRST_DELAY_MS = 9_000;
-/** One climb + a few reps + drop — matches `mascot-pullups-climb` / `-chin` in CSS. */
-export const PULLUP_SESSION_MS = 3_800;
+/** Climb + chin-ups + land — matches `mascot-pullups` in CSS. */
+export const PULLUP_SESSION_MS = 3_200;
 /** Quiet time between pull-up sessions once he has done the first. */
 export const PULLUP_GAP_MIN_MS = 12_000;
 export const PULLUP_GAP_MAX_MS = 20_000;
@@ -655,8 +622,7 @@ export function InteractiveMascot({
       }
       pullupsRef.current = true;
       setPullups(true);
-      // Proud crescents — strained / pleased with himself — not the idle wave.
-      setEmotion('proud');
+      // Stay himself — pull-ups are motion on the splash button, not a new face.
       if (pullupEndTimer.current) clearTimeout(pullupEndTimer.current);
       pullupEndTimer.current = setTimeout(() => {
         pullupEndTimer.current = null;
@@ -804,12 +770,7 @@ export function InteractiveMascot({
       {/* Tilt lives on an inner span so the button can still run the poke squash. */}
       <span className="mascot-interactive__tilt" style={tiltStyle}>
         {/* Button owns the accessible name; keep the SVG presentational to avoid a double announce. */}
-        <Mascot
-          emotion={emotion}
-          size={size}
-          look={reduceMotion ? undefined : pullups ? { x: 0, y: -0.85 } : effectiveLook}
-          hanging={pullups}
-        />
+        <Mascot emotion={emotion} size={size} look={reduceMotion ? undefined : effectiveLook} />
       </span>
     </button>
   );

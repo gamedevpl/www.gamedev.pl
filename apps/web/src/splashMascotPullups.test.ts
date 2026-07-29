@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 /**
  * Splash pull-ups are a wiring + CSS gag: the prop lives on ClosedBetaSplash and
- * the climb distances live in keyframes. Asserted from source so we do not have
- * to mount AuthContext just to prove a boolean made it onto the button.
+ * one timeline climbs / chins / lands the whole button. No hang face, no redrawn
+ * limbs — he stays the normal logo mascot.
  */
 const read = (name: string) => readFileSync(fileURLToPath(new URL(`./${name}`, import.meta.url)), 'utf8');
 
@@ -17,32 +17,30 @@ describe('the splash mascot does idle pull-ups', () => {
     expect(mascot![0]).toMatch(/doesPullUps/);
   });
 
-  it('animates a climb then chin-ups against the card rim', () => {
+  it('runs one climb-chin-land timeline on the button', () => {
     const css = read('styles.css');
     expect(css).toMatch(/\.mascot-interactive--pullups/);
-    expect(css).toMatch(/@keyframes mascot-pullups-climb/);
-    expect(css).toMatch(/@keyframes mascot-pullups-chin/);
+    expect(css).toMatch(/@keyframes mascot-pullups/);
     expect(css).toMatch(/--pullup-hang/);
-    expect(css).toMatch(/--pullup-chin-lift/);
-    expect(css).toMatch(/\.mascot-interactive--pullups \.mascot__body-group \{[\s\S]*?animation: mascot-pullups-chin/);
+    expect(css).toMatch(/--pullup-chin/);
+    // Whole-button motion — not a separate body-only chin track.
+    expect(css).not.toMatch(/@keyframes mascot-pullups-chin/);
+    expect(css).not.toMatch(/@keyframes mascot-pullups-climb/);
   });
 
-  it('keeps the baked silhouette and only seals the mouth for breath', () => {
-    const css = read('styles.css');
-    expect(css).toMatch(/@keyframes mascot-hang-mouth-seal/);
-    expect(css).toMatch(/\.mascot__mouth-seal/);
-    // Fall → squash → rebound → settle.
-    expect(css).toMatch(/scale\(1\.22,\s*0\.7\)/);
-    expect(css).toMatch(/scale\(0\.94,\s*1\.1\)/);
+  it('does not invent a hang face or redrawn limbs', () => {
     const mascot = read('Mascot.tsx');
-    expect(mascot).toMatch(/HangMouthSeal/);
-    expect(mascot).toMatch(/MOUTH_HANG_BREATHE/);
-    expect(mascot).toMatch(/PULLUP_SESSION_MS = 3_800/);
-    // No redrawn limbs — those always looked like a second pair / a weird foot column.
+    expect(mascot).toMatch(/PULLUP_SESSION_MS = 3_200/);
+    expect(mascot).not.toMatch(/hanging\?:/);
+    expect(mascot).not.toMatch(/HangMouthSeal/);
     expect(mascot).not.toMatch(/HangLimbCovers/);
-    expect(mascot).not.toMatch(/FeetTogether/);
     expect(mascot).not.toMatch(/HangArmStrokes/);
     expect(mascot).not.toMatch(/HangHands/);
+    expect(mascot).not.toMatch(/FeetTogether/);
+    expect(mascot).not.toMatch(/MOUTH_HANG/);
+    const css = read('styles.css');
+    expect(css).not.toMatch(/mascot-hang-mouth-seal/);
+    expect(css).not.toMatch(/mascot__mouth-seal/);
   });
 
   it('lets the climb reach the card rim', () => {

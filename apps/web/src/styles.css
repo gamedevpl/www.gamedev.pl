@@ -3276,7 +3276,7 @@ body.player-open {
   width: 100%;
   text-align: center;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
-  /* Pull-ups hang past the top padding onto the rim — don't clip his hands. */
+  /* Pull-ups climb onto the rim — don't clip him. */
   position: relative;
   overflow: visible;
 }
@@ -5191,25 +5191,22 @@ body.player-open {
 }
 
 /*
- * Idle pull-ups on the splash card rim. The card border IS the bar — nothing is
- * drawn for it, and we do not redraw his limbs (fake raised arms always read as a
- * second pair). Climb moves the whole sprite so his head meets that border; then
- * `.mascot__body-group` chin-ups toward the rim. Mouth seal syncs with the reps.
+ * Idle pull-ups on the splash card rim. One animation on the whole button — he
+ * stays the normal logo mascot (same face, same limbs). The card border is the
+ * bar; nothing extra is drawn. Climb → a few chin bobs near the rim → drop + land.
  */
 .mascot-interactive--pullups {
-  /* Card padding-top (48) + button padding (4) so the head meets the 1px border. */
-  --pullup-hang: 52px;
-  /* Body travel toward the rim — large enough to read as a chin-up at splash size. */
-  --pullup-chin-lift: 26px;
-  transform-origin: 50% 0%;
-  animation: mascot-pullups-climb 3.8s ease-in-out;
+  /* Card padding-top (48) + button pad so his head meets the 1px border. */
+  --pullup-hang: 48px;
+  --pullup-chin: 20px;
+  transform-origin: 50% 100%;
+  animation: mascot-pullups 3.2s ease-in-out;
 }
 
 @media (max-height: 720px) {
   .mascot-interactive--pullups {
-    /* Compact splash padding is 24px + button pad. */
-    --pullup-hang: 28px;
-    --pullup-chin-lift: 16px;
+    --pullup-hang: 26px;
+    --pullup-chin: 12px;
   }
 }
 
@@ -5218,119 +5215,51 @@ body.player-open {
   transform: none;
 }
 
-/* Chin-ups: body bob toward the rim while the button holds the hang height. */
+/* Kill the idle body bob while the pull-up timeline owns transform. */
 .mascot-interactive--pullups .mascot__body-group {
-  transform-origin: 35px 4px;
-  animation: mascot-pullups-chin 3.8s ease-in-out !important;
+  animation: none !important;
 }
 
-/*
- * Breath with the chin: a body-coloured seal covers the open mouth hole at each
- * chin-up peak (hold breath) and lifts on the way down. The seal lives outside the
- * face mask so the animation is not fighting mask opacity/transforms. Times match
- * `mascot-pullups-chin`.
- */
-.mascot--hanging .mascot__mouth-seal {
-  transform-origin: 35px 24px;
-  animation: mascot-hang-mouth-seal 3.8s ease-in-out;
-}
-
-@keyframes mascot-hang-mouth-seal {
-  0%,
-  13% {
-    transform: scaleY(0);
-    opacity: 0;
-  }
-  /* Chin-up peaks — seal lips, hold breath. */
-  23% {
-    transform: scaleY(1);
-    opacity: 1;
-  }
-  31% {
-    transform: scaleY(0);
-    opacity: 0;
-  }
-  42% {
-    transform: scaleY(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scaleY(0);
-    opacity: 0;
-  }
-  61% {
-    transform: scaleY(1);
-    opacity: 1;
-  }
-  71%,
-  100% {
-    transform: scaleY(0);
-    opacity: 0;
-  }
-}
-
-@keyframes mascot-pullups-climb {
+@keyframes mascot-pullups {
   0% {
     transform: translateY(0) scale(1, 1);
   }
-  /* Climb and plant the head on the card border. */
-  13% {
+  /* Hop up and grab the rim. */
+  14% {
     transform: translateY(calc(-1 * var(--pullup-hang))) scale(1, 1);
   }
-  /* Hold through the chin-up reps. */
-  76% {
-    transform: translateY(calc(-1 * var(--pullup-hang))) scale(1, 1);
+  /* Chin-up 1 */
+  24% {
+    transform: translateY(calc(-1 * var(--pullup-hang) - var(--pullup-chin))) scale(1.05, 0.94);
   }
-  /* Let go — stretch on the fall. */
-  84% {
-    transform: translateY(calc(-0.22 * var(--pullup-hang))) scale(0.9, 1.14);
+  32% {
+    transform: translateY(calc(-1 * var(--pullup-hang))) scale(0.98, 1.04);
   }
-  /* Impact squash — held a beat so it reads. */
-  90% {
-    transform: translateY(10px) scale(1.22, 0.7);
-  }
-  93% {
-    transform: translateY(8px) scale(1.18, 0.76);
-  }
-  /* Short rebound. */
-  96% {
-    transform: translateY(-4px) scale(0.94, 1.1);
-  }
-  /* Settle and hold so the land is not cut by session end. */
-  100% {
-    transform: translateY(0) scale(1, 1);
-  }
-}
-
-@keyframes mascot-pullups-chin {
-  /* Quiet while climbing. */
-  0%,
-  13% {
-    transform: translateY(0) scale(1, 1);
-  }
-  /* Rep 1 — chin to the rim. */
-  23% {
-    transform: translateY(calc(-1 * var(--pullup-chin-lift))) scale(1.08, 0.9);
-  }
-  31% {
-    transform: translateY(0) scale(0.96, 1.05);
-  }
-  /* Rep 2 */
+  /* Chin-up 2 */
   42% {
-    transform: translateY(calc(-1 * var(--pullup-chin-lift))) scale(1.08, 0.9);
+    transform: translateY(calc(-1 * var(--pullup-hang) - var(--pullup-chin))) scale(1.05, 0.94);
   }
   50% {
-    transform: translateY(0) scale(0.96, 1.05);
+    transform: translateY(calc(-1 * var(--pullup-hang))) scale(0.98, 1.04);
   }
-  /* Rep 3 — a little higher. */
-  61% {
-    transform: translateY(calc(-1 * var(--pullup-chin-lift) - 4px)) scale(1.1, 0.88);
+  /* Chin-up 3 — a little higher */
+  60% {
+    transform: translateY(calc(-1 * var(--pullup-hang) - var(--pullup-chin) - 4px)) scale(1.06, 0.92);
   }
-  71% {
-    transform: translateY(0) scale(0.96, 1.05);
+  68% {
+    transform: translateY(calc(-1 * var(--pullup-hang))) scale(0.98, 1.04);
   }
-  /* Quiet for the drop + landing — body rides the climb keyframes. */
-  76%,
+  /* Hold, then drop. */
+  74% {
+    transform: translateY(calc(-1 * var(--pullup-hang))) scale(1, 1);
+  }
+  /* Land squash + short bounce. */
+  86% {
+    transform: translateY(6px) scale(1.12, 0.84);
+  }
+  93% {
+    transform: translateY(-3px) scale(0.97, 1.05);
+  }
   100% {
     transform: translateY(0) scale(1, 1);
   }

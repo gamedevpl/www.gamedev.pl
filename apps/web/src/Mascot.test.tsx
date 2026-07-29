@@ -212,30 +212,19 @@ describe('Mascot', () => {
     });
   });
 
-  it('uses the baked silhouette when hanging — no redrawn limbs — and seals the mouth', async () => {
+  it('does not take a hanging pose prop — pull-ups are motion on InteractiveMascot', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
 
     await act(async () => {
-      root.render(createElement(Mascot, { emotion: 'wave', hanging: true, size: 48 }));
+      root.render(createElement(Mascot, { emotion: 'wave', size: 48 }));
     });
-    // No fake raised arms / covered stubs / merged feet — those looked wrong.
-    expect(container.querySelector('.mascot__hang-arms')).toBeNull();
-    expect(container.querySelector('.mascot__hang-arm-strokes')).toBeNull();
-    expect(container.querySelector('.mascot__hang-limb-covers')).toBeNull();
-    expect(container.querySelector('.mascot__feet-together')).toBeNull();
-    expect(container.querySelector('.mascot__mouth-seal')).not.toBeNull();
-    expect(container.querySelector('.mascot__mouth--hang-breath')).not.toBeNull();
-    expect(container.querySelector('.mascot__wave-arm')).toBeNull();
-    expect(container.querySelector('.mascot--hanging')).not.toBeNull();
-
-    await act(async () => {
-      root.render(createElement(Mascot, { emotion: 'wave', hanging: false, size: 48 }));
-    });
-    expect(container.querySelector('.mascot__mouth-seal')).toBeNull();
+    expect(container.querySelector('.mascot--wave')).not.toBeNull();
     expect(container.querySelector('.mascot__wave-arm')).not.toBeNull();
+    expect(container.querySelector('.mascot--hanging')).toBeNull();
+    expect(container.querySelector('.mascot__mouth-seal')).toBeNull();
 
     await act(async () => {
       root.unmount();
@@ -518,24 +507,20 @@ describe('InteractiveMascot', () => {
 
     const button = container.querySelector<HTMLButtonElement>('button.mascot-interactive')!;
     expect(button.classList.contains('mascot-interactive--pullups')).toBe(false);
-    expect(container.querySelector('.mascot__mouth-seal')).toBeNull();
 
     await act(async () => {
       vi.advanceTimersByTime(PULLUP_FIRST_DELAY_MS);
     });
     expect(button.classList.contains('mascot-interactive--pullups')).toBe(true);
-    expect(container.querySelector('.mascot__mouth-seal')).not.toBeNull();
-    expect(container.querySelector('.mascot--proud')).not.toBeNull();
-    expect(container.querySelector('.mascot--hanging')).not.toBeNull();
-    // No redrawn limbs — silhouette stays intact.
-    expect(container.querySelector('.mascot__hang-arms')).toBeNull();
-    expect(container.querySelector('.mascot__hang-arm-strokes')).toBeNull();
+    // Still the splash wave guy — identity stays, motion does the gag.
+    expect(container.querySelector('.mascot--wave')).not.toBeNull();
+    expect(container.querySelector('.mascot--hanging')).toBeNull();
+    expect(container.querySelector('.mascot__mouth-seal')).toBeNull();
 
     await act(async () => {
       button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(button.classList.contains('mascot-interactive--pullups')).toBe(false);
-    expect(container.querySelector('.mascot__mouth-seal')).toBeNull();
     expect(container.querySelector('.mascot--excited')).not.toBeNull();
 
     await act(async () => {
