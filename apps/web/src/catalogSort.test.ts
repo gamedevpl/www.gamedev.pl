@@ -5,7 +5,7 @@ import type { CatalogEntry } from './catalog.js';
 import {
   applyCatalogFilters,
   filterUnplayedEntries,
-  filterYourGamesEntries,
+  orderCatalogEntries,
   readCatalogFilters,
   readCatalogSortMode,
   sortCatalogEntries,
@@ -109,6 +109,36 @@ describe('sortCatalogEntries', () => {
   });
 });
 
+describe('orderCatalogEntries', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('pins the creator’s games first, then the rest in sort order', () => {
+    const signals: CatalogSortSignals = {
+      ...emptySignals,
+      recommended: ['zeta', 'mid', 'alpha'],
+    };
+    expect(orderCatalogEntries(catalog, 'recommended', signals, new Set(['mid'])).map((e) => e.slug)).toEqual([
+      'mid',
+      'zeta',
+      'alpha',
+    ]);
+  });
+
+  it('keeps normal sort when the visitor owns nothing in the catalog', () => {
+    const signals: CatalogSortSignals = {
+      ...emptySignals,
+      recommended: ['mid', 'alpha'],
+    };
+    expect(orderCatalogEntries(catalog, 'recommended', signals, new Set()).map((e) => e.slug)).toEqual([
+      'mid',
+      'alpha',
+      'zeta',
+    ]);
+  });
+});
+
 describe('catalog filters', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -120,18 +150,13 @@ describe('catalog filters', () => {
     expect(filterUnplayedEntries(catalog, affinity).map((e) => e.slug)).toEqual(['zeta']);
   });
 
-  it('keeps only the creator’s published slugs for your_games', () => {
-    expect(filterYourGamesEntries(catalog, new Set(['mid', 'missing'])).map((e) => e.slug)).toEqual(['mid']);
-  });
-
-  it('ANDs your_games with not_played', () => {
+  it('applies not_played without hiding the creator’s other games when off', () => {
     rememberRecentPlay('mid');
-    const affinity = new Map<string, string>();
-    expect(
-      applyCatalogFilters(catalog, new Set(['your_games', 'not_played']), affinity, new Set(['mid', 'zeta'])).map(
-        (e) => e.slug,
-      ),
-    ).toEqual(['zeta']);
+    expect(applyCatalogFilters(catalog, new Set(), new Map()).map((e) => e.slug)).toEqual([
+      'zeta',
+      'alpha',
+      'mid',
+    ]);
   });
 
   it('migrates the legacy not_played sort into filters', () => {
@@ -143,6 +168,11 @@ describe('catalog filters', () => {
 
   it('migrates the legacy not_played boolean into filters', () => {
     localStorage.setItem('gdpl.catalogNotPlayed', '1');
+    expect([...readCatalogFilters()]).toEqual(['not_played']);
+  });
+
+  it('drops obsolete your_games filter ids from storage', () => {
+    localStorage.setItem('gdpl.catalogFilters', JSON.stringify(['your_games', 'not_played']));
     expect([...readCatalogFilters()]).toEqual(['not_played']);
   });
 });

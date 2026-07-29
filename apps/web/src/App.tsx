@@ -716,15 +716,17 @@ export function App() {
 
             {partyError && <p className="error party-error">{partyError}</p>}
 
-            <ArcadeCatalog
-              catalogStatus={catalogStatus}
-              catalogError={catalogError}
-              catalogEntries={catalogEntries}
-              onPlayGame={handlePlayGame}
-              onPlayTogether={(game) => void handlePlayTogether(game)}
-              onRetryCatalog={handleRetryCatalog}
-              recommendationsRefreshKey={recommendationsRefreshKey}
-            />
+            {route.view !== 'play' && (
+              <ArcadeCatalog
+                catalogStatus={catalogStatus}
+                catalogError={catalogError}
+                catalogEntries={catalogEntries}
+                onPlayGame={handlePlayGame}
+                onPlayTogether={(game) => void handlePlayTogether(game)}
+                onRetryCatalog={handleRetryCatalog}
+                recommendationsRefreshKey={recommendationsRefreshKey}
+              />
+            )}
           </>
         )}
       </main>
