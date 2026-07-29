@@ -182,6 +182,12 @@ export async function buildWorldApp(options: WorldAppOptions): Promise<WorldApp>
               : error instanceof InvalidZoneTicketError
                 ? 'bad_ticket'
                 : 'zone_unavailable';
+          // The wire reason is deliberately uninformative, which leaves the operator with
+          // nothing when it is the platform at fault rather than the caller: a host that
+          // cannot start any zone at all answers `zone_unavailable` to every join and logs
+          // nothing, and reads from the outside exactly like a host with no traffic. The
+          // cause goes to the log, where the person who can fix it is the only one reading.
+          if (reason === 'zone_unavailable') app.log.error({ err: error }, 'zone admission failed');
           connection.close(reason);
         } finally {
           admitting = false;
