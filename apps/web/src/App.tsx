@@ -431,6 +431,13 @@ export function App() {
       const category = err instanceof Error ? (err as SubmissionApiError).category : undefined;
       if (message === 'content_rejected') {
         setSubmissionError(t(`errors.contentRejected.${category ?? 'other'}`));
+      } else if (message === 'creation_paused') {
+        setSubmissionError(t('errors.creationPaused'));
+        // Site-wide limits, not this creator's — checked before the quota branch below
+        // because saying "you've used your allowance" here would be untrue, and the
+        // creator can see their remaining count on the hero to check it.
+      } else if (message === 'creation_over_capacity') {
+        setSubmissionError(t('errors.creationOverCapacity'));
       } else if (message.includes('quota')) {
         setSubmissionError(t('auth.quotaExceeded'));
       } else if (message.includes('blocked')) {

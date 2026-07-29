@@ -191,6 +191,33 @@ export interface BuildPreview {
 /** A preview without its bytes — what a listing needs. */
 export type BuildPreviewSummary = Omit<BuildPreview, 'data'>;
 
+/**
+ * The creation circuit-breaker, stored rather than deployed.
+ *
+ * Per-user quotas bound what one creator costs; nothing bounded what *everyone*
+ * costs, so total spend was bounded only by the invite count. These two fields are
+ * the ceiling and the off switch.
+ *
+ * They live in Firestore instead of in the environment because an env change means a
+ * new Cloud Run revision, and a redeploy mid-incident drops every party room in
+ * flight — a breaker you cannot pull without breaking something else is not a
+ * breaker. Readers cache with a short TTL, so a flip takes effect within about a
+ * minute on every instance and costs a document read a minute in between.
+ */
+export interface CreationLimits {
+  /** Refuse new game creation entirely, with a message that says so honestly. */
+  paused: boolean;
+  /**
+   * Ceiling on submissions accepted per UTC day across every account. `null` means
+   * no stored ceiling, in which case the reader's own default applies — "unset"
+   * must never read as "unlimited".
+   */
+  globalDailySubmissionCap: number | null;
+  /** Who last changed this and when, so a leftover pause is legible as a leftover. */
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
 export interface UsageCounters {
   submissions: number;
   previews: number;
@@ -776,6 +803,18 @@ export interface Store {
     limit: number,
     action: keyof UsageCounters,
   ): Promise<{ allowed: boolean; current: number; tier: User['tier'] }>;
+  /** The stored circuit-breaker, or null when nobody has ever set one. */
+  getCreationLimits(): Promise<CreationLimits | null>;
+  /** Merges a change into the stored breaker and returns the result. */
+  setCreationLimits(patch: Partial<Omit<CreationLimits, 'updatedAt'>>, updatedBy: string): Promise<CreationLimits>;
+  /** How many submissions everyone together has made on `dateStr`. */
+  getGlobalSubmissionCount(dateStr: string): Promise<number>;
+  /**
+   * The global counterpart of checkAndIncrementQuota: takes one slot out of the day's
+   * shared allowance, or refuses. Transactional for the same reason the per-user
+   * version is — a cap that a burst can walk past is not a cap.
+   */
+  checkAndIncrementGlobalSubmissions(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }>;
   upsertWaitlistEntry(entry: { uid: string; email?: string; name?: string; locale?: string }): Promise<WaitlistEntry>;
   getWaitlistEntry(uid: string): Promise<WaitlistEntry | null>;
   isWaitlistApproved(uid: string, email?: string): Promise<boolean>;
@@ -1002,6 +1041,9 @@ export class InMemoryStore implements Store {
   private buildPreviews = new Map<number, BuildPreview[]>();
   private creatorMessages = new Map<number, CreatorMessage[]>();
   private usage = new Map<string, UsageCounters>();
+  // yyyy-mm-dd -> submissions accepted that day across every account
+  private globalSubmissions = new Map<string, number>();
+  private creationLimits: CreationLimits | null = null;
   private waitlist = new Map<string, WaitlistEntry>();
   // yyyymmdd -> events recorded that day
   private telemetry = new Map<string, TelemetryEvent[]>();
@@ -1351,6 +1393,43 @@ export class InMemoryStore implements Store {
     this.usage.set(key, newCounters);
 
     return { allowed: true, current: newCounters[action], tier };
+  }
+
+  async getCreationLimits(): Promise<CreationLimits | null> {
+    return this.creationLimits ? { ...this.creationLimits } : null;
+  }
+
+  async setCreationLimits(
+    patch: Partial<Omit<CreationLimits, 'updatedAt'>>,
+    updatedBy: string,
+  ): Promise<CreationLimits> {
+    const merged: CreationLimits = {
+      paused: patch.paused ?? this.creationLimits?.paused ?? false,
+      globalDailySubmissionCap:
+        patch.globalDailySubmissionCap !== undefined
+          ? patch.globalDailySubmissionCap
+          : (this.creationLimits?.globalDailySubmissionCap ?? null),
+      updatedAt: new Date().toISOString(),
+      updatedBy,
+    };
+    this.creationLimits = merged;
+    return { ...merged };
+  }
+
+  async getGlobalSubmissionCount(dateStr: string): Promise<number> {
+    return this.globalSubmissions.get(dateStr) ?? 0;
+  }
+
+  async checkAndIncrementGlobalSubmissions(
+    dateStr: string,
+    limit: number,
+  ): Promise<{ allowed: boolean; current: number }> {
+    const current = this.globalSubmissions.get(dateStr) ?? 0;
+    if (current >= limit) {
+      return { allowed: false, current };
+    }
+    this.globalSubmissions.set(dateStr, current + 1);
+    return { allowed: true, current: current + 1 };
   }
 
   async upsertWaitlistEntry(entry: {
@@ -2170,6 +2249,81 @@ export class FirestoreStore implements Store {
       transaction.set(counterRef, { [action]: nextVal }, { merge: true });
 
       return { allowed: true, current: nextVal, tier };
+    });
+  }
+
+  /**
+   * One document, read on a short TTL by every instance and written only by an
+   * operator. Deliberately a *document* rather than an environment variable: see
+   * CreationLimits. Nothing here is per-user, so there is no query and no index.
+   */
+  private creationLimitsRef() {
+    return this.db.collection('opsConfig').doc('creationLimits');
+  }
+
+  /** The day's shared allowance. One document per UTC day, so history is free. */
+  private globalUsageRef(dateStr: string) {
+    return this.db.collection('globalUsage').doc(dateStr);
+  }
+
+  async getCreationLimits(): Promise<CreationLimits | null> {
+    const snap = await this.creationLimitsRef().get();
+    if (!snap.exists) return null;
+    const data = snap.data() as Partial<CreationLimits> | undefined;
+    return {
+      paused: data?.paused === true,
+      globalDailySubmissionCap:
+        typeof data?.globalDailySubmissionCap === 'number' ? data.globalDailySubmissionCap : null,
+      ...(data?.updatedAt ? { updatedAt: data.updatedAt } : {}),
+      ...(data?.updatedBy ? { updatedBy: data.updatedBy } : {}),
+    };
+  }
+
+  async setCreationLimits(
+    patch: Partial<Omit<CreationLimits, 'updatedAt'>>,
+    updatedBy: string,
+  ): Promise<CreationLimits> {
+    const ref = this.creationLimitsRef();
+    return await this.db.runTransaction(async (transaction) => {
+      const snap = await transaction.get(ref);
+      const existing = snap.exists ? (snap.data() as Partial<CreationLimits>) : {};
+      const merged: CreationLimits = {
+        paused: patch.paused ?? existing.paused ?? false,
+        globalDailySubmissionCap:
+          patch.globalDailySubmissionCap !== undefined
+            ? patch.globalDailySubmissionCap
+            : (existing.globalDailySubmissionCap ?? null),
+        updatedAt: new Date().toISOString(),
+        updatedBy,
+      };
+      transaction.set(ref, merged);
+      return merged;
+    });
+  }
+
+  async getGlobalSubmissionCount(dateStr: string): Promise<number> {
+    const snap = await this.globalUsageRef(dateStr).get();
+    const value = snap.data()?.submissions;
+    return typeof value === 'number' ? value : 0;
+  }
+
+  async checkAndIncrementGlobalSubmissions(
+    dateStr: string,
+    limit: number,
+  ): Promise<{ allowed: boolean; current: number }> {
+    const ref = this.globalUsageRef(dateStr);
+    return await this.db.runTransaction(async (transaction) => {
+      const snap = await transaction.get(ref);
+      const value = snap.data()?.submissions;
+      const current = typeof value === 'number' ? value : 0;
+
+      if (current >= limit) {
+        return { allowed: false, current };
+      }
+
+      const nextVal = current + 1;
+      transaction.set(ref, { submissions: nextVal }, { merge: true });
+      return { allowed: true, current: nextVal };
     });
   }
 
