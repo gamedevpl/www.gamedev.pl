@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseGameBridgeMessage, parseServerFrame, PROTOCOL_VERSION } from './protocol.js';
+import { parseGameBridgeMessage, parseServerFrame, socketUrlFrom, PROTOCOL_VERSION } from './protocol.js';
 import { parsePathRoute } from '../router.js';
 
 describe('parseServerFrame', () => {
@@ -83,5 +83,33 @@ describe('join route', () => {
   it('still parses the existing routes', () => {
     expect(parsePathRoute('/')).toEqual({ view: 'home' });
     expect(parsePathRoute('/status/abc')).toEqual({ view: 'studio', token: 'abc' });
+  });
+});
+
+describe('socketUrlFrom', () => {
+  it('falls back to the page origin when nothing is configured', () => {
+    expect(socketUrlFrom(undefined, undefined, 'https://www.gamedev.pl')).toBe('wss://www.gamedev.pl/api/mp/ws');
+  });
+
+  it('uses the dev API base when there is no relay', () => {
+    expect(socketUrlFrom(undefined, 'http://localhost:8787', 'http://localhost:5173')).toBe(
+      'ws://localhost:8787/api/mp/ws',
+    );
+  });
+
+  it('prefers the relay over the API base', () => {
+    // Once the relay is split out the app origin stops serving /api/mp/ws entirely, so a
+    // configured relay must win — otherwise party mode dials a route that is not there.
+    expect(socketUrlFrom('https://mp.gamedev.pl', 'http://localhost:8787', 'http://localhost:5173')).toBe(
+      'wss://mp.gamedev.pl/api/mp/ws',
+    );
+  });
+
+  it('ignores empty strings, which is what an unset Vite var inlines to', () => {
+    expect(socketUrlFrom('', '', 'https://www.gamedev.pl')).toBe('wss://www.gamedev.pl/api/mp/ws');
+  });
+
+  it('tolerates a trailing slash', () => {
+    expect(socketUrlFrom('https://mp.gamedev.pl/', undefined, 'x')).toBe('wss://mp.gamedev.pl/api/mp/ws');
   });
 });

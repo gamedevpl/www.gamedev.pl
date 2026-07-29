@@ -114,11 +114,40 @@ export function parseGameBridgeMessage(raw: unknown): GameBridgeMessage | null {
 }
 
 /**
- * The websocket URL for the relay. In production the API is same-origin; in dev
- * VITE_API_BASE_URL points at the separate Fastify port.
+ * The websocket URL for the relay.
+ *
+ * Three cases, in priority order:
+ *
+ * 1. `VITE_MP_RELAY_URL` — the relay runs as its own Cloud Run service
+ *    (docs/store-launch-plan.md T0). It is pinned to one instance because rooms are
+ *    per-instance memory; the app service is not, which is the whole point of the split.
+ *    Once set, the app origin does not serve `/api/mp/ws` at all, so this must win.
+ * 2. `VITE_API_BASE_URL` — dev, where the API is a separate Fastify port.
+ * 3. Same origin — the single-process default.
+ *
+ * Only the *socket* moves. Room creation still goes to the app origin, which holds the
+ * session cookie and forwards to the relay server-side; a browser never talks to the
+ * relay's create route.
  */
 export function roomSocketUrl(): string {
-  const base = import.meta.env.VITE_API_BASE_URL;
-  const origin = base && base.length > 0 ? base : window.location.origin;
-  return `${origin.replace(/^http/, 'ws')}/api/mp/ws`;
+  return socketUrlFrom(
+    import.meta.env.VITE_MP_RELAY_URL,
+    import.meta.env.VITE_API_BASE_URL,
+    typeof window === 'undefined' ? '' : window.location.origin,
+  );
+}
+
+/**
+ * The choice above, as a pure function, because the env half cannot be tested: Vite
+ * statically inlines `import.meta.env.VITE_*` at transform time, so a test that assigns to
+ * it asserts nothing. The precedence rule is the part worth pinning anyway.
+ */
+export function socketUrlFrom(
+  relayUrl: string | undefined,
+  apiBaseUrl: string | undefined,
+  pageOrigin: string,
+): string {
+  const chosen =
+    relayUrl && relayUrl.length > 0 ? relayUrl : apiBaseUrl && apiBaseUrl.length > 0 ? apiBaseUrl : pageOrigin;
+  return `${chosen.replace(/\/+$/, '').replace(/^http/, 'ws')}/api/mp/ws`;
 }
