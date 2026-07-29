@@ -17,12 +17,17 @@ describe('the splash mascot does idle pull-ups', () => {
     expect(mascot![0]).toMatch(/doesPullUps/);
   });
 
-  it('animates a climb-and-chin-up session on the card rim', () => {
+  it('animates a climb then chin-ups against the card rim', () => {
     const css = read('styles.css');
     expect(css).toMatch(/\.mascot-interactive--pullups/);
-    expect(css).toMatch(/@keyframes mascot-pullups-session/);
+    expect(css).toMatch(/@keyframes mascot-pullups-climb/);
+    expect(css).toMatch(/@keyframes mascot-pullups-chin/);
     expect(css).toMatch(/--pullup-hang/);
-    expect(css).toMatch(/--pullup-chin/);
+    expect(css).toMatch(/--pullup-chin-lift/);
+    // Body-only chin-ups — if hang-arms lived inside body-group this would float.
+    expect(css).toMatch(
+      /\.mascot-interactive--pullups \.mascot__body-group \{[\s\S]*?animation: mascot-pullups-chin/,
+    );
   });
 
   it('lets the card rim show his hands', () => {

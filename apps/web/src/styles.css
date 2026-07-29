@@ -5191,22 +5191,24 @@ body.player-open {
 }
 
 /*
- * Idle pull-ups on the splash card rim. He climbs to the top border, does a few
- * chin-ups (hands stay put via transform-origin at the top), then drops back.
- * Distances are CSS variables so the compact splash (less padding) can shorten
- * the climb without a second keyframes block.
+ * Idle pull-ups on the splash card rim. The card border IS the bar — nothing is
+ * drawn for it. Climb moves the whole sprite so his hands meet that border; then
+ * only `.mascot__body-group` chin-ups toward the fixed hands. Animate the whole
+ * sprite for the reps and it reads as floating, not as a pull-up.
  */
 .mascot-interactive--pullups {
-  --pullup-hang: 40px;
-  --pullup-chin: 56px;
+  /* ~card padding-top so hands land on the 1px border, not short of it. */
+  --pullup-hang: 44px;
+  /* Body travel toward the hands — large enough to read at splash size. */
+  --pullup-chin-lift: 24px;
   transform-origin: 50% 0%;
-  animation: mascot-pullups-session 3.4s ease-in-out;
+  animation: mascot-pullups-climb 3.6s ease-in-out;
 }
 
 @media (max-height: 720px) {
   .mascot-interactive--pullups {
-    --pullup-hang: 22px;
-    --pullup-chin: 34px;
+    --pullup-hang: 20px;
+    --pullup-chin-lift: 14px;
   }
 }
 
@@ -5215,47 +5217,61 @@ body.player-open {
   transform: none;
 }
 
-/* Park emotion body motion — the session keyframes own his travel. */
+/* Chin-ups: body only. Hands stay on the rim (they live outside this group). */
 .mascot-interactive--pullups .mascot__body-group {
-  animation: none !important;
+  transform-origin: 35px 4px;
+  animation: mascot-pullups-chin 3.6s ease-in-out !important;
 }
 
-@keyframes mascot-pullups-session {
+@keyframes mascot-pullups-climb {
   0% {
     transform: translateY(0) scale(1, 1);
   }
-  /* Climb and grab the rim. */
-  10% {
+  /* Climb and plant hands on the card border. */
+  14% {
     transform: translateY(calc(-1 * var(--pullup-hang))) scale(1, 1);
   }
-  /* Rep 1 */
-  22% {
-    transform: translateY(calc(-1 * var(--pullup-chin))) scale(1.04, 0.94);
+  /* Hold through the chin-up reps. */
+  82% {
+    transform: translateY(calc(-1 * var(--pullup-hang))) scale(1, 1);
   }
-  30% {
-    transform: translateY(calc(-1 * var(--pullup-hang))) scale(0.98, 1.03);
+  /* Drop with a land squash. */
+  93% {
+    transform: translateY(4px) scale(1.06, 0.9);
+  }
+  100% {
+    transform: translateY(0) scale(1, 1);
+  }
+}
+
+@keyframes mascot-pullups-chin {
+  /* Quiet while climbing. */
+  0%,
+  14% {
+    transform: translateY(0) scale(1, 1);
+  }
+  /* Rep 1 — chin to the rim. */
+  24% {
+    transform: translateY(calc(-1 * var(--pullup-chin-lift))) scale(1.08, 0.9);
+  }
+  32% {
+    transform: translateY(0) scale(0.96, 1.05);
   }
   /* Rep 2 */
-  42% {
-    transform: translateY(calc(-1 * var(--pullup-chin))) scale(1.04, 0.94);
+  44% {
+    transform: translateY(calc(-1 * var(--pullup-chin-lift))) scale(1.08, 0.9);
   }
-  50% {
-    transform: translateY(calc(-1 * var(--pullup-hang))) scale(0.98, 1.03);
+  52% {
+    transform: translateY(0) scale(0.96, 1.05);
   }
-  /* Rep 3 — a little higher, showing off. */
-  62% {
-    transform: translateY(calc(-1 * var(--pullup-chin) - 3px)) scale(1.05, 0.93);
+  /* Rep 3 — a little higher. */
+  64% {
+    transform: translateY(calc(-1 * var(--pullup-chin-lift) - 4px)) scale(1.1, 0.88);
   }
-  72% {
-    transform: translateY(calc(-1 * var(--pullup-hang))) scale(0.98, 1.03);
+  74% {
+    transform: translateY(0) scale(0.96, 1.05);
   }
-  /* Hang a beat, then drop with a land squash. */
-  80% {
-    transform: translateY(calc(-1 * var(--pullup-hang))) scale(1, 1);
-  }
-  92% {
-    transform: translateY(3px) scale(1.06, 0.92);
-  }
+  82%,
   100% {
     transform: translateY(0) scale(1, 1);
   }

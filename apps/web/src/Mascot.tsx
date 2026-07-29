@@ -60,9 +60,9 @@ type MascotProps = {
    */
   scrolling?: boolean;
   /**
-   * Reach both arms up to grip a bar — used while the splash mascot does pull-ups
-   * on the card rim. Arms paint above the viewBox; `.mascot { overflow: visible }`
-   * is what lets them show.
+   * Reach both arms up to grip the splash card's top border. Arms paint above the
+   * viewBox; `.mascot { overflow: visible }` is what lets them show. Rendered
+   * outside `.mascot__body-group` so chin-ups can bob the body while hands stay put.
    */
   hanging?: boolean;
 };
@@ -301,16 +301,22 @@ function BlinkLids() {
   );
 }
 
-/** Both arms up, gripping an implied bar above his head — the pull-up pose. */
+/**
+ * Both arms up, gripping the splash card's top border.
+ *
+ * Hands sit at the top of the viewBox (not above it): the climb parks that edge
+ * on the card's 1px border, so the rim is the real border — we never draw a bar.
+ * Kept outside `.mascot__body-group` so chin-ups bob only the body.
+ */
 function HangArms() {
   return (
     <g className="mascot__hang-arms" aria-hidden="true">
-      <g fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round">
-        <path className="mascot__hang-arm mascot__hang-arm--left" d="M20 10 Q12 2 10 -6" />
-        <path className="mascot__hang-arm mascot__hang-arm--right" d="M50 10 Q58 2 60 -6" />
+      <g fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+        <path className="mascot__hang-arm mascot__hang-arm--left" d="M22 16 Q15 8 13 2" />
+        <path className="mascot__hang-arm mascot__hang-arm--right" d="M48 16 Q55 8 57 2" />
       </g>
-      <circle className="mascot__hang-hand mascot__hang-hand--left" cx="10" cy="-6" r="2.4" fill="currentColor" />
-      <circle className="mascot__hang-hand mascot__hang-hand--right" cx="60" cy="-6" r="2.4" fill="currentColor" />
+      <circle className="mascot__hang-hand mascot__hang-hand--left" cx="13" cy="2" r="2.6" fill="currentColor" />
+      <circle className="mascot__hang-hand mascot__hang-hand--right" cx="57" cy="2" r="2.6" fill="currentColor" />
     </g>
   );
 }
@@ -465,10 +471,15 @@ export function Mascot({
           </g>
         ) : null}
 
-        {hanging ? <HangArms /> : null}
-
         {showPhone ? <ScrollPhone clipId={phoneClipId} /> : null}
       </g>
+
+      {/*
+        Hands sit outside the body group on purpose: the chin-up bobs only the body
+        toward the card rim while the grip stays planted on the border. Put them
+        inside and the whole sprite floats, which does not read as a pull-up.
+      */}
+      {hanging ? <HangArms /> : null}
     </svg>
   );
 }
@@ -480,8 +491,8 @@ const POKE_HOLD_MS = 1400;
 
 /** First quiet stretch before he notices the card rim and climbs it. */
 export const PULLUP_FIRST_DELAY_MS = 9_000;
-/** One climb + a few reps + drop — matches `mascot-pullups-session` in CSS. */
-export const PULLUP_SESSION_MS = 3_400;
+/** One climb + a few reps + drop — matches `mascot-pullups-climb` / `-chin` in CSS. */
+export const PULLUP_SESSION_MS = 3_600;
 /** Quiet time between pull-up sessions once he has done the first. */
 export const PULLUP_GAP_MIN_MS = 12_000;
 export const PULLUP_GAP_MAX_MS = 20_000;
@@ -653,7 +664,8 @@ export function InteractiveMascot({
       }
       pullupsRef.current = true;
       setPullups(true);
-      setEmotion('busy');
+      // Proud crescents — strained / pleased with himself — not the idle wave.
+      setEmotion('proud');
       if (pullupEndTimer.current) clearTimeout(pullupEndTimer.current);
       pullupEndTimer.current = setTimeout(() => {
         pullupEndTimer.current = null;
@@ -803,7 +815,13 @@ export function InteractiveMascot({
         <Mascot
           emotion={emotion}
           size={size}
-          look={reduceMotion || pullups ? undefined : effectiveLook}
+          look={
+            reduceMotion
+              ? undefined
+              : pullups
+                ? { x: 0, y: -0.85 }
+                : effectiveLook
+          }
           hanging={pullups}
         />
       </span>

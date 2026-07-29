@@ -520,7 +520,9 @@ describe('InteractiveMascot', () => {
     });
     expect(button.classList.contains('mascot-interactive--pullups')).toBe(true);
     expect(container.querySelector('.mascot__hang-arms')).not.toBeNull();
-    expect(container.querySelector('.mascot--busy')).not.toBeNull();
+    expect(container.querySelector('.mascot--proud')).not.toBeNull();
+    // Hands are outside the body group so chin-ups can bob the body alone.
+    expect(container.querySelector('.mascot__body-group .mascot__hang-arms')).toBeNull();
 
     await act(async () => {
       button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
