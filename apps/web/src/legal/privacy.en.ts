@@ -83,7 +83,7 @@ export const privacyEn: LegalDocument = {
               'Which published games you open while signed in (a count and the last time you opened each) — stored ' +
                 'with your account so the home page can suggest games for you. This is separate from anonymous ' +
                 'gameplay statistics, which are never linked to your account',
-              'Personalising the “For you” recommendations on the home page',
+              'Personalising the order of games on the home page',
               'Art. 6(1)(f) — our legitimate interest in helping you find games you are likely to enjoy',
               'Until you delete your account',
             ],

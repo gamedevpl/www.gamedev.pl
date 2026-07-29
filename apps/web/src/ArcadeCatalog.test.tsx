@@ -122,6 +122,7 @@ describe('ArcadeCatalog lazy media', () => {
 
   it('does not attach image or video sources until a card enters the viewport', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ items: [] })));
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -186,6 +187,7 @@ describe('ArcadeCatalog shared-world badge', () => {
     // than the rest of the card makes — worth pinning that it appears on exactly the
     // entries that earned it and on no others.
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ items: [] })));
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);

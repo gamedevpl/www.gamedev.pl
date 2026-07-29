@@ -150,8 +150,7 @@
     "savesBadge": "Zapisuje postępy"
   },
   "recommendations": {
-    "title": "Dla Ciebie",
-    "subtitle": "Na podstawie tego, w co grasz, i tego, przy czym inni zostają.",
+    "sortedSubtitle": "Ułożone według tego, w co grasz, i tego, przy czym inni zostają.",
     "reasonContinue": "Kontynuuj grę",
     "reasonForYou": "Pasuje do Twoich gier",
     "reasonBecauseYouPlayed": "Bo grałeś w podobne",

@@ -150,8 +150,7 @@
     "savesBadge": "Saves progress"
   },
   "recommendations": {
-    "title": "For you",
-    "subtitle": "Picked from what you play and what others stick with.",
+    "sortedSubtitle": "Sorted from what you play and what others stick with.",
     "reasonContinue": "Continue playing",
     "reasonForYou": "Matches what you play",
     "reasonBecauseYouPlayed": "Because you played similar games",

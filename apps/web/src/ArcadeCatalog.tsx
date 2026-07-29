@@ -1,8 +1,10 @@
-import { useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { catalogMediaUrl, isPlatformAuthor, type CatalogEntry } from './catalog.js';
 import { MascotMoment } from './Mascot.js';
 import { PixelIcon } from './PixelIcon.js';
+import { getRecentPlays } from './recentPlays.js';
+import { fetchRecommendations, orderCatalogByRecommendations } from './recommendationsApi.js';
 import { useInView } from './useInView.js';
 
 type ArcadeCatalogProps = {
@@ -12,6 +14,8 @@ type ArcadeCatalogProps = {
   onPlayGame: (game: CatalogEntry) => void;
   onPlayTogether: (game: CatalogEntry) => void;
   onRetryCatalog: () => void;
+  /** Bump after a play so the grid can re-sort from fresh affinity. */
+  recommendationsRefreshKey?: number;
 };
 
 function humanizeMoment(name: string): string {
@@ -21,17 +25,14 @@ function humanizeMoment(name: string): string {
     .join(' ');
 }
 
-export function CatalogCard({
+function CatalogCard({
   entry,
   onPlayGame,
   onPlayTogether,
-  reasonLabel,
 }: {
   entry: CatalogEntry;
   onPlayGame: (game: CatalogEntry) => void;
   onPlayTogether: (game: CatalogEntry) => void;
-  /** Quiet reason line for the recommendations rail; omitted on the main arcade. */
-  reasonLabel?: string;
 }) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -251,7 +252,6 @@ export function CatalogCard({
               author: isPlatformAuthor(entry.submittedBy) ? t('catalog.platformAuthor') : entry.submittedBy,
             })}
           </p>
-          {reasonLabel ? <p className="card-reason">{reasonLabel}</p> : null}
           <div className="card-actions">
             <button className="primary-btn" onClick={() => onPlayGame(entry)}>
               <PixelIcon name="play" size={13} /> {t('catalog.play')}
@@ -275,13 +275,36 @@ export function ArcadeCatalog({
   onPlayGame,
   onPlayTogether,
   onRetryCatalog,
+  recommendationsRefreshKey = 0,
 }: ArcadeCatalogProps) {
   const { t } = useTranslation();
+  const [rankedSlugs, setRankedSlugs] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    if (catalogStatus !== 'ready' || catalogEntries.length === 0) {
+      setRankedSlugs(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchRecommendations(getRecentPlays()).then((items) => {
+      if (!cancelled) setRankedSlugs(items.length > 0 ? items.map((item) => item.slug) : null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [catalogStatus, catalogEntries, recommendationsRefreshKey]);
+
+  const orderedEntries = useMemo(
+    () => orderCatalogByRecommendations(catalogEntries, rankedSlugs),
+    [catalogEntries, rankedSlugs],
+  );
+  const sortedForYou = rankedSlugs !== null && rankedSlugs.length > 0;
 
   return (
     <section id="arcade" className="arcade-section">
       <div className="arcade-header">
         <h2 className="arcade-title">{t('catalog.title')}</h2>
+        {sortedForYou ? <p className="arcade-subtitle">{t('recommendations.sortedSubtitle')}</p> : null}
       </div>
 
       {catalogStatus === 'loading' ? (
@@ -297,13 +320,13 @@ export function ArcadeCatalog({
             <PixelIcon name="undo" size={13} /> {t('catalog.retry')}
           </button>
         </MascotMoment>
-      ) : catalogEntries.length === 0 ? (
+      ) : orderedEntries.length === 0 ? (
         <MascotMoment className="catalog-state" emotion="curious" size={64} title={t('mascot.curiousAlt')}>
           <p>{t('catalog.empty')}</p>
         </MascotMoment>
       ) : (
         <div className="catalog-grid">
-          {catalogEntries.map((entry) => (
+          {orderedEntries.map((entry) => (
             <CatalogCard key={entry.slug} entry={entry} onPlayGame={onPlayGame} onPlayTogether={onPlayTogether} />
           ))}
         </div>

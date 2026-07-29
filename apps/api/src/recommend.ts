@@ -1,5 +1,5 @@
 /**
- * Rank catalog games for the home-page recommendations rail.
+ * Rank catalog games for home-page ordering.
  *
  * Two signal sources, deliberately kept apart from anonymous play telemetry:
  *
@@ -11,8 +11,8 @@
  *    account feature like votes and saves; it is *not* play telemetry and must never
  *    be joined to the anonymous streams.
  *
- * The main arcade catalog stays in repo order (docs/improvement-loop-plan.md: measured
- * outcomes do not reorder the catalog in v1). This module only feeds a separate rail.
+ * The arcade grid is sorted by this ranking (not duplicated in a second section).
+ * When there is no signal at all, the caller keeps games-repo order.
  */
 
 export type RecommendReason = 'popular' | 'for_you' | 'because_you_played' | 'continue';
@@ -43,7 +43,11 @@ export interface RankRecommendationsInput {
   affinity: RecommendAffinity[];
   /** Client-declared recent slugs (anonymous cold start). Already capped by the route. */
   recentHints: string[];
-  limit: number;
+  /**
+   * Cap on returned rows. Omit or pass the catalog length to rank the whole list.
+   * Soft ceiling of 500 guards a pathological catalog.
+   */
+  limit?: number;
   /** Wall clock for "continue" recency; injectable for tests. */
   nowMs?: number;
 }
@@ -57,7 +61,7 @@ export interface RankedRecommendation {
 /** How far back a play still counts as "continue playing". */
 export const CONTINUE_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 
-const DEFAULT_LIMIT = 8;
+const MAX_LIMIT = 500;
 const MAX_CONTINUE = 2;
 
 export function normalizeGenre(genre: string): string {
@@ -103,12 +107,15 @@ function genreWeights(
 }
 
 /**
- * Rank games for the rail. Continues (recent personal plays) lead; the rest mix
- * community popularity with genre affinity so a puzzle fan sees more puzzles without
- * hiding what everyone else is playing.
+ * Rank every published game for catalog sort order. Continues (recent personal plays)
+ * lead; the rest mix community popularity with genre affinity. Games with no signal
+ * keep a stable zero score and trail the rest in their input order.
+ *
+ * Returns `[]` when nothing has a community or personal signal — the client then
+ * leaves games-repo order alone rather than inventing a shuffle.
  */
 export function rankRecommendations(input: RankRecommendationsInput): RankedRecommendation[] {
-  const limit = Math.max(1, Math.min(input.limit || DEFAULT_LIMIT, 24));
+  const limit = Math.max(1, Math.min(input.limit ?? (input.games.length || 1), MAX_LIMIT));
   const nowMs = input.nowMs ?? Date.now();
   const gamesBySlug = new Map(input.games.map((game) => [game.slug, game]));
   const published = new Set(gamesBySlug.keys());
@@ -139,8 +146,8 @@ export function rankRecommendations(input: RankRecommendationsInput): RankedReco
     const base = communityScore(input.scorecards.get(game.slug));
     const genreKey = normalizeGenre(game.genre);
     const genreBoost = genreKey ? (weights.get(genreKey) ?? 0) * 2 : 0;
-    // Already-played games stay eligible but sit lower so the rail discovers new ones.
-    const replayPenalty = playedSet.has(game.slug) ? 4 : 0;
+    // Lightly demote already-played games so the grid surfaces new ones after continues.
+    const replayPenalty = playedSet.has(game.slug) && !continueSet.has(game.slug) ? 4 : 0;
     const score = base + genreBoost - replayPenalty;
 
     let reason: RecommendReason = 'popular';
@@ -151,7 +158,12 @@ export function rankRecommendations(input: RankRecommendationsInput): RankedReco
     discovery.push({ slug: game.slug, reason, score });
   }
 
-  discovery.sort((a, b) => b.score - a.score || a.slug.localeCompare(b.slug));
+  // Stable among ties: higher score first, then original catalog index.
+  const catalogIndex = new Map(input.games.map((game, index) => [game.slug, index]));
+  discovery.sort(
+    (a, b) =>
+      b.score - a.score || (catalogIndex.get(a.slug) ?? 0) - (catalogIndex.get(b.slug) ?? 0),
+  );
 
   const ranked: RankedRecommendation[] = [
     ...continueSlugs.map((slug) => ({
@@ -162,9 +174,8 @@ export function rankRecommendations(input: RankRecommendationsInput): RankedReco
     ...discovery,
   ];
 
-  // Drop zero-evidence cold catalog padding when nothing has a signal at all.
-  const meaningful = ranked.filter((item) => item.score > 0 || item.reason === 'continue');
-  if (meaningful.length === 0) return [];
+  const hasSignal = ranked.some((item) => item.score > 0 || item.reason === 'continue');
+  if (!hasSignal) return [];
 
-  return meaningful.slice(0, limit);
+  return ranked.slice(0, limit);
 }
