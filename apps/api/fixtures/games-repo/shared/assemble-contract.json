@@ -36,9 +36,10 @@
     "headroom": 75237,
     "gfx3d": 96000,
     "lookControls": 4683,
-    "spatialAudio": 2977
+    "spatialAudio": 2977,
+    "zone": 12000
   },
-  "maxProjectBytes": 429687,
+  "maxProjectBytes": 441687,
   "audio": {
     "musicField": "string",
     "musicCatalogRequiredKeys": ["version", "tracks"],
