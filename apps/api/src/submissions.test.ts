@@ -92,6 +92,7 @@ async function createApp(params: {
   dailyFeedbackQuota?: number;
   translator?: Translator;
   contentChecker?: ContentChecker;
+  maxCachedDraftPreviews?: number;
 }): Promise<{ app: FastifyInstance; store: Store; authHeaders: Record<string, string> }> {
   const store = params.store ?? new InMemoryStore();
   await store.upsertUser({ uid: 'g:test-user' });
@@ -108,6 +109,7 @@ async function createApp(params: {
       dailySubmissionQuota: params.dailySubmissionQuota,
       dailyFeedbackQuota: params.dailyFeedbackQuota,
       translator: params.translator ?? new NoopTranslator(),
+      maxCachedDraftPreviews: params.maxCachedDraftPreviews,
     },
   });
   return { app, store, authHeaders: getAuthHeaders('g:test-user') };
@@ -931,6 +933,49 @@ describe('submission preview route', () => {
     const fourth = await app.inject({ method: 'GET', url: `/api/submissions/${token}/preview`, headers: authHeaders });
     expect(fourth.statusCode).toBe(200);
     expect(getGameSources).toHaveBeenCalledTimes(3);
+
+    await app.close();
+  });
+
+  it('evicts the oldest draft preview when the cache is full', async () => {
+    // Cap at 2 so three successful assembles force the first issue out. After
+    // eviction, a GitHub failure on that issue must 502 — there is no last-known
+    // draft left to fall back on.
+    const linkedPr: LinkedPullRequest = { ...openPreviewPr, headRefOid: 'sha-1' };
+    const { githubClient, getGameSources, findLinkedPR } = createGithubClientStub({
+      linkedPr,
+      gameSources: sampleSources,
+    });
+    const { app, authHeaders } = await createApp({
+      githubClient,
+      submissionTokenSecret: secret,
+      maxCachedDraftPreviews: 2,
+    });
+
+    for (const issueNumber of [1, 2, 3]) {
+      const token = mintToken(issueNumber, secret);
+      const res = await app.inject({ method: 'GET', url: `/api/submissions/${token}/preview`, headers: authHeaders });
+      expect(res.statusCode).toBe(200);
+    }
+    expect(getGameSources).toHaveBeenCalledTimes(3);
+
+    findLinkedPR.mockRejectedValueOnce(new Error('github request failed with status 403'));
+    const evicted = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(1, secret)}/preview`,
+      headers: authHeaders,
+    });
+    expect(evicted.statusCode).toBe(502);
+
+    // Issue 3 is still cached — a resolve failure serves its last-known draft.
+    findLinkedPR.mockRejectedValueOnce(new Error('github request failed with status 403'));
+    const kept = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(3, secret)}/preview`,
+      headers: authHeaders,
+    });
+    expect(kept.statusCode).toBe(200);
+    expect(kept.json().slug).toBe('foo');
 
     await app.close();
   });

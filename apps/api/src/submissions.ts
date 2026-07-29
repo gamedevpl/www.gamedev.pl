@@ -191,6 +191,12 @@ export interface SubmissionRoutesOptions {
    * GitHub, never a requirement — see game-snapshot.ts.
    */
   snapshotReader?: GameSnapshotReader | null;
+  /**
+   * Cap on in-memory assembled draft previews (HTML can be large). Defaults to
+   * 50; tests pass a smaller value to exercise eviction without minting dozens
+   * of issues.
+   */
+  maxCachedDraftPreviews?: number;
 }
 
 function checkUserAccess(request: FastifyRequest, reply: FastifyReply): boolean {
@@ -619,14 +625,31 @@ export async function registerSubmissionRoutes(
   // whenever GitHub 403'd the fan-out. Cache by head SHA (a push still refreshes),
   // coalesce concurrent misses, and fall back to the last assembled document for
   // this issue when a refresh throws. Cap per IP still applies as a safety net.
+  //
+  // The entry count is bounded: each value holds a full assembled HTML document,
+  // so an uncapped Map would grow with every Studio build this instance has ever
+  // served. Insertion order + delete-before-set makes the oldest (or longest-idle)
+  // entry the first one out, matching mediaCache.
   const previewRateLimitWindowMs = 60 * 1000;
   const maxPreviewsPerWindow = 30;
   const previewsByIp = new Map<string, number[]>();
   const draftPreviewTtlMs = 5 * 60_000;
+  const maxCachedDraftPreviews = options.maxCachedDraftPreviews ?? 50;
   type DraftPreviewValue = { slug: string; title: string; html: string };
   type CachedDraftPreview = { value: DraftPreviewValue; headSha: string; expiresAt: number };
   const draftPreviewCache = new Map<number, CachedDraftPreview>();
   const draftPreviewRefreshes = new Map<string, Promise<DraftPreviewValue>>();
+
+  function rememberDraftPreview(issueNumber: number, entry: CachedDraftPreview): void {
+    // Move to the newest slot so a creator still watching their build outlives
+    // abandoned ones when we have to prune.
+    draftPreviewCache.delete(issueNumber);
+    if (draftPreviewCache.size >= maxCachedDraftPreviews) {
+      const oldestKey = draftPreviewCache.keys().next().value;
+      if (oldestKey !== undefined) draftPreviewCache.delete(oldestKey);
+    }
+    draftPreviewCache.set(issueNumber, entry);
+  }
 
   // Feedback posts a GitHub comment (which re-triggers the agent), so cap it tightly.
   const feedbackRateLimitWindowMs = 60 * 60 * 1000;
@@ -1679,7 +1702,7 @@ export async function registerSubmissionRoutes(
       if (!inFlight) draftPreviewRefreshes.set(refreshKey, refresh);
 
       const value = await refresh;
-      draftPreviewCache.set(issueNumber, { value, headSha, expiresAt: now() + draftPreviewTtlMs });
+      rememberDraftPreview(issueNumber, { value, headSha, expiresAt: now() + draftPreviewTtlMs });
       return reply.send(value);
     } catch (error) {
       if (
