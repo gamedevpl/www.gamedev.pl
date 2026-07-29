@@ -87,8 +87,9 @@ Nothing in a game's code says whether its content suits a nine-year-old. So the 
 be **declared and then verified**, with CI enforcing that a declaration exists and the
 moderation layer checking it is honest.
 
-- [ ] Add `ageRating` to the games-repo frontmatter + `catalog.json` (Apple bands: `4+`,
-      `9+`, `12+`, `17+`; map to IARC for Play).
+- [ ] Add `ageRating` to the games-repo frontmatter + `catalog.json`. Apple's bands were
+      overhauled in 2025 and are now **`4+`, `9+`, `13+`, `16+`, `18+`** — `12+` and `17+`
+      no longer exist. Map to IARC for Play.
 - [ ] `tools/validate.ts` check: **fail-closed**, no publish without a rating. Same posture
       as Check 13 — an unrated game is a rejected build, not a defaulted one.
 - [ ] Extend the Vertex moderation pass to rate the *spec* at submission time, so the
@@ -99,13 +100,28 @@ moderation layer checking it is honest.
 - [ ] **The app's own rating is the ceiling of the catalog.** Decide the ceiling and make
       CI reject anything above it, or every 17+ game re-rates the entire app.
 
-**Privacy tension worth deciding deliberately.** 4.7.5 wants restriction "based on verified
-or declared age", which pushes toward collecting age data — against a deliberately minimal
-posture (no cookie banner, structurally anonymous play telemetry, and that is
-[an asset, not an accident](./legal-compliance-plan.md)). Recommended: collect a **declared
-age band**, never a birthdate; store it on the user record; treat signed-out visitors as
-the most restrictive band. Terms already require 16+, so the band is mostly confirmatory.
-This does touch the privacy policy and is a lawyer-review item in T0.
+**Decided: cap the catalog, collect no age data.** 4.7.5 asks for two things — a way to
+identify games *exceeding the app's rating*, and an age restriction mechanism. If CI
+refuses to publish anything above the app's own rating, **nothing can exceed it**: the
+first requirement is vacuous and the second has nothing to restrict. The clause is
+satisfied by a validation rule instead of a feature.
+
+That is the whole reason to prefer it. The alternative — collecting a declared age band —
+means new personal data on the user record, a privacy-policy change, a gate on the play
+path, and a lawyer-review item, all to enable content the product does not want anyway.
+The minimal-data posture (no cookie banner, structurally anonymous play telemetry) is
+[an asset, not an accident](./legal-compliance-plan.md), and this keeps it intact.
+
+The ceiling is close to free because **moderation already rejects what would earn a high
+rating** — sexual content, realistic violence, drugs, gambling. Capping the catalog mostly
+writes down a rule the content pipeline already enforces, and moves it from a judgement at
+submission time to a check at publish time.
+
+Note for the App Store Connect questionnaire: it now has **required questions about
+user-generated content**, and this app must answer yes. UGC tends to pull the app's rating
+up on its own, so the ceiling should be chosen after seeing what the questionnaire returns
+— not guessed first. Unrestricted web access would force `18+`; games are sandboxed with no
+external navigation, which is the answer that avoids it.
 
 ### T1b — WebKit in games CI (4.7's engine clause)
 
