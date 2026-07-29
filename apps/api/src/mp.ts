@@ -2,6 +2,8 @@ import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { checkUserAccess } from './auth.js';
+import type { InternalAuthVerifier } from './internal-auth.js';
+import type { RelayClient } from './mp-relay.js';
 
 /**
  * Multiplayer room relay (docs/multiplayer-plan.md).
@@ -487,6 +489,21 @@ export interface MultiplayerRoutesOptions {
   maxRoomsPerWindow?: number;
   /** Max controller/host sockets one IP may hold open at once. */
   maxSocketsPerIp?: number;
+  /**
+   * Set on the **app** service once the relay is split out (`mp-relay.ts`): room creation
+   * is forwarded here instead of running against a local registry, and the websocket is
+   * not served at all. Unset keeps everything in one process, which is what local
+   * development and every test below run against.
+   */
+  relayClient?: RelayClient;
+  /**
+   * Set on the **relay** service. It serves the websocket and an internal, OIDC-verified
+   * create route — never the public, cookie-authenticated one, because the session cookie
+   * does not (and must not) reach the relay's origin.
+   */
+  relayOnly?: boolean;
+  /** Verifies the app service's OIDC token on the internal create route. */
+  internalAuth?: InternalAuthVerifier;
 }
 
 /**
@@ -526,6 +543,15 @@ const CreateSessionSchema = z.object({
   maxPlayers: z.number().int().min(2).max(MAX_SLOTS).optional(),
 });
 
+/**
+ * The internal variant carries the owner's uid, because the relay has no session to read
+ * it from. The app service has already checked access and rate-limited by the time this
+ * is sent; the uid is what preserves the one-open-room-per-host rule inside the registry.
+ */
+const InternalCreateSessionSchema = CreateSessionSchema.extend({
+  ownerUid: z.string().trim().min(1).max(200),
+});
+
 function isRateLimited(
   buckets: Map<string, number[]>,
   ip: string,
@@ -556,29 +582,83 @@ export async function registerMultiplayerRoutes(
 
   // Hosting a room is an authenticated, rate-limited action. Guests never touch
   // this route — they arrive over the websocket with a room token instead.
-  app.post('/api/mp/sessions', async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!checkUserAccess(request, reply)) return reply;
+  //
+  // The relay service does NOT serve this route: it has no session cookie to check, by
+  // design. It gets the internal one below instead.
+  if (!options.relayOnly) {
+    app.post('/api/mp/sessions', async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!checkUserAccess(request, reply)) return reply;
 
-    const parsed = CreateSessionSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
-    }
+      const parsed = CreateSessionSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
+      }
 
-    if (isRateLimited(roomsByIp, request.ip, Date.now(), maxRoomsPerWindow, 60 * 60 * 1000)) {
-      return reply.status(429).send({ error: 'too many rooms' });
-    }
+      if (isRateLimited(roomsByIp, request.ip, Date.now(), maxRoomsPerWindow, 60 * 60 * 1000)) {
+        return reply.status(429).send({ error: 'too many rooms' });
+      }
 
-    const created = registry.createRoom(
-      parsed.data.slug,
-      request.user?.uid ?? 'unknown',
-      parsed.data.maxPlayers ?? DEFAULT_SLOTS,
-    );
-    return reply.send(created);
-  });
+      const ownerUid = request.user?.uid ?? 'unknown';
+      const maxPlayers = parsed.data.maxPlayers ?? DEFAULT_SLOTS;
+
+      // Rate limiting and the access check stay HERE, on the cookie-bearing origin, even
+      // when the room itself is created elsewhere. The relay must never be the place that
+      // decides who is allowed to host.
+      if (options.relayClient) {
+        try {
+          const created = await options.relayClient.createRoom({
+            slug: parsed.data.slug,
+            ownerUid,
+            maxPlayers,
+          });
+          return reply.send(created);
+        } catch (err) {
+          // A relay that is down means no party, not a broken site: everything else on
+          // this service keeps working, so answer honestly rather than 500-ing.
+          request.log.error({ err }, 'relay room creation failed');
+          return reply.status(503).send({ error: 'party mode is unavailable' });
+        }
+      }
+
+      const created = registry.createRoom(parsed.data.slug, ownerUid, maxPlayers);
+      return reply.send(created);
+    });
+  }
+
+  // The relay's own create route. Reachable only by the app service, proving itself with a
+  // Google-signed OIDC token minted for this service's URL — the same shape the sweep
+  // endpoints use. It is deliberately NOT cookie-authenticated: extending the session
+  // cookie to a second origin to save one hop would widen its blast radius for nothing.
+  if (options.relayOnly) {
+    app.post('/api/internal/mp/sessions', async (request: FastifyRequest, reply: FastifyReply) => {
+      const verifier = options.internalAuth;
+      if (!verifier || !(await verifier.verify(request.headers.authorization))) {
+        return reply.status(401).send({ error: 'unauthorized' });
+      }
+
+      const parsed = InternalCreateSessionSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
+      }
+
+      const created = registry.createRoom(
+        parsed.data.slug,
+        parsed.data.ownerUid,
+        parsed.data.maxPlayers ?? DEFAULT_SLOTS,
+      );
+      return reply.send(created);
+    });
+  }
 
   // One websocket endpoint for both roles. The first frame decides which: a host
   // token attaches the shared screen, a guest token claims a controller slot.
   // Deliberately NO credential in the URL — query strings land in access logs.
+  // Once the relay is split out, the app service must NOT serve the socket: it has no
+  // registry worth connecting to, and answering here is how a guest silently lands on the
+  // wrong instance — the exact failure `--max-instances 1` exists to prevent, reintroduced
+  // by a different route. Serving nothing makes the misconfiguration loud instead.
+  if (options.relayClient) return;
+
   app.get('/api/mp/ws', { websocket: true }, (socket, request) => {
     const limiter = new FrameLimiter();
     let role: 'none' | 'host' | 'guest' = 'none';

@@ -24,6 +24,7 @@ import { registerZoneRoutes, type ZoneRoutesOptions } from './zones.js';
 import { createZoneSchemaSourceFromEnv } from './zone-source.js';
 import { resolveLocalGamesDir } from './local-games-repo.js';
 import { registerMultiplayerRoutes, type MultiplayerRoutesOptions } from './mp.js';
+import { createRelayClientFromEnv, isRelayOnly } from './mp-relay.js';
 import { registerNotificationRoutes } from './notifications.js';
 import { registerPlayerFeedbackRoutes, type PlayerFeedbackRoutesOptions } from './player-feedback.js';
 import { registerPushRoutes } from './push-routes.js';
@@ -173,8 +174,18 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // Multiplayer room relay (docs/multiplayer-plan.md). Registered after the auth
   // plugin so /api/mp/sessions sees request.user, and before the beta wall hook
   // so the wall's /api/mp/ws exemption applies to a route that actually exists.
+  //
+  // One image runs both roles (docs/store-launch-plan.md T0): with MP_RELAY_URL set this
+  // process forwards room creation and stops serving the socket; with MP_RELAY_ONLY set it
+  // IS the relay. Neither set is the single-process default that local dev and the tests
+  // use, so explicit options here always win over env.
   await app.register(fastifyWebsocket, { options: { maxPayload: 4 * 1024 } });
-  await registerMultiplayerRoutes(app, options.multiplayerRoutes);
+  await registerMultiplayerRoutes(app, {
+    relayClient: createRelayClientFromEnv(),
+    relayOnly: isRelayOnly(),
+    internalAuth: isRelayOnly() ? createInternalAuthVerifierFromEnv(process.env, 'mpRelay') : undefined,
+    ...options.multiplayerRoutes,
+  });
 
   await registerRefineRoute(app, {
     store,
