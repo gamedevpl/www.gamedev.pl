@@ -3,8 +3,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { CatalogEntry } from './catalog.js';
 import {
+  applyCatalogFilters,
   filterUnplayedEntries,
-  readCatalogNotPlayedFilter,
+  filterYourGamesEntries,
+  readCatalogFilters,
   readCatalogSortMode,
   sortCatalogEntries,
   type CatalogSortSignals,
@@ -107,28 +109,40 @@ describe('sortCatalogEntries', () => {
   });
 });
 
-describe('filterUnplayedEntries', () => {
+describe('catalog filters', () => {
   beforeEach(() => {
     localStorage.clear();
   });
 
-  it('keeps only games with no affinity and no local recent play', () => {
+  it('keeps only unplayed games for not_played', () => {
     rememberRecentPlay('mid');
     const affinity = new Map([['alpha', '2026-07-28T12:00:00.000Z']]);
     expect(filterUnplayedEntries(catalog, affinity).map((e) => e.slug)).toEqual(['zeta']);
   });
-});
 
-describe('catalog preference migration', () => {
-  beforeEach(() => {
-    localStorage.clear();
+  it('keeps only the creator’s published slugs for your_games', () => {
+    expect(filterYourGamesEntries(catalog, new Set(['mid', 'missing'])).map((e) => e.slug)).toEqual(['mid']);
   });
 
-  it('migrates the legacy not_played sort into the filter', () => {
+  it('ANDs your_games with not_played', () => {
+    rememberRecentPlay('mid');
+    const affinity = new Map<string, string>();
+    expect(
+      applyCatalogFilters(catalog, new Set(['your_games', 'not_played']), affinity, new Set(['mid', 'zeta'])).map(
+        (e) => e.slug,
+      ),
+    ).toEqual(['zeta']);
+  });
+
+  it('migrates the legacy not_played sort into filters', () => {
     localStorage.setItem('gdpl.catalogSort', 'not_played');
-    expect(readCatalogNotPlayedFilter()).toBe(true);
+    expect([...readCatalogFilters()]).toEqual(['not_played']);
     expect(readCatalogSortMode()).toBe('recommended');
-    expect(localStorage.getItem('gdpl.catalogNotPlayed')).toBe('1');
-    expect(localStorage.getItem('gdpl.catalogSort')).toBe('recommended');
+    expect(localStorage.getItem('gdpl.catalogFilters')).toBe(JSON.stringify(['not_played']));
+  });
+
+  it('migrates the legacy not_played boolean into filters', () => {
+    localStorage.setItem('gdpl.catalogNotPlayed', '1');
+    expect([...readCatalogFilters()]).toEqual(['not_played']);
   });
 });

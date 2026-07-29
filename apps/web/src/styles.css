@@ -946,8 +946,8 @@ button:disabled {
 }
 
 /*
- * Compact toolbar beside the Games heading: a Not-played filter toggle plus a
- * sort dropdown. One row on phone and desktop — no chip strip that wraps.
+ * Compact toolbar beside the Games heading: Filter ▾ + Sort ▾. One row on phone
+ * and desktop — no chip strip that wraps.
  */
 .catalog-toolbar {
   display: flex;
@@ -959,13 +959,22 @@ button:disabled {
   max-width: min(100%, 18rem);
 }
 
-.catalog-filter-btn,
+.catalog-filter-menu,
+.catalog-sort-menu {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 11rem;
+}
+
+.catalog-filter-trigger,
 .catalog-sort-trigger {
-  flex: 0 1 auto;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   gap: 0.35rem;
+  width: 100%;
+  max-width: 100%;
   min-height: 40px;
   padding: 0.4rem 0.75rem;
   border: 1px solid var(--panel-border);
@@ -979,24 +988,12 @@ button:disabled {
   touch-action: manipulation;
 }
 
-.catalog-filter-btn.is-active,
+.catalog-filter-trigger.is-active,
+.catalog-filter-menu.is-open .catalog-filter-trigger,
 .catalog-sort-menu.is-open .catalog-sort-trigger {
   border-color: var(--turquoise);
   color: var(--turquoise);
   background: rgba(0, 228, 172, 0.08);
-}
-
-.catalog-sort-menu {
-  position: relative;
-  flex: 1 1 auto;
-  min-width: 0;
-  max-width: 11rem;
-}
-
-.catalog-sort-trigger {
-  width: 100%;
-  max-width: 100%;
-  justify-content: space-between;
 }
 
 .catalog-sort-trigger-label {
@@ -2906,7 +2903,7 @@ body.player-open {
     max-width: min(100%, 14.5rem);
   }
 
-  .catalog-filter-btn,
+  .catalog-filter-trigger,
   .catalog-sort-trigger {
     min-height: 44px;
   }

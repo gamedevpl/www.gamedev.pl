@@ -149,12 +149,17 @@
     "worldBadge": "Wspólny świat",
     "savesBadge": "Zapisuje postępy",
     "sortLabel": "Sortuj gry",
+    "filterLabel": "Filtr",
+    "filterCount": "Filtry ({{count}})",
     "toolbarLabel": "Filtry i sortowanie katalogu",
     "filter": {
-      "notPlayed": "Niegrane"
+      "your_games": "Twoje gry",
+      "not_played": "Niegrane"
     },
     "emptyNotPlayed": "Grałeś już we wszystkie gry tutaj.",
-    "clearNotPlayedFilter": "Pokaż wszystkie gry",
+    "emptyYourGames": "Żadna z Twoich gier nie jest jeszcze w katalogu.",
+    "emptyFiltered": "Żadne gry nie pasują do tych filtrów.",
+    "clearFilters": "Wyczyść filtry",
     "sort": {
       "recommended": "Polecane",
       "newest": "Najnowsze",

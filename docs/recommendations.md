@@ -2,8 +2,8 @@
 
 > Status: ✅ Built (2026-07-29). The home-page arcade grid can be sorted several
 > ways. **Recommended** is the default; players can also pick Newest, Most played,
-> Last played, or A–Z. **Not played** is a separate filter (hide games already
-> opened), not a sort mode.
+> Last played, or A–Z. Filters (**Your games**, **Not played**) are separate from
+> sort and can be combined.
 
 ## Sort modes
 
@@ -19,11 +19,16 @@
 
 | Filter | Effect |
 | ------ | ------ |
+| Your games | Show only published slugs owned by the signed-in creator (`/api/submissions/mine`) |
 | Not played | Show only games with no play affinity and no device-local recent open |
 
-Sort preference is remembered in `localStorage` (`gdpl.catalogSort`); the Not played
-filter in `gdpl.catalogNotPlayed`. Controls sit on one row beside the Games heading:
-filter toggle + sort dropdown (menu closes on outside tap / Escape).
+Filters AND together. Sort preference is remembered in `localStorage`
+(`gdpl.catalogSort`); active filters in `gdpl.catalogFilters`. The last
+recommendations payload is cached in `sessionStorage` (`gdpl.catalogSortSignals`)
+so a reload does not flash catalog-default order before the network returns.
+
+Controls sit on one row beside the Games heading: Filter ▾ + Sort ▾ (menus close
+on outside tap / Escape). Your games appears only when signed in.
 
 ## Signals & privacy
 
@@ -32,6 +37,7 @@ filter toggle + sort dropdown (menu closes on outside tap / Escape).
 | Scorecards | Sessions, vote net, finish rate, median play time (28-day roll) | None — aggregates about games |
 | Play affinity | `users/{uid}/playAffinity/{slug}` — open count + last opened | Signed-in humans only |
 | Recent plays (browser) | `localStorage` list, forwarded as `?recent=` hints | Device-local |
+| My submissions | Published slugs for the Your games filter | Signed-in creator |
 
 Anonymous play telemetry (`playEvents`) and visit telemetry stay **unjoinable** and
 **unattributed**. Affinity is an account feature like votes and saves, disclosed in the
@@ -59,6 +65,6 @@ games-repo order rather than inventing a shuffle.
 
 ## UI
 
-[`ArcadeCatalog`](../apps/web/src/ArcadeCatalog.tsx) shows a Not played filter toggle
-and a sort dropdown beside the Games heading, then reorders/filters the same grid.
-Logic lives in [`catalogSort.ts`](../apps/web/src/catalogSort.ts).
+[`ArcadeCatalog`](../apps/web/src/ArcadeCatalog.tsx) shows Filter and Sort dropdowns
+beside the Games heading, then filters/reorders the same grid. Logic lives in
+[`catalogSort.ts`](../apps/web/src/catalogSort.ts).

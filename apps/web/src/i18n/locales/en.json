@@ -149,12 +149,17 @@
     "worldBadge": "Shared world",
     "savesBadge": "Saves progress",
     "sortLabel": "Sort games",
+    "filterLabel": "Filter",
+    "filterCount": "Filters ({{count}})",
     "toolbarLabel": "Catalog filters and sort",
     "filter": {
-      "notPlayed": "Not played"
+      "your_games": "Your games",
+      "not_played": "Not played"
     },
     "emptyNotPlayed": "You've played every game here.",
-    "clearNotPlayedFilter": "Show all games",
+    "emptyYourGames": "None of your games are in the catalog yet.",
+    "emptyFiltered": "No games match these filters.",
+    "clearFilters": "Clear filters",
     "sort": {
       "recommended": "Recommended",
       "newest": "Newest",
