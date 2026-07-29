@@ -370,7 +370,7 @@ home screen, and iOS push delivered. M1 is closed end to end.
 >
 > **The rest of M2 is now planned in [`store-launch-plan.md`](./store-launch-plan.md)**,
 > because the bullet list below turned out to describe the small half of the work. Guideline
-> 4.7 makes this repo responsible for *every published game* satisfying the full App Review
+> 4.7 makes this repo responsible for _every published game_ satisfying the full App Review
 > Guidelines, and the catalog grows on every merge — so 4.7 compliance has to be CI-enforced
 > in the games repo, and two of its clauses (age rating, universal links) are unbuilt
 > features rather than wrapper details.
@@ -411,7 +411,7 @@ home screen, and iOS push delivered. M1 is closed end to end.
   obligation rather than a gate. The mitigation is mechanical enforcement in games-repo CI,
   planned in [`store-launch-plan.md`](./store-launch-plan.md). Two clauses are unbuilt
   features: 4.7.5 (age rating + restriction) and 4.7.4 (universal links). Two are already
-  satisfied *architecturally* by the sandbox — 4.7.2 and 4.7.3 — which must not be softened
+  satisfied _architecturally_ by the sandbox — 4.7.2 and 4.7.3 — which must not be softened
   for the Capacitor build. If review goes badly the fallback is still the PWA, which now
   carries the whole functional case including iOS push.
 - **UGC review friction (1.2 / Play UGC)**: report/block must be visibly present at

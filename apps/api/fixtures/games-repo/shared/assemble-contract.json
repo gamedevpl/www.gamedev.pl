@@ -32,11 +32,11 @@
     "hostPause": 1473,
     "mascotDraw": 679,
     "headroom": 75237,
-    "gfx3d": 56000,
+    "gfx3d": 80000,
     "lookControls": 4683,
     "spatialAudio": 2977
   },
-  "maxProjectBytes": 389687,
+  "maxProjectBytes": 413687,
   "audio": {
     "musicField": "string",
     "musicCatalogRequiredKeys": ["version", "tracks"],
