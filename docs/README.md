@@ -63,6 +63,7 @@ survives only in this repo's early history.
 | [`improvement-loop-plan.md`](./improvement-loop-plan.md)           | After publish: player signals → per-game scorecard → agent-assisted fixes and suggestions              |
 | [`path-routing-plan.md`](./path-routing-plan.md)                   | ✅ Path URLs for deep links (`/play/<slug>`, …) — History API, no hashbang                             |
 | [`recommendations.md`](./recommendations.md)                       | ✅ Home arcade sort from scorecards + signed-in play affinity                                          |
+| [`runbooks/`](./runbooks/README.md)                                | ✅ Incident procedures: site-down triage, deploy rollback, Firestore restore, secret rotation           |
 | [`contributing-for-agents.md`](./contributing-for-agents.md)       | How agents run, structure, and contribute to this repository                                           |
 | [`local-development.md`](./local-development.md)                   | ✅ Running the whole product on a laptop with no keys — start here to contribute                       |
 | [`multiplayer-plan.md`](./multiplayer-plan.md)                     | ✅ Party mode: shared screen, phones as controllers, slot model, in-process relay                      |
