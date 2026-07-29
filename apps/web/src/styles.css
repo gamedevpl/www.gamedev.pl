@@ -1578,11 +1578,12 @@ body.player-open {
   z-index: 40;
   flex-direction: column;
   align-items: stretch;
-  gap: 4px;
-  min-width: 220px;
+  gap: 2px;
+  min-width: 240px;
   padding: 8px;
   border-radius: 12px;
-  background: rgba(22, 28, 34, 0.96);
+  /* Near-opaque so menu rows stay readable over bright game pixels underneath. */
+  background: rgba(16, 22, 28, 0.98);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
   border: 1px solid var(--panel-border);
@@ -1596,24 +1597,30 @@ body.player-open {
   display: flex;
 }
 
+/* Full-bleed within the panel padding. Use a lighter hairline than --panel-border
+   so the rule stays visible against the near-opaque panel fill. */
 .theater-menu-divider {
   height: 1px;
-  margin: 4px 6px;
-  background: var(--panel-border);
+  margin: 6px 0;
+  background: rgba(255, 255, 255, 0.12);
   border: 0;
+  align-self: stretch;
 }
 
-/* Uniform menu rows — strip the mismatched secondary-btn / ghost / solid looks. */
-.theater-more-panel .theater-menu-item,
-.theater-more-panel .share-btn,
-.theater-more-panel .report-btn,
-.theater-more-panel .feedback-btn {
+/* Uniform menu rows — strip the mismatched secondary-btn / ghost / solid looks.
+   Specificity beats `.game-theater-actions button` so gap/padding stay consistent
+   even though the panel lives inside the actions row. */
+.game-theater-actions .theater-more-panel .theater-menu-item,
+.game-theater-actions .theater-more-panel .share-btn,
+.game-theater-actions .theater-more-panel .report-btn,
+.game-theater-actions .theater-more-panel .feedback-btn {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: flex-start;
+  gap: 12px;
   width: 100%;
   margin: 0;
-  padding: 10px 14px;
+  padding: 12px 14px;
   min-height: 44px;
   border-radius: 8px;
   border: 1px solid transparent;
@@ -1622,31 +1629,53 @@ body.player-open {
   font: inherit;
   font-size: 0.95rem;
   font-weight: 500;
+  line-height: 1.25;
   text-decoration: none;
   text-align: left;
   cursor: pointer;
   box-shadow: none;
+  box-sizing: border-box;
 }
 
-.theater-more-panel .theater-menu-item:hover,
-.theater-more-panel .theater-menu-item:focus-visible,
-.theater-more-panel .share-btn:hover,
-.theater-more-panel .share-btn:focus-visible,
-.theater-more-panel .report-btn:hover,
-.theater-more-panel .report-btn:focus-visible,
-.theater-more-panel .feedback-btn:hover,
-.theater-more-panel .feedback-btn:focus-visible {
+.game-theater-actions .theater-more-panel .theater-menu-item:hover,
+.game-theater-actions .theater-more-panel .theater-menu-item:focus-visible,
+.game-theater-actions .theater-more-panel .share-btn:hover,
+.game-theater-actions .theater-more-panel .share-btn:focus-visible,
+.game-theater-actions .theater-more-panel .report-btn:hover,
+.game-theater-actions .theater-more-panel .report-btn:focus-visible,
+.game-theater-actions .theater-more-panel .feedback-btn:hover,
+.game-theater-actions .theater-more-panel .feedback-btn:focus-visible {
   background: rgba(0, 228, 172, 0.12);
   color: var(--turquoise);
   border-color: transparent;
   outline: none;
 }
 
+/* Fixed icon column without CSS-scaling the SVG — PixelIcon’s width/height
+   attributes stay authoritative (15×15 crispEdges grid). Equal size={13} props
+   already put every label on the same x; flex:none keeps the glyph from
+   stretching inside the row. */
+.game-theater-actions .theater-more-panel .theater-menu-item > svg,
+.game-theater-actions .theater-more-panel .share-btn > svg,
+.game-theater-actions .theater-more-panel .report-btn > svg,
+.game-theater-actions .theater-more-panel .feedback-btn > svg {
+  flex: none;
+  display: block;
+  margin: 0;
+}
+
+.game-theater-actions .theater-more-panel .btn-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: block;
+  line-height: 1.25;
+}
+
 /* Hidden on desktop; the matching media query reveals them as menu rows on a phone.
    Must come after the shared `.theater-menu-item { display: flex }` rule and beat it
    on specificity, or those rows stay visible on wide screens too. */
-.theater-more-panel .theater-menu-item.theater-mobile-chrome,
-.theater-more-panel .theater-menu-divider.theater-mobile-chrome {
+.game-theater-actions .theater-more-panel .theater-menu-item.theater-mobile-chrome,
+.game-theater-actions .theater-more-panel .theater-menu-divider.theater-mobile-chrome {
   display: none;
 }
 
@@ -1656,10 +1685,6 @@ body.player-open {
 
 .theater-more-panel .feedback-btn {
   width: 100%;
-}
-
-.theater-more-panel .btn-label {
-  display: inline;
 }
 
 /* Written player feedback: a header control like the vote widget, but revealing a
@@ -1888,21 +1913,26 @@ body.player-open {
     display: none !important;
   }
 
-  .theater-more-panel .theater-menu-item.theater-mobile-chrome {
+  .game-theater-actions .theater-more-panel .theater-menu-item.theater-mobile-chrome {
     display: flex;
   }
 
-  .theater-more-panel .theater-menu-divider.theater-mobile-chrome {
+  .game-theater-actions .theater-more-panel .theater-menu-divider.theater-mobile-chrome {
     display: block;
   }
 
+  /* Align the menu with the right edge of the action cluster (exit sits past the
+     hamburger: 44px thumb target + 6px gap). Flush with the trigger alone left a
+     gap under the close control that read as misaligned on phones. */
   .theater-more-panel {
-    min-width: 200px;
+    right: calc(-1 * (44px + 6px));
+    min-width: 240px;
+    max-width: min(300px, calc(100vw - 24px));
   }
 
   /* Labels stay visible inside the open menu — icon-only there is opaque. */
   .theater-more-panel .btn-label {
-    display: inline !important;
+    display: block !important;
   }
 }
 
@@ -1916,8 +1946,11 @@ body.player-open {
     font-size: 0.85rem;
   }
 
-  .game-theater-actions button,
-  .game-theater-actions .report-btn {
+  /* Shrink bar chrome only — leave the overflow menu rows at their thumb target. */
+  .game-theater-actions > button,
+  .game-theater-actions .theater-more-btn,
+  .game-theater-actions .exit-btn,
+  .game-theater-actions > .report-btn {
     min-height: 36px;
     padding: 7px 9px;
   }
