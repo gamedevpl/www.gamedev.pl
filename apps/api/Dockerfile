@@ -27,9 +27,13 @@ ENV VITE_APPLE_SERVICES_ID=$VITE_APPLE_SERVICES_ID
 COPY . .
 # --ignore-scripts: skip the repo's `prepare`/husky hook (dev-only) during image builds.
 RUN npm ci --ignore-scripts
-RUN npm run build -w @gamedevpl/game-generator \
- && npm run build -w @gamedevpl/api \
- && npm run build -w @gamedevpl/web
+# Delegate to the root `build` script rather than listing workspaces here. This file used
+# to spell the sequence out, which meant adding a package updated the root script and left
+# the image behind: #323 added @gamedevpl/zone-core, CI stayed green because the workspace
+# root resolves it, and every deploy failed because `tsc -p apps/api` could not — the API
+# imports real values from it (ticket minting, schema parsing), so it must be built first.
+# One list, in package.json, is the fix that survives the next package.
+RUN npm run build
 
 # ---- runtime: prod deps only + built output ----
 FROM node:20-slim AS runtime
@@ -41,13 +45,19 @@ ENV NODE_ENV=production \
 # Workspace package manifests must all be present for `npm ci` to resolve the tree.
 COPY package.json package-lock.json ./
 COPY packages/game-generator/package.json packages/game-generator/
+COPY packages/zone-core/package.json packages/zone-core/
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
-RUN npm ci --omit=dev --ignore-scripts
+# --omit=optional keeps `isolated-vm` out of THIS image. It is zone-core's only external
+# dependency and it is optional precisely so that consumers who never open a cage skip a
+# native build. The API only mints tickets and parses schemas; the cage runs in the
+# separate world service, which has its own Dockerfile and installs it there.
+RUN npm ci --omit=dev --omit=optional --ignore-scripts
 
 # Built output: API dist, game-generator dist + runtime templates, and the static web bundle.
 COPY --from=builder /app/packages/game-generator/dist packages/game-generator/dist
 COPY --from=builder /app/packages/game-generator/templates packages/game-generator/templates
+COPY --from=builder /app/packages/zone-core/dist packages/zone-core/dist
 COPY --from=builder /app/apps/api/dist apps/api/dist
 COPY --from=builder /app/apps/web/dist apps/web/dist
 
