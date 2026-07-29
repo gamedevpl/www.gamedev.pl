@@ -25,9 +25,7 @@ describe('the splash mascot does idle pull-ups', () => {
     expect(css).toMatch(/--pullup-hang/);
     expect(css).toMatch(/--pullup-chin-lift/);
     // Body-only chin-ups — if hang-arms lived inside body-group this would float.
-    expect(css).toMatch(
-      /\.mascot-interactive--pullups \.mascot__body-group \{[\s\S]*?animation: mascot-pullups-chin/,
-    );
+    expect(css).toMatch(/\.mascot-interactive--pullups \.mascot__body-group \{[\s\S]*?animation: mascot-pullups-chin/);
   });
 
   it('covers baked side stubs and breathes with the chin', () => {
@@ -35,15 +33,15 @@ describe('the splash mascot does idle pull-ups', () => {
     expect(css).toMatch(/@keyframes mascot-hang-mouth-seal/);
     expect(css).toMatch(/\.mascot__mouth-seal/);
     // Fall → squash → rebound → settle.
-    expect(css).toMatch(/scale\(1\.18,\s*0\.76\)/);
-    expect(css).toMatch(/scale\(0\.96,\s*1\.07\)/);
+    expect(css).toMatch(/scale\(1\.22,\s*0\.7\)/);
+    expect(css).toMatch(/scale\(0\.94,\s*1\.1\)/);
     const mascot = read('Mascot.tsx');
     expect(mascot).toMatch(/hangClipId/);
-    expect(mascot).toMatch(/clipRule="evenodd"/);
     expect(mascot).toMatch(/LegsTogether/);
     expect(mascot).toMatch(/HangArmStrokes/);
     expect(mascot).toMatch(/HangMouthSeal/);
     expect(mascot).toMatch(/MOUTH_HANG_BREATHE/);
+    expect(mascot).toMatch(/PULLUP_SESSION_MS = 3_800/);
   });
 
   it('lets the card rim show his hands', () => {

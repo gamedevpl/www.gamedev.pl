@@ -5202,7 +5202,7 @@ body.player-open {
   /* Body travel toward the hands — large enough to read as a chin-up at splash size. */
   --pullup-chin-lift: 26px;
   transform-origin: 50% 0%;
-  animation: mascot-pullups-climb 3.6s ease-in-out;
+  animation: mascot-pullups-climb 3.8s ease-in-out;
 }
 
 @media (max-height: 720px) {
@@ -5221,7 +5221,7 @@ body.player-open {
 /* Chin-ups: body only. Hands stay on the rim (they live outside this group). */
 .mascot-interactive--pullups .mascot__body-group {
   transform-origin: 35px 4px;
-  animation: mascot-pullups-chin 3.6s ease-in-out !important;
+  animation: mascot-pullups-chin 3.8s ease-in-out !important;
 }
 
 /*
@@ -5232,37 +5232,37 @@ body.player-open {
  */
 .mascot--hanging .mascot__mouth-seal {
   transform-origin: 35px 24px;
-  animation: mascot-hang-mouth-seal 3.6s ease-in-out;
+  animation: mascot-hang-mouth-seal 3.8s ease-in-out;
 }
 
 @keyframes mascot-hang-mouth-seal {
   0%,
-  14% {
+  13% {
     transform: scaleY(0);
     opacity: 0;
   }
   /* Chin-up peaks — seal lips, hold breath. */
-  24% {
+  23% {
     transform: scaleY(1);
     opacity: 1;
   }
-  32% {
+  31% {
     transform: scaleY(0);
     opacity: 0;
   }
-  44% {
+  42% {
     transform: scaleY(1);
     opacity: 1;
   }
-  52% {
+  50% {
     transform: scaleY(0);
     opacity: 0;
   }
-  64% {
+  61% {
     transform: scaleY(1);
     opacity: 1;
   }
-  74%,
+  71%,
   100% {
     transform: scaleY(0);
     opacity: 0;
@@ -5274,26 +5274,29 @@ body.player-open {
     transform: translateY(0) scale(1, 1);
   }
   /* Climb and plant hands on the card border. */
-  14% {
+  13% {
     transform: translateY(calc(-1 * var(--pullup-hang))) scale(1, 1);
   }
   /* Hold through the chin-up reps. */
-  80% {
+  76% {
     transform: translateY(calc(-1 * var(--pullup-hang))) scale(1, 1);
   }
   /* Let go — stretch on the fall. */
-  88% {
-    transform: translateY(calc(-0.28 * var(--pullup-hang))) scale(0.94, 1.1);
+  84% {
+    transform: translateY(calc(-0.22 * var(--pullup-hang))) scale(0.9, 1.14);
   }
-  /* Impact squash. */
+  /* Impact squash — held a beat so it reads. */
+  90% {
+    transform: translateY(10px) scale(1.22, 0.7);
+  }
   93% {
     transform: translateY(8px) scale(1.18, 0.76);
   }
   /* Short rebound. */
-  97% {
-    transform: translateY(-3px) scale(0.96, 1.07);
+  96% {
+    transform: translateY(-4px) scale(0.94, 1.1);
   }
-  /* Settle. */
+  /* Settle and hold so the land is not cut by session end. */
   100% {
     transform: translateY(0) scale(1, 1);
   }
@@ -5302,32 +5305,32 @@ body.player-open {
 @keyframes mascot-pullups-chin {
   /* Quiet while climbing. */
   0%,
-  14% {
+  13% {
     transform: translateY(0) scale(1, 1);
   }
   /* Rep 1 — chin to the rim. */
-  24% {
+  23% {
     transform: translateY(calc(-1 * var(--pullup-chin-lift))) scale(1.08, 0.9);
   }
-  32% {
+  31% {
     transform: translateY(0) scale(0.96, 1.05);
   }
   /* Rep 2 */
-  44% {
+  42% {
     transform: translateY(calc(-1 * var(--pullup-chin-lift))) scale(1.08, 0.9);
   }
-  52% {
+  50% {
     transform: translateY(0) scale(0.96, 1.05);
   }
   /* Rep 3 — a little higher. */
-  64% {
+  61% {
     transform: translateY(calc(-1 * var(--pullup-chin-lift) - 4px)) scale(1.1, 0.88);
   }
-  74% {
+  71% {
     transform: translateY(0) scale(0.96, 1.05);
   }
   /* Quiet for the drop + landing — body rides the climb keyframes. */
-  80%,
+  76%,
   100% {
     transform: translateY(0) scale(1, 1);
   }

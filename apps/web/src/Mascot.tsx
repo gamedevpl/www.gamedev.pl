@@ -362,8 +362,22 @@ function HangArmStrokes() {
 function HangHands() {
   return (
     <g className="mascot__hang-arms" aria-hidden="true">
-      <ellipse className="mascot__hang-hand mascot__hang-hand--left" cx="14" cy="2.4" rx="5.2" ry="2.9" fill="currentColor" />
-      <ellipse className="mascot__hang-hand mascot__hang-hand--right" cx="56" cy="2.4" rx="5.2" ry="2.9" fill="currentColor" />
+      <ellipse
+        className="mascot__hang-hand mascot__hang-hand--left"
+        cx="14"
+        cy="2.4"
+        rx="5.2"
+        ry="2.9"
+        fill="currentColor"
+      />
+      <ellipse
+        className="mascot__hang-hand mascot__hang-hand--right"
+        cx="56"
+        cy="2.4"
+        rx="5.2"
+        ry="2.9"
+        fill="currentColor"
+      />
     </g>
   );
 }
@@ -374,15 +388,7 @@ function HangHands() {
  */
 function HangMouthSeal() {
   return (
-    <ellipse
-      className="mascot__mouth-seal"
-      cx="35"
-      cy="24"
-      rx="11"
-      ry="9"
-      fill="currentColor"
-      aria-hidden="true"
-    />
+    <ellipse className="mascot__mouth-seal" cx="35" cy="24" rx="11" ry="9" fill="currentColor" aria-hidden="true" />
   );
 }
 
@@ -442,14 +448,7 @@ function ScrollPhone({ clipId }: { clipId: string }) {
             <rect x="50.5" y="51" width="10" height="2.2" rx="0.5" opacity="0.4" />
           </g>
         </g>
-        <ellipse
-          className="mascot__phone-thumb"
-          cx="65.5"
-          cy="30"
-          rx="3.2"
-          ry="5"
-          fill="currentColor"
-        />
+        <ellipse className="mascot__phone-thumb" cx="65.5" cy="30" rx="3.2" ry="5" fill="currentColor" />
       </g>
     </g>
   );
@@ -507,22 +506,21 @@ export function Mascot({
         {hanging ? (
           <defs>
             {/*
-              Clip off baked side stubs and the split feet so raised arms + the
-              merged leg are the only limbs. More reliable than painting panel-coloured
-              covers (those fail if the card background is not exactly `--panel`).
+              Mask off baked side stubs and the split feet so raised arms + the
+              merged leg are the only limbs. A mask (white keep / black drop) is
+              more reliable across browsers than an evenodd clipPath with holes.
             */}
-            <clipPath id={hangClipId} clipPathUnits="userSpaceOnUse">
-              <path
-                d={
-                  'M0 0H70V60H0ZM2 40H10.5V54H2ZM59.5 40H68V53H59.5ZM20 49H31V60H20ZM39 49H50V60H39Z'
-                }
-                clipRule="evenodd"
-              />
-            </clipPath>
+            <mask id={hangClipId} maskUnits="userSpaceOnUse" x="0" y="0" width="70" height="60">
+              <rect x="0" y="0" width="70" height="60" fill="#fff" />
+              <rect x="1.5" y="38" width="10" height="16" fill="#000" />
+              <rect x="58.5" y="38" width="10" height="15" fill="#000" />
+              <rect x="19" y="48.5" width="12.5" height="11.5" fill="#000" />
+              <rect x="38.5" y="48.5" width="12.5" height="11.5" fill="#000" />
+            </mask>
           </defs>
         ) : null}
 
-        <g clipPath={hanging ? `url(#${hangClipId})` : undefined}>
+        <g mask={hanging ? `url(#${hangClipId})` : undefined}>
           {isIdle ? (
             <g className="mascot__pixels" fill="currentColor">
               <path d={IDLE_PATH} />
@@ -584,7 +582,7 @@ const POKE_HOLD_MS = 1400;
 /** First quiet stretch before he notices the card rim and climbs it. */
 export const PULLUP_FIRST_DELAY_MS = 9_000;
 /** One climb + a few reps + drop — matches `mascot-pullups-climb` / `-chin` in CSS. */
-export const PULLUP_SESSION_MS = 3_600;
+export const PULLUP_SESSION_MS = 3_800;
 /** Quiet time between pull-up sessions once he has done the first. */
 export const PULLUP_GAP_MIN_MS = 12_000;
 export const PULLUP_GAP_MAX_MS = 20_000;
@@ -862,11 +860,12 @@ export function InteractiveMascot({
   const pointerLeads = look.x !== 0 || look.y !== 0;
   const effectiveLook = pointerLeads || !device.active ? look : device.tilt;
 
-  const tiltStyle: CSSProperties | undefined = reduceMotion || pullups
-    ? undefined
-    : {
-        transform: `rotate(${(effectiveLook.x * 7).toFixed(2)}deg) translateY(${(effectiveLook.y * 2).toFixed(2)}px)`,
-      };
+  const tiltStyle: CSSProperties | undefined =
+    reduceMotion || pullups
+      ? undefined
+      : {
+          transform: `rotate(${(effectiveLook.x * 7).toFixed(2)}deg) translateY(${(effectiveLook.y * 2).toFixed(2)}px)`,
+        };
 
   return (
     <button
@@ -907,13 +906,7 @@ export function InteractiveMascot({
         <Mascot
           emotion={emotion}
           size={size}
-          look={
-            reduceMotion
-              ? undefined
-              : pullups
-                ? { x: 0, y: -0.85 }
-                : effectiveLook
-          }
+          look={reduceMotion ? undefined : pullups ? { x: 0, y: -0.85 } : effectiveLook}
           hanging={pullups}
         />
       </span>
