@@ -924,7 +924,16 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
+}
+
+.arcade-title-row {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 /* A quiet section label, not a banner — the grid of games below speaks for itself. */
@@ -935,7 +944,51 @@ button:disabled {
   margin: 0;
   letter-spacing: -0.3px;
   min-width: 0;
-  flex: 1 1 auto;
+}
+
+.catalog-live-count {
+  flex: none;
+  font-size: 0.8rem;
+}
+
+.catalog-studio-btn {
+  flex: none;
+  min-height: 36px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+.catalog-build-card {
+  justify-content: center;
+  min-height: 180px;
+}
+
+.catalog-build-card.is-live {
+  border-color: rgba(45, 212, 191, 0.4);
+  box-shadow: 0 0 18px rgba(45, 212, 191, 0.08);
+}
+
+.catalog-build-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 18px;
+}
+
+.catalog-build-yours {
+  /* Static badge on build cards — not over media. */
+  position: static;
+}
+
+.catalog-build-meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.catalog-build-body .primary-btn {
+  margin-top: auto;
 }
 
 .arcade-subtitle {

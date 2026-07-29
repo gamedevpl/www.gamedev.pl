@@ -15,12 +15,17 @@
 | Last played | Signed-in play affinity timestamps, else device-local recent plays |
 | A–Z | Title, case-insensitive |
 
-## Your games (pinned, additive)
+## Your games (merged into Games)
 
-When signed in, published slugs from `/api/submissions/mine` are sorted with the
-current mode **among themselves**, then placed first in the grid; everyone else’s
-games follow under the same sort. Cards owned by the visitor get a **Yours** badge.
-This unifies “your games + the rest” in one gallery rather than a separate filter.
+When signed in, the home **Games** gallery is one list:
+
+1. **In-progress builds** (queued / building / …) as cards that open the status page
+2. **Your published games** (pinned first among catalog entries, with a Yours badge)
+3. **Everyone else’s games** under the current sort
+
+There is no separate “Your games” section. Studio remains one click from the Games
+heading when you have builds or published games. Published slugs come from
+`/api/submissions/mine`; locally saved specs cover anonymous-era gaps.
 
 ## Filters
 

@@ -6,7 +6,6 @@ import { GameTheater } from './GameTheater.js';
 import { NavHeader } from './NavHeader.js';
 import { HeroPromptSection } from './HeroPromptSection.js';
 import { ArcadeCatalog } from './ArcadeCatalog.js';
-import { MyGamesRail } from './MyGamesRail.js';
 import { CreatorStudioView } from './CreatorStudioView.js';
 import { DraftView } from './DraftView.js';
 import { GameHealthView } from './GameHealthView.js';
@@ -72,7 +71,7 @@ export function App() {
 
   // Local storage saved specs
   const [savedSpecs, setSavedSpecs] = useState<SavedSpec[]>(() => getSavedSpecs());
-  // Bumped after a new submission so the my-games rail picks it up immediately.
+  // Bumped after a new submission so in-progress cards in the Games gallery appear.
   const [myGamesRefreshKey, setMyGamesRefreshKey] = useState(0);
   const [recommendationsRefreshKey, setRecommendationsRefreshKey] = useState(0);
   // Section to scroll to once the home route has rendered it (see handleNavigateSection).
@@ -627,17 +626,6 @@ export function App() {
               />
             </div>
 
-            {/* Same reasoning as the catalog above: the rail polls its own submissions
-                every 30s, which is pure waste while the player covers it. */}
-            {route.view !== 'play' && (
-              <MyGamesRail
-                refreshKey={myGamesRefreshKey}
-                onOpenStatus={(token) => navigate(statusPath(token))}
-                onPlayPublished={(slug) => navigate(playPath(slug))}
-                onOpenStudio={() => navigate(studioPath())}
-              />
-            )}
-
             {qaQuestions.length > 0 && pendingSpec && (
               <div ref={qaRef}>
                 <CreatorQA
@@ -716,6 +704,7 @@ export function App() {
 
             {partyError && <p className="error party-error">{partyError}</p>}
 
+            {/* Same reasoning as the catalog fetch: skip while /play covers the viewport. */}
             {route.view !== 'play' && (
               <ArcadeCatalog
                 catalogStatus={catalogStatus}
@@ -725,6 +714,9 @@ export function App() {
                 onPlayTogether={(game) => void handlePlayTogether(game)}
                 onRetryCatalog={handleRetryCatalog}
                 recommendationsRefreshKey={recommendationsRefreshKey}
+                creatorGamesRefreshKey={myGamesRefreshKey}
+                onOpenStatus={(token) => navigate(statusPath(token))}
+                onOpenStudio={() => navigate(studioPath())}
               />
             )}
           </>

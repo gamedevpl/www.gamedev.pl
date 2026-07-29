@@ -17,6 +17,14 @@ import {
   type CatalogSortMode,
   type CatalogSortSignals,
 } from './catalogSort.js';
+import {
+  CREATOR_LIVE_STATUSES,
+  CREATOR_STATUS_ICONS,
+  inProgressCreatorGames,
+  loadCreatorGames,
+  publishedCreatorSlugs,
+  type CreatorGameItem,
+} from './creatorGames.js';
 import { MascotMoment } from './Mascot.js';
 import { PixelIcon } from './PixelIcon.js';
 import { getRecentPlays } from './recentPlays.js';
@@ -25,7 +33,7 @@ import {
   readCachedCatalogSortPayload,
   type CatalogSortPayload,
 } from './recommendationsApi.js';
-import { listMySubmissions } from './submissionApi.js';
+import { formatRelativeTime } from './relativeTime.js';
 import { useInView } from './useInView.js';
 
 type ArcadeCatalogProps = {
@@ -37,6 +45,10 @@ type ArcadeCatalogProps = {
   onRetryCatalog: () => void;
   /** Bump after a play so the grid can re-sort from fresh affinity. */
   recommendationsRefreshKey?: number;
+  /** Bump after a new submission so in-progress cards appear immediately. */
+  creatorGamesRefreshKey?: number;
+  onOpenStatus?: (token: string) => void;
+  onOpenStudio?: () => void;
 };
 
 function humanizeMoment(name: string): string {
@@ -314,6 +326,37 @@ function initialSignals(): { signals: CatalogSortSignals; ready: boolean } {
   return { signals: payloadToSignals(cached), ready: true };
 }
 
+function InProgressCard({
+  item,
+  onOpenStatus,
+}: {
+  item: CreatorGameItem;
+  onOpenStatus: (token: string) => void;
+}) {
+  const { t, i18n } = useTranslation();
+  const status = item.status;
+  const isLive = status !== null && CREATOR_LIVE_STATUSES.has(status);
+
+  return (
+    <article className={`catalog-card catalog-build-card${isLive ? ' is-live' : ''}`}>
+      <div className="catalog-build-body">
+        <span className={`my-game-status my-game-status-${status ?? 'unknown'}`}>
+          <PixelIcon name={status ? CREATOR_STATUS_ICONS[status] : 'clock'} size={12} />{' '}
+          {status ? t(`statusView.states.${status}.label`) : t('myGames.checking')}
+        </span>
+        <span className="yours-pill catalog-build-yours">
+          <PixelIcon name="user" size={10} /> {t('catalog.yoursBadge')}
+        </span>
+        <h3 className="card-title">{item.title}</h3>
+        <p className="catalog-build-meta">{formatRelativeTime(item.createdAt, i18n.language)}</p>
+        <button type="button" className="primary-btn" onClick={() => onOpenStatus(item.token)}>
+          <PixelIcon name="eye" size={13} /> {t('myGames.open')}
+        </button>
+      </div>
+    </article>
+  );
+}
+
 export function ArcadeCatalog({
   catalogStatus,
   catalogError,
@@ -322,9 +365,13 @@ export function ArcadeCatalog({
   onPlayTogether,
   onRetryCatalog,
   recommendationsRefreshKey = 0,
+  creatorGamesRefreshKey = 0,
+  onOpenStatus,
+  onOpenStudio,
 }: ArcadeCatalogProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user } = useAuth();
+  const locale = i18n.language;
   const [sortMode, setSortMode] = useState<CatalogSortMode>(() =>
     typeof localStorage === 'undefined' ? DEFAULT_CATALOG_SORT : readCatalogSortMode(),
   );
@@ -336,7 +383,7 @@ export function ArcadeCatalog({
   const initial = initialSignals();
   const [signals, setSignals] = useState<CatalogSortSignals>(initial.signals);
   const [signalsReady, setSignalsReady] = useState(initial.ready);
-  const [mySlugs, setMySlugs] = useState<Set<string>>(() => new Set());
+  const [creatorItems, setCreatorItems] = useState<CreatorGameItem[]>([]);
 
   useEffect(() => {
     if (catalogStatus !== 'ready' || catalogEntries.length === 0) {
@@ -353,26 +400,27 @@ export function ArcadeCatalog({
     };
   }, [catalogStatus, catalogEntries, recommendationsRefreshKey]);
 
-  // Published slugs owned by the signed-in creator — pinned to the front of the grid.
-  // Only fetch once the gallery is actually loading (not on /play/… overlays).
+  // Creator games (published + in progress) — only while the gallery is visible.
   useEffect(() => {
-    if (!user || catalogStatus !== 'ready' || catalogEntries.length === 0) {
-      if (!user) setMySlugs(new Set());
+    if (!user) {
+      setCreatorItems([]);
       return;
     }
+    if (catalogStatus === 'loading') return;
     let cancelled = false;
-    void listMySubmissions()
-      .then((subs) => {
-        if (cancelled) return;
-        setMySlugs(new Set(subs.flatMap((sub) => (sub.slug ? [sub.slug] : []))));
-      })
-      .catch(() => {
-        if (!cancelled) setMySlugs(new Set());
+    void loadCreatorGames(locale).then((items) => {
+      if (!cancelled) setCreatorItems(items);
+    });
+    const timer = window.setInterval(() => {
+      void loadCreatorGames(locale).then((items) => {
+        if (!cancelled) setCreatorItems(items);
       });
+    }, 30_000);
     return () => {
       cancelled = true;
+      window.clearInterval(timer);
     };
-  }, [user, catalogStatus, catalogEntries.length]);
+  }, [user, catalogStatus, creatorGamesRefreshKey, locale]);
 
   // Close the sort menu on outside tap or Escape — phones have no hover to dismiss it.
   useEffect(() => {
@@ -396,6 +444,13 @@ export function ArcadeCatalog({
     };
   }, [sortMenuOpen]);
 
+  const mySlugs = useMemo(() => publishedCreatorSlugs(creatorItems), [creatorItems]);
+  const inProgress = useMemo(() => inProgressCreatorGames(creatorItems), [creatorItems]);
+  const liveCount = useMemo(
+    () => inProgress.filter((item) => item.status !== null && CREATOR_LIVE_STATUSES.has(item.status)).length,
+    [inProgress],
+  );
+
   const orderedEntries = useMemo(() => {
     const filtered = applyCatalogFilters(catalogEntries, filters, signals.affinityLastPlayed);
     return orderCatalogEntries(filtered, sortMode, signals, mySlugs);
@@ -417,7 +472,9 @@ export function ArcadeCatalog({
     });
   }
 
-  const showControls = catalogStatus === 'ready' && catalogEntries.length > 0;
+  const hasCatalog = catalogStatus === 'ready' && catalogEntries.length > 0;
+  const hasBuilds = inProgress.length > 0;
+  const showControls = hasCatalog || hasBuilds;
   const notPlayedOnly = filters.has('not_played');
   const awaitingSignals =
     catalogStatus === 'ready' &&
@@ -427,54 +484,77 @@ export function ArcadeCatalog({
 
   const emptyMessage =
     notPlayedOnly && catalogEntries.length > 0 ? t('catalog.emptyNotPlayed') : t('catalog.empty');
+  const showEmpty =
+    !awaitingSignals &&
+    catalogStatus !== 'loading' &&
+    catalogStatus !== 'error' &&
+    orderedEntries.length === 0 &&
+    inProgress.length === 0;
 
   return (
     <section id="arcade" className="arcade-section">
       <div className="arcade-header">
-        <h2 className="arcade-title">{t('catalog.title')}</h2>
+        <div className="arcade-title-row">
+          <h2 className="arcade-title">{t('catalog.title')}</h2>
+          {liveCount > 0 ? (
+            <span className="status-live catalog-live-count">
+              <span className="live-dot" aria-hidden="true" />
+              {t('myGames.liveCount', { count: liveCount })}
+            </span>
+          ) : null}
+          {onOpenStudio && (hasBuilds || mySlugs.size > 0) ? (
+            <button type="button" className="secondary-btn catalog-studio-btn" onClick={onOpenStudio}>
+              <PixelIcon name="wrench" size={12} /> {t('myGames.openStudio')}
+            </button>
+          ) : null}
+        </div>
         {showControls ? (
           <div className="catalog-toolbar" role="group" aria-label={t('catalog.toolbarLabel')}>
-            <button
-              type="button"
-              className={`catalog-filter-trigger${notPlayedOnly ? ' is-active' : ''}`}
-              aria-pressed={notPlayedOnly}
-              onClick={toggleNotPlayed}
-            >
-              {t('catalog.filter.not_played')}
-            </button>
-            <div className={`catalog-sort-menu${sortMenuOpen ? ' is-open' : ''}`} ref={sortMenuRef}>
+            {hasCatalog ? (
               <button
                 type="button"
-                className="catalog-sort-trigger"
-                aria-expanded={sortMenuOpen}
-                aria-haspopup="menu"
-                aria-label={t('catalog.sortLabel')}
-                onClick={() => setSortMenuOpen((open) => !open)}
+                className={`catalog-filter-trigger${notPlayedOnly ? ' is-active' : ''}`}
+                aria-pressed={notPlayedOnly}
+                onClick={toggleNotPlayed}
               >
-                <span className="catalog-sort-trigger-label">{t(`catalog.sort.${sortMode}`)}</span>
-                <span className="catalog-sort-caret" aria-hidden="true">
-                  ▾
-                </span>
+                {t('catalog.filter.not_played')}
               </button>
-              {sortMenuOpen ? (
-                <ul className="catalog-sort-panel" role="menu" aria-label={t('catalog.sortLabel')}>
-                  {CATALOG_SORT_MODES.map((mode) => (
-                    <li key={mode} role="none">
-                      <button
-                        type="button"
-                        role="menuitemradio"
-                        className={`catalog-sort-option${sortMode === mode ? ' is-active' : ''}`}
-                        aria-checked={sortMode === mode}
-                        onClick={() => handleSortChange(mode)}
-                      >
-                        {sortMode === mode ? <PixelIcon name="check" size={12} /> : <span className="catalog-sort-check-spacer" />}
-                        <span className="catalog-sort-option-label">{t(`catalog.sort.${mode}`)}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
+            ) : null}
+            {hasCatalog ? (
+              <div className={`catalog-sort-menu${sortMenuOpen ? ' is-open' : ''}`} ref={sortMenuRef}>
+                <button
+                  type="button"
+                  className="catalog-sort-trigger"
+                  aria-expanded={sortMenuOpen}
+                  aria-haspopup="menu"
+                  aria-label={t('catalog.sortLabel')}
+                  onClick={() => setSortMenuOpen((open) => !open)}
+                >
+                  <span className="catalog-sort-trigger-label">{t(`catalog.sort.${sortMode}`)}</span>
+                  <span className="catalog-sort-caret" aria-hidden="true">
+                    ▾
+                  </span>
+                </button>
+                {sortMenuOpen ? (
+                  <ul className="catalog-sort-panel" role="menu" aria-label={t('catalog.sortLabel')}>
+                    {CATALOG_SORT_MODES.map((mode) => (
+                      <li key={mode} role="none">
+                        <button
+                          type="button"
+                          role="menuitemradio"
+                          className={`catalog-sort-option${sortMode === mode ? ' is-active' : ''}`}
+                          aria-checked={sortMode === mode}
+                          onClick={() => handleSortChange(mode)}
+                        >
+                          {sortMode === mode ? <PixelIcon name="check" size={12} /> : <span className="catalog-sort-check-spacer" />}
+                          <span className="catalog-sort-option-label">{t(`catalog.sort.${mode}`)}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -483,7 +563,7 @@ export function ArcadeCatalog({
         <MascotMoment className="catalog-state" emotion="busy" size={56} title={t('mascot.busyAlt')}>
           <p>{t('catalog.loading')}</p>
         </MascotMoment>
-      ) : catalogStatus === 'error' ? (
+      ) : catalogStatus === 'error' && inProgress.length === 0 ? (
         <MascotMoment className="load-error" emotion="sad" size={64} title={t('mascot.sadAlt')}>
           <p className="error" role="alert">
             {t('catalog.error', { message: catalogError ?? t('errors.generic') })}
@@ -492,7 +572,7 @@ export function ArcadeCatalog({
             <PixelIcon name="undo" size={13} /> {t('catalog.retry')}
           </button>
         </MascotMoment>
-      ) : orderedEntries.length === 0 ? (
+      ) : showEmpty ? (
         <MascotMoment className="catalog-state" emotion="curious" size={64} title={t('mascot.curiousAlt')}>
           <p>{emptyMessage}</p>
           {notPlayedOnly && catalogEntries.length > 0 ? (
@@ -503,6 +583,11 @@ export function ArcadeCatalog({
         </MascotMoment>
       ) : (
         <div className="catalog-grid">
+          {onOpenStatus
+            ? inProgress.map((item) => (
+                <InProgressCard key={item.token} item={item} onOpenStatus={onOpenStatus} />
+              ))
+            : null}
           {orderedEntries.map((entry) => (
             <CatalogCard
               key={entry.slug}
