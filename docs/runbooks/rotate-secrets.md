@@ -1,42 +1,30 @@
-# Runbook: rotate secrets, and the PAT expiry ledger
+# Runbook: rotate secrets
 
 The *recipes* for each secret live in [`deployment.md`](../deployment.md). This runbook
-adds what that page does not: the **order**, the **verification step**, and the
-**expiry ledger** — because the failure mode here is not a bad rotation, it is a token
-quietly expiring on a Tuesday.
+adds what that page does not: the **order**, and the **verification step** — because the
+failure mode here is not a bad rotation, it is a token quietly expiring on a Tuesday.
 
-## 1. The expiry ledger ⚠️
+## 1. The expiry ledger lives in the ops repo
 
-Fine-grained PATs expire. Expiry is a **scheduled, silent outage** that no monitoring
-catches, because nothing is wrong until the moment it is. Keep this table current, and
-set a calendar reminder ~2 weeks before each date.
+Fine-grained PATs expire, and expiry is a **scheduled, silent outage** that no monitoring
+catches — nothing is wrong until the moment it is. So the dates have to be written down
+somewhere, with a calendar reminder ~2 weeks ahead of each.
 
-| Credential | Lives in | Grants | Expires | Reminder set |
-| --- | --- | --- | --- | --- |
-| `github-token` | GCP Secret Manager | Issues rw + PRs r + Contents r on the games repo | ⚠️ **unrecorded — fill this in** | ☐ |
-| `GAMES_REPO_TOKEN` | GitHub Actions secret (platform repo) | Contents:read on the games repo | ⚠️ **unrecorded — fill this in** | ☐ |
-| `SITE_DISPATCH_TOKEN` | GitHub Actions secret (**games** repo) | Contents:**read+write** on the platform repo | ⚠️ **unrecorded — fill this in** | ☐ |
+**That inventory is not here.** A table of every credential, what each one grants, when it
+expires, and what breaks when it does is a map of the credential surface — useful to an
+operator and equally useful to an attacker. It lives in the private ops repo
+(`gamedevpl/www.gamedev.pl-ops`, `docs/credential-ledger.md`) along with the risk
+register; see the `internal-ops-repo` skill for access.
 
-Read the real dates from GitHub → Settings → Developer settings → Fine-grained tokens,
-and replace the placeholders above. Doing that is item 7 of the O1 gate.
+What stays here is everything that is *already* public knowledge from
+[`deployment.md`](../deployment.md) — the secret names and how to rotate each one.
 
-**On `SITE_DISPATCH_TOKEN` specifically:** `repository_dispatch` cannot be granted more
-narrowly than Contents: read+write, so despite its name this is a *write-capable*
-credential on the platform repo, held by the games repo. Treat a leak of it as a
-compromise of the platform repo, not as a nuisance. Scope it to that single repository
-and nothing else.
-
-### What breaks when each one expires
-
-| Credential | Symptom |
-| --- | --- |
-| `github-token` | Submissions fail; previews and drafts fail. Published play keeps working (snapshot) |
-| `GAMES_REPO_TOKEN` | The games-repo contract check fails in CI; **the snapshot bake fails**, so the catalog silently freezes at its last good bake |
-| `SITE_DISPATCH_TOKEN` | No symptom at all — merges to the games repo stop triggering bakes, and the site serves a stale catalog until the nightly safety bake covers it |
-
-The last row is the one to worry about: it fails *invisibly*. The nightly bake bounds the
-damage to a day, and the games-repo workflow warns rather than failing when the secret is
-absent — which is friendly, and also why nobody would notice.
+One property worth stating in the open, because it constrains how the credential may be
+scoped and anyone touching the workflow needs it: **`SITE_DISPATCH_TOKEN` cannot be
+granted narrowly.** `repository_dispatch` is gated by Contents: read+write, so despite its
+name it is a *write-capable* credential on the platform repo, held by the games repo.
+Scope it to that single repository, and treat a leak of it as a compromise of the platform
+repo rather than a nuisance.
 
 ## 2. Rotation order
 
@@ -76,7 +64,7 @@ second.** A broken site is recoverable; an attacker with a live token is not bou
 
 1. Revoke the credential at its source (GitHub token settings, or disable the Secret
    Manager version).
-2. Assess the blast radius using the table in §1 — `SITE_DISPATCH_TOKEN` and
+2. Assess the blast radius using the ledger in the ops repo — `SITE_DISPATCH_TOKEN` and
    `github-token` both imply *write* access to a repository.
 3. Check what was done with it: the games repo's and platform repo's audit log, recent
    commits, workflow runs, and any issues or PRs created.

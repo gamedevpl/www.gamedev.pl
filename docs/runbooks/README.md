@@ -17,7 +17,7 @@ hour, possibly on a phone.
 | [`site-down-triage.md`](./site-down-triage.md) | Alert A1 or A2 fired, or the site is unreachable. **Start here** |
 | [`rollback-deploy.md`](./rollback-deploy.md) | A deploy broke production |
 | [`restore-firestore.md`](./restore-firestore.md) | Data was lost, corrupted, or wrongly deleted |
-| [`rotate-secrets.md`](./rotate-secrets.md) | Routine rotation, an expiring PAT, or a suspected leak. Holds the **expiry ledger** |
+| [`rotate-secrets.md`](./rotate-secrets.md) | Routine rotation, an expiring PAT, or a suspected leak. The expiry ledger itself is in the ops repo |
 
 Planned, not yet written: `event-mode.md` (pre-warm before a meetup or launch spike) and
 `launch-day.md` (the spike procedure). Both are Gate O2/O3 items.
