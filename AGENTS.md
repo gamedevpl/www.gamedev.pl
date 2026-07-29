@@ -9,6 +9,13 @@ Then [`docs/contributing-for-agents.md`](docs/contributing-for-agents.md) for th
 ## Fast facts
 
 - npm-workspaces monorepo: `apps/web`, `apps/api`, `packages/game-generator`, `infra/`, `docs/`.
+- **This repo is public.** Internal docs (GTM strategy, risk register, legal analysis, store
+  accounts, ops readiness, creator-experience review) live in the **private
+  [`www.gamedev.pl-ops`](https://github.com/gamedevpl/www.gamedev.pl-ops) repo — required
+  context for planning/strategy/legal/ops work. Read
+  [`.claude/skills/internal-ops-repo/SKILL.md`](.claude/skills/internal-ops-repo/SKILL.md)
+  for what's there, when you must consult it, and the leak-hygiene rules (never copy its
+  content into this repo, public issues, or PRs).
 - Branch: `master` — **the repo's default branch and the live product.** The closed beta at
   `https://www.gamedev.pl` deploys from it. Product: a catalog, sandboxed player, and
   spec-submission surface for an agent-maintained games repo.
@@ -77,6 +84,7 @@ autonomous agents here. Read them directly:
 | [`.claude/skills/game-asset-generation/SKILL.md`](.claude/skills/game-asset-generation/SKILL.md)           | When **generating, styling, or composing game assets** (sprites, audio, UI) for any game specification using modern procedural and tool-assisted workflows.                                                                               |
 | [`.claude/skills/managing-beta-participants/SKILL.md`](.claude/skills/managing-beta-participants/SKILL.md) | When **managing closed beta participants**, approving waitlisted users, pre-approving emails/UIDs, or inspecting beta access controls.                                                                                                    |
 | [`.claude/skills/product-instrumentation/SKILL.md`](.claude/skills/product-instrumentation/SKILL.md)       | When **adding or changing any user-facing flow** (play, creation, sign-in, sharing, party mode) or touching telemetry/metrics code — the measurement contract, privacy invariants, event vocabulary, and the current gap list.            |
+| [`.claude/skills/internal-ops-repo/SKILL.md`](.claude/skills/internal-ops-repo/SKILL.md)                   | When work touches **planning, launch stages, legal/compliance, store submission, ops gates, or product risks** — those docs live in the private `www.gamedev.pl-ops` repo, not here. Also the rules against leaking its content.          |
 
 Both carry a **mandatory self-improvement clause**: if you use one and it turns out to be
 wrong, stale, or missing something that cost you time, update it in the same session. That

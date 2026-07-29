@@ -1,7 +1,7 @@
 import type { CreatorsResponse } from './healthApi.js';
 
 /**
- * Creator return and build economics — the two figures docs/gtm-plan.md gates Stage 0 on.
+ * Creator return and build economics — the two figures that gtm-plan.md (in the private www.gamedev.pl-ops repo) gates Stage 0 on.
  *
  * Kept beside the visit funnel because they are the same question from the other side:
  * the funnel shows people arriving and trying to create, this shows whether the ones who

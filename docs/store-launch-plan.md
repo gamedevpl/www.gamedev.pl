@@ -77,7 +77,7 @@ gating track, and it is closer to done than the docs suggest.
 - [ ] **Legal** — lawyer review of terms/privacy, and a decision on the UŚUDE art. 5(2)
       identity gap, which is currently accepted _because_ exposure is small. Opening the
       beta is exactly the change that invalidates that reasoning.
-      See [`legal-compliance-plan.md`](./legal-compliance-plan.md).
+      See [`legal-compliance-plan.md`](https://github.com/gamedevpl/www.gamedev.pl-ops/blob/main/docs/legal-compliance-plan.md) (private ops repo).
 
 ### T1 — Age rating (4.7.5) — the largest new piece
 
@@ -110,7 +110,7 @@ That is the whole reason to prefer it. The alternative — collecting a declared
 means new personal data on the user record, a privacy-policy change, a gate on the play
 path, and a lawyer-review item, all to enable content the product does not want anyway.
 The minimal-data posture (no cookie banner, structurally anonymous play telemetry) is
-[an asset, not an accident](./legal-compliance-plan.md), and this keeps it intact.
+[an asset, not an accident](https://github.com/gamedevpl/www.gamedev.pl-ops/blob/main/docs/legal-compliance-plan.md), and this keeps it intact.
 
 The ceiling is close to free because **moderation already rejects what would earn a high
 rating** — sexual content, realistic violence, drugs, gambling. Capping the catalog mostly
@@ -186,7 +186,7 @@ production unnoticed.
 
 ### T4 — Accounts and signing (owner)
 
-Tracked in [`store-accounts-setup.md`](./store-accounts-setup.md). Play verification is in
+Tracked in [`store-accounts-setup.md`](https://github.com/gamedevpl/www.gamedev.pl-ops/blob/main/docs/store-accounts-setup.md) (private ops repo). Play verification is in
 flight; ASC API key and the Android upload keystore are minutes of work once needed.
 
 ### T5 — Calendar (cannot be compressed by parallelism)

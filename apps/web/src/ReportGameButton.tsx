@@ -15,7 +15,7 @@ import { PixelIcon } from './PixelIcon.js';
  * A mailto is the honest MVP: it genuinely reaches a human, and it needs no mailbox we
  * do not already have to run. Its weakness is that receipt confirmation and the
  * statement of reasons are manual — the in-product form that fixes this is Phase 2 of
- * docs/legal-compliance-plan.md.
+ * legal-compliance-plan.md in the private www.gamedev.pl-ops repo.
  */
 export function ReportGameButton({ slug, title }: { slug: string; title: string }) {
   const { t } = useTranslation();
