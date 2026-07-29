@@ -6,6 +6,24 @@ Manual or local builds continue to be supported via `infra/deploy-api.sh`.
 
 No Terraform configuration is used or required for this repository.
 
+## Scripts
+
+All are idempotent and **owner-run** — they need `gcloud` authenticated against the
+project, which agent tooling can read but not write.
+
+| Script | What it provisions | When to run |
+| --- | --- | --- |
+| `setup-wif.sh` | Workload Identity Federation for GitHub Actions | Once, before the first deploy |
+| `setup-gcp.sh` | Firestore, IAM, session secret, telemetry TTL, snapshot bucket | Once, then after adding a resource it manages |
+| `setup-backups.sh` | Firestore PITR + daily export to GCS, export SA and its IAM | Once. **Then drill the restore** — see `docs/runbooks/restore-firestore.md` |
+| `setup-monitoring.sh` | Uptime check + alert policies A1–A4, email channel | Once, per `ALERT_EMAIL`. Prints the manual step for A5 (billing budget) |
+| `deploy-api.sh` | Manual deploy of the app service | Rarely — CI deploys on merge to `master` |
+| `deploy-world.sh` | Manual deploy of the zone host | Rarely; inert unless `ZONE_HOST_URL` is set |
+
+Backups and alerting exist because neither Cloud Run nor Firestore provides them by
+default: without `setup-backups.sh` a wrong delete is unrecoverable, and without
+`setup-monitoring.sh` an outage is discovered by whoever next opens the site.
+
 ## Prerequisites (Owner-Run Setup)
 
 Before `.github/workflows/deploy.yml` can deploy from GitHub Actions, the owner must set up Workload Identity Federation in GCP:
