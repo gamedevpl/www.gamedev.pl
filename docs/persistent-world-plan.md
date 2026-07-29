@@ -1,6 +1,6 @@
 # Persistent shared worlds — concept exploration
 
-Status: **P1 and P2 built 2026-07-28. P3's spike is done and its premise survived
+Status: **P1, P2 and P2.5 built 2026-07-28. P3's spike is done and its premise survived
 ([p3-sim-spike.md](./p3-sim-spike.md)); the phase itself is not scheduled.**
 This document answers the question
 _"if we wanted a game like Ultima Online on this platform, how could we achieve it?"_ —
@@ -9,9 +9,9 @@ written against the shipped party-mode architecture
 decomposes an MMO into steps that are each independently shippable products, so the platform
 can walk toward this without betting on the destination.
 
-**P1 (durable per-player state) and P2 (shared asynchronous worlds) are implemented and
-gated**, in both repos. P3 has been spiked but not built, and nothing beyond P2 is
-committed roadmap.
+**P1 (durable per-player state), P2 (shared asynchronous worlds) and P2.5 (ambient
+presence) are implemented and gated**, in both repos. P3 has been spiked but not built,
+and nothing beyond P2.5 is committed roadmap.
 
 ---
 
@@ -285,10 +285,93 @@ writes and another reads is the hardest part of a shared world, and a bank makes
 possible message one somebody already read. The platform moderates the field regardless,
 so a game that opens it up later changes nothing about the contract.
 
-Not built, deliberately: **presence**. Knowing who is in a world _right now_ is the
-natural next thing to want, but it is a liveness problem rather than a storage one, it
-rides the relay rather than the store, and building it here would have blurred the one
-line P2 is meant to hold — that a world is a document set with rules, not a session.
+Left out of P2 deliberately, and built afterwards as its own phase: **presence**. Knowing
+who is in a world _right now_ is the natural next thing to want, but it is a liveness
+problem rather than a storage one, and building it inside P2 would have blurred the one
+line P2 is meant to hold — that a world is a document set with rules, not a session. It
+is now P2.5, below.
+
+### P2.5 — Ambient presence (part of capability 2, without the authority) ✅ built
+
+"Someone else is here now." A player in a world game sees how many others are in the same
+world and roughly where, with **no server-authoritative simulation of any kind**. Nothing
+validates a position, nothing collides, and two players cannot affect each other's round.
+That restraint is the phase: presence is the part of capability 2 that can be delivered
+under option B, and everything that needs an arbiter stays in P3.
+
+| Piece                      | Where                                                                                                                                                                                                                 |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GameKit.createPresence()` | games repo `shared/modules/presence.ts` (+ `presence` in `GAME_KIT_MODULES`, both copies of the lockstep contract)                                                                                                    |
+| Author rules and CI        | games repo `tools/validate.ts` **Check 24** — `presence: live` frontmatter, the module, a `createPresence(` call and a `world.presence` grid must all agree, and only on a game that already declares `world: shared` |
+| The declared grid          | each game's `GAME.json` `world.presence` block, parsed by [`world-schema.ts`](../apps/api/src/world-schema.ts)                                                                                                        |
+| Shell half of the bridge   | [`apps/web/src/presence.ts`](../apps/web/src/presence.ts), mounted by `GameTheater` on the published slug                                                                                                             |
+| API                        | [`apps/api/src/presence.ts`](../apps/api/src/presence.ts) — public `GET`, session-gated `POST`/`DELETE /api/games/:slug/presence`                                                                                     |
+| Storage                    | **none** — an in-process `PresenceRegistry` with a TTL                                                                                                                                                                |
+
+**Polling, not push, and the shell owns the clock.** The obvious alternative was a socket
+on `mp.ts`, which already has rooms, admission control and join tokens. It was rejected on
+two counts. A game cannot hold a socket — sandboxed, no `connect-src` — so the shell would
+have to, which means a socket per player per world on a service still pinned at
+`--max-instances 1`, for a fact that changes on a fifteen-second timescale. And P2's
+`commons` already established that a shared world polls: one request every 12 seconds while
+the tab is visible, none at all while it is hidden. Presence rides that same shape, with the
+heartbeat and the roster read combined into one request rather than two.
+
+What is genuinely new is **where the timer lives**. Saves and world writes happen because a
+player did something; presence happens because time passed. A periodic request whose
+interval was chosen by untrusted code inside an iframe is a denial-of-service surface with
+a friendly name — so the game reports _where it is_ (`here(col, row)`, free to call every
+frame) and the shell decides _how often anybody hears about it_. A game calling `here()`
+sixty times a second produces exactly the same request rate as one calling it twice.
+
+**Freshness.** A slot survives 40 s past its last heartbeat — three missed beats, long
+enough that a phone switching networks mid-walk does not blink out, short enough that "here
+now" is not reporting somebody who closed the tab a minute ago. The TTL is handed to the
+game as `ttlMs` precisely so it can draw a peer as vaguely as the number deserves;
+`wanderers-green` draws soft glows rather than sharp figures for that reason.
+
+**Privacy: what a player's presence reveals, and for how long.** That _an account_ is in
+this world, at the tile they last reported, under an eight-character tag — and nothing else.
+For as long as they play, plus the 40 s window. Three specifics:
+
+1. **No uid ever crosses the line**, pinned by a test that serialises the whole response and
+   searches it rather than checking fields one at a time.
+2. **The presence tag is not `worldOwnerTag`.** Different salt, deliberately. Equal tags
+   would let a game tell its players that the wanderer standing over there is the one who
+   planted this — where a real person is, right now, tied to what they have built. The
+   presence salt is also random per process and never persisted, so a tag stops meaning
+   anything on the next deploy, and nobody — including us later — can recompute what it was.
+3. **The grid is capped at 64×64.** This is the number that keeps ambient presence ambient.
+   A game free to declare a 4096-wide grid would be publishing a live movement trace of a
+   real person at roughly pixel resolution, which is not what anybody agreed to when they
+   walked into a world.
+
+**Nothing is stored, and that is the privacy posture rather than a shortcut around it.**
+§7's invariant 4 says every new collection joins the erasure walk the day it is created;
+the cheapest way to honour an erasure obligation is to have nothing to erase. There is no
+presence document, no presence index, no change to `erase-player-signals.ts`, and therefore
+no new way for its indexed-reads-before-writes ordering to be broken. The registry takes no
+`Store` at all, so the absence is in the type rather than only in a comment. Two costs,
+both named rather than discovered: a deploy empties every roster (players reappear within
+one heartbeat), and rosters do not survive a second instance — the same constraint `mp.ts`
+rooms already live under, and when `--max-instances 1` falls (§8) presence needs the same
+zone-directory work rooms do, not a database.
+
+**Reads are public; appearing needs an account.** Straight from P2's lesson — a count
+nobody may look at until they sign in shows an empty world to precisely the visitor
+deciding whether an account is worth having. Requiring a session to _appear_ also settles
+inflation for free: a slot is keyed by uid, so one account is one slot however many tabs it
+opens, and there is no anonymous token anybody can mint a thousand of.
+
+**The first game that uses it** is `wanderers-green` again, which is the point: presence had
+to be something added to a world that was already worth walking alone. Its `TRACE.json`
+moved by exactly one field — `company`, which is `0` at every sampled frame, because under
+capture there is never anybody else on the green. That is the committed evidence that the
+solo round is untouched.
+
+Not built, deliberately: no catalog surface. §9 wants "Enter world — 12 online now" on a
+game's card and this phase does not provide it, because a card-level count means reading
+every world's roster on a page nobody has opened a game from yet.
 
 ### P3 — Authoritative real-time zones (capabilities 2+3+4, "the real thing")
 
@@ -515,7 +598,12 @@ section originally missed.
    The learning that cost the most: a shared world needs enough content of its own to be
    worth visiting empty, or its first visitor — and every CI capture run — sees a field
    with nothing in it.
-3. ~~**P3 paper spike only**: pick the isolate technology and write the determinism CI
+3. ~~**Presence** (P2.5): who is in a world right now~~ — **done** (see §5's P2.5). The
+   design question that turned out to matter was not polling versus push, which the
+   sandbox settles on its own, but _which side owns the timer_ — and the answer that
+   makes the feature safe is the shell, because a periodic request an iframe can set the
+   interval of is a denial-of-service surface with a friendly name.
+4. ~~**P3 paper spike only**: pick the isolate technology and write the determinism CI
    check against an existing captured game — _before_ designing anything else, because if
    agent-written sims can't reliably pass the determinism gate, P3's premise fails and we
    should know early.~~ — **done** ([p3-sim-spike.md](./p3-sim-spike.md)). It did not stay

@@ -47,6 +47,17 @@ export const MAX_WORLD_ENTRY_BYTES = 4 * 1024;
  * rather than a bigger number here.
  */
 export const MAX_WORLD_ENTRIES = 2000;
+/**
+ * Ceiling on the tile grid a world may declare for presence (P2.5).
+ *
+ * This is the number that keeps ambient co-presence ambient. A game that could declare a
+ * 4096×4096 grid would be reporting one player's position to every other player at
+ * roughly pixel resolution, which is not "somebody is over there by the north hedge" —
+ * it is a movement trace of a real person, published live to strangers, from a feature
+ * nobody would have described that way. 64×64 is coarse enough that a tile is a place
+ * rather than a location, and generous enough for any board a game can actually draw.
+ */
+export const MAX_PRESENCE_GRID = 64;
 
 /** Keys are game-chosen (`plot.3.4`, `stall-17`) and land in a document path. */
 const KEY_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$/;
@@ -62,9 +73,25 @@ export type WorldFieldSpec =
   | { type: 'enum'; values: string[] }
   | { type: 'bool' };
 
+/** The coordinate space presence positions are reported and clamped in. */
+export interface PresenceGrid {
+  cols: number;
+  rows: number;
+}
+
 export interface WorldSchema {
   fields: Record<string, WorldFieldSpec>;
   maxPerPlayer: number;
+  /**
+   * Null for the ordinary world, which has entries but no roster.
+   *
+   * Presence is opt-in per world rather than on for every world, because it is the one
+   * part of this system that reports something about a person *while they are still
+   * there*. A world that stores what strangers built has not thereby agreed to announce
+   * who is standing in it, and the difference should be a decision somebody made in a
+   * reviewed manifest rather than a side effect of having a world at all.
+   */
+  presence: PresenceGrid | null;
 }
 
 export function isValidWorldKey(key: unknown): key is string {
@@ -123,7 +150,28 @@ export function parseWorldSchema(raw: unknown): WorldSchema | null {
     if (!spec) return null;
     fields[name] = spec;
   }
-  return { fields, maxPerPlayer: quota as number };
+
+  // Absent is the ordinary answer and means no roster. Present-but-unparseable takes the
+  // whole world down with it, exactly as a bad field spec does — see the note at the top
+  // on why a partial parse is not an option. Here the stake is a little different and no
+  // smaller: failing open would mean a game reporting positions into a coordinate space
+  // nobody agreed to bound.
+  let presence: PresenceGrid | null = null;
+  if (raw.presence !== undefined) {
+    presence = parsePresence(raw.presence);
+    if (!presence) return null;
+  }
+
+  return { fields, maxPerPlayer: quota as number, presence };
+}
+
+function parsePresence(raw: unknown): PresenceGrid | null {
+  if (!isRecord(raw)) return null;
+  const { cols, rows } = raw;
+  for (const size of [cols, rows]) {
+    if (!Number.isInteger(size) || (size as number) < 1 || (size as number) > MAX_PRESENCE_GRID) return null;
+  }
+  return { cols: cols as number, rows: rows as number };
 }
 
 export type WorldEntryValidation =

@@ -100,6 +100,15 @@ export const privacyPl: LegalDocument = {
               'Do usunięcia konta lub do usunięcia tego z poziomu samej gry',
             ],
             [
+              'W trakcie gry we wspólnym świecie — to, że w nim jesteś i mniej więcej gdzie: przybliżona pozycja ' +
+                'na siatce kafelków, a nie dokładna lokalizacja. Przechowywane wyłącznie w pamięci przez około ' +
+                '40 sekund od Twojego ostatniego ruchu i nigdy niezapisywane w żadnej bazie danych. Inni gracze ' +
+                'widzą krótki kod i kafelek: nigdy Twoje imię, konto ani kod powiązany z tym, co tam zbudowałeś',
+              'Umożliwienie graczom zobaczenia, że inni są w tym samym świecie w tym samym czasie',
+              'art. 6 ust. 1 lit. b — wykonanie umowy',
+              'Około 40 sekund po zakończeniu gry. Nie pozostaje nic, co można by później usunąć',
+            ],
+            [
               'Wynik moderacji Twojego opisu (czy i dlaczego został odrzucony)',
               'Niedopuszczenie do powstania treści bezprawnych lub szkodliwych',
               'art. 6 ust. 1 lit. c — obowiązek prawny (akt o usługach cyfrowych) oraz lit. f — nasz prawnie ' +

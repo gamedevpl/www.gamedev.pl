@@ -25,6 +25,15 @@ import { MAX_WORLD_ENTRIES } from './world-schema.js';
  * one an operator can run on a Friday without reading the source first, and any design
  * where a mistyped argument erases somebody's account is not that.
  *
+ * ## Why presence is not covered
+ *
+ * Because there is nothing to cover. P2.5 presence is TTL-only and lives in the API
+ * process's memory (`presence.ts`), so it never becomes a row `erasePlayerSignals` could
+ * find or miss. That is the point of the posture rather than a gap in this command: the
+ * signal with no durable form is the one whose erasure cannot silently stop working. If
+ * presence ever grows a stored half, it joins the erase path and this file in the same
+ * commit.
+ *
  * ## Why votes are not covered
  *
  * Three of the four signals can be planted as leaf documents whose parents never have to
