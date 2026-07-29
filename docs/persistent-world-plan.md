@@ -373,7 +373,7 @@ Not built, deliberately: no catalog surface. §9 wants "Enter world — 12 onlin
 game's card and this phase does not provide it, because a card-level count means reading
 every world's roster on a page nobody has opened a game from yet.
 
-### P3 — Authoritative real-time zones (capabilities 2+3+4, "the real thing")
+### P3 — Authoritative real-time zones (capabilities 2+3+4, "the real thing") ✅ built
 
 Option C: the game ships a **deterministic sim** (§6) that the platform runs in a caged
 isolate per active zone. The relay evolves from input-forwarder into a zone host that feeds
@@ -385,10 +385,12 @@ through a separate view entry point.
 - The world scales by zones, not by world: each zone is a room-sized problem, which is
   exactly the size `mp.ts` already handles.
 
-**The spike is done** (2026-07-28) — see [p3-sim-spike.md](./p3-sim-spike.md) for the
-measurements. The phase itself is still unscheduled; what exists is the contract, the CI
-gate and one game split across it, all in the games repo and inert for everything else.
-Four results change how the rest of P3 should be planned:
+**Built and live** (2026-07-29). `gamedev-world` is deployed, Ember Watch runs on it, and
+a second game (biplane-skirmish) selects the module. What follows is kept because it is
+the reasoning the build rests on, not a plan for work still to come.
+
+**The spike came first** (2026-07-28) — see [p3-sim-spike.md](./p3-sim-spike.md) for the
+measurements. Four of its results shaped everything after it:
 
 1. **The premise holds.** Of 261 modules in the catalog, **two read a clock and none
    touch the DOM** — and one of those two is a cosmetic pulse inside a renderer. Checks 6
@@ -413,8 +415,8 @@ Four results change how the rest of P3 should be planned:
    random stream spans a zone's lifetime and a woken sim can be put back on it by
    counting draws.
 
-The first task of P3 proper is now a small one: inject that math shim into the client
-bundle, closing the single gap the spike left open.
+The first task of P3 proper was a small one: inject that math shim into the client
+bundle, closing the single gap the spike left open. That is done.
 
 **The host is now built** — `packages/zone-core` (the cage, the tick loop, the
 hibernation) and `apps/world` (the socket, the Firestore snapshots), with the shell half
