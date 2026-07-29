@@ -75,6 +75,20 @@ interface Seated {
 export class ZoneHost {
   private readonly zones = new Map<string, Zone>();
   private readonly members = new Map<string, Set<Seated>>();
+  /**
+   * Admissions in flight, per zone.
+   *
+   * A joining player holds no seat yet — `zone.join` has to load the sim and read the
+   * snapshot first, and that await is hundreds of milliseconds of network. For all of it
+   * the zone is not live and has nobody in it, which is precisely the shape the sweep
+   * reaps. It ran every 20 ms, so it did not lose a race, it won every one: the zone and
+   * its seat set were deleted out from under the very first join, which then failed on a
+   * missing seat set and reported the generic `zone_unavailable`. Reaping mid-admission is
+   * worse than the crash it caused, too — a second arrival would build a *second* Zone for
+   * the same id, and two sims of one world in one process is the thing max-instances 1
+   * exists to prevent.
+   */
+  private readonly admitting = new Map<string, number>();
   private readonly options: ZoneHostOptions;
   private readonly now: () => number;
   private readonly maxZones: number;
@@ -105,7 +119,7 @@ export class ZoneHost {
       zone.pump(at);
       // A zone that put itself to sleep — empty, or over budget — is dropped here rather
       // than lingering as an object the next join would find in a half state.
-      if (zone.state !== 'live' && (this.members.get(zoneId)?.size ?? 0) === 0) {
+      if (zone.state !== 'live' && (this.members.get(zoneId)?.size ?? 0) === 0 && !this.admitting.has(zoneId)) {
         this.zones.delete(zoneId);
         this.members.delete(zoneId);
       }
@@ -145,21 +159,33 @@ export class ZoneHost {
     }
 
     let slot: number;
+    this.admitting.set(claims.zone, (this.admitting.get(claims.zone) ?? 0) + 1);
     try {
       slot = await zone.join(claims.player);
     } catch (error) {
-      if (this.zones.get(claims.zone) === zone && (this.members.get(claims.zone)?.size ?? 0) === 0) {
+      if (
+        this.zones.get(claims.zone) === zone &&
+        (this.members.get(claims.zone)?.size ?? 0) === 0 &&
+        (this.admitting.get(claims.zone) ?? 0) <= 1
+      ) {
         this.zones.delete(claims.zone);
         this.members.delete(claims.zone);
       }
       if (error instanceof ZoneFullError) throw new ZoneAdmissionError('zone_full');
       throw new ZoneAdmissionError('zone_unavailable');
+    } finally {
+      const pending = (this.admitting.get(claims.zone) ?? 1) - 1;
+      if (pending > 0) this.admitting.set(claims.zone, pending);
+      else this.admitting.delete(claims.zone);
     }
 
     // A second connection for one seat replaces the first. A player with two tabs is one
     // player; letting both drive would make the world act on contradictory intents from
     // somebody who only meant one of them.
-    const seats = this.members.get(claims.zone)!;
+    // Derived state, so a missing set is rebuilt rather than thrown over: the seat this
+    // player just earned is the fact, and `members` is only the index of it.
+    const seats = this.members.get(claims.zone) ?? new Set<Seated>();
+    this.members.set(claims.zone, seats);
     for (const seated of [...seats]) {
       if (seated.slot === slot) {
         seats.delete(seated);
