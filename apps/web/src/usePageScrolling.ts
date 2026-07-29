@@ -71,9 +71,15 @@ export function usePageScrolling(options: UsePageScrollingOptions = {}): boolean
     const onScroll = () => {
       const y = window.scrollY || document.documentElement.scrollTop || 0;
       const prev = lastY.current;
-      lastY.current = y;
-      if (prev == null) return;
+      if (prev == null) {
+        lastY.current = y;
+        return;
+      }
+      // Leave `lastY` alone until the threshold is met so slow 1px trackpad
+      // steps accumulate against the last committed position instead of each
+      // resetting the baseline and never firing.
       if (Math.abs(y - prev) < thresholdPx) return;
+      lastY.current = y;
       markScrolling();
     };
 

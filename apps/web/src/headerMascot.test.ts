@@ -17,20 +17,23 @@ import { describe, expect, it } from 'vitest';
  */
 const read = (name: string) => readFileSync(fileURLToPath(new URL(`./${name}`, import.meta.url)), 'utf8');
 
+/** The header mark specifically — not whichever `<Mascot` happens to appear first. */
+function logoMascotSource(navHeader: string): string {
+  const match = navHeader.match(/<Mascot[\s\S]*?mascot--logo[\s\S]*?\/>/);
+  expect(match).not.toBeNull();
+  return match![0];
+}
+
 describe('the header mascot is alive', () => {
   it('does not freeze the nav mark', () => {
-    const navHeader = read('NavHeader.tsx');
-    const logoMascot = navHeader.match(/<Mascot[\s\S]*?\/>/);
-    expect(logoMascot).not.toBeNull();
-    expect(logoMascot![0]).not.toMatch(/staticPose/);
-    expect(logoMascot![0]).toMatch(/mascot--logo/);
+    const markup = logoMascotSource(read('NavHeader.tsx'));
+    expect(markup).not.toMatch(/staticPose/);
   });
 
   it('wires page scrolling into the logo mark so he can mime a phone scroll', () => {
     const navHeader = read('NavHeader.tsx');
     expect(navHeader).toMatch(/usePageScrolling/);
-    const logoMascot = navHeader.match(/<Mascot[\s\S]*?\/>/);
-    expect(logoMascot![0]).toMatch(/scrolling=\{pageScrolling\}/);
+    expect(logoMascotSource(navHeader)).toMatch(/scrolling=\{pageScrolling\}/);
   });
 
   it('promotes the idle breath to a hop while the logo is hovered', () => {

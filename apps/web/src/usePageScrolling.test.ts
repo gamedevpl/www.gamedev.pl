@@ -142,6 +142,42 @@ describe('usePageScrolling', () => {
     });
   });
 
+  it('lets slow sub-threshold steps accumulate into a real scroll', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const onChange = vi.fn();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(Probe, { onChange, settleMs: 200, thresholdPx: 3 }));
+    });
+
+    // Three 1px steps never each clear the threshold, but together they do —
+    // lastY must stay put until the threshold is met, or a trackpad crawl is silent.
+    await act(async () => {
+      (window as Window & { scrollY: number }).scrollY = 1;
+      window.dispatchEvent(new Event('scroll'));
+    });
+    expect(onChange).toHaveBeenLastCalledWith(false);
+
+    await act(async () => {
+      (window as Window & { scrollY: number }).scrollY = 2;
+      window.dispatchEvent(new Event('scroll'));
+    });
+    expect(onChange).toHaveBeenLastCalledWith(false);
+
+    await act(async () => {
+      (window as Window & { scrollY: number }).scrollY = 3;
+      window.dispatchEvent(new Event('scroll'));
+    });
+    expect(onChange).toHaveBeenLastCalledWith(true);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('stays false when prefers-reduced-motion is on', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     stubMatchMedia(true);
