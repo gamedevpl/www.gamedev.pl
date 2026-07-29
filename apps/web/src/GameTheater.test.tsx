@@ -115,4 +115,19 @@ describe('GameTheater more menu', () => {
 
     expect(container.querySelector('.theater-more.is-open')).toBeNull();
   });
+
+  it('keeps menu-row icons the same size so labels share one left edge', async () => {
+    await draw();
+    const panel = container.querySelector('.theater-more-panel') as HTMLElement;
+    expect(panel).not.toBeNull();
+
+    const icons = panel.querySelectorAll(
+      '.theater-menu-item > svg, .feedback-btn > svg, .share-btn > svg, .report-btn > svg',
+    );
+    expect(icons.length).toBeGreaterThanOrEqual(3);
+
+    const widths = [...icons].map((icon) => icon.getAttribute('width'));
+    expect(new Set(widths).size).toBe(1);
+    expect(widths[0]).toBe('13');
+  });
 });

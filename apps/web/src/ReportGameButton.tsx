@@ -46,7 +46,7 @@ export function ReportGameButton({ slug, title }: { slug: string; title: string 
       aria-label={t('report.action')}
       title={t('report.action')}
     >
-      <PixelIcon name="flag" size={12} />
+      <PixelIcon name="flag" size={13} />
       <span className="btn-label">{t('report.action')}</span>
     </a>
   );
