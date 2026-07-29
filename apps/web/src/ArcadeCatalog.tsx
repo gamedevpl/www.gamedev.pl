@@ -1,10 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { catalogMediaUrl, isPlatformAuthor, type CatalogEntry } from './catalog.js';
+import {
+  CATALOG_SORT_MODES,
+  DEFAULT_CATALOG_SORT,
+  readCatalogSortMode,
+  sortCatalogEntries,
+  writeCatalogSortMode,
+  type CatalogSortMode,
+  type CatalogSortSignals,
+} from './catalogSort.js';
 import { MascotMoment } from './Mascot.js';
 import { PixelIcon } from './PixelIcon.js';
 import { getRecentPlays } from './recentPlays.js';
-import { fetchRecommendations, orderCatalogByRecommendations } from './recommendationsApi.js';
+import { fetchCatalogSortSignals } from './recommendationsApi.js';
 import { useInView } from './useInView.js';
 
 type ArcadeCatalogProps = {
@@ -268,6 +277,13 @@ function CatalogCard({
   );
 }
 
+const EMPTY_SIGNALS: CatalogSortSignals = {
+  recommended: [],
+  newest: [],
+  sessions: new Map(),
+  affinityLastPlayed: new Map(),
+};
+
 export function ArcadeCatalog({
   catalogStatus,
   catalogError,
@@ -278,16 +294,25 @@ export function ArcadeCatalog({
   recommendationsRefreshKey = 0,
 }: ArcadeCatalogProps) {
   const { t } = useTranslation();
-  const [rankedSlugs, setRankedSlugs] = useState<string[] | null>(null);
+  const [sortMode, setSortMode] = useState<CatalogSortMode>(() =>
+    typeof localStorage === 'undefined' ? DEFAULT_CATALOG_SORT : readCatalogSortMode(),
+  );
+  const [signals, setSignals] = useState<CatalogSortSignals>(EMPTY_SIGNALS);
 
   useEffect(() => {
     if (catalogStatus !== 'ready' || catalogEntries.length === 0) {
-      setRankedSlugs(null);
+      setSignals(EMPTY_SIGNALS);
       return;
     }
     let cancelled = false;
-    void fetchRecommendations(getRecentPlays()).then((items) => {
-      if (!cancelled) setRankedSlugs(items.length > 0 ? items.map((item) => item.slug) : null);
+    void fetchCatalogSortSignals(getRecentPlays()).then((payload) => {
+      if (cancelled) return;
+      setSignals({
+        recommended: payload.items.map((item) => item.slug),
+        newest: payload.newest,
+        sessions: new Map(payload.popularity.map((row) => [row.slug, row.sessions])),
+        affinityLastPlayed: new Map(payload.lastPlayed.map((row) => [row.slug, row.lastPlayedAt])),
+      });
     });
     return () => {
       cancelled = true;
@@ -295,16 +320,34 @@ export function ArcadeCatalog({
   }, [catalogStatus, catalogEntries, recommendationsRefreshKey]);
 
   const orderedEntries = useMemo(
-    () => orderCatalogByRecommendations(catalogEntries, rankedSlugs),
-    [catalogEntries, rankedSlugs],
+    () => sortCatalogEntries(catalogEntries, sortMode, signals),
+    [catalogEntries, sortMode, signals],
   );
-  const sortedForYou = rankedSlugs !== null && rankedSlugs.length > 0;
+
+  function handleSortChange(mode: CatalogSortMode) {
+    setSortMode(mode);
+    writeCatalogSortMode(mode);
+  }
 
   return (
     <section id="arcade" className="arcade-section">
       <div className="arcade-header">
         <h2 className="arcade-title">{t('catalog.title')}</h2>
-        {sortedForYou ? <p className="arcade-subtitle">{t('recommendations.sortedSubtitle')}</p> : null}
+        {catalogStatus === 'ready' && catalogEntries.length > 0 ? (
+          <div className="catalog-sort" role="group" aria-label={t('catalog.sortLabel')}>
+            {CATALOG_SORT_MODES.map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                className={`catalog-sort-option${sortMode === mode ? ' is-active' : ''}`}
+                aria-pressed={sortMode === mode}
+                onClick={() => handleSortChange(mode)}
+              >
+                {t(`catalog.sort.${mode}`)}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       {catalogStatus === 'loading' ? (

@@ -133,8 +133,16 @@ describe('recommendation routes', () => {
     const server = await app();
     const res = await server.inject({ method: 'GET', url: '/api/recommendations' });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as { items: Array<{ slug: string; reason: string }> };
+    const body = res.json() as {
+      items: Array<{ slug: string; reason: string }>;
+      popularity: Array<{ slug: string; sessions: number }>;
+      newest: string[];
+      lastPlayed: Array<{ slug: string; lastPlayedAt: string }>;
+    };
     expect(body.items[0]).toEqual({ slug: 'arcade-hit', reason: 'popular' });
+    expect(body.popularity[0]).toEqual({ slug: 'arcade-hit', sessions: 40 });
+    expect(body.newest[0]).toBe('arcade-hit'); // reverse catalog when no publish dates
+    expect(body.lastPlayed).toEqual([]);
     await server.close();
   });
 
@@ -162,9 +170,13 @@ describe('recommendation routes', () => {
       headers: authHeaders('g:alice'),
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as { items: Array<{ slug: string; reason: string }> };
+    const body = res.json() as {
+      items: Array<{ slug: string; reason: string }>;
+      lastPlayed: Array<{ slug: string; lastPlayedAt: string }>;
+    };
     expect(body.items[0]).toEqual({ slug: 'puzzle-one', reason: 'continue' });
     expect(body.items.some((item) => item.slug === 'puzzle-two' && item.reason === 'for_you')).toBe(true);
+    expect(body.lastPlayed.map((row) => row.slug)).toEqual(['puzzle-one']);
     await server.close();
   });
 

@@ -5,13 +5,13 @@ import { rankRecommendations, type RecommendGame } from './recommend.js';
 import type { Scorecard, Store } from './store.js';
 
 /**
- * Home-page recommendations: community popularity from scorecards + personal
- * play affinity for signed-in players.
+ * Home-page catalog sorting signals: community popularity from scorecards + personal
+ * play affinity for signed-in players, plus helpers for newest / most-played /
+ * last-played modes on the arcade grid.
  *
- * The home arcade **sorts** by this ranking. Affinity recording
- * (`POST /api/games/:slug/played`) is identity-attached account data, erased with
- * the account. It never writes to the anonymous play/visit telemetry streams and
- * must not grow a join key between them.
+ * Affinity recording (`POST /api/games/:slug/played`) is identity-attached account
+ * data, erased with the account. It never writes to the anonymous play/visit
+ * telemetry streams and must not grow a join key between them.
  */
 
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
@@ -131,8 +131,45 @@ export async function registerRecommendationRoutes(
       limit: query.data.limit ?? games.length,
     });
 
+    const popularity = [...scorecardMap.entries()]
+      .map(([slug, signals]) => ({ slug, sessions: signals.sessions }))
+      .sort((a, b) => b.sessions - a.sessions || a.slug.localeCompare(b.slug));
+
+    const lastPlayed = affinity
+      .filter((entry) => published.has(entry.slug))
+      .map((entry) => ({ slug: entry.slug, lastPlayedAt: entry.lastPlayedAt }))
+      .sort((a, b) => b.lastPlayedAt.localeCompare(a.lastPlayedAt) || a.slug.localeCompare(b.slug));
+
+    // Newest: submission publish time when we have it; undated games follow in reverse
+    // catalog order (committed catalogs tend to grow oldest→newest).
+    const recentPublished = await store.listRecentlyPublished(500);
+    const publishedAtBySlug = new Map<string, string>();
+    for (const submission of recentPublished) {
+      if (!submission.slug || !submission.publishedAt || !published.has(submission.slug)) continue;
+      const existing = publishedAtBySlug.get(submission.slug);
+      if (!existing || submission.publishedAt > existing) {
+        publishedAtBySlug.set(submission.slug, submission.publishedAt);
+      }
+    }
+    const dated = games
+      .filter((game) => publishedAtBySlug.has(game.slug))
+      .sort(
+        (a, b) =>
+          (publishedAtBySlug.get(b.slug) ?? '').localeCompare(publishedAtBySlug.get(a.slug) ?? '') ||
+          a.slug.localeCompare(b.slug),
+      )
+      .map((game) => game.slug);
+    const datedSet = new Set(dated);
+    const undatedNewestFirst = [...games]
+      .reverse()
+      .filter((game) => !datedSet.has(game.slug))
+      .map((game) => game.slug);
+
     return reply.send({
       items: ranked.map((item) => ({ slug: item.slug, reason: item.reason })),
+      popularity,
+      lastPlayed,
+      newest: [...dated, ...undatedNewestFirst],
     });
   });
 }

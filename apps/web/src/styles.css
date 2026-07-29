@@ -919,6 +919,11 @@ button:disabled {
 
 .arcade-header {
   margin-bottom: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 20px;
 }
 
 /* A quiet section label, not a banner — the grid of games below speaks for itself. */
@@ -935,6 +940,39 @@ button:disabled {
   font-size: 0.95rem;
   color: var(--muted);
   max-width: 42rem;
+}
+
+.catalog-sort {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.25rem;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.catalog-sort::-webkit-scrollbar {
+  display: none;
+}
+
+.catalog-sort-option {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.catalog-sort-option.is-active {
+  border-color: var(--turquoise);
+  color: var(--turquoise);
 }
 
 .catalog-grid {
