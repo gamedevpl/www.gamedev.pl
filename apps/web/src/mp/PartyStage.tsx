@@ -56,6 +56,8 @@ export function PartyStage({ game, session, onExit }: PartyStageProps) {
           return;
         }
         if (frame.t === 'input') {
+          // `d` is key down/up. Do not rename to `v` — every bridge frame already
+          // carries `v` as PROTOCOL_VERSION, and the game reads `d` for held state.
           postToGame({ t: 'input', slot: frame.slot, k: frame.k, d: frame.d });
           return;
         }

@@ -187,14 +187,16 @@ connection):
 
 | Direction      | Frames                                                                         |
 | -------------- | ------------------------------------------------------------------------------ |
-| guest → server | `hello { code, token, nick }`, `input { k, v }`, `bye`                         |
+| guest → server | `hello { code, token, nick }`, `input { k, d }`, `bye`                         |
 | server → guest | `welcome { slot, color, nick, phase }`, `phase { phase }`, `closed { reason }` |
 | host → server  | `hello { code, token }`, `phase { phase }`, `kick { slot }`                    |
-| server → host  | `roster { slots }`, `input { slot, k, v }`, `closed { reason }`                |
+| server → host  | `roster { slots }`, `input { slot, k, d }`, `closed { reason }`                |
 
-`k` is one of `up|down|left|right|a` (the v1 layout) and `v` is `0|1`. The server is a **relay
-with admission control**, not a game engine: it validates, tags with the slot number,
-rate-limits (token bucket, ~40 frames/s/connection), and forwards.
+`k` is one of `up|down|left|right|a` (the v1 layout) and `d` is `0|1` (down/up). Every frame
+already carries `v` as the protocol version, so key state cannot reuse that field — a release
+of `0` would look like a version mismatch and be dropped. The server is a **relay with
+admission control**, not a game engine: it validates, tags with the slot number, rate-limits
+(token bucket, ~40 frames/s/connection), and forwards.
 
 ### 4.3 Join security (the QR that lets strangers in)
 
@@ -245,7 +247,7 @@ lobby, in hot-seat, and in the deterministic capture harness.
 | Direction    | Messages                                                      |
 | ------------ | ------------------------------------------------------------- |
 | game → shell | `hello { slots }` (announce slot count), `phase { phase }`    |
-| shell → game | `roster { slots }`, `input { slot, k, v }`, `phase { phase }` |
+| shell → game | `roster { slots }`, `input { slot, k, d }`, `phase { phase }` |
 
 Bridge rules in the shell (`GameFrame` gains an optional `bridge` prop):
 
