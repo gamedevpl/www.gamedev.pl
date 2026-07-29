@@ -212,12 +212,33 @@ T1 and T2 gate submission but **not** the shell, so all three build concurrently
 the listing being *worth* having, not the engineering. T5 is pure calendar and should be
 started as early as it legally can be.
 
-## Decisions needed from the owner
+## Decisions taken (2026-07-28)
 
-1. **Catalog age ceiling** — what is the app's rating, and does CI reject anything above it?
-2. **Declared age band**: accept collecting one, given it touches the privacy policy?
-3. **How early does the public beta open** — before or after the relay split? Before means
-   accepting a single container with no redundancy for public traffic.
+1. ~~Declared age band?~~ **No age data is collected.** The catalog is capped instead — see
+   T1. A validation rule replaces a feature, and the minimal-data posture survives.
+2. **Catalog age ceiling** — deferred *on purpose* until the App Store Connect
+   questionnaire returns the app's own rating, because the required UGC questions move it.
+   Guessing first risks retrofitting 73 games twice.
+3. **The public beta opens *after* the relay split.** So the split stops being an
+   optional scaling nicety and becomes the gating item of T0 — the first real engineering
+   task on the whole critical path. Public traffic will not be served by a single container
+   with no redundancy.
+
+### What the relay split actually is
+
+`registerMultiplayerRoutes` (`apps/api/src/mp.ts`) owns exactly two routes —
+`POST /api/mp/sessions` and the `GET /api/mp/ws` websocket — over an in-memory
+`RoomRegistry`. Everything else in the API is stateless. So the split is narrow:
+
+- A second Cloud Run service carrying only those two routes, pinned `--max-instances 1`,
+  with room state staying in memory (frames run at 40/s; Firestore is unusable for that and
+  Memorystore is real money for a feature nobody is straining).
+- The main service drops the pin and autoscales.
+- The web client points party mode at the relay origin; the room token already travels
+  as a signed value, so cross-origin is a plumbing change rather than a trust change.
+- The pin comment lives in **two** deploy paths (`infra/deploy-api.sh` and
+  `.github/workflows/deploy.yml`) and both must move together, or a manual deploy silently
+  re-pins the service a workflow deploy just unpinned.
 
 ## What this plan does not do
 
