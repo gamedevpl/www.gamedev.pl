@@ -61,6 +61,12 @@ describe('catalog playback', () => {
       if (url.endsWith('/api/games/sky-dodge')) {
         return new Response(JSON.stringify({ slug: 'sky-dodge', title: 'Sky Dodge', html: '<canvas>sky</canvas>' }));
       }
+      if (url.includes('/api/recommendations')) {
+        return new Response(JSON.stringify({ items: [] }));
+      }
+      if (/\/api\/games\/[^/]+\/played$/.test(new URL(url, 'http://localhost').pathname)) {
+        return new Response(null, { status: 204 });
+      }
       throw new Error(`unexpected fetch: ${url}`);
     });
 
@@ -156,6 +162,9 @@ describe('catalog playback', () => {
           ]),
         );
       }
+      if (url.includes('/api/recommendations')) {
+        return new Response(JSON.stringify({ items: [] }));
+      }
       throw new Error(`unexpected fetch: ${url}`);
     });
 
@@ -208,10 +217,16 @@ describe('catalog playback', () => {
       if (url.endsWith('/api/catalog')) {
         return new Response(JSON.stringify([]));
       }
+      if (url.includes('/api/recommendations')) {
+        return new Response(JSON.stringify({ items: [] }));
+      }
       if (url.endsWith('/api/games/football-3d-lite')) {
         return new Response(
           JSON.stringify({ slug: 'football-3d-lite', title: 'Football 3D Lite', html: '<canvas>football</canvas>' }),
         );
+      }
+      if (/\/api\/games\/[^/]+\/played$/.test(new URL(url, 'http://localhost').pathname)) {
+        return new Response(null, { status: 204 });
       }
       throw new Error(`unexpected fetch: ${url}`);
     });

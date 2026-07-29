@@ -21,9 +21,11 @@ describe('PublishedGameFrame retry', () => {
     container = document.createElement('div');
     document.body.appendChild(container);
     vi.mocked(fetchPublishedGame).mockReset();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 204 }));
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     container.remove();
   });
 
