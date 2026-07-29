@@ -92,6 +92,7 @@ async function createApp(params: {
   dailyFeedbackQuota?: number;
   translator?: Translator;
   contentChecker?: ContentChecker;
+  maxCachedDraftPreviews?: number;
 }): Promise<{ app: FastifyInstance; store: Store; authHeaders: Record<string, string> }> {
   const store = params.store ?? new InMemoryStore();
   await store.upsertUser({ uid: 'g:test-user' });
@@ -108,6 +109,7 @@ async function createApp(params: {
       dailySubmissionQuota: params.dailySubmissionQuota,
       dailyFeedbackQuota: params.dailyFeedbackQuota,
       translator: params.translator ?? new NoopTranslator(),
+      maxCachedDraftPreviews: params.maxCachedDraftPreviews,
     },
   });
   return { app, store, authHeaders: getAuthHeaders('g:test-user') };
@@ -887,6 +889,126 @@ describe('submission preview route', () => {
     expect(body.html).toContain('Content-Security-Policy');
     expect(body.html).toContain("default-src 'none'");
     expect(getGameSources).toHaveBeenCalledWith('copilot/foo', 'foo');
+
+    await app.close();
+  });
+
+  it('caches a draft preview by head SHA and serves the last known draft when GitHub fails', async () => {
+    const linkedPr: LinkedPullRequest = { ...openPreviewPr, headRefOid: 'sha-1' };
+    const { githubClient, getGameSources, findLinkedPR } = createGithubClientStub({
+      linkedPr,
+      gameSources: sampleSources,
+    });
+    let currentTime = 100_000;
+    const { app, authHeaders } = await createApp({
+      githubClient,
+      submissionTokenSecret: secret,
+      now: () => currentTime,
+    });
+    const token = mintToken(123, secret);
+
+    const first = await app.inject({ method: 'GET', url: `/api/submissions/${token}/preview`, headers: authHeaders });
+    expect(first.statusCode).toBe(200);
+    expect(getGameSources).toHaveBeenCalledTimes(1);
+
+    // Same SHA within the TTL — no second GitHub fan-out.
+    const second = await app.inject({ method: 'GET', url: `/api/submissions/${token}/preview`, headers: authHeaders });
+    expect(second.statusCode).toBe(200);
+    expect(second.json().html).toBe(first.json().html);
+    expect(getGameSources).toHaveBeenCalledTimes(1);
+
+    // GitHub rate-limits the next refresh (new SHA). Creators mid-build would
+    // rather play the previous assemble than see a red error under Studio.
+    findLinkedPR.mockResolvedValue({ ...linkedPr, headRefOid: 'sha-2' });
+    getGameSources.mockRejectedValueOnce(new Error('github contents request failed with status 403'));
+    const third = await app.inject({ method: 'GET', url: `/api/submissions/${token}/preview`, headers: authHeaders });
+    expect(third.statusCode).toBe(200);
+    expect(third.json().html).toBe(first.json().html);
+    expect(getGameSources).toHaveBeenCalledTimes(2);
+
+    // After TTL expiry with the same SHA, we do hit GitHub again.
+    currentTime += 5 * 60_000 + 1;
+    findLinkedPR.mockResolvedValue(linkedPr);
+    getGameSources.mockResolvedValueOnce(sampleSources);
+    const fourth = await app.inject({ method: 'GET', url: `/api/submissions/${token}/preview`, headers: authHeaders });
+    expect(fourth.statusCode).toBe(200);
+    expect(getGameSources).toHaveBeenCalledTimes(3);
+
+    await app.close();
+  });
+
+  it('evicts the oldest draft preview when the cache is full', async () => {
+    // Cap at 2 so three successful assembles force the first issue out. After
+    // eviction, a GitHub failure on that issue must 502 — there is no last-known
+    // draft left to fall back on.
+    const linkedPr: LinkedPullRequest = { ...openPreviewPr, headRefOid: 'sha-1' };
+    const { githubClient, getGameSources, findLinkedPR } = createGithubClientStub({
+      linkedPr,
+      gameSources: sampleSources,
+    });
+    const { app, authHeaders } = await createApp({
+      githubClient,
+      submissionTokenSecret: secret,
+      maxCachedDraftPreviews: 2,
+    });
+
+    for (const issueNumber of [1, 2, 3]) {
+      const token = mintToken(issueNumber, secret);
+      const res = await app.inject({ method: 'GET', url: `/api/submissions/${token}/preview`, headers: authHeaders });
+      expect(res.statusCode).toBe(200);
+    }
+    expect(getGameSources).toHaveBeenCalledTimes(3);
+
+    findLinkedPR.mockRejectedValueOnce(new Error('github request failed with status 403'));
+    const evicted = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(1, secret)}/preview`,
+      headers: authHeaders,
+    });
+    expect(evicted.statusCode).toBe(502);
+
+    // Issue 3 is still cached — a resolve failure serves its last-known draft.
+    findLinkedPR.mockRejectedValueOnce(new Error('github request failed with status 403'));
+    const kept = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(3, secret)}/preview`,
+      headers: authHeaders,
+    });
+    expect(kept.statusCode).toBe(200);
+    expect(kept.json().slug).toBe('foo');
+
+    await app.close();
+  });
+
+  it('coalesces concurrent draft preview misses into one GitHub fan-out', async () => {
+    let resolveSources!: (value: GameSources) => void;
+    const { githubClient, getGameSources } = createGithubClientStub({
+      linkedPr: { ...openPreviewPr, headRefOid: 'sha-coalesce' },
+    });
+    getGameSources.mockImplementation(
+      () =>
+        new Promise<GameSources>((resolve) => {
+          resolveSources = resolve;
+        }),
+    );
+
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret });
+    const token = mintToken(123, secret);
+
+    const pending = Promise.all([
+      app.inject({ method: 'GET', url: `/api/submissions/${token}/preview`, headers: authHeaders }),
+      app.inject({ method: 'GET', url: `/api/submissions/${token}/preview`, headers: authHeaders }),
+    ]);
+    // Both requests must be waiting on the same in-flight assemble.
+    await vi.waitFor(() => expect(getGameSources).toHaveBeenCalled());
+    expect(getGameSources).toHaveBeenCalledTimes(1);
+    resolveSources(sampleSources);
+
+    const [a, b] = await pending;
+    expect(a.statusCode).toBe(200);
+    expect(b.statusCode).toBe(200);
+    expect(a.json().html).toBe(b.json().html);
+    expect(getGameSources).toHaveBeenCalledTimes(1);
 
     await app.close();
   });

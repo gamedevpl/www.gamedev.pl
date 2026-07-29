@@ -315,11 +315,14 @@ export function SubmissionStatusView({
       .then((html) => {
         setChannelHtml(html);
         loadedChannelRef.current = latest.ref;
+        // A working channel draft is enough to play — clear any PR-preview failure
+        // so we don't leave a red banner under a live "Play the draft" card.
+        setPreviewError(null);
       })
       .catch((err: unknown) => {
         const apiError = err as SubmissionApiError;
         setChannelHtml(null);
-        setPreviewError(apiError.message || t('statusView.previewError'));
+        setPreviewError(apiError.status === 409 ? t('statusView.previewNotReady') : t('statusView.previewError'));
       })
       .finally(() => {
         channelInFlightRef.current = false;
@@ -503,7 +506,10 @@ export function SubmissionStatusView({
               pendingRevisions={pendingRevisions}
             />
 
-            {previewError && !preview ? <p className="error">{previewError}</p> : null}
+            {/* Only alarm when nothing is playable. A channel draft can succeed while
+                the PR-branch assemble 502s (GitHub rate limits); showing both a Play
+                card and this error was the Studio bug creators hit mid-build. */}
+            {previewError && !preview && !channelHtml ? <p className="error">{previewError}</p> : null}
 
             {/* Embedded in Creator Studio the panel is a tab, not a page: the header
                 already carries "Back to home", and a second escape hatch a screen

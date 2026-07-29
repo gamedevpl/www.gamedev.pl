@@ -191,6 +191,12 @@ export interface SubmissionRoutesOptions {
    * GitHub, never a requirement — see game-snapshot.ts.
    */
   snapshotReader?: GameSnapshotReader | null;
+  /**
+   * Cap on in-memory assembled draft previews (HTML can be large). Defaults to
+   * 50; tests pass a smaller value to exercise eviction without minting dozens
+   * of issues.
+   */
+  maxCachedDraftPreviews?: number;
 }
 
 function checkUserAccess(request: FastifyRequest, reply: FastifyReply): boolean {
@@ -612,11 +618,38 @@ export async function registerSubmissionRoutes(
     };
   }
 
-  // Previews are heavier (several GitHub reads + assembly) and never cached — a
-  // fresh preview must reflect the branch's latest commit — so cap them per IP.
+  // Draft previews are heavier (several GitHub Contents reads + esbuild) and used
+  // to hit GitHub on every request. Status polls were coalesced + stale-served after
+  // the same token got rate-limited; the preview path was not, so a creator watching
+  // a build saw a working channel draft and a red "couldn't load preview" under it
+  // whenever GitHub 403'd the fan-out. Cache by head SHA (a push still refreshes),
+  // coalesce concurrent misses, and fall back to the last assembled document for
+  // this issue when a refresh throws. Cap per IP still applies as a safety net.
+  //
+  // The entry count is bounded: each value holds a full assembled HTML document,
+  // so an uncapped Map would grow with every Studio build this instance has ever
+  // served. Insertion order + delete-before-set makes the oldest (or longest-idle)
+  // entry the first one out, matching mediaCache.
   const previewRateLimitWindowMs = 60 * 1000;
   const maxPreviewsPerWindow = 30;
   const previewsByIp = new Map<string, number[]>();
+  const draftPreviewTtlMs = 5 * 60_000;
+  const maxCachedDraftPreviews = options.maxCachedDraftPreviews ?? 50;
+  type DraftPreviewValue = { slug: string; title: string; html: string };
+  type CachedDraftPreview = { value: DraftPreviewValue; headSha: string; expiresAt: number };
+  const draftPreviewCache = new Map<number, CachedDraftPreview>();
+  const draftPreviewRefreshes = new Map<string, Promise<DraftPreviewValue>>();
+
+  function rememberDraftPreview(issueNumber: number, entry: CachedDraftPreview): void {
+    // Move to the newest slot so a creator still watching their build outlives
+    // abandoned ones when we have to prune.
+    draftPreviewCache.delete(issueNumber);
+    if (draftPreviewCache.size >= maxCachedDraftPreviews) {
+      const oldestKey = draftPreviewCache.keys().next().value;
+      if (oldestKey !== undefined) draftPreviewCache.delete(oldestKey);
+    }
+    draftPreviewCache.set(issueNumber, entry);
+  }
 
   // Feedback posts a GitHub comment (which re-triggers the agent), so cap it tightly.
   const feedbackRateLimitWindowMs = 60 * 60 * 1000;
@@ -1601,10 +1634,19 @@ export async function registerSubmissionRoutes(
     reply: FastifyReply,
     issueNumber: number,
   ): Promise<FastifyReply> {
+    const serveLastKnown = (reason: string, err?: unknown): FastifyReply | null => {
+      const lastKnown = draftPreviewCache.get(issueNumber);
+      if (!lastKnown) return null;
+      request.log.warn({ err, issueNumber, headSha: lastKnown.headSha }, reason);
+      return reply.send(lastKnown.value);
+    };
+
     let linkedPr: LinkedPullRequest | null;
     try {
       linkedPr = await githubClient!.findLinkedPR(issueNumber);
     } catch (error) {
+      const stale = serveLastKnown('preview PR resolve failed; serving last known draft', error);
+      if (stale) return stale;
       request.log.error({ err: error }, 'failed to resolve submission for preview');
       return reply.status(502).send({ error: 'failed to load preview' });
     }
@@ -1618,32 +1660,50 @@ export async function registerSubmissionRoutes(
       return reply.status(409).send({ error: 'no preview available for this submission yet' });
     }
 
-    let sources: Awaited<ReturnType<GitHubClient['getGameSources']>>;
-    try {
-      sources = await githubClient!.getGameSources(linkedPr.headRefName, slug);
-    } catch (error) {
-      request.log.error({ err: error, slug }, 'failed to fetch preview sources');
-      const detail = error instanceof Error ? error.message.replace(/\s+/g, ' ').trim().slice(0, 240) : 'unknown error';
-      return reply.status(502).send({ error: 'failed to load preview', detail });
+    const headRefName = linkedPr.headRefName;
+    // Prefer the commit OID so a push invalidates the cache; fall back to the
+    // branch name when fixtures (or a sparse GraphQL payload) omit the SHA.
+    const headSha = linkedPr.headRefOid ?? headRefName;
+    const cached = draftPreviewCache.get(issueNumber);
+    if (cached && cached.headSha === headSha && cached.expiresAt > now()) {
+      return reply.send(cached.value);
     }
 
-    if (!sources) {
-      return reply.status(409).send({ error: 'no preview available for this submission yet' });
-    }
+    const refreshKey = `${issueNumber}:${headSha}`;
+    const assembleDraft = async (): Promise<DraftPreviewValue> => {
+      const sources = await githubClient!.getGameSources(headRefName, slug);
+      if (!sources) {
+        const notReady = new Error('no preview sources');
+        notReady.name = 'DraftNotReadyError';
+        throw notReady;
+      }
 
-    const project: GameProject = {
-      title: sources.title ?? slug,
-      description: '',
-      html: sources.indexHtml,
-      js: sources.gameJs,
-      css: sources.styleCss,
-    };
+      const project: GameProject = {
+        title: sources.title ?? slug,
+        description: '',
+        html: sources.indexHtml,
+        js: sources.gameJs,
+        css: sources.styleCss,
+      };
 
-    try {
       // restrictNetwork: this is unreviewed code, so lock it to its own inline
       // assets — it cannot fetch, beacon, or load anything from the network.
       const html = assembleGameHtml(project, { restrictNetwork: true });
-      return reply.send({ slug, title: project.title, html });
+      return { slug, title: project.title, html };
+    };
+
+    try {
+      const inFlight = draftPreviewRefreshes.get(refreshKey);
+      const refresh =
+        inFlight ??
+        assembleDraft().finally(() => {
+          draftPreviewRefreshes.delete(refreshKey);
+        });
+      if (!inFlight) draftPreviewRefreshes.set(refreshKey, refresh);
+
+      const value = await refresh;
+      rememberDraftPreview(issueNumber, { value, headSha, expiresAt: now() + draftPreviewTtlMs });
+      return reply.send(value);
     } catch (error) {
       if (
         error instanceof EmptyProjectError ||
@@ -1653,7 +1713,20 @@ export async function registerSubmissionRoutes(
         request.log.warn({ err: error, slug }, 'preview failed hygiene checks');
         return reply.status(422).send({ error: 'this game could not be previewed' });
       }
-      throw error;
+      if (error instanceof Error && error.name === 'DraftNotReadyError') {
+        // Incomplete tree on this SHA — still prefer a previous successful assemble
+        // over telling the creator nothing is playable.
+        const stale = serveLastKnown('preview sources incomplete; serving last known draft');
+        if (stale) return stale;
+        return reply.status(409).send({ error: 'no preview available for this submission yet' });
+      }
+
+      const stale = serveLastKnown('failed to fetch preview sources; serving last known draft', error);
+      if (stale) return stale;
+
+      request.log.error({ err: error, slug }, 'failed to fetch preview sources');
+      const detail = error instanceof Error ? error.message.replace(/\s+/g, ' ').trim().slice(0, 240) : 'unknown error';
+      return reply.status(502).send({ error: 'failed to load preview', detail });
     }
   }
 

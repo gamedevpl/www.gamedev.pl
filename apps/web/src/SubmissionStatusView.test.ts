@@ -126,6 +126,50 @@ describe('SubmissionStatusView', () => {
     });
   });
 
+  it('does not show a preview error when a channel draft loaded but the PR preview failed', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    // The Studio screenshot case: open PR (so we try the branch assemble) + a
+    // channel playable that already works. GitHub 502s the PR path; the channel
+    // path succeeds. Creators must not see a red banner under a live Play card.
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      preview: { slug: 'jump-rope-rhythm' },
+      progress: { headSha: 'sha-stuck', commits: [], checklist: [] },
+      playable: [
+        {
+          ref: 'channel-1',
+          slug: 'rope-jumper',
+          label: 'You can already play — draft version',
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    });
+    mockedGetSubmissionPreview.mockRejectedValue(Object.assign(new Error('failed to load preview'), { status: 502 }));
+    mockedGetChannelPlayable.mockResolvedValue('<!doctype html><canvas></canvas>');
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/status/dual-preview-token');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'dual-preview-token' }));
+      await flushEffects();
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(mockedGetChannelPlayable).toHaveBeenCalled();
+    expect(container.querySelector('.status-play-cta')).not.toBeNull();
+    expect(container.textContent).not.toContain("We couldn't load the preview right now");
+    expect(container.querySelector('p.error')).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('shows agent channel updates while the build is still queued, with translated step labels', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     // No PR yet — so no `progress` at all. This is exactly the stretch where the
