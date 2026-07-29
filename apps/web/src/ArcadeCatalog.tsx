@@ -341,7 +341,11 @@ export function ArcadeCatalog({
                 type="button"
                 className={`catalog-sort-option${sortMode === mode ? ' is-active' : ''}`}
                 aria-pressed={sortMode === mode}
-                onClick={() => handleSortChange(mode)}
+                onClick={(event) => {
+                  handleSortChange(mode);
+                  // Keep the active chip in view on the horizontal phone strip.
+                  event.currentTarget.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' });
+                }}
               >
                 {t(`catalog.sort.${mode}`)}
               </button>

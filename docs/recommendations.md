@@ -2,7 +2,7 @@
 
 > Status: ✅ Built (2026-07-29). The home-page arcade grid can be sorted several
 > ways. **Recommended** is the default; players can also pick Newest, Most played,
-> Last played, or A–Z.
+> Last played, Not played, or A–Z.
 
 ## Sort modes
 
@@ -12,9 +12,11 @@
 | Newest | Submission `publishedAt` when known; otherwise reverse catalog order |
 | Most played | Scorecard session counts |
 | Last played | Signed-in play affinity timestamps, else device-local recent plays |
+| Not played | Unplayed first (recommended order), then already-played |
 | A–Z | Title, case-insensitive |
 
-Preference is remembered in `localStorage` (`gdpl.catalogSort`).
+Preference is remembered in `localStorage` (`gdpl.catalogSort`). On phones the sort
+control is a full-width swipeable strip under the Games heading.
 
 ## Signals & privacy
 
