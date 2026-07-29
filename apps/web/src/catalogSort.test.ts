@@ -2,7 +2,13 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { CatalogEntry } from './catalog.js';
-import { sortCatalogEntries, type CatalogSortSignals } from './catalogSort.js';
+import {
+  filterUnplayedEntries,
+  readCatalogNotPlayedFilter,
+  readCatalogSortMode,
+  sortCatalogEntries,
+  type CatalogSortSignals,
+} from './catalogSort.js';
 import { rememberRecentPlay } from './recentPlays.js';
 
 function entry(partial: Partial<CatalogEntry> & Pick<CatalogEntry, 'slug' | 'title'>): CatalogEntry {
@@ -99,18 +105,30 @@ describe('sortCatalogEntries', () => {
       'alpha',
     ]);
   });
+});
 
-  it('puts unplayed games first for not_played', () => {
+describe('filterUnplayedEntries', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('keeps only games with no affinity and no local recent play', () => {
     rememberRecentPlay('mid');
-    const signals: CatalogSortSignals = {
-      ...emptySignals,
-      recommended: ['zeta', 'alpha', 'mid'],
-      affinityLastPlayed: new Map([['alpha', '2026-07-28T12:00:00.000Z']]),
-    };
-    expect(sortCatalogEntries(catalog, 'not_played', signals).map((e) => e.slug)).toEqual([
-      'zeta',
-      'alpha',
-      'mid',
-    ]);
+    const affinity = new Map([['alpha', '2026-07-28T12:00:00.000Z']]);
+    expect(filterUnplayedEntries(catalog, affinity).map((e) => e.slug)).toEqual(['zeta']);
+  });
+});
+
+describe('catalog preference migration', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('migrates the legacy not_played sort into the filter', () => {
+    localStorage.setItem('gdpl.catalogSort', 'not_played');
+    expect(readCatalogNotPlayedFilter()).toBe(true);
+    expect(readCatalogSortMode()).toBe('recommended');
+    expect(localStorage.getItem('gdpl.catalogNotPlayed')).toBe('1');
+    expect(localStorage.getItem('gdpl.catalogSort')).toBe('recommended');
   });
 });

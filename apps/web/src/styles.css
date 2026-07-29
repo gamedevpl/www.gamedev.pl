@@ -920,9 +920,11 @@ button:disabled {
 .arcade-header {
   margin-bottom: 16px;
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
   gap: 12px;
+  flex-wrap: nowrap;
 }
 
 /* A quiet section label, not a banner — the grid of games below speaks for itself. */
@@ -932,6 +934,8 @@ button:disabled {
   color: var(--turquoise);
   margin: 0;
   letter-spacing: -0.3px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .arcade-subtitle {
@@ -942,35 +946,28 @@ button:disabled {
 }
 
 /*
- * Full-width horizontal scroller under the title. On a phone six options will not fit;
- * bleed + edge fades advertise the swipe the same way the suggestion chip strip does.
+ * Compact toolbar beside the Games heading: a Not-played filter toggle plus a
+ * sort dropdown. One row on phone and desktop — no chip strip that wraps.
  */
-.catalog-sort {
+.catalog-toolbar {
   display: flex;
-  flex-wrap: nowrap;
-  gap: 0.35rem;
-  width: 100%;
-  max-width: 100%;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-  overscroll-behavior-x: contain;
-  scroll-snap-type: x proximity;
-  scroll-padding: 0 2px;
-  margin: 0;
-  padding: 2px;
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent);
-  mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent);
-}
-
-.catalog-sort::-webkit-scrollbar {
-  display: none;
-}
-
-.catalog-sort-option {
   flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  min-width: 0;
+  max-width: min(100%, 18rem);
+}
+
+.catalog-filter-btn,
+.catalog-sort-trigger {
+  flex: 0 1 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
   min-height: 40px;
-  padding: 0.4rem 0.85rem;
+  padding: 0.4rem 0.75rem;
   border: 1px solid var(--panel-border);
   border-radius: 6px;
   background: var(--panel);
@@ -979,13 +976,97 @@ button:disabled {
   font-size: 0.85rem;
   cursor: pointer;
   white-space: nowrap;
-  scroll-snap-align: start;
   touch-action: manipulation;
 }
 
-.catalog-sort-option.is-active {
+.catalog-filter-btn.is-active,
+.catalog-sort-menu.is-open .catalog-sort-trigger {
   border-color: var(--turquoise);
   color: var(--turquoise);
+  background: rgba(0, 228, 172, 0.08);
+}
+
+.catalog-sort-menu {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 11rem;
+}
+
+.catalog-sort-trigger {
+  width: 100%;
+  max-width: 100%;
+  justify-content: space-between;
+}
+
+.catalog-sort-trigger-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.catalog-sort-caret {
+  flex: none;
+  font-size: 0.75rem;
+  line-height: 1;
+  opacity: 0.8;
+}
+
+.catalog-sort-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: max(100%, 11.5rem);
+  max-width: min(18rem, calc(100vw - 24px));
+  margin: 0;
+  padding: 8px;
+  list-style: none;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: rgba(16, 22, 28, 0.98);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.catalog-sort-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.95rem;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.catalog-sort-option:hover,
+.catalog-sort-option:focus-visible {
+  background: rgba(0, 228, 172, 0.12);
+  color: var(--turquoise);
+  outline: none;
+}
+
+.catalog-sort-option.is-active {
+  color: var(--turquoise);
+}
+
+.catalog-sort-option > svg,
+.catalog-sort-check-spacer {
+  flex: none;
+  width: 12px;
+  height: 12px;
 }
 
 .catalog-grid {
@@ -2813,14 +2894,13 @@ body.player-open {
     grid-template-columns: 1fr;
   }
 
-  /* Same bleed pattern as .chip-container: sort chips reach the content edge so a
-     half-visible sixth option advertises the swipe. Content padding is 12px here. */
-  .catalog-sort {
-    margin: 0 -12px;
-    padding: 2px 12px;
-    width: auto;
-    max-width: none;
-    scroll-padding: 0 12px;
+  .catalog-toolbar {
+    max-width: min(100%, 14.5rem);
+  }
+
+  .catalog-filter-btn,
+  .catalog-sort-trigger {
+    min-height: 44px;
   }
 
   .transparency-grid {
