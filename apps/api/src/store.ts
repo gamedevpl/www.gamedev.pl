@@ -474,6 +474,28 @@ export interface GameSaveRecord {
 }
 
 /**
+ * One signed-in player's engagement with one published game — the personal half of
+ * home-page recommendations.
+ *
+ * Stored at `users/{uid}/playAffinity/{slug}`, under the player like saves (and unlike
+ * votes), so account erasure is one subcollection delete. This is **not** play
+ * telemetry: the anonymous `playEvents` stream stays unattributed. Affinity is an
+ * account feature the privacy notice discloses, written only when a signed-in (non-bot)
+ * player opens a published game through the shell.
+ */
+export interface PlayAffinityRecord {
+  slug: string;
+  openCount: number;
+  lastPlayedAt: string;
+}
+
+/** Soft ceiling so a single account cannot grow an unbounded affinity map. */
+export const MAX_PLAY_AFFINITY_GAMES = 100;
+
+/** Caps how high `openCount` can climb — enough for ranking weight, not a scoreboard. */
+export const MAX_PLAY_AFFINITY_OPENS = 1_000;
+
+/**
  * Ceiling on one save, in bytes of UTF-8. Mirrored by `MAX_SAVE_BYTES` in the games
  * repo's `shared/modules/save.ts`, which refuses an oversized value in the author's
  * console rather than letting it fail as a 413 in front of a player.
@@ -798,6 +820,16 @@ export interface Store {
   listGameSaves(uid: string): Promise<GameSaveRecord[]>;
   /** Deletes every save a person has. Returns how many went. */
   deleteGameSaves(uid: string): Promise<number>;
+  /**
+   * Records that a signed-in player opened a published game. Upserts the affinity
+   * row, bumps `openCount`, and trims the oldest rows when the per-user ceiling is
+   * exceeded so the map cannot grow without bound.
+   */
+  recordPlayAffinity(uid: string, slug: string, at?: string): Promise<PlayAffinityRecord>;
+  /** Every game a person has opened while signed in — recommendations + erase read. */
+  listPlayAffinity(uid: string): Promise<PlayAffinityRecord[]>;
+  /** Deletes every play-affinity row a person has. Returns how many went. */
+  deletePlayAffinity(uid: string): Promise<number>;
   /** Every entry in one shared world. The public read — no uid involved. */
   listWorldEntries(worldId: string): Promise<WorldEntryRecord[]>;
   /** One entry, or null. Used to settle ownership before a write. */
@@ -985,6 +1017,8 @@ export class InMemoryStore implements Store {
   private playerFeedback = new Map<string, PlayerFeedbackRecord[]>();
   // uid -> (slug -> saved progress)
   private gameSaves = new Map<string, Map<string, GameSaveRecord>>();
+  // uid -> (slug -> play affinity for recommendations)
+  private playAffinity = new Map<string, Map<string, PlayAffinityRecord>>();
   /** worldId -> key -> entry. Keyed by world, not by player: a world is shared. */
   private worldEntries = new Map<string, Map<string, WorldEntryRecord>>();
   // slug -> current scorecard
@@ -1497,6 +1531,39 @@ export class InMemoryStore implements Store {
   async deleteGameSaves(uid: string): Promise<number> {
     const count = this.gameSaves.get(uid)?.size ?? 0;
     this.gameSaves.delete(uid);
+    return count;
+  }
+
+  async recordPlayAffinity(uid: string, slug: string, at?: string): Promise<PlayAffinityRecord> {
+    const when = at ?? new Date().toISOString();
+    const forUser = this.playAffinity.get(uid) ?? new Map<string, PlayAffinityRecord>();
+    const existing = forUser.get(slug);
+    const record: PlayAffinityRecord = {
+      slug,
+      openCount: Math.min(MAX_PLAY_AFFINITY_OPENS, (existing?.openCount ?? 0) + 1),
+      lastPlayedAt: when,
+    };
+    forUser.set(slug, record);
+    if (forUser.size > MAX_PLAY_AFFINITY_GAMES) {
+      const oldest = [...forUser.values()]
+        .filter((entry) => entry.slug !== slug)
+        .sort((a, b) => a.lastPlayedAt.localeCompare(b.lastPlayedAt) || a.slug.localeCompare(b.slug));
+      const overflow = forUser.size - MAX_PLAY_AFFINITY_GAMES;
+      for (const entry of oldest.slice(0, overflow)) forUser.delete(entry.slug);
+    }
+    this.playAffinity.set(uid, forUser);
+    return { ...record };
+  }
+
+  async listPlayAffinity(uid: string): Promise<PlayAffinityRecord[]> {
+    return [...(this.playAffinity.get(uid)?.values() ?? [])]
+      .map((record) => ({ ...record }))
+      .sort((a, b) => b.lastPlayedAt.localeCompare(a.lastPlayedAt) || a.slug.localeCompare(b.slug));
+  }
+
+  async deletePlayAffinity(uid: string): Promise<number> {
+    const count = this.playAffinity.get(uid)?.size ?? 0;
+    this.playAffinity.delete(uid);
     return count;
   }
 
@@ -2379,6 +2446,75 @@ export class FirestoreStore implements Store {
     // operator has already accepted, and somebody who plays a lot of games is exactly
     // the person whose deletion would otherwise be a long sequence of round trips.
     // 400 per batch leaves headroom under Firestore's 500-write limit.
+    for (let index = 0; index < refs.length; index += 400) {
+      const batch = this.db.batch();
+      for (const ref of refs.slice(index, index + 400)) batch.delete(ref);
+      await batch.commit();
+    }
+    return refs.length;
+  }
+
+  private playAffinityRef(uid: string, slug: string) {
+    return this.db.collection('users').doc(uid).collection('playAffinity').doc(slug);
+  }
+
+  async recordPlayAffinity(uid: string, slug: string, at?: string): Promise<PlayAffinityRecord> {
+    const when = at ?? new Date().toISOString();
+    const ref = this.playAffinityRef(uid, slug);
+    const record = await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const existing = snap.exists ? snap.data() : null;
+      const openCount = Math.min(
+        MAX_PLAY_AFFINITY_OPENS,
+        (typeof existing?.openCount === 'number' ? existing.openCount : 0) + 1,
+      );
+      const next: PlayAffinityRecord = { slug, openCount, lastPlayedAt: when };
+      tx.set(ref, { openCount: next.openCount, lastPlayedAt: next.lastPlayedAt });
+      return next;
+    });
+
+    // Trim outside the transaction: the ceiling is a soft bound, and racing two opens
+    // past 100 is harmless compared to holding a transaction across a collection list.
+    const col = this.db.collection('users').doc(uid).collection('playAffinity');
+    const listed = await col.get();
+    if (listed.size > MAX_PLAY_AFFINITY_GAMES) {
+      const oldest = listed.docs
+        .filter((doc) => doc.id !== slug)
+        .map((doc) => ({
+          id: doc.id,
+          lastPlayedAt: typeof doc.data().lastPlayedAt === 'string' ? doc.data().lastPlayedAt : '',
+        }))
+        .sort((a, b) => a.lastPlayedAt.localeCompare(b.lastPlayedAt) || a.id.localeCompare(b.id));
+      const overflow = listed.size - MAX_PLAY_AFFINITY_GAMES;
+      for (let index = 0; index < overflow; index += 400) {
+        const batch = this.db.batch();
+        for (const entry of oldest.slice(index, Math.min(index + 400, overflow))) {
+          batch.delete(col.doc(entry.id));
+        }
+        await batch.commit();
+      }
+    }
+
+    return record;
+  }
+
+  async listPlayAffinity(uid: string): Promise<PlayAffinityRecord[]> {
+    const snap = await this.db.collection('users').doc(uid).collection('playAffinity').get();
+    return snap.docs
+      .map((doc) => {
+        const data = doc.data();
+        return {
+          slug: doc.id,
+          openCount: typeof data.openCount === 'number' ? data.openCount : 0,
+          lastPlayedAt: typeof data.lastPlayedAt === 'string' ? data.lastPlayedAt : '',
+        };
+      })
+      .sort((a, b) => b.lastPlayedAt.localeCompare(a.lastPlayedAt) || a.slug.localeCompare(b.slug));
+  }
+
+  async deletePlayAffinity(uid: string): Promise<number> {
+    const refs = await this.db.collection('users').doc(uid).collection('playAffinity').listDocuments();
+    if (refs.length === 0) return 0;
     for (let index = 0; index < refs.length; index += 400) {
       const batch = this.db.batch();
       for (const ref of refs.slice(index, index + 400)) batch.delete(ref);

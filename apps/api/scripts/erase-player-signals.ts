@@ -55,15 +55,21 @@ async function main(): Promise<void> {
     `  saves:    ${result.savesDeleted.length}${result.savesDeleted.length ? ` (${result.savesDeleted.join(', ')})` : ''}`,
   );
   console.log(
+    `  affinity: ${result.affinityCleared.length}${result.affinityCleared.length ? ` (${result.affinityCleared.join(', ')})` : ''}`,
+  );
+  console.log(
     `  worlds:   ${result.worldsErased.length}${result.worldsErased.length ? ` (${result.worldsErased.join(', ')})` : ''}`,
   );
   if (
     result.votesCleared.length === 0 &&
     result.feedbackDeleted === 0 &&
     result.savesDeleted.length === 0 &&
+    result.affinityCleared.length === 0 &&
     result.worldsErased.length === 0
   ) {
-    console.log('  nothing found — this account left no votes, feedback, saved progress, or world entries.');
+    console.log(
+      '  nothing found — this account left no votes, feedback, saved progress, play affinity, or world entries.',
+    );
   }
   if (result.worldsErased.length > 0) {
     // Worth saying out loud: unlike the rest of this report, these removals change

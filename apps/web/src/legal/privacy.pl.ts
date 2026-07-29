@@ -84,6 +84,14 @@ export const privacyPl: LegalDocument = {
               'Do usunięcia konta',
             ],
             [
+              'Które opublikowane gry otwierasz po zalogowaniu (licznik i ostatni czas otwarcia każdej) — zapisywane ' +
+                'wraz z Twoim kontem, aby strona główna mogła proponować Ci gry. To osobne od anonimowych statystyk ' +
+                'rozgrywki, które nigdy nie są powiązane z kontem',
+              'Personalizacja rekomendacji „Dla Ciebie” na stronie głównej',
+              'art. 6 ust. 1 lit. f — nasz prawnie uzasadniony interes w pomaganiu Ci znaleźć gry, które mogą Ci się spodobać',
+              'Do usunięcia konta',
+            ],
+            [
               'Twoje postępy w grach, które je zapisują (np. osiągnięty poziom lub odblokowane przedmioty) — ' +
                 'zapisywane wraz z identyfikatorem Twojego konta, aby gra mogła je przywrócić przy kolejnej wizycie',
               'Umożliwienie Ci kontynuowania gry od miejsca, w którym ją przerwałeś',
@@ -320,7 +328,7 @@ export const privacyPl: LegalDocument = {
           text:
             `Możesz w każdej chwili poprosić o usunięcie konta, pisząc na [${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL}). ` +
             'Usuwamy wtedy dane Twojego konta, adres e-mail, subskrypcje powiadomień, oddane przez Ciebie głosy i ' +
-            'wpisane uwagi do gier, zapisane postępy w grach, które je przechowują, wszystko, co zbudowałeś we ' +
+            'wpisane uwagi do gier, zapis tego, które gry otwierałeś na potrzeby rekomendacji, zapisane postępy w grach, które je przechowują, wszystko, co zbudowałeś we ' +
             'wspólnych światach gier, oraz powiązanie zgłoszeń z Twoją osobą. Usunięcie tego, co ' +
             'zbudowałeś we wspólnym świecie, usuwa to również z widoku innych graczy.',
         },

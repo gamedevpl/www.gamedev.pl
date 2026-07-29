@@ -149,6 +149,14 @@
     "worldBadge": "Shared world",
     "savesBadge": "Saves progress"
   },
+  "recommendations": {
+    "title": "For you",
+    "subtitle": "Picked from what you play and what others stick with.",
+    "reasonContinue": "Continue playing",
+    "reasonForYou": "Matches what you play",
+    "reasonBecauseYouPlayed": "Because you played similar games",
+    "reasonPopular": "Popular right now"
+  },
   "studio": {
     "title": "Active Projects & Tracker",
     "subtitle": "Track your submitted game specs, view live agent PR builds, and submit revisions.",

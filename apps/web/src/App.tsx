@@ -6,6 +6,7 @@ import { GameTheater } from './GameTheater.js';
 import { NavHeader } from './NavHeader.js';
 import { HeroPromptSection } from './HeroPromptSection.js';
 import { ArcadeCatalog } from './ArcadeCatalog.js';
+import { RecommendedCatalog } from './RecommendedCatalog.js';
 import { MyGamesRail } from './MyGamesRail.js';
 import { CreatorStudioView } from './CreatorStudioView.js';
 import { DraftView } from './DraftView.js';
@@ -74,6 +75,7 @@ export function App() {
   const [savedSpecs, setSavedSpecs] = useState<SavedSpec[]>(() => getSavedSpecs());
   // Bumped after a new submission so the my-games rail picks it up immediately.
   const [myGamesRefreshKey, setMyGamesRefreshKey] = useState(0);
+  const [recommendationsRefreshKey, setRecommendationsRefreshKey] = useState(0);
   // Section to scroll to once the home route has rendered it (see handleNavigateSection).
   const [pendingScrollTarget, setPendingScrollTarget] = useState<string | null>(null);
   // Idea loaded into the hero prompt by "try this again" on a failed/abandoned build.
@@ -487,6 +489,8 @@ export function App() {
     // Published games are permalinked: drive play through the URL so a refresh or
     // a shared link reopens the same game. The route→stage effect opens the stage.
     navigate(playPath(game.slug));
+    // Soft refresh so "continue" / genre picks update after the next home visit.
+    setRecommendationsRefreshKey((n) => n + 1);
   }
 
   async function handlePlayTogether(game: CatalogEntry) {
@@ -712,6 +716,14 @@ export function App() {
             )}
 
             {partyError && <p className="error party-error">{partyError}</p>}
+
+            <RecommendedCatalog
+              catalogStatus={catalogStatus}
+              catalogEntries={catalogEntries}
+              onPlayGame={handlePlayGame}
+              onPlayTogether={(game) => void handlePlayTogether(game)}
+              refreshKey={recommendationsRefreshKey}
+            />
 
             <ArcadeCatalog
               catalogStatus={catalogStatus}
