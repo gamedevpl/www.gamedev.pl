@@ -39,6 +39,31 @@ export async function fetchRecommendations(recent: string[] = []): Promise<Recom
   }
 }
 
+/**
+ * Reorders the catalog by recommendation slugs. Games missing from the ranking keep
+ * their relative order at the end — so a partial ranking never drops a published game.
+ */
+export function orderCatalogByRecommendations<T extends { slug: string }>(
+  entries: T[],
+  rankedSlugs: string[] | null | undefined,
+): T[] {
+  if (!rankedSlugs || rankedSlugs.length === 0) return entries;
+  const bySlug = new Map(entries.map((entry) => [entry.slug, entry]));
+  const seen = new Set<string>();
+  const ordered: T[] = [];
+  for (const slug of rankedSlugs) {
+    const entry = bySlug.get(slug);
+    if (!entry || seen.has(slug)) continue;
+    ordered.push(entry);
+    seen.add(slug);
+  }
+  for (const entry of entries) {
+    if (seen.has(entry.slug)) continue;
+    ordered.push(entry);
+  }
+  return ordered;
+}
+
 /** Best-effort; never throws into the play path. */
 export function recordGamePlayed(slug: string): void {
   void fetch(`${API_BASE}/api/games/${encodeURIComponent(slug)}/played`, {

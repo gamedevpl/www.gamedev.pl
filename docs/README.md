@@ -62,7 +62,7 @@ survives only in this repo's early history.
 | [`creator-qa-plan.md`](./creator-qa-plan.md)                       | Clarifying-questions pass before spec freeze — raises the hit rate of the one-shot agent run           |
 | [`improvement-loop-plan.md`](./improvement-loop-plan.md)           | After publish: player signals → per-game scorecard → agent-assisted fixes and suggestions              |
 | [`path-routing-plan.md`](./path-routing-plan.md)                   | ✅ Path URLs for deep links (`/play/<slug>`, …) — History API, no hashbang                             |
-| [`recommendations.md`](./recommendations.md)                       | ✅ Home-page “For you” rail — scorecards + signed-in play affinity, catalog order unchanged            |
+| [`recommendations.md`](./recommendations.md)                       | ✅ Home arcade sort from scorecards + signed-in play affinity                                          |
 | [`contributing-for-agents.md`](./contributing-for-agents.md)       | How agents run, structure, and contribute to this repository                                           |
 | [`local-development.md`](./local-development.md)                   | ✅ Running the whole product on a laptop with no keys — start here to contribute                       |
 | [`multiplayer-plan.md`](./multiplayer-plan.md)                     | ✅ Party mode: shared screen, phones as controllers, slot model, in-process relay                      |

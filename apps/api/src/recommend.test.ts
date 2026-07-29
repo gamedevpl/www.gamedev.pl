@@ -83,6 +83,24 @@ describe('rankRecommendations', () => {
     expect(ranked.every((item) => item.reason === 'popular')).toBe(true);
   });
 
+  it('returns the full catalog when limit is omitted', () => {
+    const scorecards = new Map([['arcade-hit', signals({ sessions: 10 })]]);
+    const ranked = rankRecommendations({
+      games: catalog,
+      scorecards,
+      affinity: [],
+      recentHints: [],
+      nowMs,
+    });
+    expect(ranked.map((item) => item.slug)).toEqual([
+      'arcade-hit',
+      'puzzle-one',
+      'puzzle-two',
+      'quiet-arcade',
+      'lonely',
+    ]);
+  });
+
   it('surfaces recent plays as continue, then genre-matched discoveries', () => {
     const scorecards = new Map([
       ['arcade-hit', signals({ sessions: 80, votesUp: 20 })],

@@ -244,10 +244,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     ...options.voteRoutes,
   });
 
-  // Home-page recommendations rail. Community half reads scorecards (aggregates about
+  // Home-page recommendations. Community half reads scorecards (aggregates about
   // games); personal half reads play affinity under the account. Never touches the
-  // anonymous play/visit streams. Separate from catalog order on purpose — see
-  // docs/recommendations.md and the improvement-loop ranking decision.
+  // anonymous play/visit streams. The arcade grid sorts by the returned order —
+  // see docs/recommendations.md.
   const envCatalogGenres = await createCatalogGenreSourceFromEnv();
   await registerRecommendationRoutes(app, {
     store,

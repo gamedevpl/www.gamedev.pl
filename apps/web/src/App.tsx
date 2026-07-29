@@ -6,7 +6,6 @@ import { GameTheater } from './GameTheater.js';
 import { NavHeader } from './NavHeader.js';
 import { HeroPromptSection } from './HeroPromptSection.js';
 import { ArcadeCatalog } from './ArcadeCatalog.js';
-import { RecommendedCatalog } from './RecommendedCatalog.js';
 import { MyGamesRail } from './MyGamesRail.js';
 import { CreatorStudioView } from './CreatorStudioView.js';
 import { DraftView } from './DraftView.js';
@@ -717,14 +716,6 @@ export function App() {
 
             {partyError && <p className="error party-error">{partyError}</p>}
 
-            <RecommendedCatalog
-              catalogStatus={catalogStatus}
-              catalogEntries={catalogEntries}
-              onPlayGame={handlePlayGame}
-              onPlayTogether={(game) => void handlePlayTogether(game)}
-              refreshKey={recommendationsRefreshKey}
-            />
-
             <ArcadeCatalog
               catalogStatus={catalogStatus}
               catalogError={catalogError}
@@ -732,6 +723,7 @@ export function App() {
               onPlayGame={handlePlayGame}
               onPlayTogether={(game) => void handlePlayTogether(game)}
               onRetryCatalog={handleRetryCatalog}
+              recommendationsRefreshKey={recommendationsRefreshKey}
             />
           </>
         )}

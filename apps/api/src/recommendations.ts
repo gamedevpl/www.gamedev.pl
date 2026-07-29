@@ -8,12 +8,10 @@ import type { Scorecard, Store } from './store.js';
  * Home-page recommendations: community popularity from scorecards + personal
  * play affinity for signed-in players.
  *
- * Deliberately a **separate rail**, not a reorder of `/api/catalog` — measured
- * outcomes must not reshuffle the arcade in v1 (docs/improvement-loop-plan.md).
- *
- * Affinity recording (`POST /api/games/:slug/played`) is identity-attached account
- * data, erased with the account. It never writes to the anonymous play/visit
- * telemetry streams and must not grow a join key between them.
+ * The home arcade **sorts** by this ranking. Affinity recording
+ * (`POST /api/games/:slug/played`) is identity-attached account data, erased with
+ * the account. It never writes to the anonymous play/visit telemetry streams and
+ * must not grow a join key between them.
  */
 
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
@@ -24,11 +22,11 @@ const ParamsSchema = z.object({
 const RecentQuerySchema = z.object({
   /** Comma-separated recent slugs from the browser — anonymous cold-start hints only. */
   recent: z.string().max(400).optional(),
-  limit: z.coerce.number().int().min(1).max(24).optional(),
+  /** Defaults to the full published catalog so the home grid can sort end-to-end. */
+  limit: z.coerce.number().int().min(1).max(500).optional(),
 });
 
 const MAX_RECENT_HINTS = 8;
-const DEFAULT_LIMIT = 8;
 
 export interface CatalogGenreSource {
   listPublished(): Promise<RecommendGame[]>;
@@ -130,7 +128,7 @@ export async function registerRecommendationRoutes(
       scorecards: scorecardMap,
       affinity,
       recentHints,
-      limit: query.data.limit ?? DEFAULT_LIMIT,
+      limit: query.data.limit ?? games.length,
     });
 
     return reply.send({

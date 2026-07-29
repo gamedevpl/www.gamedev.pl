@@ -820,14 +820,12 @@ at all and feeds the only autonomous-eligible class.
   `listSubmissionsByOwner` already backs the surface. A merged remix makes the
   remixer a watcher (digest visibility, no approval rights). Avoids
   multi-approver deadlock.
-- **Measured outcomes do not affect catalog ranking in v1.** ✅ Confirmed, and
-  more strongly now that party guests are unauthenticated: coupling discovery to
-  telemetry invites gaming before any anti-gaming maturity exists. Revisit only
-  after IL-4 has run long enough to trust the measurement plane; even then,
-  prefer a neutral "recently improved" badge over reordering. A separate
-  “For you” recommendations rail ([recommendations.md](./recommendations.md))
-  may use scorecard aggregates and signed-in play affinity without changing
-  arcade order.
+- **Measured outcomes drive catalog *sort order*, not a second section.** The
+  home arcade reorders by scorecard aggregates and signed-in play affinity
+  ([recommendations.md](./recommendations.md)). Anonymous play telemetry still
+  never identifies a person; affinity is account data erased with the account.
+  Prefer soft signals over hard gates — a cold catalog with no scorecards keeps
+  games-repo order rather than inventing a shuffle.
 - **Session telemetry uses the existing `gdpl-player` envelope.** 🆕 The first
   draft's separate `{ gdpl: 1, event }` envelope is dropped. One channel, one
   contract, one validator.

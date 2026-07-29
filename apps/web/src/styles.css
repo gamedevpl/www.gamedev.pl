@@ -937,17 +937,6 @@ button:disabled {
   max-width: 42rem;
 }
 
-.recommended-section {
-  margin-bottom: 24px;
-}
-
-.card-reason {
-  margin: 0 0 8px;
-  font-size: 0.78rem;
-  color: var(--muted);
-  letter-spacing: 0.01em;
-}
-
 .catalog-grid {
   display: grid;
   gap: 20px;

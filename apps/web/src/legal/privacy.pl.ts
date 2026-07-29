@@ -87,7 +87,7 @@ export const privacyPl: LegalDocument = {
               'Które opublikowane gry otwierasz po zalogowaniu (licznik i ostatni czas otwarcia każdej) — zapisywane ' +
                 'wraz z Twoim kontem, aby strona główna mogła proponować Ci gry. To osobne od anonimowych statystyk ' +
                 'rozgrywki, które nigdy nie są powiązane z kontem',
-              'Personalizacja rekomendacji „Dla Ciebie” na stronie głównej',
+              'Personalizacja kolejności gier na stronie głównej',
               'art. 6 ust. 1 lit. f — nasz prawnie uzasadniony interes w pomaganiu Ci znaleźć gry, które mogą Ci się spodobać',
               'Do usunięcia konta',
             ],
