@@ -1579,10 +1579,11 @@ body.player-open {
   flex-direction: column;
   align-items: stretch;
   gap: 2px;
-  min-width: 220px;
-  padding: 6px;
+  min-width: 240px;
+  padding: 8px;
   border-radius: 12px;
-  background: rgba(22, 28, 34, 0.96);
+  /* Near-opaque so menu rows stay readable over bright game pixels underneath. */
+  background: rgba(16, 22, 28, 0.98);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
   border: 1px solid var(--panel-border);
@@ -1596,12 +1597,12 @@ body.player-open {
   display: flex;
 }
 
-/* Full-bleed within the panel padding — inset margins made the rule look off-center
-   against equally padded rows. */
+/* Full-bleed within the panel padding. Use a lighter hairline than --panel-border
+   so the rule stays visible against the near-opaque panel fill. */
 .theater-menu-divider {
   height: 1px;
-  margin: 4px 0;
-  background: var(--panel-border);
+  margin: 6px 0;
+  background: rgba(255, 255, 255, 0.12);
   border: 0;
   align-self: stretch;
 }
@@ -1619,7 +1620,7 @@ body.player-open {
   gap: 12px;
   width: 100%;
   margin: 0;
-  padding: 10px 12px;
+  padding: 12px 14px;
   min-height: 44px;
   border-radius: 8px;
   border: 1px solid transparent;
@@ -1926,8 +1927,8 @@ body.player-open {
      gap under the close control that read as misaligned on phones. */
   .theater-more-panel {
     right: calc(-1 * (44px + 6px));
-    min-width: 220px;
-    max-width: min(280px, calc(100vw - 24px));
+    min-width: 240px;
+    max-width: min(300px, calc(100vw - 24px));
   }
 
   /* Labels stay visible inside the open menu — icon-only there is opaque. */
