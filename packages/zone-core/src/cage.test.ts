@@ -4,6 +4,7 @@ import {
   createIsolatedVmCage,
   createNodeVmCage,
   SimCageUnavailableError,
+  unwrapNativeModule,
   type SimCage,
 } from './cage.js';
 import { CLOCK_SIM, COUNTER_SIM, INCOMPLETE_SIM, RANDOM_SIM, TEST_SIM_MATH_JS } from './testSims.js';
@@ -200,5 +201,24 @@ describe('assertProductionCage', () => {
     }
     await expect(createIsolatedVmCage()).rejects.toThrow(SimCageUnavailableError);
     await expect(createIsolatedVmCage()).rejects.toThrow(/native addon|not installed/);
+  });
+});
+
+describe('unwrapNativeModule', () => {
+  /**
+   * This is the shape `await import('isolated-vm')` actually returns, and getting it wrong
+   * cost a live deploy: the host booted, reported the isolate cage, served /health, and
+   * answered every join with `zone_unavailable` because `namespace.Isolate` was undefined.
+   * The suites above cannot catch it — they are skipped wherever the optional addon is
+   * absent, which is every machine except the world image.
+   */
+  it('reads a CJS addon out of the interop namespace it arrives in', () => {
+    const Isolate = class {};
+    expect(unwrapNativeModule<{ Isolate: unknown }>({ default: { Isolate } }).Isolate).toBe(Isolate);
+  });
+
+  it('leaves a real module with named exports alone', () => {
+    const namespace = { Isolate: class {}, default: {} };
+    expect(unwrapNativeModule<{ Isolate: unknown }>(namespace)).toBe(namespace);
   });
 });

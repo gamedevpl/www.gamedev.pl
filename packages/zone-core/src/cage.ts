@@ -195,13 +195,26 @@ export async function createIsolatedVmCage(): Promise<SimCage> {
     // contributor pay for a native addon only the world service needs. The structural
     // types at the bottom of this file are what keep the call sites checked regardless.
     const nativeCage = 'isolated-vm';
-    ivm = (await import(nativeCage)) as unknown as IsolatedVmModule;
+    ivm = unwrapNativeModule<IsolatedVmModule>(await import(nativeCage));
   } catch (error) {
     throw new SimCageUnavailableError(
       'isolated-vm is not installed, so there is no cage to run a zone in. It is a native ' +
         'addon: the image needs a build toolchain, or a prebuilt binary. Falling back to ' +
         'node:vm is not an option in production — it is not a security boundary. ' +
         `(${error instanceof Error ? error.message : String(error)})`,
+    );
+  }
+
+  // Checked here rather than at the first `new ivm.Isolate(...)`, because a cage that
+  // constructs and then cannot make an isolate is the worst of both worlds: the host boots,
+  // passes assertProductionCage, answers /health, and refuses every join with the generic
+  // `zone_unavailable` — which reads like a games-repo or Firestore problem and hides the
+  // fact that no zone can ever start. A cage that is not a cage must not be returned.
+  if (typeof ivm.Isolate !== 'function') {
+    throw new SimCageUnavailableError(
+      'isolated-vm loaded but exposes no Isolate constructor, so there is no cage to run a ' +
+        'zone in. Falling back to node:vm is not an option in production — it is not a ' +
+        'security boundary.',
     );
   }
 
@@ -371,6 +384,30 @@ export function assertProductionCage(cage: SimCage, nodeEnv = process.env.NODE_E
 
 /** Minimal structural view of `isolated-vm`, so an absent optional dependency is a
  *  runtime message rather than a type-check failure on a machine that skipped it. */
+/**
+ * Reads a native CommonJS addon out of the ES module namespace it arrives in.
+ *
+ * `isolated-vm` is CJS, and `await import()` of a CJS addon yields a namespace whose only
+ * key is `default`: Node synthesises named exports with a static lexer, and it cannot see
+ * through `module.exports = require('bindings')(...)` to find them. So the namespace has
+ * no `Isolate` on it, `new ivm.Isolate(...)` throws `TypeError: not a constructor`, and —
+ * because that call sits on the path a *player* takes rather than the one the process
+ * takes at boot — the host starts, reports the isolate cage, answers /health, and then
+ * answers every single join with `zone_unavailable`. Zones look deployed and are dead.
+ *
+ * Exported for the test that pins the shape, because the environments that would have
+ * caught this by running (a dev laptop, CI) are exactly the ones where the optional addon
+ * is skipped by npm and the isolate suites do not run at all.
+ */
+export function unwrapNativeModule<T>(namespace: unknown): T {
+  const wrapper = namespace as { default?: T } | undefined;
+  const inner = wrapper?.default;
+  // `default` wins only when the namespace itself is the bare interop wrapper. A real
+  // module that also happens to have a `default` export keeps its own named exports.
+  if (inner && typeof inner === 'object' && Object.keys(wrapper as object).length === 1) return inner;
+  return namespace as T;
+}
+
 interface IsolatedVmModule {
   Isolate: new (options: { memoryLimit: number }) => IsolatedVmIsolate;
 }
