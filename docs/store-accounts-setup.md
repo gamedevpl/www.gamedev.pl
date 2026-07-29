@@ -70,8 +70,8 @@ Only when a Capacitor build actually exists. Do **not** pay before B1.
       Use this rather than an Apple ID + password anywhere in CI.
 - [ ] **C2.** Android upload key — run locally, then back up the `.jks` **and** its passwords somewhere that survives this laptop:
       `bash
-    keytool -genkeypair -v -keystore gamedev-upload.jks -alias upload -keyalg RSA -keysize 2048 -validity 10000
-    `
+  keytool -genkeypair -v -keystore gamedev-upload.jks -alias upload -keyalg RSA -keysize 2048 -validity 10000
+  `
 - [ ] **C3.** **Enrol in Play App Signing** when creating the app in Console. Without it, losing the keystore means the app
       can never be updated again — new package name, install base gone. With it, a lost upload key is a support ticket.
 - [ ] **C4.** Never commit either key. Claude adds them as GitHub Actions secrets (keystore base64-encoded).
