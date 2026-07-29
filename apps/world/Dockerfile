@@ -10,7 +10,14 @@
 #   docker build -f apps/world/Dockerfile -t gamedev-world .
 
 # ---- builder: toolchain present, so the native addon compiles ----
-FROM node:20-slim AS builder
+# node:22, not node:20, and that is load-bearing: isolated-vm@6 declares
+# `engines: { node: ">=22" }` and zone-core lists it as an OPTIONAL dependency. npm skips
+# an optional dep whose engine does not match — silently, with no error and no gyp output.
+# On node:20 `npm ci` therefore "succeeded", installed no addon, and the COPY below failed
+# with a bare `file does not exist`, which reads like a path bug rather than the engine
+# mismatch it is. Keep both stages on the same major: the runtime loads a binary the
+# builder compiled, so they must share a Node ABI.
+FROM node:22-slim AS builder
 WORKDIR /app
 
 # node-gyp needs python3, make and a C++ compiler to build isolated-vm.
@@ -28,7 +35,7 @@ RUN npm run build -w @gamedevpl/zone-core \
  && npm run build -w @gamedevpl/world
 
 # ---- runtime: prod deps only + built output ----
-FROM node:20-slim AS runtime
+FROM node:22-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
     HOST=0.0.0.0
