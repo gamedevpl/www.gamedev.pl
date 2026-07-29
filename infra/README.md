@@ -11,18 +11,37 @@ No Terraform configuration is used or required for this repository.
 All are idempotent and **owner-run** — they need `gcloud` authenticated against the
 project, which agent tooling can read but not write.
 
-| Script | What it provisions | When to run |
-| --- | --- | --- |
-| `setup-wif.sh` | Workload Identity Federation for GitHub Actions | Once, before the first deploy |
-| `setup-gcp.sh` | Firestore, IAM, session secret, telemetry TTL, snapshot bucket | Once, then after adding a resource it manages |
-| `setup-backups.sh` | Firestore PITR + daily export to GCS, export SA and its IAM | Once. **Then drill the restore** — see `docs/runbooks/restore-firestore.md` |
-| `setup-monitoring.sh` | Uptime check + alert policies A1–A4, email channel | Once, per `ALERT_EMAIL`. Prints the manual step for A5 (billing budget) |
-| `deploy-api.sh` | Manual deploy of the app service | Rarely — CI deploys on merge to `master` |
-| `deploy-world.sh` | Manual deploy of the zone host | Rarely; inert unless `ZONE_HOST_URL` is set |
+| Script                | What it provisions                                                            | When to run                                                                                           |
+| --------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `setup-wif.sh`        | Workload Identity Federation for GitHub Actions                               | Once, before the first deploy                                                                         |
+| `setup-gcp.sh`        | Firestore, IAM, session secret, telemetry TTL, snapshot bucket                | Once, then after adding a resource it manages                                                         |
+| `setup-backups.sh`    | Firestore PITR + daily export to GCS, export SA and its IAM                   | Once. **Then drill the restore** — see `docs/runbooks/restore-firestore.md`                           |
+| `setup-monitoring.sh` | Per-service uptime check + A1/A2, project-wide A3/A4 and A6/A7, email channel | **Once per service** (`SERVICE=…`), per `ALERT_EMAIL`. Prints the manual step for A5 (billing budget) |
+| `deploy-api.sh`       | Manual deploy of the app service                                              | Rarely — CI deploys on merge to `master`                                                              |
+| `deploy-world.sh`     | Manual deploy of the zone host                                                | Rarely; inert unless `ZONE_HOST_URL` is set                                                           |
 
 Backups and alerting exist because neither Cloud Run nor Firestore provides them by
 default: without `setup-backups.sh` a wrong delete is unrecoverable, and without
 `setup-monitoring.sh` an outage is discovered by whoever next opens the site.
+
+`setup-monitoring.sh` is the one script that is **not** once-per-project. A1 (uptime) and
+A2 (5xx) are per-service, so every service taking traffic needs its own run — a service
+nobody ran it for is unmonitored by construction:
+
+```bash
+ALERT_EMAIL=you@example.com ./infra/setup-monitoring.sh                       # gamedev-app
+ALERT_EMAIL=you@example.com SERVICE=gamedev-mp-relay ./infra/setup-monitoring.sh
+```
+
+The host is derived from the service's Cloud Run URL unless `HOST` is set, and
+`HEALTH_PATH` defaults to `/api/health`. A3/A4 (Cloud Scheduler jobs) and A6/A7 (the zone
+host, which the script names directly) are project-wide, so they are created only on the
+`PRIMARY_SERVICE` (default `gamedev-app`) run.
+
+`gamedev-world` is the one service you must **not** onboard this way, and the script
+refuses it: A6/A7 already watch it, deliberately without an uptime check, because probing
+a scale-to-zero service every five minutes keeps an instance warm around the clock (see
+`docs/runbooks/README.md`).
 
 ## Prerequisites (Owner-Run Setup)
 

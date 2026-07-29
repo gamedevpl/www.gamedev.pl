@@ -8,6 +8,7 @@ import {
   mediaContentType,
   mediaObject,
   POINTER_OBJECT,
+  SnapshotUnavailableError,
   type SnapshotPointer,
 } from './game-snapshot.js';
 
@@ -214,6 +215,66 @@ describe('pointer caching', () => {
 
     // Snapshot prefixes are immutable, so a stale pointer still serves correct
     // games — briefly-old beats an outage.
+    expect(await store.getPointer()).toEqual(pointer());
+  });
+});
+
+describe('read deadline', () => {
+  it('gives up on a hung read instead of stalling the play route', async () => {
+    const fake = createFakeStorage();
+    // A socket that accepted the request and will never answer. There is no GitHub
+    // fallback behind published play any more, so without a deadline this is an
+    // indefinite wait rather than a degraded response.
+    fake.raw.mockImplementationOnce(() => new Promise<Response>(() => {}));
+    const store = createGcsSnapshotStore({
+      bucket,
+      fetchImpl: fake.fetchImpl,
+      getAccessToken: async () => 'fake-token',
+      readTimeoutMs: 30,
+    });
+
+    const startedAt = Date.now();
+    // SnapshotUnavailableError is what a transport failure already raises, so serving
+    // maps a hang to the same fast 503 rather than to a new code path.
+    await expect(store.getPointer()).rejects.toThrow(SnapshotUnavailableError);
+    expect(Date.now() - startedAt).toBeLessThan(2_000);
+  });
+
+  it('lets a slow-but-answering read finish', async () => {
+    const fake = createFakeStorage({ [POINTER_OBJECT]: { body: Buffer.from(JSON.stringify(pointer())) } });
+    const inner = fake.raw.getMockImplementation()!;
+    fake.raw.mockImplementationOnce(async (...args) => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return inner(...args);
+    });
+    const store = createGcsSnapshotStore({
+      bucket,
+      fetchImpl: fake.fetchImpl,
+      getAccessToken: async () => 'fake-token',
+      readTimeoutMs: 2_000,
+    });
+
+    expect(await store.getPointer()).toEqual(pointer());
+  });
+
+  it('serves the last known pointer when a re-read hangs', async () => {
+    const fake = createFakeStorage({ [POINTER_OBJECT]: { body: Buffer.from(JSON.stringify(pointer())) } });
+    let clock = 1_000;
+    const store = createGcsSnapshotStore({
+      bucket,
+      fetchImpl: fake.fetchImpl,
+      getAccessToken: async () => 'fake-token',
+      pointerTtlMs: 60_000,
+      readTimeoutMs: 30,
+      now: () => clock,
+    });
+
+    await store.getPointer();
+    clock += 61_000;
+    fake.raw.mockImplementationOnce(() => new Promise<Response>(() => {}));
+
+    // A timeout has to count as an error, not as a fresh answer, or the stale-pointer
+    // branch would be skipped and the hang would propagate to the visitor.
     expect(await store.getPointer()).toEqual(pointer());
   });
 });
