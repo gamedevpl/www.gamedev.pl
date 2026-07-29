@@ -80,6 +80,13 @@ Business/Enterprise — it is wrong; a personal paid plan works. No Enterprise s
   error, just work on the wrong branch. **Always read the branch back from the response's
   artifacts instead of assuming the one you asked for.** To do follow-up rounds on one branch,
   make sure a PR is open on it first (create it yourself if `create_pull_request` was `false`).
+  With a PR present, resumption is reliable: verified appending to the same branch **and the
+  same PR id**, while still sending `create_pull_request: false` — that flag neither tears
+  down nor refuses an existing PR, so no flag juggling is needed between rounds.
+- ⚠️ **Auto model selection is not stable across tasks.** With `model` omitted, two
+  back-to-back tasks resolved to `claude-sonnet-4.6` and `gpt-5.4` respectively. If you are
+  comparing runs, measuring cost/latency, or want reproducibility, **pin `model` explicitly**
+  and record the namespaced string that comes back.
 - **A follow-up is a new _task_, not a new session on the old one.** Sessions are the
   within-task view; N rounds of work on one branch means N task IDs to track.
 - **`model` echoes back namespaced.** Request `claude-sonnet-4.6`, read back
