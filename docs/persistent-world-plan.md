@@ -1,6 +1,7 @@
 # Persistent shared worlds — concept exploration
 
-Status: **P1 built 2026-07-28. P2 and P3 remain 💭 concept exploration, not scheduled.**
+Status: **P1 and P2 built 2026-07-28. P3's spike is done and its premise survived
+([p3-sim-spike.md](./p3-sim-spike.md)); the phase itself is not scheduled.**
 This document answers the question
 _"if we wanted a game like Ultima Online on this platform, how could we achieve it?"_ —
 written against the shipped party-mode architecture
@@ -8,8 +9,9 @@ written against the shipped party-mode architecture
 decomposes an MMO into steps that are each independently shippable products, so the platform
 can walk toward this without betting on the destination.
 
-**[P1 (durable per-player state)](#p1--durable-per-player-state-capability-1-built) is
-implemented and gated**, in both repos. Nothing beyond it is committed roadmap.
+**P1 (durable per-player state) and P2 (shared asynchronous worlds) are implemented and
+gated**, in both repos. P3 has been spiked but not built, and nothing beyond P2 is
+committed roadmap.
 
 ---
 
@@ -300,6 +302,37 @@ through a separate view entry point.
 - The world scales by zones, not by world: each zone is a room-sized problem, which is
   exactly the size `mp.ts` already handles.
 
+**The spike is done** (2026-07-28) — see [p3-sim-spike.md](./p3-sim-spike.md) for the
+measurements. The phase itself is still unscheduled; what exists is the contract, the CI
+gate and one game split across it, all in the games repo and inert for everything else.
+Four results change how the rest of P3 should be planned:
+
+1. **The premise holds.** Of 261 modules in the catalog, **two read a clock and none
+   touch the DOM** — and one of those two is a cosmetic pulse inside a renderer. Checks 6
+   and 17 have been enforcing most of the sim contract for years for entirely unrelated
+   reasons, so the clause that sounded hardest was already satisfied. What is genuinely
+   left is a per-game structural refactor, not a platform-wide rewrite.
+2. **Cross-engine float drift is real, and this document did not mention it.** `sin`,
+   `cos`, `atan2`, `exp`, `pow` and `hypot` are implementation-approximated by
+   ECMAScript, and **7.19% of native transcendental results differ between V8 and
+   QuickJS** — `cos(0.1)` among them. Since clients predict with the same sim the server
+   arbitrates with, that is a desync on the first rotation. `shared/sim-math.ts`
+   reimplements the set from spec-exact operations and differs on 0 of 28,603 probes.
+3. **The isolate is `isolated-vm`**, measured at 0.136 ms/tick against 2.693 for a
+   QuickJS-WASM interpreter, with a hard memory cap and preemptive CPU interruption.
+   `node:vm` runs the CI gate and must never run production — it is not a security
+   boundary. The choice is cheap to revisit, because the realm-scrubbing code is portable
+   across all three candidates: an isolate buys safety, not determinism.
+4. **Hibernation needs its own check, and §6.3 understated it.** Running a sim twice
+   cannot see state kept in a module-level variable — that is perfectly reproducible, and
+   vanishes the moment a zone empties. The gate therefore snapshots mid-run and resumes
+   in a fresh realm. Relatedly, `init` takes the generator as well as the seed, so one
+   random stream spans a zone's lifetime and a woken sim can be put back on it by
+   counting draws.
+
+The first task of P3 proper is now a small one: inject that math shim into the client
+bundle, closing the single gap the spike left open.
+
 ---
 
 ## 6. The deterministic sim contract (the key idea)
@@ -309,33 +342,57 @@ simulation and a view**, and CI proves the split mechanically.
 
 ### 6.1 Shape
 
-```jsonc
-// GAME.json
-{ "engine": { "modules": ["…", "world-sim"] }, "world": { "tick_hz": 10, "max_players_per_zone": 16 } }
-```
+As built by the spike, which differs from the original sketch in three places — the
+declaration is a `zone` block rather than an engine module, it names the event kinds the
+server will accept, and `init` receives the generator as well as the seed:
 
-```js
-// sim.js — pure, deterministic, runs in the server isolate AND in every client for prediction
-export function init(seed) {
-  /* → initial zone state */
-}
-export function tick(state, events, rng) {
-  /* → next state; events = [{slot, k, v}, join, leave] */
-}
-export function wake(state, elapsedMs, rng) {
-  /* → state after hibernation (crops grew) */
-}
+In `GAME.json` — strict JSON, because that is what parses it:
 
-// view.js — runs only in the sandboxed iframe; renders state, never mutates it
-export function render(draw, state, myPlayerId) {
-  /* … */
+```json
+{
+  "zone": {
+    "tickHz": 10,
+    "maxPlayers": 16,
+    "inputs": [
+      { "k": "move", "type": "enum", "values": ["n", "s", "e", "w"] },
+      { "k": "douse", "type": "none" }
+    ]
+  }
 }
 ```
 
-No DOM, no `Date`, no `Math.random`, no floating wall-clock in `sim.js` — the platform
+`inputs` is the vocabulary a client may send, and the server accepts nothing outside it —
+generic validation, exactly the stance P2's world schema takes for entries. An undeclared
+event is one the sim can never actually receive, which is also what lets CI build a legal
+event stream to test against.
+
+```ts
+// sim.ts — pure, deterministic; runs in the server isolate AND in every client for prediction
+export function init(seed: number, rng: () => number): ZoneState;
+export function tick(state: ZoneState, events: ZoneEvent[], rng: () => number): ZoneState;
+export function wake(state: ZoneState, elapsedMs: number, rng: () => number): ZoneState;
+```
+
+The view is not a second entry point in the end — it is simply the rest of the game.
+`game.ts` and the modules beside it import `sim.ts`, render whatever state it returns,
+and decide nothing. One `sim.ts`, imported by both sides, is what stops the rules
+drifting between what a player sees and what is true.
+
+`init` taking the generator matters more than it looks: one random stream spans a zone's
+whole lifetime, which is what lets the platform put a woken sim back on the sequence it
+left by counting draws. A private generator inside `init` would make hibernation
+unresumable.
+
+No DOM, no `Date`, no `Math.random`, no floating wall-clock in `sim.ts` — the platform
 provides the tick counter and a seeded `rng` (GameKit's capture mode already does exactly
 this, so the runtime seam exists). Latency tolerance comes from the same steer as party
 mode: 10 Hz ticks and designs where a 100 ms round trip doesn't hurt.
+
+One thing this list was missing: **`Math` itself is not safe.** The spec leaves `sin`,
+`cos`, `atan2`, `exp`, `pow` and `hypot` implementation-approximated, and engines really
+do disagree — so `shared/sim-math.ts` replaces them, and the sim bundle receives it as a
+parameter named `Math`. An author writes `Math.sin(angle)` and gets the portable one
+without knowing any of this.
 
 ### 6.2 Why an agent can write this
 
@@ -346,14 +403,25 @@ snapshotting, hibernation) is platform code written once, tested once, shared by
 
 ### 6.3 Why CI can verify it
 
-- **Determinism check**: run the sim twice over a recorded event stream in the existing
-  capture harness; assert identical state hashes per tick. Flaky = rejected. This is the
-  same muscle as `CAPTURE.json` today.
-- **Purity check**: execute `sim.js` in a bare worker with no DOM/network/clock globals;
+Built, as `tools/validate.ts` Check 23 — the three checks below plus a fourth this
+section originally missed.
+
+- **Determinism check**: run the sim twice over the same event stream; assert identical
+  state hashes per tick. Flaky = rejected. This is the same muscle as `CAPTURE.json`
+  today. The stream is seeded and synthetic rather than recorded, generated from the
+  game's declared `inputs` — it reaches far more of the state space than a captured
+  human session does.
+- **Purity check**: execute `sim.ts` in a bare realm with no DOM/network/clock globals;
   any reference throws. This _derives_ server-runnability from source — the touch-support
   precedent applied to netcode.
 - **Budget check**: a tick must complete within a CPU/memory budget in the harness, since
-  the same code will be metered in the server isolate.
+  the same code will be metered in the server isolate. 8 ms at p99, 192 KiB of state.
+- **Hibernation check** — the one that was missing, and the one that catches most real
+  mistakes. Snapshot mid-run, restore into a _fresh_ realm, and continue: the hashes must
+  match the run that was never interrupted. Running a sim twice in one process cannot see
+  state kept in a module-level variable, because that state is perfectly reproducible
+  right up until the zone empties and the process moves on — which is precisely when a
+  hibernating world would lose it.
 
 ---
 
@@ -386,9 +454,14 @@ snapshotting, hibernation) is platform code written once, tested once, shared by
 - **Cost model**: active zone ≈ one room's worth of sockets + one metered isolate at
   10 Hz. Empty zone ≈ one Firestore document. The bill scales with concurrent play, not
   with how many worlds exist — this is what makes "everyone can prompt an MMO" survivable.
-- **Isolate technology** is a real decision for P3 (V8 isolates via `isolated-vm`, workers
-  with hardened realms, or a WASM-compiled sandbox); it needs a spike before any commitment.
-  P1 and P2 need none of it.
+- **Isolate technology** was a real decision for P3, and it is now made and measured:
+  **`isolated-vm`**, at 0.136 ms for a room-sized tick against 2.693 for a QuickJS-WASM
+  interpreter, with a hard memory cap and preemptive CPU interruption. The WASM sandbox
+  stays a viable fallback — 20× the CPU is still only ~2.7% of a core per zone at 10 Hz,
+  and it installs without a build toolchain. `node:vm` is fast and is **not** an option
+  here: it is not a security boundary and has no per-context memory cap, which is exactly
+  why it is the right tool for the CI gate and the wrong one for a zone.
+  See [p3-sim-spike.md](./p3-sim-spike.md) §2. P1 and P2 need none of it.
 
 ---
 
@@ -429,10 +502,20 @@ snapshotting, hibernation) is platform code written once, tested once, shared by
    The learning that cost the most: a shared world needs enough content of its own to be
    worth visiting empty, or its first visitor — and every CI capture run — sees a field
    with nothing in it.
-3. **P3 paper spike only**: pick the isolate technology and write the determinism CI check
-   against an existing captured game — _before_ designing anything else, because if
+3. ~~**P3 paper spike only**: pick the isolate technology and write the determinism CI
+   check against an existing captured game — _before_ designing anything else, because if
    agent-written sims can't reliably pass the determinism gate, P3's premise fails and we
-   should know early.
+   should know early.~~ — **done** ([p3-sim-spike.md](./p3-sim-spike.md)). It did not stay
+   a paper spike: the gate is real, and `ember-watch` is the game split across it. The
+   premise survived, and the surprise was which part was hard. Agent-written code was
+   already almost entirely free of ambient authority — the catalog's existing checks had
+   been enforcing that for years — while a hazard this document never mentioned, engines
+   disagreeing about `Math.sin`, turned out to affect 7% of transcendental results and to
+   be the one thing that would genuinely have desynced every prediction.
+
+   The learning worth carrying into P3 proper: **write the gate before the host.** Two of
+   the four findings above are things no amount of design discussion would have produced,
+   and both came from running code against a check that was allowed to fail.
 
 The UO question, answered: yes — not by building an MMO server, but by extending the two
 things this platform already believes in (the cage and the CI-derived contract) until a

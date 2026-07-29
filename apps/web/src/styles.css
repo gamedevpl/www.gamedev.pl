@@ -1368,6 +1368,12 @@ button:disabled {
     0 0 1px var(--turquoise-glow);
   overflow: hidden;
   transition: box-shadow 0.3s ease;
+  /* Parent-side only — the document inside is opaque-origin. Still suppresses the
+     iOS callout when the long-press lands on the iframe element itself. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* While the full-viewport player is open, lock page scroll so the fixed overlay is
@@ -1400,6 +1406,8 @@ body.player-open {
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;
+  /* iOS long-press loupe + Copy/Translate callout on the theater chrome. */
+  -webkit-touch-callout: none;
   /* Stop iOS from flashing a grey tap highlight over the game on every touch. */
   -webkit-tap-highlight-color: transparent;
 }
@@ -1773,6 +1781,7 @@ body.player-open {
   border-radius: 0;
   box-shadow: none;
   touch-action: none;
+  -webkit-touch-callout: none;
 }
 
 /* The rotate nudge. Deliberately not a blocking overlay: the game keeps running
@@ -2957,13 +2966,6 @@ body.player-open {
   color: var(--turquoise);
 }
 
-/* Build-time expectation, right under the phase description. */
-.status-eta {
-  margin: -6px 0 12px;
-  font-size: 0.85rem;
-  color: var(--muted);
-}
-
 /* CI is red on this build — stated plainly, without alarm. */
 .status-warning {
   display: flex;
@@ -3925,6 +3927,8 @@ body.player-open {
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
 }
 
@@ -4118,6 +4122,12 @@ body.player-open {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+/* Studio's Build tab drops the "back home" half of this row; keep what's left
+   where it was rather than letting it slide across to the empty side. */
+.status-footer-actions.is-embedded {
+  justify-content: flex-end;
 }
 
 .status-abandon {
@@ -5311,42 +5321,6 @@ body.player-open {
   }
 }
 
-/* The playable build panel on the status page.
-   Sized so the game is genuinely playable rather than a thumbnail — this is the first
-   thing a creator can actually judge, and it arrives before any commit. */
-.status-playable {
-  margin: 1.5rem 0;
-  padding: 1rem;
-  border: 1px solid var(--border, #333);
-  border-radius: 8px;
-}
-
-.status-playable h3 {
-  margin: 0 0 0.25rem;
-}
-
-.status-playable-hint {
-  margin: 0 0 0.75rem;
-  font-size: 0.9rem;
-  opacity: 0.8;
-}
-
-.status-playable-frame {
-  position: relative;
-  width: 100%;
-  /* Matches the aspect the games themselves are laid out for. */
-  aspect-ratio: 4 / 3;
-  max-height: 70vh;
-  overflow: hidden;
-  border-radius: 6px;
-}
-
-.status-playable-time {
-  margin: 0.5rem 0 0;
-  font-size: 0.8rem;
-  opacity: 0.7;
-}
-
 /* Feedback themes on the scorecard panel (docs/improvement-loop-plan.md IL-2).
    Uses the existing panel-card tone rather than a new colour: these are player-authored
    strings shown for reading, so they should look like content, not like a system status
@@ -5390,13 +5364,12 @@ body.player-open {
 }
 
 /* CREATOR CONTROL PANEL (/studio)
-   Reuses home/status tokens: section-title, panel, my-game-card, chip/health-window
-   tabs, funnel-stats, status-feedback, status-play-badge. Keep Studio from inventing
-   a parallel visual language. */
+   One product surface: shared card chrome for shelf + detail, underline tabs,
+   quiet home escape. Reuses status/funnel tokens where they already fit. */
 .studio-panel {
-  max-width: 1100px;
+  max-width: 1180px;
   margin: 0 auto;
-  padding: 1.5rem 1rem 3rem;
+  padding: 1.25rem 1rem 3rem;
 }
 
 .studio-panel-header {
@@ -5404,7 +5377,16 @@ body.player-open {
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.studio-kicker {
+  margin: 0 0 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--turquoise);
 }
 
 .studio-panel-header .section-title {
@@ -5412,24 +5394,52 @@ body.player-open {
 }
 
 .studio-panel-header .panel-copy {
-  max-width: 36rem;
+  max-width: 38rem;
+  margin: 0;
+  color: var(--muted);
+}
+
+.studio-home-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.studio-home-link:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .studio-layout {
   display: grid;
-  grid-template-columns: minmax(200px, 260px) 1fr;
-  gap: 16px;
+  grid-template-columns: minmax(220px, 280px) 1fr;
+  gap: 18px;
   align-items: start;
 }
 
 .studio-shelf {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   position: sticky;
   top: 1rem;
   max-height: calc(100vh - 2rem);
   min-height: 0;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--panel-border);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 40%), var(--panel);
 }
 
 .studio-shelf-head {
@@ -5620,32 +5630,46 @@ body.player-open {
 .studio-detail {
   background: var(--panel);
   border: 1px solid var(--panel-border);
-  border-radius: 12px;
-  padding: 24px;
+  border-radius: 14px;
+  padding: 22px 24px 26px;
   min-width: 0;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.18);
 }
 
 .studio-detail-head {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 10px;
-  margin-bottom: 14px;
+  gap: 12px;
+  margin-bottom: 8px;
 }
 
 .studio-detail-title-row {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.studio-detail-title-block {
+  display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 10px;
+  min-width: 0;
 }
 
 .studio-detail-head h2 {
   margin: 0;
-  font-size: 1.35rem;
+  font-size: 1.45rem;
   font-weight: 700;
-  letter-spacing: -0.3px;
+  letter-spacing: -0.35px;
   overflow-wrap: anywhere;
+}
+
+.studio-status-pill {
+  flex-shrink: 0;
 }
 
 .studio-game-switcher {
@@ -5798,45 +5822,48 @@ body.player-open {
   padding: 2px 10px;
 }
 
-/* Chip-style tabs — same grammar as .chip-btn / .health-window. */
+/* Underline tabs — clearer hierarchy than chip pills for a primary work surface. */
 .studio-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin: 0 0 18px;
-  padding: 0 0 14px;
+  gap: 2px;
+  margin: 0 0 20px;
+  padding: 0;
   border-bottom: 1px solid var(--panel-border);
 }
 
 .studio-tab {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--panel-border);
+  position: relative;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
   color: var(--muted);
-  border-radius: 999px;
-  padding: 6px 14px;
+  border-radius: 0;
+  padding: 10px 14px;
+  margin-bottom: -1px;
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
-  transition: all 0.2s;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .studio-tab:hover {
   color: #fff;
-  border-color: var(--turquoise);
-  background: rgba(0, 228, 172, 0.08);
 }
 
 .studio-tab.is-active {
-  color: #08241d;
-  background: var(--turquoise);
-  border-color: var(--turquoise);
-  box-shadow: 0 0 12px var(--turquoise-glow);
+  color: var(--turquoise);
+  background: transparent;
+  border-bottom-color: var(--turquoise);
+  box-shadow: none;
 }
 
 .studio-tab.is-active:hover {
-  color: #08241d;
-  filter: brightness(1.05);
+  color: var(--turquoise);
+  filter: none;
 }
 
 .studio-tab-panel {
@@ -5860,12 +5887,14 @@ body.player-open {
   color: var(--error);
 }
 
-.studio-overview-status {
-  margin-bottom: 16px;
+.studio-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
 }
 
 .studio-facts {
-  margin: 0 0 1.25rem;
+  margin: 0;
 }
 
 .studio-fact-suffix {
@@ -5932,30 +5961,6 @@ body.player-open {
   margin: 0;
 }
 
-.studio-coming-soon {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  color: var(--muted);
-  padding: 20px 18px;
-  border-radius: 12px;
-  border: 1px dashed var(--panel-border);
-  background: rgba(13, 17, 21, 0.4);
-}
-
-.studio-coming-soon h3 {
-  margin: 0 0 4px;
-  color: var(--text);
-  font-size: 1.05rem;
-}
-
-.studio-coming-soon p {
-  margin: 0;
-  max-width: 36rem;
-  line-height: 1.45;
-  font-size: 0.95rem;
-}
-
 .studio-build .status-panel.is-embedded {
   box-shadow: none;
   border: none;
@@ -5990,6 +5995,7 @@ body.player-open {
      and touch-action intersects with ancestors. Hold gestures on the game surface. */
   -webkit-user-select: none;
   user-select: none;
+  -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -6097,6 +6103,7 @@ body.player-open {
   display: block;
   background: #000;
   touch-action: none;
+  -webkit-touch-callout: none;
 }
 
 .studio-playtest-rotate {

@@ -9,7 +9,7 @@
 ### 1. Published game code
 
 Agent-written game code is untrusted, including code influenced by public specs or remix
-requests. It must render only in an iframe with `sandbox="allow-scripts"` and **without**
+requests. It must render only in an iframe with `sandbox="allow-scripts allow-pointer-lock"` and **without**
 `allow-same-origin`.
 
 This protects the parent app's DOM, cookies, and storage. It does not solve every browser risk:
@@ -105,7 +105,7 @@ credentials operated by gamedev.pl. Historical details are available in Git hist
 
 ## Non-negotiable invariants
 
-- Games render only in `sandbox="allow-scripts"` without `allow-same-origin`.
+- Games render only in `sandbox="allow-scripts allow-pointer-lock"` without `allow-same-origin`.
 - Games are served from a separate cookieless origin in production.
 - Public specs and issue text are data, never agent instructions.
 - Agent-authored changes require review and validation; they are never auto-merged.

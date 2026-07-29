@@ -37,14 +37,34 @@ describe('indexHint', () => {
   });
 
   it('does not claim an index error belonging to some other query', () => {
-    // This command depends on exactly one index. An index failure naming a different
-    // collection is a real failure the operator must read, and answering it with
-    // "provision playerFeedback.uid" sends them to fix something already fine.
+    // This command depends on two indexes. An index failure naming a different collection
+    // is a real failure the operator must read, and answering it with "provision
+    // playerFeedback.uid" sends them to fix something already fine.
     expect(
       indexHint(
         '9 FAILED_PRECONDITION: The query requires a COLLECTION_GROUP_DESC index for collection scorecard and field computedAt.',
       ),
     ).toBeNull();
+  });
+
+  it('names the world index when that is the one that failed', () => {
+    // Sending an operator to check playerFeedback when worldEntries is what is missing
+    // costs them the whole debugging session, so the hint has to say which.
+    const hint = indexHint(
+      '9 FAILED_PRECONDITION: The query requires a COLLECTION_GROUP_ASC index for collection ' +
+        'worldEntries and field ownerUid. That index is not ready yet.',
+    );
+    expect(hint).toContain('worldEntries.ownerUid');
+    expect(hint).not.toContain('playerFeedback');
+    expect(hint).toContain('still building');
+  });
+
+  it('tells an operator to run setup when the world index was never created', () => {
+    const hint = indexHint(
+      '9 FAILED_PRECONDITION: no matching index found for collection worldEntries and field ownerUid.',
+    );
+    expect(hint).toContain('worldEntries.ownerUid');
+    expect(hint).toContain('infra/setup-gcp.sh');
   });
 });
 
@@ -156,11 +176,31 @@ describe('erasePlayerSignals', () => {
     expect(actual.savesDeleted).toEqual(preview.savesDeleted);
   });
 
+  it('writes nothing when the world query fails', async () => {
+    // The companion to the feedback case below, and the one that was missing: P2 added
+    // `listWorldsForUser` — a second query needing a collection-group index — and put it
+    // *after* the writes. A missing worldEntries index would have deleted this person's
+    // feedback, votes and saves, and only then thrown. It is hoisted above the writes now,
+    // and this is what holds it there.
+    const boom = new Error(
+      '9 FAILED_PRECONDITION: The query requires a COLLECTION_GROUP_ASC index for collection ' +
+        'worldEntries and field ownerUid. That index is not ready yet.',
+    );
+    store.listWorldsForUser = () => Promise.reject(boom);
+
+    await expect(erasePlayerSignals({ store, uid: 'g:leaver' })).rejects.toThrow('FAILED_PRECONDITION');
+
+    expect(await store.getVote('brick-storm', 'g:leaver')).toBe('up');
+    expect(await store.getVoteCounts('brick-storm')).toEqual({ up: 2, down: 0 });
+    expect(await store.countPlayerFeedbackByUid('g:leaver')).toBeGreaterThan(0);
+    expect((await store.listGameSaves('g:leaver')).length).toBeGreaterThan(0);
+  });
+
   it('writes nothing when the feedback query fails', async () => {
     // The CLI tells an operator "nothing was erased" when it hits the index error, and
-    // that has to be true, not hopeful. Feedback is the only step needing an index, so it
-    // runs before any vote is cleared. If someone reorders it, this fails: the erase would
-    // wipe every vote and then report that nothing happened.
+    // that has to be true, not hopeful. Every indexed read runs before any vote is
+    // cleared. If someone reorders it, this fails: the erase would wipe every vote and
+    // then report that nothing happened.
     const boom = new Error(
       '9 FAILED_PRECONDITION: The query requires a COLLECTION_GROUP_ASC index for collection ' +
         'playerFeedback and field uid. That index is not ready yet.',

@@ -2,12 +2,12 @@
 
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n/index.js';
 import { ACTIVE_POLL_MS, SubmissionStatusView } from './SubmissionStatusView.js';
 import {
   abandonSubmission,
-  getBuildStats,
+  getChannelPlayable,
   getSubmissionPreview,
   getSubmissionStatus,
   submitFeedback,
@@ -19,16 +19,16 @@ vi.mock('./submissionApi', async () => {
     ...actual,
     getSubmissionStatus: vi.fn(),
     getSubmissionPreview: vi.fn(),
+    getChannelPlayable: vi.fn(),
     submitFeedback: vi.fn(),
-    getBuildStats: vi.fn(),
     abandonSubmission: vi.fn(),
   };
 });
 
 const mockedGetSubmissionStatus = vi.mocked(getSubmissionStatus);
 const mockedGetSubmissionPreview = vi.mocked(getSubmissionPreview);
+const mockedGetChannelPlayable = vi.mocked(getChannelPlayable);
 const mockedSubmitFeedback = vi.mocked(submitFeedback);
-const mockedGetBuildStats = vi.mocked(getBuildStats);
 const mockedAbandonSubmission = vi.mocked(abandonSubmission);
 
 async function flushEffects() {
@@ -37,11 +37,6 @@ async function flushEffects() {
 }
 
 describe('SubmissionStatusView', () => {
-  beforeEach(() => {
-    // Default: no build-time sample yet, so the fallback copy shows.
-    mockedGetBuildStats.mockResolvedValue({ medianMinutes: null, sampleSize: 0 });
-  });
-
   afterEach(() => {
     document.body.innerHTML = '';
     localStorage.clear();
@@ -71,7 +66,7 @@ describe('SubmissionStatusView', () => {
     });
   });
 
-  it('offers the latest playable build in a sandboxed frame, before any commit exists', async () => {
+  it('offers the latest channel build via Play the draft → theater, before any commit exists', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     // Still queued: no pull request, no commit, no committed capture. This is the
     // ten-minute stretch a watcher fills, and the whole reason the route exists.
@@ -87,6 +82,8 @@ describe('SubmissionStatusView', () => {
         { ref: 'older', slug: 'puppy-stroll', createdAt: new Date(Date.now() - 120_000).toISOString() },
       ],
     });
+    // Fetched as text so the theater can inject the player bridge (Escape / sound).
+    mockedGetChannelPlayable.mockResolvedValue('<!doctype html><canvas></canvas>');
     await i18n.changeLanguage('en');
     window.history.pushState(null, '', '/status/playable-token');
 
@@ -97,16 +94,32 @@ describe('SubmissionStatusView', () => {
     await act(async () => {
       root.render(createElement(SubmissionStatusView, { token: 'playable-token' }));
       await flushEffects();
+      await flushEffects();
     });
 
-    const frame = container.querySelector('iframe.game-frame') as HTMLIFrameElement | null;
-    expect(frame).not.toBeNull();
-    // Newest wins: an older build is history, not the thing to play.
-    expect(frame?.getAttribute('src')).toContain('/preview/newest');
-    // The document is unreviewed agent output, so the frame must isolate it. Without
-    // allow-same-origin it lands in an opaque origin with no reach into this app.
-    expect(frame?.getAttribute('sandbox')).toBe('allow-scripts allow-pointer-lock');
+    // Same surface as the PR draft: a PlayCard, nothing embedded inline.
+    // #322 dropped the inline frame from this view; the pointer-lock sandbox this
+    // branch adds is still asserted where a frame is actually rendered — see the
+    // preview cases below and GameFrame.sandbox.test.ts.
+    expect(container.querySelector('iframe')).toBeNull();
     expect(container.textContent).toContain('You can walk the puppy now.');
+    // Newest wins: an older build is history, not the thing to play.
+    expect(mockedGetChannelPlayable).toHaveBeenCalledWith('playable-token', expect.objectContaining({ ref: 'newest' }));
+    const playDraft = container.querySelector<HTMLButtonElement>('.status-play-cta');
+    expect(playDraft?.textContent).toContain('Play the draft');
+
+    await act(async () => {
+      playDraft?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+
+    const frame = container.querySelector('iframe[title="puppy-stroll"]') as HTMLIFrameElement | null;
+    expect(frame).not.toBeNull();
+    // srcdoc + bridge — same path as a PR draft, so theater chrome actually works.
+    expect(frame?.getAttribute('srcdoc') ?? '').toContain('gdpl-player');
+    // The theater frame is a GameFrame, so it carries the pointer-lock sandbox this
+    // branch adds. Additive only — still no allow-same-origin, still opaque origin.
+    expect(frame?.getAttribute('sandbox')).toBe('allow-scripts allow-pointer-lock');
 
     await act(async () => {
       root.unmount();
@@ -636,40 +649,9 @@ describe('SubmissionStatusView expectations & failures', () => {
     vi.clearAllMocks();
   });
 
-  it('sets a build-time expectation from real medians, and flags an overrun', async () => {
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-    await i18n.changeLanguage('en');
-    mockedGetSubmissionStatus.mockResolvedValue({ status: 'queued' });
-    mockedGetBuildStats.mockResolvedValue({ medianMinutes: 30, sampleSize: 8 });
-
-    const container = document.createElement('div');
-    document.body.appendChild(container);
-    const root = createRoot(container);
-
-    await act(async () => {
-      root.render(createElement(SubmissionStatusView, { token: 'eta-token', submittedAt: Date.now() - 5 * 60_000 }));
-      await flushEffects();
-      await flushEffects();
-    });
-    expect(container.textContent).toContain('usually take about 30 min');
-
-    // Past the median, the copy stops pretending it's on schedule.
-    await act(async () => {
-      root.render(createElement(SubmissionStatusView, { token: 'eta-token', submittedAt: Date.now() - 90 * 60_000 }));
-      await flushEffects();
-      await flushEffects();
-    });
-    expect(container.textContent).toContain('taking longer than the usual 30 min');
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
   it('shows the agent’s own progress line above anything it infers', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
-    mockedGetBuildStats.mockResolvedValue({ medianMinutes: null, sampleSize: 0 });
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'building',
       progress: {
@@ -703,7 +685,6 @@ describe('SubmissionStatusView expectations & failures', () => {
   it('says so when CI is failing on the build', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
-    mockedGetBuildStats.mockResolvedValue({ medianMinutes: null, sampleSize: 0 });
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'building',
       progress: { headSha: 'sha-1', commits: [], checklist: [], checks: 'FAILURE' },
@@ -737,7 +718,6 @@ describe('SubmissionStatusView stop & retry', () => {
   it('requires a second click before stopping a build', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
-    mockedGetBuildStats.mockResolvedValue({ medianMinutes: null, sampleSize: 0 });
     mockedGetSubmissionStatus.mockResolvedValue({ status: 'building' });
     mockedAbandonSubmission.mockResolvedValue(undefined);
 
@@ -779,7 +759,6 @@ describe('SubmissionStatusView stop & retry', () => {
   it('offers no stop control once the build is finished, and hands a stopped idea back for retry', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
-    mockedGetBuildStats.mockResolvedValue({ medianMinutes: null, sampleSize: 0 });
     mockedGetSubmissionStatus.mockResolvedValue({ status: 'abandoned' });
     const onRetry = vi.fn();
 

@@ -32,8 +32,8 @@ const STATUS_ICONS: Record<SubmissionState, PixelIconName> = {
 };
 
 const LIVE_STATUSES = new Set<SubmissionState>(['queued', 'building', 'in_review', 'publishing']);
-/** How many games the rail shows. One list request covers all of them. */
-const MAX_TRACKED = 6;
+/** How many games the home-page gist shows. Full shelf lives in Creator Studio. */
+const MAX_TRACKED = 4;
 /** Refresh cadence for the rail. Slower than the status page: this is a glance, not a watch. */
 const REFRESH_MS = 30_000;
 
