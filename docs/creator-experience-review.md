@@ -19,8 +19,10 @@ at the flow from more than one angle. This is the review; the first batch of fix
 
 ### The 11-year-old on a phone (the actual target user)
 
-- No expectation is ever set for **how long** this takes. "In the queue" for 20 minutes with no ETA
-  is where a kid leaves. Show a typical range ("most games take 20–60 min") from real data.
+- No expectation is ever set for **how long** this takes. A silent wait is still hard,
+  but a multi-hour median ("usually take about 337 min") is worse than silence — it reads
+  as "give up". Prefer progress + notifications over numeric ETAs when the distribution
+  is this wide.
 - The rail and status page assume a desktop-ish width; the play/draft flow on a phone is untested.
 - Nothing tells them the build **failed**. `needs_changes` is a dead end with no "try again" button.
 - Quota is invisible until it's spent — 5 submissions/day, discovered as an error.

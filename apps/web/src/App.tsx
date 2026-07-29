@@ -39,6 +39,7 @@ function readLocationRoute(): AppRoute {
   return parsePathRoute(window.location.pathname, window.location.hash);
 }
 import { submitSpec, refineSpec, type SubmissionApiError } from './submissionApi.js';
+import { useActiveBuildCount } from './activeBuilds.js';
 import { getSavedSpecs, saveSpec, type SavedSpec } from './mySpecs.js';
 import { clearPendingQa, loadPendingQa, savePendingQa, type PendingQaAnswers } from './pendingQa.js';
 import { useAuth } from './AuthContext.js';
@@ -82,6 +83,10 @@ export function App() {
 
   // Stage content
   const [stageContent, setStageContent] = useState<StageContent | null>(null);
+  // Builds actually in flight, from the server — the header badge's source of truth.
+  // Paused while a game is on screen: the player covers the header, and a direct
+  // /play/<slug> link is meant to cost the game and nothing else.
+  const activeBuildCount = useActiveBuildCount(myGamesRefreshKey, !stageContent);
 
   // Greenfield submission state
   // 'refining' is the spec-refiner call that precedes a submission — a few seconds
@@ -463,16 +468,20 @@ export function App() {
     [pendingSpec, qaQuestions],
   );
 
-  function navigate(path: string) {
+  const navigate = useCallback((path: string, options?: { replace?: boolean }) => {
     // Update the URL (the source of truth) and the route synchronously so
     // navigation is immediate (and testable) without waiting for popstate.
-    window.history.pushState(null, '', path);
-    // pushState is silent, so announce the navigation for anything living outside
-    // this component (see NAVIGATE_EVENT). Dispatched before the state update so a
-    // listener reading window.location sees the URL we just pushed.
+    if (options?.replace) {
+      window.history.replaceState(null, '', path);
+    } else {
+      window.history.pushState(null, '', path);
+    }
+    // pushState/replaceState are silent, so announce the navigation for anything
+    // living outside this component (see NAVIGATE_EVENT). Dispatched before the
+    // state update so a listener reading window.location sees the URL we just set.
     window.dispatchEvent(new CustomEvent(NAVIGATE_EVENT, { detail: { path } }));
     setRoute(readLocationRoute());
-  }
+  }, []);
 
   function handlePlayGame(game: CatalogEntry) {
     // Published games are permalinked: drive play through the URL so a refresh or
@@ -512,7 +521,7 @@ export function App() {
     return (
       <div className="app app--legal">
         <NavHeader
-          activeSpecsCount={savedSpecs.length}
+          activeBuildCount={activeBuildCount}
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
@@ -530,7 +539,7 @@ export function App() {
     return (
       <div className="app app--contact">
         <NavHeader
-          activeSpecsCount={savedSpecs.length}
+          activeBuildCount={activeBuildCount}
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
@@ -549,7 +558,7 @@ export function App() {
     return (
       <div className="app app--not-found">
         <NavHeader
-          activeSpecsCount={savedSpecs.length}
+          activeBuildCount={activeBuildCount}
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
@@ -575,7 +584,7 @@ export function App() {
   return (
     <div className="app">
       <NavHeader
-        activeSpecsCount={savedSpecs.length}
+        activeBuildCount={activeBuildCount}
         onNavigate={handleNavigateSection}
         onHome={() => navigate('/')}
         onStudio={() => navigate(studioPath())}
@@ -587,6 +596,7 @@ export function App() {
         ) : route.view === 'studio' ? (
           <CreatorStudioView
             selectedToken={route.token}
+            selectedTab={route.tab}
             onNavigate={navigate}
             onPlay={(slug) => navigate(playPath(slug))}
             onRetryConcept={(concept) => {

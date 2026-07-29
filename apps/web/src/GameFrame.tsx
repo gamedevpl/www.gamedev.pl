@@ -46,7 +46,7 @@ export function GameFrame(props: GameFrameProps) {
     // Focusing the element is not enough on its own: the focus has to land *inside*
     // the game's document, and a document that commits after we focused the element
     // takes it back. `focus()` is one of the few methods callable across an opaque
-    // origin, so this works under sandbox="allow-scripts".
+    // origin, so this works under sandbox="allow-scripts allow-pointer-lock".
     frame.contentWindow?.focus();
   }, [iframeRef]);
 
@@ -68,6 +68,9 @@ export function GameFrame(props: GameFrameProps) {
       // The load event is the reliable moment to focus: the game's document exists
       // and won't be replaced out from under the focus we just set.
       onLoad={focusGame}
+      // Parent-side backstop for the iOS callout when the long-press hits the iframe
+      // chrome rather than a node inside the opaque-origin document.
+      onContextMenu={(event) => event.preventDefault()}
       tabIndex={0}
       width="100%"
       height="100%"

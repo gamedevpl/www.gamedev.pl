@@ -11,10 +11,12 @@
 > **Progress since the first draft (2026-07-25).** The strategy below is unchanged; the
 > milestone boundaries have shifted because work landed out of the planned order:
 >
-> - ✅ **M1 (PWA) is built** as of 2026-07-28 — manifest, precached app shell, offline
->   page, Android install prompt, iOS Add-to-Home-Screen hint, and an update banner. Its
->   exit criterion is met by measurement (84 ms to a rendered shell with the server
->   stopped). See the M1 section for what shipped and what still needs a device.
+> - ✅ **M0 and M1 are both complete** as of 2026-07-28, device pass included. M1 shipped
+>   the manifest, precached app shell, offline page, Android install prompt, iOS
+>   Add-to-Home-Screen hint, and an update banner; its exit criterion was met by
+>   measurement (53 ms to a rendered shell on prod with every asset served from cache) and
+>   then confirmed on a real iPhone — added to home screen, **iOS push delivered**. The
+>   plan's web/PWA phase is done; everything remaining is M2 store work.
 > - ✅ **Web push is live** (desktop + Android), shipped via the notifications track, not
 >   M1. `apps/web/public/sw.js` (now the shell-cache + push worker), `apps/web/src/pushApi.ts`,
 >   `apps/api/src/push-routes.ts` / `pusher.ts`, VAPID wiring, and a **per-user push
@@ -189,8 +191,9 @@ This landed in M0 because _nothing else matters if the games themselves reject f
   against their JWKS with a _set_ of audiences, so the same route serves the web Services
   ID and the future iOS bundle ID. Accounts are keyed `a:<sub>` in the same Firestore
   model — except when `apple-account.ts` can prove, from a verified non-relay email, that
-  the person already has a Google account here, in which case they sign into it. Dormant
-  until `APPLE_SERVICES_ID` / `APPLE_CLIENT_IDS` are set; see
+  the person already has a Google account here, in which case they sign into it. **Live in
+  production since 2026-07-28** (Services ID `pl.gamedev.web`), and the linking path is
+  verified against real Apple tokens, not only tests. See
   [`auth-and-usage-plan.md`](./auth-and-usage-plan.md) for what the owner must create in
   the Apple Developer portal, and note that **no part of this flow can be tested below a
   deployed https origin** — Apple rejects `http://` return URLs.
@@ -206,7 +209,7 @@ registry gains FCM/APNs token rows alongside the web-push subscriptions it alrea
 
 ## Milestones
 
-### M0 — Mobile-web hardening 🚧 (every build item done; awaiting a real-device pass)
+### M0 — Mobile-web hardening ✅ (complete 2026-07-28; device pass done)
 
 - ✅ Responsive pass over `App.tsx` surfaces, at 320px as well as 360px — one column,
   thumb-sized targets, safe-area insets, no horizontal scroll, no field under 16px.
@@ -272,20 +275,15 @@ registry gains FCM/APNs token rows alongside the web-push subscriptions it alrea
     the first one lands; a filter can follow it, not precede it.
   - An absent or unrecognised value parses to `null`, never `'none'`: the badge is a
     warning, so the SPEC-derived fallback path must not make every card show one.
-- 🚧 Exit criterion: **on a real iPhone and a real Android phone, sign in, browse, play a
-  touch game, submit a spec, and watch its status — comfortably.** This is the only
-  open item in M0, and it is the one item no agent can close. Partly met on
-  2026-07-25: the owner signed in, submitted a spec, answered the QA questions, and
-  played games from an iPhone SE, and reported two real bugs from that pass — a
-  cluttered prompt card and games with no way to restart on a phone — both since fixed
-  and confirmed live. **Still open: catalog browsing and general play on a real
-  device** have not been re-verified since, and the catalog card is precisely what
-  changed most on 2026-07-26. Everything in the list above has been driven in a
-  browser pane at 320/360/375px in both locales, which is a stand-in for a phone, not
-  a phone: it has a mouse, so `(pointer: coarse)` never matched, and every touch rule
-  here was verified through its `max-width` half.
+- ✅ Exit criterion: **on a real iPhone and a real Android phone, sign in, browse, play a
+  touch game, submit a spec, and watch its status — comfortably.** Met in two owner
+  passes. 2026-07-25: signed in, submitted a spec, answered the QA questions, and
+  played games from an iPhone SE — the two real bugs from that pass (cluttered prompt
+  card, no way to restart a game on a phone) were fixed and confirmed live.
+  **2026-07-28: the owner re-verified catalog browsing on a real device** — the one
+  piece that had changed most since the first pass — closing M0.
 
-### M1 — PWA ✅ (built and verified 2026-07-28; awaiting the same real-device pass as M0)
+### M1 — PWA ✅ (built, verified in prod, and device-confirmed 2026-07-28)
 
 - ✅ **Web app manifest + icons + iOS meta** (`apps/web/public/manifest.webmanifest`,
   `public/icons/`, the `apple-*` tags in `index.html`). Shipped ahead of the rest in
@@ -354,13 +352,12 @@ the same rule appearing on a CDN in front of the service would take the whole in
 app down for returning visitors. Documents are now stored rebuilt via `putDocument`, the
 navigation path re-checks `redirected`, and `shellPrecache.test.ts` pins both ends.
 
-**What a real device still adds.** Everything above was verified in a desktop browser at
-mobile viewport, which has a mouse. It cannot tell us that Chrome's own installability
-heuristics fire on the deployed origin (it withheld `beforeinstallprompt` locally, so the
-Android banner was exercised through a dispatched event of the same shape), that iOS
-Safari's Share sheet reaches "Add to Home Screen" from this manifest, or that the
-installed app gets push on iOS — which is the whole reason M1 exists. Those ride along
-with M0's outstanding device pass.
+**Device pass done (2026-07-28).** Everything above was first verified in a desktop
+browser at mobile viewport, which could not prove the three things that only a phone can:
+that iOS Safari's Share sheet reaches "Add to Home Screen" from this manifest, that the
+installed app actually launches, and that **push arrives on iOS from the installed PWA**
+— the whole reason M1 exists. The owner confirmed all three on a real device: added to
+home screen, and iOS push delivered. M1 is closed end to end.
 
 ### M2 — Store apps (Capacitor) 🚧 (shell-agnostic groundwork started)
 
@@ -371,10 +368,18 @@ with M0's outstanding device pass.
 > guideline 4.8, useful on the web the day it is configured, and reused unchanged by the
 > Capacitor build later. The rest of this list still waits.
 >
-> One precondition is **not** in this list and should be: `--max-instances 1` is hard-coded
-> in both deploy paths because multiplayer rooms are per-instance memory (Phase 5 of
-> [`roadmap.md`](./roadmap.md) flags it red). Store apps drive public traffic into that one
-> container. It is a launch blocker for M2, not a detail.
+> **The rest of M2 is now planned in [`store-launch-plan.md`](./store-launch-plan.md)**,
+> because the bullet list below turned out to describe the small half of the work. Guideline
+> 4.7 makes this repo responsible for _every published game_ satisfying the full App Review
+> Guidelines, and the catalog grows on every merge — so 4.7 compliance has to be CI-enforced
+> in the games repo, and two of its clauses (age rating, universal links) are unbuilt
+> features rather than wrapper details.
+>
+> `--max-instances 1` is also a precondition, but it was mislabelled here as an M2 blocker.
+> It is hard-coded in both deploy paths because multiplayer rooms are per-instance memory
+> (Phase 5 of [`roadmap.md`](./roadmap.md) flags it red), and what it actually gates is
+> **public traffic of any kind** — the web public beta reaches it first. It belongs to the
+> closed-beta exit, upstream of M2.
 
 - ✅ **Sign in with Apple** — see the auth section above. Web-side and API-side both done;
   the Capacitor adapter feeds the same `/api/auth/apple` with a bundle-ID audience.
@@ -397,11 +402,18 @@ with M0's outstanding device pass.
 
 ## Risks & mitigations
 
-- **Apple rejects the catalog as an "HTML5 game store" (4.7)** — _the_ existential risk
-  for M2. Mitigations: games are free, run in-app, no external purchase links, human
-  curation gate is a strong review-notes story; if rejected anyway, the fallback is the
-  PWA (M1), which no store can veto. Do not build M2 features that only make sense with
-  store approval before approval exists.
+- **Guideline 4.7** — this was written as "Apple rejects the catalog as an HTML5 game
+  store", _the_ existential risk. That framing is now wrong in both directions and was
+  corrected 2026-07-28 against the current guidelines. 4.7 **explicitly permits** HTML5 and
+  JavaScript mini games, so there is no coin-flip on whether a catalog is allowed. What it
+  does instead is make this repo **responsible for every game in it** — one non-compliant
+  game rejects the whole app — and since the catalog grows by agent PR, that is a permanent
+  obligation rather than a gate. The mitigation is mechanical enforcement in games-repo CI,
+  planned in [`store-launch-plan.md`](./store-launch-plan.md). Two clauses are unbuilt
+  features: 4.7.5 (age rating + restriction) and 4.7.4 (universal links). Two are already
+  satisfied _architecturally_ by the sandbox — 4.7.2 and 4.7.3 — which must not be softened
+  for the Capacitor build. If review goes badly the fallback is still the PWA, which now
+  carries the whole functional case including iOS push.
 - **UGC review friction (1.2 / Play UGC)**: report/block must be visibly present at
   first submission — build it in M2 scope, not after rejection.
 - **Agent-built games regress on touch**: ✅ largely closed — Check 13 rejects a
@@ -427,10 +439,9 @@ with M0's outstanding device pass.
 
 1. **Should guests' controller page get PWA install nudges?** Working answer: no —
    zero-friction is the point; nudge only after a repeat visit.
-2. ~~**Sign in with Apple on web too, or app-only?**~~ **DECIDED AND BUILT 2026-07-28:
-   web too.** The verifier, the `/api/auth/apple` route, account linking and the web
-   button all exist and are tested; the feature is dormant until the owner creates a
-   Services ID (setup steps in [`auth-and-usage-plan.md`](./auth-and-usage-plan.md)).
+2. ~~**Sign in with Apple on web too, or app-only?**~~ **DECIDED, BUILT AND LIVE
+   2026-07-28: web too.** The verifier, the `/api/auth/apple` route, account linking and
+   the web button are all in production against Services ID `pl.gamedev.web`.
    Everything about it is shell-agnostic — the M2 iOS app adds its bundle ID to
    `APPLE_CLIENT_IDS` and reuses the same route.
 3. **One store app or player-app + creator-app?** Working answer: one app; creation is
@@ -442,20 +453,12 @@ with M0's outstanding device pass.
 
 ## Sequencing note
 
-M0 is pure web + games-repo work and directly serves the live closed-beta cohort
-([`closed-beta-launch-plan.md`](./closed-beta-launch-plan.md)). Its gating item — the
-games touch contract — is **done**, so what remains is the tail of the responsive audit
-plus one small feature (surfacing `touch` in the catalog). The honest blocker on
-declaring M0 finished is not code: it is that the exit criterion requires real phones,
-and only part of it has been walked so far.
-
-M1 is **built** (2026-07-28): manifest, precached shell, offline page, install path on
-both platforms, and an update banner. Its own exit criterion is met by measurement; what
-it shares with M0 is the device pass, and one device session now closes both — the same
-phone that browses the catalog can install the app and confirm iOS push, which is the
-only reason M1 was on the roadmap. QR-party v1 **already exists**, so that M2
-precondition is met; M2 still waits on the public-beta content-safety gates (the in-app
-report action depends on the moderation queue).
+M0 and M1 are **both closed** (2026-07-28), including the real-device pass that was their
+shared exit criterion: the owner browsed the catalog, added the app to an iPhone home
+screen, and received iOS push from the installed PWA. The web/PWA phase of this plan is
+finished. QR-party v1 **already exists**, so that M2 precondition is met; what M2 still
+waits on is entirely outside this repo — an Apple Developer account, a Play account,
+signing certs — plus the `--max-instances 1` launch blocker flagged in the M2 note.
 
 ---
 

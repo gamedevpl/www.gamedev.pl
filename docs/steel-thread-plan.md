@@ -46,7 +46,7 @@ bundle + catalog to the games origin, and the app picked it up. The creator saw 
 | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | Games repo scaffold (`games/`, `tools/`, workflows, agent contract) | ✅ Merged (`www.gamedev.pl-games` PR #2), 3 seed games pass `validate`/`build`/`catalog`                           |
 | Agent loop (issue → Copilot → verified PR → merge)                  | ✅ Proven live, three times (app PRs #215/#216, games PR #2)                                                       |
-| Sandboxed player (`apps/web/src/GameFrame.tsx`)                     | ✅ Works; `sandbox="allow-scripts"`, **no** `allow-same-origin`                                                    |
+| Sandboxed player (`apps/web/src/GameFrame.tsx`)                     | ✅ Works; `sandbox="allow-scripts allow-pointer-lock"`, **no** `allow-same-origin`                                 |
 | Publish to GitHub Pages (`publish.yml` in games repo)               | ❌ **Failing** — Pages not enabled; repo is private (org plan requires public repo for Pages)                      |
 | App consumes catalog                                                | ❌ Doesn't exist — app still calls the local mock (`POST /api/generate-game`)                                      |
 | Spec submission from the app                                        | ❌ Doesn't exist                                                                                                   |
@@ -84,7 +84,7 @@ bundle + catalog to the games origin, and the app picked it up. The creator saw 
 
 ## 3. Invariants — violating any of these fails review
 
-- The game iframe keeps `sandbox="allow-scripts"` and **never** gains `allow-same-origin`,
+- The game iframe keeps `sandbox="allow-scripts allow-pointer-lock"` and **never** gains `allow-same-origin`,
   `allow-top-navigation`, `allow-forms`, or `allow-popups`.
 - No secret (GitHub token, HMAC secret) ever reaches the browser: not in Vite env vars
   (`VITE_*` is public by definition), not in responses, not in error messages.
@@ -137,7 +137,7 @@ In `apps/web`:
   Keep the existing prompt/mock panel; it becomes secondary. Loading/error/empty states
   required. All new UI strings go through i18n (`en.json` + `pl.json`, both).
 - Tests: unit-test catalog filtering + a render test that the iframe for a catalog game has
-  exactly `sandbox="allow-scripts"` and the expected `src`.
+  exactly `sandbox="allow-scripts allow-pointer-lock"` and the expected `src`.
 
 **Out of scope:** routing libraries, styling overhauls, pagination, search.
 
@@ -259,7 +259,7 @@ Copilot opened a PR from it (verified with throwaway issues, since closed).
   `submission-token-secret`; the optional `site-basic-auth` locks the whole app.
 - ✅ **Live at** `https://gamedev-app-334141807880.europe-central2.run.app` (project
   `gamedevpl`). Verified in production: app serves in house style, catalog loads the 3 seed
-  games cross-origin, a seed game plays in an `iframe sandbox="allow-scripts"`, `/api/health`
+  games cross-origin, a seed game plays in an `iframe sandbox="allow-scripts allow-pointer-lock"`, `/api/health`
   works same-origin. **Access is gated by HTTP Basic Auth** (`site-basic-auth` secret) as a
   temporary lock; credentials are held by the owner (not in the repo).
 - ✅ **Submissions enabled since then.** `github-token` was created and wired, so submission

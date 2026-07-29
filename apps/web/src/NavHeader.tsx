@@ -9,7 +9,8 @@ import { PixelIcon } from './PixelIcon.js';
 import githubIcon from './assets/github-mark-white.svg';
 
 type NavHeaderProps = {
-  activeSpecsCount: number;
+  /** Builds currently in flight for the signed-in creator. Server-derived, not a local tally. */
+  activeBuildCount: number;
   onNavigate: (sectionId: string) => void;
   /** In-app home navigation (avoids a full reload / beforeunload while a game is open). */
   onHome: () => void;
@@ -17,7 +18,7 @@ type NavHeaderProps = {
   onStudio: () => void;
 };
 
-export function NavHeader({ activeSpecsCount, onNavigate, onHome, onStudio }: NavHeaderProps) {
+export function NavHeader({ activeBuildCount, onNavigate, onHome, onStudio }: NavHeaderProps) {
   const { t } = useTranslation();
   const { user, logout } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -98,21 +99,28 @@ export function NavHeader({ activeSpecsCount, onNavigate, onHome, onStudio }: Na
               <button className="nav-link" onClick={() => handleNavClick('arcade')}>
                 <PixelIcon name="gamepad" size={14} /> {t('header.navArcade')}
               </button>
-              <button className="nav-link" onClick={() => handleNavClick('my-games')}>
-                <PixelIcon name="folder" size={14} /> {t('header.navMyGames')}
-                {activeSpecsCount > 0 && <span className="specs-count-badge">{activeSpecsCount}</span>}
+              {/* Studio is the creator home. The home page only keeps a short
+                  "your games" gist; the full shelf + build/playtest/improve loop
+                  lives here. Always offered — unsigned visitors get the sign-in
+                  prompt inside Studio rather than a dead "My Games" scroll target. */}
+              <button
+                className="nav-link"
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  onStudio();
+                }}
+              >
+                <PixelIcon name="wrench" size={14} /> {t('header.navStudio')}
+                {activeBuildCount > 0 && (
+                  // The bare number reads as "Studio 2" to a screen reader; say what it counts.
+                  <span
+                    className="specs-count-badge"
+                    aria-label={t('header.activeBuilds', { count: activeBuildCount })}
+                  >
+                    {activeBuildCount}
+                  </span>
+                )}
               </button>
-              {user ? (
-                <button
-                  className="nav-link"
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    onStudio();
-                  }}
-                >
-                  <PixelIcon name="wrench" size={14} /> {t('header.navStudio')}
-                </button>
-              ) : null}
 
               {/* Controls that live in the header bar on a desktop but cannot fit
                   beside it on a phone. Hidden above the mobile breakpoint, where

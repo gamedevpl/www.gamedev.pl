@@ -100,8 +100,27 @@ export type BuildPlayableItem = {
 };
 
 /**
- * Where to fetch one playable build. The response is unreviewed agent output served as
- * HTML, so it is only ever loaded into a sandboxed frame — never fetched and inlined.
+ * Fetch one channel-pushed playable build as HTML text.
+ *
+ * The document is unreviewed agent output. Execution stays sandboxed: the app hands
+ * it to GameTheater as srcdoc (`sandbox="allow-scripts"`, no `allow-same-origin`) and
+ * injects the player bridge — the same path as a PR draft. Fetching into the parent
+ * as a string is required for that bridge; it is not the same as inlining the markup
+ * into the app DOM.
+ */
+export async function getChannelPlayable(token: string, item: BuildPlayableItem): Promise<string> {
+  const response = await fetch(buildPlayableUrl(token, item), { credentials: 'include' });
+
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+
+  return response.text();
+}
+
+/**
+ * Where to fetch one playable build. Prefer {@link getChannelPlayable} when the app
+ * will open it in the theater (needs the HTML string to inject the player bridge).
  */
 export function buildPlayableUrl(token: string, item: BuildPlayableItem): string {
   return `${API_BASE}/api/submissions/${encodeURIComponent(token)}/preview/${encodeURIComponent(item.ref)}`;
@@ -203,21 +222,6 @@ export async function getSubmissionPreview(token: string): Promise<SubmissionPre
   }
 
   return (await response.json()) as SubmissionPreview;
-}
-
-/**
- * How long recent builds actually took. Used to turn "your game is in the queue"
- * into an expectation the creator can plan around. Null median = not enough data
- * yet; the UI falls back to a range.
- */
-export async function getBuildStats(): Promise<{ medianMinutes: number | null; sampleSize: number }> {
-  const response = await fetch(`${API_BASE}/api/submissions/stats`, { credentials: 'include' });
-
-  if (!response.ok) {
-    await throwResponseError(response);
-  }
-
-  return (await response.json()) as { medianMinutes: number | null; sampleSize: number };
 }
 
 /**

@@ -1702,45 +1702,6 @@ describe('GET /api/drafts/:slug (shareable, read-only)', () => {
   });
 });
 
-describe('GET /api/submissions/stats (build-time expectation)', () => {
-  it('reports the median build time of recently published games', async () => {
-    const { githubClient } = createGithubClientStub({});
-    const store = new InMemoryStore();
-    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
-
-    // 20, 30 and 40 minute builds → median 30.
-    const minutes = [20, 30, 40];
-    for (const [index, mins] of minutes.entries()) {
-      const issueNumber = 100 + index;
-      await store.createSubmission(issueNumber, 'g:test-user', `Game ${index}`);
-      const record = (await store.getSubmission(issueNumber))!;
-      await store.setSubmissionPublishedAt(
-        issueNumber,
-        new Date(Date.parse(record.createdAt) + mins * 60_000).toISOString(),
-      );
-    }
-    // An abandoned-then-resumed build must not poison the median.
-    await store.createSubmission(200, 'g:test-user', 'Stale');
-    await store.setSubmissionPublishedAt(200, new Date(Date.now() + 40 * 3600_000).toISOString());
-
-    const res = await app.inject({ method: 'GET', url: '/api/submissions/stats', headers: authHeaders });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ medianMinutes: 30, sampleSize: 3 });
-
-    await app.close();
-  });
-
-  it('reports no median before any game has published', async () => {
-    const { githubClient } = createGithubClientStub({});
-    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret });
-
-    const res = await app.inject({ method: 'GET', url: '/api/submissions/stats', headers: authHeaders });
-    expect(res.json()).toEqual({ medianMinutes: null, sampleSize: 0 });
-
-    await app.close();
-  });
-});
-
 describe('agent progress note', () => {
   it('surfaces the agent’s own "what I am doing" line from its branch journal', async () => {
     const { githubClient, getProgressNotes } = createGithubClientStub({
