@@ -12,6 +12,8 @@
  * `InteractiveMascot` wraps the SVG in a button: hover peeks, click cycles
  * reactions, and the face tracks the pointer a little. With `reactsToTilt` he also
  * leans with the phone's own orientation and gets dizzy when it is shaken.
+ * With `doesPullUps` (splash only) he occasionally climbs the card rim for a few
+ * chin-ups when nothing else is happening — same face and limbs, just motion.
  *
  * Pass `scrolling` (boolean) on the header mark: he pulls a tiny phone and mimes
  * scrolling a feed while the page moves. Omit the prop everywhere else so the
@@ -349,14 +351,7 @@ function ScrollPhone({ clipId }: { clipId: string }) {
             <rect x="50.5" y="51" width="10" height="2.2" rx="0.5" opacity="0.4" />
           </g>
         </g>
-        <ellipse
-          className="mascot__phone-thumb"
-          cx="65.5"
-          cy="30"
-          rx="3.2"
-          ry="5"
-          fill="currentColor"
-        />
+        <ellipse className="mascot__phone-thumb" cx="65.5" cy="30" rx="3.2" ry="5" fill="currentColor" />
       </g>
     </g>
   );
@@ -452,6 +447,14 @@ const POKE_REACTIONS: readonly MascotEmotion[] = ['excited', 'happy', 'curious',
 
 const POKE_HOLD_MS = 1400;
 
+/** First quiet stretch before he notices the card rim and climbs it. */
+export const PULLUP_FIRST_DELAY_MS = 9_000;
+/** Climb + chin-ups + land — matches `mascot-pullups` in CSS. */
+export const PULLUP_SESSION_MS = 3_200;
+/** Quiet time between pull-up sessions once he has done the first. */
+export const PULLUP_GAP_MIN_MS = 12_000;
+export const PULLUP_GAP_MAX_MS = 20_000;
+
 type InteractiveMascotProps = {
   size?: number;
   className?: string;
@@ -464,6 +467,11 @@ type InteractiveMascotProps = {
    * Off by default: it costs two window listeners and, on iOS, a permission prompt.
    */
   reactsToTilt?: boolean;
+  /**
+   * When nothing else is happening, occasionally climb the splash card rim and do
+   * a few pull-ups. Opt-in — only the closed-beta splash wants this gag.
+   */
+  doesPullUps?: boolean;
 };
 
 /**
@@ -476,16 +484,21 @@ export function InteractiveMascot({
   idleEmotion = 'wave',
   pokeLabel,
   reactsToTilt = false,
+  doesPullUps = false,
 }: InteractiveMascotProps) {
   const rootRef = useRef<HTMLButtonElement>(null);
   const pokeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pullupWaitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pullupEndTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reactionIndex = useRef(0);
   const hoveredRef = useRef(false);
   const pokingRef = useRef(false);
+  const pullupsRef = useRef(false);
   const lookRef = useRef<MascotLook>({ x: 0, y: 0 });
   const [emotion, setEmotion] = useState<MascotEmotion>(idleEmotion);
   const [look, setLook] = useState<MascotLook>({ x: 0, y: 0 });
   const [poking, setPoking] = useState(false);
+  const [pullups, setPullups] = useState(false);
   /** Which gesture is currently being answered, for the one-shot motion classes. */
   const [flourish, setFlourish] = useState<MascotGesture | null>(null);
   const upsideDownRef = useRef(false);
@@ -512,12 +525,25 @@ export function InteractiveMascot({
   useEffect(() => {
     return () => {
       if (pokeTimer.current) clearTimeout(pokeTimer.current);
+      if (pullupWaitTimer.current) clearTimeout(pullupWaitTimer.current);
+      if (pullupEndTimer.current) clearTimeout(pullupEndTimer.current);
     };
   }, []);
 
   // Tilting the phone is the same gesture as moving the pointer, as far as he is
   // concerned — both end up as a look vector. Reduced motion opts out entirely.
   const device = useDeviceTilt(reactsToTilt && !reduceMotion);
+
+  const stopPullups = (nextEmotion?: MascotEmotion) => {
+    if (pullupEndTimer.current) {
+      clearTimeout(pullupEndTimer.current);
+      pullupEndTimer.current = null;
+    }
+    if (!pullupsRef.current) return;
+    pullupsRef.current = false;
+    setPullups(false);
+    if (nextEmotion !== undefined) setEmotion(nextEmotion);
+  };
 
   /*
    * How he answers each thing you can do to the phone. Skips the first render:
@@ -541,6 +567,7 @@ export function InteractiveMascot({
               ? 'excited'
               : 'confused';
 
+    stopPullups();
     pokingRef.current = true;
     setPoking(true);
     setEmotion(reaction);
@@ -562,6 +589,71 @@ export function InteractiveMascot({
   }, [device.gestureSeq]);
 
   upsideDownRef.current = device.upsideDown;
+
+  /*
+   * Occasional pull-ups on the splash card rim — only when he is otherwise idle.
+   * Interaction (poke, hover, tilt gesture) cancels a session in progress; reduced
+   * motion opts out entirely. Gaps are jittered so two visitors rarely sync up.
+   */
+  useEffect(() => {
+    if (!doesPullUps || reduceMotion) {
+      stopPullups();
+      if (pullupWaitTimer.current) {
+        clearTimeout(pullupWaitTimer.current);
+        pullupWaitTimer.current = null;
+      }
+      return;
+    }
+
+    let cancelled = false;
+
+    const clearWait = () => {
+      if (pullupWaitTimer.current) {
+        clearTimeout(pullupWaitTimer.current);
+        pullupWaitTimer.current = null;
+      }
+    };
+
+    const startSession = () => {
+      if (cancelled) return;
+      if (pokingRef.current || hoveredRef.current || upsideDownRef.current) {
+        scheduleNext(4_000);
+        return;
+      }
+      pullupsRef.current = true;
+      setPullups(true);
+      // Stay himself — pull-ups are motion on the splash button, not a new face.
+      if (pullupEndTimer.current) clearTimeout(pullupEndTimer.current);
+      pullupEndTimer.current = setTimeout(() => {
+        pullupEndTimer.current = null;
+        pullupsRef.current = false;
+        setPullups(false);
+        if (!pokingRef.current) {
+          setEmotion(hoveredRef.current ? 'curious' : idleEmotion);
+        }
+        scheduleNext(PULLUP_GAP_MIN_MS + Math.random() * (PULLUP_GAP_MAX_MS - PULLUP_GAP_MIN_MS));
+      }, PULLUP_SESSION_MS);
+    };
+
+    const scheduleNext = (delay: number) => {
+      clearWait();
+      pullupWaitTimer.current = setTimeout(() => {
+        pullupWaitTimer.current = null;
+        startSession();
+      }, delay);
+    };
+
+    scheduleNext(PULLUP_FIRST_DELAY_MS);
+
+    return () => {
+      cancelled = true;
+      clearWait();
+      if (pullupEndTimer.current) {
+        clearTimeout(pullupEndTimer.current);
+        pullupEndTimer.current = null;
+      }
+    };
+  }, [doesPullUps, reduceMotion, idleEmotion]);
 
   // Reduced motion still gets the emotion swap — only tilt/boop are suppressed.
   const settleEmotion = () => (hoveredRef.current ? 'curious' : idleEmotion);
@@ -611,6 +703,7 @@ export function InteractiveMascot({
      */
     if (reactsToTilt) device.request();
 
+    stopPullups();
     const next = POKE_REACTIONS[reactionIndex.current % POKE_REACTIONS.length]!;
     reactionIndex.current += 1;
     pokingRef.current = true;
@@ -634,11 +727,12 @@ export function InteractiveMascot({
   const pointerLeads = look.x !== 0 || look.y !== 0;
   const effectiveLook = pointerLeads || !device.active ? look : device.tilt;
 
-  const tiltStyle: CSSProperties | undefined = reduceMotion
-    ? undefined
-    : {
-        transform: `rotate(${(effectiveLook.x * 7).toFixed(2)}deg) translateY(${(effectiveLook.y * 2).toFixed(2)}px)`,
-      };
+  const tiltStyle: CSSProperties | undefined =
+    reduceMotion || pullups
+      ? undefined
+      : {
+          transform: `rotate(${(effectiveLook.x * 7).toFixed(2)}deg) translateY(${(effectiveLook.y * 2).toFixed(2)}px)`,
+        };
 
   return (
     <button
@@ -647,6 +741,7 @@ export function InteractiveMascot({
       className={[
         'mascot-interactive',
         poking ? 'mascot-interactive--poking' : null,
+        pullups ? 'mascot-interactive--pullups' : null,
         device.upsideDown ? 'mascot-interactive--upside-down' : null,
         flourish ? `mascot-interactive--${flourish}` : null,
         className,
@@ -657,18 +752,19 @@ export function InteractiveMascot({
       onClick={handlePoke}
       onPointerEnter={() => {
         hoveredRef.current = true;
+        stopPullups('curious');
         if (!pokingRef.current) setEmotion('curious');
       }}
       onPointerLeave={() => {
         hoveredRef.current = false;
         resetLook();
-        if (!pokingRef.current) setEmotion(idleEmotion);
+        if (!pokingRef.current && !pullupsRef.current) setEmotion(idleEmotion);
       }}
       onPointerMove={handlePointerMove}
       onBlur={() => {
         hoveredRef.current = false;
         resetLook();
-        if (!pokingRef.current) setEmotion(idleEmotion);
+        if (!pokingRef.current && !pullupsRef.current) setEmotion(idleEmotion);
       }}
     >
       {/* Tilt lives on an inner span so the button can still run the poke squash. */}

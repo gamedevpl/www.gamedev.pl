@@ -212,6 +212,25 @@ describe('Mascot', () => {
     });
   });
 
+  it('does not take a hanging pose prop — pull-ups are motion on InteractiveMascot', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(Mascot, { emotion: 'wave', size: 48 }));
+    });
+    expect(container.querySelector('.mascot--wave')).not.toBeNull();
+    expect(container.querySelector('.mascot__wave-arm')).not.toBeNull();
+    expect(container.querySelector('.mascot--hanging')).toBeNull();
+    expect(container.querySelector('.mascot__mouth-seal')).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('mounts the pocket phone only when scrolling is driven, and toggles the live class', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const container = document.createElement('div');
@@ -434,17 +453,16 @@ describe('InteractiveMascot', () => {
   it('still peeks on hover when prefers-reduced-motion is set', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const originalMatchMedia = window.matchMedia;
-    window.matchMedia = ((query: string) =>
-      ({
-        matches: query.includes('prefers-reduced-motion'),
-        media: query,
-        onchange: null,
-        addListener: () => {},
-        removeListener: () => {},
-        addEventListener: () => {},
-        removeEventListener: () => {},
-        dispatchEvent: () => false,
-      })) as typeof window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes('prefers-reduced-motion'),
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    })) as typeof window.matchMedia;
 
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -461,6 +479,92 @@ describe('InteractiveMascot', () => {
     expect(container.querySelector('.mascot--curious')).not.toBeNull();
     // Tilt/look stay off under reduced motion.
     expect(container.querySelector('.mascot__face-features')?.getAttribute('transform')).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+    window.matchMedia = originalMatchMedia;
+  });
+
+  it('occasionally climbs for pull-ups when idle, and a poke cancels them', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.useFakeTimers();
+    const { PULLUP_FIRST_DELAY_MS, PULLUP_SESSION_MS } = await import('./Mascot.js');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(InteractiveMascot, {
+          pokeLabel: 'Poke',
+          idleEmotion: 'wave',
+          doesPullUps: true,
+          size: 64,
+        }),
+      );
+    });
+
+    const button = container.querySelector<HTMLButtonElement>('button.mascot-interactive')!;
+    expect(button.classList.contains('mascot-interactive--pullups')).toBe(false);
+
+    await act(async () => {
+      vi.advanceTimersByTime(PULLUP_FIRST_DELAY_MS);
+    });
+    expect(button.classList.contains('mascot-interactive--pullups')).toBe(true);
+    // Still the splash wave guy — identity stays, motion does the gag.
+    expect(container.querySelector('.mascot--wave')).not.toBeNull();
+    expect(container.querySelector('.mascot--hanging')).toBeNull();
+    expect(container.querySelector('.mascot__mouth-seal')).toBeNull();
+
+    await act(async () => {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(button.classList.contains('mascot-interactive--pullups')).toBe(false);
+    expect(container.querySelector('.mascot--excited')).not.toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+    // Silence unused if tree-shaken oddly — session length is part of the contract with CSS.
+    expect(PULLUP_SESSION_MS).toBeGreaterThan(0);
+  });
+
+  it('skips pull-ups under prefers-reduced-motion', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.useFakeTimers();
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes('prefers-reduced-motion'),
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    })) as typeof window.matchMedia;
+
+    const { PULLUP_FIRST_DELAY_MS } = await import('./Mascot.js');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(InteractiveMascot, {
+          pokeLabel: 'Poke',
+          doesPullUps: true,
+          size: 64,
+        }),
+      );
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(PULLUP_FIRST_DELAY_MS + 1_000);
+    });
+    expect(container.querySelector('.mascot-interactive--pullups')).toBeNull();
+    expect(container.querySelector('.mascot__hang-arms')).toBeNull();
 
     await act(async () => {
       root.unmount();

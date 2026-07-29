@@ -40,6 +40,7 @@ export function ClosedBetaSplash() {
           className="beta-splash__mascot"
           idleEmotion="wave"
           reactsToTilt
+          doesPullUps
           size={96}
           pokeLabel={t('mascot.poke')}
         />

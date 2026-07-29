@@ -3354,6 +3354,9 @@ body.player-open {
   width: 100%;
   text-align: center;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  /* Pull-ups climb onto the rim — don't clip him. */
+  position: relative;
+  overflow: visible;
 }
 
 .beta-splash__logo {
@@ -5265,6 +5268,81 @@ body.player-open {
   animation: mascot-interactive-boop 0.45s ease-out;
 }
 
+/*
+ * Idle pull-ups on the splash card rim. One animation on the whole button — he
+ * stays the normal logo mascot (same face, same limbs). The card border is the
+ * bar; nothing extra is drawn. Climb → a few chin bobs near the rim → drop + land.
+ */
+.mascot-interactive--pullups {
+  /* Card padding-top (48) + button pad so his head meets the 1px border. */
+  --pullup-hang: 48px;
+  --pullup-chin: 20px;
+  transform-origin: 50% 100%;
+  animation: mascot-pullups 3.2s ease-in-out;
+}
+
+@media (max-height: 720px) {
+  .mascot-interactive--pullups {
+    --pullup-hang: 26px;
+    --pullup-chin: 12px;
+  }
+}
+
+.mascot-interactive--pullups .mascot-interactive__tilt {
+  transition: none;
+  transform: none;
+}
+
+/* Kill the idle body bob while the pull-up timeline owns transform. */
+.mascot-interactive--pullups .mascot__body-group {
+  animation: none !important;
+}
+
+@keyframes mascot-pullups {
+  0% {
+    transform: translateY(0) scale(1, 1);
+  }
+  /* Hop up and grab the rim. */
+  14% {
+    transform: translateY(calc(-1 * var(--pullup-hang))) scale(1, 1);
+  }
+  /* Chin-up 1 */
+  24% {
+    transform: translateY(calc(-1 * var(--pullup-hang) - var(--pullup-chin))) scale(1.05, 0.94);
+  }
+  32% {
+    transform: translateY(calc(-1 * var(--pullup-hang))) scale(0.98, 1.04);
+  }
+  /* Chin-up 2 */
+  42% {
+    transform: translateY(calc(-1 * var(--pullup-hang) - var(--pullup-chin))) scale(1.05, 0.94);
+  }
+  50% {
+    transform: translateY(calc(-1 * var(--pullup-hang))) scale(0.98, 1.04);
+  }
+  /* Chin-up 3 — a little higher */
+  60% {
+    transform: translateY(calc(-1 * var(--pullup-hang) - var(--pullup-chin) - 4px)) scale(1.06, 0.92);
+  }
+  68% {
+    transform: translateY(calc(-1 * var(--pullup-hang))) scale(0.98, 1.04);
+  }
+  /* Hold, then drop. */
+  74% {
+    transform: translateY(calc(-1 * var(--pullup-hang))) scale(1, 1);
+  }
+  /* Land squash + short bounce. */
+  86% {
+    transform: translateY(6px) scale(1.12, 0.84);
+  }
+  93% {
+    transform: translateY(-3px) scale(0.97, 1.05);
+  }
+  100% {
+    transform: translateY(0) scale(1, 1);
+  }
+}
+
 @keyframes mascot-interactive-boop {
   0% {
     transform: scale(1, 1);
@@ -5334,7 +5412,8 @@ body.player-open {
 @media (prefers-reduced-motion: reduce) {
   .mascot-interactive,
   .mascot-interactive__tilt,
-  .mascot-interactive--poking {
+  .mascot-interactive--poking,
+  .mascot-interactive--pullups {
     transition: none;
     animation: none;
   }
