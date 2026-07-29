@@ -5,6 +5,7 @@ import {
   MAX_WORLD_TEXT_LENGTH,
   parseWorldSchema,
   validateWorldEntry,
+  MAX_PRESENCE_GRID,
   worldOwnerTag,
   type WorldSchema,
 } from './world-schema.js';
@@ -222,6 +223,42 @@ describe('isValidWorldKey', () => {
     for (const key of ['', '../escape', 'has space', '/leading', '.hidden', 'x'.repeat(65), 42, null, undefined]) {
       expect(isValidWorldKey(key)).toBe(false);
     }
+  });
+});
+
+describe('parseWorldSchema presence block', () => {
+  const base = { maxPerPlayer: 3, fields: { plant: { type: 'enum', values: ['oak'] } } };
+
+  it('leaves presence null when a world declares none', () => {
+    // The ordinary world, unchanged by P2.5. Storing what strangers built is not the
+    // same decision as announcing who is standing in it, so one does not imply the other.
+    expect(parseWorldSchema(base)?.presence).toBeNull();
+  });
+
+  it('reads a declared grid', () => {
+    expect(parseWorldSchema({ ...base, presence: { cols: 15, rows: 9 } })?.presence).toEqual({ cols: 15, rows: 9 });
+  });
+
+  it('takes the whole world down when the presence block does not parse', () => {
+    // Same stance as a bad field spec, for a related reason: failing open would leave a
+    // game reporting positions into a coordinate space nobody agreed to bound.
+    expect(parseWorldSchema({ ...base, presence: {} })).toBeNull();
+    expect(parseWorldSchema({ ...base, presence: { cols: 15 } })).toBeNull();
+    expect(parseWorldSchema({ ...base, presence: { cols: 15, rows: 0 } })).toBeNull();
+    expect(parseWorldSchema({ ...base, presence: { cols: 15, rows: 2.5 } })).toBeNull();
+    expect(parseWorldSchema({ ...base, presence: { cols: '15', rows: '9' } })).toBeNull();
+    expect(parseWorldSchema({ ...base, presence: true })).toBeNull();
+    expect(parseWorldSchema({ ...base, presence: [15, 9] })).toBeNull();
+  });
+
+  it('refuses a grid fine enough to be a movement trace', () => {
+    // The cap is what keeps ambient presence ambient: a 4096-wide grid would publish a
+    // real person's position to strangers at roughly pixel resolution.
+    expect(
+      parseWorldSchema({ ...base, presence: { cols: MAX_PRESENCE_GRID, rows: MAX_PRESENCE_GRID } }),
+    ).not.toBeNull();
+    expect(parseWorldSchema({ ...base, presence: { cols: MAX_PRESENCE_GRID + 1, rows: 9 } })).toBeNull();
+    expect(parseWorldSchema({ ...base, presence: { cols: 9, rows: MAX_PRESENCE_GRID + 1 } })).toBeNull();
   });
 });
 

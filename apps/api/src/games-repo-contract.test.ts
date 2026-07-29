@@ -53,6 +53,7 @@ describe('games-repo-contract (website half)', () => {
       'party',
       'save',
       'commons',
+      'presence',
       'mascot',
       'zone',
     ]);
@@ -70,7 +71,7 @@ describe('games-repo source extractors', () => {
       // Canonical order
       export const GAME_KIT_MODULES = [
         'input', 'collision', 'world', 'ai', 'gameplay',
-        'drawing', 'actors', 'gfx', 'gfx3d', 'effects', 'audio', 'party', 'save', 'commons', 'mascot', 'zone',
+        'drawing', 'actors', 'gfx', 'gfx3d', 'effects', 'audio', 'party', 'save', 'commons', 'presence', 'mascot', 'zone',
       ] as const;
     `;
     expect(extractGameKitModules(source)).toEqual([...GAME_KIT_MODULES]);

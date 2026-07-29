@@ -17,6 +17,7 @@ import { createDefaultContentChecker, type ContentChecker } from './moderation.j
 import { registerContactRoutes, type ContactRoutesOptions } from './contact.js';
 import { registerEmailRoutes } from './email-routes.js';
 import { registerGameSaveRoutes, type GameSaveRoutesOptions } from './game-saves.js';
+import { registerPresenceRoutes, type PresenceRoutesOptions } from './presence.js';
 import { registerWorldRoutes, type WorldRoutesOptions } from './worlds.js';
 import { createWorldSchemaSourceFromEnv } from './world-source.js';
 import { registerZoneRoutes, type ZoneRoutesOptions } from './zones.js';
@@ -68,6 +69,8 @@ export interface BuildAppOptions {
   gameSaveRoutes?: Omit<GameSaveRoutesOptions, 'store'>;
   /** Seams for shared worlds; defaults to a live games-repo-backed schema source. */
   worldRoutes?: Partial<Omit<WorldRoutesOptions, 'store'>>;
+  /** Seams for ambient presence. Note the absence of a store: it keeps nothing durable. */
+  presenceRoutes?: Partial<PresenceRoutesOptions>;
   zoneRoutes?: Partial<ZoneRoutesOptions>;
   /** Seams for written player feedback; defaults to a live catalog-backed slug gate. */
   playerFeedbackRoutes?: Omit<PlayerFeedbackRoutesOptions, 'store' | 'contentChecker'>;
@@ -241,11 +244,22 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // gating it would show an empty field to exactly the visitor deciding whether to
   // care. Writes need a session, are validated against the game's declared schema, and
   // run every text field past the same moderator written feedback uses.
+  const worldSchemas = await createWorldSchemaSourceFromEnv(envPublishedSlugs);
   await registerWorldRoutes(app, {
     store,
     contentChecker,
-    worlds: await createWorldSchemaSourceFromEnv(envPublishedSlugs),
+    worlds: worldSchemas,
     ...options.worldRoutes,
+  });
+
+  // Ambient co-presence in those worlds (docs/persistent-world-plan.md P2.5). Reads are
+  // public for the same reason the world's are; appearing needs a session. It takes no
+  // `store` on purpose — presence is TTL-only and in memory, so there is nothing durable
+  // to erase and `erase-player-signals.ts` is untouched by it. The schema source is
+  // shared with the world routes: a roster only exists where a world declared one.
+  await registerPresenceRoutes(app, {
+    worlds: worldSchemas,
+    ...options.presenceRoutes,
   });
 
   // Admission to authoritative zones (docs/persistent-world-plan.md P3). This service

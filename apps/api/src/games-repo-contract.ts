@@ -23,6 +23,7 @@ export const GAME_KIT_MODULES = [
   'party',
   'save',
   'commons',
+  'presence',
   'mascot',
   // P3's zone module (docs/persistent-world-plan.md). Opt-in and, at ~9 KiB transpiled,
   // charged to the author budget the way `save` and `commons` are rather than to the
@@ -59,6 +60,10 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
  * Before that, games-repo #113 (the voxel and third-person pilots): `gfx3d`
  * 32_000 → 40_000 (+8_000, 358_027 → 366_027) for the scene3d template and the
  * chase camera those pilots share. Same opt-in shape as the band below.
+ *
+ * `presence` (games-repo P2.5) moves none of this. Like every other module it is only
+ * inlined when a `GAME.json` asks for it, so it comes out of the 200 KiB author budget
+ * rather than the platform allowances here.
  *
  * Before that, games-repo #111 (the `gfx3d` kit): +32_000 (`gfx3d`) for an
  * opt-in Lambert-mesh scene module measured at ~31.5 KiB transpiled. It is only

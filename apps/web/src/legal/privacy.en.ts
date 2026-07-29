@@ -95,6 +95,15 @@ export const privacyEn: LegalDocument = {
               'Until you delete your account, or remove it from within the game',
             ],
             [
+              'While you are playing a game with a shared world, that you are in it and roughly where — a coarse ' +
+                'tile position, not a precise location. Held only in memory for about 40 seconds after your last ' +
+                'move and never written to any database. Other players see a short code and a tile: never your ' +
+                'name, your account, or the code attached to anything you have built there',
+              'Letting players see that others are in the same world at the same time',
+              'Art. 6(1)(b) — performance of a contract',
+              'About 40 seconds after you stop playing. There is nothing kept to delete later',
+            ],
+            [
               'The moderation outcome for your description (whether it was rejected and why)',
               'Preventing unlawful or harmful content from being created',
               'Art. 6(1)(c) — legal obligation (Digital Services Act), and 6(1)(f) — our legitimate interest in a ' +

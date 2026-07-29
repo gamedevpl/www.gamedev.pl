@@ -10,6 +10,7 @@ import { ShareGameButton } from './ShareGameButton.js';
 import { VoteWidget } from './VoteWidget.js';
 import { useGamePlayer } from './gamePlayer.js';
 import { useGameSaveBridge } from './gameSave.js';
+import { usePresenceBridge } from './presence.js';
 import { useWorldBridge } from './world.js';
 import { useZoneBridge } from './zone.js';
 import { useScreenWakeLock } from './useScreenWakeLock.js';
@@ -131,6 +132,12 @@ export function GameTheater({
   // against a shape it is about to change would be visible to every other player as
   // something the game can no longer render.
   useWorldBridge(frameRef, reportSlug);
+
+  // And who is walking that world right now (P2.5). Mounted beside the world bridge
+  // rather than inside it because the two answer different questions on different
+  // clocks: a world changes when somebody acts, a roster changes when somebody arrives
+  // or stops looking. A game that never asks for a roster costs this nothing.
+  usePresenceBridge(frameRef, reportSlug);
 
   // Authoritative real-time zones (P3). Published slug again, and here the reason is
   // sharpest of the three: the host runs the *same* sim.ts the client predicts with, and
