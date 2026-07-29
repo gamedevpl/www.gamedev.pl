@@ -32,7 +32,7 @@ heading when you have builds or published games. Published slugs come from
 
 | Filter | Effect |
 | ------ | ------ |
-| My games | Show only the signed-in creator’s published games (plus in-progress builds). Hidden when signed out. |
+| My games | Show only the signed-in creator’s published games (plus in-progress builds). Hidden when signed out or when you have no builds/published games. |
 | Not played | Show only games with no play affinity and no device-local recent open |
 
 Filters combine with AND. Sort preference is remembered in `localStorage`
@@ -40,8 +40,8 @@ Filters combine with AND. Sort preference is remembered in `localStorage`
 payload is cached in `sessionStorage` (`gdpl.catalogSortSignals`) so a reload does
 not flash catalog-default order before the network returns.
 
-Controls sit on one row beside the Games heading: My games (when signed in) +
-Not played + Sort ▾ (menu closes on outside tap / Escape).
+Controls sit on one row beside the Games heading: My games (when you have
+games) + Not played + Sort ▾ (menu closes on outside tap / Escape).
 
 ## Signals & privacy
 

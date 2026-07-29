@@ -451,13 +451,21 @@ export function ArcadeCatalog({
     [inProgress],
   );
 
+  const hasCatalog = catalogStatus === 'ready' && catalogEntries.length > 0;
+  const hasBuilds = inProgress.length > 0;
+  // My games only makes sense when signed in and you actually have something yours.
+  const canFilterYourGames = Boolean(user) && (mySlugs.size > 0 || hasBuilds);
+  const showControls = hasCatalog || hasBuilds;
+  const yourGamesOnly = canFilterYourGames && filters.has('your_games');
+  const notPlayedOnly = filters.has('not_played');
+  const filtersActive = yourGamesOnly || notPlayedOnly;
+
   const orderedEntries = useMemo(() => {
-    // Signed-out visitors never filter to "my games" even if the pref is sticky —
-    // that would empty the whole catalog.
-    const activeFilters =
-      user || !filters.has('your_games')
-        ? filters
-        : new Set([...filters].filter((id) => id !== 'your_games'));
+    // Ignore a sticky your_games pref when signed out or you have nothing yours —
+    // otherwise the whole catalog would look empty for no good reason.
+    const activeFilters = canFilterYourGames
+      ? filters
+      : new Set([...filters].filter((id) => id !== 'your_games'));
     const filtered = applyCatalogFilters(
       catalogEntries,
       activeFilters,
@@ -465,7 +473,7 @@ export function ArcadeCatalog({
       mySlugs,
     );
     return orderCatalogEntries(filtered, sortMode, signals, mySlugs);
-  }, [catalogEntries, sortMode, filters, signals, mySlugs, user]);
+  }, [catalogEntries, sortMode, filters, signals, mySlugs, canFilterYourGames]);
 
   function handleSortChange(mode: CatalogSortMode) {
     setSortMode(mode);
@@ -490,13 +498,6 @@ export function ArcadeCatalog({
       return next;
     });
   }
-
-  const hasCatalog = catalogStatus === 'ready' && catalogEntries.length > 0;
-  const hasBuilds = inProgress.length > 0;
-  const showControls = hasCatalog || hasBuilds;
-  const yourGamesOnly = Boolean(user) && filters.has('your_games');
-  const notPlayedOnly = filters.has('not_played');
-  const filtersActive = yourGamesOnly || notPlayedOnly;
   const awaitingSignals =
     catalogStatus === 'ready' &&
     catalogEntries.length > 0 &&
@@ -537,7 +538,7 @@ export function ArcadeCatalog({
         </div>
         {showControls ? (
           <div className="catalog-toolbar" role="group" aria-label={t('catalog.toolbarLabel')}>
-            {hasCatalog && user ? (
+            {hasCatalog && canFilterYourGames ? (
               <button
                 type="button"
                 className={`catalog-filter-trigger${yourGamesOnly ? ' is-active' : ''}`}
