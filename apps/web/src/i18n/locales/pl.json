@@ -150,11 +150,12 @@
     "savesBadge": "Zapisuje postępy",
     "sortLabel": "Sortuj gry",
     "toolbarLabel": "Filtry i sortowanie katalogu",
+    "yoursBadge": "Twoje",
     "filter": {
-      "notPlayed": "Niegrane"
+      "not_played": "Niegrane"
     },
     "emptyNotPlayed": "Grałeś już we wszystkie gry tutaj.",
-    "clearNotPlayedFilter": "Pokaż wszystkie gry",
+    "clearFilters": "Pokaż wszystkie gry",
     "sort": {
       "recommended": "Polecane",
       "newest": "Najnowsze",

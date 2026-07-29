@@ -150,11 +150,12 @@
     "savesBadge": "Saves progress",
     "sortLabel": "Sort games",
     "toolbarLabel": "Catalog filters and sort",
+    "yoursBadge": "Yours",
     "filter": {
-      "notPlayed": "Not played"
+      "not_played": "Not played"
     },
     "emptyNotPlayed": "You've played every game here.",
-    "clearNotPlayedFilter": "Show all games",
+    "clearFilters": "Show all games",
     "sort": {
       "recommended": "Recommended",
       "newest": "Newest",

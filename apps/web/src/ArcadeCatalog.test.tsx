@@ -111,11 +111,17 @@ async function flushEffects() {
 describe('ArcadeCatalog lazy media', () => {
   beforeEach(async () => {
     installIntersectionObserverMock();
+    sessionStorage.setItem(
+      'gdpl.catalogSortSignals',
+      JSON.stringify({ items: [], popularity: [], lastPlayed: [], newest: [] }),
+    );
     await i18n.changeLanguage('en');
   });
 
   afterEach(() => {
     document.body.innerHTML = '';
+    sessionStorage.clear();
+    localStorage.clear();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -173,11 +179,17 @@ describe('ArcadeCatalog lazy media', () => {
 describe('ArcadeCatalog shared-world badge', () => {
   beforeEach(async () => {
     installIntersectionObserverMock();
+    sessionStorage.setItem(
+      'gdpl.catalogSortSignals',
+      JSON.stringify({ items: [], popularity: [], lastPlayed: [], newest: [] }),
+    );
     await i18n.changeLanguage('en');
   });
 
   afterEach(() => {
     document.body.innerHTML = '';
+    sessionStorage.clear();
+    localStorage.clear();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });

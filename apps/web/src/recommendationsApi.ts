@@ -13,6 +13,7 @@ export interface CatalogSortPayload {
 }
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
+const SIGNALS_CACHE_KEY = 'gdpl.catalogSortSignals';
 
 const REASONS = new Set<RecommendationReason>(['popular', 'for_you', 'because_you_played', 'continue']);
 
@@ -66,6 +67,39 @@ function parseNewest(body: unknown): string[] {
   );
 }
 
+function parseCachedPayload(raw: string): CatalogSortPayload | null {
+  try {
+    const body: unknown = JSON.parse(raw);
+    if (typeof body !== 'object' || body === null) return null;
+    return {
+      items: parseItems(body),
+      popularity: parsePopularity(body),
+      lastPlayed: parseLastPlayed(body),
+      newest: parseNewest(body),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Last recommendations payload — used so reload does not flash catalog-default order. */
+export function readCachedCatalogSortPayload(): CatalogSortPayload | null {
+  try {
+    const raw = sessionStorage.getItem(SIGNALS_CACHE_KEY);
+    return raw ? parseCachedPayload(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeCachedCatalogSortPayload(payload: CatalogSortPayload): void {
+  try {
+    sessionStorage.setItem(SIGNALS_CACHE_KEY, JSON.stringify(payload));
+  } catch {
+    // Private mode / quota — next reload may flash once.
+  }
+}
+
 export async function fetchCatalogSortSignals(recent: string[] = []): Promise<CatalogSortPayload> {
   const params = new URLSearchParams();
   if (recent.length > 0) params.set('recent', recent.slice(0, 8).join(','));
@@ -77,12 +111,14 @@ export async function fetchCatalogSortSignals(recent: string[] = []): Promise<Ca
   if (!response.ok) return empty;
   try {
     const body: unknown = await response.json();
-    return {
+    const payload: CatalogSortPayload = {
       items: parseItems(body),
       popularity: parsePopularity(body),
       lastPlayed: parseLastPlayed(body),
       newest: parseNewest(body),
     };
+    writeCachedCatalogSortPayload(payload);
+    return payload;
   } catch {
     return empty;
   }

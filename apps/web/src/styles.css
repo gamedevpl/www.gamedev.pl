@@ -924,7 +924,16 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
+}
+
+.arcade-title-row {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 /* A quiet section label, not a banner — the grid of games below speaks for itself. */
@@ -935,7 +944,51 @@ button:disabled {
   margin: 0;
   letter-spacing: -0.3px;
   min-width: 0;
-  flex: 1 1 auto;
+}
+
+.catalog-live-count {
+  flex: none;
+  font-size: 0.8rem;
+}
+
+.catalog-studio-btn {
+  flex: none;
+  min-height: 36px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+.catalog-build-card {
+  justify-content: center;
+  min-height: 180px;
+}
+
+.catalog-build-card.is-live {
+  border-color: rgba(45, 212, 191, 0.4);
+  box-shadow: 0 0 18px rgba(45, 212, 191, 0.08);
+}
+
+.catalog-build-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 18px;
+}
+
+.catalog-build-yours {
+  /* Static badge on build cards — not over media. */
+  position: static;
+}
+
+.catalog-build-meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.catalog-build-body .primary-btn {
+  margin-top: auto;
 }
 
 .arcade-subtitle {
@@ -946,8 +999,8 @@ button:disabled {
 }
 
 /*
- * Compact toolbar beside the Games heading: a Not-played filter toggle plus a
- * sort dropdown. One row on phone and desktop — no chip strip that wraps.
+ * Compact toolbar beside the Games heading: Not played toggle + Sort ▾.
+ * One row on phone and desktop — no chip strip that wraps.
  */
 .catalog-toolbar {
   display: flex;
@@ -959,12 +1012,18 @@ button:disabled {
   max-width: min(100%, 18rem);
 }
 
-.catalog-filter-btn,
+.catalog-sort-menu {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 11rem;
+}
+
+.catalog-filter-trigger,
 .catalog-sort-trigger {
-  flex: 0 1 auto;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   gap: 0.35rem;
   min-height: 40px;
   padding: 0.4rem 0.75rem;
@@ -979,24 +1038,24 @@ button:disabled {
   touch-action: manipulation;
 }
 
-.catalog-filter-btn.is-active,
-.catalog-sort-menu.is-open .catalog-sort-trigger {
-  border-color: var(--turquoise);
-  color: var(--turquoise);
-  background: rgba(0, 228, 172, 0.08);
-}
-
-.catalog-sort-menu {
-  position: relative;
-  flex: 1 1 auto;
-  min-width: 0;
-  max-width: 11rem;
+/* Not-played is a compact toggle; the sort control fills remaining toolbar space. */
+.catalog-toolbar > .catalog-filter-trigger {
+  flex: 0 0 auto;
+  width: auto;
+  max-width: 9rem;
+  justify-content: center;
 }
 
 .catalog-sort-trigger {
   width: 100%;
   max-width: 100%;
-  justify-content: space-between;
+}
+
+.catalog-filter-trigger.is-active,
+.catalog-sort-menu.is-open .catalog-sort-trigger {
+  border-color: var(--turquoise);
+  color: var(--turquoise);
+  background: rgba(0, 228, 172, 0.08);
 }
 
 .catalog-sort-trigger-label {
@@ -2906,7 +2965,7 @@ body.player-open {
     max-width: min(100%, 14.5rem);
   }
 
-  .catalog-filter-btn,
+  .catalog-filter-trigger,
   .catalog-sort-trigger {
     min-height: 44px;
   }
@@ -4909,6 +4968,24 @@ body.player-open {
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.18);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+/* Creator’s own published games, pinned first in the gallery. */
+.yours-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--turquoise);
+  background: rgba(0, 228, 172, 0.14);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(0, 228, 172, 0.35);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.04em;

@@ -13,14 +13,24 @@ export const CATALOG_SORT_MODES: CatalogSortMode[] = [
 
 export const DEFAULT_CATALOG_SORT: CatalogSortMode = 'recommended';
 
-const SORT_STORAGE_KEY = 'gdpl.catalogSort';
-const NOT_PLAYED_FILTER_KEY = 'gdpl.catalogNotPlayed';
+/** Only Not played is a filter today; Your games are pinned first, not filtered. */
+export type CatalogFilterId = 'not_played';
 
+export const CATALOG_FILTER_IDS: CatalogFilterId[] = ['not_played'];
+
+const SORT_STORAGE_KEY = 'gdpl.catalogSort';
+const FILTERS_STORAGE_KEY = 'gdpl.catalogFilters';
+/** @deprecated Migrated into `gdpl.catalogFilters`. */
+const LEGACY_NOT_PLAYED_FILTER_KEY = 'gdpl.catalogNotPlayed';
 /** Legacy sort value from when Not played was a sort mode, not a filter. */
 const LEGACY_NOT_PLAYED_SORT = 'not_played';
 
 export function isCatalogSortMode(value: unknown): value is CatalogSortMode {
   return typeof value === 'string' && (CATALOG_SORT_MODES as string[]).includes(value);
+}
+
+export function isCatalogFilterId(value: unknown): value is CatalogFilterId {
+  return typeof value === 'string' && (CATALOG_FILTER_IDS as string[]).includes(value);
 }
 
 export function readCatalogSortMode(): CatalogSortMode {
@@ -42,28 +52,41 @@ export function writeCatalogSortMode(mode: CatalogSortMode): void {
 }
 
 /**
- * Whether the catalog shows only games this visitor has not opened.
- * Migrates the old `not_played` sort preference into this filter once.
+ * Active catalog filters. Migrates legacy not-played prefs into the set once.
+ * Ignores obsolete `your_games` entries left in storage from an earlier build.
  */
-export function readCatalogNotPlayedFilter(): boolean {
+export function readCatalogFilters(): Set<CatalogFilterId> {
+  const filters = new Set<CatalogFilterId>();
   try {
-    const stored = localStorage.getItem(NOT_PLAYED_FILTER_KEY);
-    if (stored === '1') return true;
-    if (stored === '0') return false;
-    if (localStorage.getItem(SORT_STORAGE_KEY) === LEGACY_NOT_PLAYED_SORT) {
-      localStorage.setItem(NOT_PLAYED_FILTER_KEY, '1');
-      localStorage.setItem(SORT_STORAGE_KEY, DEFAULT_CATALOG_SORT);
-      return true;
+    const raw = localStorage.getItem(FILTERS_STORAGE_KEY);
+    if (raw) {
+      const parsed: unknown = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+          if (isCatalogFilterId(item)) filters.add(item);
+        }
+      }
+      return filters;
     }
-    return false;
+
+    // One-shot migrations from older persistence shapes.
+    if (localStorage.getItem(LEGACY_NOT_PLAYED_FILTER_KEY) === '1') {
+      filters.add('not_played');
+    } else if (localStorage.getItem(SORT_STORAGE_KEY) === LEGACY_NOT_PLAYED_SORT) {
+      filters.add('not_played');
+      localStorage.setItem(SORT_STORAGE_KEY, DEFAULT_CATALOG_SORT);
+    }
+    if (filters.size > 0) writeCatalogFilters(filters);
+    localStorage.removeItem(LEGACY_NOT_PLAYED_FILTER_KEY);
   } catch {
-    return false;
+    // Private mode / bad JSON — empty set.
   }
+  return filters;
 }
 
-export function writeCatalogNotPlayedFilter(enabled: boolean): void {
+export function writeCatalogFilters(filters: ReadonlySet<CatalogFilterId>): void {
   try {
-    localStorage.setItem(NOT_PLAYED_FILTER_KEY, enabled ? '1' : '0');
+    localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify([...filters]));
   } catch {
     // Private mode — preference simply does not persist.
   }
@@ -79,6 +102,13 @@ export interface CatalogSortSignals {
   /** Last-played timestamps (ISO) from signed-in affinity. */
   affinityLastPlayed: ReadonlyMap<string, string>;
 }
+
+export const EMPTY_CATALOG_SORT_SIGNALS: CatalogSortSignals = {
+  recommended: [],
+  newest: [],
+  sessions: new Map(),
+  affinityLastPlayed: new Map(),
+};
 
 function orderBySlugList<T extends { slug: string }>(entries: T[], order: string[]): T[] {
   if (order.length === 0) return entries;
@@ -111,6 +141,19 @@ export function filterUnplayedEntries<T extends { slug: string }>(
 ): T[] {
   const played = playedSlugSet(affinityLastPlayed);
   return entries.filter((entry) => !played.has(entry.slug));
+}
+
+/**
+ * Apply active filters. Today only `not_played`; Your games are pinned first via
+ * {@link orderCatalogEntries}, not filtered out.
+ */
+export function applyCatalogFilters<T extends { slug: string }>(
+  entries: T[],
+  filters: ReadonlySet<CatalogFilterId>,
+  affinityLastPlayed: ReadonlyMap<string, string>,
+): T[] {
+  if (filters.has('not_played')) return filterUnplayedEntries(entries, affinityLastPlayed);
+  return entries;
 }
 
 /**
@@ -175,4 +218,26 @@ export function sortCatalogEntries(
     default:
       return entries;
   }
+}
+
+/**
+ * Unified gallery order: the creator’s published games first (same sort within
+ * that group), then everyone else’s. Additive — never hides the rest of the catalog.
+ */
+export function orderCatalogEntries(
+  entries: CatalogEntry[],
+  mode: CatalogSortMode,
+  signals: CatalogSortSignals,
+  mySlugs: ReadonlySet<string>,
+): CatalogEntry[] {
+  if (mySlugs.size === 0) return sortCatalogEntries(entries, mode, signals);
+  const mine = entries.filter((entry) => mySlugs.has(entry.slug));
+  const others = entries.filter((entry) => !mySlugs.has(entry.slug));
+  if (mine.length === 0) return sortCatalogEntries(others, mode, signals);
+  return [...sortCatalogEntries(mine, mode, signals), ...sortCatalogEntries(others, mode, signals)];
+}
+
+/** Sort modes that need the recommendations payload to avoid a wrong first paint. */
+export function catalogSortNeedsSignals(mode: CatalogSortMode): boolean {
+  return mode !== 'alpha';
 }
