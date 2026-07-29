@@ -1651,18 +1651,17 @@ body.player-open {
   outline: none;
 }
 
-/* Fixed icon column so every label starts on the same x — pixel glyphs have uneven
-   ink bounds, and Report previously rendered at a smaller size than the others. */
+/* Fixed icon column without CSS-scaling the SVG — PixelIcon’s width/height
+   attributes stay authoritative (15×15 crispEdges grid). Equal size={13} props
+   already put every label on the same x; flex:none keeps the glyph from
+   stretching inside the row. */
 .game-theater-actions .theater-more-panel .theater-menu-item > svg,
 .game-theater-actions .theater-more-panel .share-btn > svg,
 .game-theater-actions .theater-more-panel .report-btn > svg,
 .game-theater-actions .theater-more-panel .feedback-btn > svg {
-  flex: 0 0 18px;
-  width: 18px;
-  height: 18px;
+  flex: none;
   display: block;
   margin: 0;
-  vertical-align: unset;
 }
 
 .game-theater-actions .theater-more-panel .btn-label {
