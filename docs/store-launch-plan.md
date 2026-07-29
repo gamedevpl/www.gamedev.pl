@@ -2,7 +2,7 @@
 
 > Written 2026-07-28, replacing the thin M2 bullet list in
 > [`mobile-app-plan.md`](./mobile-app-plan.md). That list assumed store work was mostly
-> *wrapping* — a Capacitor shell plus adapters. It is not. The wrapper is the small half;
+> _wrapping_ — a Capacitor shell plus adapters. It is not. The wrapper is the small half;
 > the large half is **guideline 4.7 compliance across a catalog that grows by agent PR**.
 >
 > Two constraints the earlier estimate leaned on have been lifted by the owner: agent work
@@ -19,7 +19,7 @@ Guideline 4.7's preamble:
 
 Every published game must satisfy the full App Review Guidelines, and **one
 non-compliant game rejects the whole app**. The catalog grows on every merge, so this is
-not a one-time gate — it is a permanent obligation that must be enforced *mechanically*,
+not a one-time gate — it is a permanent obligation that must be enforced _mechanically_,
 the way the touch contract is, or it will be enforced by App Review at random intervals
 instead.
 
@@ -29,20 +29,20 @@ instructions.**
 
 ## Where we actually stand
 
-| Requirement | State |
-| --- | --- |
-| 4.8 Sign in with Apple | ✅ live on web since 2026-07-28, reused unchanged by the shell |
-| 4.7.2 no native APIs exposed to games | ✅ **architecturally** — `sandbox="allow-scripts"`, no `allow-same-origin` |
-| 4.7.3 no data/permissions to individual games | ✅ games receive nothing |
-| 1.2 / 4.7.1 report mechanism | ✅ `ReportGameButton` |
-| 1.2 / 4.7.1 filtering | ✅ Vertex moderation + validate.ts + human merge gate |
-| 1.2 / 4.7.1 published contact | ✅ `admin@gamedev.pl`, DSA contact point |
-| 1.2 / 4.7.1 **block abusive users** | ⚠️ operator-side `tier: 'blocked'` only — not user-facing |
-| 4.7.4 **index + universal links** | ❌ catalog exists; universal links do not |
-| 4.7.5 **age rating + age restriction** | ❌ nothing rates a game or gates by age |
-| Apple account | ✅ Individual, Team `ZLSCSP42P9` |
-| Play account | 🚧 paid, in identity verification |
-| Capacitor shell | ❌ not started |
+| Requirement                                   | State                                                                      |
+| --------------------------------------------- | -------------------------------------------------------------------------- |
+| 4.8 Sign in with Apple                        | ✅ live on web since 2026-07-28, reused unchanged by the shell             |
+| 4.7.2 no native APIs exposed to games         | ✅ **architecturally** — `sandbox="allow-scripts"`, no `allow-same-origin` |
+| 4.7.3 no data/permissions to individual games | ✅ games receive nothing                                                   |
+| 1.2 / 4.7.1 report mechanism                  | ✅ `ReportGameButton`                                                      |
+| 1.2 / 4.7.1 filtering                         | ✅ Vertex moderation + validate.ts + human merge gate                      |
+| 1.2 / 4.7.1 published contact                 | ✅ `admin@gamedev.pl`, DSA contact point                                   |
+| 1.2 / 4.7.1 **block abusive users**           | ⚠️ operator-side `tier: 'blocked'` only — not user-facing                  |
+| 4.7.4 **index + universal links**             | ❌ catalog exists; universal links do not                                  |
+| 4.7.5 **age rating + age restriction**        | ❌ nothing rates a game or gates by age                                    |
+| Apple account                                 | ✅ Individual, Team `ZLSCSP42P9`                                           |
+| Play account                                  | 🚧 paid, in identity verification                                          |
+| Capacitor shell                               | ❌ not started                                                             |
 
 **4.7.2 deserves a note.** It is where most mini-app platforms fail, because bridging
 native APIs into web content is the obvious convenience. The security model forbids exactly
@@ -75,7 +75,7 @@ gating track, and it is closer to done than the docs suggest.
       unusable and Memorystore is real money for a feature nobody is straining.
       Until this lands, public traffic hits a single container with no redundancy.
 - [ ] **Legal** — lawyer review of terms/privacy, and a decision on the UŚUDE art. 5(2)
-      identity gap, which is currently accepted *because* exposure is small. Opening the
+      identity gap, which is currently accepted _because_ exposure is small. Opening the
       beta is exactly the change that invalidates that reasoning.
       See [`legal-compliance-plan.md`](./legal-compliance-plan.md).
 
@@ -92,7 +92,7 @@ moderation layer checking it is honest.
       no longer exist. Map to IARC for Play.
 - [ ] `tools/validate.ts` check: **fail-closed**, no publish without a rating. Same posture
       as Check 13 — an unrated game is a rejected build, not a defaulted one.
-- [ ] Extend the Vertex moderation pass to rate the *spec* at submission time, so the
+- [ ] Extend the Vertex moderation pass to rate the _spec_ at submission time, so the
       declared rating is generated from content rather than guessed by the agent.
 - [ ] Retrofit all 73 published games. Metadata-only, so it should **not** trigger the
       media-recapture cost that shared/GameKit edits do — verify that before starting.
@@ -101,7 +101,7 @@ moderation layer checking it is honest.
       CI reject anything above it, or every 17+ game re-rates the entire app.
 
 **Decided: cap the catalog, collect no age data.** 4.7.5 asks for two things — a way to
-identify games *exceeding the app's rating*, and an age restriction mechanism. If CI
+identify games _exceeding the app's rating_, and an age restriction mechanism. If CI
 refuses to publish anything above the app's own rating, **nothing can exceed it**: the
 first requirement is vacuous and the second has nothing to restrict. The clause is
 satisfied by a validation rule instead of a feature.
@@ -126,9 +126,9 @@ external navigation, which is the answer that avoids it.
 ### T1b — WebKit in games CI (4.7's engine clause)
 
 4.7 requires mini apps to run on **standard WebKit and JavaScriptCore** — no custom JS
-engine, no alternative renderer — and, more sharply, that the software *"only use
+engine, no alternative renderer — and, more sharply, that the software _"only use
 capabilities available in a standard WebKit view (e.g. it must open and run natively in
-Safari without modifications)"*.
+Safari without modifications)"_.
 
 The first half we satisfy by construction: Capacitor uses WKWebView, games are plain
 HTML/JS/CSS in a sandboxed iframe, and this repo ships no engine. It also retroactively
@@ -173,7 +173,7 @@ production unnoticed.
       a web implementation and a Capacitor implementation. **Nothing else in the SPA may
       branch on platform.**
 - [ ] Native sign-in: Google (Credential Manager / iOS) and Apple → the existing
-      `/api/auth/google` and `/api/auth/apple`. The Apple verifier already takes a *set* of
+      `/api/auth/google` and `/api/auth/apple`. The Apple verifier already takes a _set_ of
       audiences, so the shell adds its bundle ID to `APPLE_CLIENT_IDS` — no second verifier.
 - [ ] Push registration (APNs/FCM) into the existing per-user subscription registry
       alongside the web-push rows it already holds.
@@ -209,17 +209,17 @@ T4 (accounts/signing) ─────────┘
 ```
 
 T1 and T2 gate submission but **not** the shell, so all three build concurrently. T0 gates
-the listing being *worth* having, not the engineering. T5 is pure calendar and should be
+the listing being _worth_ having, not the engineering. T5 is pure calendar and should be
 started as early as it legally can be.
 
 ## Decisions taken (2026-07-28)
 
 1. ~~Declared age band?~~ **No age data is collected.** The catalog is capped instead — see
    T1. A validation rule replaces a feature, and the minimal-data posture survives.
-2. **Catalog age ceiling** — deferred *on purpose* until the App Store Connect
+2. **Catalog age ceiling** — deferred _on purpose_ until the App Store Connect
    questionnaire returns the app's own rating, because the required UGC questions move it.
    Guessing first risks retrofitting 73 games twice.
-3. **The public beta opens *after* the relay split.** So the split stops being an
+3. **The public beta opens _after_ the relay split.** So the split stops being an
    optional scaling nicety and becomes the gating item of T0 — the first real engineering
    task on the whole critical path. Public traffic will not be served by a single container
    with no redundancy.
@@ -252,12 +252,12 @@ cross-origin variant of the existing room token.
 build the relay has no use for, and one pinned instance holding both means a busy zone
 starves party rooms.
 
-**This widens T0, and the widening is the point.** Once #323 lands there are *two*
+**This widens T0, and the widening is the point.** Once #323 lands there are _two_
 instance-pinned stateful services, not one. `gamedev-world` has the same ceiling the relay
 does, and its answer — a zone directory — is described in `docs/p3-zone-host-infra.md` as
 **designed and deferred**. So "lift the pin before opening the beta" is not one task: it is
-*get every stateful service off the main API's scaling path and give each one a story for
-its own ceiling*. The relay is the easy half. Decide before the beta opens whether zones
+_get every stateful service off the main API's scaling path and give each one a story for
+its own ceiling_. The relay is the easy half. Decide before the beta opens whether zones
 are public at launch, or stay inert (`ZONE_HOST_URL` unset) until the directory exists.
 
 ## What this plan does not do
