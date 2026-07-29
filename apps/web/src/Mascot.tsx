@@ -13,7 +13,7 @@
  * reactions, and the face tracks the pointer a little. With `reactsToTilt` he also
  * leans with the phone's own orientation and gets dizzy when it is shaken.
  * With `doesPullUps` (splash only) he occasionally climbs the card rim for a few
- * chin-ups when nothing else is happening.
+ * chin-ups when nothing else is happening — motion only, no redrawn limbs.
  *
  * Pass `scrolling` (boolean) on the header mark: he pulls a tiny phone and mimes
  * scrolling a feed while the page moves. Omit the prop everywhere else so the
@@ -60,10 +60,9 @@ type MascotProps = {
    */
   scrolling?: boolean;
   /**
-   * Reach both arms up to grip the splash card's top border. Raised arm strokes
-   * ride with the body; hands stay outside `.mascot__body-group` on the rim so
-   * chin-ups bob the torso toward a planted grip. Baked side stubs and splayed
-   * feet are covered so he keeps one pair of each.
+   * Pull-up pose on the splash card rim: same baked silhouette (no redrawn limbs —
+   * those always looked like a second pair of arms). Climb + chin bob + mouth seal
+   * carry the gag; the card border is the bar.
    */
   hanging?: boolean;
 };
@@ -315,85 +314,6 @@ function BlinkLids() {
 }
 
 /**
- * Paint out the silhouette's side-arm stubs and splayed feet while hanging.
- * Uses the splash card panel colour — more reliable than nested SVG masks, which
- * left the stubs visible on top of the raised arms.
- */
-function HangLimbCovers() {
-  return (
-    <g className="mascot__hang-limb-covers" aria-hidden="true">
-      <rect className="mascot__hang-cover mascot__hang-cover--arm-left" x="1" y="36" width="12" height="18" rx="1" />
-      <rect className="mascot__hang-cover mascot__hang-cover--arm-right" x="57" y="36" width="12" height="17" rx="1" />
-      <rect className="mascot__hang-cover mascot__hang-cover--foot-left" x="19" y="48.5" width="13" height="11.5" />
-      <rect className="mascot__hang-cover mascot__hang-cover--foot-right" x="38" y="48.5" width="13" height="11.5" />
-    </g>
-  );
-}
-
-/**
- * Two stubby feet drawn close together — not one merged column (that read as a
- * single awkward appendage). The hang covers have already erased the splayed pair.
- */
-function FeetTogether() {
-  return (
-    <g className="mascot__feet-together" aria-hidden="true" fill="currentColor">
-      <rect className="mascot__foot mascot__foot--left" x="26" y="50" width="7" height="8" rx="2" />
-      <rect className="mascot__foot mascot__foot--right" x="37" y="50" width="7" height="8" rx="2" />
-    </g>
-  );
-}
-
-/**
- * Raised arms from the shoulders up to the rim. Chunkier filled shapes so they
- * read as his real arms moved up, not thin sticks grown from the head.
- * Inside the body group so they tuck toward the fixed hands on each chin-up.
- */
-function HangArmStrokes() {
-  return (
-    <g className="mascot__hang-arm-strokes" fill="currentColor" aria-hidden="true">
-      <path
-        className="mascot__hang-arm mascot__hang-arm--left"
-        d="M12 37 C8 29 9 18 13 6 C14.5 4.5 16 4.5 17 6 C14 17 15 28 17 37 Z"
-      />
-      <path
-        className="mascot__hang-arm mascot__hang-arm--right"
-        d="M58 37 C62 29 61 18 57 6 C55.5 4.5 54 4.5 53 6 C56 17 55 28 53 37 Z"
-      />
-    </g>
-  );
-}
-
-/**
- * Hands gripping the splash card's top border.
- *
- * Sit at the top of the viewBox: the climb parks that edge on the card's 1px
- * border, so the rim is the real bar — we never draw one. Outside
- * `.mascot__body-group` so chin-ups bob only the body while the grip stays put.
- */
-function HangHands() {
-  return (
-    <g className="mascot__hang-arms" aria-hidden="true">
-      <ellipse
-        className="mascot__hang-hand mascot__hang-hand--left"
-        cx="15"
-        cy="2.6"
-        rx="5.5"
-        ry="3"
-        fill="currentColor"
-      />
-      <ellipse
-        className="mascot__hang-hand mascot__hang-hand--right"
-        cx="55"
-        cy="2.6"
-        rx="5.5"
-        ry="3"
-        fill="currentColor"
-      />
-    </g>
-  );
-}
-
-/**
  * Body-coloured plug that seals the open hang-mouth hole at chin-up peaks.
  * Lives outside the face mask so the breath animation is not fighting mask opacity.
  */
@@ -539,14 +459,6 @@ export function Mascot({
           </>
         )}
 
-        {/*
-          Order matters: covers erase baked stubs/feet, then feet+arms paint on top
-          so he has one pair of each — not stubs under raised arms, and not one
-          merged leg column.
-        */}
-        {hanging ? <HangLimbCovers /> : null}
-        {hanging ? <FeetTogether /> : null}
-        {hanging ? <HangArmStrokes /> : null}
         {hanging ? <HangMouthSeal /> : null}
 
         <BlinkLids />
@@ -559,14 +471,6 @@ export function Mascot({
 
         {showPhone ? <ScrollPhone clipId={phoneClipId} /> : null}
       </g>
-
-      {/*
-        Hands sit outside the body group on purpose: the chin-up bobs only the body
-        toward the card rim while the grip stays planted on the border. Put them
-        inside and the whole sprite floats, which does not read as a pull-up.
-        Arm strokes stay in the body group so they flex toward these hands.
-      */}
-      {hanging ? <HangHands /> : null}
     </svg>
   );
 }

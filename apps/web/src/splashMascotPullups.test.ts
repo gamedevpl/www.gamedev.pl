@@ -24,31 +24,28 @@ describe('the splash mascot does idle pull-ups', () => {
     expect(css).toMatch(/@keyframes mascot-pullups-chin/);
     expect(css).toMatch(/--pullup-hang/);
     expect(css).toMatch(/--pullup-chin-lift/);
-    // Body-only chin-ups — if hang-arms lived inside body-group this would float.
     expect(css).toMatch(/\.mascot-interactive--pullups \.mascot__body-group \{[\s\S]*?animation: mascot-pullups-chin/);
   });
 
-  it('covers baked side stubs and breathes with the chin', () => {
+  it('keeps the baked silhouette and only seals the mouth for breath', () => {
     const css = read('styles.css');
-    expect(css).toMatch(/\.mascot__hang-cover/);
     expect(css).toMatch(/@keyframes mascot-hang-mouth-seal/);
     expect(css).toMatch(/\.mascot__mouth-seal/);
     // Fall → squash → rebound → settle.
     expect(css).toMatch(/scale\(1\.22,\s*0\.7\)/);
     expect(css).toMatch(/scale\(0\.94,\s*1\.1\)/);
     const mascot = read('Mascot.tsx');
-    expect(mascot).toMatch(/HangLimbCovers/);
-    expect(mascot).toMatch(/FeetTogether/);
-    expect(mascot).toMatch(/HangArmStrokes/);
     expect(mascot).toMatch(/HangMouthSeal/);
     expect(mascot).toMatch(/MOUTH_HANG_BREATHE/);
     expect(mascot).toMatch(/PULLUP_SESSION_MS = 3_800/);
-    // Two feet, not one merged column.
-    expect(mascot).toMatch(/mascot__foot--left/);
-    expect(mascot).toMatch(/mascot__foot--right/);
+    // No redrawn limbs — those always looked like a second pair / a weird foot column.
+    expect(mascot).not.toMatch(/HangLimbCovers/);
+    expect(mascot).not.toMatch(/FeetTogether/);
+    expect(mascot).not.toMatch(/HangArmStrokes/);
+    expect(mascot).not.toMatch(/HangHands/);
   });
 
-  it('lets the card rim show his hands', () => {
+  it('lets the climb reach the card rim', () => {
     const css = read('styles.css');
     const card = css.slice(css.indexOf('.beta-splash__card {'), css.indexOf('.beta-splash__logo {'));
     expect(card).toMatch(/overflow:\s*visible/);

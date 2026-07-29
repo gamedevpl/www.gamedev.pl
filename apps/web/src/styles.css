@@ -5192,14 +5192,14 @@ body.player-open {
 
 /*
  * Idle pull-ups on the splash card rim. The card border IS the bar — nothing is
- * drawn for it. Climb moves the whole sprite so his hands meet that border; then
- * only `.mascot__body-group` chin-ups toward the fixed hands. Animate the whole
- * sprite for the reps and it reads as floating, not as a pull-up.
+ * drawn for it, and we do not redraw his limbs (fake raised arms always read as a
+ * second pair). Climb moves the whole sprite so his head meets that border; then
+ * `.mascot__body-group` chin-ups toward the rim. Mouth seal syncs with the reps.
  */
 .mascot-interactive--pullups {
-  /* Card padding-top (48) + button padding (4) so hands meet the 1px border. */
+  /* Card padding-top (48) + button padding (4) so the head meets the 1px border. */
   --pullup-hang: 52px;
-  /* Body travel toward the hands — large enough to read as a chin-up at splash size. */
+  /* Body travel toward the rim — large enough to read as a chin-up at splash size. */
   --pullup-chin-lift: 26px;
   transform-origin: 50% 0%;
   animation: mascot-pullups-climb 3.8s ease-in-out;
@@ -5218,18 +5218,10 @@ body.player-open {
   transform: none;
 }
 
-/* Chin-ups: body only. Hands stay on the rim (they live outside this group). */
+/* Chin-ups: body bob toward the rim while the button holds the hang height. */
 .mascot-interactive--pullups .mascot__body-group {
   transform-origin: 35px 4px;
   animation: mascot-pullups-chin 3.8s ease-in-out !important;
-}
-
-/*
- * Erase baked side stubs / splayed feet while hanging. Must match the splash
- * card background — nested SVG masks left the stubs showing under the raised arms.
- */
-.mascot__hang-cover {
-  fill: var(--panel);
 }
 
 /*
@@ -5281,7 +5273,7 @@ body.player-open {
   0% {
     transform: translateY(0) scale(1, 1);
   }
-  /* Climb and plant hands on the card border. */
+  /* Climb and plant the head on the card border. */
   13% {
     transform: translateY(calc(-1 * var(--pullup-hang))) scale(1, 1);
   }
