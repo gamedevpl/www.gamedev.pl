@@ -4,6 +4,8 @@ import { GameFrame } from './GameFrame.js';
 import { fetchPublishedGame } from './catalog.js';
 import { PixelIcon } from './PixelIcon.js';
 import { useGameTelemetry } from './gamePlayer.js';
+import { rememberRecentPlay } from './recentPlays.js';
+import { recordGamePlayed } from './recommendationsApi.js';
 
 type PublishedGameFrameProps = {
   slug: string;
@@ -32,6 +34,14 @@ export function PublishedGameFrame({ slug, title, frameRef, embed, slots }: Publ
   // to a player" rather than "a card was clicked". A fetch that never resolves is a
   // catalog problem, and this is not the place that would report it.
   useGameTelemetry(slug, html !== null, slots);
+
+  // Account play affinity (signed-in) + device-local recent list (everyone). Both are
+  // best-effort and separate from anonymous play telemetry — see docs/recommendations.md.
+  useEffect(() => {
+    if (html === null) return;
+    rememberRecentPlay(slug);
+    recordGamePlayed(slug);
+  }, [slug, html]);
 
   useEffect(() => {
     let cancelled = false;

@@ -38,7 +38,8 @@ import { MAX_WORLD_ENTRIES } from './world-schema.js';
  *
  * Three of the four signals can be planted as leaf documents whose parents never have to
  * exist: feedback under `games/{slug}/playerFeedback`, saves under
- * `users/{uid}/gameSaves`, world entries under `worlds/{worldId}/worldEntries`. Firestore
+ * `users/{uid}/gameSaves`, play affinity under `users/{uid}/playAffinity`, world entries
+ * under `worlds/{worldId}/worldEntries`. Firestore
  * is content to hold a subcollection under a document that was never written, and once
  * the leaves are deleted the ghost parent stops being listed. Nothing survives the run.
  *
@@ -115,19 +116,21 @@ const FIXTURE_FEEDBACK_TEXT = 'erase verification fixture, safe to delete';
 const FIXTURE_SAVE_DATA = '{"eraseVerification":true}';
 const FIXTURE_WORLD_FIELDS = { marker: 'erase-verification' };
 
-type FixtureKind = 'world entry' | 'feedback' | 'save';
+type FixtureKind = 'world entry' | 'feedback' | 'save' | 'affinity';
 
 interface PlantedState {
   worldEntry: boolean;
   feedback: number;
   save: boolean;
+  affinity: boolean;
 }
 
 async function observe(store: Store, uid: string): Promise<PlantedState> {
-  const [entry, feedback, saves] = await Promise.all([
+  const [entry, feedback, saves, affinity] = await Promise.all([
     store.getWorldEntry(VERIFICATION_WORLD_ID, VERIFICATION_WORLD_KEY),
     store.countPlayerFeedbackByUid(uid),
     store.listGameSaves(uid),
+    store.listPlayAffinity(uid),
   ]);
   return {
     // Ownership matters, not just existence: a leftover row from another run under the
@@ -135,21 +138,22 @@ async function observe(store: Store, uid: string): Promise<PlantedState> {
     worldEntry: entry !== null && entry.ownerUid === uid,
     feedback,
     save: saves.some((save) => save.slug === VERIFICATION_SLUG),
+    affinity: affinity.some((row) => row.slug === VERIFICATION_SLUG),
   };
 }
 
 function describe(state: PlantedState): string {
   return `world entry ${state.worldEntry ? 'present' : 'absent'}, feedback ${state.feedback}, save ${
     state.save ? 'present' : 'absent'
-  }`;
+  }, affinity ${state.affinity ? 'present' : 'absent'}`;
 }
 
 function isFullyPlanted(state: PlantedState): boolean {
-  return state.worldEntry && state.feedback === 1 && state.save;
+  return state.worldEntry && state.feedback === 1 && state.save && state.affinity;
 }
 
 function isFullyGone(state: PlantedState): boolean {
-  return !state.worldEntry && state.feedback === 0 && !state.save;
+  return !state.worldEntry && state.feedback === 0 && !state.save && !state.affinity;
 }
 
 export interface VerifyEraseOptions {
@@ -192,11 +196,12 @@ export async function verifyEraseSignals(options: VerifyEraseOptions): Promise<V
     const previewFound =
       preview.worldsErased.join(',') === VERIFICATION_WORLD_ID &&
       preview.feedbackDeleted === 1 &&
-      preview.savesDeleted.join(',') === VERIFICATION_SLUG;
+      preview.savesDeleted.join(',') === VERIFICATION_SLUG &&
+      preview.affinityCleared.join(',') === VERIFICATION_SLUG;
     record(
       'dry run finds every fixture',
       previewFound,
-      `worlds [${preview.worldsErased.join(', ')}], feedback ${preview.feedbackDeleted}, saves [${preview.savesDeleted.join(', ')}]`,
+      `worlds [${preview.worldsErased.join(', ')}], feedback ${preview.feedbackDeleted}, saves [${preview.savesDeleted.join(', ')}], affinity [${preview.affinityCleared.join(', ')}]`,
     );
 
     // The check the whole dry-run affordance rests on. An operator reads a preview and
@@ -208,11 +213,12 @@ export async function verifyEraseSignals(options: VerifyEraseOptions): Promise<V
     const erasedSame =
       erased.worldsErased.join(',') === preview.worldsErased.join(',') &&
       erased.feedbackDeleted === preview.feedbackDeleted &&
-      erased.savesDeleted.join(',') === preview.savesDeleted.join(',');
+      erased.savesDeleted.join(',') === preview.savesDeleted.join(',') &&
+      erased.affinityCleared.join(',') === preview.affinityCleared.join(',');
     record(
       'confirmed run reports what the dry run promised',
       erasedSame,
-      `worlds [${erased.worldsErased.join(', ')}], feedback ${erased.feedbackDeleted}, saves [${erased.savesDeleted.join(', ')}]`,
+      `worlds [${erased.worldsErased.join(', ')}], feedback ${erased.feedbackDeleted}, saves [${erased.savesDeleted.join(', ')}], affinity [${erased.affinityCleared.join(', ')}]`,
     );
 
     // Against the database rather than the command's own report, because "said it deleted
@@ -222,11 +228,14 @@ export async function verifyEraseSignals(options: VerifyEraseOptions): Promise<V
 
     const rerun = await erasePlayerSignals({ store, uid, dryRun: true });
     const idempotent =
-      rerun.worldsErased.length === 0 && rerun.feedbackDeleted === 0 && rerun.savesDeleted.length === 0;
+      rerun.worldsErased.length === 0 &&
+      rerun.feedbackDeleted === 0 &&
+      rerun.savesDeleted.length === 0 &&
+      rerun.affinityCleared.length === 0;
     record(
       'second dry run reports nothing left',
       idempotent,
-      `worlds [${rerun.worldsErased.join(', ')}], feedback ${rerun.feedbackDeleted}, saves [${rerun.savesDeleted.join(', ')}]`,
+      `worlds [${rerun.worldsErased.join(', ')}], feedback ${rerun.feedbackDeleted}, saves [${rerun.savesDeleted.join(', ')}], affinity [${rerun.affinityCleared.join(', ')}]`,
     );
   } catch (error) {
     record('run completed', false, error instanceof Error ? error.message : String(error));
@@ -254,6 +263,8 @@ async function plantFixtures(store: Store, uid: string, planted: Set<FixtureKind
   planted.add('feedback');
   await store.putGameSave(uid, VERIFICATION_SLUG, FIXTURE_SAVE_DATA, 1);
   planted.add('save');
+  await store.recordPlayAffinity(uid, VERIFICATION_SLUG);
+  planted.add('affinity');
 }
 
 /**
@@ -279,6 +290,7 @@ async function finish(
     ['world entry', () => store.deleteWorldEntriesForUser(uid)],
     ['feedback', () => store.deletePlayerFeedbackByUid(uid)],
     ['save', () => store.deleteGameSaves(uid)],
+    ['affinity', () => store.deletePlayAffinity(uid)],
   ] as const) {
     if (!planted.has(what)) continue;
     try {
@@ -293,6 +305,7 @@ async function finish(
     if (left.worldEntry) residue.push(`world entry ${VERIFICATION_WORLD_ID}/${VERIFICATION_WORLD_KEY}`);
     if (left.feedback > 0) residue.push(`${left.feedback} feedback row(s) under ${VERIFICATION_SLUG}`);
     if (left.save) residue.push(`game save ${VERIFICATION_SLUG}`);
+    if (left.affinity) residue.push(`play affinity ${VERIFICATION_SLUG}`);
   } catch (error) {
     residue.push(`could not confirm cleanup: ${error instanceof Error ? error.message : String(error)}`);
   }

@@ -2,7 +2,8 @@ import type { Store } from './store.js';
 
 /**
  * Erase everything a person contributed *as a player*: their votes, their written
- * feedback, and their saved game progress.
+ * feedback, their saved game progress, and the play-affinity rows that personalise
+ * the home-page recommendations rail.
  *
  * This exists because the privacy notice promises it. Section 8 says account deletion
  * removes "the votes and written feedback you left on games", and until now that was a
@@ -15,7 +16,8 @@ import type { Store } from './store.js';
  * events carry no uid, no IP and no user agent by construction, so there is nothing in
  * them to erase and nothing that could be found even if we tried. That is the whole point
  * of the "measures games, not people" invariant: the erase path for play data is that it
- * was never attributed in the first place.
+ * was never attributed in the first place. Play *affinity* (the signed-in open history
+ * used for recommendations) is different — it lives under the user and is erased here.
  *
  * Two shapes of deletion, because the two collections are keyed differently:
  *
@@ -25,10 +27,10 @@ import type { Store } from './store.js';
  *   walking the games and clearing each one — and cleared through `clearVote` rather than
  *   deleted directly, because the aggregate counts live on the parent game document and a
  *   raw delete would leave `votesUp`/`votesDown` overstating reality forever.
- * - **Saves live under the player** (`users/{uid}/gameSaves/{slug}`), so erasing them is
- *   one subcollection delete with no query, no index, and no walk. That is the vote
- *   layout's lesson applied rather than repeated — the schema was chosen so this
- *   function would stay cheap as the catalog grows.
+ * - **Saves and play affinity live under the player** (`users/{uid}/gameSaves/{slug}` and
+ *   `users/{uid}/playAffinity/{slug}`), so erasing them is one subcollection delete with
+ *   no query, no index, and no walk. That is the vote layout's lesson applied rather than
+ *   repeated — the schema was chosen so this function would stay cheap as the catalog grows.
  *
  * The walk looks like something a collection-group query should replace, and it cannot be:
  * `collectionGroup('votes').where(FieldPath.documentId(), '==', uid)` throws, because a
@@ -90,6 +92,8 @@ export interface ErasePlayerSignalsResult {
   feedbackDeleted: number;
   /** Games whose saved progress was found (and deleted, unless this was a dry run). */
   savesDeleted: string[];
+  /** Games recorded in play affinity (and deleted, unless this was a dry run). */
+  affinityCleared: string[];
   /**
    * Shared worlds this person had built in (and was removed from, unless a dry run).
    *
@@ -163,7 +167,10 @@ export async function erasePlayerSignals(options: ErasePlayerSignalsOptions): Pr
   const savesDeleted = (await store.listGameSaves(uid)).map((save) => save.slug).sort();
   if (!dryRun && savesDeleted.length > 0) await store.deleteGameSaves(uid);
 
+  const affinityCleared = (await store.listPlayAffinity(uid)).map((entry) => entry.slug).sort();
+  if (!dryRun && affinityCleared.length > 0) await store.deletePlayAffinity(uid);
+
   if (!dryRun && worldsErased.length > 0) await store.deleteWorldEntriesForUser(uid);
 
-  return { uid, votesCleared, feedbackDeleted, savesDeleted, worldsErased, dryRun };
+  return { uid, votesCleared, feedbackDeleted, savesDeleted, affinityCleared, worldsErased, dryRun };
 }

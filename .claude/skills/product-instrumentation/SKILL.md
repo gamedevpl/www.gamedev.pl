@@ -98,7 +98,11 @@ signed in. Both telemetry streams are the anonymous half.
   flawless retention for a creator who does not exist, and the one number Stage 0 gates on
   becomes a measurement of our own test suite. Any new person-shaped metric (retention,
   return, cohort, funnel-by-account) must exclude the prefix the same way; play and visit
-  telemetry need no change, since neither is attributed at all.
+  telemetry need no change, since neither is attributed at all. **Play affinity** (the
+  signed-in open history behind home-page recommendations) is person-shaped and follows
+  the same rule: `bot:` uids neither write affinity nor receive personalised picks. Affinity
+  is **not** play telemetry — it lives under `users/{uid}/playAffinity` and is erased with
+  the account; never join it to `playEvents` or visit events.
 
 ## Known gaps (prefer closing one over inventing new metrics)
 

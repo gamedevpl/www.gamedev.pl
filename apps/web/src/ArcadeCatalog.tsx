@@ -21,14 +21,17 @@ function humanizeMoment(name: string): string {
     .join(' ');
 }
 
-function CatalogCard({
+export function CatalogCard({
   entry,
   onPlayGame,
   onPlayTogether,
+  reasonLabel,
 }: {
   entry: CatalogEntry;
   onPlayGame: (game: CatalogEntry) => void;
   onPlayTogether: (game: CatalogEntry) => void;
+  /** Quiet reason line for the recommendations rail; omitted on the main arcade. */
+  reasonLabel?: string;
 }) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -248,6 +251,7 @@ function CatalogCard({
               author: isPlatformAuthor(entry.submittedBy) ? t('catalog.platformAuthor') : entry.submittedBy,
             })}
           </p>
+          {reasonLabel ? <p className="card-reason">{reasonLabel}</p> : null}
           <div className="card-actions">
             <button className="primary-btn" onClick={() => onPlayGame(entry)}>
               <PixelIcon name="play" size={13} /> {t('catalog.play')}

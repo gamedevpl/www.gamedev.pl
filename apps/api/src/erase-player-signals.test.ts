@@ -94,6 +94,10 @@ describe('erasePlayerSignals', () => {
     await store.putGameSave('g:leaver', 'crypt-delver', '{"level":7}', 1);
     await store.putGameSave('g:leaver', 'brick-storm', '{"best":4200}', 1);
     await store.putGameSave('g:stayer', 'crypt-delver', '{"level":2}', 1);
+
+    await store.recordPlayAffinity('g:leaver', 'brick-storm');
+    await store.recordPlayAffinity('g:leaver', 'rock-blaster');
+    await store.recordPlayAffinity('g:stayer', 'brick-storm');
   });
 
   it('removes the leaver’s votes and feedback across every game', async () => {
@@ -139,6 +143,14 @@ describe('erasePlayerSignals', () => {
     expect(await store.getVoteCounts('rock-blaster')).toEqual({ up: 0, down: 0 });
   });
 
+  it('removes the leaver’s play affinity, and names the games', async () => {
+    const result = await erasePlayerSignals({ store, uid: 'g:leaver' });
+
+    expect(result.affinityCleared).toEqual(['brick-storm', 'rock-blaster']);
+    expect(await store.listPlayAffinity('g:leaver')).toEqual([]);
+    expect((await store.listPlayAffinity('g:stayer')).map((row) => row.slug)).toEqual(['brick-storm']);
+  });
+
   it('reports what it would do without touching anything on a dry run', async () => {
     const result = await erasePlayerSignals({ store, uid: 'g:leaver', dryRun: true });
 
@@ -146,12 +158,14 @@ describe('erasePlayerSignals', () => {
     expect(result.votesCleared.sort()).toEqual(['brick-storm', 'rock-blaster']);
     expect(result.feedbackDeleted).toBe(2);
     expect(result.savesDeleted).toEqual(['brick-storm', 'crypt-delver']);
+    expect(result.affinityCleared).toEqual(['brick-storm', 'rock-blaster']);
 
     // Still all there.
     expect(await store.getVote('brick-storm', 'g:leaver')).toBe('up');
     expect(await store.listPlayerFeedback('rock-blaster')).toHaveLength(1);
     expect(await store.getVoteCounts('brick-storm')).toEqual({ up: 2, down: 0 });
     expect(await store.getGameSave('g:leaver', 'crypt-delver')).not.toBeNull();
+    expect((await store.listPlayAffinity('g:leaver')).length).toBe(2);
   });
 
   it('is a no-op for an account that never voted or wrote anything', async () => {
@@ -160,6 +174,7 @@ describe('erasePlayerSignals', () => {
     expect(result.votesCleared).toEqual([]);
     expect(result.feedbackDeleted).toBe(0);
     expect(result.savesDeleted).toEqual([]);
+    expect(result.affinityCleared).toEqual([]);
     // And nobody else was disturbed by the attempt.
     expect(await store.getVoteCounts('brick-storm')).toEqual({ up: 2, down: 0 });
   });
@@ -174,6 +189,7 @@ describe('erasePlayerSignals', () => {
     expect(actual.feedbackDeleted).toBe(preview.feedbackDeleted);
     expect(actual.votesCleared).toEqual(preview.votesCleared);
     expect(actual.savesDeleted).toEqual(preview.savesDeleted);
+    expect(actual.affinityCleared).toEqual(preview.affinityCleared);
   });
 
   it('writes nothing when the world query fails', async () => {

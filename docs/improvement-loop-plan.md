@@ -824,7 +824,10 @@ at all and feeds the only autonomous-eligible class.
   more strongly now that party guests are unauthenticated: coupling discovery to
   telemetry invites gaming before any anti-gaming maturity exists. Revisit only
   after IL-4 has run long enough to trust the measurement plane; even then,
-  prefer a neutral "recently improved" badge over reordering.
+  prefer a neutral "recently improved" badge over reordering. A separate
+  “For you” recommendations rail ([recommendations.md](./recommendations.md))
+  may use scorecard aggregates and signed-in play affinity without changing
+  arcade order.
 - **Session telemetry uses the existing `gdpl-player` envelope.** 🆕 The first
   draft's separate `{ gdpl: 1, event }` envelope is dropped. One channel, one
   contract, one validator.

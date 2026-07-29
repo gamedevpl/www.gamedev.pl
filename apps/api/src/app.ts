@@ -38,7 +38,9 @@ import { mintToken } from './submission-token.js';
 import { registerTelemetryRoutes, type TelemetryRoutesOptions } from './telemetry.js';
 import { registerVisitTelemetryRoutes } from './visit-telemetry.js';
 import { registerVoteRoutes, type VoteRoutesOptions } from './votes.js';
+import { registerRecommendationRoutes, type RecommendationRoutesOptions } from './recommendations.js';
 import { createPublishedSlugGateFromEnv } from './published-slugs.js';
+import { createCatalogGenreSourceFromEnv } from './catalog-genre-source.js';
 import { peekQuota } from './quota-gate.js';
 import { registerRateLimit } from './rate-limit.js';
 import { isKnownSpaShellPath, looksLikeStaticAsset } from './spa-paths.js';
@@ -66,6 +68,8 @@ export interface BuildAppOptions {
   telemetryRoutes?: Omit<TelemetryRoutesOptions, 'store'>;
   /** Seams for game votes; defaults to a live catalog-backed slug gate. */
   voteRoutes?: Omit<VoteRoutesOptions, 'store'>;
+  /** Seams for home-page recommendations; defaults to live catalog + scorecards. */
+  recommendationRoutes?: Omit<RecommendationRoutesOptions, 'store'>;
   /** Seams for per-player game saves; defaults to a live catalog-backed slug gate. */
   gameSaveRoutes?: Omit<GameSaveRoutesOptions, 'store'>;
   /** Seams for shared worlds; defaults to a live games-repo-backed schema source. */
@@ -238,6 +242,18 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     store,
     publishedSlugs: envPublishedSlugs,
     ...options.voteRoutes,
+  });
+
+  // Home-page recommendations rail. Community half reads scorecards (aggregates about
+  // games); personal half reads play affinity under the account. Never touches the
+  // anonymous play/visit streams. Separate from catalog order on purpose — see
+  // docs/recommendations.md and the improvement-loop ranking decision.
+  const envCatalogGenres = await createCatalogGenreSourceFromEnv();
+  await registerRecommendationRoutes(app, {
+    store,
+    publishedSlugs: envPublishedSlugs,
+    catalog: envCatalogGenres,
+    ...options.recommendationRoutes,
   });
 
   // Durable per-player progress (docs/persistent-world-plan.md P1). Same slug gate as

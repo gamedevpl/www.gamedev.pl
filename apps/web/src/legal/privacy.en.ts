@@ -80,6 +80,14 @@ export const privacyEn: LegalDocument = {
               'Until you delete your account',
             ],
             [
+              'Which published games you open while signed in (a count and the last time you opened each) — stored ' +
+                'with your account so the home page can suggest games for you. This is separate from anonymous ' +
+                'gameplay statistics, which are never linked to your account',
+              'Personalising the “For you” recommendations on the home page',
+              'Art. 6(1)(f) — our legitimate interest in helping you find games you are likely to enjoy',
+              'Until you delete your account',
+            ],
+            [
               'Your progress in games that keep it (for example a level reached or items unlocked) — stored with ' +
                 'your account identifier so the game can hand it back to you on your next visit',
               'Letting you continue a game where you left off',
@@ -309,7 +317,8 @@ export const privacyEn: LegalDocument = {
           text:
             `You can ask us to delete your account at any time by writing to [${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL}). ` +
             'We then remove your account data, email address, notification subscriptions, the votes and written ' +
-            'feedback you left on games, your saved progress in games that keep it, anything you built in a ' +
+            'feedback you left on games, the record of which games you opened for recommendations, your saved ' +
+            'progress in games that keep it, anything you built in a ' +
             'game’s shared world, and the link between your submissions and you. Removing what you built ' +
             'from a shared world also removes it from what other players see there.',
         },
