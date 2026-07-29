@@ -1,14 +1,22 @@
 ---
 name: copilot-orchestration
-description: Delegate work to GitHub Copilot's remote coding agent by creating an issue and assigning it to the Copilot bot, then verify and merge the PR it opens. Use when offloading well-specified, self-contained coding tasks to run remotely instead of doing them locally — including choosing what is and isn't suitable to delegate.
+description: Delegate work to GitHub Copilot's remote coding agent — either via the Agent tasks REST API (no issue needed; prefer this when scripting) or by assigning an issue to the Copilot bot — then verify and merge what comes back. Use when offloading well-specified, self-contained coding tasks to run remotely instead of doing them locally, when driving or polling Copilot sessions programmatically, or when choosing what is and isn't suitable to delegate.
 ---
 
 # Orchestrating remote GitHub Copilot coding sessions
 
-Copilot's coding agent runs on GitHub's infrastructure, not yours. You dispatch work by
-**assigning an issue to the Copilot bot**; it opens a pull request. This is the cheapest way
-to get real work done without consuming local model quota — but only for the right tasks, and
-only if you verify what comes back.
+Copilot's coding agent runs on GitHub's infrastructure, not yours. There are **two** ways to
+dispatch work, and the newer one is better for anything programmatic:
+
+1. **Agent tasks REST API** (`POST /agents/repos/{owner}/{repo}/tasks`) — no issue, no label,
+   no bot assignment. Prefer this whenever you are scripting. See
+   [the Agent tasks API section](#the-agent-tasks-rest-api-prefer-this-when-scripting).
+2. **Assigning an issue to the Copilot bot** — the original path, still fine when a human
+   issue is wanted as the artifact. Documented from
+   [The dispatch procedure](#the-dispatch-procedure) onward.
+
+Either way it is the cheapest way to get real work done without consuming local model quota —
+but only for the right tasks, and only if you verify what comes back.
 
 ## When to delegate (and when not to)
 
@@ -30,7 +38,90 @@ Do **not** delegate when:
 Rule of thumb: if verification requires a human judgement call rather than a passing test
 suite, keep it.
 
+## The Agent tasks REST API (prefer this when scripting)
+
+Public preview, REST API version `2026-03-10`. **Verified against `gamedevpl` on 2026-07-29**
+— every behaviour below was observed, not read off the docs, and where the two disagree the
+observation is noted.
+
+```bash
+curl -sS -X POST \
+  -H "Accept: application/vnd.github+json" \
+  -H "X-GitHub-Api-Version: 2026-03-10" \
+  -H "Authorization: Bearer $PAT" \
+  "https://api.github.com/agents/repos/OWNER/REPO/tasks" \
+  --data '{"prompt":"...","base_ref":"main","create_pull_request":false}'
+```
+
+Five endpoints: `POST /agents/repos/{o}/{r}/tasks` (start), `GET` the same path (list, filter
+by `state`/`since`/`creator_id`/`is_archived`), `GET .../tasks/{task_id}` (one task **with
+`sessions[]`**), plus `GET /agents/tasks` and `GET /agents/tasks/{task_id}` across all repos.
+
+`POST` body: `prompt` (the only required field), `base_ref`, `head_ref`,
+`create_pull_request`, `model`, `custom_agent`.
+
+**Auth — the constraint that bites automation.** User-to-server tokens **only**: a PAT
+(fine-grained needs `Agent tasks: read` to list / `read and write` to start; classic needs
+`repo`), an OAuth app token, or a GitHub App **user** token. **GitHub App _installation_
+tokens are not supported.** A server-side orchestrator must therefore hold a human's token —
+there is no way to run this as a pure machine identity.
+
+**Licensing.** Available on all *paid* Copilot plans; the agent-tasks API reached Pro/Pro+/Max
+in June 2026. The REST reference still carries a stale line restricting `POST` to
+Business/Enterprise — it is wrong; a personal paid plan works. No Enterprise seat needed.
+
+### Gotchas, all observed
+
+- ⚠️ **`create_pull_request` does NOT default to `false`.** The docs say it does. Omitting it
+  opened a PR; setting it explicitly to `false` did not. **Always send it explicitly.**
+- ⚠️ **`head_ref` only works when that branch has an OPEN PR.** The docs' phrasing is literal
+  — it "looks up open PR context for `head_ref` targeting `base_ref`". With no open PR the
+  parameter is **silently ignored** and the agent branches fresh from `base_ref`; you get no
+  error, just work on the wrong branch. **Always read the branch back from the response's
+  artifacts instead of assuming the one you asked for.** To do follow-up rounds on one branch,
+  make sure a PR is open on it first (create it yourself if `create_pull_request` was `false`).
+- **A follow-up is a new _task_, not a new session on the old one.** Sessions are the
+  within-task view; N rounds of work on one branch means N task IDs to track.
+- **`model` echoes back namespaced.** Request `claude-sonnet-4.6`, read back
+  `sweagent-capi:claude-sonnet-4.6`. Omitting it means auto-selection, which reports as
+  `"auto"` until a session starts and then resolves to a concrete model. Don't compare
+  request and response strings for equality.
+- **GitHub rewrites `name` into a human title.** A prompt of "Fix any typo you find in
+  games/x/SPEC.md…" came back as "Correcting typos in bubble pop rush specification". Useful
+  for UI labels; do not rely on `name` echoing your prompt (`sessions[].prompt` does).
+- **`artifacts[]` is how you learn what happened.** A `branch` entry carries
+  `{base_ref, head_ref}`; a `pull` entry carries `{id, global_id}`. Both appear only once the
+  task has progressed — a freshly-created task returns `artifacts: []` and
+  `session_count: 0`. Poll `GET .../tasks/{id}` rather than trusting the create response.
+- **There is no cancel/stop endpoint.** `cancelled` exists as a *state*, but the API is
+  create/list/get only; stopping is a UI action that ends the underlying Actions run. Plan for
+  cooperative cancellation (tell the agent to stop through whatever channel it reads) plus
+  discarding the output.
+- **`custom_agent`** names a `.github/agents/<name>.agent.md` file in the repo — the clean way
+  to pin conventions and read-only boundaries for scripted dispatch.
+
+**States**: `queued`, `in_progress`, `completed`, `failed`, `idle`, `waiting_for_user`,
+`timed_out`, `cancelled`. This is a far better completion signal than the `[WIP]`-title
+heuristic below — use it whenever you have the task ID.
+
+**Timing observed**: a trivial one-file task went `queued` → `completed` in ≈4.5 minutes.
+
+### Two environment traps
+
+- **Claude Code sessions cannot reach `/agents/*`.** The session's API proxy serves only
+  `repos/{owner}/{repo}/...` REST paths plus a pinned set of GraphQL operations, so these
+  calls 403 **at the proxy, not at GitHub** (the error names `docs.anthropic.com`, which is
+  the tell). Reads of session status are still available via the GitHub MCP tool
+  `get_copilot_job_status`; anything else has to run outside the session.
+- **zsh executes pasted `#` comment lines.** `INTERACTIVE_COMMENTS` is off by default in
+  interactive zsh, so a pasted `# (c) check the thing` runs `#` as a command and reads `(c)`
+  as a glob qualifier → `zsh: number expected` / `unknown file attribute`. Harmless but
+  confusing. Give copy-paste blocks **without** comment lines, and don't use bash arrays
+  (`H=(-H ...)`) in them either.
+
 ## The dispatch procedure
+
+*(The issue-assignment path. Still valid; prefer the Agent tasks API above for scripting.)*
 
 ### 1. Write the issue like a spec
 
@@ -72,6 +163,14 @@ mutation { replaceActorsForAssignable(
 To **re-trigger** a fresh session on the same issue, unassign then reassign.
 
 ### 3. ⚠️ Confirm the base branch — the biggest gotcha
+
+> **Now avoidable.** Both dispatch paths accept an explicit base branch: `base_ref` on the
+> Agent tasks API, and an `agentAssignment` input (`targetRepositoryId`, `baseRef`,
+> `customInstructions`, `customAgent`, `model`) on the `createIssue` / `updateIssue` /
+> `addAssigneesToAssignable` / `replaceActorsForAssignable` GraphQL mutations — the latter
+> requires the header `GraphQL-Features: issues_copilot_assignment_api_support,coding_agent_model_selection`.
+> Pass the base branch explicitly and this whole class of failure disappears. The rest of this
+> section applies when you did not.
 
 **Copilot forks from the repository's DEFAULT branch, not from whatever branch the issue text
 mentions.** If your work lives on a non-default branch, it will build on the wrong base — and
