@@ -11,6 +11,7 @@ import { VoteWidget } from './VoteWidget.js';
 import { useGamePlayer } from './gamePlayer.js';
 import { useGameSaveBridge } from './gameSave.js';
 import { useWorldBridge } from './world.js';
+import { useZoneBridge } from './zone.js';
 import { useScreenWakeLock } from './useScreenWakeLock.js';
 
 /** A game to run, sourced either from raw assembled HTML or a published slug. */
@@ -130,6 +131,12 @@ export function GameTheater({
   // against a shape it is about to change would be visible to every other player as
   // something the game can no longer render.
   useWorldBridge(frameRef, reportSlug);
+
+  // Authoritative real-time zones (P3). Published slug again, and here the reason is
+  // sharpest of the three: the host runs the *same* sim.ts the client predicts with, and
+  // a draft's sim is rebuilt commit by commit — a client predicting with rules the
+  // arbiter no longer has is a desync on the first tick.
+  useZoneBridge(frameRef, reportSlug);
 
   // The game reports its own (localized) title over the bridge. Prefer it: on a
   // direct `/play/<slug>` link there's no catalog entry to take a title from, so

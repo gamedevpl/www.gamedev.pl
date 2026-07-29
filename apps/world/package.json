@@ -1,0 +1,29 @@
+{
+  "name": "@gamedevpl/world",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "PORT=8081 tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fastify/websocket": "^11.3.0",
+    "@gamedevpl/zone-core": "*",
+    "@google-cloud/firestore": "^8.7.0",
+    "esbuild": "0.25.12",
+    "fastify": "^5.10.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.15",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.16.5",
+    "typescript": "^5.5.4",
+    "vitest": "^3.2.7",
+    "ws": "^8.18.0"
+  }
+}
