@@ -59,9 +59,11 @@ that token. See [`docs/agent-access-tokens.md`](../docs/agent-access-tokens.md).
 
 ## Before larger changes
 
-Read [`docs/roadmap.md`](../docs/roadmap.md) (what's done vs next) and
-[`docs/risks-and-open-questions.md`](../docs/risks-and-open-questions.md) (safety invariants and
-open questions). Don't resurrect the removed `@gamedevpl/engine` / `@gamedevpl/llm-provider`
+Read [`docs/roadmap.md`](../docs/roadmap.md) (what's done vs next). The risk register
+(`risks-and-open-questions.md`) and other internal strategy/legal/ops docs now live in the
+**private `www.gamedev.pl-ops` repo, which you cannot access** — if a task seems to hinge
+on an open product, legal, or architecture question, flag it in the PR instead of
+guessing. Don't resurrect the removed `@gamedevpl/engine` / `@gamedevpl/llm-provider`
 DSL — the `GameProject` model is authoritative.
 
 ## Current architecture

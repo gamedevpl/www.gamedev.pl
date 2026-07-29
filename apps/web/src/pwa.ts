@@ -1,5 +1,5 @@
 /**
- * When — and whether — to suggest installing the app (docs/mobile-app-plan.md M1).
+ * When — and whether — to suggest installing the app (mobile-app-plan.md M1 (private www.gamedev.pl-ops repo)).
  *
  * Installing matters here beyond convenience: on iOS, an installed app is the *only*
  * way Safari will deliver Web Push, so a creator who wants to know their game went live

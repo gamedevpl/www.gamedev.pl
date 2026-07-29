@@ -58,14 +58,10 @@ survives only in this repo's early history.
 | [`deployment.md`](./deployment.md)                                 | Minimal delivery shape for the app, games origin, and submission API                                   |
 | [`container-orchestration.md`](./container-orchestration.md)       | **Archived** design for the removed self-hosted generation direction                                   |
 | [`remix-to-pr.md`](./remix-to-pr.md)                               | Spec for the player-remix → pull-request feature                                                       |
-| [`mobile-app-plan.md`](./mobile-app-plan.md)                       | iOS/Android strategy: mobile web → PWA → Capacitor store apps; games touch contract                    |
-| [`store-accounts-setup.md`](./store-accounts-setup.md)             | Owner checklist: Apple/Play enrolment, DSA trader status, signing keys                                 |
-| [`store-launch-plan.md`](./store-launch-plan.md)                   | Getting onto the App Store and Play: guideline 4.7 compliance, age rating, universal links, Capacitor  |
 | [`notifications-plan.md`](./notifications-plan.md)                 | Notify creators/players of transitions: detection sweep, per-user storage, in-app → email → push       |
 | [`creator-qa-plan.md`](./creator-qa-plan.md)                       | Clarifying-questions pass before spec freeze — raises the hit rate of the one-shot agent run           |
 | [`improvement-loop-plan.md`](./improvement-loop-plan.md)           | After publish: player signals → per-game scorecard → agent-assisted fixes and suggestions              |
 | [`path-routing-plan.md`](./path-routing-plan.md)                   | ✅ Path URLs for deep links (`/play/<slug>`, …) — History API, no hashbang                             |
-| [`risks-and-open-questions.md`](./risks-and-open-questions.md)     | Active product blockers, security risks, and resolved architecture decisions                           |
 | [`contributing-for-agents.md`](./contributing-for-agents.md)       | How agents run, structure, and contribute to this repository                                           |
 | [`local-development.md`](./local-development.md)                   | ✅ Running the whole product on a laptop with no keys — start here to contribute                       |
 | [`multiplayer-plan.md`](./multiplayer-plan.md)                     | ✅ Party mode: shared screen, phones as controllers, slot model, in-process relay                      |
@@ -73,27 +69,37 @@ survives only in this repo's early history.
 | [`auth-and-usage-plan.md`](./auth-and-usage-plan.md)               | ✅ Google sign-in, sessions, per-user quotas                                                           |
 | [`agent-access-tokens.md`](./agent-access-tokens.md)               | ✅ How an agent in a cloud VM authenticates without a browser or a Google account                      |
 | [`content-safety-plan.md`](./content-safety-plan.md)               | ✅ Moderation of submitted specs before an agent ever sees them                                        |
-| [`legal-compliance-plan.md`](./legal-compliance-plan.md)           | ✅ RODO/UŚUDE/DSA/AI-Act obligations and what is published to satisfy them                             |
 | [`agent-live-channel-plan.md`](./agent-live-channel-plan.md)       | ✅ How a working agent reports progress to the creator in seconds, not commits                         |
 | [`closed-beta-launch-plan.md`](./closed-beta-launch-plan.md)       | The launch that put the closed beta on the domain                                                      |
 | [`closed-beta-splash-plan.md`](./closed-beta-splash-plan.md)       | What an anonymous visitor sees while the beta is gated                                                 |
-| [`creator-experience-review.md`](./creator-experience-review.md)   | A critical read of the creation flow end to end                                                        |
 | [`games-repo-validation-spec.md`](./games-repo-validation-spec.md) | What CI in the games repo must prove before a game can publish                                         |
 | [`agent-progress-notes.md`](./agent-progress-notes.md)             | The older commit-based progress journal, superseded by the live channel                                |
 | [`steel-thread-plan.md`](./steel-thread-plan.md)                   | 🗃️ Historical — the milestone plan that got the first end-to-end thread working                        |
-| [`gtm-plan.md`](./gtm-plan.md)                                     | Go-to-market: stages, gates, and how the GitHub presence fits in                                       |
-| [`operational-readiness-plan.md`](./operational-readiness-plan.md) | 📋 Backups, monitoring, observability: the ops gates that must pass before each GTM gate opens         |
+
+## Internal docs — private ops repo
+
+Strategy, risk, legal, and ops docs are **not in this folder**. They live in the private
+[`www.gamedev.pl-ops`](https://github.com/gamedevpl/www.gamedev.pl-ops) repo
+([its docs index](https://github.com/gamedevpl/www.gamedev.pl-ops/blob/main/docs/README.md)):
+`gtm-plan.md`, `risks-and-open-questions.md`, `legal-compliance-plan.md`,
+`operational-readiness-plan.md`, `store-accounts-setup.md`, `creator-experience-review.md`,
+`mobile-app-plan.md`, `store-launch-plan.md`.
+They moved there in 2026-07 and remain **required context** for planning and
+strategy/ops/legal work — see
+[`internal-ops-repo`](../.claude/skills/internal-ops-repo/SKILL.md) for access and the
+rules against leaking their content into this public repo.
 
 ## Shared agent playbooks
 
 Kept under `.claude/skills/` so Claude Code auto-loads them, but written to be
 **agent-agnostic** — read them whichever agent you are:
 
-| Playbook                                                                    | When it applies                                                 |
-| --------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| [`verify-agent-work`](../.claude/skills/verify-agent-work/SKILL.md)         | Reviewing, verifying, or merging work you didn't write yourself |
-| [`copilot-orchestration`](../.claude/skills/copilot-orchestration/SKILL.md) | Delegating work to GitHub Copilot's remote coding agent         |
-| [`game-asset-generation`](../.claude/skills/game-asset-generation/SKILL.md) | Dynamically generating, styling, and composing game assets      |
+| Playbook                                                                    | When it applies                                                         |
+| --------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| [`verify-agent-work`](../.claude/skills/verify-agent-work/SKILL.md)         | Reviewing, verifying, or merging work you didn't write yourself         |
+| [`copilot-orchestration`](../.claude/skills/copilot-orchestration/SKILL.md) | Delegating work to GitHub Copilot's remote coding agent                 |
+| [`game-asset-generation`](../.claude/skills/game-asset-generation/SKILL.md) | Dynamically generating, styling, and composing game assets              |
+| [`internal-ops-repo`](../.claude/skills/internal-ops-repo/SKILL.md)         | Where the private strategy/risk/legal/ops docs live and how to use them |
 
 Both must be **updated when they turn out to be wrong or incomplete** — see the
 self-improvement clause at the end of each.

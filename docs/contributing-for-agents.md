@@ -18,8 +18,10 @@ For coding agents (GitHub Copilot, Claude Code, Codex) and humans picking up wor
 
 - **These docs** (`docs/`) are the plan of record — start here.
 - [`roadmap.md`](./roadmap.md) — what's done vs next.
-- [`risks-and-open-questions.md`](./risks-and-open-questions.md) — **read the known-issue and
-  blocker sections before large changes.**
+- [`risks-and-open-questions.md`](https://github.com/gamedevpl/www.gamedev.pl-ops/blob/main/docs/risks-and-open-questions.md) — **read the known-issue
+  and blocker sections before large changes.** Lives in the private `www.gamedev.pl-ops`
+  repo, as do the other strategy/legal/ops docs — see
+  [`internal-ops-repo`](../.claude/skills/internal-ops-repo/SKILL.md).
 
 ## Repo layout
 

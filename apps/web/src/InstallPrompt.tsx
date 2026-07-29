@@ -15,7 +15,7 @@ import {
 } from './pwa.js';
 
 /**
- * The offer to install the app (docs/mobile-app-plan.md M1).
+ * The offer to install the app (mobile-app-plan.md M1 (private www.gamedev.pl-ops repo)).
  *
  * Two platforms, two entirely different mechanics. Chrome hands over a real
  * `beforeinstallprompt` event that opens the OS install dialog; iOS has no such API and

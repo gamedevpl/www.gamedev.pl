@@ -2,7 +2,7 @@ import { GoogleAuth } from 'google-auth-library';
 import type { CreateRoomResult } from './mp.js';
 
 /**
- * Splitting the party relay off the main API (docs/store-launch-plan.md, T0).
+ * Splitting the party relay off the main API (store-launch-plan.md T0, private www.gamedev.pl-ops repo).
  *
  * `--max-instances 1` is pinned on the app service for exactly one reason: party rooms
  * are per-instance memory, so a guest load-balanced to a second container cannot see the

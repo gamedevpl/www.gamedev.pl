@@ -146,17 +146,17 @@ Genuinely still open, in rough priority order:
 Substantial work that never had a roadmap phase. Each has its own plan document,
 which is the authority on its detail:
 
-| Workstream                | Status                                                                                           | Plan                                                           |
-| ------------------------- | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------- |
-| Closed beta launch        | ✅ live 2026-07-23 on www.gamedev.pl                                                             | [closed-beta-launch-plan.md](./closed-beta-launch-plan.md)     |
-| Auth, usage & quotas      | ✅ Google sign-in, per-user daily counters, waitlist/allowlist                                   | [auth-and-usage-plan.md](./auth-and-usage-plan.md)             |
-| Content safety            | ✅ moderation on submission via the genai seam; beta allowlist as the interim outer safeguard    | [content-safety-plan.md](./content-safety-plan.md)             |
-| Creator QA pass           | ✅ clarifying questions before spec freeze, now a hard precondition                              | [creator-qa-plan.md](./creator-qa-plan.md)                     |
-| Notifications             | ✅ in-app bell, email + unsubscribe, Web Push (desktop/Android), Cloud Scheduler sweep           | [notifications-plan.md](./notifications-plan.md)               |
-| Live agent build channel  | ✅ agent posts progress/screenshots and gets queued creator requests back                        | [agent-live-channel-plan.md](./agent-live-channel-plan.md)     |
-| Creator experience review | ✅ backlog from a real three-hour session, closed out                                            | [creator-experience-review.md](./creator-experience-review.md) |
-| Multiplayer party mode    | 🚧 relay + party module + seed games built; the single-instance cap is its price (see Phase 5)   | [multiplayer-plan.md](./multiplayer-plan.md)                   |
-| Mobile                    | 🚧 mobile web ✅ + PWA ✅ (device-verified, iOS push works); store apps need Apple/Play accounts | [mobile-app-plan.md](./mobile-app-plan.md)                     |
+| Workstream                | Status                                                                                           | Plan                                                                                                                        |
+| ------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| Closed beta launch        | ✅ live 2026-07-23 on www.gamedev.pl                                                             | [closed-beta-launch-plan.md](./closed-beta-launch-plan.md)                                                                  |
+| Auth, usage & quotas      | ✅ Google sign-in, per-user daily counters, waitlist/allowlist                                   | [auth-and-usage-plan.md](./auth-and-usage-plan.md)                                                                          |
+| Content safety            | ✅ moderation on submission via the genai seam; beta allowlist as the interim outer safeguard    | [content-safety-plan.md](./content-safety-plan.md)                                                                          |
+| Creator QA pass           | ✅ clarifying questions before spec freeze, now a hard precondition                              | [creator-qa-plan.md](./creator-qa-plan.md)                                                                                  |
+| Notifications             | ✅ in-app bell, email + unsubscribe, Web Push (desktop/Android), Cloud Scheduler sweep           | [notifications-plan.md](./notifications-plan.md)                                                                            |
+| Live agent build channel  | ✅ agent posts progress/screenshots and gets queued creator requests back                        | [agent-live-channel-plan.md](./agent-live-channel-plan.md)                                                                  |
+| Creator experience review | ✅ backlog from a real three-hour session, closed out                                            | [creator-experience-review.md](https://github.com/gamedevpl/www.gamedev.pl-ops/blob/main/docs/creator-experience-review.md) |
+| Multiplayer party mode    | 🚧 relay + party module + seed games built; the single-instance cap is its price (see Phase 5)   | [multiplayer-plan.md](./multiplayer-plan.md)                                                                                |
+| Mobile                    | 🚧 mobile web ✅ + PWA ✅ (device-verified, iOS push works); store apps need Apple/Play accounts | [mobile-app-plan.md](https://github.com/gamedevpl/www.gamedev.pl-ops/blob/main/docs/mobile-app-plan.md)                     |
 
 ## Phase 6 — Improvement loop 📋
 

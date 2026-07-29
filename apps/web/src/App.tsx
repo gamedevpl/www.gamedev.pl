@@ -732,7 +732,7 @@ export function App() {
       {/* Same reasoning, and then some: both of these are bottom-anchored bars, and a
           bar over a running game is worse than merely unreachable. Mounting them here —
           inside the signed-in app, past the join and splash early returns — is also what
-          keeps the install nudge away from controller guests (mobile-app-plan.md, open
+          keeps the install nudge away from controller guests (mobile-app-plan.md in the private ops repo, open
           question 1) and from visitors who have not got in yet. */}
       {!stageContent && <InstallPrompt />}
       {!stageContent && <AppUpdateBanner />}

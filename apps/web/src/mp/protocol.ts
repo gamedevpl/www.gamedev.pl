@@ -119,7 +119,7 @@ export function parseGameBridgeMessage(raw: unknown): GameBridgeMessage | null {
  * Three cases, in priority order:
  *
  * 1. `VITE_MP_RELAY_URL` — the relay runs as its own Cloud Run service
- *    (docs/store-launch-plan.md T0). It is pinned to one instance because rooms are
+ *    (store-launch-plan.md T0, private www.gamedev.pl-ops repo). It is pinned to one instance because rooms are
  *    per-instance memory; the app service is not, which is the whole point of the split.
  *    Once set, the app origin does not serve `/api/mp/ws` at all, so this must win.
  * 2. `VITE_API_BASE_URL` — dev, where the API is a separate Fastify port.

@@ -3,7 +3,7 @@ import type { SubmissionRecord, User } from './store.js';
 /**
  * Creator-side aggregates: do creators come back, and what does a build cost us?
  *
- * These are the two numbers docs/gtm-plan.md gates Stage 0 on, and neither was
+ * These are the two numbers that gtm-plan.md (in the private www.gamedev.pl-ops repo) gates Stage 0 on, and neither was
  * answerable — the visit stream is anonymous by design, so it can see someone reach the
  * sign-in wall but never that the same person returned a week later. This reads the
  * signed-in side, where identity legitimately exists because creators have accounts.

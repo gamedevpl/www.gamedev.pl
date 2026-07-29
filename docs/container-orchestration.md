@@ -57,7 +57,7 @@ accounts**. Document it, but do not design around it yet:
 > clearly against typical subscription Terms of Service.** This must get an **explicit
 > answer from the vendor's commercial terms** before any design commits to it. It is a
 > **blocker**, not a decided approach. The compliant path may be Team/Enterprise plans or
-> per-token API quotas. See [`risks-and-open-questions.md`](./risks-and-open-questions.md#blockers).
+> per-token API quotas. See [`risks-and-open-questions.md`](https://github.com/gamedevpl/www.gamedev.pl-ops/blob/main/docs/risks-and-open-questions.md#blockers).
 
 Relatedly: even _single-account_ always-on multi-tenant backend use of a subscription CLI is a
 different usage pattern than an interactive developer seat and needs its own ToS check (also a
@@ -118,7 +118,7 @@ Every terminal transition (`succeeded`/`failed`) **must** tear the container dow
 
 The first vertical slice of the container path is now buildable and runnable locally.
 It proves the pipeline end-to-end **without any tokens or ToS exposure**, and stays
-strictly agent-agnostic per the [blockers](./risks-and-open-questions.md#blockers) (B1/B2).
+strictly agent-agnostic per the [blockers](https://github.com/gamedevpl/www.gamedev.pl-ops/blob/main/docs/risks-and-open-questions.md#blockers) (B1/B2).
 
 **What was built**
 

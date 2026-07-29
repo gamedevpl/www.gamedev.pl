@@ -1,7 +1,7 @@
 import type { VisitEvent } from './store.js';
 
 /**
- * Aggregates raw visit events into the funnel (docs/gtm-plan.md Stage 0 metrics).
+ * Aggregates raw visit events into the funnel — the Stage 0 metrics of gtm-plan.md in the private www.gamedev.pl-ops repo.
  *
  * The write half has been capturing since 2026-07-25 and nothing could read it. This is
  * the read half, and it answers exactly the three questions the visit stream exists for:

@@ -177,7 +177,7 @@ the coarse outer layer (and is the only limiter on `/api/auth/*`).
 Added ahead of the mobile plan's M2 store apps, where it stops being optional: App Store
 guideline 4.8 requires it beside Google in any app offering a third-party login. It is
 offered on the **web** too rather than app-only, which is
-[`mobile-app-plan.md`](./mobile-app-plan.md) open question 2's working answer turned into
+[`mobile-app-plan.md`](https://github.com/gamedevpl/www.gamedev.pl-ops/blob/main/docs/mobile-app-plan.md) open question 2's working answer turned into
 code — otherwise a creator who signs up through the iOS app cannot reach their own games
 from a desktop browser.
 
