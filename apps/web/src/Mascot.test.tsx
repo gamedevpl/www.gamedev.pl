@@ -223,12 +223,13 @@ describe('Mascot', () => {
     });
     expect(container.querySelector('.mascot__hang-arms')).not.toBeNull();
     expect(container.querySelector('.mascot__hang-arm-strokes')).not.toBeNull();
-    expect(container.querySelector('.mascot__legs-together')).not.toBeNull();
+    expect(container.querySelector('.mascot__hang-limb-covers')).not.toBeNull();
+    expect(container.querySelector('.mascot__feet-together')).not.toBeNull();
     expect(container.querySelector('.mascot__mouth-seal')).not.toBeNull();
     expect(container.querySelector('.mascot__mouth--hang-breath')).not.toBeNull();
     // Arms flex with the body; only the grip hands sit outside.
     expect(container.querySelector('.mascot__body-group .mascot__hang-arm-strokes')).not.toBeNull();
-    expect(container.querySelector('.mascot__body-group .mascot__legs-together')).not.toBeNull();
+    expect(container.querySelector('.mascot__body-group .mascot__feet-together')).not.toBeNull();
     expect(container.querySelector('.mascot__body-group .mascot__hang-arms')).toBeNull();
     expect(container.querySelector('.mascot__wave-arm')).toBeNull();
     expect(container.querySelector('.mascot--hanging')).not.toBeNull();
@@ -238,7 +239,8 @@ describe('Mascot', () => {
     });
     expect(container.querySelector('.mascot__hang-arms')).toBeNull();
     expect(container.querySelector('.mascot__hang-arm-strokes')).toBeNull();
-    expect(container.querySelector('.mascot__legs-together')).toBeNull();
+    expect(container.querySelector('.mascot__hang-limb-covers')).toBeNull();
+    expect(container.querySelector('.mascot__feet-together')).toBeNull();
     expect(container.querySelector('.mascot__mouth-seal')).toBeNull();
     expect(container.querySelector('.mascot__wave-arm')).not.toBeNull();
 
@@ -469,17 +471,16 @@ describe('InteractiveMascot', () => {
   it('still peeks on hover when prefers-reduced-motion is set', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const originalMatchMedia = window.matchMedia;
-    window.matchMedia = ((query: string) =>
-      ({
-        matches: query.includes('prefers-reduced-motion'),
-        media: query,
-        onchange: null,
-        addListener: () => {},
-        removeListener: () => {},
-        addEventListener: () => {},
-        removeEventListener: () => {},
-        dispatchEvent: () => false,
-      })) as typeof window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes('prefers-reduced-motion'),
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    })) as typeof window.matchMedia;
 
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -556,17 +557,16 @@ describe('InteractiveMascot', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.useFakeTimers();
     const originalMatchMedia = window.matchMedia;
-    window.matchMedia = ((query: string) =>
-      ({
-        matches: query.includes('prefers-reduced-motion'),
-        media: query,
-        onchange: null,
-        addListener: () => {},
-        removeListener: () => {},
-        addEventListener: () => {},
-        removeEventListener: () => {},
-        dispatchEvent: () => false,
-      })) as typeof window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes('prefers-reduced-motion'),
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    })) as typeof window.matchMedia;
 
     const { PULLUP_FIRST_DELAY_MS } = await import('./Mascot.js');
     const container = document.createElement('div');

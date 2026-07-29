@@ -30,18 +30,22 @@ describe('the splash mascot does idle pull-ups', () => {
 
   it('covers baked side stubs and breathes with the chin', () => {
     const css = read('styles.css');
+    expect(css).toMatch(/\.mascot__hang-cover/);
     expect(css).toMatch(/@keyframes mascot-hang-mouth-seal/);
     expect(css).toMatch(/\.mascot__mouth-seal/);
     // Fall → squash → rebound → settle.
     expect(css).toMatch(/scale\(1\.22,\s*0\.7\)/);
     expect(css).toMatch(/scale\(0\.94,\s*1\.1\)/);
     const mascot = read('Mascot.tsx');
-    expect(mascot).toMatch(/hangClipId/);
-    expect(mascot).toMatch(/LegsTogether/);
+    expect(mascot).toMatch(/HangLimbCovers/);
+    expect(mascot).toMatch(/FeetTogether/);
     expect(mascot).toMatch(/HangArmStrokes/);
     expect(mascot).toMatch(/HangMouthSeal/);
     expect(mascot).toMatch(/MOUTH_HANG_BREATHE/);
     expect(mascot).toMatch(/PULLUP_SESSION_MS = 3_800/);
+    // Two feet, not one merged column.
+    expect(mascot).toMatch(/mascot__foot--left/);
+    expect(mascot).toMatch(/mascot__foot--right/);
   });
 
   it('lets the card rim show his hands', () => {

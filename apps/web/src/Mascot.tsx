@@ -62,8 +62,8 @@ type MascotProps = {
   /**
    * Reach both arms up to grip the splash card's top border. Raised arm strokes
    * ride with the body; hands stay outside `.mascot__body-group` on the rim so
-   * chin-ups bob the torso toward a planted grip. Side stubs are covered so he
-   * does not grow a second pair of hands.
+   * chin-ups bob the torso toward a planted grip. Baked side stubs and splayed
+   * feet are covered so he keeps one pair of each.
    */
   hanging?: boolean;
 };
@@ -315,39 +315,50 @@ function BlinkLids() {
 }
 
 /**
- * One dangling column while hanging — the hang clip path has already removed the
- * baked split feet, so this just paints the replacement.
+ * Paint out the silhouette's side-arm stubs and splayed feet while hanging.
+ * Uses the splash card panel colour — more reliable than nested SVG masks, which
+ * left the stubs visible on top of the raised arms.
  */
-function LegsTogether() {
+function HangLimbCovers() {
   return (
-    <g className="mascot__legs-together" aria-hidden="true">
-      <path
-        className="mascot__legs-together-shape"
-        fill="currentColor"
-        d="M29.5 49h11v8c0 2.1-2.1 3.2-5.5 3.2S29.5 59.1 29.5 57z"
-      />
+    <g className="mascot__hang-limb-covers" aria-hidden="true">
+      <rect className="mascot__hang-cover mascot__hang-cover--arm-left" x="1" y="36" width="12" height="18" rx="1" />
+      <rect className="mascot__hang-cover mascot__hang-cover--arm-right" x="57" y="36" width="12" height="17" rx="1" />
+      <rect className="mascot__hang-cover mascot__hang-cover--foot-left" x="19" y="48.5" width="13" height="11.5" />
+      <rect className="mascot__hang-cover mascot__hang-cover--foot-right" x="38" y="48.5" width="13" height="11.5" />
     </g>
   );
 }
 
 /**
- * Raised arms from the shoulders up toward the rim. Inside the body group so they
- * tuck toward the fixed hands on each chin-up (reads as arms flexing, not a second
- * floating pair grown from the head).
+ * Two stubby feet drawn close together — not one merged column (that read as a
+ * single awkward appendage). The hang covers have already erased the splayed pair.
+ */
+function FeetTogether() {
+  return (
+    <g className="mascot__feet-together" aria-hidden="true" fill="currentColor">
+      <rect className="mascot__foot mascot__foot--left" x="26" y="50" width="7" height="8" rx="2" />
+      <rect className="mascot__foot mascot__foot--right" x="37" y="50" width="7" height="8" rx="2" />
+    </g>
+  );
+}
+
+/**
+ * Raised arms from the shoulders up to the rim. Chunkier filled shapes so they
+ * read as his real arms moved up, not thin sticks grown from the head.
+ * Inside the body group so they tuck toward the fixed hands on each chin-up.
  */
 function HangArmStrokes() {
   return (
-    <g
-      className="mascot__hang-arm-strokes"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path className="mascot__hang-arm mascot__hang-arm--left" d="M9 39 C5 28 7 14 14 4" />
-      <path className="mascot__hang-arm mascot__hang-arm--right" d="M61 39 C65 28 63 14 56 4" />
+    <g className="mascot__hang-arm-strokes" fill="currentColor" aria-hidden="true">
+      <path
+        className="mascot__hang-arm mascot__hang-arm--left"
+        d="M12 37 C8 29 9 18 13 6 C14.5 4.5 16 4.5 17 6 C14 17 15 28 17 37 Z"
+      />
+      <path
+        className="mascot__hang-arm mascot__hang-arm--right"
+        d="M58 37 C62 29 61 18 57 6 C55.5 4.5 54 4.5 53 6 C56 17 55 28 53 37 Z"
+      />
     </g>
   );
 }
@@ -364,18 +375,18 @@ function HangHands() {
     <g className="mascot__hang-arms" aria-hidden="true">
       <ellipse
         className="mascot__hang-hand mascot__hang-hand--left"
-        cx="14"
-        cy="2.4"
-        rx="5.2"
-        ry="2.9"
+        cx="15"
+        cy="2.6"
+        rx="5.5"
+        ry="3"
         fill="currentColor"
       />
       <ellipse
         className="mascot__hang-hand mascot__hang-hand--right"
-        cx="56"
-        cy="2.4"
-        rx="5.2"
-        ry="2.9"
+        cx="55"
+        cy="2.6"
+        rx="5.5"
+        ry="3"
         fill="currentColor"
       />
     </g>
@@ -466,7 +477,6 @@ export function Mascot({
 }: MascotProps) {
   const reactId = useId().replace(/:/g, '');
   const maskId = `mascot-mask-${reactId}`;
-  const hangClipId = `mascot-hang-clip-${reactId}`;
   const phoneClipId = `mascot-phone-clip-${reactId}`;
   const height = Math.round((size * 60) / 70);
   const classes = [
@@ -503,54 +513,41 @@ export function Mascot({
       {title ? <title>{title}</title> : null}
 
       <g className="mascot__body-group">
-        {hanging ? (
-          <defs>
-            {/*
-              Mask off baked side stubs and the split feet so raised arms + the
-              merged leg are the only limbs. A mask (white keep / black drop) is
-              more reliable across browsers than an evenodd clipPath with holes.
-            */}
-            <mask id={hangClipId} maskUnits="userSpaceOnUse" x="0" y="0" width="70" height="60">
-              <rect x="0" y="0" width="70" height="60" fill="#fff" />
-              <rect x="1.5" y="38" width="10" height="16" fill="#000" />
-              <rect x="58.5" y="38" width="10" height="15" fill="#000" />
-              <rect x="19" y="48.5" width="12.5" height="11.5" fill="#000" />
-              <rect x="38.5" y="48.5" width="12.5" height="11.5" fill="#000" />
-            </mask>
-          </defs>
-        ) : null}
+        {isIdle ? (
+          <g className="mascot__pixels" fill="currentColor">
+            <path d={IDLE_PATH} />
+          </g>
+        ) : (
+          <>
+            <defs>
+              <mask id={maskId} maskUnits="userSpaceOnUse" x="0" y="0" width="70" height="60">
+                <path fill="#fff" d={SOLID_PATH} />
+                <g fill="#000" className="mascot__face-features" transform={lookTransform}>
+                  {cutouts}
+                </g>
+              </mask>
+            </defs>
+            <rect
+              className="mascot__face"
+              x="0"
+              y="0"
+              width="70"
+              height="60"
+              fill="currentColor"
+              mask={`url(#${maskId})`}
+            />
+          </>
+        )}
 
-        <g mask={hanging ? `url(#${hangClipId})` : undefined}>
-          {isIdle ? (
-            <g className="mascot__pixels" fill="currentColor">
-              <path d={IDLE_PATH} />
-            </g>
-          ) : (
-            <>
-              <defs>
-                <mask id={maskId} maskUnits="userSpaceOnUse" x="0" y="0" width="70" height="60">
-                  <path fill="#fff" d={SOLID_PATH} />
-                  <g fill="#000" className="mascot__face-features" transform={lookTransform}>
-                    {cutouts}
-                  </g>
-                </mask>
-              </defs>
-              <rect
-                className="mascot__face"
-                x="0"
-                y="0"
-                width="70"
-                height="60"
-                fill="currentColor"
-                mask={`url(#${maskId})`}
-              />
-            </>
-          )}
-        </g>
-
-        {hanging ? <HangMouthSeal /> : null}
-        {hanging ? <LegsTogether /> : null}
+        {/*
+          Order matters: covers erase baked stubs/feet, then feet+arms paint on top
+          so he has one pair of each — not stubs under raised arms, and not one
+          merged leg column.
+        */}
+        {hanging ? <HangLimbCovers /> : null}
+        {hanging ? <FeetTogether /> : null}
         {hanging ? <HangArmStrokes /> : null}
+        {hanging ? <HangMouthSeal /> : null}
 
         <BlinkLids />
 

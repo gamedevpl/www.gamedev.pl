@@ -5225,6 +5225,14 @@ body.player-open {
 }
 
 /*
+ * Erase baked side stubs / splayed feet while hanging. Must match the splash
+ * card background — nested SVG masks left the stubs showing under the raised arms.
+ */
+.mascot__hang-cover {
+  fill: var(--panel);
+}
+
+/*
  * Breath with the chin: a body-coloured seal covers the open mouth hole at each
  * chin-up peak (hold breath) and lifts on the way down. The seal lives outside the
  * face mask so the animation is not fighting mask opacity/transforms. Times match
