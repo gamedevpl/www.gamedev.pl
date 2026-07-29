@@ -234,11 +234,31 @@ started as early as it legally can be.
   with room state staying in memory (frames run at 40/s; Firestore is unusable for that and
   Memorystore is real money for a feature nobody is straining).
 - The main service drops the pin and autoscales.
-- The web client points party mode at the relay origin; the room token already travels
-  as a signed value, so cross-origin is a plumbing change rather than a trust change.
 - The pin comment lives in **two** deploy paths (`infra/deploy-api.sh` and
   `.github/workflows/deploy.yml`) and both must move together, or a manual deploy silently
   re-pins the service a workflow deploy just unpinned.
+
+**Do not invent the pattern — PR #323 already established it.** The P3 zone-host work
+stands up `gamedev-world` as a separate Cloud Run service with its own image,
+`--min-instances 0 --max-instances 1`, `infra/deploy-world.sh` and
+`infra/cloudbuild-world.yaml`, and — the part worth copying — an admission model where
+**the main API mints short-lived HMAC tickets and the stateful service verifies them,
+never seeing a session cookie** (`packages/zone-core/src/ticket.ts`). It rejects session
+affinity for the same reason the relay pin comment does: it pins a client, not a room.
+The relay split should reuse that shape and that ticket module rather than reach for a
+cross-origin variant of the existing room token.
+
+**Keep them as separate services, though.** `apps/world` ships a native `isolated-vm`
+build the relay has no use for, and one pinned instance holding both means a busy zone
+starves party rooms.
+
+**This widens T0, and the widening is the point.** Once #323 lands there are *two*
+instance-pinned stateful services, not one. `gamedev-world` has the same ceiling the relay
+does, and its answer — a zone directory — is described in `docs/p3-zone-host-infra.md` as
+**designed and deferred**. So "lift the pin before opening the beta" is not one task: it is
+*get every stateful service off the main API's scaling path and give each one a story for
+its own ceiling*. The relay is the easy half. Decide before the beta opens whether zones
+are public at launch, or stay inert (`ZONE_HOST_URL` unset) until the directory exists.
 
 ## What this plan does not do
 
