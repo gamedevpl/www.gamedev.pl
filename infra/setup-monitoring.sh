@@ -100,6 +100,7 @@ cat > "${POLICY_DIR}/a1.json" <<EOF
       "trigger": { "count": 1 }
     }
   }],
+  "notificationChannels": ["${CHANNEL_NAME}"],
   "alertStrategy": { "autoClose": "86400s" },
   "documentation": {
     "content": "https://${HOST}/api/health is failing from most probers. Triage: docs/runbooks/site-down-triage.md",
@@ -131,6 +132,7 @@ cat > "${POLICY_DIR}/a2.json" <<EOF
       "trigger": { "count": 1 }
     }
   }],
+  "notificationChannels": ["${CHANNEL_NAME}"],
   "alertStrategy": { "autoClose": "86400s" },
   "documentation": {
     "content": "Sustained 5xx from ${SERVICE}. Most likely: a bad deploy, the snapshot bucket unreachable (published play now 503s rather than falling back), or Firestore. Triage: docs/runbooks/site-down-triage.md",
@@ -163,6 +165,7 @@ cat > "${POLICY_DIR}/a3.json" <<EOF
       "trigger": { "count": 1 }
     }
   }],
+  "notificationChannels": ["${CHANNEL_NAME}"],
   "alertStrategy": { "autoClose": "86400s" },
   "documentation": {
     "content": "A scheduled job is failing. Covers notify-sweep (creator notifications) and firestore-daily-export (backups) — check which job_id fired.",
@@ -173,15 +176,22 @@ EOF
 
 # A4 — the backup watching itself. A silently broken export is indistinguishable from a
 # working one until the day it is needed, which is the worst possible day to find out.
-# Absence of data is the signal here, so this alerts on the *metric going missing*.
+#
+# Measured on the export job's own *successful* attempts, not on bucket activity: the
+# GCS request_count metric counts reads too, so an operator running `gcloud storage ls`
+# to check on backups would suppress the very alert that tells them backups stopped —
+# and the restore runbook tells them to run exactly that. This also complements A3
+# rather than duplicating it: A3 catches a job that runs and fails, while absence
+# catches a job that is paused, deleted, or never scheduled, where there are no failed
+# attempts to count because there are no attempts at all.
 cat > "${POLICY_DIR}/a4.json" <<EOF
 {
-  "displayName": "A4 no fresh Firestore export",
+  "displayName": "A4 no successful Firestore export",
   "combiner": "OR",
   "conditions": [{
-    "displayName": "backup bucket has taken no writes in 36 hours",
+    "displayName": "export job has not succeeded in 36 hours",
     "conditionAbsent": {
-      "filter": "metric.type=\"storage.googleapis.com/api/request_count\" AND resource.type=\"gcs_bucket\" AND resource.label.\"bucket_name\"=\"${BACKUP_BUCKET}\"",
+      "filter": "metric.type=\"cloudscheduler.googleapis.com/job/attempt_count\" AND resource.type=\"cloud_scheduler_job\" AND resource.label.\"job_id\"=\"firestore-daily-export\" AND metric.label.\"response_code\"=\"200\"",
       "aggregations": [{
         "alignmentPeriod": "3600s",
         "perSeriesAligner": "ALIGN_SUM",
@@ -191,9 +201,10 @@ cat > "${POLICY_DIR}/a4.json" <<EOF
       "trigger": { "count": 1 }
     }
   }],
+  "notificationChannels": ["${CHANNEL_NAME}"],
   "alertStrategy": { "autoClose": "604800s" },
   "documentation": {
-    "content": "No write activity on gs://${BACKUP_BUCKET} for 36h — the daily export is not running. Restore procedure and job details: docs/runbooks/restore-firestore.md",
+    "content": "The daily Firestore export has not succeeded for 36h — backups are stale or stopped. A 200 from the job means the export was *accepted*; that objects actually land is what the restore drill proves. Procedure: docs/runbooks/restore-firestore.md",
     "mimeType": "text/markdown"
   }
 }
@@ -205,6 +216,10 @@ for FILE in "${POLICY_DIR}"/*.json; do
     --project "$PROJECT_ID" \
     --filter="displayName='${DISPLAY}'" \
     --format='value(name)' 2>/dev/null | head -n 1)"
+  # update replaces the policy definition wholesale, so every field the policy needs has
+  # to be in the file — including notificationChannels. Omitting it there would leave the
+  # policies present and visibly "enabled" while silently emailing nobody, which is the
+  # one failure mode worse than having no alerting at all.
   if [ -n "$EXISTING" ]; then
     gcloud alpha monitoring policies update "$EXISTING" \
       --project "$PROJECT_ID" \
@@ -215,7 +230,6 @@ for FILE in "${POLICY_DIR}"/*.json; do
     gcloud alpha monitoring policies create \
       --project "$PROJECT_ID" \
       --policy-from-file="$FILE" \
-      --notification-channels="$CHANNEL_NAME" \
       >/dev/null
     echo "    Created: ${DISPLAY}"
   fi

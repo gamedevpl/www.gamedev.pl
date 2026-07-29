@@ -31,7 +31,7 @@ Provisioned by [`infra/setup-monitoring.sh`](../../infra/setup-monitoring.sh).
 | A1 | Uptime check on `/api/health` fails from most probers for 5 min | [`site-down-triage.md`](./site-down-triage.md) |
 | A2 | Cloud Run 5xx sustained over 10 min | [`site-down-triage.md`](./site-down-triage.md) |
 | A3 | A scheduled job fails repeatedly (notify-sweep, or the daily export) | §below |
-| A4 | No write to the backup bucket in 36h | [`restore-firestore.md`](./restore-firestore.md) |
+| A4 | The daily Firestore export has not succeeded in 36h | [`restore-firestore.md`](./restore-firestore.md) |
 | A5 | Billing budget at 50 / 90 / 100% | Cost review — see the ops repo's readiness plan |
 
 **A3 covers two different jobs.** Check `job_id` on the alert:
@@ -39,7 +39,7 @@ Provisioned by [`infra/setup-monitoring.sh`](../../infra/setup-monitoring.sh).
 - `notify-sweep` — creators stop being notified of build transitions. The site looks
   fine, which is why this needs an alert at all. It is also a free synthetic monitor of
   auth + Firestore + the app in one request, so its failure often means something larger.
-- `firestore-daily-export` — backups are not running. Treat with the same urgency as A4.
+- `firestore-daily-export` — backups are failing. A4 is its counterpart: A3 fires when the job runs and fails, A4 when it stops running at all (paused, deleted, never scheduled), where there are no failures to count.
 
 ## What is not covered yet
 

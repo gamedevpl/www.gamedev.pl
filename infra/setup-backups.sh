@@ -7,7 +7,12 @@
 #   ./infra/setup-backups.sh
 #
 # Override via env: PROJECT_ID, FIRESTORE_REGION, BACKUP_BUCKET, EXPORT_SCHEDULE,
-# EXPORT_RETENTION_DAYS, PITR_RETENTION.
+# EXPORT_RETENTION_DAYS, EXPORT_SA_NAME.
+#
+# PITR's window is deliberately absent from that list: Firestore fixes it at 7 days and
+# `databases update` takes no retention argument, so a knob here could only ever print a
+# number the database does not honour — a false statement about the recovery window, in
+# the one script where that is least acceptable. Longer horizons come from the exports.
 #
 # Why both mechanisms, when either alone sounds sufficient:
 #
@@ -33,7 +38,6 @@ FIRESTORE_REGION="${FIRESTORE_REGION:-europe-central2}"
 BACKUP_BUCKET="${BACKUP_BUCKET:-${PROJECT_ID}-firestore-backups}"
 EXPORT_SCHEDULE="${EXPORT_SCHEDULE:-17 3 * * *}"
 EXPORT_RETENTION_DAYS="${EXPORT_RETENTION_DAYS:-30}"
-PITR_RETENTION="${PITR_RETENTION:-7d}"
 EXPORT_SA_NAME="${EXPORT_SA_NAME:-firestore-export}"
 EXPORT_SA="${EXPORT_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 
@@ -42,7 +46,7 @@ gcloud services enable firestore.googleapis.com storage.googleapis.com \
   cloudscheduler.googleapis.com \
   --project "$PROJECT_ID"
 
-echo "==> 2/6 Enabling point-in-time recovery (${PITR_RETENTION} window)"
+echo "==> 2/6 Enabling point-in-time recovery (7-day window, fixed by Firestore)"
 # PITR is a database-level flag, not a per-collection one, so this covers every
 # collection including ones added later. Enabling it on a database that already has it
 # is a no-op that still exits 0.
@@ -157,7 +161,7 @@ else
 fi
 
 echo ""
-echo "==> Done. PITR (${PITR_RETENTION}) + daily export to gs://${BACKUP_BUCKET}."
+echo "==> Done. PITR (7 days) + daily export to gs://${BACKUP_BUCKET} (${EXPORT_RETENTION_DAYS}-day retention)."
 echo ""
 echo "    Verify now, rather than trusting this output:"
 echo "      gcloud scheduler jobs run firestore-daily-export --location ${FIRESTORE_REGION} --project ${PROJECT_ID}"
