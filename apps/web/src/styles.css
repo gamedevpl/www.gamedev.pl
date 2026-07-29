@@ -3276,6 +3276,9 @@ body.player-open {
   width: 100%;
   text-align: center;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  /* Pull-ups hang past the top padding onto the rim — don't clip his hands. */
+  position: relative;
+  overflow: visible;
 }
 
 .beta-splash__logo {
@@ -5187,6 +5190,77 @@ body.player-open {
   animation: mascot-interactive-boop 0.45s ease-out;
 }
 
+/*
+ * Idle pull-ups on the splash card rim. He climbs to the top border, does a few
+ * chin-ups (hands stay put via transform-origin at the top), then drops back.
+ * Distances are CSS variables so the compact splash (less padding) can shorten
+ * the climb without a second keyframes block.
+ */
+.mascot-interactive--pullups {
+  --pullup-hang: 40px;
+  --pullup-chin: 56px;
+  transform-origin: 50% 0%;
+  animation: mascot-pullups-session 3.4s ease-in-out;
+}
+
+@media (max-height: 720px) {
+  .mascot-interactive--pullups {
+    --pullup-hang: 22px;
+    --pullup-chin: 34px;
+  }
+}
+
+.mascot-interactive--pullups .mascot-interactive__tilt {
+  transition: none;
+  transform: none;
+}
+
+/* Park emotion body motion — the session keyframes own his travel. */
+.mascot-interactive--pullups .mascot__body-group {
+  animation: none !important;
+}
+
+@keyframes mascot-pullups-session {
+  0% {
+    transform: translateY(0) scale(1, 1);
+  }
+  /* Climb and grab the rim. */
+  10% {
+    transform: translateY(calc(-1 * var(--pullup-hang))) scale(1, 1);
+  }
+  /* Rep 1 */
+  22% {
+    transform: translateY(calc(-1 * var(--pullup-chin))) scale(1.04, 0.94);
+  }
+  30% {
+    transform: translateY(calc(-1 * var(--pullup-hang))) scale(0.98, 1.03);
+  }
+  /* Rep 2 */
+  42% {
+    transform: translateY(calc(-1 * var(--pullup-chin))) scale(1.04, 0.94);
+  }
+  50% {
+    transform: translateY(calc(-1 * var(--pullup-hang))) scale(0.98, 1.03);
+  }
+  /* Rep 3 — a little higher, showing off. */
+  62% {
+    transform: translateY(calc(-1 * var(--pullup-chin) - 3px)) scale(1.05, 0.93);
+  }
+  72% {
+    transform: translateY(calc(-1 * var(--pullup-hang))) scale(0.98, 1.03);
+  }
+  /* Hang a beat, then drop with a land squash. */
+  80% {
+    transform: translateY(calc(-1 * var(--pullup-hang))) scale(1, 1);
+  }
+  92% {
+    transform: translateY(3px) scale(1.06, 0.92);
+  }
+  100% {
+    transform: translateY(0) scale(1, 1);
+  }
+}
+
 @keyframes mascot-interactive-boop {
   0% {
     transform: scale(1, 1);
@@ -5256,7 +5330,8 @@ body.player-open {
 @media (prefers-reduced-motion: reduce) {
   .mascot-interactive,
   .mascot-interactive__tilt,
-  .mascot-interactive--poking {
+  .mascot-interactive--poking,
+  .mascot-interactive--pullups {
     transition: none;
     animation: none;
   }
