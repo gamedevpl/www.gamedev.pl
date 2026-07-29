@@ -6,6 +6,7 @@ import { LanguageSwitcher } from './LanguageSwitcher.js';
 import { Mascot } from './Mascot.js';
 import { NotificationBell } from './NotificationBell.js';
 import { PixelIcon } from './PixelIcon.js';
+import { usePageScrolling } from './usePageScrolling.js';
 import githubIcon from './assets/github-mark-white.svg';
 
 type NavHeaderProps = {
@@ -23,6 +24,8 @@ export function NavHeader({ activeBuildCount, onNavigate, onHome, onStudio }: Na
   const { user, logout } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  // Header mark mimes the visitor: pull a phone and scroll a tiny feed while the page moves.
+  const pageScrolling = usePageScrolling();
 
   const handleNavClick = (sectionId: string) => {
     onNavigate(sectionId);
@@ -41,7 +44,13 @@ export function NavHeader({ activeBuildCount, onNavigate, onHome, onStudio }: Na
     <header className="app-header">
       <div className="logo-brand">
         <a href="/" className="logo" onClick={handleLogoClick}>
-          <Mascot className="mascot--logo" emotion="idle" size={35} title={t('header.logoAlt')} />
+          <Mascot
+            className="mascot--logo"
+            emotion="idle"
+            size={35}
+            title={t('header.logoAlt')}
+            scrolling={pageScrolling}
+          />
           gamedev<span className="turquoise">.pl</span>
         </a>
       </div>

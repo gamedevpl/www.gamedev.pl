@@ -6,11 +6,16 @@
  * (`MASCOT_SOLID_SPANS`), then punch new eyes/mouth via an SVG mask.
  *
  * Animation lives in layered SVG groups + CSS (bob, bounce, sway, blink lids,
- * waving arm). `staticPose` freezes everything; `prefers-reduced-motion` does too.
+ * waving arm, scroll-phone mime). `staticPose` freezes everything;
+ * `prefers-reduced-motion` does too.
  *
  * `InteractiveMascot` wraps the SVG in a button: hover peeks, click cycles
  * reactions, and the face tracks the pointer a little. With `reactsToTilt` he also
  * leans with the phone's own orientation and gets dizzy when it is shaken.
+ *
+ * Pass `scrolling` (boolean) on the header mark: he pulls a tiny phone and mimes
+ * scrolling a feed while the page moves. Omit the prop everywhere else so the
+ * phone markup never lands on splash / empty-state instances.
  */
 
 import {
@@ -45,6 +50,13 @@ type MascotProps = {
   staticPose?: boolean;
   /** Nudge face cutouts toward a point — no-op on the baked idle silhouette. */
   look?: MascotLook;
+  /**
+   * When set, mounts the pocket-phone prop and toggles `mascot--scrolling` so CSS
+   * can pull it out and scroll the fake feed. Always pass a boolean from the
+   * header (true while the page is scrolling) so put-away can transition; omit on
+   * every other instance.
+   */
+  scrolling?: boolean;
 };
 
 type Span = readonly [number, number, number];
@@ -281,16 +293,87 @@ function BlinkLids() {
   );
 }
 
-export function Mascot({ emotion = 'idle', size = 48, className, title, staticPose = false, look }: MascotProps) {
+/**
+ * Pocket phone the header mark pulls while the page scrolls.
+ *
+ * Kept inside the 70×60 viewBox so mobile's `overflow: hidden` on the logo still
+ * shows the gag. The bezel is `currentColor` (turquoise); the screen is dark so
+ * the scrolling feed bars read as content, not chrome.
+ */
+function ScrollPhone({ clipId }: { clipId: string }) {
+  return (
+    <g className="mascot__phone" aria-hidden="true">
+      <path
+        className="mascot__phone-arm"
+        d="M50 44 Q56 40 58 34"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.6"
+        strokeLinecap="round"
+      />
+      <g className="mascot__phone-device">
+        <rect className="mascot__phone-bezel" x="50" y="20" width="15" height="24" rx="2" fill="currentColor" />
+        <rect className="mascot__phone-screen" x="52" y="23" width="11" height="18" rx="0.8" fill="#071018" />
+        <defs>
+          <clipPath id={clipId} clipPathUnits="userSpaceOnUse">
+            <rect x="52" y="23" width="11" height="18" rx="0.8" />
+          </clipPath>
+        </defs>
+        <g className="mascot__phone-feed" clipPath={`url(#${clipId})`}>
+          <g className="mascot__phone-feed-track" fill="currentColor">
+            <rect x="53.2" y="12" width="8.6" height="1.6" rx="0.4" opacity="0.85" />
+            <rect x="53.2" y="15.2" width="6.2" height="1.2" rx="0.3" opacity="0.4" />
+            <rect x="53.2" y="18.4" width="8.6" height="1.6" rx="0.4" opacity="0.75" />
+            <rect x="53.2" y="21.6" width="5.4" height="1.2" rx="0.3" opacity="0.35" />
+            <rect x="53.2" y="24.8" width="8.6" height="1.6" rx="0.4" opacity="0.9" />
+            <rect x="53.2" y="28" width="7" height="1.2" rx="0.3" opacity="0.4" />
+            <rect x="53.2" y="31.2" width="8.6" height="1.6" rx="0.4" opacity="0.8" />
+            <rect x="53.2" y="34.4" width="5.8" height="1.2" rx="0.3" opacity="0.35" />
+            <rect x="53.2" y="37.6" width="8.6" height="1.6" rx="0.4" opacity="0.85" />
+            <rect x="53.2" y="40.8" width="6.4" height="1.2" rx="0.3" opacity="0.4" />
+            <rect x="53.2" y="44" width="8.6" height="1.6" rx="0.4" opacity="0.75" />
+            <rect x="53.2" y="47.2" width="5.2" height="1.2" rx="0.3" opacity="0.35" />
+          </g>
+        </g>
+        <ellipse
+          className="mascot__phone-thumb"
+          cx="63.5"
+          cy="34"
+          rx="2.2"
+          ry="3.4"
+          fill="currentColor"
+        />
+      </g>
+    </g>
+  );
+}
+
+export function Mascot({
+  emotion = 'idle',
+  size = 48,
+  className,
+  title,
+  staticPose = false,
+  look,
+  scrolling,
+}: MascotProps) {
   const reactId = useId().replace(/:/g, '');
   const maskId = `mascot-mask-${reactId}`;
+  const phoneClipId = `mascot-phone-clip-${reactId}`;
   const height = Math.round((size * 60) / 70);
-  const classes = ['mascot', `mascot--${emotion}`, staticPose ? 'mascot--static' : null, className]
+  const classes = [
+    'mascot',
+    `mascot--${emotion}`,
+    staticPose ? 'mascot--static' : null,
+    scrolling ? 'mascot--scrolling' : null,
+    className,
+  ]
     .filter(Boolean)
     .join(' ');
   const cutouts = cutoutsFor(emotion);
   const isIdle = emotion === 'idle' || cutouts == null;
   const showWaveArm = emotion === 'wave' || emotion === 'excited';
+  const showPhone = scrolling !== undefined;
   // Keep the nudge small — past ~3px the mouth starts to clip the silhouette.
   const lookTransform =
     look && !isIdle ? `translate(${(look.x * 2.4).toFixed(2)} ${(look.y * 1.8).toFixed(2)})` : undefined;
@@ -343,6 +426,8 @@ export function Mascot({ emotion = 'idle', size = 48, className, title, staticPo
             <path d="M64 36 Q70 26 67 14" />
           </g>
         ) : null}
+
+        {showPhone ? <ScrollPhone clipId={phoneClipId} /> : null}
       </g>
     </svg>
   );
