@@ -1009,7 +1009,7 @@ button:disabled {
   justify-content: flex-end;
   gap: 0.4rem;
   min-width: 0;
-  max-width: min(100%, 18rem);
+  max-width: min(100%, 26rem);
 }
 
 .catalog-sort-menu {
@@ -2962,7 +2962,7 @@ body.player-open {
   }
 
   .catalog-toolbar {
-    max-width: min(100%, 14.5rem);
+    max-width: min(100%, 22rem);
   }
 
   .catalog-filter-trigger,

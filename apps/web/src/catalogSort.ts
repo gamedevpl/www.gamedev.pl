@@ -13,10 +13,10 @@ export const CATALOG_SORT_MODES: CatalogSortMode[] = [
 
 export const DEFAULT_CATALOG_SORT: CatalogSortMode = 'recommended';
 
-/** Only Not played is a filter today; Your games are pinned first, not filtered. */
-export type CatalogFilterId = 'not_played';
+/** Catalog filters — independent of sort. Your games also pin first when the filter is off. */
+export type CatalogFilterId = 'your_games' | 'not_played';
 
-export const CATALOG_FILTER_IDS: CatalogFilterId[] = ['not_played'];
+export const CATALOG_FILTER_IDS: CatalogFilterId[] = ['your_games', 'not_played'];
 
 const SORT_STORAGE_KEY = 'gdpl.catalogSort';
 const FILTERS_STORAGE_KEY = 'gdpl.catalogFilters';
@@ -53,7 +53,6 @@ export function writeCatalogSortMode(mode: CatalogSortMode): void {
 
 /**
  * Active catalog filters. Migrates legacy not-played prefs into the set once.
- * Ignores obsolete `your_games` entries left in storage from an earlier build.
  */
 export function readCatalogFilters(): Set<CatalogFilterId> {
   const filters = new Set<CatalogFilterId>();
@@ -144,16 +143,24 @@ export function filterUnplayedEntries<T extends { slug: string }>(
 }
 
 /**
- * Apply active filters. Today only `not_played`; Your games are pinned first via
- * {@link orderCatalogEntries}, not filtered out.
+ * Apply active filters. `your_games` keeps only the creator’s published slugs
+ * (in-progress builds stay visible separately). Filters combine with AND.
+ * When the filter is off, {@link orderCatalogEntries} still pins yours first.
  */
 export function applyCatalogFilters<T extends { slug: string }>(
   entries: T[],
   filters: ReadonlySet<CatalogFilterId>,
   affinityLastPlayed: ReadonlyMap<string, string>,
+  mySlugs: ReadonlySet<string> = new Set(),
 ): T[] {
-  if (filters.has('not_played')) return filterUnplayedEntries(entries, affinityLastPlayed);
-  return entries;
+  let result = entries;
+  if (filters.has('your_games')) {
+    result = result.filter((entry) => mySlugs.has(entry.slug));
+  }
+  if (filters.has('not_played')) {
+    result = filterUnplayedEntries(result, affinityLastPlayed);
+  }
+  return result;
 }
 
 /**

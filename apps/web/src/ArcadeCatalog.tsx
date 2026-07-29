@@ -451,10 +451,29 @@ export function ArcadeCatalog({
     [inProgress],
   );
 
+  const hasCatalog = catalogStatus === 'ready' && catalogEntries.length > 0;
+  const hasBuilds = inProgress.length > 0;
+  // My games only makes sense when signed in and you actually have something yours.
+  const canFilterYourGames = Boolean(user) && (mySlugs.size > 0 || hasBuilds);
+  const showControls = hasCatalog || hasBuilds;
+  const yourGamesOnly = canFilterYourGames && filters.has('your_games');
+  const notPlayedOnly = filters.has('not_played');
+  const filtersActive = yourGamesOnly || notPlayedOnly;
+
   const orderedEntries = useMemo(() => {
-    const filtered = applyCatalogFilters(catalogEntries, filters, signals.affinityLastPlayed);
+    // Ignore a sticky your_games pref when signed out or you have nothing yours —
+    // otherwise the whole catalog would look empty for no good reason.
+    const activeFilters = canFilterYourGames
+      ? filters
+      : new Set([...filters].filter((id) => id !== 'your_games'));
+    const filtered = applyCatalogFilters(
+      catalogEntries,
+      activeFilters,
+      signals.affinityLastPlayed,
+      mySlugs,
+    );
     return orderCatalogEntries(filtered, sortMode, signals, mySlugs);
-  }, [catalogEntries, sortMode, filters, signals, mySlugs]);
+  }, [catalogEntries, sortMode, filters, signals, mySlugs, canFilterYourGames]);
 
   function handleSortChange(mode: CatalogSortMode) {
     setSortMode(mode);
@@ -462,20 +481,23 @@ export function ArcadeCatalog({
     setSortMenuOpen(false);
   }
 
-  function toggleNotPlayed() {
+  function toggleFilter(id: CatalogFilterId) {
     setFilters((prev) => {
       const next = new Set(prev);
-      if (next.has('not_played')) next.delete('not_played');
-      else next.add('not_played');
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       writeCatalogFilters(next);
       return next;
     });
   }
 
-  const hasCatalog = catalogStatus === 'ready' && catalogEntries.length > 0;
-  const hasBuilds = inProgress.length > 0;
-  const showControls = hasCatalog || hasBuilds;
-  const notPlayedOnly = filters.has('not_played');
+  function clearFilters() {
+    setFilters(() => {
+      const next = new Set<CatalogFilterId>();
+      writeCatalogFilters(next);
+      return next;
+    });
+  }
   const awaitingSignals =
     catalogStatus === 'ready' &&
     catalogEntries.length > 0 &&
@@ -483,7 +505,13 @@ export function ArcadeCatalog({
     !signalsReady;
 
   const emptyMessage =
-    notPlayedOnly && catalogEntries.length > 0 ? t('catalog.emptyNotPlayed') : t('catalog.empty');
+    yourGamesOnly && notPlayedOnly && (catalogEntries.length > 0 || mySlugs.size > 0)
+      ? t('catalog.emptyYourGamesNotPlayed')
+      : yourGamesOnly
+        ? t('catalog.emptyYourGames')
+        : notPlayedOnly && catalogEntries.length > 0
+          ? t('catalog.emptyNotPlayed')
+          : t('catalog.empty');
   const showEmpty =
     !awaitingSignals &&
     catalogStatus !== 'loading' &&
@@ -510,12 +538,22 @@ export function ArcadeCatalog({
         </div>
         {showControls ? (
           <div className="catalog-toolbar" role="group" aria-label={t('catalog.toolbarLabel')}>
+            {hasCatalog && canFilterYourGames ? (
+              <button
+                type="button"
+                className={`catalog-filter-trigger${yourGamesOnly ? ' is-active' : ''}`}
+                aria-pressed={yourGamesOnly}
+                onClick={() => toggleFilter('your_games')}
+              >
+                {t('catalog.filter.your_games')}
+              </button>
+            ) : null}
             {hasCatalog ? (
               <button
                 type="button"
                 className={`catalog-filter-trigger${notPlayedOnly ? ' is-active' : ''}`}
                 aria-pressed={notPlayedOnly}
-                onClick={toggleNotPlayed}
+                onClick={() => toggleFilter('not_played')}
               >
                 {t('catalog.filter.not_played')}
               </button>
@@ -575,8 +613,8 @@ export function ArcadeCatalog({
       ) : showEmpty ? (
         <MascotMoment className="catalog-state" emotion="curious" size={64} title={t('mascot.curiousAlt')}>
           <p>{emptyMessage}</p>
-          {notPlayedOnly && catalogEntries.length > 0 ? (
-            <button type="button" className="secondary-btn" onClick={toggleNotPlayed}>
+          {filtersActive && (catalogEntries.length > 0 || mySlugs.size > 0 || hasBuilds) ? (
+            <button type="button" className="secondary-btn" onClick={clearFilters}>
               {t('catalog.clearFilters')}
             </button>
           ) : null}

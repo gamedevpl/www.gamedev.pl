@@ -2,8 +2,9 @@
 
 > Status: ✅ Built (2026-07-29). The home-page arcade grid can be sorted several
 > ways. **Recommended** is the default; players can also pick Newest, Most played,
-> Last played, or A–Z. **Not played** is a filter. A signed-in creator’s published
-> games are pinned to the front of the same gallery (additive — not a filter).
+> Last played, or A–Z. **My games** and **Not played** are filters. A signed-in
+> creator’s published games are pinned to the front of the same gallery when the
+> My games filter is off.
 
 ## Sort modes
 
@@ -31,15 +32,16 @@ heading when you have builds or published games. Published slugs come from
 
 | Filter | Effect |
 | ------ | ------ |
+| My games | Show only the signed-in creator’s published games (plus in-progress builds). Hidden when signed out or when you have no builds/published games. |
 | Not played | Show only games with no play affinity and no device-local recent open |
 
-Sort preference is remembered in `localStorage` (`gdpl.catalogSort`); the Not played
-filter in `gdpl.catalogFilters`. The last recommendations payload is cached in
-`sessionStorage` (`gdpl.catalogSortSignals`) so a reload does not flash
-catalog-default order before the network returns.
+Filters combine with AND. Sort preference is remembered in `localStorage`
+(`gdpl.catalogSort`); filters in `gdpl.catalogFilters`. The last recommendations
+payload is cached in `sessionStorage` (`gdpl.catalogSortSignals`) so a reload does
+not flash catalog-default order before the network returns.
 
-Controls sit on one row beside the Games heading: Not played toggle + Sort ▾
-(menu closes on outside tap / Escape).
+Controls sit on one row beside the Games heading: My games (when you have
+games) + Not played + Sort ▾ (menu closes on outside tap / Escape).
 
 ## Signals & privacy
 
@@ -76,7 +78,7 @@ games-repo order rather than inventing a shuffle.
 
 ## UI
 
-[`ArcadeCatalog`](../apps/web/src/ArcadeCatalog.tsx) shows the Not played toggle and
-Sort dropdown beside the Games heading, pins the creator’s published games first,
-then filters/reorders the same grid. Logic lives in
-[`catalogSort.ts`](../apps/web/src/catalogSort.ts).
+[`ArcadeCatalog`](../apps/web/src/ArcadeCatalog.tsx) shows the My games / Not played
+toggles and Sort dropdown beside the Games heading, pins the creator’s published
+games first when My games is off, then filters/reorders the same grid. Logic lives
+in [`catalogSort.ts`](../apps/web/src/catalogSort.ts).
