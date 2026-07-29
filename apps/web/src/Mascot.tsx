@@ -296,51 +296,65 @@ function BlinkLids() {
 /**
  * Pocket phone the header mark pulls while the page scrolls.
  *
- * Kept inside the 70×60 viewBox so mobile's `overflow: hidden` on the logo still
- * shows the gag. The bezel is `currentColor` (turquoise); the screen is dark so
- * the scrolling feed bars read as content, not chrome.
+ * Sized for the 35px logo mark (0.5 of the 70-unit viewBox). A phone that fits
+ * politely next to him disappears at that scale — same lesson as the idle hop —
+ * so this one is chunky and overlaps his lower-right body. The bezel is dark with
+ * a turquoise stroke: a same-colour bezel dissolved into his body and the gag
+ * became invisible. Still inside the viewBox so mobile's `overflow: hidden` on
+ * the logo does not clip it.
  */
 function ScrollPhone({ clipId }: { clipId: string }) {
   return (
     <g className="mascot__phone" aria-hidden="true">
       <path
         className="mascot__phone-arm"
-        d="M50 44 Q56 40 58 34"
+        d="M46 48 Q54 44 56 36"
         fill="none"
         stroke="currentColor"
-        strokeWidth="2.6"
+        strokeWidth="3.2"
         strokeLinecap="round"
       />
       <g className="mascot__phone-device">
-        <rect className="mascot__phone-bezel" x="50" y="20" width="15" height="24" rx="2" fill="currentColor" />
-        <rect className="mascot__phone-screen" x="52" y="23" width="11" height="18" rx="0.8" fill="#071018" />
+        <rect
+          className="mascot__phone-bezel"
+          x="46"
+          y="14"
+          width="22"
+          height="34"
+          rx="2.6"
+          fill="#0a121c"
+          stroke="currentColor"
+          strokeWidth="1.8"
+        />
+        <rect className="mascot__phone-screen" x="49" y="18" width="16" height="26" rx="1.2" fill="#152033" />
         <defs>
           <clipPath id={clipId} clipPathUnits="userSpaceOnUse">
-            <rect x="52" y="23" width="11" height="18" rx="0.8" />
+            <rect x="49" y="18" width="16" height="26" rx="1.2" />
           </clipPath>
         </defs>
         <g className="mascot__phone-feed" clipPath={`url(#${clipId})`}>
           <g className="mascot__phone-feed-track" fill="currentColor">
-            <rect x="53.2" y="12" width="8.6" height="1.6" rx="0.4" opacity="0.85" />
-            <rect x="53.2" y="15.2" width="6.2" height="1.2" rx="0.3" opacity="0.4" />
-            <rect x="53.2" y="18.4" width="8.6" height="1.6" rx="0.4" opacity="0.75" />
-            <rect x="53.2" y="21.6" width="5.4" height="1.2" rx="0.3" opacity="0.35" />
-            <rect x="53.2" y="24.8" width="8.6" height="1.6" rx="0.4" opacity="0.9" />
-            <rect x="53.2" y="28" width="7" height="1.2" rx="0.3" opacity="0.4" />
-            <rect x="53.2" y="31.2" width="8.6" height="1.6" rx="0.4" opacity="0.8" />
-            <rect x="53.2" y="34.4" width="5.8" height="1.2" rx="0.3" opacity="0.35" />
-            <rect x="53.2" y="37.6" width="8.6" height="1.6" rx="0.4" opacity="0.85" />
-            <rect x="53.2" y="40.8" width="6.4" height="1.2" rx="0.3" opacity="0.4" />
-            <rect x="53.2" y="44" width="8.6" height="1.6" rx="0.4" opacity="0.75" />
-            <rect x="53.2" y="47.2" width="5.2" height="1.2" rx="0.3" opacity="0.35" />
+            {/* Period is 8 units — keyframes translate by -16 so the loop is seamless. */}
+            <rect x="50.5" y="6" width="13" height="3.2" rx="0.7" opacity="0.95" />
+            <rect x="50.5" y="11" width="9" height="2.2" rx="0.5" opacity="0.45" />
+            <rect x="50.5" y="14" width="13" height="3.2" rx="0.7" opacity="0.9" />
+            <rect x="50.5" y="19" width="10" height="2.2" rx="0.5" opacity="0.4" />
+            <rect x="50.5" y="22" width="13" height="3.2" rx="0.7" opacity="0.95" />
+            <rect x="50.5" y="27" width="9" height="2.2" rx="0.5" opacity="0.45" />
+            <rect x="50.5" y="30" width="13" height="3.2" rx="0.7" opacity="0.9" />
+            <rect x="50.5" y="35" width="10" height="2.2" rx="0.5" opacity="0.4" />
+            <rect x="50.5" y="38" width="13" height="3.2" rx="0.7" opacity="0.95" />
+            <rect x="50.5" y="43" width="9" height="2.2" rx="0.5" opacity="0.45" />
+            <rect x="50.5" y="46" width="13" height="3.2" rx="0.7" opacity="0.9" />
+            <rect x="50.5" y="51" width="10" height="2.2" rx="0.5" opacity="0.4" />
           </g>
         </g>
         <ellipse
           className="mascot__phone-thumb"
-          cx="63.5"
-          cy="34"
-          rx="2.2"
-          ry="3.4"
+          cx="65.5"
+          cy="30"
+          rx="3.2"
+          ry="5"
           fill="currentColor"
         />
       </g>

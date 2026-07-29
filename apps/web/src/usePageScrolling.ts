@@ -14,7 +14,7 @@ export type UsePageScrollingOptions = {
   thresholdPx?: number;
 };
 
-const DEFAULT_SETTLE_MS = 480;
+const DEFAULT_SETTLE_MS = 700;
 const DEFAULT_THRESHOLD_PX = 2;
 
 export function usePageScrolling(options: UsePageScrollingOptions = {}): boolean {
