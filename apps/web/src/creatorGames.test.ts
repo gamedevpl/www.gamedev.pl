@@ -36,7 +36,7 @@ describe('creatorGames', () => {
         title: 'Space Runner',
         createdAt: '2026-01-01T00:00:00Z',
         lastKnownStatus: 'building',
-        slug: null,
+        slug: 'space-runner-preview',
       },
     ]);
 
@@ -47,6 +47,7 @@ describe('creatorGames', () => {
     expect(items[1]?.title).toBe('Space Runner');
     expect(items[1]?.status).toBe('building');
     expect(mockedGetSubmissionStatus).not.toHaveBeenCalled();
+    // Only published statuses pin — a building item's slug must not pin early.
     expect([...publishedCreatorSlugs(items)]).toEqual(['circus-cat']);
     expect(inProgressCreatorGames(items).map((item) => item.title)).toEqual(['Space Runner']);
   });

@@ -289,7 +289,7 @@ export function App() {
 
   // Menu navigation is scroll-to-section, but the sections only exist on the home
   // route — from a status page we have to go home first and scroll once the target
-  // has mounted (the my-games rail also has to finish loading before it exists).
+  // has mounted (the Games gallery may still be loading).
   const handleNavigateSection = (sectionId: string) => {
     const element = document.getElementById(sectionId);
     if (element) {

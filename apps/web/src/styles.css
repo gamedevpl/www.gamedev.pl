@@ -1012,7 +1012,6 @@ button:disabled {
   max-width: min(100%, 18rem);
 }
 
-.catalog-filter-menu,
 .catalog-sort-menu {
   position: relative;
   flex: 1 1 auto;
@@ -1053,7 +1052,6 @@ button:disabled {
 }
 
 .catalog-filter-trigger.is-active,
-.catalog-filter-menu.is-open .catalog-filter-trigger,
 .catalog-sort-menu.is-open .catalog-sort-trigger {
   border-color: var(--turquoise);
   color: var(--turquoise);

@@ -98,5 +98,7 @@ export function inProgressCreatorGames(items: CreatorGameItem[]): CreatorGameIte
 
 /** Published slugs owned by the creator — pin these first in the catalog grid. */
 export function publishedCreatorSlugs(items: CreatorGameItem[]): Set<string> {
-  return new Set(items.flatMap((item) => (item.slug ? [item.slug] : [])));
+  return new Set(
+    items.flatMap((item) => (item.status === 'published' && item.slug ? [item.slug] : [])),
+  );
 }
