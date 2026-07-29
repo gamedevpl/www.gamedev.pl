@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 #
-# The alerting floor: an uptime check and the four alert policies that decide whether a
-# night of 5xx is discovered by monitoring or by a user.
+# The alerting floor: an uptime check and the alert policies that decide whether a night
+# of 5xx — or a zone host quietly turning every player away — is discovered by monitoring
+# or by a user.
 # OWNER-RUN: needs `gcloud` authenticated against the project.
 #
 # Usage:
 #   ALERT_EMAIL=you@example.com ./infra/setup-monitoring.sh
 #
-# Override via env: PROJECT_ID, REGION, SERVICE, HOST, ALERT_EMAIL, BACKUP_BUCKET.
+# Override via env: PROJECT_ID, REGION, SERVICE, WORLD_SERVICE, HOST, ALERT_EMAIL,
+# BACKUP_BUCKET.
 #
 # What this deliberately is and is not:
 #
@@ -25,6 +27,7 @@ set -euo pipefail
 PROJECT_ID="${PROJECT_ID:-gamedevpl}"
 REGION="${REGION:-europe-west1}"
 SERVICE="${SERVICE:-gamedev-app}"
+WORLD_SERVICE="${WORLD_SERVICE:-gamedev-world}"
 HOST="${HOST:-www.gamedev.pl}"
 BACKUP_BUCKET="${BACKUP_BUCKET:-${PROJECT_ID}-firestore-backups}"
 : "${ALERT_EMAIL:?set ALERT_EMAIL to the address that should receive alerts}"
@@ -210,6 +213,82 @@ cat > "${POLICY_DIR}/a4.json" <<EOF
 }
 EOF
 
+# A6 — zones are dead while the site is fine.
+#
+# This is the alert the zone host actually needs, and it is not an uptime check. When
+# admission fails the shell falls back to solo play without saying anything — which is
+# the right thing for a player and the reason nobody finds out. The host keeps answering
+# /health, every request is a 200, and each player gets a private world. Both faults on
+# the service's first day looked exactly like this, and what found them was a human
+# opening two browser windows.
+#
+# So the signal is the log line the host writes when it cannot start a zone
+# (apps/world/src/app.ts): the wire reason is deliberately uninformative, so the cause
+# goes to the log and this is the only thing watching it. One entry means one player was
+# turned away and does not warrant an email; the rate limit below is what turns "a join
+# failed" into "joins are failing", and a host that can start no zone at all will trip it
+# on the first arrival after the hour turns over.
+cat > "${POLICY_DIR}/a6.json" <<EOF
+{
+  "displayName": "A6 zone admission failing",
+  "combiner": "OR",
+  "conditions": [{
+    "displayName": "the world service could not start a zone",
+    "conditionMatchedLog": {
+      "filter": "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${WORLD_SERVICE}\" AND jsonPayload.msg=\"zone admission failed\""
+    }
+  }],
+  "notificationChannels": ["${CHANNEL_NAME}"],
+  "alertStrategy": {
+    "notificationRateLimit": { "period": "3600s" },
+    "autoClose": "86400s"
+  },
+  "documentation": {
+    "content": "${WORLD_SERVICE} refused a join it should have accepted. Players are silently playing alone and the site looks healthy. The logged error is the diagnosis — the wire reason never says. Triage: docs/runbooks/zones-down-triage.md",
+    "mimeType": "text/markdown"
+  }
+}
+EOF
+
+# A7 — the world service is crash-looping.
+#
+# The complement to A6, and the reason A6 is not enough on its own: a host that dies
+# before it can serve anything writes no admission failures either, and on a
+# scale-to-zero service "no logs" is also what a quiet night looks like. Absence proves
+# nothing here, so this watches for what a crash-loop does produce.
+#
+# Deliberately NOT an uptime check. Probing a scale-to-zero service every five minutes
+# keeps an instance warm around the clock, which converts the whole cost model in
+# docs/p3-zone-host-infra.md — \$0 at rest — into roughly \$65/month to find out whether
+# something nobody is using is up. A probe is traffic, and this service bills for traffic.
+cat > "${POLICY_DIR}/a7.json" <<EOF
+{
+  "displayName": "A7 world service 5xx rate elevated",
+  "combiner": "OR",
+  "conditions": [{
+    "displayName": "5xx responses sustained over 10 minutes",
+    "conditionThreshold": {
+      "filter": "metric.type=\"run.googleapis.com/request_count\" AND resource.type=\"cloud_run_revision\" AND resource.label.\"service_name\"=\"${WORLD_SERVICE}\" AND metric.label.\"response_code_class\"=\"5xx\"",
+      "aggregations": [{
+        "alignmentPeriod": "600s",
+        "perSeriesAligner": "ALIGN_RATE",
+        "crossSeriesReducer": "REDUCE_SUM"
+      }],
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 0.03,
+      "duration": "600s",
+      "trigger": { "count": 1 }
+    }
+  }],
+  "notificationChannels": ["${CHANNEL_NAME}"],
+  "alertStrategy": { "autoClose": "86400s" },
+  "documentation": {
+    "content": "Sustained 5xx from ${WORLD_SERVICE}. Most likely a bad image or a refusal to start — the host exits rather than downgrade when the isolate cage is unavailable, which is intended. Triage: docs/runbooks/zones-down-triage.md",
+    "mimeType": "text/markdown"
+  }
+}
+EOF
+
 for FILE in "${POLICY_DIR}"/*.json; do
   DISPLAY="$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['displayName'])" "$FILE")"
   EXISTING="$(gcloud alpha monitoring policies list \
@@ -236,7 +315,7 @@ for FILE in "${POLICY_DIR}"/*.json; do
 done
 
 echo ""
-echo "==> Done. Uptime check + A1-A4 wired to ${ALERT_EMAIL}."
+echo "==> Done. Uptime check + A1-A4, A6-A7 wired to ${ALERT_EMAIL}."
 echo ""
 echo "    A5 (billing budget) is NOT here: budgets live on the billing account, not the"
 echo "    project, and need roles this script does not assume. Create it once by hand:"
@@ -247,3 +326,13 @@ echo "    Then prove it works, because an untested alert is a decoration:"
 echo "      gcloud scheduler jobs pause notify-sweep --location ${REGION} --project ${PROJECT_ID}"
 echo "      # wait ~15 min for A3 to fire, confirm the email, then:"
 echo "      gcloud scheduler jobs resume notify-sweep --location ${REGION} --project ${PROJECT_ID}"
+echo ""
+echo "    A6 matches a log field rather than a metric, so confirm the field path is what"
+echo "    this project's logs actually carry — a filter that matches nothing creates a"
+echo "    policy that looks armed and never fires, which is the failure this file exists"
+echo "    to avoid. One query settles it:"
+echo "      gcloud logging read \\"
+echo "        'resource.labels.service_name=\"${WORLD_SERVICE}\" AND jsonPayload.msg=\"zone admission failed\"' \\"
+echo "        --project ${PROJECT_ID} --limit 5 --freshness 30d"
+echo "      # No rows and no known incident is inconclusive; drop the jsonPayload.msg"
+echo "      # clause and look at how a real log line from that service is shaped."
