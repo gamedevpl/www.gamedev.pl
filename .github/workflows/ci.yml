@@ -92,9 +92,16 @@ jobs:
       - name: Boot it and check health
         run: |
           set -euo pipefail
-          # No keys: the whole product runs on fixtures and a mock generator by design
-          # (docs/local-development.md), so a bare container must reach "ok" on its own.
-          docker run -d --name gamedev-ci -p 8080:8080 -e PORT=8080 gamedev-app:ci
+          # No real keys: the product runs on fixtures and a mock generator by design
+          # (docs/local-development.md), so the container must reach "ok" without any
+          # credential. SESSION_SECRET is the one exception and it is not a credential
+          # here — the image bakes NODE_ENV=production, and the room registry refuses to
+          # sign party tokens with the dev fallback in production. A throwaway value is
+          # exactly right: this asserts the image boots, not that it is configured.
+          docker run -d --name gamedev-ci -p 8080:8080 \
+            -e PORT=8080 \
+            -e SESSION_SECRET=ci-smoke-test-value-not-a-credential \
+            gamedev-app:ci
           for i in $(seq 1 30); do
             if curl -fsS http://localhost:8080/api/health > /tmp/health.json 2>/dev/null; then
               echo "healthy after ${i}s: $(cat /tmp/health.json)"
