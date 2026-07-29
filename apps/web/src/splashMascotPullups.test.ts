@@ -30,6 +30,23 @@ describe('the splash mascot does idle pull-ups', () => {
     );
   });
 
+  it('covers baked side stubs and breathes with the chin', () => {
+    const css = read('styles.css');
+    expect(css).toMatch(/\.mascot__arm-stub-cover/);
+    expect(css).toMatch(/\.mascot__legs-together-erase/);
+    expect(css).toMatch(/@keyframes mascot-hang-mouth-hold/);
+    expect(css).toMatch(/@keyframes mascot-hang-mouth-breathe/);
+    // Fall → squash → rebound → settle.
+    expect(css).toMatch(/scale\(1\.18,\s*0\.76\)/);
+    expect(css).toMatch(/scale\(0\.96,\s*1\.07\)/);
+    const mascot = read('Mascot.tsx');
+    expect(mascot).toMatch(/ArmStubCovers/);
+    expect(mascot).toMatch(/LegsTogether/);
+    expect(mascot).toMatch(/HangArmStrokes/);
+    expect(mascot).toMatch(/MOUTH_HANG_HOLD/);
+    expect(mascot).toMatch(/MOUTH_HANG_BREATHE/);
+  });
+
   it('lets the card rim show his hands', () => {
     const css = read('styles.css');
     const card = css.slice(css.indexOf('.beta-splash__card {'), css.indexOf('.beta-splash__logo {'));

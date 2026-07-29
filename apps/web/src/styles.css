@@ -5224,6 +5224,80 @@ body.player-open {
   animation: mascot-pullups-chin 3.6s ease-in-out !important;
 }
 
+/* Hide baked side stubs / split feet — same fill as the splash card. */
+.mascot__arm-stub-cover,
+.mascot__legs-together-erase {
+  fill: var(--panel);
+}
+
+/*
+ * Breath with the chin: sealed lips at the top of each rep, open mouth on the way
+ * down. Keyframe times match `mascot-pullups-chin`. Opacity in the SVG mask
+ * controls how hard each mouth punches the face.
+ */
+.mascot--hanging .mascot__mouth--hang-hold {
+  opacity: 0;
+  animation: mascot-hang-mouth-hold 3.6s ease-in-out;
+}
+
+.mascot--hanging .mascot__mouth--hang-breathe {
+  opacity: 1;
+  animation: mascot-hang-mouth-breathe 3.6s ease-in-out;
+}
+
+@keyframes mascot-hang-mouth-hold {
+  0%,
+  14% {
+    opacity: 0;
+  }
+  /* Rep tops — hold breath. */
+  24% {
+    opacity: 1;
+  }
+  32% {
+    opacity: 0;
+  }
+  44% {
+    opacity: 1;
+  }
+  52% {
+    opacity: 0;
+  }
+  64% {
+    opacity: 1;
+  }
+  74%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes mascot-hang-mouth-breathe {
+  0%,
+  14% {
+    opacity: 1;
+  }
+  24% {
+    opacity: 0;
+  }
+  32% {
+    opacity: 1;
+  }
+  44% {
+    opacity: 0;
+  }
+  52% {
+    opacity: 1;
+  }
+  64% {
+    opacity: 0;
+  }
+  74%,
+  100% {
+    opacity: 1;
+  }
+}
+
 @keyframes mascot-pullups-climb {
   0% {
     transform: translateY(0) scale(1, 1);
@@ -5233,13 +5307,22 @@ body.player-open {
     transform: translateY(calc(-1 * var(--pullup-hang))) scale(1, 1);
   }
   /* Hold through the chin-up reps. */
-  82% {
+  80% {
     transform: translateY(calc(-1 * var(--pullup-hang))) scale(1, 1);
   }
-  /* Drop with a land squash. */
-  93% {
-    transform: translateY(4px) scale(1.06, 0.9);
+  /* Let go — stretch on the fall. */
+  88% {
+    transform: translateY(calc(-0.28 * var(--pullup-hang))) scale(0.94, 1.1);
   }
+  /* Impact squash. */
+  93% {
+    transform: translateY(8px) scale(1.18, 0.76);
+  }
+  /* Short rebound. */
+  97% {
+    transform: translateY(-3px) scale(0.96, 1.07);
+  }
+  /* Settle. */
   100% {
     transform: translateY(0) scale(1, 1);
   }
@@ -5272,7 +5355,8 @@ body.player-open {
   74% {
     transform: translateY(0) scale(0.96, 1.05);
   }
-  82%,
+  /* Quiet for the drop + landing — body rides the climb keyframes. */
+  80%,
   100% {
     transform: translateY(0) scale(1, 1);
   }

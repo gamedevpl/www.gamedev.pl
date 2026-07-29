@@ -212,7 +212,7 @@ describe('Mascot', () => {
     });
   });
 
-  it('draws hang arms when hanging, and hides the wave arm', async () => {
+  it('draws raised arms from the shoulders when hanging, and hides the wave arm', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -222,6 +222,15 @@ describe('Mascot', () => {
       root.render(createElement(Mascot, { emotion: 'wave', hanging: true, size: 48 }));
     });
     expect(container.querySelector('.mascot__hang-arms')).not.toBeNull();
+    expect(container.querySelector('.mascot__hang-arm-strokes')).not.toBeNull();
+    expect(container.querySelector('.mascot__arm-stub-covers')).not.toBeNull();
+    expect(container.querySelector('.mascot__legs-together')).not.toBeNull();
+    expect(container.querySelector('.mascot__mouth--hang-hold')).not.toBeNull();
+    expect(container.querySelector('.mascot__mouth--hang-breathe')).not.toBeNull();
+    // Arms flex with the body; only the grip hands sit outside.
+    expect(container.querySelector('.mascot__body-group .mascot__hang-arm-strokes')).not.toBeNull();
+    expect(container.querySelector('.mascot__body-group .mascot__legs-together')).not.toBeNull();
+    expect(container.querySelector('.mascot__body-group .mascot__hang-arms')).toBeNull();
     expect(container.querySelector('.mascot__wave-arm')).toBeNull();
     expect(container.querySelector('.mascot--hanging')).not.toBeNull();
 
@@ -229,6 +238,9 @@ describe('Mascot', () => {
       root.render(createElement(Mascot, { emotion: 'wave', hanging: false, size: 48 }));
     });
     expect(container.querySelector('.mascot__hang-arms')).toBeNull();
+    expect(container.querySelector('.mascot__hang-arm-strokes')).toBeNull();
+    expect(container.querySelector('.mascot__arm-stub-covers')).toBeNull();
+    expect(container.querySelector('.mascot__legs-together')).toBeNull();
     expect(container.querySelector('.mascot__wave-arm')).not.toBeNull();
 
     await act(async () => {
@@ -520,9 +532,12 @@ describe('InteractiveMascot', () => {
     });
     expect(button.classList.contains('mascot-interactive--pullups')).toBe(true);
     expect(container.querySelector('.mascot__hang-arms')).not.toBeNull();
+    expect(container.querySelector('.mascot__hang-arm-strokes')).not.toBeNull();
+    expect(container.querySelector('.mascot__mouth--hang-hold')).not.toBeNull();
     expect(container.querySelector('.mascot--proud')).not.toBeNull();
     // Hands are outside the body group so chin-ups can bob the body alone.
     expect(container.querySelector('.mascot__body-group .mascot__hang-arms')).toBeNull();
+    expect(container.querySelector('.mascot__body-group .mascot__hang-arm-strokes')).not.toBeNull();
 
     await act(async () => {
       button.dispatchEvent(new MouseEvent('click', { bubbles: true }));

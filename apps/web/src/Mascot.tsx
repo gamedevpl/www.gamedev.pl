@@ -60,9 +60,10 @@ type MascotProps = {
    */
   scrolling?: boolean;
   /**
-   * Reach both arms up to grip the splash card's top border. Arms paint above the
-   * viewBox; `.mascot { overflow: visible }` is what lets them show. Rendered
-   * outside `.mascot__body-group` so chin-ups can bob the body while hands stay put.
+   * Reach both arms up to grip the splash card's top border. Raised arm strokes
+   * ride with the body; hands stay outside `.mascot__body-group` on the rim so
+   * chin-ups bob the torso toward a planted grip. Side stubs are covered so he
+   * does not grow a second pair of hands.
    */
   hanging?: boolean;
 };
@@ -211,12 +212,26 @@ const MOUTH_CURIOUS =
   'M20 13 L24 20 L28 12 L32 21 L36 11 L40 21 L44 12 L48 20 L52 13 L52 32 L48 26 L44 34 L40 25 L36 35 L32 26 L28 34 L24 27 L20 32 Z';
 const MOUTH_BUSY =
   'M20 13 L25 20 L30 12 L35 21 L40 11 L45 21 L50 13 L50 32 L45 26 L40 34 L35 25 L30 33 L25 26 L20 31 Z';
+/** Sealed lips — hold breath at the top of a chin-up. */
+const MOUTH_HANG_HOLD = 'M27 23 C31 25.2 39 25.2 43 23 C39 24.4 31 24.4 27 23 Z';
+/** Open mouth — breathe at the bottom of a chin-up. */
+const MOUTH_HANG_BREATHE = 'M26 18 C30 30 40 30 44 18 C40 26 30 26 26 18 Z';
 
 // Traced once at module load — the spans never change.
 const IDLE_PATH = spansToOutlinePath(MASCOT_IDLE_SPANS);
 const SOLID_PATH = spansToOutlinePath(MASCOT_SOLID_SPANS);
 
-function cutoutsFor(emotion: MascotEmotion): ReactElement | null {
+function cutoutsFor(emotion: MascotEmotion, hanging = false): ReactElement | null {
+  // Pull-ups swap the emotion mouth for a breath cycle synced to the chin keyframes.
+  if (hanging) {
+    return (
+      <>
+        {eyeCrescents()}
+        <path className="mascot__mouth mascot__mouth--hang-hold" d={MOUTH_HANG_HOLD} />
+        <path className="mascot__mouth mascot__mouth--hang-breathe" d={MOUTH_HANG_BREATHE} />
+      </>
+    );
+  }
   switch (emotion) {
     case 'idle':
       return null;
@@ -302,21 +317,71 @@ function BlinkLids() {
 }
 
 /**
- * Both arms up, gripping the splash card's top border.
- *
- * Hands sit at the top of the viewBox (not above it): the climb parks that edge
- * on the card's 1px border, so the rim is the real border — we never draw a bar.
- * Kept outside `.mascot__body-group` so chin-ups bob only the body.
+ * Cover the silhouette's baked side-arm stubs so a second pair of hands does not
+ * show under the raised arms. Filled with the splash card panel colour.
+ * Lives inside `.mascot__body-group` so it rides the chin-up with the torso.
  */
-function HangArms() {
+function ArmStubCovers() {
+  return (
+    <g className="mascot__arm-stub-covers" aria-hidden="true">
+      <rect className="mascot__arm-stub-cover mascot__arm-stub-cover--left" x="2.5" y="40.5" width="7.5" height="13" rx="1.2" />
+      <rect className="mascot__arm-stub-cover mascot__arm-stub-cover--right" x="60" y="40.5" width="7.5" height="12" rx="1.2" />
+    </g>
+  );
+}
+
+/**
+ * Merge the silhouette's split feet into one dangling column while hanging —
+ * legs together for the chin-ups. Erase uses the card panel colour; the replacement
+ * shape is body-coloured.
+ */
+function LegsTogether() {
+  return (
+    <g className="mascot__legs-together" aria-hidden="true">
+      <rect className="mascot__legs-together-erase" x="20" y="49.5" width="30" height="10" />
+      <path
+        className="mascot__legs-together-shape"
+        fill="currentColor"
+        d="M30 49.5h10v7.2c0 1.9-1.9 3-5 3s-5-1.1-5-3z"
+      />
+    </g>
+  );
+}
+
+/**
+ * Raised arms from the shoulders up toward the rim. Inside the body group so they
+ * tuck toward the fixed hands on each chin-up (reads as arms flexing, not a second
+ * floating pair grown from the head).
+ */
+function HangArmStrokes() {
+  return (
+    <g
+      className="mascot__hang-arm-strokes"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path className="mascot__hang-arm mascot__hang-arm--left" d="M9 39 C5 28 7 14 14 4" />
+      <path className="mascot__hang-arm mascot__hang-arm--right" d="M61 39 C65 28 63 14 56 4" />
+    </g>
+  );
+}
+
+/**
+ * Hands gripping the splash card's top border.
+ *
+ * Sit at the top of the viewBox: the climb parks that edge on the card's 1px
+ * border, so the rim is the real bar — we never draw one. Outside
+ * `.mascot__body-group` so chin-ups bob only the body while the grip stays put.
+ */
+function HangHands() {
   return (
     <g className="mascot__hang-arms" aria-hidden="true">
-      <g fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
-        <path className="mascot__hang-arm mascot__hang-arm--left" d="M22 16 Q15 8 13 2" />
-        <path className="mascot__hang-arm mascot__hang-arm--right" d="M48 16 Q55 8 57 2" />
-      </g>
-      <circle className="mascot__hang-hand mascot__hang-hand--left" cx="13" cy="2" r="2.6" fill="currentColor" />
-      <circle className="mascot__hang-hand mascot__hang-hand--right" cx="57" cy="2" r="2.6" fill="currentColor" />
+      <ellipse className="mascot__hang-hand mascot__hang-hand--left" cx="14" cy="2.4" rx="5.2" ry="2.9" fill="currentColor" />
+      <ellipse className="mascot__hang-hand mascot__hang-hand--right" cx="56" cy="2.4" rx="5.2" ry="2.9" fill="currentColor" />
     </g>
   );
 }
@@ -414,8 +479,9 @@ export function Mascot({
   ]
     .filter(Boolean)
     .join(' ');
-  const cutouts = cutoutsFor(emotion);
-  const isIdle = emotion === 'idle' || cutouts == null;
+  const cutouts = cutoutsFor(emotion, hanging);
+  // Hanging always uses the solid+mask body so raised arms and breath mouths work.
+  const isIdle = !hanging && (emotion === 'idle' || cutouts == null);
   const showWaveArm = !hanging && (emotion === 'wave' || emotion === 'excited');
   const showPhone = scrolling !== undefined;
   // Keep the nudge small — past ~3px the mouth starts to clip the silhouette.
@@ -463,6 +529,10 @@ export function Mascot({
           </>
         )}
 
+        {hanging ? <ArmStubCovers /> : null}
+        {hanging ? <LegsTogether /> : null}
+        {hanging ? <HangArmStrokes /> : null}
+
         <BlinkLids />
 
         {showWaveArm ? (
@@ -478,8 +548,9 @@ export function Mascot({
         Hands sit outside the body group on purpose: the chin-up bobs only the body
         toward the card rim while the grip stays planted on the border. Put them
         inside and the whole sprite floats, which does not read as a pull-up.
+        Arm strokes stay in the body group so they flex toward these hands.
       */}
-      {hanging ? <HangArms /> : null}
+      {hanging ? <HangHands /> : null}
     </svg>
   );
 }
