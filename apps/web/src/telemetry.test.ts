@@ -169,6 +169,27 @@ describe('TelemetrySession timing', () => {
     expect(batches[0].events[0].msSinceOpen).toBe(0);
     expect(batches[0].flushMsSinceOpen).toBe(0);
   });
+
+  it('forwards gfxBackend on progress and end (B18)', () => {
+    const { batches, send } = collector();
+    const session = newSession(send);
+
+    expect(session.record({ type: 'progress', label: 'exit', gfxBackend: 'webgl3d' })).toBe(true);
+    expect(session.record({ type: 'end', outcome: 'won', gfxBackend: 'webgl3d' })).toBe(true);
+    // Unknown backends are stripped, not rejected — older shells stay compatible.
+    expect(session.record({ type: 'end', outcome: 'lost', gfxBackend: 'opengl' as 'webgl' })).toBe(true);
+    session.flush();
+
+    expect(batches[0].events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'progress', label: 'exit', gfxBackend: 'webgl3d' }),
+        expect.objectContaining({ type: 'end', outcome: 'won', gfxBackend: 'webgl3d' }),
+        expect.objectContaining({ type: 'end', outcome: 'lost' }),
+      ]),
+    );
+    const lost = batches[0].events.find((e) => e.type === 'end' && e.outcome === 'lost');
+    expect(lost && 'gfxBackend' in lost ? lost.gfxBackend : undefined).toBeUndefined();
+  });
 });
 
 describe('isPlayTimeAccruing', () => {

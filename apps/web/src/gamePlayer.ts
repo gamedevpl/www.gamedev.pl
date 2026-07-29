@@ -338,6 +338,7 @@ export function useGameTelemetry(slug: string, enabled: boolean, slots?: number)
         label?: string;
         value?: number;
         outcome?: 'won' | 'lost' | 'quit';
+        gfxBackend?: 'canvas2d' | 'webgl' | 'webgl3d';
       };
       if (!data || data.source !== PLAYER) return;
       switch (data.type) {
@@ -350,13 +351,27 @@ export function useGameTelemetry(slug: string, enabled: boolean, slots?: number)
           if (isPlayTimeAccruing(document)) session.record({ type: 'alive', frames: Number(data.frames ?? 0) });
           break;
         case 'progress':
-          session.record({ type: 'progress', label: String(data.label ?? '') });
+          session.record({
+            type: 'progress',
+            label: String(data.label ?? ''),
+            ...(data.gfxBackend === 'canvas2d' || data.gfxBackend === 'webgl' || data.gfxBackend === 'webgl3d'
+              ? { gfxBackend: data.gfxBackend }
+              : {}),
+          });
           break;
         case 'score':
           session.record({ type: 'score', value: Number(data.value) });
           break;
         case 'end':
-          if (data.outcome) session.record({ type: 'end', outcome: data.outcome });
+          if (data.outcome) {
+            session.record({
+              type: 'end',
+              outcome: data.outcome,
+              ...(data.gfxBackend === 'canvas2d' || data.gfxBackend === 'webgl' || data.gfxBackend === 'webgl3d'
+                ? { gfxBackend: data.gfxBackend }
+                : {}),
+            });
+          }
           break;
       }
     }

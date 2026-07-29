@@ -41,6 +41,7 @@ function game(partial: Partial<GameHealth> & { slug: string }): GameHealth {
     winRate: null,
     medianBestScore: null,
     progressLabels: [],
+    gfxBackends: { canvas2d: 0, webgl: 0, webgl3d: 0 },
     ...partial,
   };
 }

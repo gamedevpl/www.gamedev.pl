@@ -62,6 +62,10 @@ const MAX_BACKDATE_MS = 6 * 60 * 60 * 1000;
  * simply fall back to receipt time, which is what every event used to get.
  */
 const offsetField = { msSinceOpen: z.number().int().min(0).max(MAX_SESSION_MS).optional() };
+/** Scene3D / gfx soft vs WebGL — optional on progress/end (games snapshot). */
+const gfxBackendField = {
+  gfxBackend: z.enum(['canvas2d', 'webgl', 'webgl3d']).optional(),
+};
 
 const EventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('game_opened'), slots: z.number().int().min(1).max(8).optional(), ...offsetField }),
@@ -84,10 +88,16 @@ const EventSchema = z.discriminatedUnion('type', [
       .trim()
       .min(1)
       .max(MAX_LABEL_LENGTH * 4),
+    ...gfxBackendField,
     ...offsetField,
   }),
   z.object({ type: z.literal('score'), value: z.number().finite(), ...offsetField }),
-  z.object({ type: z.literal('end'), outcome: z.enum(['won', 'lost', 'quit']), ...offsetField }),
+  z.object({
+    type: z.literal('end'),
+    outcome: z.enum(['won', 'lost', 'quit']),
+    ...gfxBackendField,
+    ...offsetField,
+  }),
 ]);
 
 const RequestSchema = z.object({
@@ -217,11 +227,21 @@ export async function registerTelemetryRoutes(app: FastifyInstance, options: Tel
         case 'alive':
           return { ...base, type: event.type, frames: event.frames };
         case 'progress':
-          return { ...base, type: event.type, label: event.label.slice(0, MAX_LABEL_LENGTH) };
+          return {
+            ...base,
+            type: event.type,
+            label: event.label.slice(0, MAX_LABEL_LENGTH),
+            ...(event.gfxBackend === undefined ? {} : { gfxBackend: event.gfxBackend }),
+          };
         case 'score':
           return { ...base, type: event.type, value: event.value };
         case 'end':
-          return { ...base, type: event.type, outcome: event.outcome };
+          return {
+            ...base,
+            type: event.type,
+            outcome: event.outcome,
+            ...(event.gfxBackend === undefined ? {} : { gfxBackend: event.gfxBackend }),
+          };
         default:
           return { ...base, type: event.type };
       }
