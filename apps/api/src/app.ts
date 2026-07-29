@@ -175,7 +175,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // plugin so /api/mp/sessions sees request.user, and before the beta wall hook
   // so the wall's /api/mp/ws exemption applies to a route that actually exists.
   //
-  // One image runs both roles (docs/store-launch-plan.md T0): with MP_RELAY_URL set this
+  // One image runs both roles (store-launch-plan.md T0, private www.gamedev.pl-ops repo): with MP_RELAY_URL set this
   // process forwards room creation and stops serving the socket; with MP_RELAY_ONLY set it
   // IS the relay. Neither set is the single-process default that local dev and the tests
   // use, so explicit options here always win over env.

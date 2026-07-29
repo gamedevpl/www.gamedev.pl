@@ -10,7 +10,7 @@ Then [`docs/contributing-for-agents.md`](docs/contributing-for-agents.md) for th
 
 - npm-workspaces monorepo: `apps/web`, `apps/api`, `packages/game-generator`, `infra/`, `docs/`.
 - **This repo is public.** Internal docs (GTM strategy, risk register, legal analysis, store
-  accounts, ops readiness, creator-experience review) live in the **private
+  accounts, mobile/store launch plans, ops readiness, creator-experience review) live in the **private
   [`www.gamedev.pl-ops`](https://github.com/gamedevpl/www.gamedev.pl-ops) repo — required
   context for planning/strategy/legal/ops work. Read
   [`.claude/skills/internal-ops-repo/SKILL.md`](.claude/skills/internal-ops-repo/SKILL.md)

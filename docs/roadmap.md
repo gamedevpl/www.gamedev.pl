@@ -156,7 +156,7 @@ which is the authority on its detail:
 | Live agent build channel  | ✅ agent posts progress/screenshots and gets queued creator requests back                        | [agent-live-channel-plan.md](./agent-live-channel-plan.md)                                                                  |
 | Creator experience review | ✅ backlog from a real three-hour session, closed out                                            | [creator-experience-review.md](https://github.com/gamedevpl/www.gamedev.pl-ops/blob/main/docs/creator-experience-review.md) |
 | Multiplayer party mode    | 🚧 relay + party module + seed games built; the single-instance cap is its price (see Phase 5)   | [multiplayer-plan.md](./multiplayer-plan.md)                                                                                |
-| Mobile                    | 🚧 mobile web ✅ + PWA ✅ (device-verified, iOS push works); store apps need Apple/Play accounts | [mobile-app-plan.md](./mobile-app-plan.md)                                                                                  |
+| Mobile                    | 🚧 mobile web ✅ + PWA ✅ (device-verified, iOS push works); store apps need Apple/Play accounts | [mobile-app-plan.md](https://github.com/gamedevpl/www.gamedev.pl-ops/blob/main/docs/mobile-app-plan.md)                     |
 
 ## Phase 6 — Improvement loop 📋
 

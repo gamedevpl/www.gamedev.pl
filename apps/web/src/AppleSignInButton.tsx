@@ -7,7 +7,7 @@ import { useAuth } from './AuthContext.js';
  *
  * Required beside Google by App Store guideline 4.8 before the M2 store apps can ship,
  * and offered on the web rather than app-only so an Apple-account creator can still reach
- * their games from a desktop browser (mobile-app-plan.md, open question 2).
+ * their games from a desktop browser (mobile-app-plan.md in the private ops repo, open question 2).
  *
  * Unlike Google's widget this draws its own button. Apple's HIG permits that as long as
  * the mark, the wording and the proportions are theirs, and it is what lets the control

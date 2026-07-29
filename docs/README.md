@@ -58,8 +58,6 @@ survives only in this repo's early history.
 | [`deployment.md`](./deployment.md)                                 | Minimal delivery shape for the app, games origin, and submission API                                   |
 | [`container-orchestration.md`](./container-orchestration.md)       | **Archived** design for the removed self-hosted generation direction                                   |
 | [`remix-to-pr.md`](./remix-to-pr.md)                               | Spec for the player-remix → pull-request feature                                                       |
-| [`mobile-app-plan.md`](./mobile-app-plan.md)                       | iOS/Android strategy: mobile web → PWA → Capacitor store apps; games touch contract                    |
-| [`store-launch-plan.md`](./store-launch-plan.md)                   | Getting onto the App Store and Play: guideline 4.7 compliance, age rating, universal links, Capacitor  |
 | [`notifications-plan.md`](./notifications-plan.md)                 | Notify creators/players of transitions: detection sweep, per-user storage, in-app → email → push       |
 | [`creator-qa-plan.md`](./creator-qa-plan.md)                       | Clarifying-questions pass before spec freeze — raises the hit rate of the one-shot agent run           |
 | [`improvement-loop-plan.md`](./improvement-loop-plan.md)           | After publish: player signals → per-game scorecard → agent-assisted fixes and suggestions              |
@@ -84,7 +82,8 @@ Strategy, risk, legal, and ops docs are **not in this folder**. They live in the
 [`www.gamedev.pl-ops`](https://github.com/gamedevpl/www.gamedev.pl-ops) repo
 ([its docs index](https://github.com/gamedevpl/www.gamedev.pl-ops/blob/main/docs/README.md)):
 `gtm-plan.md`, `risks-and-open-questions.md`, `legal-compliance-plan.md`,
-`operational-readiness-plan.md`, `store-accounts-setup.md`, `creator-experience-review.md`.
+`operational-readiness-plan.md`, `store-accounts-setup.md`, `creator-experience-review.md`,
+`mobile-app-plan.md`, `store-launch-plan.md`.
 They moved there in 2026-07 and remain **required context** for planning and
 strategy/ops/legal work — see
 [`internal-ops-repo`](../.claude/skills/internal-ops-repo/SKILL.md) for access and the

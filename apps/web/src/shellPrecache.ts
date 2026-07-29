@@ -1,5 +1,5 @@
 /**
- * The build-time half of the installed app's shell cache (docs/mobile-app-plan.md M1).
+ * The build-time half of the installed app's shell cache (mobile-app-plan.md M1 (private www.gamedev.pl-ops repo)).
  *
  * `public/sw.js` ships with a placeholder build manifest so it stays plain, runnable
  * JavaScript in dev, where there is no hashed bundle to precache and caching Vite's

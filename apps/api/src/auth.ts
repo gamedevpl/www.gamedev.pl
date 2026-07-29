@@ -190,7 +190,7 @@ export interface AuthPluginOptions {
   /**
    * Sign in with Apple. Absent in every environment where the owner has not created a
    * Services ID yet, which is why `/api/auth/apple` answers 503 rather than assuming a
-   * verifier exists — the store apps (mobile-app-plan.md M2) need this, guideline 4.8
+   * verifier exists — the store apps (mobile-app-plan.md M2, private ops repo) need this, guideline 4.8
    * requires it beside Google, and the web app gets it so an Apple-account creator can
    * still reach their games from a desktop.
    */

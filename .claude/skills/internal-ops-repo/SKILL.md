@@ -1,6 +1,6 @@
 ---
 name: internal-ops-repo
-description: The private www.gamedev.pl-ops repo holds the internal docs that no longer live in this public repo — GTM/go-to-market strategy, the risk register (risks-and-open-questions), legal compliance analysis, store account checklists, operational readiness plans, and the creator-experience review. Use whenever work touches planning, prioritisation, launch stages, legal/compliance, store submission, ops/monitoring gates, or product risks — or whenever a doc referenced somewhere cannot be found in docs/. Also covers the rules for not leaking private content into this public repo.
+description: The private www.gamedev.pl-ops repo holds the internal docs that no longer live in this public repo — GTM/go-to-market strategy, the risk register (risks-and-open-questions), legal compliance analysis, store account checklists, the mobile app and store launch plans, operational readiness plans, and the creator-experience review. Use whenever work touches planning, prioritisation, launch stages, legal/compliance, mobile/PWA/store submission, ops/monitoring gates, or product risks — or whenever a doc referenced somewhere cannot be found in docs/. Also covers the rules for not leaking private content into this public repo.
 ---
 
 # The private ops repo (`www.gamedev.pl-ops`)
@@ -26,6 +26,11 @@ accepted; future edits happen there):
 - `docs/operational-readiness-plan.md` — backup/monitoring/observability gates per GTM
   stage.
 - `docs/store-accounts-setup.md` — owner checklist for Apple/Play accounts and keys.
+- `docs/mobile-app-plan.md` — iOS/Android strategy (mobile web → PWA → store apps).
+  Code comments in `pwa.ts`, `InstallPrompt.tsx`, `shellPrecache.ts`, `App.tsx`,
+  `AppleSignInButton.tsx`, `auth.ts` refer to it.
+- `docs/store-launch-plan.md` — App Store / Play submission plan. Referenced from
+  `mp/protocol.ts`, `app.ts`, `mp-relay.ts` (the T0 relay split).
 - `docs/creator-experience-review.md` — internal critique of the creation flow.
 
 Start at its [`docs/README.md`](https://github.com/gamedevpl/www.gamedev.pl-ops/blob/main/docs/README.md);
