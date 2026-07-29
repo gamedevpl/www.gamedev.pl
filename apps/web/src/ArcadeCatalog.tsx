@@ -4,8 +4,11 @@ import { catalogMediaUrl, isPlatformAuthor, type CatalogEntry } from './catalog.
 import {
   CATALOG_SORT_MODES,
   DEFAULT_CATALOG_SORT,
+  filterUnplayedEntries,
+  readCatalogNotPlayedFilter,
   readCatalogSortMode,
   sortCatalogEntries,
+  writeCatalogNotPlayedFilter,
   writeCatalogSortMode,
   type CatalogSortMode,
   type CatalogSortSignals,
@@ -297,6 +300,11 @@ export function ArcadeCatalog({
   const [sortMode, setSortMode] = useState<CatalogSortMode>(() =>
     typeof localStorage === 'undefined' ? DEFAULT_CATALOG_SORT : readCatalogSortMode(),
   );
+  const [notPlayedOnly, setNotPlayedOnly] = useState(() =>
+    typeof localStorage === 'undefined' ? false : readCatalogNotPlayedFilter(),
+  );
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  const sortMenuRef = useRef<HTMLDivElement | null>(null);
   const [signals, setSignals] = useState<CatalogSortSignals>(EMPTY_SIGNALS);
 
   useEffect(() => {
@@ -319,37 +327,100 @@ export function ArcadeCatalog({
     };
   }, [catalogStatus, catalogEntries, recommendationsRefreshKey]);
 
-  const orderedEntries = useMemo(
-    () => sortCatalogEntries(catalogEntries, sortMode, signals),
-    [catalogEntries, sortMode, signals],
-  );
+  // Close the sort menu on outside tap or Escape — phones have no hover to dismiss it.
+  useEffect(() => {
+    if (!sortMenuOpen) return;
+    const onPointer = (event: PointerEvent) => {
+      if (sortMenuRef.current && !sortMenuRef.current.contains(event.target as Node)) {
+        setSortMenuOpen(false);
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSortMenuOpen(false);
+    };
+    const timer = window.setTimeout(() => {
+      document.addEventListener('pointerdown', onPointer);
+    }, 0);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener('pointerdown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [sortMenuOpen]);
+
+  const orderedEntries = useMemo(() => {
+    const filtered = notPlayedOnly
+      ? filterUnplayedEntries(catalogEntries, signals.affinityLastPlayed)
+      : catalogEntries;
+    return sortCatalogEntries(filtered, sortMode, signals);
+  }, [catalogEntries, sortMode, notPlayedOnly, signals]);
 
   function handleSortChange(mode: CatalogSortMode) {
     setSortMode(mode);
     writeCatalogSortMode(mode);
+    setSortMenuOpen(false);
   }
+
+  function handleNotPlayedToggle() {
+    setNotPlayedOnly((prev) => {
+      const next = !prev;
+      writeCatalogNotPlayedFilter(next);
+      return next;
+    });
+  }
+
+  const showControls = catalogStatus === 'ready' && catalogEntries.length > 0;
+  const emptyMessage =
+    notPlayedOnly && catalogEntries.length > 0 ? t('catalog.emptyNotPlayed') : t('catalog.empty');
 
   return (
     <section id="arcade" className="arcade-section">
       <div className="arcade-header">
         <h2 className="arcade-title">{t('catalog.title')}</h2>
-        {catalogStatus === 'ready' && catalogEntries.length > 0 ? (
-          <div className="catalog-sort" role="group" aria-label={t('catalog.sortLabel')}>
-            {CATALOG_SORT_MODES.map((mode) => (
+        {showControls ? (
+          <div className="catalog-toolbar" role="group" aria-label={t('catalog.toolbarLabel')}>
+            <button
+              type="button"
+              className={`catalog-filter-btn${notPlayedOnly ? ' is-active' : ''}`}
+              aria-pressed={notPlayedOnly}
+              onClick={handleNotPlayedToggle}
+            >
+              {t('catalog.filter.notPlayed')}
+            </button>
+            <div className={`catalog-sort-menu${sortMenuOpen ? ' is-open' : ''}`} ref={sortMenuRef}>
               <button
-                key={mode}
                 type="button"
-                className={`catalog-sort-option${sortMode === mode ? ' is-active' : ''}`}
-                aria-pressed={sortMode === mode}
-                onClick={(event) => {
-                  handleSortChange(mode);
-                  // Keep the active chip in view on the horizontal phone strip.
-                  event.currentTarget.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' });
-                }}
+                className="catalog-sort-trigger"
+                aria-expanded={sortMenuOpen}
+                aria-haspopup="menu"
+                aria-label={t('catalog.sortLabel')}
+                onClick={() => setSortMenuOpen((open) => !open)}
               >
-                {t(`catalog.sort.${mode}`)}
+                <span className="catalog-sort-trigger-label">{t(`catalog.sort.${sortMode}`)}</span>
+                <span className="catalog-sort-caret" aria-hidden="true">
+                  ▾
+                </span>
               </button>
-            ))}
+              {sortMenuOpen ? (
+                <ul className="catalog-sort-panel" role="menu" aria-label={t('catalog.sortLabel')}>
+                  {CATALOG_SORT_MODES.map((mode) => (
+                    <li key={mode} role="none">
+                      <button
+                        type="button"
+                        role="menuitemradio"
+                        className={`catalog-sort-option${sortMode === mode ? ' is-active' : ''}`}
+                        aria-checked={sortMode === mode}
+                        onClick={() => handleSortChange(mode)}
+                      >
+                        {sortMode === mode ? <PixelIcon name="check" size={12} /> : <span className="catalog-sort-check-spacer" />}
+                        <span className="catalog-sort-option-label">{t(`catalog.sort.${mode}`)}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
           </div>
         ) : null}
       </div>
@@ -369,7 +440,12 @@ export function ArcadeCatalog({
         </MascotMoment>
       ) : orderedEntries.length === 0 ? (
         <MascotMoment className="catalog-state" emotion="curious" size={64} title={t('mascot.curiousAlt')}>
-          <p>{t('catalog.empty')}</p>
+          <p>{emptyMessage}</p>
+          {notPlayedOnly && catalogEntries.length > 0 ? (
+            <button type="button" className="secondary-btn" onClick={handleNotPlayedToggle}>
+              {t('catalog.clearNotPlayedFilter')}
+            </button>
+          ) : null}
         </MascotMoment>
       ) : (
         <div className="catalog-grid">

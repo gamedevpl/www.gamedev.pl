@@ -1,26 +1,23 @@
 import type { CatalogEntry } from './catalog.js';
 import { getRecentPlays } from './recentPlays.js';
 
-export type CatalogSortMode =
-  | 'recommended'
-  | 'newest'
-  | 'most_played'
-  | 'last_played'
-  | 'not_played'
-  | 'alpha';
+export type CatalogSortMode = 'recommended' | 'newest' | 'most_played' | 'last_played' | 'alpha';
 
 export const CATALOG_SORT_MODES: CatalogSortMode[] = [
   'recommended',
   'newest',
   'most_played',
   'last_played',
-  'not_played',
   'alpha',
 ];
 
 export const DEFAULT_CATALOG_SORT: CatalogSortMode = 'recommended';
 
-const STORAGE_KEY = 'gdpl.catalogSort';
+const SORT_STORAGE_KEY = 'gdpl.catalogSort';
+const NOT_PLAYED_FILTER_KEY = 'gdpl.catalogNotPlayed';
+
+/** Legacy sort value from when Not played was a sort mode, not a filter. */
+const LEGACY_NOT_PLAYED_SORT = 'not_played';
 
 export function isCatalogSortMode(value: unknown): value is CatalogSortMode {
   return typeof value === 'string' && (CATALOG_SORT_MODES as string[]).includes(value);
@@ -28,7 +25,8 @@ export function isCatalogSortMode(value: unknown): value is CatalogSortMode {
 
 export function readCatalogSortMode(): CatalogSortMode {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(SORT_STORAGE_KEY);
+    if (raw === LEGACY_NOT_PLAYED_SORT) return DEFAULT_CATALOG_SORT;
     return isCatalogSortMode(raw) ? raw : DEFAULT_CATALOG_SORT;
   } catch {
     return DEFAULT_CATALOG_SORT;
@@ -37,7 +35,35 @@ export function readCatalogSortMode(): CatalogSortMode {
 
 export function writeCatalogSortMode(mode: CatalogSortMode): void {
   try {
-    localStorage.setItem(STORAGE_KEY, mode);
+    localStorage.setItem(SORT_STORAGE_KEY, mode);
+  } catch {
+    // Private mode — preference simply does not persist.
+  }
+}
+
+/**
+ * Whether the catalog shows only games this visitor has not opened.
+ * Migrates the old `not_played` sort preference into this filter once.
+ */
+export function readCatalogNotPlayedFilter(): boolean {
+  try {
+    const stored = localStorage.getItem(NOT_PLAYED_FILTER_KEY);
+    if (stored === '1') return true;
+    if (stored === '0') return false;
+    if (localStorage.getItem(SORT_STORAGE_KEY) === LEGACY_NOT_PLAYED_SORT) {
+      localStorage.setItem(NOT_PLAYED_FILTER_KEY, '1');
+      localStorage.setItem(SORT_STORAGE_KEY, DEFAULT_CATALOG_SORT);
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+export function writeCatalogNotPlayedFilter(enabled: boolean): void {
+  try {
+    localStorage.setItem(NOT_PLAYED_FILTER_KEY, enabled ? '1' : '0');
   } catch {
     // Private mode — preference simply does not persist.
   }
@@ -76,6 +102,15 @@ export function playedSlugSet(affinityLastPlayed: ReadonlyMap<string, string>): 
   const played = new Set<string>(affinityLastPlayed.keys());
   for (const slug of getRecentPlays()) played.add(slug);
   return played;
+}
+
+/** Keep only games the visitor has not opened yet. */
+export function filterUnplayedEntries<T extends { slug: string }>(
+  entries: T[],
+  affinityLastPlayed: ReadonlyMap<string, string>,
+): T[] {
+  const played = playedSlugSet(affinityLastPlayed);
+  return entries.filter((entry) => !played.has(entry.slug));
 }
 
 /**
@@ -121,23 +156,6 @@ function orderAlpha<T extends { title: string; slug: string }>(entries: T[]): T[
   );
 }
 
-/**
- * Unplayed games first (recommended order among them), then already-played games
- * (most recently played last so the fresh stuff stays on top).
- */
-function orderByNotPlayed<T extends { slug: string }>(
-  entries: T[],
-  signals: CatalogSortSignals,
-): T[] {
-  const played = playedSlugSet(signals.affinityLastPlayed);
-  const unplayed = entries.filter((entry) => !played.has(entry.slug));
-  const already = entries.filter((entry) => played.has(entry.slug));
-  return [
-    ...orderBySlugList(unplayed, signals.recommended),
-    ...orderByLastPlayed(already, signals.affinityLastPlayed),
-  ];
-}
-
 export function sortCatalogEntries(
   entries: CatalogEntry[],
   mode: CatalogSortMode,
@@ -152,8 +170,6 @@ export function sortCatalogEntries(
       return orderByMostPlayed(entries, signals.sessions);
     case 'last_played':
       return orderByLastPlayed(entries, signals.affinityLastPlayed);
-    case 'not_played':
-      return orderByNotPlayed(entries, signals);
     case 'alpha':
       return orderAlpha(entries);
     default:

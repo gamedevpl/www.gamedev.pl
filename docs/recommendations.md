@@ -2,7 +2,8 @@
 
 > Status: ✅ Built (2026-07-29). The home-page arcade grid can be sorted several
 > ways. **Recommended** is the default; players can also pick Newest, Most played,
-> Last played, Not played, or A–Z.
+> Last played, or A–Z. **Not played** is a separate filter (hide games already
+> opened), not a sort mode.
 
 ## Sort modes
 
@@ -12,11 +13,17 @@
 | Newest | Submission `publishedAt` when known; otherwise reverse catalog order |
 | Most played | Scorecard session counts |
 | Last played | Signed-in play affinity timestamps, else device-local recent plays |
-| Not played | Unplayed first (recommended order), then already-played |
 | A–Z | Title, case-insensitive |
 
-Preference is remembered in `localStorage` (`gdpl.catalogSort`). On phones the sort
-control is a full-width swipeable strip under the Games heading.
+## Filters
+
+| Filter | Effect |
+| ------ | ------ |
+| Not played | Show only games with no play affinity and no device-local recent open |
+
+Sort preference is remembered in `localStorage` (`gdpl.catalogSort`); the Not played
+filter in `gdpl.catalogNotPlayed`. Controls sit on one row beside the Games heading:
+filter toggle + sort dropdown (menu closes on outside tap / Escape).
 
 ## Signals & privacy
 
@@ -52,6 +59,6 @@ games-repo order rather than inventing a shuffle.
 
 ## UI
 
-[`ArcadeCatalog`](../apps/web/src/ArcadeCatalog.tsx) shows a sort control next to the
-Games heading and reorders the same grid. Sort logic lives in
-[`catalogSort.ts`](../apps/web/src/catalogSort.ts).
+[`ArcadeCatalog`](../apps/web/src/ArcadeCatalog.tsx) shows a Not played filter toggle
+and a sort dropdown beside the Games heading, then reorders/filters the same grid.
+Logic lives in [`catalogSort.ts`](../apps/web/src/catalogSort.ts).

@@ -149,12 +149,17 @@
     "worldBadge": "Wspólny świat",
     "savesBadge": "Zapisuje postępy",
     "sortLabel": "Sortuj gry",
+    "toolbarLabel": "Filtry i sortowanie katalogu",
+    "filter": {
+      "notPlayed": "Niegrane"
+    },
+    "emptyNotPlayed": "Grałeś już we wszystkie gry tutaj.",
+    "clearNotPlayedFilter": "Pokaż wszystkie gry",
     "sort": {
       "recommended": "Polecane",
       "newest": "Najnowsze",
       "most_played": "Najczęściej grane",
       "last_played": "Ostatnio grane",
-      "not_played": "Niegrane",
       "alpha": "A–Z"
     }
   },
