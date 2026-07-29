@@ -25,10 +25,9 @@ export const GAME_KIT_MODULES = [
   'commons',
   'presence',
   'mascot',
-  // P3's zone module (docs/persistent-world-plan.md). Opt-in and, at ~9 KiB transpiled,
-  // charged to the author budget the way `save` and `commons` are rather than to the
-  // platform allowances — so MAX_PROJECT_BYTES does not move for it. Only `gfx3d` was
-  // large enough to need a reserve of its own.
+  // P3's zone module (docs/persistent-world-plan.md). Opt-in, and since games-repo #163
+  // it has a reserve of its own rather than coming out of the author budget — see the
+  // note on GAMEKIT_PLATFORM_BYTES for what changed that.
   'zone',
 ] as const;
 
@@ -42,9 +41,16 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
  * music, touch hint, progress, universal input, pointer poll, draw surface,
  * pointer release, host pause, mascot draw, headroom, gfx3d, look, spatial, …). Together with
  * {@link GAME_BUDGET_BYTES} this must equal games-repo `MAX_BUNDLE_BYTES`
- * (429_687, matching games-repo `shared/assemble-contract.json` `maxProjectBytes`). Not a round KiB.
+ * (441_687, matching games-repo `shared/assemble-contract.json` `maxProjectBytes`). Not a round KiB.
  *
- * Last moved by games-repo #124 (Scene3D B11 scene management): `gfx3d`
+ * Last moved by games-repo #163: +12_000 for a named `zone` reserve, 429_687 → 441_687.
+ * The module shipped charged to the author budget, on the reasoning that it is small and
+ * opt-in the way `save` and `commons` are. biplane-skirmish disproved that on arrival —
+ * the first published game to select `zone` landed 20 bytes under the ceiling, which made
+ * the next byte spent anywhere in the shared kit a break in a live game rather than a cost
+ * to the author who spent it. That is the same argument `gfx3d` has a reserve for.
+ *
+ * Before that, games-repo #124 (Scene3D B11 scene management): `gfx3d`
  * 80_000 → 96_000 (+16_000, 413_687 → 429_687).
  *
  * Before that, games-repo #123 (Scene3D B10 effects): `gfx3d` 56_000 → 80_000
@@ -76,7 +82,7 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
  * Before that, games-repo #102: +679 (`mascotDraw`) and +75_237 (`headroom`) — 30% of
  * the 250_790 ceiling — plus earlier host-pause / touch steer raises.
  */
-export const GAMEKIT_PLATFORM_BYTES = 224_887;
+export const GAMEKIT_PLATFORM_BYTES = 236_887;
 
 /** Combined html+js+css size cap — must match games-repo `MAX_BUNDLE_BYTES`. */
 export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
