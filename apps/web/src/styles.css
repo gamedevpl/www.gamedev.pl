@@ -5231,70 +5231,41 @@ body.player-open {
 }
 
 /*
- * Breath with the chin: sealed lips at the top of each rep, open mouth on the way
- * down. Keyframe times match `mascot-pullups-chin`. Opacity in the SVG mask
- * controls how hard each mouth punches the face.
+ * Breath with the chin: scale the mouth flat at each chin-up peak (hold breath),
+ * open it on the way down. One path + scaleY — dual-opacity cutouts inside an SVG
+ * mask flipped which state won at the peak in Chromium. Times match
+ * `mascot-pullups-chin`.
  */
-.mascot--hanging .mascot__mouth--hang-hold {
-  opacity: 0;
-  animation: mascot-hang-mouth-hold 3.6s ease-in-out;
+.mascot--hanging .mascot__mouth--hang-breath {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: mascot-hang-mouth-breath 3.6s ease-in-out;
 }
 
-.mascot--hanging .mascot__mouth--hang-breathe {
-  opacity: 1;
-  animation: mascot-hang-mouth-breathe 3.6s ease-in-out;
-}
-
-@keyframes mascot-hang-mouth-hold {
+@keyframes mascot-hang-mouth-breath {
   0%,
   14% {
-    opacity: 0;
+    transform: scaleY(1);
   }
-  /* Rep tops — hold breath. */
+  /* Chin-up peaks — seal lips, hold breath. */
   24% {
-    opacity: 1;
+    transform: scaleY(0.12);
   }
   32% {
-    opacity: 0;
+    transform: scaleY(1);
   }
   44% {
-    opacity: 1;
+    transform: scaleY(0.12);
   }
   52% {
-    opacity: 0;
+    transform: scaleY(1);
   }
   64% {
-    opacity: 1;
+    transform: scaleY(0.12);
   }
   74%,
   100% {
-    opacity: 0;
-  }
-}
-
-@keyframes mascot-hang-mouth-breathe {
-  0%,
-  14% {
-    opacity: 1;
-  }
-  24% {
-    opacity: 0;
-  }
-  32% {
-    opacity: 1;
-  }
-  44% {
-    opacity: 0;
-  }
-  52% {
-    opacity: 1;
-  }
-  64% {
-    opacity: 0;
-  }
-  74%,
-  100% {
-    opacity: 1;
+    transform: scaleY(1);
   }
 }
 

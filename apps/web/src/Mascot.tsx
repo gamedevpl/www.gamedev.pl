@@ -212,9 +212,7 @@ const MOUTH_CURIOUS =
   'M20 13 L24 20 L28 12 L32 21 L36 11 L40 21 L44 12 L48 20 L52 13 L52 32 L48 26 L44 34 L40 25 L36 35 L32 26 L28 34 L24 27 L20 32 Z';
 const MOUTH_BUSY =
   'M20 13 L25 20 L30 12 L35 21 L40 11 L45 21 L50 13 L50 32 L45 26 L40 34 L35 25 L30 33 L25 26 L20 31 Z';
-/** Sealed lips — hold breath at the top of a chin-up. */
-const MOUTH_HANG_HOLD = 'M27 23 C31 25.2 39 25.2 43 23 C39 24.4 31 24.4 27 23 Z';
-/** Open mouth — breathe at the bottom of a chin-up. */
+/** Open mouth — scaled flat in CSS to seal the lips at each chin-up peak. */
 const MOUTH_HANG_BREATHE = 'M26 18 C30 30 40 30 44 18 C40 26 30 26 26 18 Z';
 
 // Traced once at module load — the spans never change.
@@ -222,13 +220,14 @@ const IDLE_PATH = spansToOutlinePath(MASCOT_IDLE_SPANS);
 const SOLID_PATH = spansToOutlinePath(MASCOT_SOLID_SPANS);
 
 function cutoutsFor(emotion: MascotEmotion, hanging = false): ReactElement | null {
-  // Pull-ups swap the emotion mouth for a breath cycle synced to the chin keyframes.
+  // Pull-ups: one mouth shape, CSS scaleY seals it at chin-up peaks (hold breath)
+  // and opens it on the way down (breathe). Dual-opacity cutouts inside SVG masks
+  // were unreliable about which state won at the peak.
   if (hanging) {
     return (
       <>
         {eyeCrescents()}
-        <path className="mascot__mouth mascot__mouth--hang-hold" d={MOUTH_HANG_HOLD} />
-        <path className="mascot__mouth mascot__mouth--hang-breathe" d={MOUTH_HANG_BREATHE} />
+        <path className="mascot__mouth mascot__mouth--hang-breath" d={MOUTH_HANG_BREATHE} />
       </>
     );
   }
@@ -338,11 +337,11 @@ function ArmStubCovers() {
 function LegsTogether() {
   return (
     <g className="mascot__legs-together" aria-hidden="true">
-      <rect className="mascot__legs-together-erase" x="20" y="49.5" width="30" height="10" />
+      <rect className="mascot__legs-together-erase" x="19.5" y="49" width="31" height="11" />
       <path
         className="mascot__legs-together-shape"
         fill="currentColor"
-        d="M30 49.5h10v7.2c0 1.9-1.9 3-5 3s-5-1.1-5-3z"
+        d="M29.5 49h11v8c0 2.1-2.1 3.2-5.5 3.2S29.5 59.1 29.5 57z"
       />
     </g>
   );
