@@ -147,10 +147,17 @@
     "remix": "Zremiksuj",
     "platformAuthor": "gamedev.pl",
     "worldBadge": "Wspólny świat",
-    "savesBadge": "Zapisuje postępy"
+    "savesBadge": "Zapisuje postępy",
+    "sortLabel": "Sortuj gry",
+    "sort": {
+      "recommended": "Polecane",
+      "newest": "Najnowsze",
+      "most_played": "Najczęściej grane",
+      "last_played": "Ostatnio grane",
+      "alpha": "A–Z"
+    }
   },
   "recommendations": {
-    "sortedSubtitle": "Ułożone według tego, w co grasz, i tego, przy czym inni zostają.",
     "reasonContinue": "Kontynuuj grę",
     "reasonForYou": "Pasuje do Twoich gier",
     "reasonBecauseYouPlayed": "Bo grałeś w podobne",

@@ -5,6 +5,13 @@ export interface RecommendationItem {
   reason: RecommendationReason;
 }
 
+export interface CatalogSortPayload {
+  items: RecommendationItem[];
+  popularity: Array<{ slug: string; sessions: number }>;
+  lastPlayed: Array<{ slug: string; lastPlayedAt: string }>;
+  newest: string[];
+}
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
 const REASONS = new Set<RecommendationReason>(['popular', 'for_you', 'because_you_played', 'continue']);
@@ -24,19 +31,66 @@ function parseItems(body: unknown): RecommendationItem[] {
   });
 }
 
-export async function fetchRecommendations(recent: string[] = []): Promise<RecommendationItem[]> {
+function parsePopularity(body: unknown): Array<{ slug: string; sessions: number }> {
+  if (typeof body !== 'object' || body === null || !Array.isArray((body as { popularity?: unknown }).popularity)) {
+    return [];
+  }
+  return (body as { popularity: unknown[] }).popularity.flatMap((item) => {
+    if (typeof item !== 'object' || item === null) return [];
+    const slug = (item as { slug?: unknown }).slug;
+    const sessions = (item as { sessions?: unknown }).sessions;
+    if (typeof slug !== 'string' || typeof sessions !== 'number' || !Number.isFinite(sessions)) return [];
+    return [{ slug, sessions: Math.max(0, Math.floor(sessions)) }];
+  });
+}
+
+function parseLastPlayed(body: unknown): Array<{ slug: string; lastPlayedAt: string }> {
+  if (typeof body !== 'object' || body === null || !Array.isArray((body as { lastPlayed?: unknown }).lastPlayed)) {
+    return [];
+  }
+  return (body as { lastPlayed: unknown[] }).lastPlayed.flatMap((item) => {
+    if (typeof item !== 'object' || item === null) return [];
+    const slug = (item as { slug?: unknown }).slug;
+    const lastPlayedAt = (item as { lastPlayedAt?: unknown }).lastPlayedAt;
+    if (typeof slug !== 'string' || typeof lastPlayedAt !== 'string' || !lastPlayedAt) return [];
+    return [{ slug, lastPlayedAt }];
+  });
+}
+
+function parseNewest(body: unknown): string[] {
+  if (typeof body !== 'object' || body === null || !Array.isArray((body as { newest?: unknown }).newest)) {
+    return [];
+  }
+  return (body as { newest: unknown[] }).newest.filter(
+    (slug): slug is string => typeof slug === 'string' && /^[a-z0-9][a-z0-9-]*$/.test(slug),
+  );
+}
+
+export async function fetchCatalogSortSignals(recent: string[] = []): Promise<CatalogSortPayload> {
   const params = new URLSearchParams();
   if (recent.length > 0) params.set('recent', recent.slice(0, 8).join(','));
   const query = params.toString();
+  const empty: CatalogSortPayload = { items: [], popularity: [], lastPlayed: [], newest: [] };
   const response = await fetch(`${API_BASE}/api/recommendations${query ? `?${query}` : ''}`, {
     credentials: 'include',
   });
-  if (!response.ok) return [];
+  if (!response.ok) return empty;
   try {
-    return parseItems(await response.json());
+    const body: unknown = await response.json();
+    return {
+      items: parseItems(body),
+      popularity: parsePopularity(body),
+      lastPlayed: parseLastPlayed(body),
+      newest: parseNewest(body),
+    };
   } catch {
-    return [];
+    return empty;
   }
+}
+
+/** @deprecated Prefer fetchCatalogSortSignals — kept for call sites that only need ranking. */
+export async function fetchRecommendations(recent: string[] = []): Promise<RecommendationItem[]> {
+  return (await fetchCatalogSortSignals(recent)).items;
 }
 
 /**

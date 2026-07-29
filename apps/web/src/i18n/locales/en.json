@@ -147,10 +147,17 @@
     "remix": "Remix Game",
     "platformAuthor": "gamedev.pl",
     "worldBadge": "Shared world",
-    "savesBadge": "Saves progress"
+    "savesBadge": "Saves progress",
+    "sortLabel": "Sort games",
+    "sort": {
+      "recommended": "Recommended",
+      "newest": "Newest",
+      "most_played": "Most played",
+      "last_played": "Last played",
+      "alpha": "A–Z"
+    }
   },
   "recommendations": {
-    "sortedSubtitle": "Sorted from what you play and what others stick with.",
     "reasonContinue": "Continue playing",
     "reasonForYou": "Matches what you play",
     "reasonBecauseYouPlayed": "Because you played similar games",
