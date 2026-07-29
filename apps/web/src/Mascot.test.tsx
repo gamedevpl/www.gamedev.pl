@@ -223,10 +223,9 @@ describe('Mascot', () => {
     });
     expect(container.querySelector('.mascot__hang-arms')).not.toBeNull();
     expect(container.querySelector('.mascot__hang-arm-strokes')).not.toBeNull();
-    expect(container.querySelector('.mascot__arm-stub-covers')).not.toBeNull();
     expect(container.querySelector('.mascot__legs-together')).not.toBeNull();
+    expect(container.querySelector('.mascot__mouth-seal')).not.toBeNull();
     expect(container.querySelector('.mascot__mouth--hang-breath')).not.toBeNull();
-    expect(container.querySelector('.mascot__mouth--hang-hold')).toBeNull();
     // Arms flex with the body; only the grip hands sit outside.
     expect(container.querySelector('.mascot__body-group .mascot__hang-arm-strokes')).not.toBeNull();
     expect(container.querySelector('.mascot__body-group .mascot__legs-together')).not.toBeNull();
@@ -239,8 +238,8 @@ describe('Mascot', () => {
     });
     expect(container.querySelector('.mascot__hang-arms')).toBeNull();
     expect(container.querySelector('.mascot__hang-arm-strokes')).toBeNull();
-    expect(container.querySelector('.mascot__arm-stub-covers')).toBeNull();
     expect(container.querySelector('.mascot__legs-together')).toBeNull();
+    expect(container.querySelector('.mascot__mouth-seal')).toBeNull();
     expect(container.querySelector('.mascot__wave-arm')).not.toBeNull();
 
     await act(async () => {
@@ -533,7 +532,7 @@ describe('InteractiveMascot', () => {
     expect(button.classList.contains('mascot-interactive--pullups')).toBe(true);
     expect(container.querySelector('.mascot__hang-arms')).not.toBeNull();
     expect(container.querySelector('.mascot__hang-arm-strokes')).not.toBeNull();
-    expect(container.querySelector('.mascot__mouth--hang-breath')).not.toBeNull();
+    expect(container.querySelector('.mascot__mouth-seal')).not.toBeNull();
     expect(container.querySelector('.mascot--proud')).not.toBeNull();
     // Hands are outside the body group so chin-ups can bob the body alone.
     expect(container.querySelector('.mascot__body-group .mascot__hang-arms')).toBeNull();

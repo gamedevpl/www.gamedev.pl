@@ -212,7 +212,7 @@ const MOUTH_CURIOUS =
   'M20 13 L24 20 L28 12 L32 21 L36 11 L40 21 L44 12 L48 20 L52 13 L52 32 L48 26 L44 34 L40 25 L36 35 L32 26 L28 34 L24 27 L20 32 Z';
 const MOUTH_BUSY =
   'M20 13 L25 20 L30 12 L35 21 L40 11 L45 21 L50 13 L50 32 L45 26 L40 34 L35 25 L30 33 L25 26 L20 31 Z';
-/** Open mouth — scaled flat in CSS to seal the lips at each chin-up peak. */
+/** Open mouth while hanging — sealed by `.mascot__mouth-seal` at chin-up peaks. */
 const MOUTH_HANG_BREATHE = 'M26 18 C30 30 40 30 44 18 C40 26 30 26 26 18 Z';
 
 // Traced once at module load — the spans never change.
@@ -220,9 +220,8 @@ const IDLE_PATH = spansToOutlinePath(MASCOT_IDLE_SPANS);
 const SOLID_PATH = spansToOutlinePath(MASCOT_SOLID_SPANS);
 
 function cutoutsFor(emotion: MascotEmotion, hanging = false): ReactElement | null {
-  // Pull-ups: one mouth shape, CSS scaleY seals it at chin-up peaks (hold breath)
-  // and opens it on the way down (breathe). Dual-opacity cutouts inside SVG masks
-  // were unreliable about which state won at the peak.
+  // Pull-ups: open mouth cutout stays punched; a body-coloured seal outside the
+  // mask covers it at chin-up peaks (hold breath) and lifts on the way down.
   if (hanging) {
     return (
       <>
@@ -316,28 +315,12 @@ function BlinkLids() {
 }
 
 /**
- * Cover the silhouette's baked side-arm stubs so a second pair of hands does not
- * show under the raised arms. Filled with the splash card panel colour.
- * Lives inside `.mascot__body-group` so it rides the chin-up with the torso.
- */
-function ArmStubCovers() {
-  return (
-    <g className="mascot__arm-stub-covers" aria-hidden="true">
-      <rect className="mascot__arm-stub-cover mascot__arm-stub-cover--left" x="2.5" y="40.5" width="7.5" height="13" rx="1.2" />
-      <rect className="mascot__arm-stub-cover mascot__arm-stub-cover--right" x="60" y="40.5" width="7.5" height="12" rx="1.2" />
-    </g>
-  );
-}
-
-/**
- * Merge the silhouette's split feet into one dangling column while hanging —
- * legs together for the chin-ups. Erase uses the card panel colour; the replacement
- * shape is body-coloured.
+ * One dangling column while hanging — the hang clip path has already removed the
+ * baked split feet, so this just paints the replacement.
  */
 function LegsTogether() {
   return (
     <g className="mascot__legs-together" aria-hidden="true">
-      <rect className="mascot__legs-together-erase" x="19.5" y="49" width="31" height="11" />
       <path
         className="mascot__legs-together-shape"
         fill="currentColor"
@@ -382,6 +365,24 @@ function HangHands() {
       <ellipse className="mascot__hang-hand mascot__hang-hand--left" cx="14" cy="2.4" rx="5.2" ry="2.9" fill="currentColor" />
       <ellipse className="mascot__hang-hand mascot__hang-hand--right" cx="56" cy="2.4" rx="5.2" ry="2.9" fill="currentColor" />
     </g>
+  );
+}
+
+/**
+ * Body-coloured plug that seals the open hang-mouth hole at chin-up peaks.
+ * Lives outside the face mask so the breath animation is not fighting mask opacity.
+ */
+function HangMouthSeal() {
+  return (
+    <ellipse
+      className="mascot__mouth-seal"
+      cx="35"
+      cy="24"
+      rx="11"
+      ry="9"
+      fill="currentColor"
+      aria-hidden="true"
+    />
   );
 }
 
@@ -466,6 +467,7 @@ export function Mascot({
 }: MascotProps) {
   const reactId = useId().replace(/:/g, '');
   const maskId = `mascot-mask-${reactId}`;
+  const hangClipId = `mascot-hang-clip-${reactId}`;
   const phoneClipId = `mascot-phone-clip-${reactId}`;
   const height = Math.round((size * 60) / 70);
   const classes = [
@@ -502,33 +504,53 @@ export function Mascot({
       {title ? <title>{title}</title> : null}
 
       <g className="mascot__body-group">
-        {isIdle ? (
-          <g className="mascot__pixels" fill="currentColor">
-            <path d={IDLE_PATH} />
-          </g>
-        ) : (
-          <>
-            <defs>
-              <mask id={maskId} maskUnits="userSpaceOnUse" x="0" y="0" width="70" height="60">
-                <path fill="#fff" d={SOLID_PATH} />
-                <g fill="#000" className="mascot__face-features" transform={lookTransform}>
-                  {cutouts}
-                </g>
-              </mask>
-            </defs>
-            <rect
-              className="mascot__face"
-              x="0"
-              y="0"
-              width="70"
-              height="60"
-              fill="currentColor"
-              mask={`url(#${maskId})`}
-            />
-          </>
-        )}
+        {hanging ? (
+          <defs>
+            {/*
+              Clip off baked side stubs and the split feet so raised arms + the
+              merged leg are the only limbs. More reliable than painting panel-coloured
+              covers (those fail if the card background is not exactly `--panel`).
+            */}
+            <clipPath id={hangClipId} clipPathUnits="userSpaceOnUse">
+              <path
+                d={
+                  'M0 0H70V60H0ZM2 40H10.5V54H2ZM59.5 40H68V53H59.5ZM20 49H31V60H20ZM39 49H50V60H39Z'
+                }
+                clipRule="evenodd"
+              />
+            </clipPath>
+          </defs>
+        ) : null}
 
-        {hanging ? <ArmStubCovers /> : null}
+        <g clipPath={hanging ? `url(#${hangClipId})` : undefined}>
+          {isIdle ? (
+            <g className="mascot__pixels" fill="currentColor">
+              <path d={IDLE_PATH} />
+            </g>
+          ) : (
+            <>
+              <defs>
+                <mask id={maskId} maskUnits="userSpaceOnUse" x="0" y="0" width="70" height="60">
+                  <path fill="#fff" d={SOLID_PATH} />
+                  <g fill="#000" className="mascot__face-features" transform={lookTransform}>
+                    {cutouts}
+                  </g>
+                </mask>
+              </defs>
+              <rect
+                className="mascot__face"
+                x="0"
+                y="0"
+                width="70"
+                height="60"
+                fill="currentColor"
+                mask={`url(#${maskId})`}
+              />
+            </>
+          )}
+        </g>
+
+        {hanging ? <HangMouthSeal /> : null}
         {hanging ? <LegsTogether /> : null}
         {hanging ? <HangArmStrokes /> : null}
 

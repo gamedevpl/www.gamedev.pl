@@ -5224,48 +5224,48 @@ body.player-open {
   animation: mascot-pullups-chin 3.6s ease-in-out !important;
 }
 
-/* Hide baked side stubs / split feet — same fill as the splash card. */
-.mascot__arm-stub-cover,
-.mascot__legs-together-erase {
-  fill: var(--panel);
-}
-
 /*
- * Breath with the chin: scale the mouth flat at each chin-up peak (hold breath),
- * open it on the way down. One path + scaleY — dual-opacity cutouts inside an SVG
- * mask flipped which state won at the peak in Chromium. Times match
+ * Breath with the chin: a body-coloured seal covers the open mouth hole at each
+ * chin-up peak (hold breath) and lifts on the way down. The seal lives outside the
+ * face mask so the animation is not fighting mask opacity/transforms. Times match
  * `mascot-pullups-chin`.
  */
-.mascot--hanging .mascot__mouth--hang-breath {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: mascot-hang-mouth-breath 3.6s ease-in-out;
+.mascot--hanging .mascot__mouth-seal {
+  transform-origin: 35px 24px;
+  animation: mascot-hang-mouth-seal 3.6s ease-in-out;
 }
 
-@keyframes mascot-hang-mouth-breath {
+@keyframes mascot-hang-mouth-seal {
   0%,
   14% {
-    transform: scaleY(1);
+    transform: scaleY(0);
+    opacity: 0;
   }
   /* Chin-up peaks — seal lips, hold breath. */
   24% {
-    transform: scaleY(0.12);
+    transform: scaleY(1);
+    opacity: 1;
   }
   32% {
-    transform: scaleY(1);
+    transform: scaleY(0);
+    opacity: 0;
   }
   44% {
-    transform: scaleY(0.12);
+    transform: scaleY(1);
+    opacity: 1;
   }
   52% {
-    transform: scaleY(1);
+    transform: scaleY(0);
+    opacity: 0;
   }
   64% {
-    transform: scaleY(0.12);
+    transform: scaleY(1);
+    opacity: 1;
   }
   74%,
   100% {
-    transform: scaleY(1);
+    transform: scaleY(0);
+    opacity: 0;
   }
 }
 
