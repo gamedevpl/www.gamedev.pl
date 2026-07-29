@@ -393,7 +393,7 @@ export function ArcadeCatalog({
                 type="button"
                 className="catalog-sort-trigger"
                 aria-expanded={sortMenuOpen}
-                aria-haspopup="listbox"
+                aria-haspopup="menu"
                 aria-label={t('catalog.sortLabel')}
                 onClick={() => setSortMenuOpen((open) => !open)}
               >
@@ -403,18 +403,18 @@ export function ArcadeCatalog({
                 </span>
               </button>
               {sortMenuOpen ? (
-                <ul className="catalog-sort-panel" role="listbox" aria-label={t('catalog.sortLabel')}>
+                <ul className="catalog-sort-panel" role="menu" aria-label={t('catalog.sortLabel')}>
                   {CATALOG_SORT_MODES.map((mode) => (
-                    <li key={mode} role="presentation">
+                    <li key={mode} role="none">
                       <button
                         type="button"
-                        role="option"
+                        role="menuitemradio"
                         className={`catalog-sort-option${sortMode === mode ? ' is-active' : ''}`}
-                        aria-selected={sortMode === mode}
+                        aria-checked={sortMode === mode}
                         onClick={() => handleSortChange(mode)}
                       >
                         {sortMode === mode ? <PixelIcon name="check" size={12} /> : <span className="catalog-sort-check-spacer" />}
-                        <span>{t(`catalog.sort.${mode}`)}</span>
+                        <span className="catalog-sort-option-label">{t(`catalog.sort.${mode}`)}</span>
                       </button>
                     </li>
                   ))}

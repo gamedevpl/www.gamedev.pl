@@ -1051,6 +1051,14 @@ button:disabled {
   touch-action: manipulation;
 }
 
+.catalog-sort-option-label {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .catalog-sort-option:hover,
 .catalog-sort-option:focus-visible {
   background: rgba(0, 228, 172, 0.12);
