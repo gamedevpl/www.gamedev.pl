@@ -5197,18 +5197,19 @@ body.player-open {
  * sprite for the reps and it reads as floating, not as a pull-up.
  */
 .mascot-interactive--pullups {
-  /* ~card padding-top so hands land on the 1px border, not short of it. */
-  --pullup-hang: 44px;
-  /* Body travel toward the hands — large enough to read at splash size. */
-  --pullup-chin-lift: 24px;
+  /* Card padding-top (48) + button padding (4) so hands meet the 1px border. */
+  --pullup-hang: 52px;
+  /* Body travel toward the hands — large enough to read as a chin-up at splash size. */
+  --pullup-chin-lift: 26px;
   transform-origin: 50% 0%;
   animation: mascot-pullups-climb 3.6s ease-in-out;
 }
 
 @media (max-height: 720px) {
   .mascot-interactive--pullups {
-    --pullup-hang: 20px;
-    --pullup-chin-lift: 14px;
+    /* Compact splash padding is 24px + button pad. */
+    --pullup-hang: 28px;
+    --pullup-chin-lift: 16px;
   }
 }
 
