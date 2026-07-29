@@ -1,0 +1,83 @@
+name: Verify erasure
+
+# Re-proves the privacy notice's §8 promise against the live database, nightly.
+#
+# `apps/api/src/erase-player-signals.ts` is the executable half of "account deletion
+# removes the votes and written feedback you left on games". Its failure mode is silent:
+# `player:erase --dry-run` answering `worlds: 0` looks the same whether the person left
+# nothing or a collection-group index was renamed months ago and the query has matched
+# nothing since. Nobody would notice until a deletion request arrived and was answered
+# with a report that found nothing — which is the one moment it must not be wrong.
+#
+# So `verify:erase` plants fixtures, runs the erase path over them, reads the database
+# back after every step, and cleans up. A red X here means erasure is broken now, not
+# that it broke whenever somebody next thought to check by hand.
+#
+# Nightly rather than weekly because the interval is the bound on how long erasure could
+# be quietly broken, and a day is a defensible answer to "when did you last know this
+# worked?" where a week is harder to say out loud. The cost is a handful of Firestore
+# writes per run, all under a synthetic uid, all removed before the job exits.
+
+on:
+  # 47 minutes past, off the top of the hour where GitHub's scheduler is most contended
+  # and a delayed start is likeliest — same reasoning as publish-games.yml.
+  schedule:
+    - cron: '47 3 * * *'
+  # The manual entry point: confirming a fix, or answering "does erasure work right now?"
+  # while a deletion request is open.
+  workflow_dispatch:
+
+# Two runs mint different uids and cannot delete each other's fixtures, so overlap is
+# survivable rather than dangerous. Queued anyway: a scheduled run stacking on a manual
+# one produces two reports of the same thing and only muddies which one an operator is
+# reading.
+concurrency:
+  group: verify-erase
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      # The name the Firestore client actually reads. `new Firestore()` takes no project
+      # argument, and google-auth resolves one from GCLOUD_PROJECT / GOOGLE_CLOUD_PROJECT,
+      # the credential file, or the metadata server — a runner has no metadata server and
+      # the WIF credential file carries no project, so without this the job fails with
+      # "Unable to detect a Project Id in the current environment". Set here rather than
+      # left to whatever google-github-actions/auth happens to export, because the failure
+      # is at the end of a job that has already authenticated and looks like a broken
+      # credential rather than a missing variable. Named PROJECT_ID here once; it was
+      # read by nothing.
+      GOOGLE_CLOUD_PROJECT: 'gamedevpl'
+      WIF_PROVIDER: 'projects/334141807880/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+      # Deliberately not github-actions-deployer. That account can ship code but has no
+      # Firestore role, and giving it one would hand every deploy the ability to read
+      # every player's data. This account is the inverse: it can touch Firestore and
+      # nothing else, and revoking it stops these runs without touching deploys.
+      WIF_SERVICE_ACCOUNT: 'erase-verifier@gamedevpl.iam.gserviceaccount.com'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Authenticate to GCP via Workload Identity Federation
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
+
+      # Fixtures are minted under a `verify:` uid no sign-in path can produce, in a game
+      # slug and world id no published game holds. The command takes no uid argument, so
+      # there is no way for this job to reach a real account.
+      - name: Verify erasure end to end
+        run: npm run verify:erase -w @gamedevpl/api

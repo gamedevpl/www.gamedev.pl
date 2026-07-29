@@ -39,19 +39,26 @@ function manyGames(count: number): StudioGame[] {
   }));
 }
 
-async function renderStudio() {
+async function renderStudio(props: Partial<Parameters<typeof CreatorStudioView>[0]> = {}) {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
+  const onNavigate = props.onNavigate ?? vi.fn();
   await act(async () => {
-    root.render(createElement(CreatorStudioView, { onNavigate: vi.fn(), onPlay: vi.fn() }));
+    root.render(
+      createElement(CreatorStudioView, {
+        onNavigate,
+        onPlay: vi.fn(),
+        ...props,
+      }),
+    );
   });
   await act(async () => {
     await fetchStudioGames.mock.results[0]?.value;
     await fetchStudioHealth.mock.results[0]?.value;
     await fetchStudioScorecards.mock.results[0]?.value;
   });
-  return { container, root };
+  return { container, root, onNavigate };
 }
 
 describe('CreatorStudioView', () => {
@@ -140,6 +147,76 @@ describe('CreatorStudioView', () => {
 
     expect(container.querySelector('.studio-layout')?.classList.contains('is-focus')).toBe(true);
     expect(container.querySelector('.studio-game-switcher')?.textContent).toMatch(/10 games/i);
+
+    root.unmount();
+  });
+
+  it('persists the selected tab in the URL', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue(manyGames(2));
+    window.history.replaceState(null, '', '/studio/token-0');
+
+    const { container, root, onNavigate } = await renderStudio({ selectedToken: 'token-0' });
+
+    const improveTab = Array.from(container.querySelectorAll('[role="tab"]')).find((button) =>
+      button.textContent?.includes('Improve'),
+    );
+    expect(improveTab).toBeTruthy();
+
+    await act(async () => {
+      improveTab!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(onNavigate).toHaveBeenCalledWith('/studio/token-0/improve');
+
+    root.unmount();
+  });
+
+  it('falls back to the default tab when the deep-linked one does not exist for the game', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    // token-0 is still building, so Stats has nothing to show for it.
+    fetchStudioGames.mockResolvedValue(manyGames(2));
+    window.history.replaceState(null, '', '/studio/token-0/stats');
+
+    const { container, root, onNavigate } = await renderStudio({ selectedToken: 'token-0', selectedTab: 'stats' });
+
+    // Landed on Build, and the URL was corrected in place rather than pushed.
+    const activeTab = container.querySelector('[role="tab"][aria-selected="true"]');
+    expect(activeTab?.textContent).toContain('Build');
+    expect(onNavigate).toHaveBeenCalledWith('/studio/token-0/build', { replace: true });
+    // No tab may exist in the URL that has no button to leave it by.
+    const tabLabels = Array.from(container.querySelectorAll('[role="tab"]')).map((button) => button.textContent);
+    expect(tabLabels.some((label) => label?.includes('Player feedback'))).toBe(false);
+
+    root.unmount();
+  });
+
+  it('keeps a capability token out of the URL on bare /studio until a game is picked', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue(manyGames(2));
+    window.history.replaceState(null, '', '/studio');
+
+    const { container, root, onNavigate } = await renderStudio();
+
+    // First game is selected in the UI for convenience…
+    expect(container.querySelector('.studio-shelf-item.is-active')?.textContent).toContain('Game 1');
+    // …but the address bar stays token-free until an explicit pick.
+    expect(onNavigate).not.toHaveBeenCalled();
+
+    const second = Array.from(container.querySelectorAll('.studio-shelf-item')).find((item) =>
+      item.textContent?.includes('Game 2'),
+    );
+    expect(second).toBeTruthy();
+    await act(async () => {
+      second!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onNavigate).toHaveBeenCalledWith('/studio/token-1/overview');
 
     root.unmount();
   });

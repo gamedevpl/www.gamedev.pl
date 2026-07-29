@@ -59,6 +59,8 @@ survives only in this repo's early history.
 | [`container-orchestration.md`](./container-orchestration.md)       | **Archived** design for the removed self-hosted generation direction                                   |
 | [`remix-to-pr.md`](./remix-to-pr.md)                               | Spec for the player-remix → pull-request feature                                                       |
 | [`mobile-app-plan.md`](./mobile-app-plan.md)                       | iOS/Android strategy: mobile web → PWA → Capacitor store apps; games touch contract                    |
+| [`store-accounts-setup.md`](./store-accounts-setup.md)             | Owner checklist: Apple/Play enrolment, DSA trader status, signing keys                                 |
+| [`store-launch-plan.md`](./store-launch-plan.md)                   | Getting onto the App Store and Play: guideline 4.7 compliance, age rating, universal links, Capacitor  |
 | [`notifications-plan.md`](./notifications-plan.md)                 | Notify creators/players of transitions: detection sweep, per-user storage, in-app → email → push       |
 | [`creator-qa-plan.md`](./creator-qa-plan.md)                       | Clarifying-questions pass before spec freeze — raises the hit rate of the one-shot agent run           |
 | [`improvement-loop-plan.md`](./improvement-loop-plan.md)           | After publish: player signals → per-game scorecard → agent-assisted fixes and suggestions              |
@@ -80,6 +82,7 @@ survives only in this repo's early history.
 | [`agent-progress-notes.md`](./agent-progress-notes.md)             | The older commit-based progress journal, superseded by the live channel                                |
 | [`steel-thread-plan.md`](./steel-thread-plan.md)                   | 🗃️ Historical — the milestone plan that got the first end-to-end thread working                        |
 | [`gtm-plan.md`](./gtm-plan.md)                                     | Go-to-market: stages, gates, and how the GitHub presence fits in                                       |
+| [`operational-readiness-plan.md`](./operational-readiness-plan.md) | 📋 Backups, monitoring, observability: the ops gates that must pass before each GTM gate opens         |
 
 ## Shared agent playbooks
 
