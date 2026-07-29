@@ -261,6 +261,11 @@ export interface TelemetryEvent {
   value?: number;
   /** `end`: how the session finished. */
   outcome?: 'won' | 'lost' | 'quit';
+  /**
+   * `progress` / `end`: optional render backend from the game snapshot (B18).
+   * Fixed vocabulary only — never free text.
+   */
+  gfxBackend?: 'canvas2d' | 'webgl' | 'webgl3d';
 }
 
 /**

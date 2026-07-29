@@ -41,9 +41,12 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
  * music, touch hint, progress, universal input, pointer poll, draw surface,
  * pointer release, host pause, mascot draw, headroom, gfx3d, look, spatial, …). Together with
  * {@link GAME_BUDGET_BYTES} this must equal games-repo `MAX_BUNDLE_BYTES`
- * (413_687, matching games-repo `shared/assemble-contract.json` `maxProjectBytes`). Not a round KiB.
+ * (429_687, matching games-repo `shared/assemble-contract.json` `maxProjectBytes`). Not a round KiB.
  *
- * Last moved by games-repo #123 (Scene3D B10 effects): `gfx3d` 56_000 → 80_000
+ * Last moved by games-repo #124 (Scene3D B11 scene management): `gfx3d`
+ * 80_000 → 96_000 (+16_000, 413_687 → 429_687).
+ *
+ * Before that, games-repo #123 (Scene3D B10 effects): `gfx3d` 56_000 → 80_000
  * (+24_000, 389_687 → 413_687).
  *
  * Before that, games-repo #120 (Scene3D B8/B9): two new named allowances on top
@@ -68,7 +71,7 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
  * Before that, games-repo #102: +679 (`mascotDraw`) and +75_237 (`headroom`) — 30% of
  * the 250_790 ceiling — plus earlier host-pause / touch steer raises.
  */
-export const GAMEKIT_PLATFORM_BYTES = 208_887;
+export const GAMEKIT_PLATFORM_BYTES = 224_887;
 
 /** Combined html+js+css size cap — must match games-repo `MAX_BUNDLE_BYTES`. */
 export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
