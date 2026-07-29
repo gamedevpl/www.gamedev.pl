@@ -163,6 +163,23 @@ export interface GcsSnapshotStoreOptions {
   getAccessToken?: () => Promise<string>;
   /** How long a resolved pointer is trusted before re-reading it. */
   pointerTtlMs?: number;
+  /**
+   * Deadline on a single snapshot *read*, including the token fetch and the body.
+   *
+   * Published catalog and play read Cloud Storage with nothing behind it: a *failed*
+   * connection degrades to a fast 503, but a *hung* one had no deadline at all, so it
+   * stalled the play route — the one route that must never be down — for as long as
+   * the socket stayed open. A timeout raises `SnapshotUnavailableError`, which is the
+   * same error a transport failure already produces, so a hang and a refusal are
+   * indistinguishable to callers: both are a quick 503, and an already-resolved
+   * pointer keeps being served.
+   *
+   * Reads only. Writes are deliberately left untimed — `putGame` uploads a whole
+   * assembled game and the bake job pushes the entire catalog through it, so a
+   * few-second ceiling there would fail large games for no operational gain. The
+   * bake is a batch job with its own wall-clock limit; the play route is not.
+   */
+  readTimeoutMs?: number;
   now?: () => number;
 }
 
@@ -178,6 +195,10 @@ export function createGcsSnapshotStore(options: GcsSnapshotStoreOptions): GameSn
   const fetchImpl = options.fetchImpl ?? fetch;
   const now = options.now ?? Date.now;
   const pointerTtlMs = options.pointerTtlMs ?? 60_000;
+  // Long enough that a healthy read never trips it (Storage in-region answers in tens
+  // of milliseconds), short enough that a visitor waiting on a wedged connection gets
+  // an answer instead of a spinner.
+  const readTimeoutMs = options.readTimeoutMs ?? 3_000;
 
   let auth: GoogleAuth | null = null;
   const getAccessToken =
@@ -193,14 +214,50 @@ export function createGcsSnapshotStore(options: GcsSnapshotStoreOptions): GameSn
     return { authorization: `Bearer ${await getAccessToken()}` };
   }
 
+  /**
+   * Runs a read under `readTimeoutMs`, aborting the request when it expires.
+   *
+   * Raced rather than left to the `AbortSignal` alone: aborting is what frees the
+   * socket, but the *guarantee* the play route needs is that this settles by the
+   * deadline whatever the transport does with the signal. The rejection is a
+   * `SnapshotUnavailableError` so a hang lands on the existing degradation path
+   * rather than on a new one.
+   */
+  async function withReadDeadline<T>(name: string, run: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        controller.abort();
+        reject(new SnapshotUnavailableError(`snapshot read of ${name} timed out after ${readTimeoutMs}ms`));
+      }, readTimeoutMs);
+    });
+
+    const attempt = run(controller.signal);
+    // The loser of the race still settles. Once we have abandoned it, its abort
+    // rejection is expected — claim it here so it is not an unhandled rejection.
+    attempt.catch(() => {});
+
+    try {
+      return await Promise.race([attempt, deadline]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   async function readObject(name: string): Promise<Buffer | null> {
     const url = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(name)}?alt=media`;
-    const response = await fetchImpl(url, { headers: await authHeaders() });
-    if (response.status === 404) return null;
-    if (!response.ok) {
-      throw new Error(`snapshot read of ${name} failed: ${response.status} ${await safeBodyText(response)}`);
-    }
-    return Buffer.from(await response.arrayBuffer());
+    // The token fetch and the body read are inside the deadline with the request: both
+    // are network calls (the first to the metadata server), and either can be the thing
+    // that hangs.
+    return withReadDeadline(name, async (signal) => {
+      const response = await fetchImpl(url, { headers: await authHeaders(), signal });
+      if (response.status === 404) return null;
+      if (!response.ok) {
+        throw new Error(`snapshot read of ${name} failed: ${response.status} ${await safeBodyText(response)}`);
+      }
+      return Buffer.from(await response.arrayBuffer());
+    });
   }
 
   async function readJson<T>(name: string): Promise<T | null> {
@@ -213,6 +270,8 @@ export function createGcsSnapshotStore(options: GcsSnapshotStoreOptions): GameSn
     }
   }
 
+  // Untimed on purpose — see readTimeoutMs. This carries whole assembled games for a
+  // batch job, not a request a person is waiting on.
   async function writeObject(name: string, body: Buffer, contentType: string, cacheControl: string): Promise<void> {
     const url =
       `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(bucket)}/o` +

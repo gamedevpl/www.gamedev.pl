@@ -6,10 +6,21 @@
 # OWNER-RUN: needs `gcloud` authenticated against the project.
 #
 # Usage:
-#   ALERT_EMAIL=you@example.com ./infra/setup-monitoring.sh
+#   ALERT_EMAIL=you@example.com ./infra/setup-monitoring.sh                     # the app
+#   ALERT_EMAIL=… SERVICE=gamedev-mp-relay ./infra/setup-monitoring.sh          # + a second service
 #
-# Override via env: PROJECT_ID, REGION, SERVICE, WORLD_SERVICE, HOST, ALERT_EMAIL,
-# BACKUP_BUCKET.
+# Override via env: PROJECT_ID, REGION, SERVICE, PRIMARY_SERVICE, WORLD_SERVICE, HOST,
+# HEALTH_PATH, ALERT_EMAIL, BACKUP_BUCKET.
+#
+# **Run it once per service that answers HTTP requests.** A1 (uptime) and A2 (5xx) are
+# per-service; a service nobody ran this for is unmonitored by construction, which is how
+# the party relay would have gone live. Everything else — A3/A4 (scheduler jobs) and
+# A6/A7 (the world service, which names itself through WORLD_SERVICE) — is project-wide
+# and is written only on the PRIMARY_SERVICE run, so a second service does not get
+# duplicate copies of them.
+#
+# The world service is the exception in the other direction: do NOT onboard it with
+# SERVICE=, and see the guard below for why.
 #
 # What this deliberately is and is not:
 #
@@ -22,6 +33,9 @@
 #   trains the operator to ignore the channel, which is worse than not having it.
 #
 # Idempotent: policies are matched by display name and updated rather than duplicated.
+# Every per-service display name carries the service, so a second service *adds* policies
+# instead of overwriting the first service's — which is what matching on a
+# service-agnostic name ("A1 site down …") would have done.
 set -euo pipefail
 
 # gcloud asks for confirmation on stderr — including "you do not have this command group
@@ -46,10 +60,51 @@ done
 PROJECT_ID="${PROJECT_ID:-gamedevpl}"
 REGION="${REGION:-europe-west1}"
 SERVICE="${SERVICE:-gamedev-app}"
+# The service that owns the project-wide policies (A3/A4/A6/A7) and answers on the domain.
+PRIMARY_SERVICE="${PRIMARY_SERVICE:-gamedev-app}"
 WORLD_SERVICE="${WORLD_SERVICE:-gamedev-world}"
-HOST="${HOST:-www.gamedev.pl}"
+HEALTH_PATH="${HEALTH_PATH:-/api/health}"
 BACKUP_BUCKET="${BACKUP_BUCKET:-${PROJECT_ID}-firestore-backups}"
 : "${ALERT_EMAIL:?set ALERT_EMAIL to the address that should receive alerts}"
+
+# The world service is watched by A6/A7 and deliberately has no uptime check: a probe
+# every five minutes keeps a scale-to-zero service warm around the clock, which converts
+# \$0 at rest into roughly \$65/month to learn whether something nobody is using is up
+# (docs/p3-zone-host-infra.md). Running this per-service for it would quietly undo that
+# decision *and* duplicate A7 under an A2 name, so it is refused rather than warned about.
+if [ "$SERVICE" = "$WORLD_SERVICE" ]; then
+  echo "Refusing to onboard '${SERVICE}' per-service: it is covered by A6/A7 from the" >&2
+  echo "'${PRIMARY_SERVICE}' run, without an uptime check on purpose. See the note above." >&2
+  exit 1
+fi
+
+# The primary service answers on the domain; anything else is probed on its own Cloud Run
+# hostname, resolved here so adding a service is one variable rather than two.
+if [ -z "${HOST:-}" ]; then
+  if [ "$SERVICE" = "$PRIMARY_SERVICE" ]; then
+    HOST="www.gamedev.pl"
+  else
+    # `|| true` and no stderr redirect, for the reason #345 landed: under `set -e` a
+    # failing command substitution kills the script at the assignment, so a service that
+    # does not exist would have exited here silently instead of reaching the message below.
+    HOST="$(gcloud run services describe "$SERVICE" \
+      --region "$REGION" --project "$PROJECT_ID" \
+      --format='value(status.url)' || true)"
+    HOST="${HOST#https://}"
+    HOST="${HOST#http://}"
+    if [ -z "$HOST" ]; then
+      echo "Could not resolve a URL for service '${SERVICE}' in ${REGION}. Set HOST= explicitly." >&2
+      exit 1
+    fi
+  fi
+fi
+
+echo "==> Target: service '${SERVICE}' on https://${HOST}${HEALTH_PATH}"
+if [ "$SERVICE" = "$PRIMARY_SERVICE" ]; then
+  echo "    Primary service — the project-wide policies (A3, A4, A6, A7) are included."
+else
+  echo "    Secondary service — A1/A2 only; the rest belong to '${PRIMARY_SERVICE}'."
+fi
 
 echo "==> 1/4 Enabling the Monitoring API"
 gcloud services enable monitoring.googleapis.com --project "$PROJECT_ID"
@@ -71,30 +126,46 @@ else
   echo "    Channel already exists."
 fi
 
-echo "==> 3/4 Ensuring the uptime check on https://${HOST}/api/health"
+echo "==> 3/4 Ensuring the uptime check on https://${HOST}${HEALTH_PATH}"
 # /api/health is the right probe target precisely because it is not walled: it answers
 # 200 without a session, so a failure means the service is genuinely unreachable rather
 # than that the beta gate did its job. Checking a walled route would alert on 401 or,
 # worse, teach us to ignore the alert that fires every time.
+#
+# The name carries the service: one check per service, and A1 below is scoped to this
+# check's id so a second service's outage cannot be reported as the first one's.
+UPTIME_DISPLAY="${SERVICE} health"
 UPTIME_NAME="$(gcloud monitoring uptime list-configs \
   --project "$PROJECT_ID" \
-  --filter="displayName='gamedev-app health'" \
+  --filter="displayName='${UPTIME_DISPLAY}'" \
   --format='value(name)' | head -n 1)"
 if [ -z "$UPTIME_NAME" ]; then
-  gcloud monitoring uptime create 'gamedev-app health' \
+  gcloud monitoring uptime create "$UPTIME_DISPLAY" \
     --project "$PROJECT_ID" \
     --resource-type=uptime-url \
     --resource-labels="host=${HOST},project_id=${PROJECT_ID}" \
-    --path='/api/health' \
+    --path="$HEALTH_PATH" \
     --port=443 \
     --protocol=https \
     --period=5 \
     --timeout=10 \
     >/dev/null
   echo "    Created (5-minute cadence from multiple regions)."
+  UPTIME_NAME="$(gcloud monitoring uptime list-configs \
+    --project "$PROJECT_ID" \
+    --filter="displayName='${UPTIME_DISPLAY}'" \
+    --format='value(name)' | head -n 1)"
 else
   echo "    Uptime check already exists."
 fi
+# The check_id is the last segment of the config's resource name, and it is the only
+# thing that ties a check_passed time series back to one service.
+CHECK_ID="${UPTIME_NAME##*/}"
+if [ -z "$CHECK_ID" ]; then
+  echo "Could not resolve the uptime check id for '${UPTIME_DISPLAY}'." >&2
+  exit 1
+fi
+echo "    check_id=${CHECK_ID}"
 
 echo "==> 4/4 Ensuring alert policies"
 POLICY_DIR="$(mktemp -d)"
@@ -103,14 +174,18 @@ trap 'rm -rf "$POLICY_DIR"' EXIT
 # A1 — the site is down. Multi-region agreement is what separates "Cloud Run is gone"
 # from "one prober had a bad minute", which is why the uptime check fans out and this
 # policy waits for 300s of sustained failure before it speaks.
+#
+# Scoped to this service's check_id. Without that the condition matches *every* uptime
+# check in the project, so a second service's policy would fire on the first service's
+# outage and both would say the same, wrong thing about which service is down.
 cat > "${POLICY_DIR}/a1.json" <<EOF
 {
-  "displayName": "A1 site down (uptime check failing)",
+  "displayName": "A1 ${SERVICE} site down (uptime check failing)",
   "combiner": "OR",
   "conditions": [{
     "displayName": "uptime check failing for 5 minutes",
     "conditionThreshold": {
-      "filter": "metric.type=\"monitoring.googleapis.com/uptime_check/check_passed\" AND resource.type=\"uptime_url\"",
+      "filter": "metric.type=\"monitoring.googleapis.com/uptime_check/check_passed\" AND resource.type=\"uptime_url\" AND metric.label.\"check_id\"=\"${CHECK_ID}\"",
       "aggregations": [{
         "alignmentPeriod": "300s",
         "perSeriesAligner": "ALIGN_FRACTION_TRUE",
@@ -125,7 +200,7 @@ cat > "${POLICY_DIR}/a1.json" <<EOF
   "notificationChannels": ["${CHANNEL_NAME}"],
   "alertStrategy": { "autoClose": "86400s" },
   "documentation": {
-    "content": "https://${HOST}/api/health is failing from most probers. Triage: docs/runbooks/site-down-triage.md",
+    "content": "https://${HOST}${HEALTH_PATH} (service ${SERVICE}) is failing from most probers. Triage: docs/runbooks/site-down-triage.md",
     "mimeType": "text/markdown"
   }
 }
@@ -137,7 +212,7 @@ EOF
 # continuously) and stay quiet for the occasional one-off.
 cat > "${POLICY_DIR}/a2.json" <<EOF
 {
-  "displayName": "A2 Cloud Run 5xx rate elevated",
+  "displayName": "A2 ${SERVICE} Cloud Run 5xx rate elevated",
   "combiner": "OR",
   "conditions": [{
     "displayName": "5xx responses sustained over 10 minutes",
@@ -162,6 +237,14 @@ cat > "${POLICY_DIR}/a2.json" <<EOF
   }
 }
 EOF
+
+# A3, A4, A6 and A7 are project-wide: A3/A4 watch Cloud Scheduler jobs, and A6/A7 name
+# the world service through WORLD_SERVICE rather than deriving it from SERVICE. All four
+# are written only on the primary run. Duplicating them per service would mean N identical
+# emails for one failed job, which is how an operator learns to filter the channel; their
+# display names stay service-free for the same reason.
+# (Heredoc bodies are left unindented: EOF must start the line.)
+if [ "$SERVICE" = "$PRIMARY_SERVICE" ]; then
 
 # A3 — the notify sweep. It already runs every 2 minutes against auth, Firestore and the
 # app in one request, which makes it a synthetic monitor we are getting for free; all
@@ -308,6 +391,8 @@ cat > "${POLICY_DIR}/a7.json" <<EOF
 }
 EOF
 
+fi
+
 for FILE in "${POLICY_DIR}"/*.json; do
   DISPLAY="$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['displayName'])" "$FILE")"
   EXISTING="$(gcloud alpha monitoring policies list \
@@ -334,7 +419,19 @@ for FILE in "${POLICY_DIR}"/*.json; do
 done
 
 echo ""
-echo "==> Done. Uptime check + A1-A4, A6-A7 wired to ${ALERT_EMAIL}."
+if [ "$SERVICE" = "$PRIMARY_SERVICE" ]; then
+  echo "==> Done. '${SERVICE}' uptime check + A1/A2, and the project-wide A3/A4 and A6/A7,"
+  echo "    wired to ${ALERT_EMAIL}."
+  echo ""
+  echo "    Every other service answering requests needs its own run, or it is unmonitored:"
+  echo "      ALERT_EMAIL=${ALERT_EMAIL} SERVICE=<service> ./infra/setup-monitoring.sh"
+  echo "    ('${WORLD_SERVICE}' is the exception — A6/A7 above already cover it, without a"
+  echo "    probe that would keep a scale-to-zero service warm.)"
+else
+  echo "==> Done. '${SERVICE}' uptime check + A1/A2 wired to ${ALERT_EMAIL}."
+  echo "    A3/A4 and A6/A7 were skipped — they are project-wide and belong to the"
+  echo "    '${PRIMARY_SERVICE}' run."
+fi
 echo ""
 echo "    A5 (billing budget) is NOT here: budgets live on the billing account, not the"
 echo "    project, and need roles this script does not assume. Create it once by hand:"
