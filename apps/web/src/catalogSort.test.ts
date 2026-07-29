@@ -1,9 +1,9 @@
+// @vitest-environment jsdom
+
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { CatalogEntry } from './catalog.js';
 import { sortCatalogEntries, type CatalogSortSignals } from './catalogSort.js';
 import { rememberRecentPlay } from './recentPlays.js';
-
-// @vitest-environment jsdom
 
 function entry(partial: Partial<CatalogEntry> & Pick<CatalogEntry, 'slug' | 'title'>): CatalogEntry {
   return {
@@ -97,6 +97,20 @@ describe('sortCatalogEntries', () => {
       'mid',
       'zeta',
       'alpha',
+    ]);
+  });
+
+  it('puts unplayed games first for not_played', () => {
+    rememberRecentPlay('mid');
+    const signals: CatalogSortSignals = {
+      ...emptySignals,
+      recommended: ['zeta', 'alpha', 'mid'],
+      affinityLastPlayed: new Map([['alpha', '2026-07-28T12:00:00.000Z']]),
+    };
+    expect(sortCatalogEntries(catalog, 'not_played', signals).map((e) => e.slug)).toEqual([
+      'zeta',
+      'alpha',
+      'mid',
     ]);
   });
 });

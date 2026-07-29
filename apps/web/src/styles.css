@@ -920,10 +920,9 @@ button:disabled {
 .arcade-header {
   margin-bottom: 16px;
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px 20px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
 }
 
 /* A quiet section label, not a banner — the grid of games below speaks for itself. */
@@ -942,14 +941,26 @@ button:disabled {
   max-width: 42rem;
 }
 
+/*
+ * Full-width horizontal scroller under the title. On a phone six options will not fit;
+ * bleed + edge fades advertise the swipe the same way the suggestion chip strip does.
+ */
 .catalog-sort {
   display: flex;
   flex-wrap: nowrap;
-  gap: 0.25rem;
+  gap: 0.35rem;
+  width: 100%;
   max-width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scroll-padding: 0 2px;
+  margin: 0;
+  padding: 2px;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent);
 }
 
 .catalog-sort::-webkit-scrollbar {
@@ -958,8 +969,8 @@ button:disabled {
 
 .catalog-sort-option {
   flex: 0 0 auto;
-  min-height: 36px;
-  padding: 0.35rem 0.75rem;
+  min-height: 40px;
+  padding: 0.4rem 0.85rem;
   border: 1px solid var(--panel-border);
   border-radius: 6px;
   background: var(--panel);
@@ -968,6 +979,8 @@ button:disabled {
   font-size: 0.85rem;
   cursor: pointer;
   white-space: nowrap;
+  scroll-snap-align: start;
+  touch-action: manipulation;
 }
 
 .catalog-sort-option.is-active {
@@ -2798,6 +2811,16 @@ body.player-open {
 
   .catalog-grid {
     grid-template-columns: 1fr;
+  }
+
+  /* Same bleed pattern as .chip-container: sort chips reach the content edge so a
+     half-visible sixth option advertises the swipe. Content padding is 12px here. */
+  .catalog-sort {
+    margin: 0 -12px;
+    padding: 2px 12px;
+    width: auto;
+    max-width: none;
+    scroll-padding: 0 12px;
   }
 
   .transparency-grid {

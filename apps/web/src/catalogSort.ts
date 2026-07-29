@@ -1,13 +1,20 @@
 import type { CatalogEntry } from './catalog.js';
 import { getRecentPlays } from './recentPlays.js';
 
-export type CatalogSortMode = 'recommended' | 'newest' | 'most_played' | 'last_played' | 'alpha';
+export type CatalogSortMode =
+  | 'recommended'
+  | 'newest'
+  | 'most_played'
+  | 'last_played'
+  | 'not_played'
+  | 'alpha';
 
 export const CATALOG_SORT_MODES: CatalogSortMode[] = [
   'recommended',
   'newest',
   'most_played',
   'last_played',
+  'not_played',
   'alpha',
 ];
 
@@ -64,6 +71,13 @@ function orderBySlugList<T extends { slug: string }>(entries: T[], order: string
   return ordered;
 }
 
+/** Slugs this visitor has opened — affinity (signed-in) plus device-local recent. */
+export function playedSlugSet(affinityLastPlayed: ReadonlyMap<string, string>): Set<string> {
+  const played = new Set<string>(affinityLastPlayed.keys());
+  for (const slug of getRecentPlays()) played.add(slug);
+  return played;
+}
+
 /**
  * Last-played order: signed-in affinity timestamps win when present; otherwise the
  * device-local recent list (newest first). Unplayed games keep catalog order at the end.
@@ -107,6 +121,23 @@ function orderAlpha<T extends { title: string; slug: string }>(entries: T[]): T[
   );
 }
 
+/**
+ * Unplayed games first (recommended order among them), then already-played games
+ * (most recently played last so the fresh stuff stays on top).
+ */
+function orderByNotPlayed<T extends { slug: string }>(
+  entries: T[],
+  signals: CatalogSortSignals,
+): T[] {
+  const played = playedSlugSet(signals.affinityLastPlayed);
+  const unplayed = entries.filter((entry) => !played.has(entry.slug));
+  const already = entries.filter((entry) => played.has(entry.slug));
+  return [
+    ...orderBySlugList(unplayed, signals.recommended),
+    ...orderByLastPlayed(already, signals.affinityLastPlayed),
+  ];
+}
+
 export function sortCatalogEntries(
   entries: CatalogEntry[],
   mode: CatalogSortMode,
@@ -121,6 +152,8 @@ export function sortCatalogEntries(
       return orderByMostPlayed(entries, signals.sessions);
     case 'last_played':
       return orderByLastPlayed(entries, signals.affinityLastPlayed);
+    case 'not_played':
+      return orderByNotPlayed(entries, signals);
     case 'alpha':
       return orderAlpha(entries);
     default:
