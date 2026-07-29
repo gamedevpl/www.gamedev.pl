@@ -5,6 +5,14 @@
  * half of this lockstep. A stale copy here 502s every published game while
  * catalog/media still look fine (issue #247). CI re-checks the live games repo
  * when `GAMES_REPO_TOKEN` is set (`npm run contract:games-repo`).
+ *
+ * **Raising a budget? Merge this side first.** The two PRs are not order-neutral.
+ * Games-repo-first opens a window where the build ceiling is above the serve one,
+ * and a game that grows into it bakes as a failure — quietly, because a partial
+ * bake leaves the pointer on the previous snapshot, so the site keeps serving and
+ * merged games simply never appear. Website-first cannot do that: a serve cap above
+ * the build cap means no assemblable game is refused here. See
+ * docs/games-repo-validation-spec.md §2.
  */
 
 /** Canonical GameKit module order — must match games-repo `GAME_KIT_MODULES`. */
