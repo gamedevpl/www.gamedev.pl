@@ -81,7 +81,7 @@ with nothing built for them. Most of that has since been answered; what is left:
 These are facts, not preferences; any mobile strategy must satisfy all five.
 
 1. **Games are web content, permanently.** Every game is HTML/JS/CSS executed in an
-   `<iframe sandbox="allow-scripts">` from a cookieless origin
+   `<iframe sandbox="allow-scripts allow-pointer-lock">` from a cookieless origin
    ([`security-model.md`](./security-model.md)). A native app would still render games in
    a WebView. There is no native rendering to gain — which removes the main argument for
    React Native/Flutter/native rewrites.
@@ -139,7 +139,7 @@ flowchart TD
       C -->|native adapters| AD[Adapter layer:\nauth · push · QR scan · deep links]
     end
     SPA -->|/api/*| API[apps/api on Cloud Run]
-    SPA -->|iframe sandbox=allow-scripts| GAMES[(Games origin, cookieless)]
+    SPA -->|iframe sandbox=allow-scripts allow-pointer-lock| GAMES[(Games origin, cookieless)]
     AD -->|Google/Apple ID token| API
     API -->|gamedev_session cookie| SPA
     PUSH[FCM / APNs] --> C
@@ -188,11 +188,12 @@ This landed in M0 because _nothing else matters if the games themselves reject f
 - ✅ **Sign in with Apple** (required by 4.8) — **built 2026-07-28**, ahead of the rest of
   M2 because it is the one M2 item that needs no store account to write and pays off on
   the web immediately. `apps/api/src/apple-auth.ts` verifies Apple's RS256 ID tokens
-  against their JWKS with a *set* of audiences, so the same route serves the web Services
+  against their JWKS with a _set_ of audiences, so the same route serves the web Services
   ID and the future iOS bundle ID. Accounts are keyed `a:<sub>` in the same Firestore
   model — except when `apple-account.ts` can prove, from a verified non-relay email, that
-  the person already has a Google account here, in which case they sign into it. Dormant
-  until `APPLE_SERVICES_ID` / `APPLE_CLIENT_IDS` are set; see
+  the person already has a Google account here, in which case they sign into it. **Live in
+  production since 2026-07-28** (Services ID `pl.gamedev.web`), and the linking path is
+  verified against real Apple tokens, not only tests. See
   [`auth-and-usage-plan.md`](./auth-and-usage-plan.md) for what the owner must create in
   the Apple Developer portal, and note that **no part of this flow can be tested below a
   deployed https origin** — Apple rejects `http://` return URLs.
@@ -360,17 +361,25 @@ home screen, and iOS push delivered. M1 is closed end to end.
 
 ### M2 — Store apps (Capacitor) 🚧 (shell-agnostic groundwork started)
 
-> **Started out of order, deliberately.** M2 cannot *complete* without an Apple Developer
+> **Started out of order, deliberately.** M2 cannot _complete_ without an Apple Developer
 > account, a Play account, signing certs and store listings — none of which live in this
 > repo. What can be built without them is the part the plan already identified as
 > shell-agnostic, and Sign in with Apple (✅ 2026-07-28) is the first of it: required by
 > guideline 4.8, useful on the web the day it is configured, and reused unchanged by the
 > Capacitor build later. The rest of this list still waits.
 >
-> One precondition is **not** in this list and should be: `--max-instances 1` is hard-coded
-> in both deploy paths because multiplayer rooms are per-instance memory (Phase 5 of
-> [`roadmap.md`](./roadmap.md) flags it red). Store apps drive public traffic into that one
-> container. It is a launch blocker for M2, not a detail.
+> **The rest of M2 is now planned in [`store-launch-plan.md`](./store-launch-plan.md)**,
+> because the bullet list below turned out to describe the small half of the work. Guideline
+> 4.7 makes this repo responsible for *every published game* satisfying the full App Review
+> Guidelines, and the catalog grows on every merge — so 4.7 compliance has to be CI-enforced
+> in the games repo, and two of its clauses (age rating, universal links) are unbuilt
+> features rather than wrapper details.
+>
+> `--max-instances 1` is also a precondition, but it was mislabelled here as an M2 blocker.
+> It is hard-coded in both deploy paths because multiplayer rooms are per-instance memory
+> (Phase 5 of [`roadmap.md`](./roadmap.md) flags it red), and what it actually gates is
+> **public traffic of any kind** — the web public beta reaches it first. It belongs to the
+> closed-beta exit, upstream of M2.
 
 - ✅ **Sign in with Apple** — see the auth section above. Web-side and API-side both done;
   the Capacitor adapter feeds the same `/api/auth/apple` with a bundle-ID audience.
@@ -393,11 +402,18 @@ home screen, and iOS push delivered. M1 is closed end to end.
 
 ## Risks & mitigations
 
-- **Apple rejects the catalog as an "HTML5 game store" (4.7)** — _the_ existential risk
-  for M2. Mitigations: games are free, run in-app, no external purchase links, human
-  curation gate is a strong review-notes story; if rejected anyway, the fallback is the
-  PWA (M1), which no store can veto. Do not build M2 features that only make sense with
-  store approval before approval exists.
+- **Guideline 4.7** — this was written as "Apple rejects the catalog as an HTML5 game
+  store", _the_ existential risk. That framing is now wrong in both directions and was
+  corrected 2026-07-28 against the current guidelines. 4.7 **explicitly permits** HTML5 and
+  JavaScript mini games, so there is no coin-flip on whether a catalog is allowed. What it
+  does instead is make this repo **responsible for every game in it** — one non-compliant
+  game rejects the whole app — and since the catalog grows by agent PR, that is a permanent
+  obligation rather than a gate. The mitigation is mechanical enforcement in games-repo CI,
+  planned in [`store-launch-plan.md`](./store-launch-plan.md). Two clauses are unbuilt
+  features: 4.7.5 (age rating + restriction) and 4.7.4 (universal links). Two are already
+  satisfied *architecturally* by the sandbox — 4.7.2 and 4.7.3 — which must not be softened
+  for the Capacitor build. If review goes badly the fallback is still the PWA, which now
+  carries the whole functional case including iOS push.
 - **UGC review friction (1.2 / Play UGC)**: report/block must be visibly present at
   first submission — build it in M2 scope, not after rejection.
 - **Agent-built games regress on touch**: ✅ largely closed — Check 13 rejects a
@@ -423,10 +439,9 @@ home screen, and iOS push delivered. M1 is closed end to end.
 
 1. **Should guests' controller page get PWA install nudges?** Working answer: no —
    zero-friction is the point; nudge only after a repeat visit.
-2. ~~**Sign in with Apple on web too, or app-only?**~~ **DECIDED AND BUILT 2026-07-28:
-   web too.** The verifier, the `/api/auth/apple` route, account linking and the web
-   button all exist and are tested; the feature is dormant until the owner creates a
-   Services ID (setup steps in [`auth-and-usage-plan.md`](./auth-and-usage-plan.md)).
+2. ~~**Sign in with Apple on web too, or app-only?**~~ **DECIDED, BUILT AND LIVE
+   2026-07-28: web too.** The verifier, the `/api/auth/apple` route, account linking and
+   the web button are all in production against Services ID `pl.gamedev.web`.
    Everything about it is shell-agnostic — the M2 iOS app adds its bundle ID to
    `APPLE_CLIENT_IDS` and reuses the same route.
 3. **One store app or player-app + creator-app?** Working answer: one app; creation is

@@ -6,12 +6,12 @@
 
 ## Decisions already made
 
-| Question | Answer |
-| --- | --- |
-| Company (sp. z o.o.)? | **No.** |
-| JDG? | **No** — it does not get "Gamedev.pl" onto the App Store (Apple rejects trade names and treats a sole proprietorship as an individual), and VAT registration + business legal status are two of Apple's own trader-status factors, which is what publishes an address. |
-| Personal legal name public on store listings? | **Accepted.** Applies to **store listings only** — the website still publishes "Gamedev.pl" with no personal name; leave `apps/web/src/legal/operator.ts` alone. See [`legal-compliance-plan.md`](./legal-compliance-plan.md). |
-| Personal address public? | **No** — avoided by declaring non-trader, which holds only while nothing monetizes. |
+| Question                                      | Answer                                                                                                                                                                                                                                                                 |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Company (sp. z o.o.)?                         | **No.**                                                                                                                                                                                                                                                                |
+| JDG?                                          | **No** — it does not get "Gamedev.pl" onto the App Store (Apple rejects trade names and treats a sole proprietorship as an individual), and VAT registration + business legal status are two of Apple's own trader-status factors, which is what publishes an address. |
+| Personal legal name public on store listings? | **Accepted.** Applies to **store listings only** — the website still publishes "Gamedev.pl" with no personal name; leave `apps/web/src/legal/operator.ts` alone. See [`legal-compliance-plan.md`](./legal-compliance-plan.md).                                         |
+| Personal address public?                      | **No** — avoided by declaring non-trader, which holds only while nothing monetizes.                                                                                                                                                                                    |
 
 ---
 
@@ -21,11 +21,11 @@ Unblocks code that is already deployed and dormant. Publishes **nothing** public
 is no App Store listing at this stage.
 
 - [x] **A1.** Enrolled as **Individual** 2026-07-28. Team ID `ZLSCSP42P9`.
-      Do *not* attempt organization enrolment — it needs a legal entity and a D-U-N-S number.
+      Do _not_ attempt organization enrolment — it needs a legal entity and a D-U-N-S number.
 - [x] **A2.** App ID `pl.gamedev.app`, Sign in with Apple enabled.
       Note: the **Description** field accepts only letters, numbers and spaces — `Gamedev.pl` is rejected for the dot, so it is `Gamedev`.
 - [x] **A3.** Services ID `pl.gamedev.web` (description `Gamedev`).
-      Services IDs are **under Identifiers** via the filter dropdown, *not* the left-nav "Services" section, which is a different feature.
+      Services IDs are **under Identifiers** via the filter dropdown, _not_ the left-nav "Services" section, which is a different feature.
 - [x] **A4.** Web Authentication Configuration: primary App ID `pl.gamedev.app`,
       domain `www.gamedev.pl`, return URL `https://www.gamedev.pl/` (exact, trailing slash, https —
       Apple rejects every `http://` URL, which is why this flow cannot be tested below a deployed origin).
@@ -33,14 +33,16 @@ is no App Store listing at this stage.
       Apple validates the web flow against the **registered Return URLs**; the
       `apple-developer-domain-association.txt` file belongs to the private-email relay service, which this
       product deliberately does not use. If a future need appears, the Download button lives in the panel
-      behind the **+** next to *Website URLs*.
-- [x] **A6.** Repo Actions *variables* set 2026-07-28 (not secrets — both values are public):
+      behind the **+** next to _Website URLs_.
+- [x] **A6.** Repo Actions _variables_ set 2026-07-28 (not secrets — both values are public):
       `APPLE_SERVICES_ID=pl.gamedev.web`, `APPLE_CLIENT_IDS=pl.gamedev.web`.
-- [ ] **A7.** You sign in with Apple on https://www.gamedev.pl once, from a device with an Apple ID.
-      **Choose "Share My Email", not Hide My Email**, for the first test — the relay path deliberately
-      does not link to an existing account.
+- [x] **A7.** Verified in production 2026-07-28: signing in with Apple landed the owner in their
+      **existing** account with their games — account linking working against real Apple tokens.
+      (Use "Share My Email", not Hide My Email: the relay path deliberately cannot link.)
 
-**Phase A ends here and is worth doing on its own**, independent of any store app.
+**Phase A is complete.** Sign in with Apple is live on the web. Remaining Apple nit: the
+sign-in sheet reads "sign in to **Gamedev**" because the Services ID description field
+rejects the dot in `Gamedev.pl` — same alphanumeric-and-spaces rule as the App ID.
 
 ---
 
@@ -50,7 +52,7 @@ Only when a Capacitor build actually exists. Do **not** pay before B1.
 
 - [ ] **B1.** Walk the [Play Console](https://play.google.com/console/signup) signup as a **Personal** account **without paying**, to the point where it shows what will be displayed publicly.
       Confirm no address is shown for a free, non-monetized app. If it insists on a public address, stop and get a
-      mail-forwarding address (*biuro wirtualne*, ~50–150 PLN/mo) before continuing.
+      mail-forwarding address (_biuro wirtualne_, ~50–150 PLN/mo) before continuing.
 - [ ] **B2.** Pay the **$25** one-time fee. Complete identity verification (government ID).
 - [ ] **B3.** Set **Developer name** = `Gamedev.pl`. This is the public listing name and is separate from the
       verified legal name shown under "About the developer".
@@ -63,13 +65,13 @@ Only when a Capacitor build actually exists. Do **not** pay before B1.
 
 ## Phase C — Signing
 
-- [ ] **C1.** App Store Connect → Users and Access → **Integrations** → App Store Connect **API key**, role *App Manager*.
+- [ ] **C1.** App Store Connect → Users and Access → **Integrations** → App Store Connect **API key**, role _App Manager_.
       Save the `.p8` (downloadable **once**), the **Key ID** and the **Issuer ID**. Give them to Claude for GitHub secrets.
       Use this rather than an Apple ID + password anywhere in CI.
 - [ ] **C2.** Android upload key — run locally, then back up the `.jks` **and** its passwords somewhere that survives this laptop:
-      ```bash
-      keytool -genkeypair -v -keystore gamedev-upload.jks -alias upload -keyalg RSA -keysize 2048 -validity 10000
-      ```
+      `bash
+  keytool -genkeypair -v -keystore gamedev-upload.jks -alias upload -keyalg RSA -keysize 2048 -validity 10000
+  `
 - [ ] **C3.** **Enrol in Play App Signing** when creating the app in Console. Without it, losing the keystore means the app
       can never be updated again — new package name, install base gone. With it, a lost upload key is a support ticket.
 - [ ] **C4.** Never commit either key. Claude adds them as GitHub Actions secrets (keystore base64-encoded).

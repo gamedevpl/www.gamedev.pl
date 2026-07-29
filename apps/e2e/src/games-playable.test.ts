@@ -66,9 +66,33 @@ async function sampleCanvas(frame: Frame): Promise<CanvasSample | null> {
   return frame
     .evaluate((threshold) => {
       const canvas = document.querySelector('canvas');
-      const context = canvas?.getContext('2d');
-      if (!canvas || !context) return null;
-      const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+      if (!canvas || !canvas.width || !canvas.height) return null;
+
+      // Prefer 2d getImageData. WebGL scene3d canvases have no 2d context — draw into
+      // an offscreen 2d canvas (requires preserveDrawingBuffer on the GL context).
+      let data: Uint8ClampedArray | null = null;
+      try {
+        const context = canvas.getContext('2d');
+        if (context) {
+          data = context.getImageData(0, 0, canvas.width, canvas.height).data;
+        }
+      } catch {
+        data = null;
+      }
+      if (!data) {
+        try {
+          const off = document.createElement('canvas');
+          off.width = canvas.width;
+          off.height = canvas.height;
+          const ctx = off.getContext('2d');
+          if (!ctx) return null;
+          ctx.drawImage(canvas, 0, 0);
+          data = ctx.getImageData(0, 0, off.width, off.height).data;
+        } catch {
+          return null;
+        }
+      }
+
       let lit = 0;
       let digest = 0;
       for (let i = 0; i < data.length; i += 4) {
@@ -138,7 +162,9 @@ async function inspectGame(page: Page, slug: string): Promise<GameReport> {
  */
 function playable(report: GameReport): boolean {
   return (
-    report.sandbox === 'allow-scripts' && report.frameAppeared && (report.animated || report.respondedToInput === true)
+    report.sandbox === 'allow-scripts allow-pointer-lock' &&
+    report.frameAppeared &&
+    (report.animated || report.respondedToInput === true)
   );
 }
 
@@ -231,6 +257,8 @@ describe.skipIf(!prereq.ok)('published games are playable', () => {
       sandboxes.add(await iframe.getAttribute('sandbox'));
     }
 
-    expect([...sandboxes], 'every game frame must be exactly allow-scripts').toEqual(['allow-scripts']);
+    expect([...sandboxes], 'every game frame must be exactly allow-scripts allow-pointer-lock').toEqual([
+      'allow-scripts allow-pointer-lock',
+    ]);
   }, 180_000);
 });

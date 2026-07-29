@@ -16,7 +16,7 @@ Then [`docs/contributing-for-agents.md`](docs/contributing-for-agents.md) for th
   that branch has landed on `master` and been deleted, so ignore any stale guidance that calls
   `master` "off-limits" — the previous hand-built games site survives only in early history.
 - **Safety invariant (never break):** generated games render only in an iframe with
-  `sandbox="allow-scripts"` and **no `allow-same-origin`**.
+  `sandbox="allow-scripts allow-pointer-lock"` and **no `allow-same-origin`**.
 - **ESM only**, TypeScript strict, `.js` extensions in relative imports, Prettier + ESLint
   (zero warnings).
 
@@ -101,6 +101,6 @@ secrets. Non-obvious caveats for running/testing locally:
   `mintSessionToken(uid, 'dev-session-secret-change-me')` and send it as the `gamedev_session`
   cookie (see `apps/api/src/app.test.ts`). Dev uses `InMemoryStore` and that default session
   secret (`apps/api/src/server.ts`, `auth.ts`).
-- Generated games render only in `<iframe sandbox="allow-scripts">` with no `allow-same-origin`
+- Generated games render only in `<iframe sandbox="allow-scripts allow-pointer-lock">` with no `allow-same-origin`
   (`apps/web/src/GameFrame.tsx`) — the safety invariant. A produced game document is a
   self-contained `<!doctype html>` with inlined `<style>`/`<script>`.

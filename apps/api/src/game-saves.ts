@@ -7,7 +7,7 @@ import { MAX_GAME_SAVE_BYTES, type Store } from './store.js';
  * Durable per-player game progress (docs/persistent-world-plan.md, phase P1).
  *
  * The game itself never reaches this route. A game runs in an iframe with
- * `sandbox="allow-scripts"`, no `allow-same-origin`, and a CSP with no `connect-src` —
+ * `sandbox="allow-scripts allow-pointer-lock"`, no `allow-same-origin`, and a CSP with no `connect-src` —
  * it could not call an API if it wanted to, which is the invariant the whole platform
  * rests on. What happens instead is the same shape as multiplayer input, in reverse:
  * the game asks its GameKit `save` module for a slot, the module postMessages the

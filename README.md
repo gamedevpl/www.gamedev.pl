@@ -62,7 +62,7 @@ Full detail, including what is deliberately faked locally and what will surprise
 
 Games are real code, so they cannot be safety-checked the way structured data can. Safety
 comes from **execution, not inspection**: every game is assembled into one self-contained
-document and rendered in an `<iframe sandbox="allow-scripts">` with **no `allow-same-origin`**.
+document and rendered in an `<iframe sandbox="allow-scripts allow-pointer-lock">` with **no `allow-same-origin`**.
 It cannot reach the parent page, cookies, storage, or any authenticated endpoint.
 
 That boundary is the single most important invariant in the project. If you find a way around

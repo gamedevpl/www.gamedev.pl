@@ -155,7 +155,7 @@ the coarse outer layer (and is the only limiter on `/api/auth/*`).
    deps is theater. Likely dev-tooling chains; verify.
 2. **Alerting**: 5xx rate + catalog-fetch failure (runtime GitHub API dependency).
 3. **Invariants** (goes in `docs/security-model.md`): game iframes stay
-   `sandbox="allow-scripts"` with **no** `allow-same-origin` — _more_ critical once session
+   `sandbox="allow-scripts allow-pointer-lock"` with **no** `allow-same-origin` — _more_ critical once session
    cookies exist on the app origin; no secret reaches the browser; no tokens in URLs or
    localStorage; creator text is data, never instructions.
 4. **Login abuse**: per-IP limit on `/api/auth/*`; audience + issuer pinned; small
@@ -172,7 +172,7 @@ the coarse outer layer (and is the only limiter on `/api/auth/*`).
 
 ---
 
-## Sign in with Apple (built 2026-07-28, dormant until configured)
+## Sign in with Apple (built and **live** 2026-07-28)
 
 Added ahead of the mobile plan's M2 store apps, where it stops being optional: App Store
 guideline 4.8 requires it beside Google in any app offering a third-party login. It is
@@ -181,17 +181,24 @@ offered on the **web** too rather than app-only, which is
 code — otherwise a creator who signs up through the iOS app cannot reach their own games
 from a desktop browser.
 
-**It is off right now.** Every piece is in the tree and tested, and nothing renders or
-responds until the two environment variables below are set. `/api/auth/apple` answers
-`503`, and the button does not paint.
+**It is on.** Services ID `pl.gamedev.web` was created 2026-07-28 and both variables are
+set, so `/api/health` reports `appleSignIn: true` and the button paints. Verified end to
+end in production the same day, including the part that mattered: signing in with Apple
+landed the owner in their **existing** Google-created account with their games, rather
+than a fresh one — account linking working against real Apple tokens, not just tests.
+
+**Domain verification turned out not to be part of this flow.** The console never offered
+an association file, and none was needed: Apple validates the web flow against the
+registered **Return URLs**. `apple-developer-domain-association.txt` belongs to the
+private-email relay service, which this product deliberately does not use.
 
 ### What the owner has to do (none of it can be done from the repo)
 
 1. Join the **Apple Developer Program** (~$99/yr). Everything below needs it, including
    the web-only flow — there is no free tier for Sign in with Apple.
-2. Create an **App ID** and enable the *Sign in with Apple* capability on it.
-3. Create a **Services ID** (e.g. `pl.gamedev.web`) — this is the *web* client, distinct
-   from the app's bundle ID — and enable *Sign in with Apple* on it.
+2. Create an **App ID** and enable the _Sign in with Apple_ capability on it.
+3. Create a **Services ID** (e.g. `pl.gamedev.web`) — this is the _web_ client, distinct
+   from the app's bundle ID — and enable _Sign in with Apple_ on it.
 4. Under that Services ID, configure:
    - **Domain**: `www.gamedev.pl`, then complete Apple's domain-verification file check.
    - **Return URL**: `https://www.gamedev.pl/` — must be https and must match exactly.
@@ -222,7 +229,7 @@ responds until the two environment variables below are set. `/api/auth/apple` an
   to the waitlist. Correct, but it will read as a bug when it first happens — the fix is
   an explicit "link an Apple ID" action on an already-signed-in account, not looser
   matching.
-- **`email_verified` arrives as a boolean *or* the string `"true"`**, depending on the
+- **`email_verified` arrives as a boolean _or_ the string `"true"`**, depending on the
   flow. `Boolean("false")` is `true`, so a direct read of that claim fails **open** on the
   one flag gating the allowlist. `appleClaimFlag` exists solely for this and is pinned by
   a test.

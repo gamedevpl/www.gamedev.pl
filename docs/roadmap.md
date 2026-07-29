@@ -47,7 +47,7 @@ from the games repo by the API and served through the app
 ([github-client.ts](../apps/api/src/github-client.ts) builds the catalog straight
 from `games/` directories rather than depending on a public `catalog.json`), then run
 in the sandboxed iframe via `srcDoc`. Isolation comes from
-`sandbox="allow-scripts"` with no `allow-same-origin` plus an opaque origin — not
+`sandbox="allow-scripts allow-pointer-lock"` with no `allow-same-origin` plus an opaque origin — not
 from a separate hostname. The upside is decisive: **the games repo can be private**,
 and unmerged PR previews are playable. The invariant to keep in mind is that the
 assembler and the games repo's own `tools/lib/assemble.ts` must stay in lockstep;
@@ -134,7 +134,9 @@ Genuinely still open, in rough priority order:
   stalls are at least _detected_ now (the notify sweep logs them at `error`); what
   is missing is anything that notices the log.
 - 📋 Protected deployment environments; no `environment:` gate on `deploy.yml`.
-- 📋 Actions are pinned to major tags (`@v4`, `@v2`), not commit SHAs.
+- 📋 Action pinning is incomplete: the Google auth/gcloud actions in `deploy.yml` are
+  SHA-pinned, but first-party `actions/checkout` / `actions/setup-node` remain on
+  major tags across all workflows.
 - 📋 Infrastructure as code. Delivery is shell scripts plus `cloudbuild.yaml`; the
   resources are now decided, so the original "IaC only after resources exist"
   precondition is satisfied.
@@ -144,16 +146,16 @@ Genuinely still open, in rough priority order:
 Substantial work that never had a roadmap phase. Each has its own plan document,
 which is the authority on its detail:
 
-| Workstream                | Status                                                                                         | Plan                                                           |
-| ------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| Closed beta launch        | ✅ live 2026-07-23 on www.gamedev.pl                                                           | [closed-beta-launch-plan.md](./closed-beta-launch-plan.md)     |
-| Auth, usage & quotas      | ✅ Google sign-in, per-user daily counters, waitlist/allowlist                                 | [auth-and-usage-plan.md](./auth-and-usage-plan.md)             |
-| Content safety            | ✅ moderation on submission via the genai seam; beta allowlist as the interim outer safeguard  | [content-safety-plan.md](./content-safety-plan.md)             |
-| Creator QA pass           | ✅ clarifying questions before spec freeze, now a hard precondition                            | [creator-qa-plan.md](./creator-qa-plan.md)                     |
-| Notifications             | ✅ in-app bell, email + unsubscribe, Web Push (desktop/Android), Cloud Scheduler sweep         | [notifications-plan.md](./notifications-plan.md)               |
-| Live agent build channel  | ✅ agent posts progress/screenshots and gets queued creator requests back                      | [agent-live-channel-plan.md](./agent-live-channel-plan.md)     |
-| Creator experience review | ✅ backlog from a real three-hour session, closed out                                          | [creator-experience-review.md](./creator-experience-review.md) |
-| Multiplayer party mode    | 🚧 relay + party module + seed games built; the single-instance cap is its price (see Phase 5) | [multiplayer-plan.md](./multiplayer-plan.md)                   |
+| Workstream                | Status                                                                                           | Plan                                                           |
+| ------------------------- | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------- |
+| Closed beta launch        | ✅ live 2026-07-23 on www.gamedev.pl                                                             | [closed-beta-launch-plan.md](./closed-beta-launch-plan.md)     |
+| Auth, usage & quotas      | ✅ Google sign-in, per-user daily counters, waitlist/allowlist                                   | [auth-and-usage-plan.md](./auth-and-usage-plan.md)             |
+| Content safety            | ✅ moderation on submission via the genai seam; beta allowlist as the interim outer safeguard    | [content-safety-plan.md](./content-safety-plan.md)             |
+| Creator QA pass           | ✅ clarifying questions before spec freeze, now a hard precondition                              | [creator-qa-plan.md](./creator-qa-plan.md)                     |
+| Notifications             | ✅ in-app bell, email + unsubscribe, Web Push (desktop/Android), Cloud Scheduler sweep           | [notifications-plan.md](./notifications-plan.md)               |
+| Live agent build channel  | ✅ agent posts progress/screenshots and gets queued creator requests back                        | [agent-live-channel-plan.md](./agent-live-channel-plan.md)     |
+| Creator experience review | ✅ backlog from a real three-hour session, closed out                                            | [creator-experience-review.md](./creator-experience-review.md) |
+| Multiplayer party mode    | 🚧 relay + party module + seed games built; the single-instance cap is its price (see Phase 5)   | [multiplayer-plan.md](./multiplayer-plan.md)                   |
 | Mobile                    | 🚧 mobile web ✅ + PWA ✅ (device-verified, iOS push works); store apps need Apple/Play accounts | [mobile-app-plan.md](./mobile-app-plan.md)                     |
 
 ## Phase 6 — Improvement loop 📋

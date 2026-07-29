@@ -138,7 +138,7 @@ committing.
 What it costs: the preview can show something that was never committed. Mitigate by expiring the
 pushed build as soon as a new commit lands on the branch (we already track `headSha`), and
 labelling it as an unsaved work-in-progress. Security is unchanged — same `assembleGameHtml`
-with `restrictNetwork`, same `sandbox="allow-scripts"` iframe with no `allow-same-origin`, same
+with `restrictNetwork`, same `sandbox="allow-scripts allow-pointer-lock"` iframe with no `allow-same-origin`, same
 `default-src 'none'` CSP. Nothing about this makes agent code more trusted than it is today.
 
 ### 6. Rich media (screenshots)

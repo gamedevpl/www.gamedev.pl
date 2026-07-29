@@ -105,7 +105,7 @@ Two remain, and they're simpler than before.
 
 **1. Generated game code is still untrusted.** It's written by an agent, and later influenced
 by creator specs and player remix requests. It runs in the player's browser, so the existing
-invariant is unchanged and non-negotiable: `sandbox="allow-scripts"` with **no
+invariant is unchanged and non-negotiable: `sandbox="allow-scripts allow-pointer-lock"` with **no
 `allow-same-origin`** (see [`security-model.md`](./security-model.md)). Serving games from a
 separate, cookieless origin remains the right call.
 

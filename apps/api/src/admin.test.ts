@@ -365,7 +365,9 @@ describe('GET /api/admin/suggestions', () => {
   it('answers 404 to a non-admin and to a signed-out caller alike', async () => {
     const app = await appWith(store);
 
-    expect((await app.inject({ method: 'GET', url: '/api/admin/suggestions', headers: authHeaders('g:beta') })).statusCode).toBe(404);
+    expect(
+      (await app.inject({ method: 'GET', url: '/api/admin/suggestions', headers: authHeaders('g:beta') })).statusCode,
+    ).toBe(404);
     expect((await app.inject({ method: 'GET', url: '/api/admin/suggestions' })).statusCode).toBe(404);
     await app.close();
   });
@@ -389,10 +391,20 @@ describe('GET /api/admin/suggestions', () => {
       window: { days: ['2026-07-28'], truncated: false },
       sessions: { count: 100, bounces: 0, closes: 0, medianPlaySeconds: 30, totalPlaySeconds: 3000 },
       health: { errors: 50, aliveTicks: 1000, stalledTicks: 0, stallRate: 0, medianFps: 60, resumeTicksIgnored: 0 },
-      depth: { outcomes: { won: 0, lost: 0, quit: 0 }, sessionsWithEnding: 0, finishRate: null, winRate: 0, medianBestScore: null },
+      depth: {
+        outcomes: { won: 0, lost: 0, quit: 0 },
+        sessionsWithEnding: 0,
+        finishRate: null,
+        winRate: 0,
+        medianBestScore: null,
+      },
       votes: { up: 0, down: 0 },
       feedback: { count: 0 },
-      untrusted: { errorSamples: [{ message: 'TypeError: x is not a function', count: 50 }], progressLabels: [], feedbackThemes: [] },
+      untrusted: {
+        errorSamples: [{ message: 'TypeError: x is not a function', count: 50 }],
+        progressLabels: [],
+        feedbackThemes: [],
+      },
     };
     // Typed, not cast: this fixture is the only thing asserting the endpoint's shape, so a
     // change to Scorecard should fail here rather than be absorbed.
@@ -401,7 +413,14 @@ describe('GET /api/admin/suggestions', () => {
     const app = await appWith(store);
     const res = await app.inject({ method: 'GET', url: '/api/admin/suggestions', headers: authHeaders('g:boss') });
 
-    const body = res.json() as { suggestions: Array<{ slug: string; class: string; untrustedContext: { errorSamples: Array<{ message: string }> } }>; computedFrom: string };
+    const body = res.json() as {
+      suggestions: Array<{
+        slug: string;
+        class: string;
+        untrustedContext: { errorSamples: Array<{ message: string }> };
+      }>;
+      computedFrom: string;
+    };
     expect(body.suggestions).toHaveLength(1);
     expect(body.suggestions[0]).toMatchObject({ slug: 'crashy', class: 'defect' });
     // The game's own error text reaches the operator, under the name that says so.

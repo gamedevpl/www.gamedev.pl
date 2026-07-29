@@ -39,14 +39,23 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
 /**
  * Sum of GameKit platform allowances outside the author budget (touch, restart,
  * music, touch hint, progress, universal input, pointer poll, draw surface,
- * pointer release, host pause, mascot draw, …) plus a deliberate headroom band.
+ * pointer release, host pause, mascot draw, headroom, gfx3d, look, spatial, …).
  * Together with {@link GAME_BUDGET_BYTES} this must equal games-repo
- * `MAX_BUNDLE_BYTES` (358_027, matching games-repo
- * `shared/assemble-contract.json` `maxProjectBytes`). Not a round KiB: the
- * platform side is an explicit sum of named allowances, not a padded
- * `42 * 1024` block.
+ * `MAX_BUNDLE_BYTES` (389_687, matching games-repo
+ * `shared/assemble-contract.json` `maxProjectBytes`). Not a round KiB.
  *
- * Last moved by games-repo #111 (the `gfx3d` kit): +32_000 (`gfx3d`) for an
+ * Last moved by games-repo #120 (Scene3D B8/B9): two new named allowances on top
+ * of the B7 `gfx3d` 56_000 reserve — +4_683 (`lookControls`) and +2_977
+ * (`spatialAudio`), 382_027 → 389_687.
+ *
+ * Before that, games-repo #117 (Scene3D B7): `gfx3d` 40_000 → 56_000 (+16_000,
+ * 366_027 → 382_027) for procedural textures, point lights and bloom.
+ *
+ * Before that, games-repo #113 (the voxel and third-person pilots): `gfx3d`
+ * 32_000 → 40_000 (+8_000, 358_027 → 366_027) for the scene3d template and the
+ * chase camera those pilots share. Same opt-in shape as the band below.
+ *
+ * Before that, games-repo #111 (the `gfx3d` kit): +32_000 (`gfx3d`) for an
  * opt-in Lambert-mesh scene module measured at ~31.5 KiB transpiled. It is only
  * inlined when a `GAME.json` asks for it, so unlike the allowances below it is
  * not bytes every game pays — but the cap is a single number, and a gfx3d game
@@ -54,23 +63,10 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
  * That is the same shape as the touch-layer drift that put block-cascade and
  * rooftop-dash live answering 422.
  *
- * Before that, games-repo #102 did two things: +679 (`mascotDraw`) for
- * `draw.mascot` on the createRenderer surface, and +75_237 (`headroom`) — 30% of
- * the 250_790 ceiling that resulted — to stop the cap being a hair trigger. It had
- * been pinned to the exact assembled size of the tightest published title, so a
- * 679-byte platform change needed a measured constant and a paired PR on this
- * side; `tower-defence` had 90 bytes of room. The band is deliberate slack, not a
- * measurement, and the author budget above is untouched by it.
- *
- * Before that, host-pause: +1_473 (`hostPause`, includes `suspend().catch`) so
- * Creator Studio / theater can dispatch `gdpl-pause` / `gdpl-resume` without the
- * shell patching rAF. Before that, games-repo PR #103
- * raised `touch` 12_795 → 13_061 (+266) when `createInput` began requiring an
- * explicit steer decision. Every game is served that layer whether it asked for
- * it or not, so it is charged to the platform side; charging it to authors would
- * silently shrink what they may write.
+ * Before that, games-repo #102: +679 (`mascotDraw`) and +75_237 (`headroom`) — 30% of
+ * the 250_790 ceiling — plus earlier host-pause / touch steer raises.
  */
-export const GAMEKIT_PLATFORM_BYTES = 153_227;
+export const GAMEKIT_PLATFORM_BYTES = 184_887;
 
 /** Combined html+js+css size cap — must match games-repo `MAX_BUNDLE_BYTES`. */
 export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
