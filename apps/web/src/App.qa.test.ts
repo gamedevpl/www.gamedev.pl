@@ -57,6 +57,7 @@ function mockApi(options: { onRefine?: () => void; gate?: Promise<void> } = {}) 
       return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: false }));
     }
     if (url.endsWith('/api/catalog')) return new Response(JSON.stringify([]));
+    if (url.includes('/api/recommendations')) return new Response(JSON.stringify({ items: [] }));
     if (url.includes('/api/quota')) {
       return new Response(JSON.stringify({ submissions: { used: 0, limit: 5 } }));
     }

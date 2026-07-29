@@ -24,6 +24,12 @@ function mockPublicApis() {
     if (url.endsWith('/api/catalog')) {
       return new Response(JSON.stringify([]));
     }
+    if (url.includes('/api/recommendations')) {
+      return new Response(JSON.stringify({ items: [] }));
+    }
+    if (/\/api\/games\/[^/]+\/played$/.test(new URL(url, 'http://localhost').pathname)) {
+      return new Response(null, { status: 204 });
+    }
     if (url.includes('/api/games/')) {
       return new Response(JSON.stringify({ slug: 'sky-dodge', title: 'Sky Dodge', html: '<canvas></canvas>' }));
     }
