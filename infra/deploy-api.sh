@@ -40,6 +40,11 @@
 #                               /api/internal/scorecard-sweep. Separate from the notify
 #                               audience because an OIDC audience is the endpoint's own
 #                               URL — one sweep's token must not be replayable at the other.)
+#   ZONE_HOST_URL=...          (gamedev-world's URL; enables authoritative zones. Unset
+#                               means /api/games/:slug/zone/ticket 404s and games play on
+#                               unchanged — the intended default. Must be passed on EVERY
+#                               deploy: --set-env-vars replaces the whole map, so omitting
+#                               it here silently switches zones off.)
 #
 # Then run:
 #   PROJECT_ID=my-proj ./infra/deploy-api.sh
@@ -82,6 +87,7 @@ DIGEST_SWEEP_AUDIENCE="${DIGEST_SWEEP_AUDIENCE:-}"
 # the private key is a Secret Manager secret wired in below. Push is off without them.
 VAPID_PUBLIC_KEY="${VAPID_PUBLIC_KEY:-}"
 VAPID_SUBJECT="${VAPID_SUBJECT:-}"
+ZONE_HOST_URL="${ZONE_HOST_URL:-}"
 
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/app:$(date +%Y%m%d-%H%M%S)"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -190,6 +196,9 @@ if [ -n "$VAPID_PUBLIC_KEY" ]; then
 fi
 if [ -n "$VAPID_SUBJECT" ]; then
   ENV_VARS="${ENV_VARS}|VAPID_SUBJECT=${VAPID_SUBJECT}"
+fi
+if [ -n "$ZONE_HOST_URL" ]; then
+  ENV_VARS="${ENV_VARS}|ZONE_HOST_URL=${ZONE_HOST_URL}"
 fi
 
 echo "==> Deploying to Cloud Run (scale-to-zero)"

@@ -124,6 +124,22 @@ jobs:
           # cannot map a guest onto the host's instance. To scale out again, first
           # split the relay into its own service or move room state somewhere shared
           # (docs/multiplayer-plan.md §4.6).
+          #
+          # ZONE_HOST_URL is threaded through from a repo variable rather than being set
+          # on the service by hand: --set-env-vars replaces the whole map, so a manually
+          # set value would be silently wiped by the next deploy and zones would go dark
+          # with no failure signal. Appended only when non-empty, matching how
+          # infra/deploy-api.sh treats every optional var — an omitted variable leaves
+          # ZONE_HOST_URL unset, zones.ts reads that as absent, and
+          # /api/games/:slug/zone/ticket 404s while every game plays on unchanged. That
+          # is the intended default until gamedev-world is deployed (infra/deploy-world.sh,
+          # docs/p3-zone-host-infra.md).
+          ENV_VARS="^|^GAMES_REPO=${GAMES_REPO}|GAMES_SNAPSHOT_BUCKET=${GAMES_SNAPSHOT_BUCKET}|GOOGLE_OAUTH_CLIENT_ID=${{ vars.GOOGLE_OAUTH_CLIENT_ID }}|APPLE_CLIENT_IDS=${{ vars.APPLE_CLIENT_IDS }}|WEB_ORIGIN=https://gamedev-app-334141807880.europe-west1.run.app,https://www.gamedev.pl,https://gamedev.pl|CANONICAL_HOST=www.gamedev.pl|PRIVATE_BETA=true|BETA_ALLOWED_UIDS=${{ vars.BETA_ALLOWED_UIDS }}|BETA_ALLOWED_EMAILS=${{ vars.BETA_ALLOWED_EMAILS }}|ADMIN_UIDS=${{ vars.ADMIN_UIDS }}|NOTIFY_SWEEP_AUDIENCE=${{ vars.NOTIFY_SWEEP_AUDIENCE }}|NOTIFY_SWEEP_SA=${{ vars.NOTIFY_SWEEP_SA }}|SCORECARD_SWEEP_AUDIENCE=${{ vars.SCORECARD_SWEEP_AUDIENCE }}|DIGEST_SWEEP_AUDIENCE=${{ vars.DIGEST_SWEEP_AUDIENCE }}|VAPID_PUBLIC_KEY=${{ vars.VAPID_PUBLIC_KEY }}|VAPID_SUBJECT=${{ vars.VAPID_SUBJECT }}"
+          ZONE_HOST_URL_VAL="${{ vars.ZONE_HOST_URL }}"
+          if [ -n "$ZONE_HOST_URL_VAL" ]; then
+            ENV_VARS="${ENV_VARS}|ZONE_HOST_URL=${ZONE_HOST_URL_VAL}"
+          fi
+
           gcloud run deploy "$SERVICE" \
             --image "$IMAGE" \
             --region "$REGION" \
@@ -135,7 +151,7 @@ jobs:
             --min-instances 0 \
             --max-instances 1 \
             --port 8080 \
-            --set-env-vars "^|^GAMES_REPO=${GAMES_REPO}|GAMES_SNAPSHOT_BUCKET=${GAMES_SNAPSHOT_BUCKET}|GOOGLE_OAUTH_CLIENT_ID=${{ vars.GOOGLE_OAUTH_CLIENT_ID }}|APPLE_CLIENT_IDS=${{ vars.APPLE_CLIENT_IDS }}|WEB_ORIGIN=https://gamedev-app-334141807880.europe-west1.run.app,https://www.gamedev.pl,https://gamedev.pl|CANONICAL_HOST=www.gamedev.pl|PRIVATE_BETA=true|BETA_ALLOWED_UIDS=${{ vars.BETA_ALLOWED_UIDS }}|BETA_ALLOWED_EMAILS=${{ vars.BETA_ALLOWED_EMAILS }}|ADMIN_UIDS=${{ vars.ADMIN_UIDS }}|NOTIFY_SWEEP_AUDIENCE=${{ vars.NOTIFY_SWEEP_AUDIENCE }}|NOTIFY_SWEEP_SA=${{ vars.NOTIFY_SWEEP_SA }}|SCORECARD_SWEEP_AUDIENCE=${{ vars.SCORECARD_SWEEP_AUDIENCE }}|DIGEST_SWEEP_AUDIENCE=${{ vars.DIGEST_SWEEP_AUDIENCE }}|VAPID_PUBLIC_KEY=${{ vars.VAPID_PUBLIC_KEY }}|VAPID_SUBJECT=${{ vars.VAPID_SUBJECT }}" \
+            --set-env-vars "$ENV_VARS" \
             "${SECRET_FLAGS[@]}"
 
       - name: Smoke test candidate revision
