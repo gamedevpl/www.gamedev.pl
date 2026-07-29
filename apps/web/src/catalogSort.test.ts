@@ -159,6 +159,26 @@ describe('catalog filters', () => {
     ]);
   });
 
+  it('keeps only the creator’s published games for your_games', () => {
+    const mine = new Set(['alpha', 'mid']);
+    expect(
+      applyCatalogFilters(catalog, new Set(['your_games']), new Map(), mine).map((e) => e.slug),
+    ).toEqual(['alpha', 'mid']);
+  });
+
+  it('combines your_games and not_played', () => {
+    rememberRecentPlay('mid');
+    const mine = new Set(['alpha', 'mid', 'zeta']);
+    expect(
+      applyCatalogFilters(
+        catalog,
+        new Set(['your_games', 'not_played']),
+        new Map([['alpha', '2026-07-28T12:00:00.000Z']]),
+        mine,
+      ).map((e) => e.slug),
+    ).toEqual(['zeta']);
+  });
+
   it('migrates the legacy not_played sort into filters', () => {
     localStorage.setItem('gdpl.catalogSort', 'not_played');
     expect([...readCatalogFilters()]).toEqual(['not_played']);
@@ -171,8 +191,8 @@ describe('catalog filters', () => {
     expect([...readCatalogFilters()]).toEqual(['not_played']);
   });
 
-  it('drops obsolete your_games filter ids from storage', () => {
+  it('round-trips your_games and not_played in storage', () => {
     localStorage.setItem('gdpl.catalogFilters', JSON.stringify(['your_games', 'not_played']));
-    expect([...readCatalogFilters()]).toEqual(['not_played']);
+    expect([...readCatalogFilters()].sort()).toEqual(['not_played', 'your_games']);
   });
 });

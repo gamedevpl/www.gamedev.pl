@@ -152,9 +152,12 @@
     "toolbarLabel": "Catalog filters and sort",
     "yoursBadge": "Yours",
     "filter": {
+      "your_games": "My games",
       "not_played": "Not played"
     },
     "emptyNotPlayed": "You've played every game here.",
+    "emptyYourGames": "You haven't published a game yet.",
+    "emptyYourGamesNotPlayed": "You've played all of your games here.",
     "clearFilters": "Show all games",
     "sort": {
       "recommended": "Recommended",

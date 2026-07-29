@@ -152,9 +152,12 @@
     "toolbarLabel": "Filtry i sortowanie katalogu",
     "yoursBadge": "Twoje",
     "filter": {
+      "your_games": "Moje gry",
       "not_played": "Niegrane"
     },
     "emptyNotPlayed": "Grałeś już we wszystkie gry tutaj.",
+    "emptyYourGames": "Nie opublikowałeś jeszcze żadnej gry.",
+    "emptyYourGamesNotPlayed": "Grałeś już we wszystkie swoje gry tutaj.",
     "clearFilters": "Pokaż wszystkie gry",
     "sort": {
       "recommended": "Polecane",
