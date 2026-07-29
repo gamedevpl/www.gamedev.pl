@@ -45,6 +45,20 @@ games-repo order rather than inventing a shuffle.
 ## API
 
 - `POST /api/games/:slug/played` — session optional; writes affinity for signed-in
-  humans; always 204 for bots / anonymous
-- `GET /api/recommendations?recent=slug,slug` — returns `{ items, popularity, lastPlayed, newest }`
-  for the catalog toolbar (`apps/web/src/recommendationsApi.ts`)
+  non-bot users; `204` otherwise.
+- `GET /api/recommendations?recent=slug1,slug2` — returns ranking plus sort helpers:
+
+```json
+{
+  "items": [{ "slug": "…", "reason": "popular" }],
+  "popularity": [{ "slug": "…", "sessions": 12 }],
+  "lastPlayed": [{ "slug": "…", "lastPlayedAt": "…" }],
+  "newest": ["slug-a", "slug-b"]
+}
+```
+
+## UI
+
+[`ArcadeCatalog`](../apps/web/src/ArcadeCatalog.tsx) shows a Not played filter toggle
+and a sort dropdown beside the Games heading, then reorders/filters the same grid.
+Logic lives in [`catalogSort.ts`](../apps/web/src/catalogSort.ts).
