@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { InvalidAgentTokenError, readBearerToken, verifyAgentToken } from './agent-token.js';
 import { InvalidUploadError, type GamesStore } from './games-store.js';
 import { canTransition } from './job-state.js';
-import { isNativeJobId, type CreatorMessage, type Store, type SubmissionRecord } from './store.js';
+import { type CreatorMessage, type Store, type SubmissionRecord } from './store.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from './submission-status.js';
 
 /**
@@ -593,7 +593,7 @@ export async function registerAgentChannelRoutes(
         // game to the review queue on the agent's say-so, before our gate had run and
         // whatever it might have said. `submitted` is the state the reconciler refuses
         // to move, which is exactly the protection this needs.
-        if (store && isNativeJobId(issueNumber)) {
+        if (store) {
           const current = record.state ?? 'building';
           if (canTransition(current, 'submitted')) {
             await store.recordJobTransition(issueNumber, {
