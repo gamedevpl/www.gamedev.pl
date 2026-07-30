@@ -5,8 +5,9 @@
 > the creator-facing scorecard all shipped, so a creator can now answer all three
 > of IL-2's exit questions without an agent. **IL-3 is in progress**: the router
 > classifies live scorecards at `GET /api/admin/suggestions`, and the nightly
-> analyst run persists what it says into `suggestions/`. What remains — the inbox,
-> approval, and measurement — is described under IL-3 below. Note that as of the
+> analyst run persists what it says into `suggestions/`, where a creator can approve
+> one into an evidence-fenced issue or dismiss it with a reason. What remains is the
+> stall alert and the 14-day measurement, described under IL-3 below. Note that as of the
 > first reading no game yet routes to an actionable class, so the queue is
 > correctly empty until play volume catches up; that is data, not a defect.
 > **IL-4 has not started**: it depends on IL-3's exit, a merged and measured
