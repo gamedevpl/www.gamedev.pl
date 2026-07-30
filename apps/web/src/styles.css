@@ -7252,10 +7252,41 @@ body.player-open {
   margin-bottom: 0.5rem;
 }
 
+/* Four separate figures, read at a glance and in any order. */
 .admin-console-counts {
-  font-size: 0.85rem;
-  opacity: 0.75;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1.1rem;
+  margin: 0;
   font-variant-numeric: tabular-nums;
+}
+
+.admin-console-counts div {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+}
+
+.admin-console-counts dt {
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.55;
+}
+
+.admin-console-counts dd {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.admin-console-counts .is-warn dd {
+  color: var(--danger, #c0392b);
+}
+
+.admin-console-of {
+  font-weight: 400;
+  opacity: 0.55;
 }
 
 .admin-tabs {
@@ -7267,13 +7298,21 @@ body.player-open {
 
 .admin-tab {
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   padding: 0.3rem 0.75rem;
   font: inherit;
   font-size: 0.85rem;
+  text-decoration: none;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
   background: transparent;
   color: inherit;
+}
+
+.admin-tab:hover {
+  border-color: color-mix(in srgb, currentColor 60%, transparent);
 }
 
 .admin-tab.is-active {
@@ -7282,33 +7321,91 @@ body.player-open {
 }
 
 .admin-tab-badge {
-  margin-left: 0.35rem;
   font-variant-numeric: tabular-nums;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
+  line-height: 1;
+  padding: 0.15rem 0.35rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 20%, transparent);
 }
 
-/* What is waiting on the reader, shown above every section. Colour carries no meaning
-   on its own here — each row says in words what kind of alert it is. */
+.admin-tab-badge.is-warn {
+  background: color-mix(in srgb, var(--danger, #c0392b) 22%, transparent);
+  color: var(--danger, #c0392b);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* What is waiting on the reader, shown above every section — one line until opened, and
+   absent entirely when nothing is waiting. Colour carries no meaning on its own here:
+   each row says in words what kind of alert it is. */
 .admin-alerts {
-  list-style: none;
   margin: 0 0 1.25rem;
+}
+
+.admin-alerts-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  cursor: pointer;
+  padding: 0.4rem 0.6rem;
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--danger, #c0392b) 35%, transparent);
+  background: color-mix(in srgb, var(--danger, #c0392b) 8%, transparent);
+  color: inherit;
+}
+
+.admin-alerts-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--danger, #c0392b) 25%, transparent);
+}
+
+.admin-alerts-gist {
+  flex: 1;
+}
+
+.admin-alerts-chevron {
+  opacity: 0.6;
+}
+
+.admin-alerts-list {
+  list-style: none;
+  margin: 0.3rem 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
 }
 
-.admin-alerts--clear {
-  font-size: 0.85rem;
-  opacity: 0.6;
-}
-
 .admin-alert {
-  padding: 0.4rem 0.6rem;
   border-radius: 4px;
   font-size: 0.85rem;
   background: color-mix(in srgb, currentColor 8%, transparent);
   border-left: 3px solid color-mix(in srgb, currentColor 40%, transparent);
+}
+
+.admin-alert-open {
+  display: block;
+  width: 100%;
+  cursor: pointer;
+  padding: 0.4rem 0.6rem;
+  font: inherit;
+  font-size: inherit;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.admin-alert-open:hover {
+  background: color-mix(in srgb, currentColor 6%, transparent);
 }
 
 .admin-alert--review_ready {
@@ -7441,6 +7538,13 @@ body.player-open {
   margin: 0.15rem 0 0;
   font-size: 1.35rem;
   font-variant-numeric: tabular-nums;
+}
+
+/* The same figure in the unit the bill arrives in, under the one worth quoting. */
+.admin-cost-headline .admin-cost-sub {
+  font-size: 0.75rem;
+  opacity: 0.6;
+  margin-top: 0;
 }
 
 /* Dimmed, not hidden: a build that never shipped is still money, and its row is how the

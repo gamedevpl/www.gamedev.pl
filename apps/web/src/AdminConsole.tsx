@@ -39,6 +39,14 @@ const ALERT_COPY: Record<OperatorAlert['kind'], string> = {
   feedback_undelivered: 'change request never collected — check the relay',
 };
 
+/** The same kinds again, short enough to sit several to a line in the summary. */
+const ALERT_SHORT: Record<OperatorAlert['kind'], string> = {
+  review_ready: 'ready to publish',
+  build_failed: 'failed',
+  build_stalled: 'stopped',
+  feedback_undelivered: 'undelivered feedback',
+};
+
 /** Rough age, in the same vocabulary the queue uses. */
 function since(at: string, now: number): string {
   // Clamped, because these two clocks are not the same clock: `at` is the server's and
@@ -53,39 +61,84 @@ function since(at: string, now: number): string {
   return `${Math.floor(hours / 24)}d`;
 }
 
+/** "2 ready to publish, 1 stopped" — the whole banner, when it is closed. */
+function summarize(alerts: OperatorAlert[]): string {
+  const counts = new Map<OperatorAlert['kind'], number>();
+  // Insertion order is the server's severity order, so the summary leads with the same
+  // thing the list would.
+  for (const alert of alerts) counts.set(alert.kind, (counts.get(alert.kind) ?? 0) + 1);
+  return [...counts].map(([kind, count]) => `${count} ${ALERT_SHORT[kind]}`).join(', ');
+}
+
 /**
  * What is waiting on the person reading, above whatever section they opened.
  *
  * Shown on every section rather than only on the queue: the reason to consolidate these
  * pages is that an operator opens one of them and finds out about the others, and an
  * alert visible only on the page you had to already be on would not be an alert.
+ *
+ * But it is one line until asked, and nothing at all when there is nothing waiting. The
+ * first version was a stack of boxes between the tabs and the section on every page,
+ * including a permanent "Nothing waiting on you." — which is a banner that is always
+ * there, and a banner that is always there is furniture rather than a signal. Collapsed,
+ * it costs a line and still says the number; open, it is the same list as before.
  */
-function AlertBanner({ alerts }: { alerts: OperatorAlert[] }) {
+function AlertBanner({
+  alerts,
+  open,
+  onToggle,
+  onOpenQueue,
+}: {
+  alerts: OperatorAlert[];
+  open: boolean;
+  onToggle: () => void;
+  onOpenQueue: () => void;
+}) {
   const now = Date.now();
-  if (alerts.length === 0) {
-    return <p className="admin-alerts admin-alerts--clear">Nothing waiting on you.</p>;
-  }
+  // Nothing waiting is not news. The header counts already say the queue is quiet.
+  if (alerts.length === 0) return null;
+
   return (
-    <ul className="admin-alerts">
-      {alerts.map((alert) => (
-        <li key={alert.id} className={`admin-alert admin-alert--${alert.kind}`}>
-          <span className="admin-alert-title">{alert.title}</span>{' '}
-          <span className="admin-alert-kind">
-            {ALERT_COPY[alert.kind]}
-            {alert.stall ? ` (${alert.stall})` : ''}
-          </span>{' '}
-          <span className="admin-alert-age">
-            #{alert.issueNumber} · {since(alert.since, now)}
-          </span>
-        </li>
-      ))}
-    </ul>
+    <div className="admin-alerts">
+      <button type="button" className="admin-alerts-summary" aria-expanded={open} onClick={onToggle}>
+        <span className="admin-alerts-count">{alerts.length}</span>
+        <span className="admin-alerts-gist">waiting on you — {summarize(alerts)}</span>
+        <span className="admin-alerts-chevron" aria-hidden="true">
+          {open ? '▾' : '▸'}
+        </span>
+      </button>
+
+      {open && (
+        <ul className="admin-alerts-list">
+          {alerts.map((alert) => (
+            <li key={alert.id} className={`admin-alert admin-alert--${alert.kind}`}>
+              {/* The row is the way to the queue, which is the only place any of these can
+                  actually be acted on. Before this it was inert text that told you
+                  something was wrong and offered no verb. */}
+              <button type="button" className="admin-alert-open" onClick={onOpenQueue}>
+                <span className="admin-alert-title">{alert.title}</span>{' '}
+                <span className="admin-alert-kind">
+                  {ALERT_COPY[alert.kind]}
+                  {alert.stall ? ` (${alert.stall})` : ''}
+                </span>{' '}
+                <span className="admin-alert-age">
+                  #{alert.issueNumber} · {since(alert.since, now)}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
 export function AdminConsole({ section, onNavigate }: { section: AdminSection; onNavigate: (path: string) => void }) {
   const [summary, setSummary] = useState<AdminSummary | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'forbidden' | 'error'>('loading');
+  // Held here rather than in the banner so switching sections does not re-collapse a list
+  // the operator just opened — the banner is the same banner on every section.
+  const [alertsOpen, setAlertsOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -118,33 +171,76 @@ export function AdminConsole({ section, onNavigate }: { section: AdminSection; o
       <header className="admin-console-header">
         <h1>Operator</h1>
         {summary && (
-          <p className="admin-console-counts">
-            {summary.queue.active} active · {summary.queue.stalled} stalled · {summary.limits.todaySubmissions}/
-            {summary.limits.globalDailySubmissionCap} today
-            {summary.limits.paused ? ' · creation paused' : ''}
-          </p>
+          // Discrete figures rather than one dot-separated sentence: these are four
+          // unrelated numbers, and reading them as prose meant reading all of them to
+          // find the one you came for.
+          <dl className="admin-console-counts">
+            <div>
+              <dt>Active</dt>
+              <dd>{summary.queue.active}</dd>
+            </div>
+            <div className={summary.queue.stalled > 0 ? 'is-warn' : undefined}>
+              <dt>Stalled</dt>
+              <dd>{summary.queue.stalled}</dd>
+            </div>
+            <div>
+              <dt>Today</dt>
+              <dd>
+                {summary.limits.todaySubmissions}
+                <span className="admin-console-of">/{summary.limits.globalDailySubmissionCap}</span>
+              </dd>
+            </div>
+            <div className={summary.limits.paused ? 'is-warn' : undefined}>
+              <dt>Creation</dt>
+              <dd>{summary.limits.paused ? 'paused' : 'open'}</dd>
+            </div>
+          </dl>
         )}
       </header>
 
-      <nav className="admin-tabs">
+      <nav className="admin-tabs" aria-label="Operator sections">
         {ADMIN_SECTIONS.map((candidate) => (
-          <button
+          // Real links, not buttons: these are addresses, so a middle-click or a
+          // cmd-click should open one in a new tab the way it does everywhere else on
+          // the site. The click handler is the in-app path, not the only path.
+          <a
             key={candidate}
-            type="button"
+            href={adminPath(candidate)}
             className={candidate === section ? 'admin-tab is-active' : 'admin-tab'}
             aria-current={candidate === section ? 'page' : undefined}
-            onClick={() => onNavigate(adminPath(candidate))}
+            onClick={(event) => {
+              if (event.defaultPrevented || event.button !== 0) return;
+              if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+              event.preventDefault();
+              onNavigate(adminPath(candidate));
+            }}
           >
             {SECTION_LABELS[candidate]}
             {candidate === 'queue' && summary && summary.alerts.length > 0 ? (
-              <span className="admin-tab-badge">{summary.alerts.length}</span>
+              <span className="admin-tab-badge" aria-label={`${summary.alerts.length} waiting on you`}>
+                {summary.alerts.length}
+              </span>
             ) : null}
-          </button>
+            {/* The breaker being pulled is the other state that wants a person, and it
+                is invisible from five of the six sections without this. */}
+            {candidate === 'limits' && summary?.limits.paused ? (
+              <span className="admin-tab-badge is-warn" aria-label="creation paused">
+                paused
+              </span>
+            ) : null}
+          </a>
         ))}
       </nav>
 
       {state === 'error' && <p className="health-empty">Could not read the console summary.</p>}
-      {summary && <AlertBanner alerts={summary.alerts} />}
+      {summary && (
+        <AlertBanner
+          alerts={summary.alerts}
+          open={alertsOpen}
+          onToggle={() => setAlertsOpen((wasOpen) => !wasOpen)}
+          onOpenQueue={() => onNavigate(adminPath('queue'))}
+        />
+      )}
 
       {section === 'queue' && <AdminJobsPanel />}
       {section === 'costs' && <CostsPanel />}

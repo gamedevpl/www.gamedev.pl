@@ -9,14 +9,33 @@
 // (see `JobCostEntry`). Nothing is estimated, and nothing is inferred from state: a job
 // that took four sessions reports four whether or not its transitions still say so.
 //
-// The unit problem is deliberate and load-bearing. Copilot bills a premium request per
-// session and exposes no token counts; the gate bills Cloud Build minutes we do not yet
-// read back. So credits and sessions are real, tokens and dollars are absent, and this
-// module reports absence as absence rather than as zero — a report that said "$0.00 per
-// game" would be worse than one that says the money is not measurable yet.
+// The unit problem is narrower than it looks. Copilot bills a premium request per session
+// and exposes no token counts, so tokens stay absent — but a credit is not a proxy for
+// money, it *is* money in another unit, and converting it estimates nothing. What remains
+// genuinely unpriced is Cloud Build minutes behind the gate, which is a smaller and
+// nameable hole rather than the whole money column.
+//
+// Where absence is still the truth, this module reports absence rather than zero: a job
+// with no ledger reads as unmeasured, not as free.
 
 import { resolveJobState, type JobState } from './job-state.js';
 import type { JobCostEntry, SubmissionRecord } from './store.js';
+
+/**
+ * GitHub fixes an AI credit at $0.01 — 100 credits to the dollar, a published rate rather
+ * than a quote that moves with usage.
+ *
+ * Credits stay the *stored* unit: the ledger books what was actually billed, in the unit
+ * the bill is denominated in, and the conversion happens here on read. If the rate ever
+ * changes, that is one constant and no migration — and a historical entry still says what
+ * it said when it was written.
+ */
+export const USD_PER_CREDIT = 0.01;
+
+/** Money is only ever reported to the cent; floating-point sums are not. */
+function cents(usd: number): number {
+  return Math.round(usd * 100) / 100;
+}
 
 export interface JobCostSummary {
   issueNumber: number;
@@ -31,7 +50,15 @@ export interface JobCostSummary {
   gateRuns: number;
   /** Present only when some backend actually reported tokens. */
   tokens?: { input: number; output: number };
-  /** Present only when some service actually reported money. */
+  /**
+   * What this job cost, in money: credits at the fixed rate plus anything a service
+   * priced directly.
+   *
+   * Absent when no *priced* spending was recorded — which is not the same as no ledger.
+   * A gate run is booked as an entry with neither credits nor dollars, because Cloud
+   * Build minutes are billed and nothing reads the price back, so a job can have a
+   * ledger and still have nothing to report here.
+   */
   usd?: number;
   /** Creation to the last thing that happened to it. */
   elapsedMs: number;
@@ -62,10 +89,14 @@ export interface CostReport {
    * failed twice before succeeding cost three sessions, and so did the game.
    */
   creditsPerPublishedGame: number | null;
+  /** The same number in money, which is the one worth quoting. */
+  usdPerPublishedGame: number | null;
   /** Median wall-clock of the jobs that shipped. Null when none did. */
   medianTimeToPublishMs: number | null;
   /** Of the credits above, how many bought nothing playable. The cost of the failure rate. */
   creditsOnUnpublished: number;
+  /** The failure rate priced. */
+  usdOnUnpublished: number;
   /**
    * Jobs in the window that have no ledger at all — dispatched before this recorded
    * anything. Reported so a small total is legible as "not measured yet" rather than
@@ -103,7 +134,11 @@ function summarize(record: SubmissionRecord): JobCostSummary {
       entry.tokens ? { input: sum.input + entry.tokens.input, output: sum.output + entry.tokens.output } : sum,
     { input: 0, output: 0 },
   );
-  const usd = entries.reduce((sum, entry) => sum + (entry.usd ?? 0), 0);
+  const credits = entries.reduce((sum, entry) => sum + (entry.credits ?? 0), 0);
+  // Credits converted, plus anything a service priced in dollars directly. The two are
+  // added rather than treated as alternatives: they are different spending, not two
+  // measurements of the same spending.
+  const usd = cents(credits * USD_PER_CREDIT + entries.reduce((sum, entry) => sum + (entry.usd ?? 0), 0));
 
   return {
     issueNumber: record.issueNumber,
@@ -111,10 +146,12 @@ function summarize(record: SubmissionRecord): JobCostSummary {
     ...(record.slug ? { slug: record.slug } : {}),
     ...(state ? { state } : {}),
     sessions: entries.filter((entry) => entry.kind === 'agent_session').length,
-    credits: entries.reduce((sum, entry) => sum + (entry.credits ?? 0), 0),
+    credits,
     gateRuns: entries.filter((entry) => entry.kind === 'gate_run').length,
-    // Absent rather than zero: nothing reports these yet, and a zero would read as a
-    // measurement that came back empty instead of one that was never taken.
+    // Absent rather than zero: nothing reports tokens yet, and a zero would read as a
+    // measurement that came back empty instead of one that was never taken. Money is
+    // absent on the same rule — a missing figure means no priced spending was recorded,
+    // which still includes the case of a job whose only entries are unpriced gate runs.
     ...(tokens.input + tokens.output > 0 ? { tokens } : {}),
     ...(usd > 0 ? { usd } : {}),
     elapsedMs: Math.max(0, lastActivityAt(record) - Date.parse(record.createdAt)),
@@ -139,15 +176,21 @@ export function buildCostReport(records: SubmissionRecord[]): CostReport {
     { input: 0, output: 0 },
   );
   if (tokens.input + tokens.output > 0) totals.tokens = tokens;
-  const usd = jobs.reduce((sum, job) => sum + (job.usd ?? 0), 0);
+  const usd = cents(jobs.reduce((sum, job) => sum + (job.usd ?? 0), 0));
   if (usd > 0) totals.usd = usd;
+
+  const unpublished = jobs.filter((job) => !job.published);
 
   return {
     jobs,
     totals,
     creditsPerPublishedGame: totals.published > 0 ? Math.round((totals.credits / totals.published) * 100) / 100 : null,
+    // Divided from the total rather than averaged over the per-job dollars, so the cents
+    // dropped by rounding each job do not compound into the headline.
+    usdPerPublishedGame: totals.published > 0 ? cents(usd / totals.published) : null,
     medianTimeToPublishMs: median(jobs.filter((job) => job.published).map((job) => job.elapsedMs)),
-    creditsOnUnpublished: jobs.filter((job) => !job.published).reduce((sum, job) => sum + job.credits, 0),
+    creditsOnUnpublished: unpublished.reduce((sum, job) => sum + job.credits, 0),
+    usdOnUnpublished: cents(unpublished.reduce((sum, job) => sum + (job.usd ?? 0), 0)),
     unmeasuredJobs: records.filter((record) => (record.costs ?? []).length === 0).length,
   };
 }
