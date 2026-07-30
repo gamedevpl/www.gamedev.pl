@@ -65,6 +65,9 @@ GAMES_REPO="${GAMES_REPO:-gamedevpl/www.gamedev.pl-games}"
 # for that opt-out to work at all, and it is what makes the `-n` guard below mean
 # something instead of being always true.
 GAMES_SNAPSHOT_BUCKET="${GAMES_SNAPSHOT_BUCKET-${PROJECT_ID}-games-snapshots}"
+# The games store — where delivered game sources live. Unset means agents can build but
+# cannot deliver: the upload route answers 503 rather than accepting work and dropping it.
+GAMES_STORE_BUCKET="${GAMES_STORE_BUCKET-${PROJECT_ID}-games-store}"
 GOOGLE_OAUTH_CLIENT_ID="${GOOGLE_OAUTH_CLIENT_ID:-334141807880-t8qsj5n6p3g9imbs3jfut82cecvr87pu.apps.googleusercontent.com}"
 # Both default to empty: Sign in with Apple stays off until the owner creates a Services
 # ID, and off means an honest 503 plus a hidden button rather than a half-wired one.
@@ -119,6 +122,18 @@ else
   echo "==> Submission secrets not found; deploying browse/play-only (submissions return 503)."
 fi
 
+# Dispatch credential for GitHub's agent tasks API. Deliberately a secret of its own
+# rather than a reuse of github-token: the tasks API needs a user-to-server token, and
+# separating them means dispatch and serving fail independently — a dispatch PAT expiring
+# must not take the catalog down with it. Absent means builds are never handed to an
+# agent; submissions are still accepted and sit queued, visibly, in the operator queue.
+if gcloud secrets describe agent-tasks-token --project "$PROJECT_ID" >/dev/null 2>&1; then
+  SECRET_MAPPINGS+=("AGENT_TASKS_TOKEN=agent-tasks-token:latest")
+  echo "==> agent-tasks-token found; agent dispatch enabled."
+else
+  echo "==> agent-tasks-token not found; submissions will queue without being dispatched."
+fi
+
 if gcloud secrets describe session-secret --project "$PROJECT_ID" >/dev/null 2>&1; then
   SECRET_MAPPINGS+=("SESSION_SECRET=session-secret:latest")
   echo "==> session-secret found; session authentication enabled."
@@ -150,6 +165,9 @@ fi
 ENV_VARS="^|^GAMES_REPO=${GAMES_REPO}|WEB_ORIGIN=${WEB_ORIGIN}|PRIVATE_BETA=${PRIVATE_BETA}"
 if [ -n "${GAMES_SNAPSHOT_BUCKET:-}" ]; then
   ENV_VARS="${ENV_VARS}|GAMES_SNAPSHOT_BUCKET=${GAMES_SNAPSHOT_BUCKET}"
+fi
+if [ -n "${GAMES_STORE_BUCKET:-}" ]; then
+  ENV_VARS="${ENV_VARS}|GAMES_STORE_BUCKET=${GAMES_STORE_BUCKET}"
 fi
 if [ -n "${CANONICAL_HOST:-}" ]; then
   ENV_VARS="${ENV_VARS}|CANONICAL_HOST=${CANONICAL_HOST}"

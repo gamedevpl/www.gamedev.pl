@@ -159,7 +159,7 @@ done
 # cross-region read would put the latency back that baking was meant to remove.
 SNAPSHOT_BUCKET="${GAMES_SNAPSHOT_BUCKET:-${PROJECT_ID}-games-snapshots}"
 SNAPSHOT_BUCKET_REGION="${SNAPSHOT_BUCKET_REGION:-europe-west1}"
-echo "==> 8/8 Ensuring the games snapshot bucket gs://${SNAPSHOT_BUCKET} exists"
+echo "==> 8/9 Ensuring the games snapshot bucket gs://${SNAPSHOT_BUCKET} exists"
 if gcloud storage buckets describe "gs://${SNAPSHOT_BUCKET}" --project "$PROJECT_ID" >/dev/null 2>&1; then
   echo "    Bucket already exists."
 else
@@ -211,6 +211,52 @@ gcloud storage buckets update "gs://${SNAPSHOT_BUCKET}" \
   >/dev/null
 rm -f "$LIFECYCLE_FILE"
 echo "    IAM (deployer: write, Cloud Run: read) and 90-day lifecycle applied."
+
+# The games store (apps/api/src/games-store.ts) — the system of record for creator
+# game content, as opposed to the snapshot, which is a rebuildable projection of it.
+# Same region as the snapshot bucket and for the same reason: it is read while baking
+# and while serving previews.
+STORE_BUCKET="${GAMES_STORE_BUCKET:-${PROJECT_ID}-games-store}"
+echo "==> 9/9 Ensuring the games store bucket gs://${STORE_BUCKET} exists"
+if gcloud storage buckets describe "gs://${STORE_BUCKET}" --project "$PROJECT_ID" >/dev/null 2>&1; then
+  echo "    Bucket already exists."
+else
+  # Public access prevention is not belt-and-braces here, it is a promise we published:
+  # the privacy policy says a submitted spec does not become public by being submitted,
+  # and creator sources live in this bucket. A world-readable object would make that
+  # sentence false.
+  gcloud storage buckets create "gs://${STORE_BUCKET}" \
+    --location="$SNAPSHOT_BUCKET_REGION" \
+    --uniform-bucket-level-access \
+    --public-access-prevention \
+    --project="$PROJECT_ID"
+  echo "    Created bucket in ${SNAPSHOT_BUCKET_REGION}."
+fi
+
+# Unlike the snapshot bucket, Cloud Run must *write* here: a delivery arrives over the
+# build channel, which is served by the API, so the runtime is what stores a candidate
+# version. It gets objectCreator + objectViewer rather than objectAdmin — create and read
+# but never delete — so a compromised runtime cannot destroy stored games, and the
+# immutable version ids mean it has no existing path worth overwriting anyway. The
+# deployer keeps objectAdmin because the bake and the gate also prune and rewrite.
+gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
+  --member="serviceAccount:${DEPLOYER_SA}" \
+  --role="roles/storage.objectAdmin" \
+  --project="$PROJECT_ID" \
+  >/dev/null
+
+for role in roles/storage.objectViewer roles/storage.objectCreator; do
+  gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
+    --member="serviceAccount:${RUN_SA}" \
+    --role="$role" \
+    --project="$PROJECT_ID" \
+    >/dev/null
+done
+
+# Deliberately NO lifecycle rule. The snapshot bucket expires old objects because they
+# are rebuildable; these are the originals. A rule that deleted them would delete the
+# games — versioned history is the rollback path and the creator's own record of work.
+echo "    IAM applied (deployer: admin, Cloud Run: read+create). No lifecycle: these are originals."
 
 echo ""
 echo "==> Done. Firestore database, snapshot bucket, IAM roles (datastore.user, aiplatform.user), session-secret, telemetry TTL, and the scorecards read index configured for project ${PROJECT_ID}."

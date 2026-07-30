@@ -10,6 +10,7 @@ import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLar
 import { registerAccessTokenRoutes } from './access-token-routes.js';
 import { registerJobAdminRoutes } from './job-admin-routes.js';
 import { createAgentBackendFromEnv } from './agent-backend-env.js';
+import { createGcsGamesStore } from './games-store.js';
 import { registerAdminRoutes } from './admin.js';
 import { parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
@@ -176,6 +177,17 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     store,
     contentChecker,
     agentBackend: options.submissionRoutes?.agentBackend ?? createAgentBackendFromEnv(app.log),
+    agentChannel: {
+      ...options.submissionRoutes?.agentChannel,
+      // Where a delivered game is stored. Without a bucket the delivery verb answers
+      // 503 rather than accepting an agent's work and silently dropping it — which is
+      // the right behaviour for local development, where there is no bucket at all.
+      gamesStore:
+        options.submissionRoutes?.agentChannel?.gamesStore ??
+        (process.env.GAMES_STORE_BUCKET?.trim()
+          ? createGcsGamesStore({ bucket: process.env.GAMES_STORE_BUCKET.trim() })
+          : undefined),
+    },
   });
 
   // Multiplayer room relay (docs/multiplayer-plan.md). Registered after the auth
