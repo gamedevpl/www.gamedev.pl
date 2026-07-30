@@ -519,7 +519,8 @@ export function App() {
   }, []);
 
   // Header Up chevron — Android-style parent path, never history.back(). Hidden
-  // while a game theater covers the viewport (Close owns escape there).
+  // while App owns a theater (`stageContent`) and on routes whose child owns one
+  // (`/play`, `/draft`, studio playtest — see navUpTarget).
   const headerUp = useMemo(() => {
     if (stageContent) return null;
     const target = navUpTarget(route);
