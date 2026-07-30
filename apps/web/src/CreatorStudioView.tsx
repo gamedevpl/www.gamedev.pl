@@ -23,11 +23,14 @@ import {
   fetchStudioHealth,
   fetchStudioScorecards,
   fetchStudioSuggestions,
+  fetchGameAutonomy,
+  setGameAutonomy,
   submitImprovement,
   type StudioApiError,
   type StudioGame,
   type StudioScorecard,
   type StudioSuggestion,
+  type AutonomyMode,
 } from './studioApi.js';
 
 /**
@@ -832,6 +835,8 @@ function StatsTab({
 
       <SuggestedImprovements slug={game.slug} />
 
+      <AutonomySetting slug={game.slug} />
+
       {health && health.errorSamples.length > 0 ? (
         <div className="studio-error-samples">
           <h3 className="health-section-title">{t('studioPanel.stats.errorSamples')}</h3>
@@ -1085,6 +1090,90 @@ function SuggestionContext({ context }: { context: StudioSuggestion['untrustedCo
     </div>
   );
 }
+
+/**
+ * What the platform may do to this game without asking (IL-4).
+ *
+ * Framed as permission rather than as a feature toggle, and it says the reassuring part
+ * out loud: nothing reaches the site without the creator's review whatever they pick.
+ * That is not marketing — `publishing` is reachable only from `ready_for_review` in the
+ * job state machine, so it is a property of the system rather than a promise about it.
+ */
+function AutonomySetting({ slug }: { slug: string | undefined }) {
+  const { t } = useTranslation();
+  const [mode, setMode] = useState<AutonomyMode | null>(null);
+  const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  useEffect(() => {
+    if (!slug) return;
+    let cancelled = false;
+    fetchGameAutonomy(slug)
+      .then((value) => {
+        if (!cancelled) setMode(value);
+      })
+      // A game the creator does not own, or a deployment without this route, simply has
+      // no control to show — it must not break the stats page around it.
+      .catch(() => {
+        if (!cancelled) setMode(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
+
+  if (!slug || mode === null) return null;
+
+  async function choose(next: AutonomyMode) {
+    if (!slug) return;
+    const previous = mode;
+    setMode(next);
+    setState('saving');
+    try {
+      setMode(await setGameAutonomy(slug, next));
+      setState('saved');
+    } catch {
+      // Put it back rather than leave the control showing a setting that is not stored.
+      setMode(previous);
+      setState('error');
+    }
+  }
+
+  return (
+    <div className="studio-autonomy">
+      <h3 className="health-section-title">{t('studioPanel.autonomy.title')}</h3>
+      <p className="health-note">{t('studioPanel.autonomy.note')}</p>
+      <ul className="studio-autonomy-options">
+        {AUTONOMY_CHOICES.map(([value, labelKey, hintKey]) => (
+          <li key={value}>
+            <label className={value === mode ? 'studio-autonomy-option is-active' : 'studio-autonomy-option'}>
+              <input
+                type="radio"
+                name={`autonomy-${slug}`}
+                checked={value === mode}
+                disabled={state === 'saving'}
+                onChange={() => choose(value)}
+              />
+              <span>
+                <strong>{t(labelKey)}</strong>
+                <small>{t(hintKey)}</small>
+              </span>
+            </label>
+          </li>
+        ))}
+      </ul>
+      {state === 'error' ? <p className="studio-error">{t('studioPanel.autonomy.failed')}</p> : null}
+      {state === 'saved' ? <p className="studio-autonomy-saved">{t('studioPanel.autonomy.saved')}</p> : null}
+    </div>
+  );
+}
+
+/** Ordered least to most permission, so the list reads as a scale rather than a menu. */
+const AUTONOMY_CHOICES: Array<[AutonomyMode, string, string]> = [
+  ['digest-only', 'studioPanel.autonomy.digestOnly', 'studioPanel.autonomy.digestOnlyHint'],
+  ['suggest', 'studioPanel.autonomy.suggest', 'studioPanel.autonomy.suggestHint'],
+  ['auto-fix-defects', 'studioPanel.autonomy.autoFixDefects', 'studioPanel.autonomy.autoFixDefectsHint'],
+  ['auto-tune', 'studioPanel.autonomy.autoTune', 'studioPanel.autonomy.autoTuneHint'],
+];
 
 function ImproveTab({ game }: { game: StudioGame }) {
   const { t } = useTranslation();

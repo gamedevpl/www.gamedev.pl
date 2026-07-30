@@ -10,8 +10,9 @@
 > stall alert and the 14-day measurement, described under IL-3 below. Note that as of the
 > first reading no game yet routes to an actionable class, so the queue is
 > correctly empty until play volume catches up; that is data, not a defect.
-> **IL-4 has not started**: it depends on IL-3's exit, a merged and measured
-> improvement. **The `@copilot` relay this plan called its biggest risk is retired** —
+> **IL-4 is in place**: per-game autonomy (default `suggest`, which acts on nothing), a
+> 2/day global and 1/game/week budget, and — structurally — no way for autonomous work to
+> publish itself, since `publishing` is reachable only from `ready_for_review`. **The `@copilot` relay this plan called its biggest risk is retired** —
 > the platform owns dispatch now; see "Dispatch is ours now".
 > Revised against the shipped platform (first drafted 2026-07-23) —
 > everything the first draft listed as a dependency is now live: catalog, player,
@@ -944,11 +945,47 @@ at all and feeds the only autonomous-eligible class.
 
 ### Phase IL-4 — Bounded autonomy
 
-- Autonomy toggles per game; defect-class issues filed without waiting for
-  creator approval (notification instead).
-- Budget enforcement, router tuning from dismissal reasons and measured outcomes.
-- Exit: a crash-class defect goes from telemetry signal to merged fix with the
-  only human touch being PR review.
+- ✅ **Autonomy is per game, and the default acts on nothing** (2026-07-30):
+  [autonomy.ts](../apps/api/src/autonomy.ts), set from the studio's stats tab.
+  `digest-only` / `suggest` (default) / `auto-fix-defects` / `auto-tune`. Per game rather
+  than per account, because a creator can reasonably want a crash fixed unasked on the
+  game they no longer play and to be consulted about everything on the one they are still
+  shaping.
+
+  ⚠️ **No mode permits a design change.** That class means the spec itself has to change,
+  and the spec is the creator's statement of what they wanted — a machine rewriting it
+  unasked has stopped improving their game and started replacing it. There is deliberately
+  no setting that overrides this, and a test asserts every mode refuses.
+
+- ✅ **"Never auto-merge" is now structural rather than policy.** `publishing` is
+  reachable only from `ready_for_review`, so nothing dispatched autonomously can reach the
+  site without the human review that is the moderation boundary. The worst an over-eager
+  router can do is spend an agent run and produce a candidate somebody declines. This
+  phase therefore needed no enforcement of its own — the state machine already has it.
+
+- ✅ **Budget** (2/day globally, 1/game/week): two ceilings because they bound different
+  failures. The global one bounds **cost** — a router bug that suddenly finds forty defects
+  should spend two agent runs, not forty. The per-game one bounds **nuisance** — a game
+  whose evidence keeps routing to defect would otherwise be rebuilt nightly while its
+  creator watches. Spend is derived from the suggestions themselves rather than kept in a
+  counter, because a counter is a second source of truth that can drift from the work it
+  claims to describe. Creator approvals do not count against it; those already spend the
+  `improvements` quota.
+
+  A withheld suggestion stays `proposed` with the reason attached rather than being
+  dropped — a ceiling is a reason to wait, not to forget.
+
+- ✅ **The creator is notified, without a new notification type.** An autonomous
+  improvement is a new job, so the existing notify sweep emits `submission.building` and
+  then `submission.published` to its owner. The plan's "notification instead" is satisfied
+  by machinery that already shipped.
+
+- 📋 Router tuning from dismissal reasons and measured outcomes. The inputs now exist —
+  `bad-evidence` dismissals and `improved | neutral | regressed` verdicts — but nothing
+  reads them yet, and it should stay a thing an operator does with evidence in hand rather
+  than a loop that tunes itself.
+- Exit: a crash-class defect goes from telemetry signal to published fix with the only
+  human touch being review.
 
 ## Decided defaults (revisit if evidence disagrees)
 

@@ -3,6 +3,15 @@ import type { InternalAuthVerifier } from './internal-auth.js';
 import { routeScorecard, type Suggestion, type SuggestionClass } from './suggestions.js';
 import { OPEN_SUGGESTION_STATUSES, type Scorecard, type Store, type SuggestionRecord } from './store.js';
 import { advanceSuggestionOutcomes } from './suggestion-outcomes.js';
+import {
+  AUTONOMOUS_ACTOR,
+  budgetVerdict,
+  DEFAULT_AUTONOMY,
+  mayActAutonomously,
+  wantsSuggestions,
+  type AutonomyMode,
+} from './autonomy.js';
+import { hypothesisMetric, metricFromScorecard } from './suggestion-outcomes.js';
 
 /**
  * The analyst run (docs/improvement-loop-plan.md IL-3): persists what the router says.
@@ -60,6 +69,12 @@ export function suggestionId(slug: string, suggestionClass: string, computedFrom
 
 export interface SuggestionSweepResult {
   scanned: number;
+  /** Suggestions the platform started work on itself, within budget (IL-4). */
+  autoDispatched: number;
+  /** Eligible, but a budget ceiling stopped it. Counted so a quiet night is explicable. */
+  autoWithheld: number;
+  /** Games whose creator set `digest-only`. Counted rather than skipped silently. */
+  mutedByCreator: number;
   /** True when there were more scorecards than the sample limit — a floor, not a total. */
   truncated: boolean;
   created: number;
@@ -75,6 +90,23 @@ export interface SuggestionSweepDeps {
   now?: () => number;
   scorecardSampleLimit?: number;
   onError?: (slug: string, error: unknown) => void;
+  /**
+   * Starts work without asking, for games whose creator opted in.
+   *
+   * Absent means the sweep proposes and never acts — which is also what every game gets
+   * regardless, unless its owner changed the setting.
+   */
+  startImprovementRound?: (input: {
+    issueNumber: number;
+    text: string;
+    title: string;
+    locale: string;
+    legacyBody: string;
+    log: { error: (context: object, message: string) => void };
+  }) => Promise<{ route: 'job'; jobId: number } | { route: 'issue'; issueNumber: number } | null>;
+  /** Builds the brief an autonomously dispatched agent receives. */
+  buildBrief?: (record: SuggestionRecord, untrusted: Scorecard['untrusted'] | null) => string;
+  log?: { error: (context: object, message: string) => void };
 }
 
 function evidenceOf(routed: Suggestion): SuggestionRecord['evidence'] {
@@ -120,6 +152,16 @@ export async function runSuggestionSweep(deps: SuggestionSweepDeps): Promise<Sug
   let obsoleted = 0;
   let skippedUnowned = 0;
   let failed = 0;
+  let autoDispatched = 0;
+  let autoWithheld = 0;
+  let mutedByCreator = 0;
+
+  // Read once for the whole run: the budget is a property of the day and the week, not of
+  // whichever game happens to be considered first.
+  const decided = await store.listSuggestions({
+    status: ['dispatched', 'published', 'measured'],
+    limit: 500,
+  });
 
   const closeOpen = async (record: SuggestionRecord, reason: string): Promise<void> => {
     await store.putSuggestion({ ...record, status: 'obsolete', statusReason: reason, updatedAt: at });
@@ -171,7 +213,7 @@ export async function runSuggestionSweep(deps: SuggestionSweepDeps): Promise<Sug
         await closeOpen(existing, `evidence now routes this game as ${routed.class}`);
       }
 
-      await store.putSuggestion({
+      const fresh: SuggestionRecord = {
         id: suggestionId(card.slug, routed.class, routed.computedFrom),
         slug: card.slug,
         ownerUid: submission.ownerUid,
@@ -182,8 +224,68 @@ export async function runSuggestionSweep(deps: SuggestionSweepDeps): Promise<Sug
         computedFrom: routed.computedFrom,
         createdAt: at,
         updatedAt: at,
+      };
+
+      // IL-4. Default is `suggest`, so a game whose owner never touched this setting is
+      // only ever proposed to — acting on it would be work nobody agreed to.
+      const mode = ((await store.getGameAutonomy(card.slug)) ?? DEFAULT_AUTONOMY) as AutonomyMode;
+
+      // `digest-only` is "leave me alone": no card, and nothing acted on. The digest still
+      // reports the game's numbers, which is the whole point of the setting having a name
+      // rather than being an off switch.
+      if (!wantsSuggestions(mode)) {
+        mutedByCreator += 1;
+        continue;
+      }
+
+      if (!mayActAutonomously(mode, routed.class) || !deps.startImprovementRound || !deps.buildBrief) {
+        await store.putSuggestion(fresh);
+        created += 1;
+        continue;
+      }
+
+      const verdict = budgetVerdict({ decided, slug: card.slug, now: currentTime });
+      if (!verdict.allowed) {
+        // Left `proposed` rather than dropped: the creator can still approve it by hand,
+        // and a budget ceiling is a reason to wait, not a reason to forget.
+        await store.putSuggestion({ ...fresh, statusReason: verdict.reason });
+        created += 1;
+        autoWithheld += 1;
+        continue;
+      }
+
+      const metric = hypothesisMetric(routed.class);
+      const started = await deps.startImprovementRound({
+        issueNumber: submission.issueNumber,
+        text: deps.buildBrief(fresh, card.untrusted),
+        title: `Improve ${card.slug}: ${routed.class}`,
+        legacyBody: deps.buildBrief(fresh, card.untrusted),
+        locale: submission.locale ?? 'en',
+        log: deps.log ?? { error: () => {} },
+      });
+
+      await store.putSuggestion({
+        ...fresh,
+        // Attributed to the platform, not to a person. That is what lets the budget read
+        // above tell autonomous starts apart from creator approvals, and what lets a
+        // creator see that they did not ask for this.
+        decidedBy: AUTONOMOUS_ACTOR,
+        decidedAt: at,
+        ...(metric ? { baseline: { at, metrics: { [metric.key]: metricFromScorecard(card, metric.key) } } } : {}),
+        ...(started
+          ? { status: 'dispatched' as const, jobId: started.route === 'job' ? started.jobId : started.issueNumber }
+          : {
+              status: 'no-implementer' as const,
+              statusReason: 'could not start a round of work; this can be retried',
+            }),
       });
       created += 1;
+      if (started) {
+        autoDispatched += 1;
+        // Counted against this run's own budget too, so two eligible games cannot both
+        // spend the last slot.
+        decided.push({ ...fresh, decidedBy: AUTONOMOUS_ACTOR, decidedAt: at });
+      }
     } catch (error) {
       // One game's failure must not cost the rest of the sweep. Counted so a run that
       // wrote nothing because everything threw cannot read as a quiet night.
@@ -192,11 +294,25 @@ export async function runSuggestionSweep(deps: SuggestionSweepDeps): Promise<Sug
     }
   }
 
-  return { scanned: cards.length, truncated, created, updated, obsoleted, skippedUnowned, failed };
+  return {
+    scanned: cards.length,
+    truncated,
+    created,
+    updated,
+    obsoleted,
+    skippedUnowned,
+    failed,
+    autoDispatched,
+    autoWithheld,
+    mutedByCreator,
+  };
 }
 
 export interface SuggestionSweepRoutesOptions {
   store: Store;
+  /** Autonomy (IL-4): absent means the sweep proposes and never acts. */
+  startImprovementRound?: SuggestionSweepDeps['startImprovementRound'];
+  buildBrief?: SuggestionSweepDeps['buildBrief'];
   /** OIDC verifier for the scheduler; deny-all when the sweep is not configured. */
   internalAuthVerifier: InternalAuthVerifier;
   now?: () => number;
@@ -226,6 +342,9 @@ export async function registerSuggestionSweepRoutes(
           now: options.now,
           scorecardSampleLimit: options.scorecardSampleLimit,
           onError: (slug, error) => request.log.error({ err: error, slug }, 'suggestion write failed'),
+          startImprovementRound: options.startImprovementRound,
+          buildBrief: options.buildBrief,
+          log: request.log,
         });
         // Same run, same schedule: proposing new work and following up on work already
         // approved are both "what does the evidence say this morning", and splitting them

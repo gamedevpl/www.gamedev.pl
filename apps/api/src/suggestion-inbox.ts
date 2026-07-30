@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Scorecard, Store, SuggestionRecord } from './store.js';
 import { hypothesisMetric, metricFromScorecard } from './suggestion-outcomes.js';
+import { AUTONOMY_MODES, DEFAULT_AUTONOMY, type AutonomyMode } from './autonomy.js';
 import type { SubmissionRoutesHandle } from './submissions.js';
 
 /**
@@ -252,6 +253,41 @@ export async function registerSuggestionInboxRoutes(
 
     await store.putSuggestion(next);
     return reply.send({ suggestion: next });
+  });
+
+  /**
+   * What the platform may do to one of the caller's games without asking (IL-4).
+   *
+   * Per game rather than per account: a creator can reasonably want a crash fixed unasked
+   * on the game they no longer play, and want to be consulted about everything on the one
+   * they are still shaping.
+   */
+  app.get('/api/me/games/:slug/autonomy', async (request, reply) => {
+    if (!requireUser(request, reply)) return;
+    const slug = z.string().parse((request.params as { slug?: string }).slug);
+    const submission = await store.getPublishedSubmissionBySlug(slug);
+    // 404 rather than 403, like the suggestion routes: a slug is public, so confirming
+    // that one exists but belongs to somebody else says more than it needs to.
+    if (!submission || submission.ownerUid !== request.user!.uid) {
+      return reply.status(404).send({ error: 'not found' });
+    }
+    const mode = ((await store.getGameAutonomy(slug)) ?? DEFAULT_AUTONOMY) as AutonomyMode;
+    return reply.send({ mode, modes: AUTONOMY_MODES });
+  });
+
+  app.put('/api/me/games/:slug/autonomy', async (request, reply) => {
+    if (!requireUser(request, reply)) return;
+    const slug = z.string().parse((request.params as { slug?: string }).slug);
+    const parsed = z.object({ mode: z.enum(AUTONOMY_MODES) }).safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'unknown autonomy mode', modes: AUTONOMY_MODES });
+    }
+    const submission = await store.getPublishedSubmissionBySlug(slug);
+    if (!submission || submission.ownerUid !== request.user!.uid) {
+      return reply.status(404).send({ error: 'not found' });
+    }
+    await store.setGameAutonomy(slug, parsed.data.mode);
+    return reply.send({ mode: parsed.data.mode });
   });
 
   app.post('/api/me/suggestions/:id/dismiss', async (request, reply) => {

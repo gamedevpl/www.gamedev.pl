@@ -313,6 +313,20 @@
       "rejected": "Odrzucone",
       "failed": "Nie udało się. Spróbuj ponownie.",
       "quota": "Wykorzystano dzisiejszy limit ulepszeń."
+    },
+    "autonomy": {
+      "title": "Co możemy zrobić bez pytania",
+      "note": "Nic nie trafi na stronę bez Twojej akceptacji, cokolwiek tu wybierzesz.",
+      "digestOnly": "Zostaw tę grę w spokoju",
+      "digestOnlyHint": "Bez propozycji. Cotygodniowe podsumowanie nadal poda liczby.",
+      "suggest": "Proponuj, a ja zdecyduję",
+      "suggestHint": "Ustawienie domyślne. Nic nie ruszy bez Twojej zgody.",
+      "autoFixDefects": "Naprawiaj awarie bez pytania",
+      "autoFixDefectsHint": "Tylko awarie i zacięcia. Dostaniesz informację, gdy praca ruszy.",
+      "autoTune": "Naprawiaj awarie i dostrajaj trudność",
+      "autoTuneHint": "Poprawia też miejsca, w których gracze utykają, zgodnie ze specyfikacją.",
+      "saved": "Zapisano",
+      "failed": "Nie udało się zapisać. Spróbuj ponownie."
     }
   },
   "submit": {

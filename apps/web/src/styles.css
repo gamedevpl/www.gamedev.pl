@@ -7299,3 +7299,41 @@ body.player-open {
 .studio-suggestion-outcome {
   margin: 0.5rem 0;
 }
+
+/* Autonomy permission (docs/improvement-loop-plan.md IL-4). A scale from least to most
+   permission, laid out as a list rather than a select so every option's consequence is
+   readable without opening anything. */
+.studio-autonomy {
+  margin-top: 1.5rem;
+}
+
+.studio-autonomy-options {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+}
+
+.studio-autonomy-option {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  /* 44px tap floor, as with every control added since the M0 responsive audit. */
+  min-height: 44px;
+  padding: 0.5rem 0.6rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.studio-autonomy-option.is-active {
+  background: rgba(127, 127, 127, 0.12);
+}
+
+.studio-autonomy-option small {
+  display: block;
+  opacity: 0.75;
+}
+
+.studio-autonomy-saved {
+  margin: 0.4rem 0 0;
+  opacity: 0.75;
+}

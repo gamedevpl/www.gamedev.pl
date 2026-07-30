@@ -34,7 +34,11 @@ import { registerPlayerFeedbackRoutes, type PlayerFeedbackRoutesOptions } from '
 import { registerPushRoutes } from './push-routes.js';
 import { registerDigestRoutes, type DigestRoutesOptions } from './digest.js';
 import { registerSuggestionSweepRoutes, type SuggestionSweepRoutesOptions } from './suggestion-sweep.js';
-import { registerSuggestionInboxRoutes, type SuggestionInboxRoutesOptions } from './suggestion-inbox.js';
+import {
+  buildImprovementBrief,
+  registerSuggestionInboxRoutes,
+  type SuggestionInboxRoutesOptions,
+} from './suggestion-inbox.js';
 import { registerScorecardRoutes, type ScorecardRoutesOptions } from './scorecard.js';
 import { createInternalAuthVerifierFromEnv } from './internal-auth.js';
 import { registerRefineRoute, type SpecRefiner } from './refine.js';
@@ -379,6 +383,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await registerSuggestionSweepRoutes(app, {
     store,
     internalAuthVerifier: createInternalAuthVerifierFromEnv(process.env, 'suggestionSweep'),
+    // IL-4: the sweep can start work itself, but only for games whose creator opted in.
+    // Same dispatch path as an approval, so autonomous and human-approved work cannot
+    // reach an agent by different routes.
+    startImprovementRound: submissionSeams.startImprovementRound,
+    buildBrief: buildImprovementBrief,
     ...options.suggestionSweepRoutes,
   });
 

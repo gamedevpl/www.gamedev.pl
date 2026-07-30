@@ -13,6 +13,8 @@ const fetchStudioScorecards = vi.fn();
 const fetchStudioSuggestions = vi.fn();
 const approveSuggestion = vi.fn();
 const dismissSuggestion = vi.fn();
+const fetchGameAutonomy = vi.fn();
+const setGameAutonomy = vi.fn();
 let authUser: { uid: string; name: string } | null = null;
 
 vi.mock('./AuthContext', () => ({
@@ -29,6 +31,8 @@ vi.mock('./studioApi', async () => {
     fetchStudioSuggestions: (...args: unknown[]) => fetchStudioSuggestions(...args),
     approveSuggestion: (...args: unknown[]) => approveSuggestion(...args),
     dismissSuggestion: (...args: unknown[]) => dismissSuggestion(...args),
+    fetchGameAutonomy: (...args: unknown[]) => fetchGameAutonomy(...args),
+    setGameAutonomy: (...args: unknown[]) => setGameAutonomy(...args),
     submitImprovement: vi.fn(),
   };
 });
@@ -80,6 +84,9 @@ describe('CreatorStudioView', () => {
     fetchStudioSuggestions.mockResolvedValue([]);
     approveSuggestion.mockReset();
     dismissSuggestion.mockReset();
+    fetchGameAutonomy.mockReset();
+    fetchGameAutonomy.mockRejectedValue(new Error('not owned'));
+    setGameAutonomy.mockReset();
   });
 
   afterEach(() => {
@@ -270,6 +277,9 @@ describe('CreatorStudioView — what players think', () => {
     fetchStudioSuggestions.mockResolvedValue([]);
     approveSuggestion.mockReset();
     dismissSuggestion.mockReset();
+    fetchGameAutonomy.mockReset();
+    fetchGameAutonomy.mockRejectedValue(new Error('not owned'));
+    setGameAutonomy.mockReset();
   });
 
   afterEach(() => {
@@ -386,6 +396,47 @@ describe('CreatorStudioView — what players think', () => {
       const { container, root } = await openStats();
 
       expect(container.textContent).not.toContain('Suggested improvements');
+      root.unmount();
+    });
+  });
+
+  describe('autonomy permission', () => {
+    it('shows the creator what may happen without asking, and reassures about publishing', async () => {
+      fetchGameAutonomy.mockResolvedValue('suggest');
+
+      const { container, root } = await openStats();
+
+      expect(container.textContent).toContain('What we may do without asking');
+      // The reassurance is load-bearing: it is a property of the job state machine, not a
+      // promise, and a creator deciding this needs to know it.
+      expect(container.textContent).toContain('Nothing goes live without your review');
+      expect(container.textContent).toContain('Suggest, and let me decide');
+      root.unmount();
+    });
+
+    it('saves the choice the creator makes', async () => {
+      fetchGameAutonomy.mockResolvedValue('suggest');
+      setGameAutonomy.mockResolvedValue('auto-fix-defects');
+
+      const { container, root } = await openStats();
+      const option = Array.from(container.querySelectorAll('label')).find((label) =>
+        label.textContent?.includes('Fix crashes without asking'),
+      );
+      const radio = option?.querySelector('input');
+      await act(async () => {
+        radio?.click();
+      });
+
+      expect(setGameAutonomy).toHaveBeenCalledWith('sky-dodge', 'auto-fix-defects');
+      root.unmount();
+    });
+
+    it('shows nothing at all when the setting cannot be read', async () => {
+      // A game the creator does not own, or a deployment without the route. It must not
+      // take the stats page down with it.
+      const { container, root } = await openStats();
+
+      expect(container.textContent).not.toContain('What we may do without asking');
       root.unmount();
     });
   });

@@ -1182,6 +1182,15 @@ export interface Store {
    * this is one query behind an operator page rather than a paginated surface.
    */
   listScorecards(opts?: { limit?: number }): Promise<Scorecard[]>;
+  /**
+   * What the creator has allowed the platform to do to a game unasked (IL-4).
+   *
+   * Keyed by slug rather than by submission, like every other per-game fact, because a
+   * game now outlives the job that built it — an improvement is a new job, and a setting
+   * that lived on a submission would be silently forgotten the first time one ran.
+   */
+  getGameAutonomy(slug: string): Promise<string | null>;
+  setGameAutonomy(slug: string, mode: string): Promise<void>;
   /** Writes a suggestion whole (docs/improvement-loop-plan.md IL-3). */
   putSuggestion(record: SuggestionRecord): Promise<void>;
   /** One suggestion by id, or null. */
@@ -1359,6 +1368,7 @@ export class InMemoryStore implements Store {
   // slug -> current scorecard
   private scorecards = new Map<string, Scorecard>();
   private suggestions = new Map<string, SuggestionRecord>();
+  private gameAutonomy = new Map<string, string>();
   // tokenId -> personal access token record
   private accessTokens = new Map<string, AccessTokenRecord>();
 
@@ -2148,6 +2158,14 @@ export class InMemoryStore implements Store {
       .map((card) => structuredClone(card))
       .sort(compareScorecards)
       .slice(0, opts?.limit ?? 200);
+  }
+
+  async getGameAutonomy(slug: string): Promise<string | null> {
+    return this.gameAutonomy.get(slug) ?? null;
+  }
+
+  async setGameAutonomy(slug: string, mode: string): Promise<void> {
+    this.gameAutonomy.set(slug, mode);
   }
 
   async putSuggestion(record: SuggestionRecord): Promise<void> {
@@ -3505,6 +3523,17 @@ export class FirestoreStore implements Store {
   // group would be the third one in this schema for no gain over a plain collection.
   private suggestionRef(id: string) {
     return this.db.collection('suggestions').doc(id);
+  }
+
+  async getGameAutonomy(slug: string): Promise<string | null> {
+    const snap = await this.gameRef(slug).get();
+    return (snap.data() as { autonomy?: string } | undefined)?.autonomy ?? null;
+  }
+
+  async setGameAutonomy(slug: string, mode: string): Promise<void> {
+    // Merge: the game document carries other per-game facts, and a whole-document write
+    // here would drop them.
+    await this.gameRef(slug).set({ autonomy: mode }, { merge: true });
   }
 
   async putSuggestion(record: SuggestionRecord): Promise<void> {

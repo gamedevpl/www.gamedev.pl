@@ -313,6 +313,20 @@
       "rejected": "Dismissed",
       "failed": "That did not go through. Please try again.",
       "quota": "You have used today's improvement allowance."
+    },
+    "autonomy": {
+      "title": "What we may do without asking",
+      "note": "Nothing goes live without your review, whatever you choose here.",
+      "digestOnly": "Leave this game alone",
+      "digestOnlyHint": "No suggestions. Your weekly digest still reports the numbers.",
+      "suggest": "Suggest, and let me decide",
+      "suggestHint": "The default. Nothing starts without your approval.",
+      "autoFixDefects": "Fix crashes without asking",
+      "autoFixDefectsHint": "Only crashes and stalls. You are told when work starts.",
+      "autoTune": "Fix crashes and tune difficulty",
+      "autoTuneHint": "Also adjusts where players get stuck, within your spec.",
+      "saved": "Saved",
+      "failed": "Could not save that. Please try again."
     }
   },
   "submit": {

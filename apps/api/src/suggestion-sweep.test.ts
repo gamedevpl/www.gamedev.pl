@@ -330,3 +330,93 @@ describe('POST /api/internal/suggestion-sweep', () => {
     await app.close();
   });
 });
+
+describe('runSuggestionSweep — bounded autonomy (IL-4)', () => {
+  const acting = () => {
+    const started: Array<{ issueNumber: number; text: string }> = [];
+    return {
+      started,
+      startImprovementRound: async (input: { issueNumber: number; text: string }) => {
+        started.push(input);
+        return { route: 'job' as const, jobId: 5_000 + started.length };
+      },
+      buildBrief: () => 'brief',
+    };
+  };
+
+  it('proposes and does not act, for a game whose creator never opted in', async () => {
+    // The default. Acting here would be work nobody agreed to, on a published game.
+    await publish('crashy');
+    await store.putScorecard('crashy', crashy('crashy'));
+    const backend = acting();
+
+    const result = await runSuggestionSweep({ store, now: () => AT, ...backend });
+
+    expect(result.created).toBe(1);
+    expect(result.autoDispatched).toBe(0);
+    expect(backend.started).toHaveLength(0);
+    expect((await store.listSuggestions())[0].status).toBe('proposed');
+  });
+
+  it('starts work itself once the creator has opted that game in', async () => {
+    await publish('crashy');
+    await store.putScorecard('crashy', crashy('crashy'));
+    await store.setGameAutonomy('crashy', 'auto-fix-defects');
+    const backend = acting();
+
+    const result = await runSuggestionSweep({ store, now: () => AT, ...backend });
+
+    expect(result.autoDispatched).toBe(1);
+    expect(backend.started).toHaveLength(1);
+    const [record] = await store.listSuggestions();
+    // Attributed to the platform, which is what makes it distinguishable from an
+    // approval both to the budget and to the creator reading the card.
+    expect(record).toMatchObject({ status: 'dispatched', decidedBy: 'system:autonomy' });
+    expect(record.baseline?.metrics.errorsPerSession).toBe(0.4);
+  });
+
+  it('still refuses a design change on a game opted all the way in', async () => {
+    await publish('disliked');
+    await store.putScorecard('disliked', card({ slug: 'disliked', votes: { up: 1, down: 9 } }));
+    await store.setGameAutonomy('disliked', 'auto-tune');
+    const backend = acting();
+
+    const result = await runSuggestionSweep({ store, now: () => AT, ...backend });
+
+    expect((await store.listSuggestions())[0].class).toBe('design-change');
+    expect(result.autoDispatched).toBe(0);
+    expect(backend.started).toHaveLength(0);
+  });
+
+  it('spends the daily budget across games and then withholds, leaving cards approvable', async () => {
+    // Three eligible games, two slots. The third must still be proposed — a ceiling is a
+    // reason to wait, not a reason to forget.
+    for (const slug of ['a-game', 'b-game', 'c-game']) {
+      await publish(slug, `owner-${slug}`);
+      await store.putScorecard(slug, crashy(slug));
+      await store.setGameAutonomy(slug, 'auto-fix-defects');
+    }
+    const backend = acting();
+
+    const result = await runSuggestionSweep({ store, now: () => AT, ...backend });
+
+    expect(result.autoDispatched).toBe(2);
+    expect(result.autoWithheld).toBe(1);
+    expect(result.created).toBe(3);
+    const withheld = (await store.listSuggestions()).filter((s) => s.status === 'proposed');
+    expect(withheld).toHaveLength(1);
+    expect(withheld[0].statusReason).toContain('budget');
+  });
+
+  it('raises nothing at all for a game set to digest-only', async () => {
+    await publish('quiet-please');
+    await store.putScorecard('quiet-please', crashy('quiet-please'));
+    await store.setGameAutonomy('quiet-please', 'digest-only');
+
+    const result = await runSuggestionSweep({ store, now: () => AT });
+
+    expect(result.created).toBe(0);
+    expect(result.mutedByCreator).toBe(1);
+    expect(await store.listSuggestions()).toHaveLength(0);
+  });
+});

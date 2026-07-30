@@ -163,3 +163,29 @@ export async function dismissSuggestion(id: string, reason: string): Promise<Stu
   }
   return ((await response.json()) as { suggestion: StudioSuggestion }).suggestion;
 }
+
+/** What the platform may do to a game without asking (docs/improvement-loop-plan.md IL-4). */
+export type AutonomyMode = 'digest-only' | 'suggest' | 'auto-fix-defects' | 'auto-tune';
+
+export async function fetchGameAutonomy(slug: string): Promise<AutonomyMode> {
+  const response = await fetch(`${API_BASE}/api/me/games/${encodeURIComponent(slug)}/autonomy`, {
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+  return ((await response.json()) as { mode: AutonomyMode }).mode;
+}
+
+export async function setGameAutonomy(slug: string, mode: AutonomyMode): Promise<AutonomyMode> {
+  const response = await fetch(`${API_BASE}/api/me/games/${encodeURIComponent(slug)}/autonomy`, {
+    method: 'PUT',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ mode }),
+  });
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+  return ((await response.json()) as { mode: AutonomyMode }).mode;
+}
