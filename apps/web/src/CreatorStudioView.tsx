@@ -3,10 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
 import { AuthModal } from './AuthModal.js';
 import type { GameHealth } from './healthApi.js';
-import { PixelIcon, type PixelIconName } from './PixelIcon.js';
+import { PixelIcon } from './PixelIcon.js';
 import { formatRelativeTime } from './relativeTime.js';
 import { playPath, studioPath, type StudioTab } from './router.js';
-import { abandonSubmission, type SubmissionState } from './submissionApi.js';
+import { abandonSubmission } from './submissionApi.js';
 import { StudioPlaytestPanel } from './StudioPlaytestPanel.js';
 import {
   filterStudioGames,
@@ -55,25 +55,7 @@ import {
  * whichever surface absorbed them.
  */
 
-const STATUS_ICONS: Record<SubmissionState, PixelIconName> = {
-  queued: 'clock',
-  building: 'wrench',
-  in_review: 'eye',
-  publishing: 'rocket',
-  published: 'star',
-  needs_changes: 'pencil',
-  abandoned: 'trash',
-};
-
 const WINDOWS = [1, 7, 30];
-
-/** Surface strip order, and the label each one carries. */
-const TAB_ORDER: readonly StudioTab[] = ['thread', 'details', 'playtest'];
-const TAB_LABELS: Record<StudioTab, string> = {
-  thread: 'studioPanel.tabs.thread',
-  details: 'studioPanel.tabs.details',
-  playtest: 'studioPanel.tabs.playtest',
-};
 
 type NavigateOptions = { replace?: boolean };
 
@@ -369,12 +351,8 @@ export function CreatorStudioView({
     />
   );
 
-  // Derived from the same predicate the router uses, so a deep-linked tab can never
-  // resolve to a surface with no button to leave it by.
-  const tabItems = activeGame ? TAB_ORDER.filter((id) => tabAvailable(activeGame, id)) : [];
-
   return (
-    <section className={`studio-panel${tab === 'playtest' ? ' is-playtesting' : ''}`}>
+    <section className={`studio-panel${tab === 'playtest' ? ' is-playtesting' : ''}${activeGame ? ' is-focused' : ''}`}>
       <header className="studio-panel-header">
         <div>
           <p className="studio-kicker">{t('studioPanel.kicker')}</p>
@@ -415,6 +393,9 @@ export function CreatorStudioView({
               <h2 className="studio-shelf-heading">{t('studioPanel.shelf.heading')}</h2>
               <span className="studio-shelf-count">{t('studioPanel.shelf.count', { count: games.length })}</span>
             </div>
+            <button type="button" className="studio-shelf-new" onClick={() => onNavigate('/')}>
+              <PixelIcon name="sparkle" size={12} /> {t('studioPanel.shelf.newGame')}
+            </button>
             <StudioShelfControls
               searchInputId={shelfSearchId}
               query={shelfQuery}
@@ -456,30 +437,31 @@ export function CreatorStudioView({
                     <h2>{activeGame.title}</h2>
                     {activeGame.slug ? <code className="studio-slug">{activeGame.slug}</code> : null}
                   </div>
-                  <StudioStatusPill game={activeGame} />
+                  {/* Actions, not tabs. A tab strip across the work surface says the
+                      surfaces are peers; the thread is not a peer of the panel listing
+                      when the game was made. These open things beside it and leave it
+                      where it is. */}
+                  <div className="studio-head-actions">
+                    <button type="button" className="studio-head-action" onClick={() => openTab('playtest')}>
+                      <PixelIcon name="play" size={12} /> {t('studioPanel.tabs.playtest')}
+                    </button>
+                    <button
+                      type="button"
+                      className={`studio-head-action${tab === 'details' ? ' is-active' : ''}`}
+                      aria-pressed={tab === 'details'}
+                      onClick={() => openTab(tab === 'details' ? 'thread' : 'details')}
+                    >
+                      <PixelIcon name="expand" size={12} /> {t('studioPanel.tabs.details')}
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              <div className="studio-tabs" role="tablist" aria-label={t('studioPanel.title')}>
-                {tabItems.map((id) => (
-                  <button
-                    key={id}
-                    type="button"
-                    role="tab"
-                    aria-selected={tab === id}
-                    className={`studio-tab${tab === id ? ' is-active' : ''}`}
-                    onClick={() => openTab(id)}
-                  >
-                    {t(TAB_LABELS[id])}
-                  </button>
-                ))}
-              </div>
-
-              <div className="studio-tab-panel">
-                {/* The thread is the game. Keyed on the token so switching games starts a
-                    new conversation rather than showing the previous one's tail while the
-                    first poll of the new one is in flight. */}
-                {tab === 'thread' ? (
+              {/* The thread stays put. Details opens beside it on a wide screen and over
+                  it on a narrow one; only playtest, which needs the whole viewport to be
+                  a game, replaces it. */}
+              <div className={`studio-workspace${tab === 'details' ? ' is-details-open' : ''}`}>
+                {tab !== 'playtest' ? (
                   <div className="studio-build">
                     <SubmissionStatusView
                       key={activeGame.token}
@@ -509,23 +491,35 @@ export function CreatorStudioView({
                 {/* Everything that is about the game rather than said to it: when it was
                     made, who can play it, how it is doing, and how to stop it. */}
                 {tab === 'details' ? (
-                  <DetailsPanel
-                    game={activeGame}
-                    health={selectedHealth}
-                    days={days}
-                    healthDays={healthDays}
-                    truncated={truncated}
-                    scorecard={selectedScorecard}
-                    onDaysChange={setDays}
-                    onOpenThread={() => openTab('thread')}
-                    onOpenPlaytest={() => openTab('playtest')}
-                    onPlay={() => activeGame.slug && onPlay(activeGame.slug)}
-                    onRemoved={(token) => {
-                      setGames((prev) => prev.filter((game) => game.token !== token));
-                      setSelected((current) => (current === token ? null : current));
-                      onNavigate(studioPath());
-                    }}
-                  />
+                  <aside className="studio-rail" aria-label={t('studioPanel.tabs.details')}>
+                    <div className="studio-rail-head">
+                      <h3>{t('studioPanel.tabs.details')}</h3>
+                      <button
+                        type="button"
+                        className="modal-close-btn"
+                        onClick={() => openTab('thread')}
+                        aria-label={t('studioPanel.shelf.closePicker')}
+                      >
+                        <PixelIcon name="close" size={14} />
+                      </button>
+                    </div>
+                    <DetailsPanel
+                      game={activeGame}
+                      health={selectedHealth}
+                      days={days}
+                      healthDays={healthDays}
+                      truncated={truncated}
+                      scorecard={selectedScorecard}
+                      onDaysChange={setDays}
+                      onOpenPlaytest={() => openTab('playtest')}
+                      onPlay={() => activeGame.slug && onPlay(activeGame.slug)}
+                      onRemoved={(token) => {
+                        setGames((prev) => prev.filter((game) => game.token !== token));
+                        setSelected((current) => (current === token ? null : current));
+                        onNavigate(studioPath());
+                      }}
+                    />
+                  </aside>
                 ) : null}
               </div>
             </div>
@@ -578,22 +572,6 @@ export function CreatorStudioView({
         </div>
       ) : null}
     </section>
-  );
-}
-
-function StudioStatusPill({ game }: { game: StudioGame }) {
-  const { t } = useTranslation();
-  const published = isStudioGamePublished(game);
-  const statusLabel = game.lastKnownStatus
-    ? t(`statusView.states.${game.lastKnownStatus}.label`)
-    : t('myGames.checking');
-  const live = game.lastKnownStatus ? STUDIO_LIVE_STATUSES.has(game.lastKnownStatus) : false;
-
-  return (
-    <span className={`status-play-badge studio-status-pill${published || live ? ' is-live' : ''}`}>
-      {(published || live) && <span className="live-dot" aria-hidden="true" />}
-      {statusLabel}
-    </span>
   );
 }
 
@@ -696,17 +674,20 @@ function StudioShelfList({
               onClick={() => onSelect(game.token)}
               aria-current={active ? 'true' : undefined}
             >
-              <span className={`studio-shelf-status${building ? ' is-live' : ''}${published ? ' is-published' : ''}`}>
-                {status ? (
-                  <>
-                    <PixelIcon name={STATUS_ICONS[status]} size={11} /> {t(`statusView.states.${status}.label`)}
-                  </>
-                ) : (
-                  t('myGames.checking')
-                )}
-              </span>
+              {/* A dot, not a label. Every row used to carry its status in words and its
+                  age beside it, which made a list of five games a wall of small text with
+                  the titles — the only thing being chosen between — third in the reading
+                  order. The state that matters at a glance is "is this one moving", and a
+                  dot says that without spending a line on it. */}
+              <span
+                className={`studio-shelf-dot${building ? ' is-live' : ''}${published ? ' is-published' : ''}`}
+                aria-hidden="true"
+              />
               <span className="studio-shelf-title">{game.title}</span>
-              <span className="studio-shelf-meta">{formatRelativeTime(Date.parse(game.createdAt), locale)}</span>
+              <span className="studio-sr-only">
+                {status ? t(`statusView.states.${status}.label`) : t('myGames.checking')} ·{' '}
+                {formatRelativeTime(Date.parse(game.createdAt), locale)}
+              </span>
             </button>
           </li>
         );
@@ -728,7 +709,6 @@ function DetailsPanel({
   truncated,
   scorecard,
   onDaysChange,
-  onOpenThread,
   onOpenPlaytest,
   onPlay,
   onRemoved,
@@ -740,7 +720,6 @@ function DetailsPanel({
   truncated: boolean;
   scorecard: StudioScorecard | null;
   onDaysChange: (days: number) => void;
-  onOpenThread: () => void;
   onOpenPlaytest: () => void;
   onPlay: () => void;
   onRemoved: (token: string) => void;
@@ -792,15 +771,14 @@ function DetailsPanel({
       </ul>
 
       <div className="studio-actions">
+        {/* Nothing here to reopen the build with: the thread is on the screen already,
+            beside this panel. Playing a published game is the one action that is not
+            simply "look left". */}
         {published && game.slug ? (
           <button type="button" className="primary-btn" onClick={onPlay}>
             <PixelIcon name="play" size={12} /> {t('myGames.play')}
           </button>
-        ) : (
-          <button type="button" className="primary-btn" onClick={onOpenThread}>
-            <PixelIcon name="wrench" size={12} /> {t('studioPanel.overview.openBuild')}
-          </button>
-        )}
+        ) : null}
         <button type="button" className="secondary-btn" onClick={onOpenPlaytest}>
           <PixelIcon name="play" size={12} /> {t('studioPanel.overview.playtest')}
         </button>

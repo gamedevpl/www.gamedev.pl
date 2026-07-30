@@ -181,16 +181,20 @@ describe('CreatorStudioView', () => {
 
     const { container, root, onNavigate } = await renderStudio({ selectedGame: 'token-0' });
 
-    const detailsTab = Array.from(container.querySelectorAll('[role="tab"]')).find((button) =>
+    const detailsAction = Array.from(container.querySelectorAll('.studio-head-action')).find((button) =>
       button.textContent?.includes('Details'),
     );
-    expect(detailsTab).toBeTruthy();
+    expect(detailsAction).toBeTruthy();
 
     await act(async () => {
-      detailsTab!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      detailsAction!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     expect(onNavigate).toHaveBeenCalledWith('/studio/token-0/details');
+    // Beside the thread, not instead of it: opening the facts about a game must not
+    // take the game off the screen.
+    expect(container.querySelector('.studio-rail')).not.toBeNull();
+    expect(container.querySelector('.studio-build')).not.toBeNull();
 
     root.unmount();
   });
@@ -206,13 +210,16 @@ describe('CreatorStudioView', () => {
 
     const { container, root, onNavigate } = await renderStudio({ selectedGame: 'token-0', selectedTab: 'details' });
 
-    const activeTab = container.querySelector('[role="tab"][aria-selected="true"]');
-    expect(activeTab?.textContent).toContain('Details');
+    expect(container.querySelector('.studio-rail')).not.toBeNull();
     // In place, so the old address does not become a history entry to go Back through.
     expect(onNavigate).toHaveBeenCalledWith('/studio/token-0/details', { replace: true });
-    // Every surface in the URL has a button to leave it by.
-    const tabLabels = Array.from(container.querySelectorAll('[role="tab"]')).map((button) => button.textContent);
-    expect(tabLabels).toEqual(['Thread', 'Details', 'Playtest']);
+    // The surface it landed on has a control showing it is open, and one to close it by.
+    const details = Array.from(container.querySelectorAll('.studio-head-action')).find((button) =>
+      button.textContent?.includes('Details'),
+    );
+    expect(details?.getAttribute('aria-pressed')).toBe('true');
+    // And the tab strip is gone for good.
+    expect(container.querySelectorAll('[role="tab"]')).toHaveLength(0);
 
     root.unmount();
   });
@@ -413,12 +420,12 @@ describe('CreatorStudioView — what players think', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     const { container, root } = await renderStudio();
-    const statsTab = Array.from(container.querySelectorAll('button')).find((button) =>
-      button.textContent?.trim().startsWith('Details'),
+    const detailsAction = Array.from(container.querySelectorAll('.studio-head-action')).find((button) =>
+      button.textContent?.includes('Details'),
     );
-    if (statsTab) {
+    if (detailsAction) {
       await act(async () => {
-        statsTab.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        detailsAction.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       });
     }
     return { container, root };

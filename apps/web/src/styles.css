@@ -3834,42 +3834,356 @@ body.player-open {
   margin: 0;
 }
 
-/* The thread's reply box. Pinned to the foot of the conversation, and visibly the place
-   the thread is heading rather than one more panel stacked under it. */
-.status-composer {
-  margin-top: 20px;
-  border: 1px solid rgba(0, 228, 172, 0.28);
-  background: linear-gradient(180deg, rgba(0, 228, 172, 0.05), transparent 60%);
+/* With a game open the page title steps out of the way. A masthead and a strapline are
+   right for the shelf, which is a page you arrive at; they are 200px of nothing above a
+   conversation you came back to read. */
+.studio-panel.is-focused .studio-panel-header {
+  margin-bottom: 10px;
 }
 
-/* The creator's own messages, set across from the agent's — without this a request
-   they sent and the reply to it are two identical grey rows. */
-.build-activity-item.is-mine {
-  flex-direction: row-reverse;
-  text-align: right;
+.studio-panel.is-focused .studio-kicker,
+.studio-panel.is-focused .studio-panel-header .panel-copy {
+  display: none;
 }
 
-.build-activity-item.is-mine .build-activity-body {
-  align-items: flex-end;
+.studio-panel.is-focused .studio-panel-header .section-title {
+  font-size: 1.05rem;
+  margin: 0;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* Starting a new game belongs at the top of the list of games, not behind a trip home. */
+.studio-shelf-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 8px 11px;
   border-radius: 10px;
-  background: rgba(0, 228, 172, 0.08);
-  border: 1px solid rgba(0, 228, 172, 0.2);
-  padding: 8px 12px;
+  border: 1px dashed var(--panel-border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
 }
 
-.build-activity-item.is-mine .build-activity-label {
+.studio-shelf-new:hover {
   color: var(--turquoise);
+  border-color: rgba(0, 228, 172, 0.4);
+}
+
+/* Thread on the left, details beside it when asked for. A grid rather than a tab swap,
+   because opening the facts about a game should not take the game off the screen. */
+.studio-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+@media (min-width: 1100px) {
+  .studio-workspace.is-details-open {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  }
+}
+
+.studio-rail {
+  min-width: 0;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-card);
+  padding: 14px 16px 18px;
+}
+
+.studio-rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.studio-rail-head h3 {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Below the rail breakpoint the details arrive over the thread as a sheet, anchored to
+   the bottom where a thumb is — the same shape the game picker already uses. */
+@media (max-width: 1099px) {
+  .studio-workspace.is-details-open .studio-rail {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 1100;
+    max-height: min(80vh, 40rem);
+    overflow-y: auto;
+    border-radius: 16px 16px 0 0;
+    border-bottom: 0;
+    background: var(--panel);
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
+    animation: fadeIn 0.2s ease;
+  }
+}
+
+/* Header actions, in place of the tab strip that used to sit across the work surface. */
+.studio-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.studio-head-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.studio-head-action:hover {
+  color: var(--text);
+  border-color: rgba(0, 228, 172, 0.35);
+}
+
+.studio-head-action.is-active {
+  color: var(--turquoise);
+  border-color: rgba(0, 228, 172, 0.4);
+  background: rgba(0, 228, 172, 0.1);
+}
+
+/* A shelf row is a title. The state that matters at a glance rides on a dot. */
+.studio-shelf-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--panel-border);
+  flex: none;
+}
+
+.studio-shelf-dot.is-live {
+  background: var(--accent-blue);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+}
+
+.studio-shelf-dot.is-published {
+  background: var(--turquoise);
+}
+
+/* ── THE THREAD ──────────────────────────────────────────────────────────────────
+   One game is one conversation, so this is built like every other place you talk to
+   something: the transcript scrolls in its own pane and the box you answer in never
+   moves. What it replaced was a bordered box titled BUILD ACTIVITY containing rows of
+   12px text behind an icon column — all of it true, none of it reading as a dialogue.
+
+   The height is viewport-relative rather than full-screen because the studio still
+   lives inside an ordinary scrolling page with a header above it; what matters is that
+   the transcript, not the document, is the thing that scrolls. */
+.studio-thread {
+  display: flex;
+  flex-direction: column;
+  height: min(70vh, 780px);
+  min-height: 24rem;
+}
+
+.studio-thread-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 2px 8px;
+}
+
+.studio-thread-empty {
+  color: var(--muted);
+  margin: 0;
+  padding: 8px 2px;
+}
+
+.studio-thread-turns {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+/* An agent turn is prose with nothing drawn around it — the widest, quietest thing on
+   the screen, which is what makes it read as the voice rather than as a log line. */
+.studio-turn {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+.studio-turn-body {
+  max-width: 68ch;
+  min-width: 0;
+}
+
+.studio-turn-kicker {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--turquoise);
+  margin-bottom: 3px;
+}
+
+.studio-turn-text {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.97rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.studio-turn-time {
+  font-size: 0.72rem;
+  color: var(--muted);
+  opacity: 0.75;
+}
+
+/* The creator's own turn: a bubble on the other side, and deliberately the quieter of
+   the two. It is there to be recognised as theirs while scrolling past, not to compete
+   with the answer it asked for. */
+.studio-turn.is-mine {
+  align-items: flex-end;
+}
+
+.studio-turn.is-mine .studio-turn-body {
+  background: var(--panel-card);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 10px 14px;
+  max-width: min(62ch, 78%);
+}
+
+.studio-turn.is-mine .studio-turn-text {
+  color: var(--text);
+}
+
+.studio-turn.is-pending .studio-turn-body {
+  opacity: 0.7;
+}
+
+.studio-turn-shots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* Nothing below this line moves when the thread grows. */
+.studio-thread-foot {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--panel-border);
+}
+
+/* Where the work is, and the one thing to do about it — the bar directly above the
+   composer, in place of a timeline, a progress bar, a pill and a sentence stacked over
+   the conversation and pushing it down the page. */
+.studio-thread-context {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--panel-card);
+  border: 1px solid var(--panel-border);
+  font-size: 0.82rem;
+}
+
+.studio-context-state,
+.studio-context-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.studio-context-phase {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.studio-context-beat,
+.studio-context-progress {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.studio-thread-context .primary-btn,
+.studio-thread-context .secondary-btn {
+  padding: 6px 14px;
+  font-size: 0.82rem;
+}
+
+.status-composer.is-compact {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.status-composer.is-compact .status-feedback-input {
+  width: 100%;
+  border-radius: 12px;
+  resize: vertical;
+}
+
+.status-composer.is-compact .status-feedback-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.status-composer.is-compact .status-feedback-actions .error {
+  margin: 0;
+  margin-right: auto;
 }
 
 @media (max-width: 640px) {
-  /* Too little width left for two sides of a conversation; the label carries it. */
-  .build-activity-item.is-mine {
-    flex-direction: row;
-    text-align: left;
+  .studio-thread {
+    height: calc(100dvh - 18rem);
+    min-height: 20rem;
   }
 
-  .build-activity-item.is-mine .build-activity-body {
-    align-items: flex-start;
+  /* Too little width left for two sides of a conversation; the bubble carries it. */
+  .studio-turn.is-mine .studio-turn-body {
+    max-width: 100%;
   }
 }
 
@@ -6137,15 +6451,11 @@ body.player-open {
 /* Compact rows — denser than home-rail cards so 10+ games stay scannable. */
 .studio-shelf-item {
   width: 100%;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas:
-    'status meta'
-    'title title';
-  column-gap: 8px;
-  row-gap: 2px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
   text-align: left;
-  padding: 10px 12px;
+  padding: 8px 11px;
   border-radius: 10px;
   background: var(--panel-card);
   border: 1px solid var(--panel-border);
@@ -6194,10 +6504,11 @@ body.player-open {
 }
 
 .studio-shelf-title {
-  grid-area: title;
+  flex: 1;
+  min-width: 0;
   display: block;
-  font-size: 0.95rem;
-  font-weight: 700;
+  font-size: 0.92rem;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

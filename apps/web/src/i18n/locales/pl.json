@@ -229,6 +229,7 @@
     "shelfAria": "Twoje gry",
     "shelf": {
       "heading": "Twoje gry",
+      "newGame": "Nowa gra",
       "count": "{{count}} gier",
       "searchLabel": "Szukaj wśród swoich gier",
       "searchPlaceholder": "Szukaj po tytule lub slugu…",

@@ -411,10 +411,141 @@ export function SubmissionStatusView({
   // surface; Studio's own playtest already learned inset frames are unplayable on
   // phones, so everything playable here opens the theater.
 
+  const theaters = (
+    <>
+      {playing === 'published' && status?.status === 'published' && status.slug ? (
+        <GameTheater
+          title={publishedGameTitle}
+          badge={{ icon: 'gamepad', label: t('catalog.playingBadge', { defaultValue: 'Playing' }) }}
+          source={{ slug: status.slug }}
+          onExit={closeTheater}
+        />
+      ) : null}
+
+      {playing === 'draft' && launchedHtml != null ? (
+        <GameTheater
+          title={
+            preview ? previewTitle : (submittedTitle ?? latestChannelBuild?.slug ?? t('statusView.previewGameTitle'))
+          }
+          badge={{ icon: 'wrench', label: t('statusView.draftBadge') }}
+          source={{ html: launchedHtml }}
+          onExit={closeTheater}
+        />
+      ) : null}
+    </>
+  );
+
+  /**
+   * Inside Creator Studio this is a thread, not a page.
+   *
+   * The standalone `/status/<token>` view below keeps its page shape — it is a link
+   * somebody was sent, read once, top to bottom. This one is a place the creator comes
+   * back to, so it is built the way every other place you talk to something is: the
+   * conversation scrolls, and the box you answer in does not move.
+   */
+  if (embedded) {
+    const activity = status
+      ? buildActivityFeed(
+          status.progress,
+          status.events ?? [],
+          pendingRevisions,
+          status.media ?? [],
+          t('statusView.gallery.caption'),
+        )
+      : [];
+    const reported = status?.events?.find((event) => event.progress)?.progress;
+    const checklist = status?.progress?.checklist ?? [];
+    const done = reported?.done ?? checklist.filter((item) => item.checked).length;
+    const total = reported?.total ?? checklist.length;
+
+    const playable =
+      status?.status === 'published' && status.slug
+        ? { label: t('statusView.play'), onClick: () => setPlaying('published') }
+        : preview
+          ? { label: t('statusView.playDraft'), onClick: openDraft }
+          : channelHtml
+            ? { label: t('statusView.playDraft'), onClick: openChannel }
+            : undefined;
+
+    return (
+      <>
+        <div className="studio-thread">
+          {loading ? (
+            <p className="catalog-state studio-thread-empty">{t('statusView.loading')}</p>
+          ) : errorMessage ? (
+            <div className="studio-thread-empty">
+              <p className="error">{errorMessage}</p>
+              <p className="status-description">
+                {isInvalidToken ? t('statusView.invalidTokenHelp') : t('statusView.fetchErrorHelp')}
+              </p>
+            </div>
+          ) : status ? (
+            <>
+              <ThreadStream token={token} entries={activity} emptyLabel={stateDescription} />
+
+              <div className="studio-thread-foot">
+                {/* Trouble is said once, immediately above the box the creator would use
+                    to do something about it. A dead round outranks a slow one: when both
+                    are set the failure is the explanation and the stall is its symptom. */}
+                {status.failure ? (
+                  <p className="status-warning">
+                    <PixelIcon name="signal" size={13} />{' '}
+                    {t(`statusView.failure.${failureCopyKey(status.failure.reason)}`)}
+                  </p>
+                ) : status.stall ? (
+                  <p className="status-warning">
+                    <PixelIcon name="signal" size={13} /> {t(`statusView.stall.${status.stall}`)}
+                  </p>
+                ) : status.progress?.checks === 'FAILURE' ? (
+                  <p className="status-warning">
+                    <PixelIcon name="signal" size={13} /> {t('statusView.checksFailed')}
+                  </p>
+                ) : null}
+
+                {previewError && !preview && !channelHtml ? <p className="error">{previewError}</p> : null}
+
+                {TERMINAL_STATUSES.has(status.status) &&
+                status.status !== 'published' &&
+                submittedConcept &&
+                onRetry ? (
+                  <button className="primary-btn status-retry" onClick={() => onRetry(submittedConcept)}>
+                    <PixelIcon name="undo" size={13} /> {t('statusView.tryAgain')}
+                  </button>
+                ) : null}
+
+                <ThreadContextBar
+                  {...(status.slug ? { slug: status.slug } : {})}
+                  phase={t(`statusView.states.${status.status}.label`)}
+                  heartbeatAt={heartbeatAt}
+                  {...(total > 0 ? { progress: { done, total } } : {})}
+                  {...(playable ? { primary: playable } : {})}
+                  {...(onPlaytest && playable
+                    ? { secondary: { label: t('statusView.playtestCta'), onClick: onPlaytest } }
+                    : {})}
+                />
+
+                {status.status !== 'abandoned' ? (
+                  <FeedbackPanel
+                    token={token}
+                    published={status.status === 'published'}
+                    building={!preview && !channelHtml}
+                    compact
+                    onSent={(text) => setPendingRevisions((current) => [...current, { text, at: Date.now() }])}
+                  />
+                ) : null}
+              </div>
+            </>
+          ) : null}
+        </div>
+        {theaters}
+      </>
+    );
+  }
+
   return (
     <>
-      <section className={`panel status-panel${embedded ? ' is-embedded' : ''}`}>
-        {!embedded ? (
+      <section className="panel status-panel">
+        {
           <>
             <div className="status-heading">
               <h2 className="section-title">{submittedTitle ?? t('statusView.title')}</h2>
@@ -439,20 +570,7 @@ export function SubmissionStatusView({
               </a>
             </p>
           </>
-        ) : status && !TERMINAL_STATUSES.has(status.status) ? (
-          <div className="status-heading status-heading-embedded">
-            <span className="status-live">
-              <span className="live-dot" aria-hidden="true" />
-              {t('statusView.live')}
-              {heartbeatAt !== null ? (
-                <>
-                  {' · '}
-                  <BuildHeartbeat at={heartbeatAt} />
-                </>
-              ) : null}
-            </span>
-          </div>
-        ) : null}
+        }
         {loading ? (
           <p className="catalog-state">{t('statusView.loading')}</p>
         ) : errorMessage ? (
@@ -461,11 +579,9 @@ export function SubmissionStatusView({
             <p className="status-description">
               {isInvalidToken ? t('statusView.invalidTokenHelp') : t('statusView.fetchErrorHelp')}
             </p>
-            {!embedded ? (
-              <a className="inline-link" href="/">
-                {t('statusView.backHome')}
-              </a>
-            ) : null}
+            <a className="inline-link" href="/">
+              {t('statusView.backHome')}
+            </a>
           </>
         ) : status ? (
           <>
@@ -575,41 +691,16 @@ export function SubmissionStatusView({
                 card and this error was the Studio bug creators hit mid-build. */}
             {previewError && !preview && !channelHtml ? <p className="error">{previewError}</p> : null}
 
-            {/* Embedded in Creator Studio the panel is a tab, not a page: the header
-                already carries "Back to home", and a second escape hatch a screen
-                below it just reads as two different ways out. Stopping the build has
-                no such duplicate, so it stays either way. */}
-            <div className={`status-footer-actions${embedded ? ' is-embedded' : ''}`}>
-              {!embedded ? (
-                <a className="inline-link" href="/">
-                  {t('statusView.backHome')}
-                </a>
-              ) : null}
+            <div className="status-footer-actions">
+              <a className="inline-link" href="/">
+                {t('statusView.backHome')}
+              </a>
               {!TERMINAL_STATUSES.has(status.status) ? <AbandonControl token={token} /> : null}
             </div>
           </>
         ) : null}
       </section>
-
-      {playing === 'published' && status?.status === 'published' && status.slug ? (
-        <GameTheater
-          title={publishedGameTitle}
-          badge={{ icon: 'gamepad', label: t('catalog.playingBadge', { defaultValue: 'Playing' }) }}
-          source={{ slug: status.slug }}
-          onExit={closeTheater}
-        />
-      ) : null}
-
-      {playing === 'draft' && launchedHtml != null ? (
-        <GameTheater
-          title={
-            preview ? previewTitle : (submittedTitle ?? latestChannelBuild?.slug ?? t('statusView.previewGameTitle'))
-          }
-          badge={{ icon: 'wrench', label: t('statusView.draftBadge') }}
-          source={{ html: launchedHtml }}
-          onExit={closeTheater}
-        />
-      ) : null}
+      {theaters}
     </>
   );
 }
@@ -773,12 +864,15 @@ function FeedbackPanel({
   token,
   published,
   building,
+  compact = false,
   onSent,
 }: {
   token: string;
   /** Routes the message: an improvement on the live game, or a change on the build. */
   published: boolean;
   building: boolean;
+  /** The thread's reply box rather than a page section — field and send, nothing else. */
+  compact?: boolean;
   onSent: (text: string) => void;
 }) {
   const { t } = useTranslation();
@@ -824,18 +918,54 @@ function FeedbackPanel({
     : building
       ? 'statusView.feedback.hintBuilding'
       : 'statusView.feedback.hint';
+  const titleKey = published
+    ? 'statusView.feedback.titlePublished'
+    : building
+      ? 'statusView.feedback.titleBuilding'
+      : 'statusView.feedback.title';
+
+  // Compact is the thread's composer: a field and a send, the way a reply box looks
+  // everywhere else. The heading and the standing hint paragraph were page furniture —
+  // fine on a page read once, noise under a conversation you come back to. What the hint
+  // said still matters, so it becomes the placeholder: it is on screen exactly while the
+  // box is empty, which is when "where does this go?" is the open question.
+  if (compact) {
+    return (
+      <div className="status-feedback status-composer is-compact">
+        <textarea
+          className="status-feedback-input"
+          value={text}
+          onChange={(event) => {
+            setText(event.target.value);
+            if (state === 'sent') setState('idle');
+          }}
+          placeholder={t(hintKey)}
+          aria-label={t(titleKey)}
+          rows={2}
+          maxLength={2000}
+        />
+        <div className="status-feedback-actions">
+          {error ? <p className="error">{error}</p> : null}
+          {state === 'sent' && !error ? (
+            <span className="status-feedback-sent">
+              <PixelIcon name="check" size={13} /> {t('statusView.feedback.sent')}
+            </span>
+          ) : null}
+          <button
+            className="primary-btn"
+            onClick={() => void send()}
+            disabled={state === 'sending' || trimmed.length < 10}
+          >
+            {state === 'sending' ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="status-feedback status-composer">
-      <h3 className="status-feedback-title">
-        {t(
-          published
-            ? 'statusView.feedback.titlePublished'
-            : building
-              ? 'statusView.feedback.titleBuilding'
-              : 'statusView.feedback.title',
-        )}
-      </h3>
+      <h3 className="status-feedback-title">{t(titleKey)}</h3>
       <p className="status-feedback-hint">{t(hintKey)}</p>
       <textarea
         className="status-feedback-input"
@@ -863,6 +993,153 @@ function FeedbackPanel({
         ) : null}
       </div>
       {error ? <p className="error">{error}</p> : null}
+    </div>
+  );
+}
+
+/**
+ * The thread, in the shape a conversation actually has.
+ *
+ * The build's story used to be a log: a bordered box titled BUILD ACTIVITY, rows of
+ * 12px text behind an icon column, timestamps hard right. Everything in it was true and
+ * none of it read as somebody talking. Here the agent's turns are ordinary prose at full
+ * width with nothing drawn around them, and the creator's are quiet bubbles on the other
+ * side — the asymmetry every chat client uses, and deliberately the way round where the
+ * agent's words are the ones with room to breathe.
+ *
+ * Scrolls in its own pane so the composer beneath it never moves, and sticks to the
+ * bottom as the agent talks — unless the reader has scrolled up, which is them saying
+ * they are reading something and would like it to stay put.
+ */
+function ThreadStream({ token, entries, emptyLabel }: { token: string; entries: ActivityEntry[]; emptyLabel: string }) {
+  const { t, i18n } = useTranslation();
+  const [zoomed, setZoomed] = useState<BuildMediaItem | null>(null);
+  const [broken, setBroken] = useState<string[]>([]);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const stickToBottomRef = useRef(true);
+
+  const onScroll = () => {
+    const pane = scrollRef.current;
+    if (!pane) return;
+    // A small slack, because "at the bottom" is never exact once fonts and images have
+    // settled, and a reader one pixel short of it still means to be following along.
+    stickToBottomRef.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 48;
+  };
+
+  useEffect(() => {
+    const pane = scrollRef.current;
+    if (!pane || !stickToBottomRef.current) return;
+    pane.scrollTop = pane.scrollHeight;
+  }, [entries.length]);
+
+  return (
+    <div className="studio-thread-scroll" ref={scrollRef} onScroll={onScroll}>
+      {entries.length === 0 ? <p className="studio-thread-empty">{emptyLabel}</p> : null}
+      <ol className="studio-thread-turns">
+        {entries.map((entry, index) => {
+          const mine = entry.kind === 'revision';
+          const media = entry.media?.filter((item) => !broken.includes(item.ref)) ?? [];
+          return (
+            <li
+              key={`${entry.kind}-${entry.at}-${index}`}
+              className={`studio-turn${mine ? ' is-mine' : ''}${entry.pending ? ' is-pending' : ''}`}
+            >
+              <div className="studio-turn-body">
+                {/* The step is a closed set, so it is our own translated copy rather than
+                    a machine translation of whatever the agent happened to write. */}
+                {!mine && entry.step ? (
+                  <span className="studio-turn-kicker">{t(`statusView.progress.steps.${entry.step}`)}</span>
+                ) : null}
+                <p className="studio-turn-text">{entry.text}</p>
+                {media.length > 0 ? (
+                  <span className="studio-turn-shots">
+                    {media.map((item) => (
+                      <button
+                        key={item.ref}
+                        type="button"
+                        className="build-activity-shot"
+                        onClick={() => setZoomed(item)}
+                        title={t('statusView.gallery.expand')}
+                      >
+                        <img
+                          src={buildMediaUrl(token, item)}
+                          alt={item.label || t('statusView.gallery.alt')}
+                          loading="lazy"
+                          onError={() => setBroken((refs) => [...refs, item.ref])}
+                        />
+                      </button>
+                    ))}
+                  </span>
+                ) : null}
+              </div>
+              <time className="studio-turn-time" dateTime={new Date(entry.at).toISOString()}>
+                {entry.pending
+                  ? t('statusView.progress.yourRequestSending')
+                  : formatRelativeTime(entry.at, i18n.language)}
+              </time>
+            </li>
+          );
+        })}
+      </ol>
+      {zoomed ? <ShotLightbox token={token} item={zoomed} onClose={() => setZoomed(null)} /> : null}
+    </div>
+  );
+}
+
+/**
+ * The bar between the thread and the composer: where the work is, and the one thing to
+ * do about it.
+ *
+ * Replaces a five-step timeline, a progress bar, a status pill and a sentence — four
+ * things saying where the build was, stacked above the conversation and pushing it down
+ * the page. This says it once, in the place the eye already is because the composer is
+ * directly underneath.
+ */
+function ThreadContextBar({
+  slug,
+  phase,
+  heartbeatAt,
+  progress,
+  primary,
+  secondary,
+}: {
+  slug?: string;
+  phase: string;
+  heartbeatAt: number | null;
+  progress?: { done: number; total: number };
+  primary?: { label: string; onClick: () => void };
+  secondary?: { label: string; onClick: () => void };
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <div className="studio-thread-context">
+      <span className="studio-context-state">
+        {slug ? <code className="studio-slug">{slug}</code> : null}
+        <span className="studio-context-phase">{phase}</span>
+        {heartbeatAt !== null ? (
+          <span className="studio-context-beat">
+            <BuildHeartbeat at={heartbeatAt} />
+          </span>
+        ) : null}
+      </span>
+      <span className="studio-context-actions">
+        {progress && progress.total > 0 ? (
+          <span className="studio-context-progress">
+            {t('statusView.progress.checklistCount', { done: progress.done, total: progress.total })}
+          </span>
+        ) : null}
+        {secondary ? (
+          <button type="button" className="secondary-btn status-playtest-cta" onClick={secondary.onClick}>
+            <PixelIcon name="wrench" size={13} /> {secondary.label}
+          </button>
+        ) : null}
+        {primary ? (
+          <button type="button" className="primary-btn status-play-cta" onClick={primary.onClick}>
+            <PixelIcon name="play" size={13} /> {primary.label}
+          </button>
+        ) : null}
+      </span>
     </div>
   );
 }
