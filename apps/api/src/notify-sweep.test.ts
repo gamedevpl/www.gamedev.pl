@@ -94,6 +94,16 @@ describe('POST /api/internal/notify-sweep', () => {
   it('emits notifications for transitioned active submissions and is idempotent', async () => {
     const store = new InMemoryStore();
     await store.createSubmission(42, 'g:owner', 'Sky Dodge');
+    await store.setSubmissionSlug(42, 'sky-dodge');
+    // The sweep derives a job's status from its own record now, not from the issue and
+    // PR it used to read — so the state that makes this notifiable is recorded here
+    // rather than mocked onto a GitHub stub.
+    await store.recordJobTransition(42, {
+      to: 'published',
+      at: new Date().toISOString(),
+      by: 'gate',
+      reason: 'merged',
+    });
     const app = await buildSweepApp(store, acceptAll);
 
     const first = await app.inject({
