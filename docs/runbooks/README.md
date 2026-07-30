@@ -61,7 +61,8 @@ Two consequences worth knowing before you trust either:
   failures and there is nothing to count — this was true of the metric version too, so the
   "pause notify-sweep and wait for the email" instruction that used to be here could never
   have worked. To test it, point the job at a wrong path for ~8 minutes and put it back;
-  the script prints the exact commands.
+  the script prints the exact commands. **Done on `notify-sweep` 2026-07-30 and it works
+  end to end**: first failure 22:26:04Z, incident 22:33:52Z, email delivered — 7m48s.
 - **A4 is inert until the first successful export.** An absence condition needs a time
   series that once existed, and a log-based metric with no matching entries has no series.
   It becomes real protection only after `setup-backups.sh` has run and one export has
@@ -96,6 +97,41 @@ where the host dies before it can write one.
   fine, which is why this needs an alert at all. It is also a free synthetic monitor of
   auth + Firestore + the app in one request, so its failure often means something larger.
 - `firestore-daily-export` — backups are failing. A4 is its counterpart: A3 fires when the job runs and fails, A4 when it stops running at all (paused, deleted, never scheduled), where there are no failures to count.
+
+The `job_id` really is in the alert text — verified 2026-07-30, the message reads
+`… Cloud Scheduler Job labels {project_id=gamedevpl, job_id=notify-sweep} is above the
+threshold of 2.000 with a value of 3.000`. The two jobs also sit in **different regions**
+(`notify-sweep` in `europe-west1`, `firestore-daily-export` in `europe-central2`), so a
+`jobs describe` against the wrong `--location` reports the job as missing and reads like a
+deleted job rather than a typo.
+
+**A quiet A3 is not the same as a healthy A3.** The policy is `autoClose: 86400s` over a
+15-minute `ALIGN_SUM` grouped by `job_id`, and while an incident is open that same group
+does not notify again — so one stuck incident can leave A3 silent through a second outage
+of that job for up to 24h. The grouping is what keeps this survivable: a `notify-sweep`
+incident cannot mask `firestore-daily-export`, because that opens its own. Do not
+"simplify" the aggregation.
+
+**How to check whether A3 has fired, without the console.** Cloud Monitoring exposes no
+incidents API, but the events are in Cloud Logging:
+
+```bash
+gcloud logging read 'log_id("monitoring.googleapis.com/ViolationOpenEventv1")' \
+  --project gamedevpl --freshness=2d --format=json
+```
+
+`ViolationOpenEventv1` carries the open time, `policy_display_name`, the `job_id`, and the
+observed value against the threshold; `ViolationAutoResolveEventv1` carries the close,
+matched on `violation_id`. Two uses. During an incident, this is the fastest way to see
+what fired and when. Before a deliberate drill, it is how you check no incident is already
+open on that `job_id` — otherwise the notification is suppressed and a correctly wired
+alert looks broken.
+
+These prove the incident opened, not that mail was delivered; this project has no
+`monitoring.googleapis.com/notification_channel` log, so the last link is a human reading
+`admin@gamedev.pl`. And after a drill, **verify the restore by reading the job's URI back,
+never by watching the alert go quiet** — the incident outlives the fix by about one
+15-minute window (observed: opened 22:33:52Z, restored 22:37:05Z, still open at 22:51Z).
 
 ## What is not covered yet
 
