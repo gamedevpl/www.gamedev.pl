@@ -39,7 +39,10 @@ export const JOB_STATES = [
   'published',
   /** Bounced back for another round — gate red past retries, or reviewer rejected. */
   'needs_changes',
-  /** The agent failed, timed out, or finished without delivering. Terminal. */
+  /**
+   * The agent failed, timed out, or finished without delivering. Terminal for the
+   * round — no observation reopens it — but creator feedback dispatches another.
+   */
   'failed',
   /** Stopped by the creator or the operator. Terminal. */
   'canceled',
@@ -78,7 +81,10 @@ const ALLOWED_TRANSITIONS: Readonly<Record<JobState, readonly JobState[]>> = {
   published: [],
   // Another round: back to the queue, which is what dispatching a follow-up means.
   needs_changes: ['queued', 'dispatched', 'building', 'canceled', 'abandoned'],
-  failed: [],
+  // Same shape as needs_changes, for the same reason: a dead round must not orphan
+  // the job, and feedback after a failure *is* the retry. Still terminal to the
+  // reconciler — `isTerminal` guards it, so only a creator or operator moves it.
+  failed: ['queued', 'dispatched', 'building', 'canceled', 'abandoned'],
   canceled: [],
   abandoned: [],
 };
@@ -212,6 +218,12 @@ export interface AgentObservation {
    * this: with a candidate it is done, without one it stopped without producing anything.
    */
   hasCandidate: boolean;
+  /**
+   * Where the work is happening, once the backend can say. A freshly created task has no
+   * branch yet, so this is the only moment it can be learned — and without it a revision
+   * round cannot resume the work, it can only start again somewhere else.
+   */
+  workspace?: string;
 }
 
 export interface ReconcileResult {

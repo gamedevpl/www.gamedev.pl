@@ -18,7 +18,8 @@ import type { AgentObservation } from './job-state.js';
 export interface CopilotBackendOptions {
   tasks: AgentTasksClient;
   /** Only used to open the resumption pull request — see `resume`. */
-  github: Pick<GitHubClient, 'ensureOpenPullRequest'>;
+  /** Only used to delete a spent workspace — see `cleanup`. */
+  github: Pick<GitHubClient, 'deleteBranch'>;
   /** Branch the harness is read from. */
   baseRef?: string;
   /**
@@ -53,9 +54,32 @@ export function buildPrompt(brief: BuildBrief): string {
   const slug = brief.slug ?? '(the slug named in your first progress report)';
   const lines = [
     brief.feedback
-      ? `The creator played the draft of \`${slug}\` and asked for changes. Continue your existing work on this branch.`
+      ? `The creator played the draft of \`${slug}\` and asked for changes. Continue that game — revise it, do not rebuild it.`
       : `Build a new browser game in \`games/${slug}/\`.`,
     '',
+    // The branch is not the source of truth and must not be treated as one: a session
+    // can start on a fresh branch with none of the earlier work in it, and an agent
+    // that "continues" from an empty directory silently delivers a different game than
+    // the one the creator gave feedback on. The store has every delivery, exactly.
+    ...(brief.feedback
+      ? [
+          '## Before you change anything',
+          '',
+          'Fetch the version the creator actually played. This checkout may not contain it —',
+          'the game lives in the site’s store, not in a branch:',
+          '',
+          '```bash',
+          `export GAMEDEVPL_API=${brief.apiBaseUrl}`,
+          `export GAMEDEVPL_BUILD_TOKEN=${brief.channelToken}`,
+          `npm run restore -- ${slug}`,
+          '```',
+          '',
+          'It writes back the exact files that were delivered. Read them, then make the',
+          'creator’s changes on top of them. If it reports nothing delivered yet, the earlier',
+          'round never finished and you are starting the game rather than revising it.',
+          '',
+        ]
+      : []),
     '## Scope — this is enforced, not advisory',
     '',
     `- You may create and edit files under \`games/${slug}/\` only.`,
@@ -138,48 +162,52 @@ export function createCopilotBackend(options: CopilotBackendOptions): AgentBacke
       return { ref: task.id, workspace: resolveTaskBranch(task) ?? undefined };
     },
 
-    async resume(brief: BuildBrief, previous: DispatchResult): Promise<DispatchResult> {
-      // Without a branch there is nothing to resume — the first session never got far
-      // enough to produce one — so this is a fresh dispatch carrying the feedback.
-      if (!previous.workspace) return this.dispatch(brief);
+    /**
+     * A revision round starts a *fresh* workspace and restores the game into it.
+     *
+     * Continuing the previous branch is the obvious implementation and the wrong one.
+     * That branch was cut when the build started, so its GameKit, tooling and harness
+     * are however old the job is — and a game revised against a stale engine is exactly
+     * the drift the gate exists to catch, except self-inflicted, on every round, growing
+     * with the age of the build. It also needed an open pull request as resumption
+     * context, because the agent tasks API ignores `head_ref` without one, which put a
+     * pull request back into a delivery path built to have none.
+     *
+     * Branching from `baseRef` instead gives every round the current engine, and the
+     * brief's `npm run restore` brings the game itself back from the store — exactly,
+     * because versions are immutable. Continuity comes from the delivery, which is the
+     * thing that was actually reviewed, rather than from a branch that merely happens
+     * to still exist.
+     *
+     * The cost is honest: work an agent committed but never delivered does not survive
+     * the round. That is the right trade — undelivered work was never gated, never
+     * previewed, and never seen by the creator whose feedback this is answering.
+     */
+    async resume(brief: BuildBrief): Promise<DispatchResult> {
+      return this.dispatch(brief);
+    },
 
-      // The agent tasks API resumes a branch only when it can find an **open pull
-      // request** for it; with none, `head_ref` is ignored and the agent silently starts
-      // a new branch, losing the work the creator just gave feedback on. So the PR is
-      // opened here, on demand, purely as resumption context: it is never merged, nothing
-      // reads it, and cleanup closes it when the job ends. Opening it lazily rather than
-      // on every dispatch keeps the common case — a build nobody revises — PR-free.
-      await options.github.ensureOpenPullRequest({
-        headRef: previous.workspace,
-        baseRef,
-        title: `Build workspace: ${brief.slug ?? previous.workspace}`,
-        body: [
-          'Working branch for a gamedev.pl build. **Not for review or merge.**',
-          '',
-          'It exists so the coding agent can resume this branch across sessions — the agent',
-          'tasks API will only continue a branch that has an open pull request. The game is',
-          'delivered over the build channel and published from the store, not from here.',
-        ].join('\n'),
-      });
-
-      const task = await options.tasks.startTask({
-        prompt: buildPrompt(brief),
-        baseRef,
-        headRef: previous.workspace,
-        model,
-        createPullRequest,
-        customAgent: options.customAgent,
-      });
-
-      // Verify rather than assume: a head_ref that could not be resolved is ignored
-      // silently, and a resumed round that quietly started a new branch would otherwise
-      // look identical to one that worked.
-      return { ref: task.id, workspace: resolveTaskBranch(task) ?? previous.workspace };
+    /**
+     * Deletes the workspace once the job has no further use for it.
+     *
+     * Safe because the branch never held anything authoritative: the game is in the
+     * store, the gate reads it from there, and publication bakes from there. What is
+     * left behind is one branch per round per game, forever, in a repository people
+     * also read.
+     */
+    async cleanup(previous: DispatchResult): Promise<void> {
+      if (!previous.workspace) return;
+      await options.github.deleteBranch(previous.workspace);
     },
 
     async observe(ref: string, { hasCandidate }): Promise<AgentObservation | null> {
       const task = await options.tasks.getTask(ref);
-      return task ? { state: task.state, hasCandidate } : null;
+      if (!task) return null;
+      // The branch is reported here and nowhere else: `startTask` answers before the
+      // agent has created one, so a dispatch that does not come back and ask never
+      // learns where its own work lives.
+      const workspace = resolveTaskBranch(task);
+      return { state: task.state, hasCandidate, ...(workspace ? { workspace } : {}) };
     },
 
     async cancel(): Promise<{ enforced: boolean }> {

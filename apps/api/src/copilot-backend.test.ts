@@ -60,9 +60,23 @@ describe('buildPrompt', () => {
 
   it('frames a revision round as continuing, not starting over', () => {
     const prompt = buildPrompt({ ...BRIEF, feedback: 'make the bubbles bigger' });
-    expect(prompt).toContain('Continue your existing work');
+    expect(prompt).toContain('revise it, do not rebuild it');
     expect(prompt).toContain('make the bubbles bigger');
     expect(prompt).not.toContain('Build a new browser game');
+  });
+
+  it('tells a revision round to fetch what the creator actually played', () => {
+    // "Continue your existing work on this branch" is what this used to say, and it was
+    // a promise the system could not keep: a session can start on a fresh branch with
+    // none of the earlier work in it. Restoring from the store is what makes the
+    // instruction true, so the game gets revised rather than silently replaced.
+    const prompt = buildPrompt({ ...BRIEF, feedback: 'make the bubbles bigger' });
+    expect(prompt).toContain('npm run restore -- comet-courier');
+    expect(prompt).toContain('This checkout may not contain it');
+  });
+
+  it('does not send a first build looking for a delivery that cannot exist', () => {
+    expect(buildPrompt(BRIEF)).not.toContain('npm run restore');
   });
 
   it('truncates an oversized spec rather than sending it whole', () => {
@@ -76,7 +90,7 @@ describe('dispatch', () => {
     const { client, startTask } = stubTasks();
     const backend = createCopilotBackend({
       tasks: client,
-      github: { ensureOpenPullRequest: vi.fn() },
+      github: { deleteBranch: vi.fn() },
       model: 'gpt-5.4',
       customAgent: 'game-builder',
     });
@@ -95,67 +109,82 @@ describe('dispatch', () => {
 
   it('reads the branch back from the task rather than assuming one', async () => {
     const { client } = stubTasks(task({ branch: { headRef: 'copilot/comet-courier' } }));
-    const backend = createCopilotBackend({ tasks: client, github: { ensureOpenPullRequest: vi.fn() } });
+    const backend = createCopilotBackend({ tasks: client, github: { deleteBranch: vi.fn() } });
 
     expect(await backend.dispatch(BRIEF)).toEqual({ ref: 'task-1', workspace: 'copilot/comet-courier' });
   });
 });
 
 describe('resume', () => {
-  it('opens the pull request the API needs before asking to continue a branch', async () => {
-    // Without an open PR the head_ref is ignored and the agent starts a fresh branch,
-    // losing the work the creator just gave feedback on.
-    const { client, startTask } = stubTasks(task({ branch: { headRef: 'copilot/x' } }));
-    const ensureOpenPullRequest = vi.fn(async () => ({ number: 7 }));
-    const backend = createCopilotBackend({ tasks: client, github: { ensureOpenPullRequest } });
+  it('branches a revision round from the current base, not the stale workspace', async () => {
+    // Continuing the old branch would revise the game against whatever GameKit existed
+    // when the build started — the exact drift the gate exists to catch, self-inflicted
+    // and growing with the age of the job. The game comes back from the store instead.
+    const { client, startTask } = stubTasks(task({ branch: { headRef: 'copilot/fresh' } }));
+    const backend = createCopilotBackend({ tasks: client, github: { deleteBranch: vi.fn() } });
 
-    await backend.resume({ ...BRIEF, feedback: 'bigger bubbles' }, { ref: 'task-1', workspace: 'copilot/x' });
-
-    expect(ensureOpenPullRequest).toHaveBeenCalledWith(
-      expect.objectContaining({ headRef: 'copilot/x', baseRef: 'main' }),
+    const result = await backend.resume(
+      { ...BRIEF, feedback: 'bigger bubbles' },
+      { ref: 'task-1', workspace: 'copilot/stale' },
     );
-    expect(startTask).toHaveBeenCalledWith(expect.objectContaining({ headRef: 'copilot/x' }));
-    // Ordering matters: the PR has to exist before the task is started, not after.
-    expect(ensureOpenPullRequest.mock.invocationCallOrder[0]).toBeLessThan(startTask.mock.invocationCallOrder[0]);
-  });
 
-  it('marks the resumption PR as not for review', async () => {
-    const { client } = stubTasks(task({ branch: { headRef: 'copilot/x' } }));
-    const ensureOpenPullRequest = vi.fn(async () => ({ number: 7 }));
-    const backend = createCopilotBackend({ tasks: client, github: { ensureOpenPullRequest } });
-
-    await backend.resume(BRIEF, { ref: 'task-1', workspace: 'copilot/x' });
-
-    expect(ensureOpenPullRequest.mock.calls[0][0].body).toContain('Not for review or merge');
-  });
-
-  it('falls back to a fresh dispatch when there is no branch to resume', async () => {
-    const { client, startTask } = stubTasks();
-    const ensureOpenPullRequest = vi.fn();
-    const backend = createCopilotBackend({ tasks: client, github: { ensureOpenPullRequest } });
-
-    await backend.resume({ ...BRIEF, feedback: 'again' }, { ref: 'task-1' });
-
-    expect(ensureOpenPullRequest).not.toHaveBeenCalled();
+    expect(startTask).toHaveBeenCalledWith(expect.objectContaining({ baseRef: 'main' }));
     expect(startTask.mock.calls[0][0].headRef).toBeUndefined();
+    expect(result.workspace).toBe('copilot/fresh');
   });
 
-  it('keeps the previous branch when the new task has not reported one yet', async () => {
-    const { client } = stubTasks(task());
-    const backend = createCopilotBackend({
-      tasks: client,
-      github: { ensureOpenPullRequest: vi.fn(async () => ({ number: 7 })) },
-    });
+  it('needs no pull request to continue a build', async () => {
+    // The API ignores head_ref without an open PR, so resuming a branch required
+    // opening one purely as scaffolding — putting a pull request back into a delivery
+    // path built to have none. Not resuming a branch removes the need entirely.
+    const { client } = stubTasks(task({ branch: { headRef: 'copilot/fresh' } }));
+    const deleteBranch = vi.fn();
+    const backend = createCopilotBackend({ tasks: client, github: { deleteBranch } });
 
-    const result = await backend.resume(BRIEF, { ref: 'task-1', workspace: 'copilot/x' });
-    expect(result.workspace).toBe('copilot/x');
+    await backend.resume({ ...BRIEF, feedback: 'again' }, { ref: 'task-1', workspace: 'copilot/stale' });
+
+    // Nothing was opened, and the old branch is not deleted here either — the caller
+    // does that once the new round has a workspace of its own.
+    expect(deleteBranch).not.toHaveBeenCalled();
+  });
+
+  it('carries the feedback into the new round', async () => {
+    const { client, startTask } = stubTasks(task({ branch: { headRef: 'copilot/fresh' } }));
+    const backend = createCopilotBackend({ tasks: client, github: { deleteBranch: vi.fn() } });
+
+    await backend.resume({ ...BRIEF, feedback: 'bigger bubbles' }, { ref: 'task-1', workspace: 'copilot/stale' });
+
+    expect(startTask.mock.calls[0][0].prompt).toContain('bigger bubbles');
+    expect(startTask.mock.calls[0][0].prompt).toContain('npm run restore');
+  });
+});
+
+describe('cleanup', () => {
+  it('deletes a spent workspace', async () => {
+    const { client } = stubTasks();
+    const deleteBranch = vi.fn();
+    const backend = createCopilotBackend({ tasks: client, github: { deleteBranch } });
+
+    await backend.cleanup?.({ ref: 'task-1', workspace: 'copilot/spent' });
+
+    expect(deleteBranch).toHaveBeenCalledWith('copilot/spent');
+  });
+
+  it('does nothing for a dispatch that never got a branch', async () => {
+    const { client } = stubTasks();
+    const deleteBranch = vi.fn();
+    const backend = createCopilotBackend({ tasks: client, github: { deleteBranch } });
+
+    await backend.cleanup?.({ ref: 'task-1' });
+
+    expect(deleteBranch).not.toHaveBeenCalled();
   });
 });
 
 describe('observe and cancel', () => {
   it('normalizes the task state into a backend-neutral observation', async () => {
     const { client } = stubTasks(task({ state: 'in_progress' }));
-    const backend = createCopilotBackend({ tasks: client, github: { ensureOpenPullRequest: vi.fn() } });
+    const backend = createCopilotBackend({ tasks: client, github: { deleteBranch: vi.fn() } });
 
     expect(await backend.observe('task-1', { hasCandidate: false })).toEqual({
       state: 'in_progress',
@@ -163,11 +192,25 @@ describe('observe and cancel', () => {
     });
   });
 
+  it('reports the branch, because this is the only place it can be learned', async () => {
+    // `startTask` answers before the agent has created a branch, so a dispatch that
+    // never comes back and asks never learns where its own work lives — and a revision
+    // round then cannot resume it, only start somewhere else from nothing.
+    const { client } = stubTasks(task({ state: 'in_progress', branch: { headRef: 'copilot/tv-tycoon' } }));
+    const backend = createCopilotBackend({ tasks: client, github: { deleteBranch: vi.fn() } });
+
+    expect(await backend.observe('task-1', { hasCandidate: false })).toEqual({
+      state: 'in_progress',
+      hasCandidate: false,
+      workspace: 'copilot/tv-tycoon',
+    });
+  });
+
   it('admits that cancellation is not enforced', async () => {
     // There is no cancel endpoint. Saying so honestly is what stops the UI promising a
     // creator that a wedged agent has been killed when it has only been ignored.
     const { client } = stubTasks();
-    const backend = createCopilotBackend({ tasks: client, github: { ensureOpenPullRequest: vi.fn() } });
+    const backend = createCopilotBackend({ tasks: client, github: { deleteBranch: vi.fn() } });
 
     expect(await backend.cancel('task-1')).toEqual({ enforced: false });
   });

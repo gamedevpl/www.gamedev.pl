@@ -108,6 +108,13 @@ function StatusTimeline({ current }: { current: SubmissionStatus['status'] }) {
 /** A change request sent from this tab, echoed locally until the API returns it. */
 type PendingRevision = { text: string; at: number };
 
+/** Failure reasons with their own copy; anything newer gets the generic sentence. */
+const FAILURE_COPY_KEYS = new Set(['task_failed', 'task_timed_out', 'task_completed_without_delivery']);
+
+function failureCopyKey(reason: string): string {
+  return FAILURE_COPY_KEYS.has(reason) ? reason : 'generic';
+}
+
 type SubmissionStatusViewProps = {
   token: string;
   submittedTitle?: string;
@@ -428,6 +435,18 @@ export function SubmissionStatusView({
             {status.progress?.checks === 'FAILURE' ? (
               <p className="status-warning">
                 <PixelIcon name="signal" size={13} /> {t('statusView.checksFailed')}
+              </p>
+            ) : null}
+
+            {/* A dead round outranks a slow one: when both are set, the failure is
+                the explanation and the stall is just its symptom. */}
+            {status.failure ? (
+              <p className="status-warning">
+                <PixelIcon name="signal" size={13} /> {t(`statusView.failure.${failureCopyKey(status.failure.reason)}`)}
+              </p>
+            ) : status.stall ? (
+              <p className="status-warning">
+                <PixelIcon name="signal" size={13} /> {t(`statusView.stall.${status.stall}`)}
               </p>
             ) : null}
 

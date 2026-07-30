@@ -589,6 +589,70 @@ export async function registerAgentChannelRoutes(
     },
   );
 
+  /**
+   * Hands a build back its own last delivery.
+   *
+   * The channel was upload-only, and that quietly made the agent's *branch* the real
+   * home of a game: a follow-up session could only continue the work if it happened to
+   * land on the same branch, and when it did not — which is what happens whenever the
+   * branch is unknown at resume time — the creator's game started again from nothing.
+   * The store already holds every delivered version, immutably; this is the read that
+   * makes it the source of truth rather than a copy nobody can get back.
+   *
+   * Scoped to the job's own game by the same token that authorizes its delivery, so a
+   * build can restore what it delivered and nothing else.
+   */
+  app.get(
+    '/api/agent/build/sources',
+    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      const { record } = resolved;
+
+      if (!options.gamesStore) {
+        return reply.status(503).send({ error: 'delivery is not configured on this deployment' });
+      }
+      // Nothing delivered yet is the ordinary state of a first build, not an error:
+      // the agent starts from the repository, exactly as it does today.
+      if (!record.slug || !record.deliveredVersion) {
+        return reply.send({ delivery: null, files: [] });
+      }
+
+      const manifest = await options.gamesStore.getManifest(record.slug, record.deliveredVersion);
+      if (!manifest) {
+        request.log.error(
+          { slug: record.slug, version: record.deliveredVersion },
+          'delivered version has no manifest — the store lost a version a job still points at',
+        );
+        return reply.status(502).send({ error: 'the delivered version could not be read back' });
+      }
+
+      const files = await Promise.all(
+        manifest.sourceFiles.map(async (path) => ({
+          path,
+          content: await options.gamesStore!.getSourceFile(record.slug!, record.deliveredVersion!, path),
+        })),
+      );
+      // A manifest listing a file the bucket does not have is a broken version, not a
+      // partial one. Handing back a game with holes would have the agent "restore" a
+      // deletion it never made.
+      const missing = files.filter((file) => file.content === null).map((file) => file.path);
+      if (missing.length > 0) {
+        request.log.error(
+          { slug: record.slug, version: record.deliveredVersion, missing },
+          'delivered version is missing files its manifest lists',
+        );
+        return reply.status(502).send({ error: 'the delivered version could not be read back' });
+      }
+
+      return reply.send({
+        delivery: { slug: record.slug, version: record.deliveredVersion },
+        files,
+      });
+    },
+  );
+
   // Collect without reporting. Deliberately does NOT mark messages delivered — an
   // agent that reads a request and then crashes must not lose it. Acking is explicit.
   app.get(

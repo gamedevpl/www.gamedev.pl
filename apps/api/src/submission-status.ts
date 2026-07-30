@@ -172,6 +172,15 @@ export interface SubmissionStatusResponseBase {
    * creator gets Polish without a translation round-trip.
    */
   stall?: JobStall;
+  /**
+   * The build's last round ended in an error rather than a delivery. Set alongside
+   * `status` because the public vocabulary projects `failed` onto `needs_changes` —
+   * without this the page says "waiting for your input" about a session that died,
+   * which reads as the creator's fault instead of ours. `reason` is the transition's
+   * machine-readable cause (`task_failed`, `task_timed_out`, …), a closed vocabulary
+   * like `stall`: the UI renders its own translated copy, not this string.
+   */
+  failure?: { reason: string };
 }
 
 /**

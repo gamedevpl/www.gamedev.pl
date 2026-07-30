@@ -22,6 +22,7 @@ function stubGitHub(overrides: Partial<GitHubClient> = {}): GitHubClient {
     closeIssue: async () => {},
     closePullRequest: async () => {},
     ensureOpenPullRequest: async () => ({ number: 1 }),
+    deleteBranch: async () => {},
     getGameSources: async (): Promise<GameSources | null> => null,
     getGameMedia: async () => null,
     getCatalog: async (): Promise<CatalogGameEntry[]> => [],
@@ -732,6 +733,92 @@ describe('agent build channel', () => {
       });
 
       expect(delivered).toEqual([{ slug: 'comet-courier', version: 'v1' }]);
+    });
+  });
+
+  /**
+   * Reading a delivery back. The channel was upload-only, which quietly made the
+   * agent's branch the real home of a game — and a session that starts on a fresh
+   * branch then "continues" from an empty directory, delivering a different game than
+   * the one the creator gave feedback on.
+   */
+  describe('restoring a delivery', () => {
+    function storeWithVersion(files: Record<string, string | null>) {
+      return {
+        putCandidateSources: async () => ({ version: 'v1', manifest: {} as never }),
+        getManifest: async () => ({ sourceFiles: Object.keys(files) }),
+        getSourceFile: async (_slug: string, _version: string, path: string) => files[path] ?? null,
+        putGateResult: async () => {},
+        putDerivedArtifact: async () => {},
+        getDerivedArtifact: async () => null,
+      } as unknown as GamesStore;
+    }
+
+    it('hands a build back the exact files it delivered', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      await store.setSubmissionSlug(ISSUE, 'comet-courier');
+      await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
+      app = await createApp(store, {
+        gamesStore: storeWithVersion({ 'SPEC.md': '# Comet Courier', 'game.ts': 'export const tick = () => {};' }),
+      });
+
+      const response = await app.inject({ method: 'GET', url: '/api/agent/build/sources', headers: agentHeaders() });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        delivery: { slug: 'comet-courier', version: 'v1' },
+        files: [
+          { path: 'SPEC.md', content: '# Comet Courier' },
+          { path: 'game.ts', content: 'export const tick = () => {};' },
+        ],
+      });
+    });
+
+    it('says plainly that a first build has nothing to restore', async () => {
+      // The ordinary state of every new game. An agent that runs restore by habit must
+      // not be sent looking for a problem that does not exist.
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      app = await createApp(store, { gamesStore: storeWithVersion({}) });
+
+      const response = await app.inject({ method: 'GET', url: '/api/agent/build/sources', headers: agentHeaders() });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ delivery: null, files: [] });
+    });
+
+    it('refuses a version with holes rather than restoring a game missing files', async () => {
+      // A manifest listing a file the bucket does not have is a broken version, not a
+      // partial one — handing it back would have the agent "restore" a deletion it
+      // never made, then deliver the result as the creator's game.
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      await store.setSubmissionSlug(ISSUE, 'comet-courier');
+      await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
+      app = await createApp(store, {
+        gamesStore: storeWithVersion({ 'SPEC.md': '# Comet Courier', 'game.ts': null }),
+      });
+
+      const response = await app.inject({ method: 'GET', url: '/api/agent/build/sources', headers: agentHeaders() });
+
+      expect(response.statusCode).toBe(502);
+    });
+
+    it('rejects a request without a valid build token', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      await store.setSubmissionSlug(ISSUE, 'comet-courier');
+      await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
+      app = await createApp(store, { gamesStore: storeWithVersion({ 'SPEC.md': 'x' }) });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/agent/build/sources',
+        headers: { authorization: 'Bearer not-a-real-token' },
+      });
+
+      expect(response.statusCode).toBe(401);
     });
   });
 });

@@ -359,6 +359,12 @@ export interface GitHubClient {
     number: number;
   }>;
   /**
+   * Deletes a build's working branch. Best effort by contract — the caller treats a
+   * failure as litter rather than an error, because the game itself was never in the
+   * branch: it is in the store, which is what makes the branch disposable at all.
+   */
+  deleteBranch(ref: string): Promise<void>;
+  /**
    * Reads a game's source files from a branch (typically an unmerged PR head).
    * Returns null if the game directory or a required file is missing on that ref.
    */
@@ -702,6 +708,12 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         body: JSON.stringify({ head: input.headRef, base: input.baseRef, title: input.title, body: input.body }),
       });
       return { number: created.number };
+    },
+
+    async deleteBranch(ref) {
+      await requestJson(`https://api.github.com/repos/${repo}/git/refs/heads/${encodeURIComponent(ref)}`, {
+        method: 'DELETE',
+      });
     },
 
     async closeIssue(issueNumber) {
