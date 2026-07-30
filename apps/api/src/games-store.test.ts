@@ -81,8 +81,17 @@ describe('defaultVersionId', () => {
     // sorts identically with no shared state to contend for.
     const first = defaultVersionId(new Date('2026-07-30T10:00:00.000Z'));
     const second = defaultVersionId(new Date('2026-07-30T10:00:01.000Z'));
-    expect(first).toBe('v20260730T100000Z');
+    expect(first).toMatch(/^v20260730T100000000Z-[0-9a-f]{6}$/);
     expect([second, first].sort()).toEqual([first, second]);
+  });
+
+  it('does not collide for two deliveries at the same instant', () => {
+    // Versions are immutable, so a colliding id is not a cosmetic problem: the second
+    // delivery would overwrite the first's sources in place and the surviving manifest
+    // would describe a mixture of the two.
+    const at = new Date('2026-07-30T10:00:00.000Z');
+    const ids = new Set(Array.from({ length: 200 }, () => defaultVersionId(at)));
+    expect(ids.size).toBe(200);
   });
 });
 
@@ -122,7 +131,9 @@ describe('GCS games store', () => {
       engineRef: 'abc123',
     });
 
-    expect(version).toBe('v20260730T100000Z');
+    // The exact id is defaultVersionId's business, tested above; what matters here is
+    // that everything for this delivery lands under whatever id it chose.
+    expect(version).toMatch(/^v20260730T100000000Z-/);
     expect(objects.has(`games/comet-courier/versions/${version}/source/game.ts`)).toBe(true);
     // Provenance is the point: which job, which backend, which model, which engine.
     expect(manifest).toMatchObject({

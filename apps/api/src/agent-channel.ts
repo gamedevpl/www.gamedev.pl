@@ -510,9 +510,11 @@ export async function registerAgentChannelRoutes(
    * agent uploads its own sources; we store them as an immutable candidate version and
    * run our own gate against them. Two properties are worth being explicit about:
    *
-   * - The slug is taken from the **token**, not from the body. The token is minted per
-   *   job, so an agent cannot deliver into another game's history by asking to — the
-   *   claim in the request is checked against the claim in the credential.
+   * - The slug is bound to the **job**, and the job is bound to the token. The token
+   *   itself carries only the job id, so the first delivery does name its own slug —
+   *   but that slug is persisted onto the job, and every later delivery on the same
+   *   token is checked against it. An agent therefore cannot deliver into a game it was
+   *   not dispatched for, and cannot change its mind about which game it is building.
    * - Nothing here trusts the upload. Paths are validated against the delivery contract
    *   before a byte is written, and the bundle and media that eventually ship are built
    *   by our gate from these sources rather than accepted from the agent.
@@ -546,6 +548,14 @@ export async function registerAgentChannelRoutes(
       const slug = record.slug ?? parsed.data.slug;
       if (record.slug && record.slug !== parsed.data.slug) {
         return reply.status(409).send({ error: `this build delivers to ${record.slug}, not ${parsed.data.slug}` });
+      }
+      // Bind the job to this slug on the first delivery, and do it *before* storing
+      // anything. Without this the check above never fires for a job that arrived
+      // without a slug: every delivery would find `record.slug` unset and be free to
+      // name a different game. Writing it first rather than after the upload means a
+      // second delivery racing the first still finds the binding in place.
+      if (!record.slug && store) {
+        await store.setSubmissionSlug(issueNumber, slug);
       }
 
       try {

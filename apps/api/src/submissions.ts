@@ -21,7 +21,13 @@ import {
 } from './game-snapshot.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
 import type { AgentBackend } from './agent-backend.js';
-import { detectStall, fromSubmissionStatus, planObservedStatusTransition, toSubmissionStatus } from './job-state.js';
+import {
+  detectStall,
+  fromSubmissionStatus,
+  planObservedStatusTransition,
+  toSubmissionStatus,
+  type JobTransition,
+} from './job-state.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
@@ -352,15 +358,24 @@ export async function registerSubmissionRoutes(
    * Best effort by design: this is bookkeeping, and a failed write must never turn a
    * creator's status poll into an error.
    */
-  async function recordDerivedJobState(record: SubmissionRecord, observed: SubmissionStatus): Promise<void> {
-    if (!store) return;
+  async function recordDerivedJobState(
+    record: SubmissionRecord,
+    observed: SubmissionStatus,
+  ): Promise<JobTransition | null> {
+    if (!store) return null;
     const transition = planObservedStatusTransition(record.state, observed, new Date(now()).toISOString());
-    if (!transition) return;
+    if (!transition) return null;
     try {
       await store.recordJobTransition(record.issueNumber, transition);
     } catch (error) {
       app.log.error({ err: error, issueNumber: record.issueNumber }, 'job transition write failed');
+      return null;
     }
+    // Returned so the caller can judge staleness against the state it just wrote. The
+    // caller holds a snapshot taken before this write, and a stall computed from that
+    // snapshot would measure how long the job sat in the state it has *just left* —
+    // which is how a job that is visibly progressing gets reported as stuck.
+    return transition;
   }
 
   /**
@@ -1399,13 +1414,15 @@ export async function registerSubmissionRoutes(
             if (record.lastStatus !== status.status) {
               await store.setSubmissionLastStatus(issueNumber, status.status);
             }
-            await recordDerivedJobState(record, status.status);
+            const transition = await recordDerivedJobState(record, status.status);
             // Say *why* a build looks stuck rather than leaving the page to imply it
-            // from silence. Computed after the transition write so it reflects the
-            // observation just recorded, not the one before it.
+            // from silence. The transition just written wins over the snapshot `record`
+            // was read into: a job that has this moment moved to a new state has been
+            // in that state for no time at all, and reporting it as stalled would be
+            // reporting the age of a state it has already left.
             const stall = detectStall({
-              state: record.state ?? fromSubmissionStatus(status.status),
-              stateSince: record.stateSince ?? record.createdAt,
+              state: transition?.to ?? record.state ?? fromSubmissionStatus(status.status),
+              stateSince: transition?.at ?? record.stateSince ?? record.createdAt,
               lastAgentSignalAt: record.lastAgentSignalAt,
               agentState: record.agentState,
               now: now(),

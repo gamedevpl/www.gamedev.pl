@@ -600,6 +600,37 @@ describe('agent build channel', () => {
       expect(stored).toHaveLength(0);
     });
 
+    it('binds the job to the first slug it delivers, so a later one cannot switch games', async () => {
+      // The test above seeds the slug, which is the case where the job already knows
+      // what it is building. This is the case that does not: a job dispatched without a
+      // slug learns it from its first delivery, and if that is never persisted the
+      // check above can never fire — every delivery would find the job unbound and be
+      // free to name a different game.
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore, stored } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      const first = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources',
+        headers: agentHeaders(),
+        payload: { slug: 'comet-courier', files: MINIMAL },
+      });
+      expect(first.json()).toMatchObject({ accepted: true });
+      expect((await store.getSubmission(ISSUE))?.slug).toBe('comet-courier');
+
+      const second = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources',
+        headers: agentHeaders(),
+        payload: { slug: 'someone-elses-game', files: MINIMAL },
+      });
+
+      expect(second.statusCode).toBe(409);
+      expect(stored).toHaveLength(1);
+    });
+
     it('explains a rejected path instead of failing opaquely', async () => {
       const store = new InMemoryStore();
       await seedSubmission(store);

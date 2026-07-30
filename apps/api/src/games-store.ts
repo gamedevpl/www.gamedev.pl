@@ -17,6 +17,7 @@
 // flag flip plus a re-bake instead of a revert-and-wait, and what stops a stray object
 // resurrecting a withdrawn game.
 
+import { randomBytes } from 'node:crypto';
 import { GoogleAuth } from 'google-auth-library';
 
 /**
@@ -218,12 +219,18 @@ export interface GcsGamesStoreOptions {
  * A counter needs a read-modify-write against a shared value, which is a race between
  * concurrent builds of the same game and a lock nobody wants to own. A timestamp sorts
  * the same way, needs no coordination, and reads correctly in a bucket listing.
+ *
+ * It keeps milliseconds and carries a random suffix because seconds are not unique
+ * enough to be an identity. Two deliveries inside the same second — a retried upload,
+ * or two builds of one game running at once — would otherwise compute the same id and
+ * overwrite each other's objects. Versions are supposed to be immutable, and an id that
+ * can collide makes them silently not: the loser's sources vanish under the winner's,
+ * and the manifest that survives describes a mixture of both. The suffix costs nothing
+ * and the timestamp still sorts.
  */
 export function defaultVersionId(at: Date): string {
-  return `v${at
-    .toISOString()
-    .replace(/[-:]/g, '')
-    .replace(/\.\d+Z$/, 'Z')}`;
+  const stamp = at.toISOString().replace(/[-:.]/g, '');
+  return `v${stamp}-${randomBytes(3).toString('hex')}`;
 }
 
 function assertSlug(slug: string): void {
