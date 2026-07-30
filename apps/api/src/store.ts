@@ -1,5 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { Firestore, type DocumentData } from '@google-cloud/firestore';
+import type { AgentTaskState } from './agent-tasks.js';
+import type { PublicationRecord } from './games-store.js';
+import type { JobState, JobTransition } from './job-state.js';
 import type { BuildEvent, SubmissionStatus } from './submission-status.js';
 
 /**
@@ -119,6 +122,74 @@ export interface SubmissionRecord {
    * machine-translating them afterwards, and costs us nothing.
    */
   locale?: string;
+  /**
+   * The job's own state, as opposed to one derived from GitHub on every read.
+   *
+   * `lastStatus` above records what a derivation *said*; this records what the job
+   * *is*. The distinction is what makes an operator queue, cancellation, retries and
+   * a real answer to "stuck or slow?" possible at all — none of which can be built on
+   * a value that is recomputed from a third party's UI state each time it is asked for.
+   */
+  state?: JobState;
+  /**
+   * When the job entered {@link state}. The input to every duration question: time in
+   * state, queue age, and whether silence has gone on long enough to be a stall.
+   */
+  stateSince?: string;
+  /**
+   * The state history, oldest first, so a build explains itself afterwards — the
+   * difference between "this took 40 minutes" and "this took 40 minutes because it was
+   * re-dispatched twice after gate failures".
+   *
+   * Capped at {@link MAX_JOB_TRANSITIONS}: a job accrues a dozen or so legitimately, and
+   * the cap exists so that a reconciler bug flapping between two states cannot grow a
+   * document until it hits Firestore's 1 MB limit and takes the submission down with it.
+   */
+  transitions?: JobTransition[];
+  /**
+   * The agent backend's own last reported state, kept so stall detection can prefer
+   * what the agent says over what timestamps imply — an agent that reports it is
+   * blocked on an answer needs no inference at all.
+   */
+  agentState?: AgentTaskState;
+  /**
+   * When the agent last said anything over the build channel.
+   *
+   * Denormalized from the events subcollection on purpose: judging whether a build has
+   * gone quiet is the operator queue's main job, and reading the newest event for every
+   * in-flight submission would turn one page load into a fan-out of subcollection
+   * queries — the shape of read amplification this whole change exists to remove.
+   */
+  lastAgentSignalAt?: string;
+  /**
+   * Which backend is building this job and where.
+   *
+   * `refs` accumulates because a revision round is a *new* task rather than a new session
+   * on the old one, so a job that has been revised twice has three refs sharing one
+   * workspace. The newest is the one to observe.
+   */
+  dispatch?: { backend: string; refs: string[]; workspace?: string };
+}
+
+/**
+ * How many transitions a submission keeps. Oldest are dropped first; the tail is what
+ * anyone debugging a live build actually looks at.
+ */
+export const MAX_JOB_TRANSITIONS = 50;
+
+/**
+ * Where our own job ids start.
+ *
+ * Chosen to sit far above any number GitHub will plausibly assign an issue in the games
+ * repo (which is in the low hundreds), so the boundary never has to be revisited and a
+ * job's id alone says which era it belongs to. Jobs below the floor were keyed by a real
+ * issue and are still served that way; jobs at or above it never had one.
+ */
+export const JOB_ID_FLOOR = 1_000_000;
+
+/** Whether this job was created after job identity stopped coming from GitHub. */
+export function isNativeJobId(id: number): boolean {
+  return id >= JOB_ID_FLOOR;
 }
 
 /**
@@ -715,12 +786,59 @@ export interface Store {
   setSubmissionNotifiedStatus(issueNumber: number, status: SubmissionStatus): Promise<void>;
   /** Records the status last derived from GitHub, whether or not it notified anyone. */
   setSubmissionLastStatus(issueNumber: number, status: SubmissionStatus): Promise<void>;
+  /**
+   * Moves a job to `transition.to`, stamping `stateSince` and appending to the history.
+   *
+   * Callers decide *whether* to move (the rules live in job-state.ts); this only records
+   * the decision. Returns false when the record is gone, so a caller can tell a no-op
+   * from a write.
+   */
+  recordJobTransition(issueNumber: number, transition: JobTransition): Promise<boolean>;
+  /** Records the agent backend's last reported state, for stall detection. */
+  setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void>;
+  /** Appends a dispatch ref, recording which backend is building this job and where. */
+  recordDispatch(issueNumber: number, dispatch: { backend: string; ref: string; workspace?: string }): Promise<void>;
+  /**
+   * Allocates a job id of our own.
+   *
+   * Job identity used to be a GitHub issue number, which meant creating a work item in
+   * someone else's system before we could name our own job — and made every store key,
+   * every token and the whole build channel depend on that call succeeding.
+   *
+   * Ids stay numeric so none of that has to change; only their *source* moves. They are
+   * allocated from {@link JOB_ID_FLOOR} upward, well clear of any real issue number, so
+   * the two eras are distinguishable by value alone: below the floor is a legacy
+   * issue-keyed job, at or above it is one of ours. That is what lets both be served
+   * side by side without a migration or a discriminator column.
+   */
+  allocateJobId(): Promise<number>;
   /** Records the game directory a submission is building, once it is known. */
   setSubmissionSlug(issueNumber: number, slug: string): Promise<void>;
   /** Stamps the moment a submission was first seen published (for build-time stats). */
   setSubmissionPublishedAt(issueNumber: number, at: string): Promise<void>;
   /** Marks a submission abandoned by its creator. */
   setSubmissionAbandoned(issueNumber: number, at: string): Promise<void>;
+  /**
+   * Reads what is currently published for a slug, or null when nothing ever was.
+   *
+   * This — not the presence of an object in the bucket, and not a merge having happened —
+   * is publication authority. Keeping it here is what makes a takedown immediate and
+   * total: one write withdraws a game, and no leftover storage can contradict it.
+   */
+  getPublication(slug: string): Promise<PublicationRecord | null>;
+  /** Publishes (or re-publishes) a slug at a specific stored version. */
+  setPublication(record: PublicationRecord): Promise<void>;
+  /**
+   * Withdraws a game.
+   *
+   * Separate from `setPublication` because a takedown is not a publish with different
+   * arguments: it must record *why* and *when*, which is what a DSA statement of reasons
+   * is written from, and it must be impossible to perform by accident while editing a
+   * version pointer.
+   */
+  takedownPublication(slug: string, reason: string, at: string): Promise<boolean>;
+  /** Every slug currently live — the input the snapshot bake reads. */
+  listPublications(): Promise<PublicationRecord[]>;
   /** Records the creator's language, so the agent can report progress in it. */
   setSubmissionLocale(issueNumber: number, locale: string): Promise<void>;
   /** Records how many QA answers reached the agent with this submission. */
@@ -1036,6 +1154,8 @@ function byNewestFirst(a: { createdAt: string; id: string }, b: { createdAt: str
 export class InMemoryStore implements Store {
   private users = new Map<string, User>();
   private submissions = new Map<number, SubmissionRecord>();
+  private publications = new Map<string, PublicationRecord>();
+  private nextJobId = JOB_ID_FLOOR;
   private buildEvents = new Map<number, BuildEvent[]>();
   private buildShots = new Map<number, BuildShot[]>();
   private buildPreviews = new Map<number, BuildPreview[]>();
@@ -1142,6 +1262,65 @@ export class InMemoryStore implements Store {
     if (sub) this.submissions.set(issueNumber, { ...sub, lastStatus: status });
   }
 
+  async recordJobTransition(issueNumber: number, transition: JobTransition): Promise<boolean> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub) return false;
+    this.submissions.set(issueNumber, {
+      ...sub,
+      state: transition.to,
+      stateSince: transition.at,
+      transitions: [...(sub.transitions ?? []), transition].slice(-MAX_JOB_TRANSITIONS),
+    });
+    return true;
+  }
+
+  async setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (sub) this.submissions.set(issueNumber, { ...sub, agentState });
+  }
+
+  async allocateJobId(): Promise<number> {
+    this.nextJobId = Math.max(this.nextJobId, JOB_ID_FLOOR) + 1;
+    return this.nextJobId;
+  }
+
+  async recordDispatch(
+    issueNumber: number,
+    dispatch: { backend: string; ref: string; workspace?: string },
+  ): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub) return;
+    const existing = sub.dispatch;
+    this.submissions.set(issueNumber, {
+      ...sub,
+      dispatch: {
+        backend: dispatch.backend,
+        refs: [...(existing?.refs ?? []), dispatch.ref],
+        workspace: dispatch.workspace ?? existing?.workspace,
+      },
+    });
+  }
+
+  async getPublication(slug: string): Promise<PublicationRecord | null> {
+    const record = this.publications.get(slug);
+    return record ? { ...record } : null;
+  }
+
+  async setPublication(record: PublicationRecord): Promise<void> {
+    this.publications.set(record.slug, { ...record });
+  }
+
+  async takedownPublication(slug: string, reason: string, at: string): Promise<boolean> {
+    const record = this.publications.get(slug);
+    if (!record) return false;
+    this.publications.set(slug, { ...record, state: 'disabled', takedownAt: at, takedownReason: reason });
+    return true;
+  }
+
+  async listPublications(): Promise<PublicationRecord[]> {
+    return Array.from(this.publications.values()).map((record) => ({ ...record }));
+  }
+
   async setSubmissionSlug(issueNumber: number, slug: string): Promise<void> {
     const sub = this.submissions.get(issueNumber);
     if (sub) this.submissions.set(issueNumber, { ...sub, slug });
@@ -1180,6 +1359,8 @@ export class InMemoryStore implements Store {
     const existing = this.buildEvents.get(issueNumber) ?? [];
     existing.push(record);
     this.buildEvents.set(issueNumber, existing);
+    const submission = this.submissions.get(issueNumber);
+    if (submission) this.submissions.set(issueNumber, { ...submission, lastAgentSignalAt: record.createdAt });
     return { ...record };
   }
 
@@ -1928,6 +2109,107 @@ export class FirestoreStore implements Store {
     await this.db.collection('submissions').doc(String(issueNumber)).set({ lastStatus: status }, { merge: true });
   }
 
+  async recordJobTransition(issueNumber: number, transition: JobTransition): Promise<boolean> {
+    const ref = this.db.collection('submissions').doc(String(issueNumber));
+    // A transaction, not a merge: the status poll and the reconciler sweep can both
+    // observe the same job at once, and appending to a list read outside a transaction
+    // loses whichever write landed second — silently, and exactly under the concurrent
+    // load where the history matters most.
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return false;
+      const current = snap.data() as SubmissionRecord;
+      tx.set(
+        ref,
+        {
+          state: transition.to,
+          stateSince: transition.at,
+          transitions: [...(current.transitions ?? []), transition].slice(-MAX_JOB_TRANSITIONS),
+        },
+        { merge: true },
+      );
+      return true;
+    });
+  }
+
+  async setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void> {
+    await this.db.collection('submissions').doc(String(issueNumber)).set({ agentState }, { merge: true });
+  }
+
+  async allocateJobId(): Promise<number> {
+    const ref = this.db.collection('counters').doc('jobs');
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const current = (snap.data() as { next?: number } | undefined)?.next ?? JOB_ID_FLOOR;
+      const next = Math.max(current, JOB_ID_FLOOR) + 1;
+      tx.set(ref, { next }, { merge: true });
+      return next;
+    });
+  }
+
+  async recordDispatch(
+    issueNumber: number,
+    dispatch: { backend: string; ref: string; workspace?: string },
+  ): Promise<void> {
+    const ref = this.db.collection('submissions').doc(String(issueNumber));
+    // Transactional for the same reason transitions are: a dispatch and a reconciler
+    // observation can land together, and appending to a list read outside a transaction
+    // drops one of them.
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return;
+      const existing = (snap.data() as SubmissionRecord).dispatch;
+      tx.set(
+        ref,
+        {
+          dispatch: {
+            backend: dispatch.backend,
+            refs: [...(existing?.refs ?? []), dispatch.ref],
+            ...((dispatch.workspace ?? existing?.workspace)
+              ? { workspace: dispatch.workspace ?? existing?.workspace }
+              : {}),
+          },
+        },
+        { merge: true },
+      );
+    });
+  }
+
+  async getPublication(slug: string): Promise<PublicationRecord | null> {
+    const snap = await this.db.collection('games').doc(slug).get();
+    const publication = (snap.data() as { publication?: PublicationRecord } | undefined)?.publication;
+    return publication ?? null;
+  }
+
+  async setPublication(record: PublicationRecord): Promise<void> {
+    // Merged onto the existing game document rather than a collection of its own: votes,
+    // player feedback and scorecards already live at games/{slug}, and a takedown that
+    // has to remember to visit a second place is a takedown that eventually misses one.
+    await this.db.collection('games').doc(record.slug).set({ publication: record }, { merge: true });
+  }
+
+  async takedownPublication(slug: string, reason: string, at: string): Promise<boolean> {
+    const ref = this.db.collection('games').doc(slug);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const current = (snap.data() as { publication?: PublicationRecord } | undefined)?.publication;
+      if (!current) return false;
+      tx.set(
+        ref,
+        { publication: { ...current, state: 'disabled', takedownAt: at, takedownReason: reason } },
+        { merge: true },
+      );
+      return true;
+    });
+  }
+
+  async listPublications(): Promise<PublicationRecord[]> {
+    const snap = await this.db.collection('games').get();
+    return snap.docs
+      .map((doc) => (doc.data() as { publication?: PublicationRecord }).publication)
+      .filter((publication): publication is PublicationRecord => Boolean(publication));
+  }
+
   async setSubmissionSlug(issueNumber: number, slug: string): Promise<void> {
     await this.db.collection('submissions').doc(String(issueNumber)).set({ slug }, { merge: true });
   }
@@ -1979,6 +2261,14 @@ export class FirestoreStore implements Store {
     // Firestore rejects undefined values; optional fields are simply absent instead.
     const document = Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined));
     await this.eventsCollection(issueNumber).doc(record.id).set(document);
+    // Denormalized onto the parent so the operator queue can judge silence for every
+    // in-flight job without a subcollection read per job. Merged separately rather than
+    // transactionally: losing a race here costs a slightly stale liveness timestamp,
+    // which is not worth a transaction on the hottest write in the channel.
+    await this.db
+      .collection('submissions')
+      .doc(String(issueNumber))
+      .set({ lastAgentSignalAt: record.createdAt }, { merge: true });
     return record;
   }
 

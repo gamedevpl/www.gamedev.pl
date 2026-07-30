@@ -43,6 +43,7 @@ jobs:
       # publish-games.yml. When set, published catalog / play / media are served
       # only from the snapshot; unset is the local/dev opt-out (GitHub / fixtures).
       GAMES_SNAPSHOT_BUCKET: 'gamedevpl-games-snapshots'
+      GAMES_STORE_BUCKET: 'gamedevpl-games-store'
       WIF_PROVIDER: 'projects/334141807880/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
       WIF_SERVICE_ACCOUNT: 'github-actions-deployer@gamedevpl.iam.gserviceaccount.com'
 
@@ -78,6 +79,15 @@ jobs:
 
           if gcloud secrets describe session-secret --project "$PROJECT_ID" >/dev/null 2>&1; then
             SECRET_MAPPINGS+=("SESSION_SECRET=session-secret:latest")
+          fi
+
+          # Dispatch credential for GitHub's agent tasks API. Its own secret rather than a
+          # reuse of github-token: the tasks API needs a user-to-server token, and keeping
+          # them apart means dispatch and serving fail independently — a dispatch PAT
+          # expiring must not take the catalog down. Without it submissions are accepted
+          # and sit queued, visibly, instead of being handed to an agent.
+          if gcloud secrets describe agent-tasks-token --project "$PROJECT_ID" >/dev/null 2>&1; then
+            SECRET_MAPPINGS+=("AGENT_TASKS_TOKEN=agent-tasks-token:latest")
           fi
 
           # Resend API key for outbound email (beta invites, notifications). The
@@ -134,7 +144,7 @@ jobs:
           # /api/games/:slug/zone/ticket 404s while every game plays on unchanged. That
           # is the intended default until gamedev-world is deployed (infra/deploy-world.sh,
           # docs/p3-zone-host-infra.md).
-          ENV_VARS="^|^GAMES_REPO=${GAMES_REPO}|GAMES_SNAPSHOT_BUCKET=${GAMES_SNAPSHOT_BUCKET}|GOOGLE_OAUTH_CLIENT_ID=${{ vars.GOOGLE_OAUTH_CLIENT_ID }}|APPLE_CLIENT_IDS=${{ vars.APPLE_CLIENT_IDS }}|WEB_ORIGIN=https://gamedev-app-334141807880.europe-west1.run.app,https://www.gamedev.pl,https://gamedev.pl|CANONICAL_HOST=www.gamedev.pl|PRIVATE_BETA=true|BETA_ALLOWED_UIDS=${{ vars.BETA_ALLOWED_UIDS }}|BETA_ALLOWED_EMAILS=${{ vars.BETA_ALLOWED_EMAILS }}|ADMIN_UIDS=${{ vars.ADMIN_UIDS }}|NOTIFY_SWEEP_AUDIENCE=${{ vars.NOTIFY_SWEEP_AUDIENCE }}|NOTIFY_SWEEP_SA=${{ vars.NOTIFY_SWEEP_SA }}|SCORECARD_SWEEP_AUDIENCE=${{ vars.SCORECARD_SWEEP_AUDIENCE }}|DIGEST_SWEEP_AUDIENCE=${{ vars.DIGEST_SWEEP_AUDIENCE }}|VAPID_PUBLIC_KEY=${{ vars.VAPID_PUBLIC_KEY }}|VAPID_SUBJECT=${{ vars.VAPID_SUBJECT }}"
+          ENV_VARS="^|^GAMES_REPO=${GAMES_REPO}|GAMES_SNAPSHOT_BUCKET=${GAMES_SNAPSHOT_BUCKET}|GAMES_STORE_BUCKET=${GAMES_STORE_BUCKET}|GATE_BUILD_PROJECT=${{ env.PROJECT_ID }}|GOOGLE_OAUTH_CLIENT_ID=${{ vars.GOOGLE_OAUTH_CLIENT_ID }}|APPLE_CLIENT_IDS=${{ vars.APPLE_CLIENT_IDS }}|WEB_ORIGIN=https://gamedev-app-334141807880.europe-west1.run.app,https://www.gamedev.pl,https://gamedev.pl|CANONICAL_HOST=www.gamedev.pl|PRIVATE_BETA=true|BETA_ALLOWED_UIDS=${{ vars.BETA_ALLOWED_UIDS }}|BETA_ALLOWED_EMAILS=${{ vars.BETA_ALLOWED_EMAILS }}|ADMIN_UIDS=${{ vars.ADMIN_UIDS }}|NOTIFY_SWEEP_AUDIENCE=${{ vars.NOTIFY_SWEEP_AUDIENCE }}|NOTIFY_SWEEP_SA=${{ vars.NOTIFY_SWEEP_SA }}|SCORECARD_SWEEP_AUDIENCE=${{ vars.SCORECARD_SWEEP_AUDIENCE }}|DIGEST_SWEEP_AUDIENCE=${{ vars.DIGEST_SWEEP_AUDIENCE }}|VAPID_PUBLIC_KEY=${{ vars.VAPID_PUBLIC_KEY }}|VAPID_SUBJECT=${{ vars.VAPID_SUBJECT }}"
           ZONE_HOST_URL_VAL="${{ vars.ZONE_HOST_URL }}"
           if [ -n "$ZONE_HOST_URL_VAL" ]; then
             ENV_VARS="${ENV_VARS}|ZONE_HOST_URL=${ZONE_HOST_URL_VAL}"

@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { InvalidAgentTokenError, readBearerToken, verifyAgentToken } from './agent-token.js';
+import { InvalidUploadError, type GamesStore } from './games-store.js';
 import type { CreatorMessage, Store, SubmissionRecord } from './store.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from './submission-status.js';
 
@@ -95,6 +96,34 @@ const MAX_PREVIEW_LABEL = 120;
  * clears the real ceiling with slack while staying well inside a Firestore document.
  */
 const maxPreviewBytes = 320 * 1024;
+// Deliveries are rare by nature — a build delivers once, a revision round once more — so
+// this bounds a looping agent rather than shaping normal use.
+const DEFAULT_MAX_SUBMITS_PER_WINDOW = 20;
+
+/**
+ * A delivery: the game's own source files, and nothing else.
+ *
+ * Deliberately text rather than an archive. An archive would need unpacking before its
+ * paths could be judged, and unpacking untrusted input to decide whether it is allowed is
+ * exactly the order of operations that produces zip-slip bugs. A flat list of
+ * (path, content) is checked before a single byte is stored.
+ */
+const BuildSourcesInputSchema = z.object({
+  slug: z
+    .string()
+    .trim()
+    .regex(/^[a-z0-9][a-z0-9-]*$/, 'slug must be lowercase letters, digits and dashes')
+    .max(64),
+  files: z
+    .array(
+      z.object({
+        path: z.string().trim().min(1).max(120),
+        content: z.string().max(1_000_000),
+      }),
+    )
+    .min(1, 'files is required')
+    .max(64, 'too many files'),
+});
 
 const BuildPreviewInputSchema = z.object({
   html: z
@@ -149,6 +178,16 @@ export interface AgentChannelOptions {
   keepPreviews?: number;
   /** Playable previews one build may push per hour. */
   maxPreviewsPerWindow?: number;
+  /**
+   * Where a delivered game is stored. Absent in local development and in tests that do
+   * not exercise delivery, in which case the submit verb reports itself unavailable
+   * rather than pretending to have accepted work.
+   */
+  gamesStore?: GamesStore;
+  /** Deliveries one build may make per hour. */
+  maxSubmitsPerWindow?: number;
+  /** Called when a candidate version lands, so the job can move on to the gate. */
+  onSourcesDelivered?: (input: { issueNumber: number; slug: string; version: string }) => Promise<void> | void;
 }
 
 type RejectionReason = 'stopped' | 'rate_limited' | 'too_many_events' | 'too_many_shots';
@@ -185,10 +224,12 @@ export async function registerAgentChannelRoutes(
   // recompiles every thirty seconds for half an hour is working exactly as intended.
   const keepPreviews = options.keepPreviews ?? 4;
   const maxPreviewsPerWindow = options.maxPreviewsPerWindow ?? 90;
+  const maxSubmitsPerWindow = options.maxSubmitsPerWindow ?? DEFAULT_MAX_SUBMITS_PER_WINDOW;
   const eventsByBuild = new Map<number, number[]>();
   const inboxChecksByBuild = new Map<number, number[]>();
   const shotsByBuild = new Map<number, number[]>();
   const previewsByBuild = new Map<number, number[]>();
+  const submitsByBuild = new Map<number, number[]>();
 
   /**
    * Resolves the build a request is about. The token is the whole credential: it
@@ -259,58 +300,62 @@ export async function registerAgentChannelRoutes(
   // IP ceilings sit above the per-build limiters inside each handler. Agents
   // share a Cloud Run egress IP, so these are generous; the build-keyed checks
   // remain the real abuse control.
-  app.post('/api/agent/build/progress', { config: { rateLimit: { max: 300, timeWindow: '1 hour' } } }, async (request, reply) => {
-    const resolved = await resolveBuild(request, reply);
-    if (!resolved) return reply;
-    const { issueNumber, record } = resolved;
+  app.post(
+    '/api/agent/build/progress',
+    { config: { rateLimit: { max: 300, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      const { issueNumber, record } = resolved;
 
-    const parsed = BuildEventInputSchema.safeParse(request.body ?? {});
-    if (!parsed.success) {
-      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
-    }
+      const parsed = BuildEventInputSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
+      }
 
-    // A rejected report still answers with the creator's messages. Handing back an
-    // error and dropping their change request would be the worst of both.
-    const reject = async (reason: RejectionReason) =>
-      reply.send({ accepted: false, rejected: reason, ...(await channelState(issueNumber, record)) });
+      // A rejected report still answers with the creator's messages. Handing back an
+      // error and dropping their change request would be the worst of both.
+      const reject = async (reason: RejectionReason) =>
+        reply.send({ accepted: false, rejected: reason, ...(await channelState(issueNumber, record)) });
 
-    if (stopReason(record)) {
-      return reject('stopped');
-    }
-    if (isRateLimited(eventsByBuild, issueNumber, now(), maxEventsPerWindow)) {
-      return reject('rate_limited');
-    }
-    if ((await store!.countBuildEvents(issueNumber)) >= maxEventsPerBuild) {
-      return reject('too_many_events');
-    }
+      if (stopReason(record)) {
+        return reject('stopped');
+      }
+      if (isRateLimited(eventsByBuild, issueNumber, now(), maxEventsPerWindow)) {
+        return reject('rate_limited');
+      }
+      if ((await store!.countBuildEvents(issueNumber)) >= maxEventsPerBuild) {
+        return reject('too_many_events');
+      }
 
-    const text = sanitizeCreatorText(parsed.data.text, { singleLine: true }).slice(0, MAX_EVENT_TEXT);
-    if (!text) {
-      return reply.status(400).send({ error: 'text is required' });
-    }
-    const localized = parsed.data.textLocalized
-      ? sanitizeCreatorText(parsed.data.textLocalized, { singleLine: true }).slice(0, MAX_EVENT_TEXT)
-      : '';
-    // A localized sentence without a language tag cannot be matched to a reader, so
-    // it is dropped rather than shown to someone who may not read it.
-    const hasLocalized = Boolean(localized && parsed.data.locale);
-    const progress = parsed.data.progress
-      ? { done: Math.min(parsed.data.progress.done, parsed.data.progress.total), total: parsed.data.progress.total }
-      : undefined;
+      const text = sanitizeCreatorText(parsed.data.text, { singleLine: true }).slice(0, MAX_EVENT_TEXT);
+      if (!text) {
+        return reply.status(400).send({ error: 'text is required' });
+      }
+      const localized = parsed.data.textLocalized
+        ? sanitizeCreatorText(parsed.data.textLocalized, { singleLine: true }).slice(0, MAX_EVENT_TEXT)
+        : '';
+      // A localized sentence without a language tag cannot be matched to a reader, so
+      // it is dropped rather than shown to someone who may not read it.
+      const hasLocalized = Boolean(localized && parsed.data.locale);
+      const progress = parsed.data.progress
+        ? { done: Math.min(parsed.data.progress.done, parsed.data.progress.total), total: parsed.data.progress.total }
+        : undefined;
 
-    const event: Omit<BuildEvent, 'id' | 'createdAt'> = {
-      kind: parsed.data.kind,
-      ...(parsed.data.step ? { step: parsed.data.step } : {}),
-      text,
-      ...(hasLocalized ? { textLocalized: localized, locale: parsed.data.locale } : {}),
-      ...(progress ? { progress } : {}),
-    };
+      const event: Omit<BuildEvent, 'id' | 'createdAt'> = {
+        kind: parsed.data.kind,
+        ...(parsed.data.step ? { step: parsed.data.step } : {}),
+        text,
+        ...(hasLocalized ? { textLocalized: localized, locale: parsed.data.locale } : {}),
+        ...(progress ? { progress } : {}),
+      };
 
-    const stored = await store!.appendBuildEvent(issueNumber, event);
-    options.onEvent?.(issueNumber);
+      const stored = await store!.appendBuildEvent(issueNumber, event);
+      options.onEvent?.(issueNumber);
 
-    return reply.send({ accepted: true, event: stored, ...(await channelState(issueNumber, record)) });
-  });
+      return reply.send({ accepted: true, event: stored, ...(await channelState(issueNumber, record)) });
+    },
+  );
 
   /**
    * A picture of the game as it stands, pushed before any commit.
@@ -321,62 +366,66 @@ export async function registerAgentChannelRoutes(
    * must actually start with a PNG signature, because everything downstream serves it
    * back to a browser as an image.
    */
-  app.post('/api/agent/build/shot', { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } }, async (request, reply) => {
-    const resolved = await resolveBuild(request, reply);
-    if (!resolved) return reply;
-    const { issueNumber, record } = resolved;
+  app.post(
+    '/api/agent/build/shot',
+    { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      const { issueNumber, record } = resolved;
 
-    const parsed = BuildShotInputSchema.safeParse(request.body ?? {});
-    if (!parsed.success) {
-      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
-    }
+      const parsed = BuildShotInputSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
+      }
 
-    const reject = async (reason: RejectionReason) =>
-      reply.send({ accepted: false, rejected: reason, ...(await channelState(issueNumber, record)) });
+      const reject = async (reason: RejectionReason) =>
+        reply.send({ accepted: false, rejected: reason, ...(await channelState(issueNumber, record)) });
 
-    if (stopReason(record)) {
-      return reject('stopped');
-    }
-    if (isRateLimited(shotsByBuild, issueNumber, now(), maxShotsPerWindow)) {
-      return reject('rate_limited');
-    }
-    if ((await store!.countBuildShots(issueNumber)) >= maxShotsPerBuild) {
-      return reject('too_many_shots');
-    }
+      if (stopReason(record)) {
+        return reject('stopped');
+      }
+      if (isRateLimited(shotsByBuild, issueNumber, now(), maxShotsPerWindow)) {
+        return reject('rate_limited');
+      }
+      if ((await store!.countBuildShots(issueNumber)) >= maxShotsPerBuild) {
+        return reject('too_many_shots');
+      }
 
-    const bytes = Buffer.from(parsed.data.png, 'base64');
-    if (bytes.length > maxShotBytes) {
-      return reply.status(413).send({ error: 'screenshot is too large' });
-    }
-    if (!bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
-      return reply.status(400).send({ error: 'not a PNG' });
-    }
+      const bytes = Buffer.from(parsed.data.png, 'base64');
+      if (bytes.length > maxShotBytes) {
+        return reply.status(413).send({ error: 'screenshot is too large' });
+      }
+      if (!bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
+        return reply.status(400).send({ error: 'not a PNG' });
+      }
 
-    const label = parsed.data.label
-      ? sanitizeCreatorText(parsed.data.label, { singleLine: true }).slice(0, MAX_SHOT_LABEL)
-      : '';
-    const labelLocalized = parsed.data.labelLocalized
-      ? sanitizeCreatorText(parsed.data.labelLocalized, { singleLine: true }).slice(0, MAX_SHOT_LABEL)
-      : '';
-    // Same rule as a progress sentence: a caption with no language tag cannot be
-    // matched to a reader, so it is dropped rather than shown to the wrong one.
-    const hasLocalized = Boolean(labelLocalized && parsed.data.locale);
+      const label = parsed.data.label
+        ? sanitizeCreatorText(parsed.data.label, { singleLine: true }).slice(0, MAX_SHOT_LABEL)
+        : '';
+      const labelLocalized = parsed.data.labelLocalized
+        ? sanitizeCreatorText(parsed.data.labelLocalized, { singleLine: true }).slice(0, MAX_SHOT_LABEL)
+        : '';
+      // Same rule as a progress sentence: a caption with no language tag cannot be
+      // matched to a reader, so it is dropped rather than shown to the wrong one.
+      const hasLocalized = Boolean(labelLocalized && parsed.data.locale);
 
-    // Re-encoded from the decoded bytes rather than stored as sent: whatever
-    // whitespace or padding variant arrived, what we keep is canonical base64.
-    const stored = await store!.appendBuildShot(issueNumber, {
-      data: bytes.toString('base64'),
-      ...(label ? { label } : {}),
-      ...(hasLocalized ? { labelLocalized, locale: parsed.data.locale } : {}),
-    });
-    options.onEvent?.(issueNumber);
+      // Re-encoded from the decoded bytes rather than stored as sent: whatever
+      // whitespace or padding variant arrived, what we keep is canonical base64.
+      const stored = await store!.appendBuildShot(issueNumber, {
+        data: bytes.toString('base64'),
+        ...(label ? { label } : {}),
+        ...(hasLocalized ? { labelLocalized, locale: parsed.data.locale } : {}),
+      });
+      options.onEvent?.(issueNumber);
 
-    return reply.send({
-      accepted: true,
-      shot: { id: stored.id, createdAt: stored.createdAt, ...(label ? { label } : {}) },
-      ...(await channelState(issueNumber, record)),
-    });
-  });
+      return reply.send({
+        accepted: true,
+        shot: { id: stored.id, createdAt: stored.createdAt, ...(label ? { label } : {}) },
+        ...(await channelState(issueNumber, record)),
+      });
+    },
+  );
 
   /**
    * A playable build of the game, pushed before any commit.
@@ -454,31 +503,120 @@ export async function registerAgentChannelRoutes(
     },
   );
 
+  /**
+   * Deliver the game.
+   *
+   * This is what replaces "open a pull request and wait for a human to merge it". The
+   * agent uploads its own sources; we store them as an immutable candidate version and
+   * run our own gate against them. Two properties are worth being explicit about:
+   *
+   * - The slug is bound to the **job**, and the job is bound to the token. The token
+   *   itself carries only the job id, so the first delivery does name its own slug —
+   *   but that slug is persisted onto the job, and every later delivery on the same
+   *   token is checked against it. An agent therefore cannot deliver into a game it was
+   *   not dispatched for, and cannot change its mind about which game it is building.
+   * - Nothing here trusts the upload. Paths are validated against the delivery contract
+   *   before a byte is written, and the bundle and media that eventually ship are built
+   *   by our gate from these sources rather than accepted from the agent.
+   */
+  app.post(
+    '/api/agent/build/sources',
+    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      const { issueNumber, record } = resolved;
+
+      if (!options.gamesStore) {
+        return reply.status(503).send({ error: 'delivery is not configured on this deployment' });
+      }
+
+      const parsed = BuildSourcesInputSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
+      }
+
+      if (stopReason(record)) {
+        return reply.send({ accepted: false, rejected: 'stopped', ...(await channelState(issueNumber, record)) });
+      }
+      if (isRateLimited(submitsByBuild, issueNumber, now(), maxSubmitsPerWindow)) {
+        return reply.send({ accepted: false, rejected: 'rate_limited', ...(await channelState(issueNumber, record)) });
+      }
+
+      // The job's own slug wins whenever it has one. A build that has already been
+      // associated with a game cannot deliver into a different one, whatever it sends.
+      const slug = record.slug ?? parsed.data.slug;
+      if (record.slug && record.slug !== parsed.data.slug) {
+        return reply.status(409).send({ error: `this build delivers to ${record.slug}, not ${parsed.data.slug}` });
+      }
+      // Bind the job to this slug on the first delivery, and do it *before* storing
+      // anything. Without this the check above never fires for a job that arrived
+      // without a slug: every delivery would find `record.slug` unset and be free to
+      // name a different game. Writing it first rather than after the upload means a
+      // second delivery racing the first still finds the binding in place.
+      if (!record.slug && store) {
+        await store.setSubmissionSlug(issueNumber, slug);
+      }
+
+      try {
+        const { version } = await options.gamesStore.putCandidateSources({
+          slug,
+          issueNumber,
+          files: parsed.data.files,
+        });
+        await options.onSourcesDelivered?.({ issueNumber, slug, version });
+        options.onEvent?.(issueNumber);
+
+        return reply.send({
+          accepted: true,
+          delivery: { slug, version },
+          ...(await channelState(issueNumber, record)),
+        });
+      } catch (error) {
+        // A rejected upload is the agent's to fix, so the reason goes back in full. This
+        // is the one place a 400 body is worth writing carefully: the alternative is an
+        // agent burning a session guessing which file was refused.
+        if (error instanceof InvalidUploadError) {
+          return reply.status(400).send({ error: error.message });
+        }
+        throw error;
+      }
+    },
+  );
+
   // Collect without reporting. Deliberately does NOT mark messages delivered — an
   // agent that reads a request and then crashes must not lose it. Acking is explicit.
-  app.get('/api/agent/build/inbox', { config: { rateLimit: { max: 600, timeWindow: '1 hour' } } }, async (request, reply) => {
-    const resolved = await resolveBuild(request, reply);
-    if (!resolved) return reply;
-    const { issueNumber, record } = resolved;
+  app.get(
+    '/api/agent/build/inbox',
+    { config: { rateLimit: { max: 600, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      const { issueNumber, record } = resolved;
 
-    if (isRateLimited(inboxChecksByBuild, issueNumber, now(), maxInboxChecksPerWindow)) {
-      return reply.status(429).send({ error: 'too many inbox checks' });
-    }
+      if (isRateLimited(inboxChecksByBuild, issueNumber, now(), maxInboxChecksPerWindow)) {
+        return reply.status(429).send({ error: 'too many inbox checks' });
+      }
 
-    return reply.send(await channelState(issueNumber, record));
-  });
+      return reply.send(await channelState(issueNumber, record));
+    },
+  );
 
-  app.post('/api/agent/build/inbox/ack', { config: { rateLimit: { max: 600, timeWindow: '1 hour' } } }, async (request, reply) => {
-    const resolved = await resolveBuild(request, reply);
-    if (!resolved) return reply;
-    const { issueNumber, record } = resolved;
+  app.post(
+    '/api/agent/build/inbox/ack',
+    { config: { rateLimit: { max: 600, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      const { issueNumber, record } = resolved;
 
-    const parsed = AckRequestSchema.safeParse(request.body ?? {});
-    if (!parsed.success) {
-      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
-    }
+      const parsed = AckRequestSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
+      }
 
-    await store!.markCreatorMessagesDelivered(issueNumber, parsed.data.ids);
-    return reply.send({ ok: true, ...(await channelState(issueNumber, record)) });
-  });
+      await store!.markCreatorMessagesDelivered(issueNumber, parsed.data.ids);
+      return reply.send({ ok: true, ...(await channelState(issueNumber, record)) });
+    },
+  );
 }

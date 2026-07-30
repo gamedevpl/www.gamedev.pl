@@ -20,12 +20,26 @@ import {
   type GameSnapshotReader,
 } from './game-snapshot.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
+import type { AgentBackend } from './agent-backend.js';
+import {
+  detectStall,
+  fromSubmissionStatus,
+  planObservedStatusTransition,
+  toSubmissionStatus,
+  type JobTransition,
+} from './job-state.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { notifyOnTransition, type EmitDeps } from './notify.js';
 import { peekQuota } from './quota-gate.js';
-import { type BuildPreviewSummary, type BuildShotSummary, type Store } from './store.js';
+import {
+  isNativeJobId,
+  type BuildPreviewSummary,
+  type BuildShotSummary,
+  type Store,
+  type SubmissionRecord,
+} from './store.js';
 import {
   CREATOR_FEEDBACK_MARKER,
   countCreatorClarifications,
@@ -36,6 +50,7 @@ import {
   type BuildEvent,
   type BuildMediaItem,
   type BuildPlayableItem,
+  type SubmissionStatus,
   type SubmissionStatusResponse,
 } from './submission-status.js';
 import { InvalidTokenError, mintToken, verifyToken } from './submission-token.js';
@@ -195,7 +210,15 @@ export interface SubmissionRoutesOptions {
   /** Localizes the agent's English build log; defaults to createTranslatorFromEnv(). */
   translator?: Translator;
   /** Caps and seams for the agent build channel; see registerAgentChannelRoutes. */
-  agentChannel?: Pick<AgentChannelOptions, 'maxEventsPerBuild' | 'maxEventsPerWindow'>;
+  /**
+   * Which coding-agent backend builds submitted games. Absent means dispatch is not
+   * wired in this environment and the games repo's label workflow still starts builds.
+   */
+  agentBackend?: AgentBackend;
+  agentChannel?: Pick<
+    AgentChannelOptions,
+    'maxEventsPerBuild' | 'maxEventsPerWindow' | 'gamesStore' | 'maxSubmitsPerWindow' | 'onSourcesDelivered'
+  >;
   /**
    * Pre-assembled published games. Defaults to the bucket in
    * GAMES_SNAPSHOT_BUCKET, or null when unset. Always a fast path in front of
@@ -315,6 +338,7 @@ export async function registerSubmissionRoutes(
   const improvementRateLimitWindowMs = 60 * 60 * 1000;
   const maxImprovementsPerWindow = 10;
   const internalAuthVerifier = options.internalAuthVerifier ?? createInternalAuthVerifierFromEnv();
+  const agentBackend = options.agentBackend;
 
   // Shared deps for notification emission (in-app + best-effort email). The mailer
   // degrades to a no-op without RESEND_API_KEY, and email is skipped entirely
@@ -322,6 +346,142 @@ export async function registerSubmissionRoutes(
   const notifyMailer = options.notifyMailer ?? createMailerFromEnv();
   const notifyAppBaseUrl = options.notifyAppBaseUrl ?? process.env.APP_BASE_URL?.trim() ?? 'https://www.gamedev.pl';
   const unsubscribeSecret = options.unsubscribeSecret ?? process.env.SESSION_SECRET;
+  /**
+   * Feeds a derived status into the job state machine.
+   *
+   * Both the status poll and the sweep call this, so an in-flight build accumulates a
+   * real state and history whichever one happens to observe it first. It is additive
+   * for now — the status route still answers from the derivation — but it is what
+   * populates the record that will answer instead, and it makes time-in-state and
+   * stall detection available immediately for jobs that predate the job model.
+   *
+   * Best effort by design: this is bookkeeping, and a failed write must never turn a
+   * creator's status poll into an error.
+   */
+  async function recordDerivedJobState(
+    record: SubmissionRecord,
+    observed: SubmissionStatus,
+  ): Promise<JobTransition | null> {
+    if (!store) return null;
+    const transition = planObservedStatusTransition(record.state, observed, new Date(now()).toISOString());
+    if (!transition) return null;
+    try {
+      await store.recordJobTransition(record.issueNumber, transition);
+    } catch (error) {
+      app.log.error({ err: error, issueNumber: record.issueNumber }, 'job transition write failed');
+      return null;
+    }
+    // Returned so the caller can judge staleness against the state it just wrote. The
+    // caller holds a snapshot taken before this write, and a stall computed from that
+    // snapshot would measure how long the job sat in the state it has *just left* —
+    // which is how a job that is visibly progressing gets reported as stuck.
+    return transition;
+  }
+
+  /**
+   * Hands a job to a coding agent.
+   *
+   * This is what replaces the games repo's `assign-copilot.yml` — a workflow whose only
+   * job was assigning a bot the REST API will not list, needing a PAT of its own because
+   * the default token could not do it. Dispatching from here also means the *product*
+   * decides which backend and which model builds a game, rather than that being a
+   * property of a label somebody put on an issue.
+   *
+   * The GitHub issue survives for now as the job's identity — every store key, every
+   * token and the whole build channel are derived from its number — but nothing reads it
+   * as a work item any more. Re-keying jobs onto ids we mint is a change of its own, and
+   * doing it in the same step as moving dispatch would put two risky migrations in one
+   * deploy for no gain.
+   *
+   * Best effort against a missing backend: without one configured (local development, or
+   * before the dispatch credential exists in an environment) the submission still
+   * succeeds and the label workflow remains the path that starts it. A creator must never
+   * lose a submission to orchestration that is not wired up yet.
+   */
+  async function dispatchBuild(input: {
+    issueNumber: number;
+    spec: string;
+    locale: string;
+    log: { error: (context: object, message: string) => void };
+  }): Promise<void> {
+    // Without the signing secret there is no per-job channel credential to give the
+    // agent, and an agent that cannot report or deliver is worse than one never started.
+    if (!agentBackend || !submissionTokenSecret) return;
+    try {
+      const result = await agentBackend.dispatch({
+        issueNumber: input.issueNumber,
+        spec: input.spec,
+        locale: input.locale,
+        channelToken: mintAgentToken(input.issueNumber, submissionTokenSecret),
+        apiBaseUrl: notifyAppBaseUrl,
+      });
+      await store?.recordDispatch(input.issueNumber, {
+        backend: agentBackend.name,
+        ref: result.ref,
+        workspace: result.workspace,
+      });
+      await store?.recordJobTransition(input.issueNumber, {
+        to: 'dispatched',
+        at: new Date(now()).toISOString(),
+        by: 'system',
+        reason: `dispatched_to_${agentBackend.name}`,
+      });
+    } catch (error) {
+      // A failed dispatch leaves the job `queued`, which is exactly what the operator
+      // queue reports as `not_dispatched` once it has waited long enough — so this
+      // surfaces as a visible stalled job rather than a silently dead one.
+      input.log.error({ err: error, issueNumber: input.issueNumber }, 'agent dispatch failed');
+    }
+  }
+
+  /**
+   * Starts another round on an existing job.
+   *
+   * The backend decides what "another round" costs: Copilot needs an open pull request
+   * on the branch before it will resume one, which its adapter arranges on demand. That
+   * detail stays inside the adapter — here it is simply "continue this job".
+   */
+  async function resumeBuild(input: {
+    issueNumber: number;
+    feedback: string;
+    locale: string;
+    log: { error: (context: object, message: string) => void };
+  }): Promise<void> {
+    if (!agentBackend || !submissionTokenSecret || !store) return;
+    const record = await store.getSubmission(input.issueNumber);
+    const previous = record?.dispatch;
+    try {
+      const brief = {
+        issueNumber: input.issueNumber,
+        slug: record?.slug,
+        spec: input.feedback,
+        feedback: input.feedback,
+        locale: input.locale,
+        channelToken: mintAgentToken(input.issueNumber, submissionTokenSecret),
+        apiBaseUrl: notifyAppBaseUrl,
+      };
+      const result = previous?.refs.length
+        ? await agentBackend.resume(brief, {
+            ref: previous.refs[previous.refs.length - 1],
+            workspace: previous.workspace,
+          })
+        : await agentBackend.dispatch(brief);
+      await store.recordDispatch(input.issueNumber, {
+        backend: agentBackend.name,
+        ref: result.ref,
+        workspace: result.workspace,
+      });
+      const transition = record?.state
+        ? planObservedStatusTransition(record.state, 'building', new Date(now()).toISOString(), 'creator')
+        : null;
+      if (transition) await store.recordJobTransition(input.issueNumber, transition);
+    } catch (error) {
+      // The creator's request is already queued on the build channel, so a failed
+      // resume costs the round its head start, not the request itself.
+      input.log.error({ err: error, issueNumber: input.issueNumber }, 'agent resume failed');
+    }
+  }
+
   function buildNotifyDeps(): EmitDeps {
     return {
       store: store!,
@@ -362,62 +522,6 @@ export async function registerSubmissionRoutes(
       'This token is scoped to this build and can only post progress about it.',
       '',
       '</details>',
-    ].join('\n');
-  }
-
-  /**
-   * The build-channel briefing appended to every submission issue. This is where the
-   * agent first learns the channel exists, so it carries the credential, the
-   * vocabulary, and — most importantly — the reason: someone is watching this build
-   * happen, and until now they watched it through a transport that made the agent
-   * choose between reporting and working.
-   */
-  function buildChannelSection(agentToken: string, locale: string): string {
-    return [
-      '## Build channel (report progress here)',
-      '',
-      'A person is watching this build on www.gamedev.pl right now, often for an hour or more.',
-      'Post an update whenever you start something, finish something, or get stuck. It is one',
-      'HTTP call — no commit, no push, no CI — and it shows up on their screen within seconds.',
-      '',
-      '```bash',
-      `npm run progress -- --step mechanics "Getting the squad moving and shooting."`,
-      '```',
-      '',
-      'The command reads `GAMEDEVPL_BUILD_TOKEN` and `GAMEDEVPL_API` from the environment:',
-      '',
-      '```bash',
-      `export GAMEDEVPL_API=${notifyAppBaseUrl}`,
-      `export GAMEDEVPL_BUILD_TOKEN=${agentToken}`,
-      '```',
-      '',
-      '- `--step` is one of: `planning`, `art`, `mechanics`, `audio`, `balancing`, `fixing`,',
-      '  `testing`, `polishing`. It is shown in the creator’s own language, so use it.',
-      '- The message is one plain sentence about the *game*, in the words a player would use,',
-      '  **written in English**. The site is read in more than one language and English is what',
-      '  every other reader is served, so it is always required.',
-      ...(locale === 'en'
-        ? [`- The creator reads the site in **${locale}**, so that one sentence is all they need.`]
-        : [
-            `- The creator reads the site in **${locale}**. Write it a second time in that language`,
-            '  so they get your words rather than a machine translation of them:',
-            `  \`npm run progress -- --step art "Drawing the soldiers." --lang ${locale} --localized "..."\`.`,
-            `  Use ${locale}'s accented characters properly — the sentence is already quoted, so`,
-            '  nothing needs escaping.',
-          ]),
-      '- `--done N --total N` draws the progress bar. Without it the page counts ticked items in',
-      '  your PR checklist, which reads `0 of 5` until you push, however much you have done.',
-      '- Use `--kind blocked` when you are stuck and `--kind done` when the game is playable.',
-      '',
-      '**The reply carries their answers.** Every call returns any change requests the creator',
-      'has sent, plus a `stop` flag if they abandoned the build — check it, and stop working when',
-      'it is set. `npm run progress -- --check` reads the inbox without posting anything.',
-      '',
-      'If the channel is unreachable, fall back to committing a `games/<slug>/PROGRESS.md`',
-      'journal (newest line first) — the site reads that too, just far more slowly.',
-      '',
-      'This token is scoped to this build and can only post progress about it. It cannot read',
-      'or change anything else.',
     ].join('\n');
   }
 
@@ -873,6 +977,31 @@ export async function registerSubmissionRoutes(
 
   // Single source of GitHub-state → status derivation, shared by the on-demand
   // status route and the notification sweep so they never diverge.
+  /**
+   * Status for a job we created ourselves, read from its own record.
+   *
+   * There is no issue and no pull request to derive from — that is the point — so this
+   * is a projection of the job state, not an inference about somebody else's UI. It is
+   * also why a GitHub outage can no longer affect a creator watching their build: the
+   * events, screenshots and playable drafts on the page all come from Firestore already.
+   */
+  async function nativeJobStatus(record: SubmissionRecord): Promise<SubmissionStatusResponse> {
+    const state = record.state ?? 'queued';
+    const status: SubmissionStatusResponse = {
+      status: record.abandonedAt ? 'abandoned' : toSubmissionStatus(state),
+      ...(record.slug ? { slug: record.slug } : {}),
+    };
+    const stall = detectStall({
+      state,
+      stateSince: record.stateSince ?? record.createdAt,
+      lastAgentSignalAt: record.lastAgentSignalAt,
+      agentState: record.agentState,
+      now: now(),
+    });
+    if (stall) status.stall = stall;
+    return status;
+  }
+
   async function deriveSubmissionStatusWithPr(
     client: GitHubClient,
     issueNumber: number,
@@ -1012,35 +1141,37 @@ export async function registerSubmissionRoutes(
     ].join('\n');
 
     try {
-      const issue = await githubClient.createIssue({
-        title: sanitizedTitle,
-        body: issueBody,
-        labels: ['new-game'],
+      // Job identity is ours now. It used to be a GitHub issue number, which meant we
+      // could not name our own job until a work item existed in someone else's system —
+      // and made every store key, every token and the whole build channel depend on that
+      // call. Nothing is filed on GitHub here any more; the brief goes straight to an
+      // agent, and `issueBody` survives only as the human-readable spec inside it.
+      if (!store) {
+        return reply.status(503).send({ error: 'submissions are unavailable' });
+      }
+      const jobId = await store.allocateJobId();
+      await store.createSubmission(jobId, request.user!.uid, sanitizedTitle);
+      await store.setSubmissionLocale(jobId, creatorLocale);
+      // Raw, not sanitized: the sanitizer strips the '##' that marks the block.
+      await store.setSubmissionClarificationCount(jobId, countCreatorClarifications(parsed.data.concept));
+      await store.recordJobTransition(jobId, {
+        to: 'queued',
+        at: new Date(now()).toISOString(),
+        by: 'creator',
+        reason: 'submitted',
       });
 
-      if (store) {
-        await store.createSubmission(issue.number, request.user!.uid, sanitizedTitle);
-        await store.setSubmissionLocale(issue.number, creatorLocale);
-        // Raw, not sanitized: the sanitizer strips the '##' that marks the block.
-        await store.setSubmissionClarificationCount(issue.number, countCreatorClarifications(parsed.data.concept));
-      }
+      await dispatchBuild({
+        issueNumber: jobId,
+        spec: issueBody,
+        locale: creatorLocale,
+        log: request.log,
+      });
 
-      // The build channel's credentials are derived from the issue number, so they
-      // can only be written once the issue exists. Best effort: a failure here costs
-      // live progress reporting, not the build, so it must not fail the submission.
-      try {
-        await githubClient.updateIssueBody(
-          issue.number,
-          `${issueBody}\n\n${buildChannelSection(mintAgentToken(issue.number, submissionTokenSecret), creatorLocale)}`,
-        );
-      } catch (channelError) {
-        request.log.error({ err: channelError, issueNumber: issue.number }, 'failed to attach build channel');
-      }
-
-      const token = mintToken(issue.number, submissionTokenSecret);
+      const token = mintToken(jobId, submissionTokenSecret);
       return reply.send({ token, statusUrl: `/api/submissions/${token}` });
     } catch (error) {
-      request.log.error({ err: error }, 'failed to create submission issue');
+      request.log.error({ err: error }, 'failed to create submission');
       return reply.status(502).send({ error: 'failed to submit game spec' });
     }
   });
@@ -1142,17 +1273,39 @@ export async function registerSubmissionRoutes(
         return reply.send({ ok: true, alreadyAbandoned: true });
       }
 
-      try {
-        const linkedPr = await githubClient.findLinkedPR(issueNumber);
-        if (linkedPr && linkedPr.state === 'OPEN' && !linkedPr.merged) {
-          await githubClient.closePullRequest(linkedPr.number);
+      if (isNativeJobId(issueNumber)) {
+        // Nothing to close: there is no issue, and any pull request is workspace
+        // scaffolding the adapter tidies up. Cancellation is asked of the backend and
+        // its honesty is respected — Copilot has no cancel endpoint, so a live session
+        // keeps running and the guarantee we actually give the creator is that the job
+        // is terminal and whatever arrives afterwards is discarded.
+        const ref = record.dispatch?.refs.at(-1);
+        if (agentBackend && ref) {
+          try {
+            await agentBackend.cancel(ref);
+          } catch (cancelError) {
+            request.log.error({ err: cancelError, issueNumber }, 'agent cancel failed');
+          }
         }
-        // A merged PR means the game shipped — closing the issue is still correct
-        // (the creator is done with it), but nothing is withdrawn.
-        await githubClient.closeIssue(issueNumber);
-      } catch (error) {
-        request.log.error({ err: error }, 'failed to abandon submission');
-        return reply.status(502).send({ error: 'failed to abandon this build' });
+        await store.recordJobTransition(issueNumber, {
+          to: 'canceled',
+          at: new Date(now()).toISOString(),
+          by: 'creator',
+          reason: 'abandoned',
+        });
+      } else {
+        try {
+          const linkedPr = await githubClient.findLinkedPR(issueNumber);
+          if (linkedPr && linkedPr.state === 'OPEN' && !linkedPr.merged) {
+            await githubClient.closePullRequest(linkedPr.number);
+          }
+          // A merged PR means the game shipped — closing the issue is still correct
+          // (the creator is done with it), but nothing is withdrawn.
+          await githubClient.closeIssue(issueNumber);
+        } catch (error) {
+          request.log.error({ err: error }, 'failed to abandon submission');
+          return reply.status(502).send({ error: 'failed to abandon this build' });
+        }
       }
 
       await store.setSubmissionAbandoned(issueNumber, new Date(now()).toISOString());
@@ -1218,6 +1371,24 @@ export async function registerSubmissionRoutes(
     if (existing) return existing;
 
     const refresh = (async () => {
+      // A job we created has no issue to read. Answer from its own record and skip the
+      // GitHub round-trip entirely — this is the path every new build takes.
+      if (isNativeJobId(issueNumber)) {
+        const record = await store?.getSubmission(issueNumber);
+        const status = record
+          ? await localizeStatus(await nativeJobStatus(record), locale)
+          : ({ status: 'queued' } as SubmissionStatusResponse);
+        statusCache.set(cacheKey, { value: status, expiresAt: now() + 60_000 });
+        if (store && record) {
+          try {
+            await notifyOnTransition(buildNotifyDeps(), record, status, token);
+          } catch (notifyError) {
+            app.log.error({ err: notifyError }, 'notification emit on status poll failed');
+          }
+        }
+        return status;
+      }
+
       const { status: derived, linkedPr } = await deriveSubmissionStatusWithPr(githubClient!, issueNumber);
       const withNote = await attachProgressNote(githubClient!, derived, linkedPr);
       const status = await localizeStatus(withNote, locale);
@@ -1243,6 +1414,20 @@ export async function registerSubmissionRoutes(
             if (record.lastStatus !== status.status) {
               await store.setSubmissionLastStatus(issueNumber, status.status);
             }
+            const transition = await recordDerivedJobState(record, status.status);
+            // Say *why* a build looks stuck rather than leaving the page to imply it
+            // from silence. The transition just written wins over the snapshot `record`
+            // was read into: a job that has this moment moved to a new state has been
+            // in that state for no time at all, and reporting it as stalled would be
+            // reporting the age of a state it has already left.
+            const stall = detectStall({
+              state: transition?.to ?? record.state ?? fromSubmissionStatus(status.status),
+              stateSince: transition?.at ?? record.stateSince ?? record.createdAt,
+              lastAgentSignalAt: record.lastAgentSignalAt,
+              agentState: record.agentState,
+              now: now(),
+            });
+            if (stall) status.stall = stall;
             await notifyOnTransition(buildNotifyDeps(), record, status, token);
           }
         } catch (notifyError) {
@@ -1429,11 +1614,24 @@ export async function registerSubmissionRoutes(
         buildChannelReminder(mintAgentToken(issueNumber, submissionTokenSecret), creatorLocale),
       ].join('\n');
 
-      try {
-        await githubClient.createIssueComment(target, commentBody);
-      } catch (error) {
-        request.log.error({ err: error }, 'failed to post feedback comment');
-        return reply.status(502).send({ error: 'failed to send feedback' });
+      if (isNativeJobId(issueNumber)) {
+        // No comment, no marker, no relay workflow. A revision is a new task on the
+        // job's existing workspace, dispatched by us — which is what removes the
+        // Copilot-licence relay that `commentBody` above was shaped for, and with it
+        // the last reason creator feedback had to travel through GitHub at all.
+        await resumeBuild({
+          issueNumber,
+          feedback: contextBlock ? `${sanitizedFeedback}\n\n${contextBlock}` : sanitizedFeedback,
+          locale: creatorLocale,
+          log: request.log,
+        });
+      } else {
+        try {
+          await githubClient.createIssueComment(target, commentBody);
+        } catch (error) {
+          request.log.error({ err: error }, 'failed to post feedback comment');
+          return reply.status(502).send({ error: 'failed to send feedback' });
+        }
       }
 
       // Queue the same request on the build channel. The comment above is the durable
@@ -1644,6 +1842,7 @@ export async function registerSubmissionRoutes(
           if (record.lastStatus !== status.status) {
             await store.setSubmissionLastStatus(record.issueNumber, status.status);
           }
+          await recordDerivedJobState(record, status.status);
           const statusToken = mintToken(record.issueNumber, submissionTokenSecret);
           const result = await notifyOnTransition(buildNotifyDeps(), record, status, statusToken);
           if (result.emitted) emitted += 1;
