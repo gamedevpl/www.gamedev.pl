@@ -3519,18 +3519,10 @@ body.player-open {
 }
 
 .howto-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
   margin: 0;
-  font-size: 1.05rem;
-  color: var(--turquoise);
-}
-
-.howto-game {
-  margin: 2px 0 0;
-  color: var(--muted);
-  font-size: 0.85rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
 }
 
 /* Key on the left, what it does on the right — the two-column reading answers "which
@@ -3559,6 +3551,12 @@ body.player-open {
   color: var(--muted);
   font-size: 0.85rem;
   line-height: 1.35;
+}
+
+/* The action reads as a label ("Steer"), not as the tail of a sentence — but only the
+   first letter, because `capitalize` would also title-case "hard drop". */
+.howto-keys dd::first-letter {
+  text-transform: uppercase;
 }
 
 /* A clause with no "X to Y" shape keeps its own line rather than being guessed apart. */

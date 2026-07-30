@@ -79,7 +79,9 @@ describe('HowToPlayPanel', () => {
     const labelledBy = card()?.getAttribute('aria-labelledby');
     expect(labelledBy).toBeTruthy();
     expect(document.getElementById(labelledBy!)?.textContent).toContain('How to play');
-    expect(document.querySelector('.howto-game')?.textContent).toBe('Apex Sprint');
+    // The game is named in the close button rather than shown as a subtitle: the theater
+    // bar behind the card already carries the title.
+    expect(document.querySelector('.howto-close')?.getAttribute('aria-label')).toContain('Apex Sprint');
     expect(document.querySelector('.howto-dismiss')?.textContent).toContain('close');
   });
 

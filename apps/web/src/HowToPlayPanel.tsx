@@ -8,7 +8,11 @@ type HowToPlayPanelProps = {
   open: boolean;
   /** The game's `controls` string from the catalog. Free text; rendered as text nodes. */
   controls: string;
-  /** Shown as the panel's subtitle so it is obvious which game these keys belong to. */
+  /**
+   * Names the game in the close button's accessible label. It is not shown: the theater
+   * bar behind the card already carries the title, and repeating it in a card this small
+   * costs a row without answering the question the card exists for.
+   */
   gameTitle: string;
   /** Adds the "keyboard only" line, for games the games-repo build found no touch path in. */
   keyboardOnly?: boolean;
@@ -81,18 +85,15 @@ export function HowToPlayPanel({ open, controls, gameTitle, keyboardOnly = false
         onClick={(event) => event.stopPropagation()}
       >
         <div className="howto-head">
-          <div>
-            <h2 className="howto-title" id="howto-title">
-              <PixelIcon name="gamepad" size={16} /> {t('player.howToPlay')}
-            </h2>
-            <p className="howto-game">{gameTitle}</p>
-          </div>
+          <h2 className="howto-title" id="howto-title">
+            {t('player.howToPlay')}
+          </h2>
           <button
             type="button"
             className="howto-close"
             onClick={onClose}
             ref={closeRef}
-            aria-label={t('player.howToPlayClose')}
+            aria-label={t('player.howToPlayClose', { game: gameTitle })}
           >
             <PixelIcon name="close" size={14} />
           </button>
