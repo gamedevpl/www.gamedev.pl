@@ -7,7 +7,7 @@
 > router → persist → inbox → approve/dismiss → dispatch → follow → measure. Note that as
 > of the first reading no game yet routes to an actionable class, so the queue is
 > correctly empty until play volume catches up; that is data, not a defect. The phase's
-> *exit* — a first improvement merged and measured — therefore waits on play, not on code.
+> _exit_ — a first improvement merged and measured — therefore waits on play, not on code.
 > **IL-4 is in place**: per-game autonomy (default `suggest`, which acts on nothing), a
 > 2/day global and 1/game/week budget, and — structurally — no way for autonomous work to
 > publish itself, since `publishing` is reachable only from `ready_for_review`. **The `@copilot` relay this plan called its biggest risk is retired** —
@@ -998,6 +998,32 @@ at all and feeds the only autonomous-eligible class.
   `bad-evidence` dismissals and `improved | neutral | regressed` verdicts — but nothing
   reads them yet, and it should stay a thing an operator does with evidence in hand rather
   than a loop that tunes itself.
+
+- ⚠️ **Known gap: nothing comes and gets a human for the review step.** Publishing is the
+  one thing autonomy can never do — `publishing` is reachable only from
+  `ready_for_review` — and it is also the one non-terminal state nothing watches.
+  `detectStall` covers `queued`, `dispatched`, `submitted` and `building`; it deliberately
+  does **not** flag `ready_for_review`, because waiting on a person is not the agent
+  stalling. Correct as a definition, and it leaves a job awaiting review invisible to the
+  mechanism built to surface stuck work: absent from the stalled count, unranked in the
+  operator queue, silent in the logs.
+
+  This bites hardest exactly when autonomy is on. Under `suggest` a creator approved
+  something and is half-expecting it; under `auto-fix-defects` nobody initiated anything,
+  so the work happens while no one is looking and then stops where a human is required —
+  agent time already spent, creator waiting, digest saying nothing.
+
+  **Deliberately not built yet**, on the same reasoning as the router tuning above: with
+  one operator and near-zero volume, checking the console beats machinery whose threshold
+  and channel would both be guesses. **The trigger to build it** is either of — the first
+  job reaching `ready_for_review` from an _autonomous_ dispatch, or the first one found
+  sitting there more than a day.
+
+  The cheap version is one more `JobStall` variant (`awaiting_review`, on time in state)
+  plus a threshold; the outcome pass already logs stalls at `error` with the suggestion
+  attached, so nothing else needs building. Pushing or emailing the operator is a separate,
+  larger decision and probably still unnecessary.
+
 - Exit: a crash-class defect goes from telemetry signal to published fix with the only
   human touch being review.
 
