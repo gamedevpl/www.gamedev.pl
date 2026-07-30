@@ -29,6 +29,21 @@ describe('createCloudBuildGateTrigger', () => {
     expect(calls[0]!.url).toContain('/projects/gamedevpl/builds');
     const steps = calls[0]!.body.steps as Array<{ args: string[] }>;
     expect(steps[1]!.args[1]).toContain("--slug 'comet-courier' --version 'v1'");
+    // An acceptance run, so no --health: the verdict lands as `manifest.gate`.
+    expect(steps[1]!.args[1]).not.toContain('--health');
+  });
+
+  it('runs a health re-gate as the same build with the health flag and its own tag', async () => {
+    const { impl, calls } = stubFetch();
+    const trigger = createCloudBuildGateTrigger({ ...OPTIONS, fetchImpl: impl });
+
+    await trigger!({ slug: 'comet-courier', version: 'v1', mode: 'health' });
+
+    const script = (calls[0]!.body.steps as Array<{ args: string[] }>)[1]!.args[1]!;
+    expect(script).toContain("--slug 'comet-courier' --version 'v1' --health");
+    // Tagged so a fleet re-check reads as one in the Cloud Build history, not as a
+    // wave of failing acceptance gates.
+    expect(calls[0]!.body.tags).toEqual(['gate', 'health', 'slug-comet-courier']);
   });
 
   it('points the capture harness at the browser it actually installed', async () => {

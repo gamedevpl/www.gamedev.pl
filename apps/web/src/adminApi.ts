@@ -7,7 +7,8 @@
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
-export type OperatorAlertKind = 'review_ready' | 'build_failed' | 'build_stalled' | 'feedback_undelivered';
+export type OperatorAlertKind =
+  'review_ready' | 'build_failed' | 'build_stalled' | 'feedback_undelivered' | 'game_unhealthy';
 
 export interface OperatorAlert {
   id: string;

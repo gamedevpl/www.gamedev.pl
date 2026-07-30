@@ -75,7 +75,72 @@ describe('runGate', () => {
 
     await runGate('comet-courier', 'v1', { store, prepareHarness: harnessDir, run, assembleBundle: stubAssemble });
 
-    expect(run.mock.calls[0]![1]).not.toContain('--accept');
+    // Addressed by content, not by index: the runner also shells out for bookkeeping
+    // (`git rev-parse`), and the check invocation is the one this is about.
+    const check = run.mock.calls.find(([command]) => command === 'npm');
+    expect(check?.[1]).not.toContain('--accept');
+  });
+
+  it('reports the engine commit it actually checked against, from the harness itself', async () => {
+    const { store } = stubStore();
+    const run = vi.fn(async (command: string) =>
+      command === 'git' ? { code: 0, output: 'deadbeefcafe\n' } : { code: 0, output: 'ok' },
+    );
+
+    const outcome = await runGate('comet-courier', 'v1', {
+      store,
+      prepareHarness: harnessDir,
+      run,
+      assembleBundle: stubAssemble,
+    });
+
+    expect(outcome.engineCommit).toBe('deadbeefcafe');
+    // The sha is in the report too, so a verdict read by a human names the target.
+    expect(outcome.report).toContain('deadbeefcafe');
+  });
+
+  it('checks against the manifest pin by default, and the override when asked', async () => {
+    const { store } = stubStore();
+    const seen: string[] = [];
+    const prepareHarness = async (engineRef: string) => {
+      seen.push(engineRef);
+      return harnessDir();
+    };
+    const run = vi.fn(async () => ({ code: 0, output: 'ok' }));
+
+    await runGate('comet-courier', 'v1', { store, prepareHarness, run, assembleBundle: stubAssemble });
+    // A health run's whole question is "does it work on *today's* engine", so the pin —
+    // which exists to keep the acceptance verdict reproducible — is exactly what it
+    // must ignore.
+    await runGate(
+      'comet-courier',
+      'v1',
+      { store, prepareHarness, run, assembleBundle: stubAssemble },
+      {
+        engineRef: 'main',
+      },
+    );
+
+    expect(seen).toEqual(['abc123', 'main']);
+  });
+
+  it('still renders a verdict when the sha cannot be resolved', async () => {
+    // The commit is bookkeeping; the check is the verdict. Failing the run because
+    // `git rev-parse` failed would discard an answer we already paid for.
+    const { store } = stubStore();
+    const run = vi.fn(async (command: string) =>
+      command === 'git' ? { code: 128, output: 'not a repository' } : { code: 0, output: 'ok' },
+    );
+
+    const outcome = await runGate('comet-courier', 'v1', {
+      store,
+      prepareHarness: harnessDir,
+      run,
+      assembleBundle: stubAssemble,
+    });
+
+    expect(outcome.green).toBe(true);
+    expect(outcome.engineCommit).toBeUndefined();
   });
 
   it('runs against the engine the version was built for, not whatever is current', async () => {

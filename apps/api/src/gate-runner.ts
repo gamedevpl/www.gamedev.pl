@@ -34,6 +34,22 @@ export interface GateOutcome {
   artifacts: string[];
   /** How long the check took — the number that tells us if this is affordable. */
   durationMs: number;
+  /**
+   * The engine commit the run actually checked against, read from the harness itself
+   * (`git rev-parse HEAD`) rather than trusted from the ref that requested it. A ref
+   * like `main` names a moving target; this is where it was standing when the verdict
+   * was rendered — the sha that makes "it worked when we checked" checkable later.
+   */
+  engineCommit?: string;
+}
+
+export interface GateRunOptions {
+  /**
+   * Check against this engine ref instead of the manifest's pin. Health runs use it to
+   * ask the question the pin exists to avoid: "does this game work on *today's* engine,
+   * not the one it was accepted against".
+   */
+  engineRef?: string;
 }
 
 export interface GateRunnerDeps {
@@ -110,7 +126,12 @@ const MEDIA_EXTENSIONS = ['.png', '.mp4', '.json'];
  * one worth reporting. Telling an agent about six failures when five are consequences of
  * the first is how a fix round gets spent on the wrong thing.
  */
-export async function runGate(slug: string, version: string, deps: GateRunnerDeps): Promise<GateOutcome> {
+export async function runGate(
+  slug: string,
+  version: string,
+  deps: GateRunnerDeps,
+  options: GateRunOptions = {},
+): Promise<GateOutcome> {
   const now = deps.now ?? Date.now;
   const roots = deps.artifactRoots ?? DEFAULT_ARTIFACT_ROOTS;
   const startedAt = now();
@@ -120,16 +141,20 @@ export async function runGate(slug: string, version: string, deps: GateRunnerDep
     return { green: false, report: `no such version: ${slug}@${version}`, artifacts: [], durationMs: 0 };
   }
 
-  // Ideally every version pins the engine *commit* it was built against, so a green
-  // verdict stays reproducible after the engine moves on. Deliveries do not record one
-  // yet — dispatch targets `main`, a moving branch, and pinning would mean resolving it
-  // to a sha at dispatch and carrying that through to the upload. Until that exists this
-  // falls back to the default branch, which means a re-run of an old version is checked
-  // against a newer engine than it was written for. That is a real limitation, not a
-  // detail: it is why `engineRef` is on the manifest at all, and closing it is the next
-  // change to this file.
-  const engineRef = manifest.engineRef ?? 'main';
+  // Deliveries do not pin an engine commit yet — dispatch targets `main`, a moving
+  // branch — so a first gate run checks against wherever `main` stands and stamps the
+  // resolved sha back onto the manifest (see the caller). A *re*-run of a stamped
+  // version checks against that pin, which is what keeps a green verdict reproducible
+  // after the engine moves on. Health runs override the pin on purpose: their whole
+  // question is whether the game survives the engine having moved.
+  const engineRef = options.engineRef ?? manifest.engineRef ?? 'main';
   const harness = await deps.prepareHarness(engineRef);
+  // Best effort: an outcome without the sha is poorer, not wrong, and a verdict must
+  // not be discarded because a bookkeeping read failed.
+  const engineCommit = await deps
+    .run('git', ['rev-parse', 'HEAD'], harness)
+    .then((head) => (head.code === 0 ? head.output.trim().split('\n').pop()?.trim() : undefined))
+    .catch(() => undefined);
   const gameDir = path.join(harness, 'games', slug);
 
   try {
@@ -157,6 +182,7 @@ export async function runGate(slug: string, version: string, deps: GateRunnerDep
         // unverified document has no path to a player either way.
         artifacts: await storePreview(deps, slug, version, harness),
         durationMs: now() - startedAt,
+        ...(engineCommit ? { engineCommit } : {}),
       };
     }
 
@@ -174,14 +200,16 @@ export async function runGate(slug: string, version: string, deps: GateRunnerDep
         report: error instanceof Error ? error.message : String(error),
         artifacts: [],
         durationMs: now() - startedAt,
+        ...(engineCommit ? { engineCommit } : {}),
       };
     }
 
     return {
       green: true,
-      report: `check:game passed against engine ${engineRef}; ${artifacts.length} artifacts stored`,
+      report: `check:game passed against engine ${engineCommit ?? engineRef}; ${artifacts.length} artifacts stored`,
       artifacts,
       durationMs: now() - startedAt,
+      ...(engineCommit ? { engineCommit } : {}),
     };
   } finally {
     // The harness is disposable and can be large. Leaving it behind is how a long-lived
@@ -220,12 +248,7 @@ async function materializeCandidate(store: GamesStore, manifest: VersionManifest
  * verdict already says everything there is to say. Throwing here would turn a reported
  * failure into a crashed gate, which is strictly less information.
  */
-async function storePreview(
-  deps: GateRunnerDeps,
-  slug: string,
-  version: string,
-  harness: string,
-): Promise<string[]> {
+async function storePreview(deps: GateRunnerDeps, slug: string, version: string, harness: string): Promise<string[]> {
   try {
     const preview = await (deps.assembleBundle ?? assembleFromHarness)(harness, slug);
     if (preview === null) return [];

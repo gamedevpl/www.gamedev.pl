@@ -119,13 +119,23 @@ async function createApp(params: {
   contentChecker?: ContentChecker;
   maxCachedDraftPreviews?: number;
   agentBackend?: AgentBackend;
-  agentChannel?: { gamesStore?: GamesStore };
+  agentChannel?: {
+    gamesStore?: GamesStore;
+    onSourcesDelivered?: (input: {
+      issueNumber: number;
+      slug: string;
+      version: string;
+      mode?: 'health';
+    }) => Promise<{ buildId?: string } | void>;
+  };
+  adminUids?: string;
 }): Promise<{ app: FastifyInstance; store: Store; authHeaders: Record<string, string> }> {
   const store = params.store ?? new InMemoryStore();
   await store.upsertUser({ uid: 'g:test-user' });
   const app = await buildApp({
     store,
     sessionSecret,
+    ...(params.adminUids ? { adminUids: params.adminUids } : {}),
     ...(params.contentChecker ? { contentChecker: params.contentChecker } : {}),
     submissionRoutes: {
       githubToken: params.githubClient ? 'token' : undefined,
@@ -2304,6 +2314,431 @@ describe('POST /api/submissions/:token/improve', () => {
     const source = await store.getSubmission(published);
     expect(source?.state).toBe('published');
     expect(source?.dispatch).toBeUndefined();
+    await app.close();
+  });
+});
+
+/**
+ * The operator's cancel and retry. Both live behind the same 404-to-strangers posture
+ * as every other operator surface, and both act through the state machine rather than
+ * around it.
+ */
+describe('operator cancel and retry', () => {
+  const body = { title: 'Game idea', concept: 'A concept long enough to pass validation rules.' };
+  const bossHeaders = () => getAuthHeaders('g:boss');
+
+  /** A dispatched job owned by g:test-user, with an operator allowlisted. */
+  async function appWithJob(overrides: { backend?: AgentBackend } = {}) {
+    const stub = createGithubClientStub({});
+    const { backend, briefs } = createBackendStub();
+    const { app, store, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      agentBackend: overrides.backend ?? backend,
+      submissionTokenSecret: secret,
+      adminUids: 'g:boss',
+    });
+    // The auth hook resolves the session's user from the store, so the operator has to
+    // exist there like anyone else.
+    await store.upsertUser({ uid: 'g:boss' });
+    await app.inject({ method: 'POST', url: '/api/submissions', headers: authHeaders, payload: body });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    return { app, store, job, briefs };
+  }
+
+  it('answers 404 to a non-operator, the same as every operator surface', async () => {
+    const { app, job } = await appWithJob();
+
+    for (const verb of ['cancel', 'retry']) {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/admin/jobs/${job.issueNumber}/${verb}`,
+        headers: getAuthHeaders('g:someone-else'),
+      });
+      expect(response.statusCode).toBe(404);
+    }
+
+    await app.close();
+  });
+
+  it('cancels a running job, and is honest that the stop is cooperative', async () => {
+    const { app, store, job } = await appWithJob();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/admin/jobs/${job.issueNumber}/cancel`,
+      headers: bossHeaders(),
+    });
+
+    expect(response.statusCode).toBe(200);
+    // `stopEnforced: false` is the Copilot backend telling the truth: there is no kill
+    // endpoint, the session winds down when it next reads the channel.
+    expect(response.json()).toEqual({ ok: true, state: 'canceled', stopEnforced: false });
+
+    const record = await store.getSubmission(job.issueNumber);
+    expect(record?.state).toBe('canceled');
+    const last = record?.transitions?.at(-1);
+    expect(last).toMatchObject({ to: 'canceled', by: 'operator', reason: 'operator_canceled' });
+
+    await app.close();
+  });
+
+  it('refuses to cancel a finished job rather than rewriting its ending', async () => {
+    const { app, store, job } = await appWithJob();
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'published',
+      at: new Date().toISOString(),
+      by: 'operator',
+      reason: 'published',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/admin/jobs/${job.issueNumber}/cancel`,
+      headers: bossHeaders(),
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ error: 'already_finished', state: 'published' });
+
+    await app.close();
+  });
+
+  it('refuses to cancel mid-publish, where a half-killed bake could lie', async () => {
+    const { app, store, job } = await appWithJob();
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'publishing',
+      at: new Date().toISOString(),
+      by: 'operator',
+      reason: 'approved',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/admin/jobs/${job.issueNumber}/cancel`,
+      headers: bossHeaders(),
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ error: 'mid_publish' });
+
+    await app.close();
+  });
+
+  it('retries a failed round that never delivered, preserving its branch', async () => {
+    const { app, store, job, briefs } = await appWithJob();
+    await store.setDispatchWorkspace(job.issueNumber, 'copilot/has-the-work');
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'failed',
+      at: new Date().toISOString(),
+      by: 'reconciler',
+      reason: 'task_failed',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/admin/jobs/${job.issueNumber}/retry`,
+      headers: bossHeaders(),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ ok: true, state: 'building', creditsSpent: 1 });
+
+    // The branch is the only copy of undelivered work; the new round is told where it is.
+    const brief = briefs.at(-1);
+    expect(brief?.undelivered).toBe(true);
+    expect(brief?.previousWorkspace).toBe('copilot/has-the-work');
+
+    const record = await store.getSubmission(job.issueNumber);
+    expect(record?.state).toBe('building');
+    // The history says who restarted it, not `derived_from_github`.
+    expect(record?.transitions?.at(-1)).toMatchObject({ to: 'building', by: 'operator', reason: 'operator_retry' });
+    // The retry is an agent session like any other, so the ledger books it.
+    expect(record?.costs?.filter((entry) => entry.kind === 'agent_session')).toHaveLength(2);
+
+    await app.close();
+  });
+
+  it('briefs a delivered-but-refused retry from the channel, not from a second copy', async () => {
+    const { app, store, job, briefs } = await appWithJob();
+    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v1');
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'needs_changes',
+      at: new Date().toISOString(),
+      by: 'gate',
+      reason: 'gate_red',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/admin/jobs/${job.issueNumber}/retry`,
+      headers: bossHeaders(),
+    });
+
+    expect(response.statusCode).toBe(200);
+    const brief = briefs.at(-1);
+    // Delivered work restores from the store; nothing to salvage from a branch.
+    expect(brief?.undelivered).toBeUndefined();
+    // The brief points at the channel rather than repeating the gate report, which the
+    // channel already carries on every call.
+    expect(brief?.feedback).toContain('build channel');
+
+    await app.close();
+  });
+
+  it('kicks a quiet building job with a fresh session, and says so in the history', async () => {
+    const { app, store, job } = await appWithJob();
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'building',
+      at: new Date().toISOString(),
+      by: 'reconciler',
+      reason: 'task_in_progress',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/admin/jobs/${job.issueNumber}/retry`,
+      headers: bossHeaders(),
+    });
+
+    expect(response.statusCode).toBe(200);
+    const record = await store.getSubmission(job.issueNumber);
+    // Same state, new session — without the explicit transition the retry would leave
+    // no trace in the job's history at all.
+    expect(record?.transitions?.at(-1)).toMatchObject({ to: 'building', by: 'operator', reason: 'operator_retry' });
+    expect(record?.dispatch?.refs).toHaveLength(2);
+
+    await app.close();
+  });
+
+  it('refuses to retry a job that was never dispatched, where a round would brief nothing', async () => {
+    const stub = createGithubClientStub({});
+    // No agent backend on create: the job stays queued with no dispatch and no spec on
+    // record. Retry must refuse rather than start an empty session — but the route
+    // needs *a* backend to exist, so one is present and never called.
+    const { backend, briefs } = createBackendStub();
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:test-user' });
+    await store.upsertUser({ uid: 'g:boss' });
+    const first = await createApp({ githubClient: stub.githubClient, submissionTokenSecret: secret, store });
+    await first.app.inject({ method: 'POST', url: '/api/submissions', headers: first.authHeaders, payload: body });
+    await first.app.close();
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'failed',
+      at: new Date().toISOString(),
+      by: 'system',
+      reason: 'dispatch_failed',
+    });
+
+    const { app } = await createApp({
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      adminUids: 'g:boss',
+      store,
+    });
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/admin/jobs/${job.issueNumber}/retry`,
+      headers: bossHeaders(),
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ error: 'never_dispatched' });
+    expect(briefs).toHaveLength(0);
+
+    await app.close();
+  });
+
+  it('refuses states where a retry has nothing to redo', async () => {
+    const { app, store, job } = await appWithJob();
+    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v1');
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'ready_for_review',
+      at: new Date().toISOString(),
+      by: 'gate',
+      reason: 'gate_green',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/admin/jobs/${job.issueNumber}/retry`,
+      headers: bossHeaders(),
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ error: 'not_retryable', state: 'ready_for_review' });
+
+    await app.close();
+  });
+
+  it('reports a dispatch that failed instead of pretending the retry took', async () => {
+    const { backend } = createBackendStub();
+    const failing: AgentBackend = {
+      ...backend,
+      dispatch: async () => {
+        throw new Error('backend down');
+      },
+      resume: async () => {
+        throw new Error('backend down');
+      },
+    };
+    const { app, store, job } = await appWithJob();
+    await app.close();
+
+    const second = await createApp({
+      githubClient: createGithubClientStub({}).githubClient,
+      agentBackend: failing,
+      submissionTokenSecret: secret,
+      adminUids: 'g:boss',
+      store,
+    });
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'failed',
+      at: new Date().toISOString(),
+      by: 'reconciler',
+      reason: 'task_failed',
+    });
+
+    const response = await second.app.inject({
+      method: 'POST',
+      url: `/api/admin/jobs/${job.issueNumber}/retry`,
+      headers: bossHeaders(),
+    });
+
+    expect(response.statusCode).toBe(502);
+    expect(response.json()).toMatchObject({ error: 'dispatch_failed' });
+
+    await second.app.close();
+  });
+});
+
+/**
+ * The operator's health re-gate: the manual trigger of the break-and-nudge loop. The
+ * verdict's read-back and the nudge itself are covered with the sweep
+ * (notify-sweep.test.ts); this is the request side.
+ */
+describe('operator health re-gate', () => {
+  const bossHeaders = () => getAuthHeaders('g:boss');
+
+  async function appWithPublishedGame(publicationState: 'published' | 'disabled' = 'published') {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:test-user' });
+    await store.upsertUser({ uid: 'g:boss' });
+    await store.createSubmission(1_000_042, 'g:creator', 'Sky Dodge');
+    await store.setPublication({
+      slug: 'sky-dodge',
+      state: publicationState,
+      currentVersion: 'v1',
+      publishedAt: '2026-07-01T00:00:00.000Z',
+    });
+
+    const triggered: Array<{ issueNumber: number; slug: string; version: string; mode?: 'health' }> = [];
+    const gamesStore = {
+      getManifest: async () => ({
+        slug: 'sky-dodge',
+        version: 'v1',
+        createdAt: '2026-06-30T00:00:00.000Z',
+        issueNumber: 1_000_042,
+        sourceFiles: [],
+      }),
+    } as unknown as GamesStore;
+
+    const { app } = await createApp({
+      githubClient: createGithubClientStub({}).githubClient,
+      store,
+      submissionTokenSecret: secret,
+      adminUids: 'g:boss',
+      agentChannel: {
+        gamesStore,
+        onSourcesDelivered: async (input) => {
+          triggered.push(input);
+          return { buildId: 'health-build-1' };
+        },
+      },
+    });
+    return { app, store, triggered };
+  }
+
+  it('answers 404 to a non-operator', async () => {
+    const { app } = await appWithPublishedGame();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/games/sky-dodge/regate',
+      headers: getAuthHeaders('g:someone-else'),
+    });
+    expect(response.statusCode).toBe(404);
+
+    await app.close();
+  });
+
+  it('starts a health run against the current engine and records what it asked', async () => {
+    const { app, store, triggered } = await appWithPublishedGame();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/games/sky-dodge/regate',
+      headers: bossHeaders(),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ ok: true, slug: 'sky-dodge', version: 'v1', buildId: 'health-build-1' });
+    // Same configured trigger the delivery path uses, in health mode — a second
+    // trigger would be a second definition of the gate.
+    expect(triggered).toEqual([{ issueNumber: 1_000_042, slug: 'sky-dodge', version: 'v1', mode: 'health' }]);
+
+    // The pending check is what the sweep will resolve.
+    const publication = await store.getPublication('sky-dodge');
+    expect(publication?.healthCheck).toMatchObject({ version: 'v1', buildId: 'health-build-1' });
+    expect(publication?.healthCheck?.verdictAt).toBeUndefined();
+
+    // A health run is a gate run on the bill, booked to the job that built the game.
+    const record = await store.getSubmission(1_000_042);
+    expect(record?.costs).toEqual([
+      expect.objectContaining({ kind: 'gate_run', by: 'cloud-build', ref: 'health-build-1' }),
+    ]);
+
+    await app.close();
+  });
+
+  it('refuses a game that is not currently published', async () => {
+    // Nothing is live, so there is nothing whose health could mean anything.
+    const { app, triggered } = await appWithPublishedGame('disabled');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/games/sky-dodge/regate',
+      headers: bossHeaders(),
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ error: 'not_published', state: 'disabled' });
+    expect(triggered).toHaveLength(0);
+
+    await app.close();
+  });
+
+  it('lists the published shelf with its health for the console', async () => {
+    const { app, store } = await appWithPublishedGame();
+    await store.setPublicationHealthCheck('sky-dodge', {
+      version: 'v1',
+      requestedAt: '2026-07-29T10:00:00.000Z',
+      green: false,
+      verdictAt: '2026-07-29T10:20:00.000Z',
+    });
+
+    const response = await app.inject({ method: 'GET', url: '/api/admin/games', headers: bossHeaders() });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().games).toEqual([
+      expect.objectContaining({
+        slug: 'sky-dodge',
+        currentVersion: 'v1',
+        healthCheck: expect.objectContaining({ green: false }),
+      }),
+    ]);
+
     await app.close();
   });
 });

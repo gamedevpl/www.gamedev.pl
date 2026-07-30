@@ -18,16 +18,20 @@ import type { AgentBackend } from './agent-backend.js';
 import {
   canTransition,
   detectStall,
+  isTerminal,
   planObservedStatusTransition,
   reconcileAgentObservation,
+  resolveJobState,
   toSubmissionStatus,
+  type JobState,
   type JobTransition,
 } from './job-state.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
-import { emitOperatorAlert, notifyOnTransition, type EmitDeps } from './notify.js';
+import { emitOperatorAlert, emitSubmissionNotification, notifyOnTransition, type EmitDeps } from './notify.js';
 import { detectOperatorAlerts, FEEDBACK_STALL_MS } from './operator-alerts.js';
+import { isAdminSession } from './admin.js';
 import { peekQuota } from './quota-gate.js';
 import { type BuildPreviewSummary, type BuildShotSummary, type Store, type SubmissionRecord } from './store.js';
 import {
@@ -515,6 +519,13 @@ export async function registerSubmissionRoutes(
     log: { error: (context: object, message: string) => void };
     /** Set when this round exists only because the last one never uploaded. */
     undelivered?: boolean;
+    /**
+     * Who asked for this round and why, when it was not the creator. The transition an
+     * operator's retry writes has to say so — a history reading `derived_from_github`
+     * for a round a person explicitly started would be the history lying about the one
+     * fact an audit of that job would want.
+     */
+    transition?: { by: JobTransition['by']; reason: string };
   }): Promise<void> {
     if (!agentBackend || !submissionTokenSecret || !store) return;
     const record = await store.getSubmission(input.issueNumber);
@@ -556,9 +567,19 @@ export async function registerSubmissionRoutes(
         await releaseWorkspace(input.issueNumber, previous.workspace, input.log);
       }
       const transition = record?.state
-        ? planObservedStatusTransition(record.state, 'building', new Date(now()).toISOString(), 'creator')
+        ? planObservedStatusTransition(
+            record.state,
+            'building',
+            new Date(now()).toISOString(),
+            input.transition?.by ?? 'creator',
+          )
         : null;
-      if (transition) await store.recordJobTransition(input.issueNumber, transition);
+      if (transition) {
+        await store.recordJobTransition(input.issueNumber, {
+          ...transition,
+          ...(input.transition ? { reason: input.transition.reason } : {}),
+        });
+      }
     } catch (error) {
       // The creator's request is already queued on the build channel, so a failed
       // resume costs the round its head start, not the request itself.
@@ -1879,6 +1900,212 @@ export async function registerSubmissionRoutes(
     },
   );
 
+  /**
+   * The operator's two verbs on a build beyond publish: stop it, and run it again.
+   *
+   * Registered here rather than in job-admin-routes because they are made of this
+   * module's machinery — the dispatcher, the channel token mint, the cost ledger — and
+   * the queue module deliberately owns none of that. Same admission rule as every other
+   * operator surface: a non-operator gets 404, not 403.
+   */
+  app.post<{ Params: { issueNumber: string } }>('/api/admin/jobs/:issueNumber/cancel', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });
+    if (!store) return reply.status(503).send({ error: 'store_unavailable' });
+    const issueNumber = Number(request.params.issueNumber);
+    if (!Number.isInteger(issueNumber)) return reply.status(400).send({ error: 'invalid_job' });
+
+    const record = await store.getSubmission(issueNumber);
+    if (!record) return reply.status(404).send({ error: 'not_found' });
+
+    const state = resolveJobState(record);
+    if (state && isTerminal(state)) return reply.status(409).send({ error: 'already_finished', state });
+    // The transition table forbids exactly one non-terminal exit to canceled: a bake in
+    // flight. Killing a job mid-publish could leave a publication pointing at a version
+    // whose job says it never happened — let it land or fail, then act on that.
+    if (state && !canTransition(state, 'canceled')) return reply.status(409).send({ error: 'mid_publish', state });
+
+    const at = new Date(now()).toISOString();
+    // A record the job model never adopted has no state to transition from; recording
+    // the cancel adopts it directly as canceled, which is the fact the operator just
+    // established about it.
+    await store.recordJobTransition(issueNumber, { to: 'canceled', at, by: 'operator', reason: 'operator_canceled' });
+
+    // Best effort, and honest about what it did. The Copilot backend has no kill switch —
+    // cancellation there is the job being terminal: the channel's control block now says
+    // stop, a live session reads it on its next report, and anything it sends anyway is
+    // rejected. `stopEnforced: false` is the console's cue to say "told to stop" rather
+    // than "stopped".
+    let stopEnforced = false;
+    const refs = record.dispatch?.refs;
+    if (agentBackend && refs?.length) {
+      try {
+        stopEnforced = (await agentBackend.cancel(refs[refs.length - 1])).enforced;
+      } catch (cancelError) {
+        request.log.error({ err: cancelError, issueNumber }, 'agent cancel failed; job is canceled regardless');
+      }
+    }
+
+    return reply.send({ ok: true, state: 'canceled', stopEnforced });
+  });
+
+  /**
+   * What the operator's retry tells the agent. Deliberately thin: the channel already
+   * carries the substantive brief — the gate verdict with its report, pending creator
+   * messages, the must-deliver reminder — on every call, derived from what we stored.
+   * Repeating any of it here would be a second copy that drifts.
+   */
+  const OPERATOR_RETRY_BRIEF =
+    'The operator restarted this build after it stopped making progress. Read the gate verdict and any ' +
+    'pending creator messages on the build channel, fix what ended the last round, and deliver again.';
+
+  /** States a retry makes sense from. */
+  const OPERATOR_RETRY_STATES: ReadonlySet<JobState> = new Set<JobState>([
+    // The round is dead and feedback-as-retry is the creator's move; this is the
+    // operator making it for them.
+    'failed',
+    'needs_changes',
+    // Not dead, just stuck — a quiet session or a wedged dispatch. A retry supersedes
+    // the old session with a fresh one on the same job.
+    'building',
+    'dispatched',
+  ]);
+
+  app.post<{ Params: { issueNumber: string } }>('/api/admin/jobs/:issueNumber/retry', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });
+    if (!store) return reply.status(503).send({ error: 'store_unavailable' });
+    if (!agentBackend || !submissionTokenSecret) {
+      return reply.status(503).send({ error: 'agent_backend_unavailable' });
+    }
+    const issueNumber = Number(request.params.issueNumber);
+    if (!Number.isInteger(issueNumber)) return reply.status(400).send({ error: 'invalid_job' });
+
+    const record = await store.getSubmission(issueNumber);
+    if (!record) return reply.status(404).send({ error: 'not_found' });
+
+    const state = resolveJobState(record);
+    if (!state || !OPERATOR_RETRY_STATES.has(state)) {
+      return reply.status(409).send({ error: 'not_retryable', ...(state ? { state } : {}) });
+    }
+    // Nothing delivered and nothing dispatched: there is no branch to recover, no stored
+    // version to restore, and the spec is not on the record — a round started from here
+    // would brief the agent with nothing. `queued` jobs land here, which is deliberate:
+    // their fix is dispatch coming back, not an empty session.
+    const undelivered = !record.deliveredVersion;
+    if (undelivered && !record.dispatch?.refs?.length) {
+      return reply.status(409).send({ error: 'never_dispatched' });
+    }
+
+    const refsBefore = record.dispatch?.refs?.length ?? 0;
+    await resumeBuild({
+      issueNumber,
+      feedback: undelivered ? '' : OPERATOR_RETRY_BRIEF,
+      locale: record.locale ?? 'en',
+      log: request.log,
+      // An undelivered job's work only exists on its branch; the flag is what stops the
+      // resume path deleting it and what hands the new session the old workspace.
+      ...(undelivered ? { undelivered: true } : {}),
+      transition: { by: 'operator', reason: 'operator_retry' },
+    });
+
+    // `resumeBuild` reports dispatch failure by logging, not throwing — right for the
+    // feedback route, where the request is queued on the channel either way, but an
+    // operator clicking retry needs the truth now. A new session always appends a ref,
+    // so no new ref means no new session.
+    const after = await store.getSubmission(issueNumber);
+    if ((after?.dispatch?.refs?.length ?? 0) <= refsBefore) {
+      return reply.status(502).send({ error: 'dispatch_failed' });
+    }
+
+    // A same-state retry (kicking a quiet build) records no transition on the resume
+    // path — building to building is not a move the table knows — so without this the
+    // retry would be invisible in the job's own history. The quiet-stall flag may keep
+    // showing until the new session first reports, which is accurate: it hasn't yet.
+    if (state === 'building') {
+      await store.recordJobTransition(issueNumber, {
+        to: 'building',
+        at: new Date(now()).toISOString(),
+        by: 'operator',
+        reason: 'operator_retry',
+      });
+    }
+
+    // One credit: the retry is an agent session like any other, booked by resumeBuild.
+    return reply.send({ ok: true, state: 'building', creditsSpent: 1 });
+  });
+
+  /**
+   * The published shelf, as the operator sees it: what is live, at which version, and
+   * what the last health re-gate said. Slugs only — a publication's identity is its
+   * slug, and joining titles back through manifests would cost a read per game on a
+   * list that exists to be glanced at.
+   */
+  app.get('/api/admin/games', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });
+    if (!store) return reply.status(503).send({ error: 'store_unavailable' });
+    const publications = await store.listPublications();
+    return reply.send({
+      games: publications.sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt)),
+    });
+  });
+
+  /**
+   * Re-gates a published game against the *current* engine — the manual trigger of the
+   * break-and-nudge loop.
+   *
+   * The published bundle froze the engine it shipped with, so serving is immune to
+   * engine changes; what drifts is whether the game would still pass a rebuild. This
+   * runs the same gate on the game's current version with the engine pin overridden,
+   * records the verdict as `manifest.health` (never touching the acceptance verdict,
+   * which is provenance), and leaves the read-back to the sweep — the same pattern the
+   * acceptance gate uses, for the same reason: the verdict is durable in the store, and
+   * a callback would be a second source of a fact the manifest already holds.
+   *
+   * A red verdict nudges the creator rather than pulling the game: an improvement round
+   * rebuilds it against the current engine, and inviting one is the point.
+   */
+  app.post<{ Params: { slug: string } }>('/api/admin/games/:slug/regate', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });
+    if (!store) return reply.status(503).send({ error: 'store_unavailable' });
+    const gamesStore = options.agentChannel?.gamesStore;
+    const gateTrigger = options.agentChannel?.onSourcesDelivered;
+    if (!gamesStore || !gateTrigger) return reply.status(503).send({ error: 'gate_unavailable' });
+
+    const slug = request.params.slug;
+    const publication = await store.getPublication(slug);
+    if (!publication) return reply.status(404).send({ error: 'not_found' });
+    if (publication.state !== 'published') {
+      return reply.status(409).send({ error: 'not_published', state: publication.state });
+    }
+
+    const version = publication.currentVersion;
+    const manifest = await gamesStore.getManifest(slug, version);
+    if (!manifest) return reply.status(409).send({ error: 'version_missing' });
+
+    const requestedAt = new Date(now()).toISOString();
+    const triggered = await gateTrigger({ issueNumber: manifest.issueNumber, slug, version, mode: 'health' });
+    const buildId = triggered && typeof triggered === 'object' ? triggered.buildId : undefined;
+
+    // Replaces any previous check wholesale: the question is always about the latest
+    // run, and a stale verdict left beside a fresh request would read as an answer.
+    await store.setPublicationHealthCheck(slug, {
+      version,
+      requestedAt,
+      ...(buildId ? { buildId } : {}),
+    });
+    // Booked to the job that built the game — a health run is a gate run on the bill,
+    // and this is the one place the issue number is known.
+    if (buildId) {
+      await store.recordJobCost(manifest.issueNumber, {
+        kind: 'gate_run',
+        at: requestedAt,
+        by: 'cloud-build',
+        ref: buildId,
+      });
+    }
+
+    return reply.send({ ok: true, slug, version, ...(buildId ? { buildId } : {}) });
+  });
+
   // The notification sweep (docs/notifications-plan.md N1): the closed-tab backstop
   // for the opportunistic poll-path detection above. Cloud Scheduler POSTs here with
   // an OIDC token; we derive the current status of every still-active submission and
@@ -1973,6 +2200,73 @@ export async function registerSubmissionRoutes(
         }
       }
 
+      // The health half of the sweep: read back verdicts of re-gates in flight. The
+      // gate ran remotely, wrote to the manifest and exited — same read-back pattern as
+      // the acceptance verdict. Bounded: one manifest read per *pending* check, and a
+      // publication with no check (or a resolved one) costs nothing.
+      let healthResolved = 0;
+      let unhealthy = 0;
+      const healthGamesStore = options.agentChannel?.gamesStore;
+      if (healthGamesStore) {
+        const publications = await store.listPublications().catch(() => []);
+        for (const publication of publications) {
+          const check = publication.healthCheck;
+          if (!check || check.verdictAt) continue;
+          try {
+            const manifest = await healthGamesStore.getManifest(publication.slug, check.version);
+            const health = manifest?.health;
+            // A verdict older than the request is the previous run's answer, not this
+            // one's — the run we are waiting for has not written yet.
+            if (!health || Date.parse(health.ranAt) < Date.parse(check.requestedAt)) continue;
+
+            healthResolved += 1;
+            const resolved = { ...check, green: health.green, verdictAt: health.ranAt };
+            if (health.green) {
+              await store.setPublicationHealthCheck(publication.slug, resolved);
+              continue;
+            }
+
+            unhealthy += 1;
+            // Red: the game still serves — its baked bundle froze the engine it shipped
+            // with — but a rebuild would fail. Nudge the creator, whose improvement
+            // round is the fix, and copy the operator. Notified-at is written only
+            // after both, so an emit that dies retries next sweep; the emits themselves
+            // are idempotent by id.
+            const submission = manifest ? await store.getSubmission(manifest.issueNumber) : null;
+            if (submission) {
+              await emitSubmissionNotification(buildNotifyDeps(), {
+                uid: submission.ownerUid,
+                type: 'submission.game_health',
+                issueNumber: submission.issueNumber,
+                gameTitle: submission.title,
+                statusToken: mintToken(submission.issueNumber, submissionTokenSecret),
+              });
+            }
+            if (adminUids && adminUids.size > 0) {
+              await emitOperatorAlert(
+                { ...buildNotifyDeps(), adminUids },
+                {
+                  id: `op-health-${publication.slug}-${check.version}`,
+                  kind: 'game_unhealthy',
+                  issueNumber: manifest?.issueNumber ?? 0,
+                  title: submission?.title ?? publication.slug,
+                  ownerUid: submission?.ownerUid ?? '',
+                  slug: publication.slug,
+                  since: health.ranAt,
+                },
+              );
+            }
+            await store.setPublicationHealthCheck(publication.slug, {
+              ...resolved,
+              notifiedAt: new Date(now()).toISOString(),
+            });
+          } catch (healthError) {
+            // One unreadable manifest must not abort the sweep — same rule as above.
+            request.log.error({ err: healthError, slug: publication.slug }, 'health check read failed');
+          }
+        }
+      }
+
       // Logged at error level so it surfaces without new infrastructure, the same way
       // the scorecard sweep reports its failures — a nightly job nobody watches is
       // exactly the kind that fails quietly for weeks.
@@ -1986,6 +2280,8 @@ export async function registerSubmissionRoutes(
           alerted,
           stalled: stalledIssues.length,
           stalledIssues,
+          healthResolved,
+          unhealthy,
         },
         stalledIssues.length > 0
           ? 'creator feedback undelivered past the stall threshold — the games-repo @copilot relay may be down'
@@ -1997,6 +2293,8 @@ export async function registerSubmissionRoutes(
         alerts: alerts.length,
         alerted,
         stalled: stalledIssues.length,
+        healthResolved,
+        unhealthy,
       });
     },
   );

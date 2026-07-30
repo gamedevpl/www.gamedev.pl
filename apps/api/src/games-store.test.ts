@@ -209,6 +209,35 @@ describe('GCS games store', () => {
     expect((await store.getManifest('g', version))?.gate).toMatchObject({ green: false, report: '3 checks failed' });
   });
 
+  it('pins the engine the first gate run checked against, and never repins', async () => {
+    const { impl } = stubGcs();
+    const store = createGcsGamesStore({ ...base, fetchImpl: impl });
+    const { version } = await store.putCandidateSources({ slug: 'g', issueNumber: 1, files: MINIMAL });
+
+    await store.putGateResult('g', version, { green: true, engineRef: 'aaa111' });
+    // A later re-run against a moved engine must not rewrite what the verdict was
+    // rendered against — the pin is provenance, and provenance is append-only.
+    await store.putGateResult('g', version, { green: true, engineRef: 'bbb222' });
+
+    expect((await store.getManifest('g', version))?.engineRef).toBe('aaa111');
+  });
+
+  it('records a health verdict beside the gate verdict, never over it', async () => {
+    const { impl } = stubGcs();
+    const store = createGcsGamesStore({ ...base, fetchImpl: impl });
+    const { version } = await store.putCandidateSources({ slug: 'g', issueNumber: 1, files: MINIMAL });
+    await store.putGateResult('g', version, { green: true, report: 'accepted' });
+
+    // The engine moved on and the same game now fails. The acceptance verdict is the
+    // record of why this version was allowed to publish; a red health run erasing it
+    // would erase the justification along with it.
+    await store.putHealthResult('g', version, { green: false, report: 'trace diverged', engineRef: 'ccc333' });
+
+    const manifest = await store.getManifest('g', version);
+    expect(manifest?.gate).toMatchObject({ green: true, report: 'accepted' });
+    expect(manifest?.health).toMatchObject({ green: false, report: 'trace diverged', engineRef: 'ccc333' });
+  });
+
   it('round-trips derived artifacts the gate produces', async () => {
     const { impl } = stubGcs();
     const store = createGcsGamesStore({ ...base, fetchImpl: impl });
