@@ -112,11 +112,15 @@ describe('NavHeader operator link', () => {
     vi.restoreAllMocks();
   });
 
-  async function renderWith(summary: { status: number; body: unknown }) {
+  async function renderWith(summary: { status: number; body: unknown }, admin = true) {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
       if (url.endsWith('/api/auth/me')) {
-        return new Response(JSON.stringify({ user: { uid: 'g:boss', tier: 'free' } }));
+        // The session says whether this account is an operator; the nav never asks an
+        // operator endpoint to find out.
+        return new Response(
+          JSON.stringify({ user: { uid: 'g:boss', tier: 'free', ...(admin ? { admin: true } : {}) } }),
+        );
       }
       if (url.endsWith('/api/health')) {
         return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: false }));
@@ -191,29 +195,29 @@ describe('NavHeader operator link', () => {
     await act(async () => root.unmount());
   });
 
-  it('stops asking once it knows the answer is no', async () => {
-    // Whether someone is an operator does not change while they browse, and almost
-    // nobody is one. Left polling, every signed-in visitor would ask a question with a
-    // known answer every two minutes, forever, at one 404 apiece.
-    const { root } = await renderWith({ status: 404, body: { error: 'not found' } });
+  it('never asks an operator endpoint on behalf of someone who is not one', async () => {
+    // The 404 probe this replaced put an error in every non-operator's console on every
+    // page load — which is most people, on most page loads, and is what failed the
+    // deploy gate. A non-operator now makes no operator request at all.
+    const { root } = await renderWith({ status: 404, body: { error: 'not found' } }, false);
     const summaryCalls = () =>
       vi.mocked(globalThis.fetch).mock.calls.filter(([input]) => String(input).endsWith('/api/admin/summary')).length;
 
-    expect(summaryCalls()).toBe(1);
+    expect(summaryCalls()).toBe(0);
     await act(async () => {
       vi.advanceTimersByTime(10 * 60_000);
       await Promise.resolve();
     });
 
-    expect(summaryCalls()).toBe(1);
+    expect(summaryCalls()).toBe(0);
 
     await act(async () => root.unmount());
   });
 
   it('shows nobody else that there is a console at all', async () => {
-    // 404 is the API's answer to a signed-in non-admin, and the nav treats it as the
-    // whole answer: no link, no badge, nothing to notice.
-    const { container, root } = await renderWith({ status: 404, body: { error: 'not found' } });
+    // A session with no `admin` flag is the API's answer for a signed-in non-admin, and
+    // the nav treats it as the whole answer: no link, no badge, nothing to notice.
+    const { container, root } = await renderWith({ status: 404, body: { error: 'not found' } }, false);
 
     const link = Array.from(container.querySelectorAll('.nav-link')).find((element) =>
       element.textContent?.includes('Operator'),
