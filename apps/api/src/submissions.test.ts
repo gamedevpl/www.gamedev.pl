@@ -1185,6 +1185,70 @@ describe('submission preview route', () => {
     await app.close();
   });
 
+  it('does not report a broken preview as one that has not started', async () => {
+    // A delivered job whose sources will not read is a failure, not a state. Saying
+    // "not yet" to a creator whose game was delivered an hour ago sends them back to
+    // waiting for something that is never coming, and hides the fault from us too.
+    const store = new InMemoryStore();
+    const jobId = 1_000_044;
+    await store.upsertUser({ uid: 'g:test-user' });
+    await store.createSubmission(jobId, 'g:test-user', 'Broken');
+    await store.setSubmissionSlug(jobId, 'broken-game');
+    await store.setSubmissionDeliveredVersion(jobId, 'v1');
+
+    const gamesStore = {
+      getSourceFile: async () => {
+        throw new Error('games store read of index.html failed: 503');
+      },
+    } as unknown as GamesStore;
+
+    const { app, authHeaders } = await createApp({
+      store,
+      githubClient: createGithubClientStub({}).githubClient,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(jobId, secret)}/preview`,
+      headers: authHeaders,
+    });
+
+    expect(res.statusCode).toBe(502);
+    await app.close();
+  });
+
+  it('treats a version missing its own sources as broken, not as undelivered', async () => {
+    const store = new InMemoryStore();
+    const jobId = 1_000_045;
+    await store.upsertUser({ uid: 'g:test-user' });
+    await store.createSubmission(jobId, 'g:test-user', 'Incomplete');
+    await store.setSubmissionSlug(jobId, 'incomplete-game');
+    await store.setSubmissionDeliveredVersion(jobId, 'v1');
+
+    // Stored, but game.ts is absent — the manifest claims a file the store does not have.
+    const gamesStore = {
+      getSourceFile: async (_s: string, _v: string, path: string) => (path === 'index.html' ? '<!doctype html>' : null),
+    } as unknown as GamesStore;
+
+    const { app, authHeaders } = await createApp({
+      store,
+      githubClient: createGithubClientStub({}).githubClient,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(jobId, secret)}/preview`,
+      headers: authHeaders,
+    });
+
+    expect(res.statusCode).toBe(502);
+    await app.close();
+  });
+
   it('tells a native job with nothing delivered yet that there is nothing to play', async () => {
     // Honest rather than a 502: before the first delivery there genuinely is no game.
     const store = new InMemoryStore();

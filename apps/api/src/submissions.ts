@@ -1867,11 +1867,6 @@ export async function registerSubmissionRoutes(
   );
 
   /**
-   * Assembles the in-progress game on a submission's open PR branch and sends it.
-   * Shared by the token route (the creator's own preview) and the slug route (a
-   * read-only share link) so both resolve the exact same document.
-   */
-  /**
    * Assembles the preview for a job that has no pull request.
    *
    * Every native job is one of these, so without it a creator watches an hour of build
@@ -1882,6 +1877,11 @@ export async function registerSubmissionRoutes(
    * checks, so what the creator plays is what gets judged. Before the first delivery
    * there is genuinely nothing playable, and 409 is the honest answer — the channel's
    * own pushed previews cover that window and are served elsewhere.
+   *
+   * Returns null for exactly one reason: **this job has nothing delivered to serve**.
+   * Anything else — an unreadable object, a version claiming files it never stored —
+   * throws, because a broken preview and an unstarted one are different facts and a
+   * creator told "not yet" about a failure will wait for something that is not coming.
    */
   async function replyWithStoredDraft(
     request: FastifyRequest,
@@ -1899,7 +1899,15 @@ export async function registerSubmissionRoutes(
 
     const read = (path: string) => gamesStore.getSourceFile(slug, deliveredVersion, path);
     const [indexHtml, gameTs, styleCss] = await Promise.all([read('index.html'), read('game.ts'), read('style.css')]);
-    if (!indexHtml || !gameTs) return null;
+    // `=== null` is the absence, not falsiness: a stored-but-empty file is a delivery
+    // that went wrong, and reporting it as "nothing delivered yet" would hide that.
+    // Empty content reaches assembleGameHtml and comes back as EmptyProjectError, which
+    // the caller renders as "could not be previewed" — the accurate answer.
+    if (indexHtml === null || gameTs === null) {
+      const incomplete = new Error(`version ${deliveredVersion} is missing index.html or game.ts`);
+      incomplete.name = 'StoredDraftIncompleteError';
+      throw incomplete;
+    }
 
     const project: GameProject = {
       title: record.title || slug,
@@ -1944,14 +1952,34 @@ export async function registerSubmissionRoutes(
     // fallback. Tried first for legacy jobs too: once a job has delivered, the stored
     // candidate is fresher and cheaper than a GitHub round-trip to its branch.
     const record = await store?.getSubmission(issueNumber);
+    const native = isNativeJobId(issueNumber);
     if (record) {
-      const stored = await replyWithStoredDraft(request, reply, record).catch((error) => {
-        request.log.warn({ err: error, issueNumber }, 'stored draft preview failed; falling back');
-        return null;
-      });
-      if (stored) return stored;
+      try {
+        const stored = await replyWithStoredDraft(request, reply, record);
+        if (stored) return stored;
+      } catch (error) {
+        if (
+          error instanceof EmptyProjectError ||
+          error instanceof ProjectTooLargeError ||
+          error instanceof CredentialLeakError
+        ) {
+          request.log.warn({ err: error, issueNumber }, 'stored draft failed hygiene checks');
+          return reply.status(422).send({ error: 'this game could not be previewed' });
+        }
+        const stale = serveLastKnown('stored draft read failed; serving last known draft', error);
+        if (stale) return stale;
+        // A native job has no second source, so this is the end of the line and it is a
+        // failure, not a state. Answering 409 here would tell a creator whose game was
+        // delivered an hour ago that it has not been — and they would keep waiting.
+        // A legacy job falls through to its PR branch, which is a real alternative.
+        if (native) {
+          request.log.error({ err: error, issueNumber }, 'stored draft preview failed');
+          return reply.status(502).send({ error: 'failed to load preview' });
+        }
+        request.log.warn({ err: error, issueNumber }, 'stored draft unavailable; falling back to the PR branch');
+      }
     }
-    if (isNativeJobId(issueNumber)) {
+    if (native) {
       const stale = serveLastKnown('no delivery yet for native job; serving last known draft');
       if (stale) return stale;
       return reply.status(409).send({ error: 'no preview available for this submission yet' });
