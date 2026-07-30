@@ -1,0 +1,175 @@
+import { useCallback, useEffect, useState } from 'react';
+import {
+  fetchJobQueue,
+  publishJob,
+  type JobQueueEntry,
+  type JobQueueResponse,
+  type PublishRefusal,
+} from './adminJobsApi.js';
+
+/**
+ * The build queue an operator actually works from.
+ *
+ * Everything here was already answerable and unanswered: the queue endpoint has existed
+ * with nothing rendering it, and publishing has been a curl command. The creator-
+ * experience review's oldest finding is watching a build for three hours with no way to
+ * tell a stuck agent from a slow one — this is the surface where that becomes visible,
+ * and where the one thing an operator can do about a finished build is a button.
+ *
+ * Deliberately dense and unstyled-by-default: it is a working view for one person, not a
+ * product surface, and a table that fits twenty jobs on a laptop beats cards that fit six.
+ */
+
+const REFUSAL_COPY: Record<PublishRefusal, string> = {
+  // Each names the next step, because that is the difference between a refusal an
+  // operator can act on and one that just says no.
+  gate_red: 'the gate failed this version — read its report before publishing',
+  not_gated: 'the gate has not run against this version yet',
+  nothing_delivered: 'this build has never delivered a version',
+  store_unavailable: 'the games store is not configured on this deployment',
+  unknown: 'refused, and the reason was not one this console knows',
+};
+
+const STALL_COPY: Record<NonNullable<JobQueueEntry['stall']>, string> = {
+  awaiting_input: 'waiting on the creator',
+  not_dispatched: 'never picked up by an agent',
+  quiet: 'agent silent',
+  gate_not_started: 'delivered, gate never started',
+};
+
+/** Short, sortable duration: an operator reads "2h 5m", not 7_500_000. */
+function duration(ms: number | undefined): string {
+  if (ms === undefined || !Number.isFinite(ms)) return '—';
+  const minutes = Math.floor(ms / 60_000);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ${minutes % 60}m`;
+  return `${Math.floor(hours / 24)}d ${hours % 24}h`;
+}
+
+function JobRow({ job, onPublished }: { job: JobQueueEntry; onPublished: () => void }) {
+  const [publishing, setPublishing] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  // Only a gate-green build can publish, and `ready_for_review` is precisely the state
+  // that means so. Offering the button earlier would be offering an action the API will
+  // refuse — the console should not invite a click it knows the answer to.
+  const publishable = job.state === 'ready_for_review';
+
+  const onPublish = useCallback(async () => {
+    setPublishing(true);
+    setMessage(null);
+    try {
+      const result = await publishJob(job.issueNumber);
+      if ('refused' in result) {
+        setMessage(REFUSAL_COPY[result.refused]);
+      } else {
+        setMessage(`published ${result.slug}`);
+        onPublished();
+      }
+    } catch {
+      setMessage('could not reach the API');
+    } finally {
+      setPublishing(false);
+    }
+  }, [job.issueNumber, onPublished]);
+
+  const latest = job.recentTransitions[0];
+
+  return (
+    <tr className={job.stall ? 'admin-job-row is-stalled' : 'admin-job-row'}>
+      <td>
+        <div className="admin-job-title">{job.title}</div>
+        <div className="admin-job-sub">
+          #{job.issueNumber}
+          {job.slug ? ` · ${job.slug}` : ''}
+        </div>
+      </td>
+      <td>
+        <span className="admin-job-state">{job.state}</span>
+        {job.stall ? <div className="admin-job-stall">{STALL_COPY[job.stall]}</div> : null}
+        {/* The reason the job is where it is — `gate_red`, `task_failed`, `approved`.
+            Without it the state alone cannot distinguish a build that failed from one
+            that is merely waiting. */}
+        {latest?.reason ? <div className="admin-job-sub">{latest.reason}</div> : null}
+      </td>
+      <td>{duration(job.timeInStateMs)}</td>
+      <td>{duration(job.ageMs)}</td>
+      <td>
+        {publishable ? (
+          <button className="admin-job-publish" onClick={onPublish} disabled={publishing}>
+            {publishing ? 'Publishing…' : 'Publish'}
+          </button>
+        ) : null}
+        {message ? <div className="admin-job-message">{message}</div> : null}
+      </td>
+    </tr>
+  );
+}
+
+export function AdminJobsPanel() {
+  const [queue, setQueue] = useState<JobQueueResponse | null>(null);
+  const [state, setState] = useState<'loading' | 'ready' | 'forbidden' | 'error'>('loading');
+
+  const load = useCallback(async () => {
+    try {
+      const response = await fetchJobQueue();
+      if (response === null) {
+        setState('forbidden');
+        return;
+      }
+      setQueue(response);
+      setState('ready');
+    } catch {
+      setState('error');
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+    // A build queue is only useful while it is current, and an operator watching a job
+    // move is the whole reason to have this open. Cheap: the endpoint reads the store
+    // and costs no GitHub calls, which is why it can be polled at all.
+    const timer = setInterval(() => void load(), 30_000);
+    return () => clearInterval(timer);
+  }, [load]);
+
+  if (state === 'forbidden') return <p className="health-empty">Not found.</p>;
+  if (state === 'loading') return <p className="health-empty">Reading the queue…</p>;
+  if (state === 'error') return <p className="health-empty">Could not read the queue.</p>;
+
+  const jobs = queue?.jobs ?? [];
+
+  return (
+    <section className="admin-jobs">
+      <h2 className="health-section-title">Build queue</h2>
+      <p className="health-summary">
+        {jobs.length} active {jobs.length === 1 ? 'job' : 'jobs'}
+        {queue?.stalled ? ` · ${queue.stalled} stalled` : ''}
+      </p>
+
+      {jobs.length === 0 ? (
+        <p className="health-empty">Nothing building.</p>
+      ) : (
+        <div className="health-table-scroll">
+          <table className="health-table admin-jobs-table">
+            <thead>
+              <tr>
+                <th>Game</th>
+                <th>State</th>
+                <th>In state</th>
+                <th>Age</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {jobs.map((job) => (
+                <JobRow key={job.issueNumber} job={job} onPublished={() => void load()} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
