@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import { registerAccessTokenRoutes } from './access-token-routes.js';
 import { registerJobAdminRoutes } from './job-admin-routes.js';
+import { createAgentBackendFromEnv } from './agent-backend-env.js';
 import { registerAdminRoutes } from './admin.js';
 import { parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
@@ -174,6 +175,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     ...options.submissionRoutes,
     store,
     contentChecker,
+    agentBackend: options.submissionRoutes?.agentBackend ?? createAgentBackendFromEnv(app.log),
   });
 
   // Multiplayer room relay (docs/multiplayer-plan.md). Registered after the auth
