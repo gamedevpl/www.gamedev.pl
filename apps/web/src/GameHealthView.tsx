@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { AdminJobsPanel } from './AdminJobsPanel.js';
 import {
   fetchGameHealth,
   fetchVisitFunnel,
@@ -122,8 +123,9 @@ export function GameHealthView() {
   return (
     <section className="health">
       <header className="health-header">
-        {/* The page now carries both streams, so the title names neither. */}
-        <h1>Telemetry</h1>
+        {/* The page carries the queue and both telemetry streams, so the title names
+            what it is rather than any one of them. */}
+        <h1>Operator</h1>
         <div className="health-windows">
           {WINDOWS.map((window) => (
             <button
@@ -137,6 +139,12 @@ export function GameHealthView() {
           ))}
         </div>
       </header>
+
+      {/* First, because it is the only part of this page with something to *do*: a
+          build waiting on approval is the one thing here that goes stale by being
+          unread. Its own loading and permission states are handled inside, so a slow
+          telemetry read never delays the queue. */}
+      <AdminJobsPanel />
 
       {state === 'loading' && <p className="health-empty">Reading telemetry…</p>}
       {state === 'error' && <p className="health-empty">Could not read telemetry.</p>}

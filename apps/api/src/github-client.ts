@@ -1109,29 +1109,8 @@ ${gameJs}`;
         if (specMd === null) {
           continue;
         }
-        const frontmatter = parseSpecFrontmatter(specMd);
-        const title = frontmatter.title;
-        if (!title) {
-          continue;
-        }
-        // A spec with no status is published — merging it is what publishes it.
-        // Only an explicit archived/disabled withdraws a game from the site.
-        const rawStatus = frontmatter.status ?? '';
-        const status = rawStatus === 'archived' || rawStatus === 'disabled' ? rawStatus : 'published';
-        const mediaMetadata = status === 'published' ? (files.get(`games/${slug}/media/metadata.json`) ?? null) : null;
-        entries.push({
-          slug,
-          title,
-          genre: frontmatter.genre ?? '',
-          controls: frontmatter.controls ?? '',
-          status,
-          media: parseGameMedia(mediaMetadata),
-          multiplayer: parseMultiplayer(frontmatter),
-          saves: parseSaves(frontmatter.saves),
-          world: parseWorld(frontmatter.world),
-          orientation: parseOrientation(frontmatter),
-          submittedBy: parseSubmittedBy(frontmatter.submitted_by),
-        });
+        const entry = catalogEntryFromSpec(slug, specMd, (name) => files.get(`games/${slug}/${name}`) ?? null);
+        if (entry) entries.push(entry);
       }
 
       return entries;
@@ -1302,6 +1281,45 @@ function parseGameMedia(metadataJson: string | null): CatalogGameMedia | null {
  * lenient `key: value` format the games repo's tools/lib/spec.mjs uses (no nested
  * YAML). Lines that don't look like `key: value` are skipped.
  */
+/**
+ * Builds one catalog entry from a game's `SPEC.md`.
+ *
+ * Exported because games now reach the catalog two ways — committed to the games repo,
+ * or delivered to the store and published from there — and both have to describe a game
+ * identically. A second implementation for the store path would be a second answer to
+ * "what genre is this game", diverging silently the first time a frontmatter field is
+ * added. `readSibling` is how the caller supplies files next to the spec (`media/
+ * metadata.json` today), since one side has them in a tree listing and the other in a
+ * bucket. Returns null for a spec with no title, which is not a game we can list.
+ */
+export function catalogEntryFromSpec(
+  slug: string,
+  specMd: string,
+  readSibling: (name: string) => string | null,
+): CatalogGameEntry | null {
+  const frontmatter = parseSpecFrontmatter(specMd);
+  const title = frontmatter.title;
+  if (!title) return null;
+  // A spec with no status is published — merging it is what publishes it. Only an
+  // explicit archived/disabled withdraws a game from the site.
+  const rawStatus = frontmatter.status ?? '';
+  const status = rawStatus === 'archived' || rawStatus === 'disabled' ? rawStatus : 'published';
+  const mediaMetadata = status === 'published' ? readSibling('media/metadata.json') : null;
+  return {
+    slug,
+    title,
+    genre: frontmatter.genre ?? '',
+    controls: frontmatter.controls ?? '',
+    status,
+    media: parseGameMedia(mediaMetadata),
+    multiplayer: parseMultiplayer(frontmatter),
+    saves: parseSaves(frontmatter.saves),
+    world: parseWorld(frontmatter.world),
+    orientation: parseOrientation(frontmatter),
+    submittedBy: parseSubmittedBy(frontmatter.submitted_by),
+  };
+}
+
 function parseSpecFrontmatter(specMd: string): Record<string, string> {
   const matched = /^---\s*\n([\s\S]*?)\n---/.exec(specMd);
   if (!matched?.[1]) {

@@ -822,3 +822,47 @@ describe('agent build channel', () => {
     });
   });
 });
+
+describe('the delivery reminder on every channel call', () => {
+  it('tells an undelivered build that pushing is not delivering', async () => {
+    // The brief says this too, but the brief is read at the start of a session and the
+    // omission happens at the end of one. A live session has been observed doing the
+    // whole job, pushing its branch, and stopping — thousands of tokens after being
+    // told. This rides along with something the agent is already doing.
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    const app = await createApp(store);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/progress',
+      headers: agentHeaders(),
+      payload: { text: 'Working on the maze.' },
+    });
+
+    expect(response.json().control.delivered).toBe(false);
+    expect(response.json().control.mustDeliver).toContain('npm run submit');
+
+    await app.close();
+  });
+
+  it('stops nagging once the build has actually delivered', async () => {
+    // Derived from what we stored, not from anything the session claims about itself.
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
+    const app = await createApp(store);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/progress',
+      headers: agentHeaders(),
+      payload: { text: 'Polishing.' },
+    });
+
+    expect(response.json().control.delivered).toBe(true);
+    expect(response.json().control.mustDeliver).toBeUndefined();
+
+    await app.close();
+  });
+});

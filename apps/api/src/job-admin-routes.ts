@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { isAdminSession } from './admin.js';
 import { detectStall, isTerminal, toSubmissionStatus, type JobStall, type JobState } from './job-state.js';
+import type { GamesStore } from './games-store.js';
 import type { Store, SubmissionRecord } from './store.js';
 
 /**
@@ -123,9 +124,9 @@ function jobStateFromLastStatus(status: SubmissionRecord['lastStatus']): JobStat
 
 export async function registerJobAdminRoutes(
   app: FastifyInstance,
-  options: { store?: Store; adminUids?: Set<string>; now?: () => number },
+  options: { store?: Store; adminUids?: Set<string>; gamesStore?: GamesStore; now?: () => number },
 ): Promise<void> {
-  const { store, adminUids } = options;
+  const { store, adminUids, gamesStore } = options;
   const now = options.now ?? Date.now;
 
   app.get('/api/admin/jobs', async (request, reply) => {
@@ -138,5 +139,59 @@ export async function registerJobAdminRoutes(
 
     const records = await store.listActiveSubmissions();
     return reply.send(buildJobQueue(records, now()));
+  });
+
+  /**
+   * Publishes a gate-green build. This is the moderation boundary, exercised.
+   *
+   * Deliberately an operator action rather than something the gate does on green. The
+   * gate answers "does this run"; a human answers "may this be on the site", and those
+   * are different questions — the second is the one the DSA and the AI Act care about,
+   * and automating it would delete the boundary while leaving every document that claims
+   * we have one. So the gate records a verdict, and this is where someone acts on it.
+   *
+   * The green check is re-read from the manifest here rather than trusted from the job's
+   * state. Job state is derived on a poll and can be stale or adopted from an older
+   * record; the manifest is what the gate actually wrote. Publishing is the one action
+   * where the difference could put an unverified game in front of players.
+   */
+  app.post<{ Params: { issueNumber: string } }>('/api/admin/jobs/:issueNumber/publish', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) {
+      return reply.code(404).send({ error: 'not_found' });
+    }
+    if (!store || !gamesStore) {
+      return reply.code(503).send({ error: 'store_unavailable' });
+    }
+
+    const issueNumber = Number(request.params.issueNumber);
+    if (!Number.isInteger(issueNumber)) {
+      return reply.code(400).send({ error: 'invalid_job' });
+    }
+
+    const record = await store.getSubmission(issueNumber);
+    if (!record) return reply.code(404).send({ error: 'not_found' });
+    if (!record.slug || !record.deliveredVersion) {
+      return reply.code(409).send({ error: 'nothing_delivered' });
+    }
+
+    const manifest = await gamesStore.getManifest(record.slug, record.deliveredVersion);
+    if (!manifest?.gate) return reply.code(409).send({ error: 'not_gated' });
+    if (!manifest.gate.green) return reply.code(409).send({ error: 'gate_red' });
+
+    const at = new Date(now()).toISOString();
+    // Through `publishing` rather than straight to `published`: the intermediate state is
+    // what a job is in while this is happening, and skipping it would leave no record
+    // that it ever was — which is the state a failed publish has to fall back from.
+    await store.recordJobTransition(issueNumber, { to: 'publishing', at, by: 'operator', reason: 'approved' });
+    await store.setPublication({
+      slug: record.slug,
+      state: 'published',
+      currentVersion: record.deliveredVersion,
+      publishedAt: at,
+    });
+    await store.recordJobTransition(issueNumber, { to: 'published', at, by: 'operator', reason: 'published' });
+    await store.setSubmissionPublishedAt(issueNumber, at);
+
+    return reply.send({ ok: true, slug: record.slug, version: record.deliveredVersion, publishedAt: at });
   });
 }

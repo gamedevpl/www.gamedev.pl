@@ -2694,3 +2694,211 @@ describe('status route under GitHub pressure', () => {
     await app.close();
   });
 });
+
+describe('games published from the store rather than the repo', () => {
+  /** A store holding one published version: its spec, and the bundle the gate assembled. */
+  function publishedGamesStore(bundle = '<!doctype html><meta name="ai-provenance" content="x" />game') {
+    return {
+      getSourceFile: async (_slug: string, _version: string, path: string) =>
+        path === 'SPEC.md' ? '---\ntitle: Comet Courier\ngenre: arcade\n---\n' : null,
+      getDerivedArtifact: async () => Buffer.from(bundle, 'utf8'),
+      getManifest: async () => null,
+      putCandidateSources: async () => ({ version: 'v1', manifest: {} }),
+      putGateResult: async () => {},
+      putDerivedArtifact: async () => {},
+    } as unknown as GamesStore;
+  }
+
+  async function appWithPublication(
+    gamesStore: GamesStore,
+    catalog: CatalogGameEntry[] = [],
+    gameSources: GameSources | null = null,
+  ) {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:test-user' });
+    await store.setPublication({
+      slug: 'comet-courier',
+      state: 'published',
+      currentVersion: 'v1',
+      publishedAt: '2026-07-30T12:00:00Z',
+    });
+    const { githubClient } = createGithubClientStub({ catalog, gameSources });
+    const { app } = await createApp({
+      githubClient,
+      store,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+    });
+    return { app, store };
+  }
+
+  it('lists a store-published game the games repo has never heard of', async () => {
+    // A delivered game is never committed, so the repo catalog cannot see it. Without
+    // this the operator publishes a game and the site it was published to shows nothing.
+    const { app } = await appWithPublication(publishedGamesStore());
+
+    const response = await app.inject({ method: 'GET', url: '/api/catalog' });
+
+    expect(response.statusCode).toBe(200);
+    const entry = response.json().find((item: CatalogGameEntry) => item.slug === 'comet-courier');
+    // Described by the same parser the repo path uses, so the two cannot disagree about
+    // what a game's genre is.
+    expect(entry).toMatchObject({ title: 'Comet Courier', genre: 'arcade', status: 'published' });
+
+    await app.close();
+  });
+
+  it('serves the gate’s own assembled document, so the played bytes are the checked ones', async () => {
+    const { app } = await appWithPublication(publishedGamesStore());
+
+    const response = await app.inject({ method: 'GET', url: '/api/games/comet-courier' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ slug: 'comet-courier', title: 'Comet Courier' });
+    // The provenance marking is the visible proof it came through assembleGameHtml
+    // rather than the games repo's own build.
+    expect(response.json().html).toContain('ai-provenance');
+
+    await app.close();
+  });
+
+  it('does not list one game twice while it exists on both sides', async () => {
+    // During the migration a slug can be both committed and delivered. Two cards for
+    // one game is worse than either source winning, and the repo copy is what the bake
+    // serves — so it keeps the slug.
+    const { app } = await appWithPublication(publishedGamesStore(), [catalogEntry('comet-courier')]);
+
+    const response = await app.inject({ method: 'GET', url: '/api/catalog' });
+
+    expect(response.json().filter((item: CatalogGameEntry) => item.slug === 'comet-courier')).toHaveLength(1);
+
+    await app.close();
+  });
+
+  it('falls through to the repo rather than 404ing when a publication has no bundle', async () => {
+    // A store record with no artifact must not take a working repo game off the site.
+    const gamesStore = {
+      ...publishedGamesStore(),
+      getDerivedArtifact: async () => null,
+    } as unknown as GamesStore;
+    const { app } = await appWithPublication(gamesStore, [catalogEntry('comet-courier')], {
+      indexHtml: '<div id="game"></div>',
+      gameJs: 'const repoCopy = true;',
+      styleCss: 'body{}',
+      title: 'Comet Courier',
+    });
+
+    const response = await app.inject({ method: 'GET', url: '/api/games/comet-courier' });
+
+    // Served from the repo path (the stub's sources), not refused.
+    expect(response.statusCode).toBe(200);
+
+    await app.close();
+  });
+});
+
+describe('a session that finishes without delivering', () => {
+  /** Observes a finished session; `hasCandidate` comes from the record, not the stub. */
+  function finishedBackend() {
+    const { backend, briefs } = createBackendStub();
+    return {
+      briefs,
+      backend: {
+        ...backend,
+        observe: async (_ref: string, opts: { hasCandidate: boolean }) => ({
+          state: 'completed' as const,
+          hasCandidate: opts.hasCandidate,
+        }),
+      },
+    };
+  }
+
+  async function jobWithFinishedSession(overrides: { maxDeliveryNudges?: number } = {}) {
+    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { backend, briefs } = finishedBackend();
+    const clock = { t: Date.now() };
+    const cleanup = vi.fn(async () => {});
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: { ...backend, cleanup },
+      submissionTokenSecret: secret,
+      now: () => clock.t,
+      ...overrides,
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setDispatchWorkspace(job.issueNumber, 'copilot/has-the-work');
+    return { app, store, job, briefs, clock, cleanup, token: mintToken(job.issueNumber, secret) };
+  }
+
+  it('sends the session back to deliver instead of failing the build', async () => {
+    // The work is very likely done and sitting on a branch — only the upload is
+    // missing. Asking is far cheaper than the round it would otherwise cost.
+    const { app, store, job, briefs, clock, token } = await jobWithFinishedSession();
+
+    clock.t += 3 * 60 * 1000;
+    const status = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: getAuthHeaders() });
+
+    expect(status.statusCode).toBe(200);
+    const brief = briefs.at(-1);
+    expect(brief?.undelivered).toBe(true);
+    // The branch is the only copy of undelivered work, so the round is told where it is.
+    expect(brief?.previousWorkspace).toBe('copilot/has-the-work');
+    // Building again, not failed: the creator is not shown an error about a round that
+    // is at this moment running.
+    expect((await store.getSubmission(job.issueNumber))?.state).toBe('building');
+
+    await app.close();
+  });
+
+  it('keeps the branch holding the undelivered work', async () => {
+    // Every other round deletes the previous workspace, because the store has the
+    // truth. Here it does not — deleting would destroy what the new round was sent
+    // to recover.
+    const { app, cleanup, clock, token } = await jobWithFinishedSession();
+
+    clock.t += 3 * 60 * 1000;
+    await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: getAuthHeaders() });
+
+    expect(cleanup).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('asks once, then reports the failure rather than retrying forever', async () => {
+    // A setup that cannot deliver fails the same way however many times it is asked,
+    // and every attempt is a real agent session against a real quota.
+    const { app, store, job, briefs, clock, token } = await jobWithFinishedSession();
+
+    clock.t += 3 * 60 * 1000;
+    await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: getAuthHeaders() });
+    const afterFirst = briefs.length;
+
+    // The re-sent session finishes without delivering too.
+    clock.t += 3 * 60 * 1000;
+    const status = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: getAuthHeaders() });
+
+    expect(briefs.length).toBe(afterFirst);
+    expect((await store.getSubmission(job.issueNumber))?.state).toBe('failed');
+    expect(status.json().failure).toEqual({ reason: 'task_completed_without_delivery' });
+
+    await app.close();
+  });
+
+  it('leaves a session that did deliver alone', async () => {
+    const { app, store, job, briefs, clock, token } = await jobWithFinishedSession();
+    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v1');
+
+    clock.t += 3 * 60 * 1000;
+    await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: getAuthHeaders() });
+
+    expect(briefs.at(-1)?.undelivered).toBeUndefined();
+
+    await app.close();
+  });
+});
