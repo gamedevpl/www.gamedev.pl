@@ -107,23 +107,49 @@ else
     --display-name="Firestore scheduled export" \
     --project="$PROJECT_ID"
   echo "    Created ${EXPORT_SA}."
+  # A brand-new service account is not immediately usable in an IAM binding: the identity
+  # propagates asynchronously, and add-iam-policy-binding answers "Service account … does
+  # not exist" until it lands. That is exactly how the first real run of this script died,
+  # one line after successfully creating the account.
+  printf '    Waiting for the identity to propagate'
+  for _ in $(seq 1 30); do
+    if gcloud iam service-accounts describe "$EXPORT_SA" --project "$PROJECT_ID" >/dev/null 2>&1; then
+      break
+    fi
+    printf '.'
+    sleep 2
+  done
+  printf '\n'
 fi
+
+# Even once `describe` answers, the policy layer can still lag behind, so the grants below
+# are retried rather than allowed to fail the whole run on a race that clears itself in
+# seconds. The last attempt runs unsuppressed: a genuine permission problem has to be
+# readable, not buried under retries.
+grant_with_retry() {
+  local attempt
+  for attempt in 1 2 3 4; do
+    if "$@" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep $((attempt * 3))
+  done
+  "$@" >/dev/null
+}
 
 echo "==> 5/6 Granting the export SA exactly what it needs"
 # datastore.importExportAdmin can start an export but cannot read document contents,
 # and objectCreator can write new objects but cannot read or delete existing ones. So a
 # compromise of this identity cannot exfiltrate the database and cannot destroy older
 # backups — which is the property that makes a backup worth having during an incident.
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+grant_with_retry gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:${EXPORT_SA}" \
   --role="roles/datastore.importExportAdmin" \
-  --condition=None \
-  >/dev/null
-gcloud storage buckets add-iam-policy-binding "gs://${BACKUP_BUCKET}" \
+  --condition=None
+grant_with_retry gcloud storage buckets add-iam-policy-binding "gs://${BACKUP_BUCKET}" \
   --member="serviceAccount:${EXPORT_SA}" \
   --role="roles/storage.objectCreator" \
-  --project="$PROJECT_ID" \
-  >/dev/null
+  --project="$PROJECT_ID"
 echo "    importExportAdmin + objectCreator granted (no read, no delete)."
 
 echo "==> 6/6 Ensuring the daily export job"
