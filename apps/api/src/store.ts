@@ -239,16 +239,16 @@ export const MAX_JOB_TRANSITIONS = 50;
  * Where our own job ids start.
  *
  * Chosen to sit far above any number GitHub will plausibly assign an issue in the games
- * repo (which is in the low hundreds), so the boundary never has to be revisited and a
- * job's id alone says which era it belongs to. Jobs below the floor were keyed by a real
- * issue and are still served that way; jobs at or above it never had one.
+ * repo (which is in the low hundreds). It began as a discriminator — a job's id alone
+ * said which era it belonged to, and routes branched on it — and that job is finished:
+ * the GitHub-keyed path was removed on 2026-07-30 and `isNativeJobId` with it.
+ *
+ * **The floor itself stays, and not for history.** Those old jobs are still documents in
+ * `submissions`, keyed by their issue number, and a document key is forever. Allocating
+ * from 1 would hand a new build the id of a real creator's old one and quietly write into
+ * their record. The floor is what makes the id space append-only.
  */
 export const JOB_ID_FLOOR = 1_000_000;
-
-/** Whether this job was created after job identity stopped coming from GitHub. */
-export function isNativeJobId(id: number): boolean {
-  return id >= JOB_ID_FLOOR;
-}
 
 /**
  * A change request from the creator, queued for the agent to collect over the build
