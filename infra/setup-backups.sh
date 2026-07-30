@@ -30,6 +30,11 @@
 # This script is idempotent — safe to re-run after changing any of the knobs above.
 set -euo pipefail
 
+# Every gcloud call here is GA, so none should prompt — but the existence checks below
+# discard both streams, so any prompt that did appear would be invisible and the script
+# would wait on stdin forever. setup-monitoring.sh hung exactly that way. Prompts off.
+export CLOUDSDK_CORE_DISABLE_PROMPTS=1
+
 PROJECT_ID="${PROJECT_ID:-gamedevpl}"
 # The bucket must live where the database lives: Firestore refuses to export across
 # locations, and this database is in europe-central2 (the app is in europe-west1 —
