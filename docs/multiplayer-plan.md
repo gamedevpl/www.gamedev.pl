@@ -291,12 +291,27 @@ gameplay, drawing, actors, gfx, effects, audio, party`) in both `tools/lib/assem
   affinity does not fix this (it pins a _client_, not a _room_). For the closed beta the
   service therefore runs **`--max-instances 1`** while multiplayer is enabled: with an
   allowlisted handful of users and Cloud Run's default concurrency of 80, one instance is
-  ample. This is the one genuine trade in this design and it is one flag to revert.
-  Upgrade paths when it matters: a separate `gamedev-party` service pinned to one instance
-  (same image, host authenticated by a short-lived HMAC ticket since cookies don't cross
-  origins), or externalized room state (Memorystore). The wire protocol is unchanged by
-  either, and the client already handles `room_not_found` by telling the host to restart the
-  lobby — so raising the cap later degrades visibly rather than mysteriously.
+  ample. This is the one genuine trade in this design.
+- **The split is now built** ([`mp-relay.ts`](../apps/api/src/mp-relay.ts),
+  [`infra/deploy-relay.sh`](../infra/deploy-relay.sh)) and takes the first of the two upgrade
+  paths above: a `gamedev-mp-relay` service pinned to one instance, running the **same image**
+  with `MP_RELAY_ONLY=1`, while the app service loses the pin. One correction to what this
+  section predicted: the host is **not** authenticated by a short-lived HMAC ticket. The app
+  service stays the front door for `POST /api/mp/sessions` — cookie-authenticated, exactly as
+  today — and forwards the create to the relay over an **audience-pinned Google OIDC token**.
+  That keeps `RoomRegistry.createRoom` running in one place, so room codes, room tokens, the
+  one-room-per-host rule and every test in §7 keep their meaning; a ticket format would have
+  needed a new claim set and its own code-collision handling for no benefit on a path that runs
+  once per party. Externalized room state (Memorystore) remains the _second_ step, needed only
+  when one instance of relay is no longer enough.
+- **Lifting the app's pin is not a separate act.** `MP_RELAY_URL` both forwards room creation
+  and raises the ceiling, in both deploy paths, enforced by
+  [`mp-relay-deploy.test.ts`](../apps/api/src/mp-relay-deploy.test.ts) — because "raised the cap,
+  forgot to forward the rooms" is the failure this whole section is about, and it presents as
+  guests' wifi being bad. Rollout steps are in
+  [`deployment.md`](./deployment.md#splitting-the-party-relay-out-lifting-the-ceiling).
+  The wire protocol is unchanged, and the client already handles `room_not_found` by telling the
+  host to restart the lobby — so raising the cap degrades visibly rather than mysteriously.
 - WS connections cap at the request timeout (≤60 min); shell and controllers **auto-reconnect
   into the same slot**, which also covers phones sleeping/backgrounding — the #1 real-world
   event.

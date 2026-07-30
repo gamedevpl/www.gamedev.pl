@@ -34,7 +34,7 @@ survives only in this repo's early history.
 | Games origin    | ✅ Served through the API rather than a public CDN, so the games repo can stay private and PR previews are playable                                                 |
 | Auth & quotas   | ✅ Google sign-in, per-user daily counters, closed-beta allowlist + waitlist                                                                                        |
 | Notifications   | ✅ In-app bell, email with unsubscribe, Web Push (desktop/Android)                                                                                                  |
-| Multiplayer     | ✅ Party mode — one shared screen, phones as controllers (relay is in-process, hence `--max-instances 1`)                                                           |
+| Multiplayer     | ✅ Party mode — one shared screen, phones as controllers (relay is in-process, hence one instance — splitting it out is built, see `deployment.md`)                 |
 | Mobile          | ✅ Every catalog game is playable with a thumb, **enforced in CI** from each game's source. No PWA/install path yet                                                 |
 | Generator seam  | `packages/game-generator` — deterministic **mock only**, a development preview route                                                                                |
 | Local dev       | ✅ Whole product runs with no keys — bundled fixture games and a dev sign-in (`local-development.md`)                                                               |
@@ -63,7 +63,7 @@ survives only in this repo's early history.
 | [`improvement-loop-plan.md`](./improvement-loop-plan.md)           | After publish: player signals → per-game scorecard → agent-assisted fixes and suggestions              |
 | [`path-routing-plan.md`](./path-routing-plan.md)                   | ✅ Path URLs for deep links (`/play/<slug>`, …) — History API, no hashbang                             |
 | [`recommendations.md`](./recommendations.md)                       | ✅ Home arcade sort from scorecards + signed-in play affinity                                          |
-| [`runbooks/`](./runbooks/README.md)                                | ✅ Incident procedures: site-down triage, deploy rollback, Firestore restore, secret rotation           |
+| [`runbooks/`](./runbooks/README.md)                                | ✅ Incident procedures: site-down triage, deploy rollback, Firestore restore, secret rotation          |
 | [`contributing-for-agents.md`](./contributing-for-agents.md)       | How agents run, structure, and contribute to this repository                                           |
 | [`local-development.md`](./local-development.md)                   | ✅ Running the whole product on a laptop with no keys — start here to contribute                       |
 | [`multiplayer-plan.md`](./multiplayer-plan.md)                     | ✅ Party mode: shared screen, phones as controllers, slot model, in-process relay                      |

@@ -40,6 +40,12 @@
 #                               /api/internal/scorecard-sweep. Separate from the notify
 #                               audience because an OIDC audience is the endpoint's own
 #                               URL — one sweep's token must not be replayable at the other.)
+#   MP_RELAY_URL=...           (gamedev-mp-relay's URL, from infra/deploy-relay.sh; moves
+#                               party room creation to that service AND lifts this
+#                               service's --max-instances pin. One switch for both on
+#                               purpose — see the deploy block below. Unset keeps the relay
+#                               in-process and the pin on, which is today's production.)
+#   MAX_INSTANCES=...          (only honoured when MP_RELAY_URL is set; defaults to 4)
 #   ZONE_HOST_URL=...          (gamedev-world's URL; enables authoritative zones. Unset
 #                               means /api/games/:slug/zone/ticket 404s and games play on
 #                               unchanged — the intended default. Must be passed on EVERY
@@ -91,6 +97,9 @@ DIGEST_SWEEP_AUDIENCE="${DIGEST_SWEEP_AUDIENCE:-}"
 VAPID_PUBLIC_KEY="${VAPID_PUBLIC_KEY:-}"
 VAPID_SUBJECT="${VAPID_SUBJECT:-}"
 ZONE_HOST_URL="${ZONE_HOST_URL:-}"
+# Party relay split (apps/api/src/mp-relay.ts). Empty = the relay runs in this process,
+# which is what local dev, the tests and today's production all do.
+MP_RELAY_URL="${MP_RELAY_URL:-}"
 
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/app:$(date +%Y%m%d-%H%M%S)"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -223,16 +232,36 @@ fi
 if [ -n "$ZONE_HOST_URL" ]; then
   ENV_VARS="${ENV_VARS}|ZONE_HOST_URL=${ZONE_HOST_URL}"
 fi
+if [ -n "$MP_RELAY_URL" ]; then
+  ENV_VARS="${ENV_VARS}|MP_RELAY_URL=${MP_RELAY_URL}"
+fi
 
-echo "==> Deploying to Cloud Run (scale-to-zero)"
-# --max-instances 1: DO NOT RAISE while multiplayer is enabled. Party rooms are
-# per-instance in-memory state (apps/api/src/mp.ts) — the host opens a room on
-# whichever container served it, and a phone scanning the QR is load-balanced
+# The instance ceiling is DERIVED FROM MP_RELAY_URL, never chosen by hand.
+#
+# Party rooms are per-instance in-memory state (apps/api/src/mp.ts): the host opens a room
+# on whichever container served it, and a phone scanning the QR is load-balanced
 # independently, so a second instance turns a valid room code into "no such room".
-# Intermittent, and therefore blamed on the guest's wifi. Cookie-based
-# --session-affinity does NOT help: it is per-client and cannot map a guest onto the
-# host's instance. To scale out again, first split the relay into its own service or
-# move room state somewhere shared (docs/multiplayer-plan.md §4.6).
+# Intermittent, and therefore blamed on the guest's wifi. Cookie-based --session-affinity
+# does NOT help — it is per-client and cannot map a guest onto the host's instance.
+#
+# So the pin is not a warning comment anyone can override; it is a function of whether the
+# rooms still live here. With MP_RELAY_URL set, this process forwards room creation to the
+# relay service and never serves the socket, and scaling out is safe. Without it, the pin is
+# 1 and MAX_INSTANCES is ignored — because a raised ceiling on a process that still owns
+# rooms is precisely the outage this split exists to prevent, and it would look like a wifi
+# problem for weeks. See docs/multiplayer-plan.md §4.6 and infra/deploy-relay.sh.
+if [ -n "$MP_RELAY_URL" ]; then
+  MAX_INSTANCES="${MAX_INSTANCES:-4}"
+else
+  if [ -n "${MAX_INSTANCES:-}" ] && [ "${MAX_INSTANCES}" != "1" ]; then
+    echo "!! Ignoring MAX_INSTANCES=${MAX_INSTANCES}: MP_RELAY_URL is unset, so party rooms" >&2
+    echo "   still live in this service's memory and a second instance would break them." >&2
+    echo "   Deploy the relay first (infra/deploy-relay.sh), then set MP_RELAY_URL." >&2
+  fi
+  MAX_INSTANCES=1
+fi
+
+echo "==> Deploying to Cloud Run (scale-to-zero, max ${MAX_INSTANCES} instance(s))"
 gcloud run deploy "$SERVICE" \
   --image "$IMAGE" \
   --region "$REGION" \
@@ -240,7 +269,7 @@ gcloud run deploy "$SERVICE" \
   --platform managed \
   --allow-unauthenticated \
   --min-instances 0 \
-  --max-instances 1 \
+  --max-instances "$MAX_INSTANCES" \
   --port 8080 \
   --set-env-vars "${ENV_VARS}" \
   ${SECRET_FLAGS[@]+"${SECRET_FLAGS[@]}"}

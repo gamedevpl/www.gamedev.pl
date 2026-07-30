@@ -4,7 +4,8 @@
 > automatically by GitHub Actions (`deploy.yml`) on every push to `master`.
 >
 > The app (web + API) runs as **one Cloud Run service**: project `gamedevpl`, region
-> **`europe-west1`**, service `gamedev-app`, scale-to-zero with **`--max-instances 1`**. The
+> **`europe-west1`**, service `gamedev-app`, scale-to-zero and pinned to **one instance** until
+> the party relay is split out (see "Splitting the party relay out" below). The
 > custom domain is a native Cloud Run domain mapping; the apex `gamedev.pl` 301-redirects to
 > `www`. The old GitHub Pages site no longer serves this domain — it survives only in this
 > repo's early history.
@@ -258,13 +259,55 @@ requests to `/api` — no CORS and no second service.
 
 [`infra/deploy-api.sh`](../infra/deploy-api.sh) can be used to manually trigger Cloud Build, push
 to Artifact Registry, and deploy to Cloud Run from a local environment. It deploys with
-`--min-instances 0` (scale-to-zero) and `--max-instances 1`.
+`--min-instances 0` (scale-to-zero) and a `--max-instances` value it derives — see below.
 
-**Why `--max-instances 1`:** the multiplayer relay keeps party-mode lobbies in the memory of a
-single process ([`apps/api/src/mp.ts`](../apps/api/src/mp.ts)). A second instance would put a
-phone controller and the screen it controls in different processes, and the lobby would appear
-empty. Raising the cap therefore requires moving that state out of process first — it is not a
-knob to turn under load.
+**Why the instance ceiling is 1, and what lifts it:** the multiplayer relay keeps party-mode
+lobbies in the memory of a single process ([`apps/api/src/mp.ts`](../apps/api/src/mp.ts)). A
+second instance would put a phone controller and the screen it controls in different processes,
+and the lobby would appear empty — intermittently, which is how it gets blamed on the guest's
+wifi. Raising the cap therefore requires moving that state out of the app process first. It is
+not a knob to turn under load, and it is no longer _reachable_ as one: both deploy paths compute
+the ceiling from `MP_RELAY_URL` rather than accepting it as input, and
+[`apps/api/src/mp-relay-deploy.test.ts`](../apps/api/src/mp-relay-deploy.test.ts) fails CI if
+that coupling is broken.
+
+### Splitting the party relay out (lifting the ceiling)
+
+The relay is the only thing that needs the pin, so it moves to its own Cloud Run service and
+that service takes the pin instead. **Both services run the same image** — the role is chosen by
+env (`MP_RELAY_ONLY` on the relay, `MP_RELAY_URL` on the app) — because a second Dockerfile is a
+second thing to drift. See [`multiplayer-plan.md` §4.6](./multiplayer-plan.md) and
+[`apps/api/src/mp-relay.ts`](../apps/api/src/mp-relay.ts) for the design.
+
+Rollout, owner-run and in this order:
+
+1. `PROJECT_ID=gamedevpl ./infra/deploy-relay.sh` — creates `gamedev-mp-relay` from whatever
+   image `gamedev-app` is currently running, pins it to one instance, mounts `session-secret`
+   (room tokens are HMAC'd from it), raises the request timeout to an hour so a websocket is
+   not dropped after five minutes, and pins the OIDC audience to the service's own URL. It
+   finishes by proving that an unauthenticated room-creation call is **refused**.
+2. Set the Actions variable **`MP_RELAY_URL`** to the URL the script prints, then re-run the
+   deploy workflow. That single variable moves room creation to the relay, stops the app serving
+   the socket, and lifts the app's ceiling — one switch on purpose, because a raised ceiling on a
+   service that still owns rooms is the exact outage the split exists to prevent.
+3. `ALERT_EMAIL=… SERVICE=gamedev-mp-relay ./infra/setup-monitoring.sh` — a service with no
+   uptime check and no alert policy is unmonitored by construction.
+4. Open a lobby, join from a phone, confirm the controller moves something. Nothing above proves
+   that; a relay can health-check green while the QR code goes nowhere.
+
+Once `MP_RELAY_URL` is set, `deploy.yml` moves the relay onto each new image **before** promoting
+the app — server before client, since the promoted web bundle is the relay's websocket client.
+Only `--image` is updated, so a deploy cannot silently reconfigure the relay by omission.
+
+Security shape worth understanding before touching it: the relay is `--allow-unauthenticated`
+because a phone that scanned a QR has no Google identity and never will. What protects it is
+app-level — the room token verified in the socket's first frame, and an audience-pinned OIDC
+token from the app service on the internal create route. Missing either `MP_RELAY_AUDIENCE` or
+`MP_RELAY_CALLER_SA` makes that route **deny-all**
+([`internal-auth.ts`](../apps/api/src/internal-auth.ts)), so a half-configured relay refuses to
+open rooms rather than opening them to the internet. `PRIVATE_BETA=true` with no allowlist walls
+every other route the shared image happens to register, which needs no maintenance: the relay's
+whole job lives in the two paths the wall exempts.
 
 ## Infrastructure
 

@@ -121,12 +121,15 @@ Genuinely still open, in rough priority order:
   Before the fix it worked only because closed-beta traffic rarely warms a second
   instance — the sort of defect that surfaces on a traffic bump and gets blamed on
   the guest's wifi.
-- 🔴 **The cap is now the scaling ceiling for the whole API.** Catalog, submissions,
-  telemetry, and status polling all share the one container multiplayer needs.
-  Acceptable at closed-beta traffic, and must be resolved before the site opens:
-  split the relay into its own single-instance service, or move room state somewhere
-  shared ([multiplayer-plan.md](./multiplayer-plan.md) §4.6). Note that Cloud Run's
-  `--session-affinity` is not a fix — it is per-client and cannot map a guest onto
+- 🟡 **The cap is the scaling ceiling for the whole API, and the way out is now built
+  but not switched on.** Catalog, submissions, telemetry, and status polling all share
+  the one container multiplayer needs. The relay has its own service
+  ([deploy-relay.sh](../infra/deploy-relay.sh)) and both deploy paths derive the ceiling
+  from `MP_RELAY_URL`, so lifting the cap and moving the rooms are one action rather than
+  two — see [multiplayer-plan.md](./multiplayer-plan.md) §4.6 and
+  [deployment.md](./deployment.md#splitting-the-party-relay-out-lifting-the-ceiling).
+  What remains is owner-run: create the service, set the variable. Note that Cloud Run's
+  `--session-affinity` was never a fix — it is per-client and cannot map a guest onto
   the host's instance.
 - 📋 Takedown operations, backups, and published-catalog rollback.
 - 📋 Observability beyond Cloud Run's defaults — no dashboards or alerting on the
