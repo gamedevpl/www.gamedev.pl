@@ -56,7 +56,7 @@ EXPORT_SA="${EXPORT_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 
 echo "==> 1/7 Enabling required APIs"
 gcloud services enable firestore.googleapis.com storage.googleapis.com \
-  cloudscheduler.googleapis.com \
+  cloudscheduler.googleapis.com workflows.googleapis.com workflowexecutions.googleapis.com \
   --project "$PROJECT_ID"
 
 echo "==> 2/7 Enabling point-in-time recovery (7-day window, fixed by Firestore)"
@@ -194,33 +194,67 @@ grant_with_retry gcloud storage buckets add-iam-policy-binding "gs://${BACKUP_BU
   --member="serviceAccount:${EXPORT_SA}" \
   --role="roles/storage.objectCreator" \
   --project="$PROJECT_ID"
-echo "    importExportAdmin + objectCreator granted (no read, no delete)."
+# The same identity now wears two hats: Scheduler authenticates as it to *start* an
+# execution (workflows.invoker), and the workflow then *runs* as it. logWriter is what
+# lets the workflow's sys.log lines reach Logging — without it the export still happens
+# but leaves no trace to read after the fact.
+grant_with_retry gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${EXPORT_SA}" \
+  --role="roles/workflows.invoker" \
+  --condition=None
+grant_with_retry gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${EXPORT_SA}" \
+  --role="roles/logging.logWriter" \
+  --condition=None
+# And the non-obvious one. A workflow deployed with --service-account does not simply
+# *have* that identity: the Workflows service agent mints a token for it on every
+# `auth: OAuth2` call, which needs serviceAccountTokenCreator on the SA itself. Without it
+# the export fails before it reaches Firestore, and the message names neither the missing
+# role nor the real principal — just "IAM permission denied for service account
+# firestore-export@…", which reads like the export permission is wrong when it is fine.
+PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
+grant_with_retry gcloud iam service-accounts add-iam-policy-binding "$EXPORT_SA" \
+  --member="serviceAccount:service-${PROJECT_NUMBER}@gcp-sa-workflows.iam.gserviceaccount.com" \
+  --role="roles/iam.serviceAccountTokenCreator" \
+  --project="$PROJECT_ID"
+echo "    importExportAdmin + objectCreator + workflows.invoker + logWriter + tokenCreator granted."
 
-echo "==> 7/7 Ensuring the daily export job"
-# Scheduler calls the Firestore REST API directly with an OAuth token rather than going
-# through a Cloud Function: fewer moving parts, nothing to deploy, and no second
-# codebase that can rot.
+echo "==> 7/7 Ensuring the export workflow and its schedule"
+# Scheduler used to POST straight at :exportDocuments with a static body. That body is the
+# problem: it carries a fixed `outputUriPrefix`, Scheduler has no date templating, and
+# Firestore writes *into* the prefix it is handed rather than creating a per-run folder
+# beneath it. So the first export succeeded, wrote exports/exports.overall_export_metadata,
+# and every run afterwards was rejected with 400 INVALID_ARGUMENT: Path already exists.
+# One export, then silent failure forever — the exact decay this file exists to prevent.
+# Confirmed on 2026-07-30: a success at 08:51, then 400s at 15:17 and 15:30.
 #
-# ⚠️ KNOWN BROKEN, and the comment that used to sit here is why. It claimed "the prefix is
-# fixed and Firestore creates a timestamped folder beneath it per run, so runs never
-# overwrite each other". Firestore does no such thing: it writes straight into the prefix
-# given. So the first export succeeded, wrote `exports/exports.overall_export_metadata`,
-# and every run since has been rejected with 400 INVALID_ARGUMENT — a backup that ran once
-# and then failed forever, which is precisely the silent-decay case this file exists to
-# prevent. Confirmed against this project: one SUCCESSFUL export operation at the fixed
-# prefix, then 400s at 15:17 and 15:30 on 2026-07-30.
+# A Workflow is the smallest thing that can compute a prefix. Bucket, lifecycle rule,
+# service account and the restore procedure are all untouched; the only change is that a
+# timestamp now gets stamped in between. It is a hosted YAML document, not a second
+# codebase — nothing to build, deploy or keep on a runtime version.
 #
-# Scheduler has no date templating, so the prefix has to be computed by something. The fix
-# is a small OIDC-authenticated endpoint on the app that mints `exports/<timestamp>` and
-# calls the export API — same shape as the notify/scorecard sweeps. Until that ships and
-# this job is repointed at it, **pause this job**: two failures a day teach an operator to
-# ignore A3, which costs more than the export it is failing to take.
-#   gcloud scheduler jobs pause firestore-daily-export --location ${FIRESTORE_REGION} --project ${PROJECT_ID}
-# The native schedules from step 3 cover the routine case in the meantime.
-EXPORT_URI="https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default):exportDocuments"
-EXPORT_BODY='{"outputUriPrefix":"gs://'"${BACKUP_BUCKET}"'/exports"}'
+# It also polls the export to a terminal state, which matters to alerting rather than
+# tidiness: A4 counts successful runs, and if this returned on acceptance then "success"
+# would only mean Firestore took the request. See the workflow's own header.
+gcloud workflows deploy firestore-export \
+  --source="$(dirname "$0")/firestore-export-workflow.yaml" \
+  --location="$FIRESTORE_REGION" \
+  --service-account="$EXPORT_SA" \
+  --set-env-vars="BACKUP_BUCKET=${BACKUP_BUCKET}" \
+  --project="$PROJECT_ID" \
+  >/dev/null
+echo "    Workflow 'firestore-export' deployed."
+
+# Scheduler's job is now only to start an execution, so the body is empty and the prefix
+# is no longer expressible here — which is the point.
+EXPORT_URI="https://workflowexecutions.googleapis.com/v1/projects/${PROJECT_ID}/locations/${FIRESTORE_REGION}/workflows/firestore-export/executions"
+EXPORT_BODY='{}'
 
 if gcloud scheduler jobs describe firestore-daily-export --location "$FIRESTORE_REGION" --project "$PROJECT_ID" >/dev/null 2>&1; then
+  # `--update-headers`, not `--headers`: the create and update verbs spell this argument
+  # differently, and update rejects the create spelling outright. With `set -e` that
+  # aborted the whole script — but only on the second run, when the job already existed,
+  # which is the run nobody tests.
   gcloud scheduler jobs update http firestore-daily-export \
     --location "$FIRESTORE_REGION" \
     --project "$PROJECT_ID" \
@@ -228,7 +262,7 @@ if gcloud scheduler jobs describe firestore-daily-export --location "$FIRESTORE_
     --time-zone 'Etc/UTC' \
     --uri "$EXPORT_URI" \
     --http-method POST \
-    --headers 'Content-Type=application/json' \
+    --update-headers 'Content-Type=application/json' \
     --message-body "$EXPORT_BODY" \
     --oauth-service-account-email "$EXPORT_SA" \
     >/dev/null
@@ -254,10 +288,10 @@ echo "      PITR              rewinds the live database, 7-day window"
 echo "      Native schedules  daily (7d) + weekly (14w), inside Firestore"
 echo "      GCS exports       ${EXPORT_RETENTION_DAYS}-day retention, different failure domain"
 echo ""
-echo "    ⚠️  The GCS export job is currently BROKEN — it exports to a fixed prefix and"
-echo "    Firestore rejects every run after the first. Pause it until the endpoint that"
-echo "    computes a per-run prefix ships, so it stops generating alerts you must ignore:"
-echo "      gcloud scheduler jobs pause firestore-daily-export --location ${FIRESTORE_REGION} --project ${PROJECT_ID}"
+echo "    Verify the export end to end, rather than trusting this output. A run that"
+echo "    finishes SUCCEEDED has waited for the export, so objects are on disk:"
+echo "      gcloud workflows run firestore-export --location ${FIRESTORE_REGION} --project ${PROJECT_ID}"
+echo "      gcloud storage ls gs://${BACKUP_BUCKET}/exports/"
 echo ""
 echo "    Verify the native schedules now, rather than trusting this output:"
 echo "      gcloud firestore backups schedules list --database='(default)' --project ${PROJECT_ID}"

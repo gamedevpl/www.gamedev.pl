@@ -1,0 +1,85 @@
+# Firestore export, with a per-run output prefix.
+#
+# Cloud Scheduler cannot produce this on its own: its message body is a static string with
+# no date templating, so pointing it straight at :exportDocuments meant every run reused
+# one prefix. Firestore writes into the prefix it is given rather than creating a folder
+# beneath it, so the first export succeeded and every run afterwards was rejected with
+#   400 INVALID_ARGUMENT: Path already exists: /<bucket>/exports/exports.overall_export_metadata
+# A backup that ran exactly once and then failed forever. This workflow exists to compute
+# the one value Scheduler could not.
+#
+# It also *waits* for the export, which the old arrangement did not and could not. That is
+# not politeness — alert A4 counts successful runs, and if this returned the moment the
+# operation was accepted then "success" would mean "Firestore took the request", which is
+# true even when the export then fails. Polling to a terminal state is what makes A4 a
+# statement about backups rather than about HTTP.
+main:
+  steps:
+    - init:
+        assign:
+          - project: ${sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
+          - bucket: ${sys.get_env("BACKUP_BUCKET")}
+          # RFC3339 with the separators stripped: 20260730T153238Z. Colons are legal in
+          # object names but make every later gsutil/curl invocation need quoting.
+          - stamp: ${text.replace_all(text.replace_all(text.substring(time.format(sys.now()), 0, 19), "-", ""), ":", "")}
+          - prefix: ${"gs://" + bucket + "/exports/" + stamp + "Z"}
+          # 4 hours at 30s. Far past the seconds this takes at current data volume; the
+          # point is that a wedged operation ends as a failed execution A4 can see, rather
+          # than an execution that runs until the Workflows ceiling.
+          - attempts_left: 480
+    - start_export:
+        call: http.post
+        args:
+          url: '${"https://firestore.googleapis.com/v1/projects/" + project + "/databases/(default):exportDocuments"}'
+          auth:
+            type: OAuth2
+          body:
+            outputUriPrefix: ${prefix}
+        result: started
+    - announce:
+        call: sys.log
+        args:
+          severity: INFO
+          text: '${"firestore export started: " + prefix + " op=" + started.body.name}'
+    - poll:
+        call: http.get
+        args:
+          url: '${"https://firestore.googleapis.com/v1/" + started.body.name}'
+          auth:
+            type: OAuth2
+        result: op
+    - decide:
+        switch:
+          # `done` is absent while running, not false, so it needs a default.
+          - condition: ${default(map.get(op.body, "done"), false)}
+            next: check_error
+          - condition: ${attempts_left <= 0}
+            next: timed_out
+        next: back_off
+    - back_off:
+        steps:
+          - decrement:
+              assign:
+                - attempts_left: ${attempts_left - 1}
+          - sleep:
+              call: sys.sleep
+              args:
+                seconds: 30
+        next: poll
+    - timed_out:
+        raise:
+          message: '${"firestore export did not finish in time: " + prefix}'
+          operation: ${started.body.name}
+    - check_error:
+        switch:
+          # A finished operation carries either `error` or `response`. Raising here is what
+          # turns a failed export into a FAILED execution, which is the whole point.
+          - condition: ${"error" in op.body}
+            raise: ${op.body.error}
+    - succeeded:
+        call: sys.log
+        args:
+          severity: NOTICE
+          text: '${"firestore export succeeded: " + prefix}'
+    - done:
+        return: ${prefix}

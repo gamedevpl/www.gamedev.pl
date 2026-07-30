@@ -291,9 +291,14 @@ ensure_log_metric scheduler_job_errors \
   'Failed Cloud Scheduler attempts, any job. Backs alert A3.' \
   'resource.type="cloud_scheduler_job" AND severity>=ERROR'
 
+# Counted on the *workflow execution*, not on Cloud Scheduler's HTTP status. Scheduler
+# now only asks for an execution to start, so its 200 arrives long before the export does
+# and would be returned even by a run that then failed — an A4 built on it would be green
+# by construction. The workflow polls the export to a terminal state and fails the
+# execution if the operation carries an error, so SUCCEEDED here means the export finished.
 ensure_log_metric firestore_export_succeeded \
-  'Successful attempts of the daily Firestore export job. Backs alert A4.' \
-  'resource.type="cloud_scheduler_job" AND resource.labels.job_id="firestore-daily-export" AND jsonPayload."@type"="type.googleapis.com/google.cloud.scheduler.logging.AttemptFinished" AND httpRequest.status=200'
+  'Completed Firestore export workflow executions. Backs alert A4.' \
+  'resource.type="workflows.googleapis.com/Workflow" AND resource.labels.workflow_id="firestore-export" AND jsonPayload.state="SUCCEEDED"'
 
 # Moderation rejections (docs/content-safety-plan.md slice 2). Every content-safety layer was
 # built and then never observed: a rejection returned a 422 and evaporated, so nobody could
@@ -348,8 +353,8 @@ EOF
 # A4 — the backup watching itself. A silently broken export is indistinguishable from a
 # working one until the day it is needed, which is the worst possible day to find out.
 #
-# Measured on the export job's own *successful* attempts, not on bucket activity: the
-# GCS request_count metric counts reads too, so an operator running `gcloud storage ls`
+# Measured on the export workflow's own *successful* executions, not on bucket activity:
+# the GCS request_count metric counts reads too, so an operator running `gcloud storage ls`
 # to check on backups would suppress the very alert that tells them backups stopped —
 # and the restore runbook tells them to run exactly that. This also complements A3
 # rather than duplicating it: A3 catches a job that runs and fails, while absence
@@ -374,9 +379,9 @@ cat > "${POLICY_DIR}/a4.json" <<EOF
   "displayName": "A4 no successful Firestore export",
   "combiner": "OR",
   "conditions": [{
-    "displayName": "export job has not succeeded in 36 hours",
+    "displayName": "export has not succeeded in 23h30m",
     "conditionAbsent": {
-      "filter": "metric.type=\"logging.googleapis.com/user/firestore_export_succeeded\" AND resource.type=\"cloud_scheduler_job\"",
+      "filter": "metric.type=\"logging.googleapis.com/user/firestore_export_succeeded\" AND resource.type=\"workflows.googleapis.com/Workflow\"",
       "aggregations": [{
         "alignmentPeriod": "3600s",
         "perSeriesAligner": "ALIGN_SUM",
@@ -389,7 +394,7 @@ cat > "${POLICY_DIR}/a4.json" <<EOF
   "notificationChannels": ["${CHANNEL_NAME}"],
   "alertStrategy": { "autoClose": "604800s" },
   "documentation": {
-    "content": "The daily Firestore export has not succeeded for 36h — backups are stale or stopped. A 200 from the job means the export was *accepted*; that objects actually land is what the restore drill proves. Procedure: docs/runbooks/restore-firestore.md",
+    "content": "The Firestore export has not succeeded for 23h30m — backups are stale or stopped. The workflow waits for the export operation, so a SUCCEEDED execution means objects were written, not merely requested. Check: gcloud workflows executions list --workflow=firestore-export --location europe-central2. Procedure: docs/runbooks/restore-firestore.md",
     "mimeType": "text/markdown"
   }
 }
@@ -603,8 +608,10 @@ echo "        --project ${PROJECT_ID} --uri \"\${URI}\""
 echo ""
 echo "    A4 cannot be tested yet, and is inert rather than armed: an absence condition"
 echo "    needs a time series that once existed, and firestore_export_succeeded has no"
-echo "    data until the export job runs. Run ./infra/setup-backups.sh and let one export"
-echo "    succeed; A4 starts protecting you from that point on."
+echo "    data until the export workflow completes once. Run ./infra/setup-backups.sh, then"
+echo "    force a run and wait for it to finish:"
+echo "      gcloud workflows run firestore-export --location europe-central2 --project ${PROJECT_ID}"
+echo "    A4 starts protecting you from that point on."
 echo ""
 echo "    A6 matches a log field rather than a metric, so confirm the field path is what"
 echo "    this project's logs actually carry — a filter that matches nothing creates a"
