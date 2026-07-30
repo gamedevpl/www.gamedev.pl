@@ -45,6 +45,13 @@
 #   SUGGESTION_SWEEP_AUDIENCE=... (suggestion endpoint URL; enables OIDC auth on
 #                               /api/internal/suggestion-sweep, the IL-3 router run over
 #                               the scorecards. Its own audience for the same reason.)
+#   HEALTH_SWEEP_AUDIENCE=...  (health endpoint URL; enables OIDC auth on
+#                               /api/internal/health-sweep, the daily re-check of the
+#                               published shelf against today's engine. Its own audience
+#                               for the same reason.)
+#   HEALTH_SWEEP_BATCH=...     (how many health re-gates one sweep run may start;
+#                               defaults to 3. Each one is a Cloud Build run, so this is
+#                               the knob that decides what the loop costs per day.)
 #   MP_RELAY_URL=...           (gamedev-mp-relay's URL, from infra/deploy-relay.sh; moves
 #                               party room creation to that service AND lifts this
 #                               service's --max-instances pin. One switch for both on
@@ -98,6 +105,8 @@ NOTIFY_SWEEP_SA="${NOTIFY_SWEEP_SA:-}"
 SCORECARD_SWEEP_AUDIENCE="${SCORECARD_SWEEP_AUDIENCE:-}"
 DIGEST_SWEEP_AUDIENCE="${DIGEST_SWEEP_AUDIENCE:-}"
 SUGGESTION_SWEEP_AUDIENCE="${SUGGESTION_SWEEP_AUDIENCE:-}"
+HEALTH_SWEEP_AUDIENCE="${HEALTH_SWEEP_AUDIENCE:-}"
+HEALTH_SWEEP_BATCH="${HEALTH_SWEEP_BATCH:-}"
 # Web Push (docs/notifications-plan.md M2). Public key is public by design (env var);
 # the private key is a Secret Manager secret wired in below. Push is off without them.
 VAPID_PUBLIC_KEY="${VAPID_PUBLIC_KEY:-}"
@@ -232,6 +241,12 @@ fi
 
 if [ -n "$DIGEST_SWEEP_AUDIENCE" ]; then
   ENV_VARS="${ENV_VARS}|DIGEST_SWEEP_AUDIENCE=${DIGEST_SWEEP_AUDIENCE}"
+fi
+if [ -n "$HEALTH_SWEEP_AUDIENCE" ]; then
+  ENV_VARS="${ENV_VARS}|HEALTH_SWEEP_AUDIENCE=${HEALTH_SWEEP_AUDIENCE}"
+fi
+if [ -n "$HEALTH_SWEEP_BATCH" ]; then
+  ENV_VARS="${ENV_VARS}|HEALTH_SWEEP_BATCH=${HEALTH_SWEEP_BATCH}"
 fi
 if [ -n "$SUGGESTION_SWEEP_AUDIENCE" ]; then
   ENV_VARS="${ENV_VARS}|SUGGESTION_SWEEP_AUDIENCE=${SUGGESTION_SWEEP_AUDIENCE}"

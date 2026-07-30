@@ -68,6 +68,7 @@ function createGithubClientStub(params: {
     getGameMedia,
     getCatalog,
     getProgressNotes,
+    getRefSha: async () => null,
   };
   return {
     githubClient,

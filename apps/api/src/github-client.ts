@@ -410,6 +410,18 @@ export interface GitHubClient {
    * rate-limit outage. Worlds are rare; their manifests are fetched when asked for.
    */
   getGameManifest(ref: string, slug: string): Promise<Record<string, unknown> | null>;
+  /**
+   * The commit a ref currently points at. Null when the ref does not resolve, or when
+   * GitHub could not be asked at all.
+   *
+   * Exists so the health sweep (game-health.ts) can answer "has the engine moved since
+   * we last checked this game" by comparing shas rather than guessing from elapsed time.
+   * A sha comparison makes a quiet week cost nothing and a real engine change trigger
+   * exactly the re-checks it should; a timer would re-gate the whole shelf on a schedule
+   * whether or not anything changed. Null on failure rather than a throw, because the
+   * caller's correct response to "we don't know where the engine is" is to start nothing.
+   */
+  getRefSha(ref: string): Promise<string | null>;
 }
 
 /**
@@ -996,6 +1008,21 @@ ${gameJs}`;
         return null;
       }
       return parseGameMedia(await readRawFile(`games/${slug}/media/metadata.json`, ref));
+    },
+
+    async getRefSha(ref) {
+      // Same charset guard the catalog read uses, plus no `..`: the ref lands in a URL
+      // path, and a slashed ref like `release/1.x` must stay slashed to resolve — so it
+      // cannot be escaped away, and traversal has to be refused outright instead.
+      if (!/^[A-Za-z0-9._/-]+$/.test(ref) || ref.split('/').includes('..')) return null;
+      try {
+        // The commits endpoint rather than git/refs: it resolves a branch, a tag and a
+        // sha alike, so the caller is not obliged to know which kind of ref it holds.
+        const commit = await requestJson<{ sha?: string }>(`https://api.github.com/repos/${repo}/commits/${ref}`);
+        return typeof commit.sha === 'string' && commit.sha ? commit.sha : null;
+      } catch {
+        return null;
+      }
     },
 
     async getGameManifest(ref, slug) {
