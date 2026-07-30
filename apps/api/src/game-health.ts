@@ -119,6 +119,27 @@ const RED_RECHECK_COOLDOWN_MS = 14 * 24 * 60 * 60 * 1000;
  */
 const DEFAULT_BATCH = 3;
 
+/**
+ * Reads the batch size from configuration, keeping an explicit **zero**.
+ *
+ * Zero is not a degenerate value here, it is the loop's pause switch: the sweep still
+ * runs, still resolves the head, and still reports every game it *would* have started as
+ * `deferred` — so spending can be stopped, and what it was about to spend on inspected,
+ * without deleting the scheduler job or unsetting its audience. `Number(x) || undefined`
+ * would quietly turn that into the default and start three builds instead of none.
+ *
+ * Anything that is not a whole non-negative number — a typo, a unit suffix, an empty
+ * string — is unset rather than zero. Failing to the default is the safe direction for a
+ * misconfiguration: the sweep keeps working at a bounded rate instead of silently
+ * switching itself off, which is the failure nobody would notice.
+ */
+export function parseBatchSize(raw: string | undefined): number | undefined {
+  const trimmed = raw?.trim();
+  if (!trimmed) return undefined;
+  const parsed = Number(trimmed);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : undefined;
+}
+
 export interface HealthSweepDeps {
   store: Store;
   gamesStore: GamesStore;

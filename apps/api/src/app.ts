@@ -33,7 +33,7 @@ import { registerNotificationRoutes } from './notifications.js';
 import { registerPlayerFeedbackRoutes, type PlayerFeedbackRoutesOptions } from './player-feedback.js';
 import { registerPushRoutes } from './push-routes.js';
 import { registerDigestRoutes, type DigestRoutesOptions } from './digest.js';
-import { registerHealthSweepRoutes, type HealthSweepRoutesOptions } from './game-health.js';
+import { parseBatchSize, registerHealthSweepRoutes, type HealthSweepRoutesOptions } from './game-health.js';
 import { registerSuggestionSweepRoutes, type SuggestionSweepRoutesOptions } from './suggestion-sweep.js';
 import {
   buildImprovementBrief,
@@ -425,7 +425,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // version's pin. Two different answers to "what is today's engine" would make the
     // sweep start runs it then judges stale the moment they finish.
     engineRef: process.env.GAMES_ENGINE_REF?.trim() || undefined,
-    batch: Number(process.env.HEALTH_SWEEP_BATCH) || undefined,
+    batch: parseBatchSize(process.env.HEALTH_SWEEP_BATCH),
     ...options.healthSweepRoutes,
   });
 

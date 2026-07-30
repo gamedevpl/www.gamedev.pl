@@ -51,7 +51,10 @@
 #                               for the same reason.)
 #   HEALTH_SWEEP_BATCH=...     (how many health re-gates one sweep run may start;
 #                               defaults to 3. Each one is a Cloud Build run, so this is
-#                               the knob that decides what the loop costs per day.)
+#                               the knob that decides what the loop costs per day. Set it
+#                               to 0 to pause the spending without deleting the scheduler
+#                               job: the sweep still runs and still reports every game it
+#                               would have started, as `deferred` in its log line.)
 #   MP_RELAY_URL=...           (gamedev-mp-relay's URL, from infra/deploy-relay.sh; moves
 #                               party room creation to that service AND lifts this
 #                               service's --max-instances pin. One switch for both on

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from './app.js';
-import { runHealthSweep, startHealthCheck, type HealthGateTrigger } from './game-health.js';
+import { parseBatchSize, runHealthSweep, startHealthCheck, type HealthGateTrigger } from './game-health.js';
 import type { GamesStore, VersionManifest } from './games-store.js';
 import type { InternalAuthVerifier } from './internal-auth.js';
 import { InMemoryStore } from './store.js';
@@ -229,6 +229,32 @@ describe('runHealthSweep — what counts as stale', () => {
     const result = await sweep();
 
     expect(result).toMatchObject({ published: 0, started: [] });
+  });
+});
+
+describe('parseBatchSize', () => {
+  it('keeps an explicit zero, because zero is the pause switch', async () => {
+    // Setting the batch to 0 must stop the spending without stopping the sweep — the run
+    // still reports what it *would* have started, which is what makes it inspectable
+    // rather than just off.
+    expect(parseBatchSize('0')).toBe(0);
+
+    await publish('drifted', { healthRef: OLD });
+    const result = await sweep({ batch: parseBatchSize('0') });
+
+    expect(result).toMatchObject({ head: HEAD, started: [], deferred: 1 });
+    expect(gateTrigger).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the default for anything that is not a whole count', async () => {
+    // Failing to the default rather than to zero on a misconfiguration: a sweep running
+    // at a bounded rate is a visible cost, a sweep silently switched off is not.
+    expect(parseBatchSize('5')).toBe(5);
+    expect(parseBatchSize(undefined)).toBeUndefined();
+    expect(parseBatchSize('  ')).toBeUndefined();
+    expect(parseBatchSize('two')).toBeUndefined();
+    expect(parseBatchSize('2.5')).toBeUndefined();
+    expect(parseBatchSize('-1')).toBeUndefined();
   });
 });
 
