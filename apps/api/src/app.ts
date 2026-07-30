@@ -34,6 +34,7 @@ import { registerPlayerFeedbackRoutes, type PlayerFeedbackRoutesOptions } from '
 import { registerPushRoutes } from './push-routes.js';
 import { registerDigestRoutes, type DigestRoutesOptions } from './digest.js';
 import { registerSuggestionSweepRoutes, type SuggestionSweepRoutesOptions } from './suggestion-sweep.js';
+import { registerSuggestionInboxRoutes, type SuggestionInboxRoutesOptions } from './suggestion-inbox.js';
 import { registerScorecardRoutes, type ScorecardRoutesOptions } from './scorecard.js';
 import { createInternalAuthVerifierFromEnv } from './internal-auth.js';
 import { registerRefineRoute, type SpecRefiner } from './refine.js';
@@ -89,6 +90,8 @@ export interface BuildAppOptions {
   scorecardRoutes?: Partial<Omit<ScorecardRoutesOptions, 'store'>>;
   digestRoutes?: Partial<Omit<DigestRoutesOptions, 'store'>>;
   suggestionSweepRoutes?: Partial<Omit<SuggestionSweepRoutesOptions, 'store'>>;
+  /** Seams for the creator suggestion inbox; the GitHub client is shared with submissions. */
+  suggestionInboxRoutes?: Partial<Omit<SuggestionInboxRoutesOptions, 'store'>>;
   /** Seams for the public contact form (mailer fake in tests). */
   contactRoutes?: ContactRoutesOptions;
   // Private beta allowlist — uids (comma-separated) allowed to sign in and access gated routes
@@ -176,7 +179,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     betaAllowedEmails,
   });
 
-  await registerSubmissionRoutes(app, {
+  const gamesRepoClient = await registerSubmissionRoutes(app, {
     ...options.submissionRoutes,
     store,
     contentChecker,
@@ -377,6 +380,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     store,
     internalAuthVerifier: createInternalAuthVerifierFromEnv(process.env, 'suggestionSweep'),
     ...options.suggestionSweepRoutes,
+  });
+
+  // Where a human decides (docs/improvement-loop-plan.md IL-3 creator surface). Files
+  // through the same games-repo client the submission routes resolved, so approving a
+  // suggestion and requesting an improvement cannot disagree about where issues go.
+  await registerSuggestionInboxRoutes(app, {
+    store,
+    githubClient: gamesRepoClient ?? undefined,
+    ...options.suggestionInboxRoutes,
   });
 
   // Issuing personal access tokens (docs/agent-access-tokens.md) — the credential that

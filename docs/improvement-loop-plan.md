@@ -461,9 +461,15 @@ considerably:
   Studio playtest assumes landscape and opens as a full-viewport theater (same
   idea as GameTheater) with pause/resume on the bar and the note sheet layered
   over the game — not an inset iframe inside Studio chrome.
-- 📋 **Suggestion inbox** — cards with insight → evidence → proposed change →
-  [Approve → files issue] / [Dismiss with reason]. Dismissal reasons feed router
-  tuning. Approval reuses the feedback-comment path that already works.
+- ✅ **Suggestion inbox** (2026-07-30) — cards with insight → evidence →
+  [Approve → files issue] / [Dismiss with reason], in the studio's stats tab beside the
+  reactions block, because a suggestion is a reading of the same evidence
+  ([CreatorStudioView.tsx](../apps/web/src/CreatorStudioView.tsx),
+  [suggestion-inbox.ts](../apps/api/src/suggestion-inbox.ts)). Dismissal reasons are a
+  **fixed vocabulary** rather than free text: they exist to tune the router, so they have
+  to be countable, and a free-text field on a card that later feeds an agent's context is
+  a prompt-injection surface with no reason to exist — the creator's own words already
+  have a home in the improve endpoint.
 - 📋 **Autonomy toggle** per game: `digest only` / `suggest` (default) /
   `auto-fix defects` / `auto-tune within spec`.
 - 📋 **Digest** — a batched notification, not a new channel. `NotificationType`
@@ -863,9 +869,32 @@ at all and feeds the only autonomous-eligible class.
   Scheduled after the 03:20 scorecard sweep, because it reads what that run wrote.
   Closed until the job and the env var exist, like every other internal sweep.
 
-- Suggestion inbox UI; Approve → structured improvement issue (evidence-fenced)
-  → Copilot **via the relay**, with a stall alert on `issue-filed` → no PR.
-- Measurement records written at merge; 14-day post-change comparison.
+- ✅ **Inbox, approval and dismissal** (2026-07-30):
+  `GET /api/me/suggestions`, `POST .../:id/approve`, `POST .../:id/dismiss`
+  ([suggestion-inbox.ts](../apps/api/src/suggestion-inbox.ts)). Approve files an
+  evidence-fenced `improvement` issue through the _same_ games-repo client the submission
+  routes resolved, and spends the `improvements` quota, so approving cannot outrun the
+  budget the plan reserved for it.
+
+  **Approval is durable even when the handoff fails.** This is the plan's preferred
+  mitigation for the relay risk, implemented: if the issue cannot be filed — relay down,
+  filing unconfigured — the suggestion lands in `no-implementer` with the reason attached
+  and the studio says "approved, but no coding agent was available; you can retry". A 502
+  would have discarded the decision and made Approve a button that sometimes silently
+  does nothing.
+
+  Somebody else's suggestion is **404, not 403**: a 403 confirms the id exists, and these
+  ids are derivable from a public slug. Re-deciding a decided suggestion is 409, so a
+  double-click cannot file duplicate work.
+
+  The issue body splits what this service measured from what a game and its players
+  wrote. Findings and metrics are stated plainly; the untrusted strings follow inside a
+  fenced block labelled as data that does not override the task — and they are read from
+  the **live** scorecard at approval time, so an erased player is never quoted from a
+  stale copy. That is the ⚠️ below, answered at the exact point it bites.
+
+- 📋 Stall alert on `issue-filed` → no PR. Measurement records written at merge; 14-day
+  post-change comparison.
 - ⚠️ **`errorSamples` is the one attacker-controlled field in the health data.** Every
   other number in a scorecard is computed by this service; an error message is a
   string a game chose to emit. It is safe rendered as text to an operator and unsafe

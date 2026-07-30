@@ -301,10 +301,19 @@ function sendMedia(
   return reply.type(entry.contentType).send(entry.body);
 }
 
+/**
+ * Registers the submission routes and hands back the games-repo client it resolved.
+ *
+ * The return value exists so the suggestion inbox can file issues through the *same*
+ * client rather than resolving one of its own. Client resolution here depends on the
+ * token, the token secret and the local-games fallback together; a second copy of that
+ * logic elsewhere is a copy that drifts, and this file already carries a warning about
+ * exactly that hazard for the token secret.
+ */
 export async function registerSubmissionRoutes(
   app: FastifyInstance,
   options: SubmissionRoutesOptions = {},
-): Promise<void> {
+): Promise<GitHubClient | null> {
   const githubToken = options.githubToken ?? process.env.GITHUB_TOKEN;
   const gamesRepo = options.gamesRepo ?? process.env.GAMES_REPO ?? 'gamedevpl/www.gamedev.pl-games';
 
@@ -2927,4 +2936,6 @@ export async function registerSubmissionRoutes(
     now,
     onEvent: (issueNumber) => eventsCache.delete(issueNumber),
   });
+
+  return githubClient;
 }

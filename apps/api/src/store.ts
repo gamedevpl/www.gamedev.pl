@@ -780,6 +780,11 @@ export interface SuggestionRecord {
   status: SuggestionStatus;
   /** Why it reached its current status, when a human or the sweep had a reason. */
   statusReason?: string;
+  /** The games-repo issue this became, once an implementer was successfully handed it. */
+  issueNumber?: number;
+  /** Who decided, and when — so an approval is attributable rather than ambient. */
+  decidedBy?: string;
+  decidedAt?: string;
   /** `computedAt` of the scorecard behind it, so a stale suggestion reads as stale. */
   computedFrom: string;
   createdAt: string;
