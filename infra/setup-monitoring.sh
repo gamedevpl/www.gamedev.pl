@@ -170,7 +170,7 @@ if [ -z "$CHECK_ID" ]; then
 fi
 echo "    check_id=${CHECK_ID}"
 
-echo "==> 4/4 Ensuring alert policies"
+echo "==> 4/4 Ensuring log-based metrics and alert policies"
 POLICY_DIR="$(mktemp -d)"
 trap 'rm -rf "$POLICY_DIR"' EXIT
 
@@ -249,10 +249,56 @@ EOF
 # (Heredoc bodies are left unindented: EOF must start the line.)
 if [ "$SERVICE" = "$PRIMARY_SERVICE" ]; then
 
-# A3 — the notify sweep. It already runs every 2 minutes against auth, Firestore and the
-# app in one request, which makes it a synthetic monitor we are getting for free; all
-# that was missing was anyone listening. Its failure is also a real user-facing outage
-# (creators stop being notified) even when every page still loads.
+# A3 and A4 are built on log-based metrics, because **Cloud Scheduler emits no monitoring
+# metrics in this project at all.** The first real run of this script died here on
+# `cloudscheduler.googleapis.com/job/attempt_count`, and the cause was not the label the
+# error named: a sweep of all 8,657 metric descriptors visible to the project found no
+# `cloudscheduler.googleapis.com/*` metric whatsoever, so no condition over that metric
+# could ever have fired. The pre-existing A3/A4 were unarmed by construction.
+#
+# What Cloud Scheduler does emit is logs, on `resource.type="cloud_scheduler_job"`: an
+# AttemptStarted and an AttemptFinished per run, with the outcome in `httpRequest.status`
+# and failures at severity ERROR. Both filters below were checked against this project's
+# real log history — the ERROR one matches the notify-sweep 401 storm of 2026-07-24, and
+# the success one matches notify-sweep's current 200s.
+#
+# Counting metrics rather than log-match conditions, deliberately: a log-match alert fires
+# on the *first* entry, and A3's whole design is that one failed attempt of a job that runs
+# every two minutes is not an email. A counter keeps the "more than two in fifteen minutes"
+# threshold that made it worth having.
+ensure_log_metric() {
+  local NAME="$1" DESC="$2" FILTER="$3"
+  # A probe, so this redirect is the same shape as the alpha/beta check above rather than
+  # the kind #345 removed: a NOT_FOUND here is the answer, not a hidden failure.
+  if gcloud logging metrics describe "$NAME" --project "$PROJECT_ID" >/dev/null 2>&1; then
+    gcloud logging metrics update "$NAME" \
+      --project "$PROJECT_ID" \
+      --description="$DESC" \
+      --log-filter="$FILTER" \
+      >/dev/null
+    echo "    Updated log metric: ${NAME}"
+  else
+    gcloud logging metrics create "$NAME" \
+      --project "$PROJECT_ID" \
+      --description="$DESC" \
+      --log-filter="$FILTER" \
+      >/dev/null
+    echo "    Created log metric: ${NAME}"
+  fi
+}
+
+ensure_log_metric scheduler_job_errors \
+  'Failed Cloud Scheduler attempts, any job. Backs alert A3.' \
+  'resource.type="cloud_scheduler_job" AND severity>=ERROR'
+
+ensure_log_metric firestore_export_succeeded \
+  'Successful attempts of the daily Firestore export job. Backs alert A4.' \
+  'resource.type="cloud_scheduler_job" AND resource.labels.job_id="firestore-daily-export" AND jsonPayload."@type"="type.googleapis.com/google.cloud.scheduler.logging.AttemptFinished" AND httpRequest.status=200'
+
+# A3 — a scheduled job is failing. notify-sweep already runs every 2 minutes against auth,
+# Firestore and the app in one request, which makes it a synthetic monitor we are getting
+# for free; all that was missing was anyone listening. Its failure is also a real
+# user-facing outage (creators stop being notified) even when every page still loads.
 cat > "${POLICY_DIR}/a3.json" <<EOF
 {
   "displayName": "A3 notify-sweep failing",
@@ -260,7 +306,7 @@ cat > "${POLICY_DIR}/a3.json" <<EOF
   "conditions": [{
     "displayName": "scheduler job failing repeatedly",
     "conditionThreshold": {
-      "filter": "metric.type=\"cloudscheduler.googleapis.com/job/attempt_count\" AND resource.type=\"cloud_scheduler_job\" AND metric.label.\"response_code\"!=\"200\"",
+      "filter": "metric.type=\"logging.googleapis.com/user/scheduler_job_errors\" AND resource.type=\"cloud_scheduler_job\"",
       "aggregations": [{
         "alignmentPeriod": "900s",
         "perSeriesAligner": "ALIGN_SUM",
@@ -292,6 +338,12 @@ EOF
 # rather than duplicating it: A3 catches a job that runs and fails, while absence
 # catches a job that is paused, deleted, or never scheduled, where there are no failed
 # attempts to count because there are no attempts at all.
+#
+# **An absence condition needs a time series that once existed.** A log-based metric with
+# no matching entries has no series at all, and absence over nothing does not fire — so
+# this policy is inert until the export job succeeds once, and only becomes real
+# protection after `setup-backups.sh` has run and one export has landed. That ordering is
+# printed at the end of this script rather than left as folklore.
 cat > "${POLICY_DIR}/a4.json" <<EOF
 {
   "displayName": "A4 no successful Firestore export",
@@ -299,7 +351,7 @@ cat > "${POLICY_DIR}/a4.json" <<EOF
   "conditions": [{
     "displayName": "export job has not succeeded in 36 hours",
     "conditionAbsent": {
-      "filter": "metric.type=\"cloudscheduler.googleapis.com/job/attempt_count\" AND resource.type=\"cloud_scheduler_job\" AND resource.label.\"job_id\"=\"firestore-daily-export\" AND metric.label.\"response_code\"=\"200\"",
+      "filter": "metric.type=\"logging.googleapis.com/user/firestore_export_succeeded\" AND resource.type=\"cloud_scheduler_job\"",
       "aggregations": [{
         "alignmentPeriod": "3600s",
         "perSeriesAligner": "ALIGN_SUM",
@@ -441,10 +493,22 @@ echo "    project, and need roles this script does not assume. Create it once by
 echo "      Console → Billing → Budgets & alerts → Create budget"
 echo "      Scope: project ${PROJECT_ID}; thresholds 50/90/100%; email ${ALERT_EMAIL}"
 echo ""
-echo "    Then prove it works, because an untested alert is a decoration:"
-echo "      gcloud scheduler jobs pause notify-sweep --location ${REGION} --project ${PROJECT_ID}"
-echo "      # wait ~15 min for A3 to fire, confirm the email, then:"
-echo "      gcloud scheduler jobs resume notify-sweep --location ${REGION} --project ${PROJECT_ID}"
+echo "    Then prove A3 works, because an untested alert is a decoration. Note that"
+echo "    *pausing* notify-sweep does NOT test it: a paused job makes no attempts, so it"
+echo "    logs no failures and A3 has nothing to count. Make it fail instead, and put it"
+echo "    back — 4xx from a wrong path is enough, and a few minutes without the sweep is"
+echo "    harmless (status polls detect the same transitions):"
+echo "      URI=https://www.gamedev.pl/api/internal/notify-sweep"
+echo "      gcloud scheduler jobs update http notify-sweep --location ${REGION} \\"
+echo "        --project ${PROJECT_ID} --uri \"\${URI}-nope\""
+echo "      # wait ~8 min (>2 failed attempts in a 15-minute window), expect the email"
+echo "      gcloud scheduler jobs update http notify-sweep --location ${REGION} \\"
+echo "        --project ${PROJECT_ID} --uri \"\${URI}\""
+echo ""
+echo "    A4 cannot be tested yet, and is inert rather than armed: an absence condition"
+echo "    needs a time series that once existed, and firestore_export_succeeded has no"
+echo "    data until the export job runs. Run ./infra/setup-backups.sh and let one export"
+echo "    succeed; A4 starts protecting you from that point on."
 echo ""
 echo "    A6 matches a log field rather than a metric, so confirm the field path is what"
 echo "    this project's logs actually carry — a filter that matches nothing creates a"
