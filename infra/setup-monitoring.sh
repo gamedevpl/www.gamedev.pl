@@ -458,10 +458,30 @@ fi
 
 for FILE in "${POLICY_DIR}"/*.json; do
   DISPLAY="$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['displayName'])" "$FILE")"
-  EXISTING="$(gcloud alpha monitoring policies list \
+  MATCHES="$(gcloud alpha monitoring policies list \
     --project "$PROJECT_ID" \
     --filter="displayName='${DISPLAY}'" \
-    --format='value(name)' | head -n 1)"
+    --format='value(name)')"
+  EXISTING="$(printf '%s\n' "$MATCHES" | head -n 1)"
+
+  # A name can match more than once, and it did: the lookup and the create are not atomic,
+  # so an interrupted run — or, as happened here, a second run started while the first was
+  # still going — can have both decide the policy is absent and both create it. The result
+  # is two identical policies and two emails per incident, which is how a channel stops
+  # being read.
+  #
+  # "Idempotent: matched by display name" is only true if duplicates converge rather than
+  # accumulate, so extras are deleted rather than reported. Safe because these are exact
+  # display-name matches against the set this script owns, and the survivor is rewritten
+  # from the file below anyway; loud because deleting a policy should never be silent.
+  EXTRAS="$(printf '%s\n' "$MATCHES" | tail -n +2)"
+  if [ -n "$EXTRAS" ]; then
+    printf '%s\n' "$EXTRAS" | while IFS= read -r DUPLICATE; do
+      [ -n "$DUPLICATE" ] || continue
+      gcloud alpha monitoring policies delete "$DUPLICATE" --project "$PROJECT_ID" >/dev/null
+      echo "    Removed duplicate of ${DISPLAY} (${DUPLICATE##*/})"
+    done
+  fi
   # update replaces the policy definition wholesale, so every field the policy needs has
   # to be in the file — including notificationChannels. Omitting it there would leave the
   # policies present and visibly "enabled" while silently emailing nobody, which is the
