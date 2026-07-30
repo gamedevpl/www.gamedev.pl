@@ -41,7 +41,15 @@ PROJECT_ID="${PROJECT_ID:-gamedevpl}"
 # see docs/deployment.md; that split is deliberate and predates the domain mapping).
 FIRESTORE_REGION="${FIRESTORE_REGION:-europe-central2}"
 BACKUP_BUCKET="${BACKUP_BUCKET:-${PROJECT_ID}-firestore-backups}"
-EXPORT_SCHEDULE="${EXPORT_SCHEDULE:-17 3 * * *}"
+# Twice a day, and the second run is what makes the staleness alert possible at all.
+# Monitoring caps an absence condition's duration at 23h30m, so A4 in setup-monitoring.sh
+# cannot ask "no successful export in 36 hours" — and with a single daily export, *any*
+# window shorter than 24h elapses between two healthy runs and emails every morning. Two
+# runs 12h apart mean a 23h30m silence takes two consecutive failures to produce, which is
+# the "tolerate one hiccup, escalate a real outage" behaviour the 36h window was for. The
+# side benefit is the honest one: it halves the worst-case data loss to 12 hours.
+# Overriding this back to daily is supported, at the price of A4 firing after one miss.
+EXPORT_SCHEDULE="${EXPORT_SCHEDULE:-17 3,15 * * *}"
 EXPORT_RETENTION_DAYS="${EXPORT_RETENTION_DAYS:-30}"
 EXPORT_SA_NAME="${EXPORT_SA_NAME:-firestore-export}"
 EXPORT_SA="${EXPORT_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"

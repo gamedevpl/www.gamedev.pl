@@ -344,6 +344,14 @@ EOF
 # this policy is inert until the export job succeeds once, and only becomes real
 # protection after `setup-backups.sh` has run and one export has landed. That ordering is
 # printed at the end of this script rather than left as folklore.
+#
+# The window is 23h30m rather than the 36h this asked for originally, because that is the
+# API's hard ceiling ("Durations longer than 23h30m are not supported"). Which is why
+# setup-backups.sh exports **twice** a day: against a single daily export, any window
+# shorter than 24h elapses between two perfectly healthy runs and emails every morning.
+# Two runs 12h apart mean 23h30m of silence takes two consecutive failures — the same
+# "tolerate one hiccup" behaviour 36h was chosen for. The two files are coupled here; if
+# the export goes back to daily, this fires after a single miss.
 cat > "${POLICY_DIR}/a4.json" <<EOF
 {
   "displayName": "A4 no successful Firestore export",
@@ -357,7 +365,7 @@ cat > "${POLICY_DIR}/a4.json" <<EOF
         "perSeriesAligner": "ALIGN_SUM",
         "crossSeriesReducer": "REDUCE_SUM"
       }],
-      "duration": "129600s",
+      "duration": "84600s",
       "trigger": { "count": 1 }
     }
   }],

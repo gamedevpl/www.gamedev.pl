@@ -32,7 +32,7 @@ Provisioned by [`infra/setup-monitoring.sh`](../../infra/setup-monitoring.sh).
 | A1  | `A1 <service> site down (uptime check failing)` | That service's uptime check fails from most probers for 5 min            | [`site-down-triage.md`](./site-down-triage.md)   |
 | A2  | `A2 <service> Cloud Run 5xx rate elevated`      | That service's Cloud Run 5xx sustained over 10 min                       | [`site-down-triage.md`](./site-down-triage.md)   |
 | A3  | `A3 notify-sweep failing`                       | >2 failed Cloud Scheduler attempts in 15 min, any job (log-based)        | §below                                           |
-| A4  | `A4 no successful Firestore export`             | No successful export attempt logged in 36h (inert until the first one)   | [`restore-firestore.md`](./restore-firestore.md) |
+| A4  | `A4 no successful Firestore export`             | No successful export logged in 23h30m (inert until the first one)        | [`restore-firestore.md`](./restore-firestore.md) |
 | A5  | (billing budget, created by hand)               | Billing budget at 50 / 90 / 100%                                         | Cost review — see the ops repo's readiness plan  |
 | A6  | `A6 zone admission failing`                     | The zone host could not start a zone (log-based, rate-limited to hourly) | [`zones-down-triage.md`](./zones-down-triage.md) |
 | A7  | `A7 world service 5xx rate elevated`            | `gamedev-world` 5xx sustained over 10 min                                | [`zones-down-triage.md`](./zones-down-triage.md) |
@@ -64,6 +64,12 @@ Two consequences worth knowing before you trust either:
   series that once existed, and a log-based metric with no matching entries has no series.
   It becomes real protection only after `setup-backups.sh` has run and one export has
   landed.
+- **A4's window is 23h30m, and that is why the export runs twice a day.** Monitoring caps
+  absence durations at 23h30m, so the 36h window this wanted is not expressible. Against a
+  single daily export, any window under 24h elapses between two healthy runs and emails
+  every morning; with runs 12h apart, 23h30m of silence takes two consecutive failures.
+  `setup-monitoring.sh` and `setup-backups.sh` are coupled through this — reverting the
+  export to daily makes A4 fire after a single miss.
 
 **A6 has no uptime check behind it, on purpose.** Probing a scale-to-zero service every
 five minutes keeps an instance warm around the clock and turns `$0` at rest into roughly
