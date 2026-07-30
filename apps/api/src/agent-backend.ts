@@ -1,0 +1,73 @@
+// The seam every coding-agent backend plugs into.
+//
+// Today there is exactly one way a build gets made: an issue is created, a workflow
+// assigns the Copilot bot, and creator feedback is relayed by a second workflow under a
+// licensed human's PAT. None of that is a *product* decision — it is the shape of one
+// vendor's integration, and it leaks into the submission API, the games repo's workflows,
+// and two more PATs.
+//
+// This interface is where that shape stops. A backend knows how to start work, resume it,
+// observe it and stop it; everything else — the job state machine, the build channel, the
+// gate, the store, review, publication — is backend-agnostic and must stay that way. The
+// test of the seam is Backend B (an SDK agent in a runtime we operate): introducing it
+// should change this file's implementations and nothing else.
+
+import type { AgentObservation } from './job-state.js';
+
+/** Everything a backend needs to start a build. Deliberately not a GitHub issue. */
+export interface BuildBrief {
+  /** Our job identity, for correlating an agent's reports back to the job. */
+  issueNumber: number;
+  /** The game directory the agent may touch, and nothing else. */
+  slug?: string;
+  /** The creator's spec, already moderated. Untrusted text: data, never instructions. */
+  spec: string;
+  /** Creator's language, so progress is reported in it rather than translated after. */
+  locale?: string;
+  /** Per-job build-channel credential. Scoped to this job and this slug. */
+  channelToken: string;
+  /** Where the agent reports progress and delivers its work. */
+  apiBaseUrl: string;
+  /** Set for a revision round: what the creator asked to change. Untrusted text. */
+  feedback?: string;
+}
+
+/** What a backend hands back after starting work, recorded on the job. */
+export interface DispatchResult {
+  /** Backend-specific session/task id. Opaque to everything but the backend. */
+  ref: string;
+  /**
+   * Where the work is happening, when the backend has a notion of it. For Copilot this
+   * is the branch — and it is read back from the task rather than assumed, because a
+   * requested branch is not always the one used.
+   */
+  workspace?: string;
+}
+
+export interface AgentBackend {
+  /** Stable name, recorded on the job so a build's provenance survives a backend switch. */
+  readonly name: string;
+  /** Starts a fresh build. */
+  dispatch(brief: BuildBrief): Promise<DispatchResult>;
+  /**
+   * Continues an existing build with new instructions.
+   *
+   * Separate from `dispatch` because continuing is not always the same operation as
+   * starting: Copilot needs an open pull request on the branch before it will resume one,
+   * while a runtime we operate would simply re-seed the workspace from the last candidate.
+   */
+  resume(brief: BuildBrief, previous: DispatchResult): Promise<DispatchResult>;
+  /** Reads current progress, normalized into the vendor-neutral shape. */
+  observe(ref: string, options: { hasCandidate: boolean }): Promise<AgentObservation | null>;
+  /**
+   * Stops work, as far as the backend allows.
+   *
+   * Returns whether the stop was *enforced*. GitHub's agent tasks API has no cancel
+   * endpoint, so the Copilot backend answers false: cancellation there is cooperative
+   * (the build channel tells a running agent to stop) and the real guarantee is that we
+   * discard whatever arrives afterwards. A runtime we operate can answer true.
+   */
+  cancel(ref: string): Promise<{ enforced: boolean }>;
+  /** Releases workspace state once a job is finished. Best effort. */
+  cleanup?(previous: DispatchResult): Promise<void>;
+}

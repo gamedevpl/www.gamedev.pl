@@ -346,6 +346,19 @@ export interface GitHubClient {
   closeIssue(issueNumber: number): Promise<void>;
   closePullRequest(pullNumber: number): Promise<void>;
   /**
+   * Opens a pull request for an existing branch, or returns the open one if there
+   * already is one.
+   *
+   * Exists for one narrow reason: GitHub's agent tasks API can only resume work on a
+   * branch that has an **open pull request** — without one, the `head_ref` asking it to
+   * resume is silently ignored and the agent branches fresh instead. So a revision round
+   * has to guarantee the PR exists first. The PR is never merged and nothing reads it;
+   * it is resumption context, and the adapter closes it when the job finishes.
+   */
+  ensureOpenPullRequest(input: { headRef: string; baseRef: string; title: string; body: string }): Promise<{
+    number: number;
+  }>;
+  /**
    * Reads a game's source files from a branch (typically an unmerged PR head).
    * Returns null if the game directory or a required file is missing on that ref.
    */
@@ -674,6 +687,21 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         method: 'PATCH',
         body: JSON.stringify({ body }),
       });
+    },
+
+    async ensureOpenPullRequest(input) {
+      const existing = await requestJson<Array<{ number: number }>>(
+        `https://api.github.com/repos/${repo}/pulls?state=open&head=${encodeURIComponent(
+          `${owner}:${input.headRef}`,
+        )}&base=${encodeURIComponent(input.baseRef)}`,
+      );
+      if (existing.length > 0) return { number: existing[0].number };
+
+      const created = await requestJson<{ number: number }>(`https://api.github.com/repos/${repo}/pulls`, {
+        method: 'POST',
+        body: JSON.stringify({ head: input.headRef, base: input.baseRef, title: input.title, body: input.body }),
+      });
+      return { number: created.number };
     },
 
     async closeIssue(issueNumber) {
