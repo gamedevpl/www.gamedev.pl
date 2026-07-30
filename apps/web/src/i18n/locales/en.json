@@ -224,6 +224,7 @@
     "loading": "Loading your games…",
     "loadError": "Could not load your studio right now. Try again in a moment.",
     "empty": "You have not commissioned a game yet.",
+    "gameNotFound": "We couldn't find that game on your shelf. It may have been stopped, or the link may belong to someone else.",
     "createFirst": "Create your first game",
     "shelfAria": "Your games",
     "shelf": {

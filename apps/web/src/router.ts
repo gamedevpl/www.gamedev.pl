@@ -45,9 +45,20 @@ export type AppRoute =
   // surface before there was a console, and links to it are in people's bookmarks.
   | { view: 'admin'; section: AdminSection }
   // Creator control panel: own games, draft build (ex-status), playtest, improve.
-  // `/status/:token` is accepted as an alias and resolves here too.
-  // Optional `tab` deep-links into a work surface (`/studio/:token/build`).
-  | { view: 'studio'; token?: string; tab?: StudioTab }
+  //
+  // `game` addresses one game on the creator's shelf. It is a **slug** — games are
+  // given one at submission now, so there is no window where a build has no readable
+  // address — but it is deliberately left opaque here, because the same segment used to
+  // carry a capability token and those URLs are in notification emails and browser
+  // histories. The studio resolves it against the shelf by either, then rewrites the
+  // URL to the slug, which is how an old token link upgrades itself on first use.
+  //
+  // Nothing is fetched by this value: the shelf comes from the signed-in creator's own
+  // games, so a slug belonging to somebody else resolves to nothing at all.
+  //
+  // `/status/:token` is accepted as an alias and resolves here too. Optional `tab`
+  // deep-links into a work surface (`/studio/tv-tycoon/build`).
+  | { view: 'studio'; game?: string; tab?: StudioTab }
   // Privacy policy and terms. Reachable without a session — someone deciding whether
   // to sign in has to be able to read what signing in would mean first.
   | { view: 'legal'; doc: LegalDocId }
@@ -113,7 +124,7 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
     // Legacy status URLs land in Creator Studio — the draft Build tab is the
     // former status / "dev studio" page, now unified with playtest + improve.
     const token = decodeSegment(statusMatch[1]);
-    if (token) return { view: 'studio', token };
+    if (token) return { view: 'studio', game: token };
   }
 
   const playMatch = normalizedPath.match(PLAY_PREFIX_PATTERN);
@@ -158,23 +169,23 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
     return { view: 'studio' };
   }
 
-  // `/studio/:token` or `/studio/:token/:tab`. A third segment that is not a known
-  // tab is a 404 rather than a silent fallback to the token-only view: it keeps the
+  // `/studio/:game` or `/studio/:game/:tab`. A third segment that is not a known
+  // tab is a 404 rather than a silent fallback to the game-only view: it keeps the
   // client in step with the API's shell allowlist, which serves those paths a real 404.
   const studioMatch = normalizedPath.match(/^\/studio\/([^/]+)(?:\/([^/]+))?$/);
   if (studioMatch?.[1]) {
-    const token = decodeSegment(studioMatch[1]);
+    const game = decodeSegment(studioMatch[1]);
     const tabSegment = studioMatch[2] ? decodeSegment(studioMatch[2]) : undefined;
-    if (token === null || tabSegment === null) {
+    if (game === null || tabSegment === null) {
       return { view: 'notFound' };
     }
     if (!tabSegment) {
-      return { view: 'studio', token };
+      return { view: 'studio', game };
     }
     if (!isStudioTab(tabSegment)) {
       return { view: 'notFound' };
     }
-    return { view: 'studio', token, tab: tabSegment };
+    return { view: 'studio', game, tab: tabSegment };
   }
 
   // Hybrid join: /join/<code>#<token> — credential stays out of the request line.
@@ -189,6 +200,17 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
 /** @deprecated Prefer {@link studioPath}. Kept so old `/status/` links and call sites still resolve. */
 export function statusPath(token: string): string {
   return studioPath(token);
+}
+
+/**
+ * Whether a studio path segment names a game the way we now write them.
+ *
+ * Used to decide when a URL is already canonical. A capability token is base64url and
+ * can, rarely, be all-lowercase and dash-free — so this is a test of shape, not proof
+ * of which kind of address it is; the studio resolves it against the shelf either way.
+ */
+export function looksLikeSlug(segment: string): boolean {
+  return SLUG_PATTERN.test(segment);
 }
 
 /** Canonical play URL. Emit this; `/ay/<slug>` and `/ai/<slug>` only as inbound aliases. */
@@ -222,10 +244,11 @@ export function canonicalPath(pathname: string): string | null {
       // showing belongs in the URL, or a refresh is a different page than a reload.
       case 'admin':
         return adminPath(route.section);
-      // Only the token form. `/studio` itself is canonical, and a tab is added by the
-      // view once it knows which game it is showing rather than here.
+      // Only the addressed form. `/studio` itself is canonical, and a tab is added by
+      // the view once it knows which game it is showing rather than here. Rewriting a
+      // token to its slug also happens there, for the same reason: it takes the shelf.
       case 'studio':
-        return route.token ? studioPath(route.token, route.tab) : null;
+        return route.game ? studioPath(route.game, route.tab) : null;
       default:
         return null;
     }
@@ -250,12 +273,13 @@ export function draftPath(slug: string): string {
 }
 
 /**
- * Creator control panel. Optional token deep-links into one game on the shelf;
- * optional tab deep-links into a work surface on that game.
+ * Creator control panel. Optional `game` (a slug, or a legacy capability token)
+ * deep-links into one game on the shelf; optional tab deep-links into a work surface
+ * on that game.
  */
-export function studioPath(token?: string, tab?: StudioTab): string {
-  if (!token) return '/studio';
-  const base = `/studio/${encodeURIComponent(token)}`;
+export function studioPath(game?: string, tab?: StudioTab): string {
+  if (!game) return '/studio';
+  const base = `/studio/${encodeURIComponent(game)}`;
   return tab ? `${base}/${tab}` : base;
 }
 
@@ -286,10 +310,10 @@ export function navUpTarget(route: AppRoute): NavUpTarget | null {
       // Playtest is a full-viewport theater with its own Close back to overview.
       if (route.tab === 'playtest') return null;
       // Any selected-game URL (with or without a tab) goes to the shelf — not to
-      // `/studio/:token`. CreatorStudioView canonicalizes a bare token URL onto the
+      // `/studio/:game`. CreatorStudioView canonicalizes a bare game URL onto the
       // default tab (Build for in-progress games), which would immediately undo an
       // Up that only stripped the tab and make the chevron look broken.
-      if (route.token) {
+      if (route.game) {
         return { path: studioPath(), labelKey: 'upStudio' };
       }
       return { path: '/', labelKey: 'upHome' };

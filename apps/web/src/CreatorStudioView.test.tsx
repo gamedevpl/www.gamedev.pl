@@ -176,7 +176,7 @@ describe('CreatorStudioView', () => {
     fetchStudioGames.mockResolvedValue(manyGames(2));
     window.history.replaceState(null, '', '/studio/token-0');
 
-    const { container, root, onNavigate } = await renderStudio({ selectedToken: 'token-0' });
+    const { container, root, onNavigate } = await renderStudio({ selectedGame: 'token-0' });
 
     const improveTab = Array.from(container.querySelectorAll('[role="tab"]')).find((button) =>
       button.textContent?.includes('Improve'),
@@ -200,7 +200,7 @@ describe('CreatorStudioView', () => {
     fetchStudioGames.mockResolvedValue(manyGames(2));
     window.history.replaceState(null, '', '/studio/token-0/stats');
 
-    const { container, root, onNavigate } = await renderStudio({ selectedToken: 'token-0', selectedTab: 'stats' });
+    const { container, root, onNavigate } = await renderStudio({ selectedGame: 'token-0', selectedTab: 'stats' });
 
     // Landed on Build, and the URL was corrected in place rather than pushed.
     const activeTab = container.querySelector('[role="tab"][aria-selected="true"]');
@@ -209,6 +209,58 @@ describe('CreatorStudioView', () => {
     // No tab may exist in the URL that has no button to leave it by.
     const tabLabels = Array.from(container.querySelectorAll('[role="tab"]')).map((button) => button.textContent);
     expect(tabLabels.some((label) => label?.includes('Player feedback'))).toBe(false);
+
+    root.unmount();
+  });
+
+  it('opens a game addressed by its slug', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue(manyGames(3));
+    window.history.replaceState(null, '', '/studio/game-2');
+
+    const { container, root } = await renderStudio({ selectedGame: 'game-2' });
+
+    expect(container.querySelector('.studio-detail-title-block h2')?.textContent).toContain('Game 2');
+
+    root.unmount();
+  });
+
+  it('rewrites an old capability-token link onto the game’s slug', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue(manyGames(3));
+    window.history.replaceState(null, '', '/studio/token-1');
+
+    // The shape of a link from a months-old notification email, minted before games
+    // were given a slug at submission.
+    const { container, root, onNavigate } = await renderStudio({ selectedGame: 'token-1' });
+
+    // It still opens the right game…
+    expect(container.querySelector('.studio-detail-title-block h2')?.textContent).toContain('Game 2');
+    // …and leaves a readable URL behind it, taking the capability out of history. In
+    // place, so the old address does not become an entry to go Back through.
+    expect(onNavigate).toHaveBeenCalledWith('/studio/game-2/overview', { replace: true });
+
+    root.unmount();
+  });
+
+  it('shows nothing for a game the creator does not own', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue(manyGames(3));
+    window.history.replaceState(null, '', '/studio/somebody-elses-game');
+
+    // Slugs are public — they are in every /play/ link — so the guard cannot be that
+    // the address is secret. It is that the shelf holds only this creator's games, and
+    // nothing on this screen is fetched by the URL's value.
+    const { container, root, onNavigate } = await renderStudio({ selectedGame: 'somebody-elses-game' });
+
+    expect(container.querySelector('.studio-detail')).toBeNull();
+    expect(onNavigate).not.toHaveBeenCalled();
 
     root.unmount();
   });
@@ -224,7 +276,7 @@ describe('CreatorStudioView', () => {
 
     // First game is selected in the UI for convenience…
     expect(container.querySelector('.studio-shelf-item.is-active')?.textContent).toContain('Game 1');
-    // …but the address bar stays token-free until an explicit pick.
+    // …but nothing is written to the address bar until an explicit pick.
     expect(onNavigate).not.toHaveBeenCalled();
 
     const second = Array.from(container.querySelectorAll('.studio-shelf-item')).find((item) =>
@@ -234,7 +286,9 @@ describe('CreatorStudioView', () => {
     await act(async () => {
       second!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(onNavigate).toHaveBeenCalledWith('/studio/token-1/overview');
+    // And when it is written, it names the game — not the capability token that used
+    // to sit in the URL bar, in history, and in every screenshot of this screen.
+    expect(onNavigate).toHaveBeenCalledWith('/studio/game-2/overview');
 
     root.unmount();
   });

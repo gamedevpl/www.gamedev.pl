@@ -34,6 +34,7 @@ import { emitOperatorAlert, emitSubmissionNotification, notifyOnTransition, type
 import { detectOperatorAlerts, FEEDBACK_STALL_MS } from './operator-alerts.js';
 import { isAdminSession } from './admin.js';
 import { peekQuota } from './quota-gate.js';
+import { mintGameSlug } from './slug.js';
 import { type BuildPreviewSummary, type BuildShotSummary, type Store, type SubmissionRecord } from './store.js';
 import {
   CREATOR_FEEDBACK_MARKER,
@@ -457,6 +458,8 @@ export async function registerSubmissionRoutes(
 
   async function dispatchBuild(input: {
     issueNumber: number;
+    /** The game directory the agent is to build into. Assigned before dispatch. */
+    slug?: string;
     spec: string;
     locale: string;
     log: { error: (context: object, message: string) => void };
@@ -477,6 +480,7 @@ export async function registerSubmissionRoutes(
     try {
       const result = await agentBackend.dispatch({
         issueNumber: input.issueNumber,
+        ...(input.slug ? { slug: input.slug } : {}),
         spec: input.spec,
         locale: input.locale,
         channelToken: mintAgentToken(input.issueNumber, submissionTokenSecret),
@@ -1043,6 +1047,40 @@ export async function registerSubmissionRoutes(
     return entries.find((entry) => entry.slug === slug && entry.status === 'published') ?? null;
   }
 
+  /**
+   * Whether anything already answers to this name.
+   *
+   * Three namespaces, because a game can exist in three places and a new build must not
+   * be given an address that already means something else: another submission (building
+   * or built), a game published through the store, and a game published in the games
+   * repo's catalog. `except` lets a job ask about a name it may already hold itself.
+   *
+   * Deliberately forgiving of its own failures. This runs inside submission creation, and
+   * a GitHub outage that made every name look taken would refuse builds the creator has
+   * already paid a quota slot for; a name that is wrongly *available* costs far less than
+   * a submission that will not start, and the delivery path checks again before writing.
+   */
+  async function isSlugClaimed(slug: string, except?: number): Promise<boolean> {
+    if (store) {
+      try {
+        const existing = await store.getSubmissionBySlug(slug);
+        if (existing && existing.issueNumber !== except) return true;
+        const publication = await store.getPublication(slug);
+        if (publication) return true;
+      } catch {
+        // Fall through: see above — an unavailable store must not block creation.
+      }
+    }
+    if (githubClient) {
+      try {
+        if (await isSlugPublished(githubClient, slug)) return true;
+      } catch {
+        // Same reasoning, and this one is the likeliest to fail: it reads GitHub.
+      }
+    }
+    return false;
+  }
+
   // Single source of GitHub-state → status derivation, shared by the on-demand
   // status route and the notification sweep so they never diverge.
   /**
@@ -1362,8 +1400,16 @@ export async function registerSubmissionRoutes(
       if (!store) {
         return reply.status(503).send({ error: 'submissions are unavailable' });
       }
+      // The game's address, minted from the title the creator just confirmed and fixed
+      // for the game's whole life. It used to be the agent's to choose and was learned
+      // only on its first delivery, which left every build with a stretch — minutes at
+      // best — where the thing being built had no name a URL could use. That is why the
+      // creator's own studio addressed their game by a capability token.
+      const slug = await mintGameSlug(sanitizedTitle, (candidate) => isSlugClaimed(candidate));
+
       const jobId = await store.allocateJobId();
       await store.createSubmission(jobId, request.user!.uid, sanitizedTitle);
+      await store.setSubmissionSlug(jobId, slug);
       await store.setSubmissionLocale(jobId, creatorLocale);
       // Raw, not sanitized: the sanitizer strips the '##' that marks the block.
       await store.setSubmissionClarificationCount(jobId, countCreatorClarifications(parsed.data.concept));
@@ -1376,13 +1422,19 @@ export async function registerSubmissionRoutes(
 
       await dispatchBuild({
         issueNumber: jobId,
+        // The agent is told where to build rather than left to name the place itself.
+        // Its brief previously read "games/(the slug named in your first progress
+        // report)/", which is a sentence, not a path.
+        slug,
         spec: issueBody,
         locale: creatorLocale,
         log: request.log,
       });
 
       const token = mintToken(jobId, submissionTokenSecret);
-      return reply.send({ token, statusUrl: `/api/submissions/${token}` });
+      // The slug travels back so the app can go straight to `/studio/<slug>` instead of
+      // putting a capability token in the URL bar and in the creator's history.
+      return reply.send({ token, slug, statusUrl: `/api/submissions/${token}` });
     } catch (error) {
       request.log.error({ err: error }, 'failed to create submission');
       return reply.status(502).send({ error: 'failed to submit game spec' });

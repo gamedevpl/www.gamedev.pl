@@ -20,7 +20,7 @@ describe('parsePathRoute', () => {
   });
 
   it('parses a status token into Creator Studio (legacy alias)', () => {
-    expect(parsePathRoute('/status/abc123')).toEqual({ view: 'studio', token: 'abc123' });
+    expect(parsePathRoute('/status/abc123')).toEqual({ view: 'studio', game: 'abc123' });
   });
 
   it('parses a published-game permalink', () => {
@@ -95,13 +95,13 @@ describe('parsePathRoute', () => {
 
   it('parses the creator studio route', () => {
     expect(parsePathRoute('/studio')).toEqual({ view: 'studio' });
-    expect(parsePathRoute('/studio/abc%2Ftoken')).toEqual({ view: 'studio', token: 'abc/token' });
+    expect(parsePathRoute('/studio/abc%2Ftoken')).toEqual({ view: 'studio', game: 'abc/token' });
     expect(parsePathRoute('/studio/abc%2Ftoken/build')).toEqual({
       view: 'studio',
-      token: 'abc/token',
+      game: 'abc/token',
       tab: 'build',
     });
-    expect(parsePathRoute('/studio/tok/playtest')).toEqual({ view: 'studio', token: 'tok', tab: 'playtest' });
+    expect(parsePathRoute('/studio/tok/playtest')).toEqual({ view: 'studio', game: 'tok', tab: 'playtest' });
     expect(parsePathRoute('/studio/tok/nope')).toEqual({ view: 'notFound' });
     // The stubbed feedback surface is gone from the UI, so its path is gone too —
     // otherwise a deep link resolves to a tab with nothing to render.
@@ -191,11 +191,17 @@ describe('path builders', () => {
     expect(studioPath()).toBe('/studio');
     expect(studioPath('tok')).toBe('/studio/tok');
     expect(studioPath('a b', 'stats')).toBe('/studio/a%20b/stats');
-    expect(parsePathRoute(studioPath('a b'))).toEqual({ view: 'studio', token: 'a b' });
+    expect(parsePathRoute(studioPath('a b'))).toEqual({ view: 'studio', game: 'a b' });
     expect(parsePathRoute(studioPath('tok', 'improve'))).toEqual({
       view: 'studio',
-      token: 'tok',
+      game: 'tok',
       tab: 'improve',
+    });
+    // The address games actually carry now.
+    expect(parsePathRoute(studioPath('tv-tycoon', 'build'))).toEqual({
+      view: 'studio',
+      game: 'tv-tycoon',
+      tab: 'build',
     });
   });
 
@@ -226,17 +232,17 @@ describe('navUpTarget', () => {
     expect(navUpTarget({ view: 'join', code: 'ABC123', token: 'tok' })).toBeNull();
     expect(navUpTarget({ view: 'play', slug: 'sky-dodge' })).toBeNull();
     expect(navUpTarget({ view: 'draft', slug: 'space-runner' })).toBeNull();
-    expect(navUpTarget({ view: 'studio', token: 'tok', tab: 'playtest' })).toBeNull();
+    expect(navUpTarget({ view: 'studio', game: 'tok', tab: 'playtest' })).toBeNull();
   });
 
   it('walks studio game work surfaces to the shelf, then home', () => {
     // Tab → shelf (not `/studio/:token`): a bare token URL is rewritten back onto
     // the default tab, which would cancel the Up for in-progress Build views.
-    expect(navUpTarget({ view: 'studio', token: 'tok', tab: 'build' })).toEqual({
+    expect(navUpTarget({ view: 'studio', game: 'tok', tab: 'build' })).toEqual({
       path: '/studio',
       labelKey: 'upStudio',
     });
-    expect(navUpTarget({ view: 'studio', token: 'tok' })).toEqual({
+    expect(navUpTarget({ view: 'studio', game: 'tok' })).toEqual({
       path: '/studio',
       labelKey: 'upStudio',
     });

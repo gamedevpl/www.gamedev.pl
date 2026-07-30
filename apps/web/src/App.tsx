@@ -134,9 +134,11 @@ export function App() {
         ? (catalogEntries.find((game) => game.slug === route.slug)?.title ??
           (stageContent?.type === 'catalog' && stageContent.game.slug === route.slug ? stageContent.game.title : null))
         : null;
+    // Matched on either address the URL can carry: a slug now, a capability token on
+    // links minted before games had one.
     const studioTitle =
-      route.view === 'studio' && route.token
-        ? (savedSpecs.find((spec) => spec.token === route.token)?.title ?? null)
+      route.view === 'studio' && route.game
+        ? (savedSpecs.find((spec) => spec.token === route.game || spec.slug === route.game)?.title ?? null)
         : null;
 
     return resolveDocumentTitle(route, {
@@ -452,6 +454,7 @@ export function App() {
         title,
         concept,
         createdAt: Date.now(),
+        ...(response.slug ? { slug: response.slug } : {}),
       });
       setSavedSpecs(updatedSpecs);
       setMyGamesRefreshKey((key) => key + 1);
@@ -465,7 +468,9 @@ export function App() {
       setPendingSpec(null);
       clearPendingQa();
 
-      navigate(statusPath(response.token));
+      // Straight to the game's own address. Older API builds answer without a slug, in
+      // which case the token still addresses the studio and gets rewritten there.
+      navigate(studioPath(response.slug ?? response.token));
     } catch (err) {
       const message = err instanceof Error ? err.message : t('errors.generic');
       const category = err instanceof Error ? (err as SubmissionApiError).category : undefined;
@@ -709,7 +714,7 @@ export function App() {
           <AdminConsole section={route.section} onNavigate={navigate} />
         ) : route.view === 'studio' ? (
           <CreatorStudioView
-            selectedToken={route.token}
+            selectedGame={route.game}
             selectedTab={route.tab}
             onNavigate={navigate}
             onPlay={(slug) => navigate(playPath(slug))}

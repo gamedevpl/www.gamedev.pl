@@ -528,18 +528,50 @@ describe('submission routes', () => {
     expect(jobs[0].issueNumber).toBeGreaterThanOrEqual(JOB_ID_FLOOR);
     expect(response.json()).toEqual({
       token: mintToken(jobs[0].issueNumber, secret),
+      // Minted here, from the sanitized title, and returned so the app can open the
+      // studio on a readable address instead of on a capability token.
+      slug: 'my-cool-title',
       statusUrl: `/api/submissions/${response.json().token}`,
     });
+    expect(jobs[0].slug).toBe('my-cool-title');
 
     // Creator text is still sanitized and still fenced as data — it just reaches the
     // agent directly now instead of by way of an issue body.
     expect(briefs).toHaveLength(1);
     expect(briefs[0].spec).toContain('My cool title');
+    // The agent is told where to build. Its brief used to name the game directory as
+    // "(the slug named in your first progress report)", which is a sentence, not a path.
+    expect(briefs[0].slug).toBe('my-cool-title');
     expect(briefs[0].spec).toContain('This is a sufficiently long concept with markup and details.');
     expect(briefs[0].spec).not.toContain('<script>');
     expect(briefs[0].spec).not.toContain('<i>');
     expect(briefs[0].channelToken).toBe(mintAgentToken(jobs[0].issueNumber, secret));
   });
+  it('gives two games of the same name addresses of their own', async () => {
+    const { githubClient } = createGithubClientStub({ issueNumber: 93 });
+    const store = new InMemoryStore();
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
+
+    const submit = () =>
+      app.inject({
+        method: 'POST',
+        url: '/api/submissions',
+        headers: authHeaders,
+        payload: {
+          title: 'Space Miner',
+          concept: 'Dig asteroids for ore and sell it at the station before your fuel runs out.',
+        },
+      });
+
+    const first = await submit();
+    const second = await submit();
+
+    expect(first.json().slug).toBe('space-miner');
+    // Numbered rather than randomised: the second "space miner" being space-miner-2 is
+    // a fact a creator can hold in their head.
+    expect(second.json().slug).toBe('space-miner-2');
+  });
+
   it('records how many QA answers came with the concept', async () => {
     const { githubClient } = createGithubClientStub({ issueNumber: 92 });
     const store = new InMemoryStore();

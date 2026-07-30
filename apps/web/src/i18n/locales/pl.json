@@ -224,6 +224,7 @@
     "loading": "Ładujemy Twoje gry…",
     "loadError": "Nie udało się wczytać studia. Spróbuj za chwilę.",
     "empty": "Nie zleciłeś jeszcze żadnej gry.",
+    "gameNotFound": "Nie znaleźliśmy tej gry na Twojej półce. Mogła zostać zatrzymana albo link należy do kogoś innego.",
     "createFirst": "Stwórz pierwszą grę",
     "shelfAria": "Twoje gry",
     "shelf": {

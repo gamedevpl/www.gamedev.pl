@@ -73,8 +73,12 @@ const TAB_LABELS: Record<StudioTab, string> = {
 type NavigateOptions = { replace?: boolean };
 
 type CreatorStudioViewProps = {
-  /** Deep-link into a specific game when present. */
-  selectedToken?: string;
+  /**
+   * Deep-link into a specific game when present: its slug, or — for links minted
+   * before games had one — its capability token. Resolved against the creator's own
+   * shelf, so it addresses nothing they do not own.
+   */
+  selectedGame?: string;
   /** Deep-link into a work-surface tab when present. */
   selectedTab?: StudioTab;
   onNavigate: (path: string, options?: NavigateOptions) => void;
@@ -104,6 +108,18 @@ function resolveTab(game: StudioGame, requested?: StudioTab): StudioTab {
   return defaultTabFor(game);
 }
 
+/**
+ * How this game is addressed in the URL.
+ *
+ * The slug once it has one, which is now from the moment the game was submitted. The
+ * capability token is the fallback for games created before slugs were assigned up
+ * front — and it is a fallback rather than the rule because a token in the URL bar is a
+ * grant sitting in browser history, in screenshots, and in anything the creator pastes.
+ */
+function studioAddress(game: StudioGame): string {
+  return game.slug ?? game.token;
+}
+
 function formatSeconds(seconds: number): string {
   if (seconds < 60) return `${Math.round(seconds)}s`;
   const minutes = Math.floor(seconds / 60);
@@ -121,7 +137,7 @@ function healthFor(game: StudioGame, rows: GameHealth[]): GameHealth | null {
 }
 
 export function CreatorStudioView({
-  selectedToken,
+  selectedGame,
   selectedTab,
   onNavigate,
   onPlay,
@@ -138,7 +154,9 @@ export function CreatorStudioView({
   const [days, setDays] = useState(7);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<string | null>(selectedToken ?? null);
+  // Internally a game is its token — that is what every API call on this screen takes.
+  // The URL says slug; the shelf is what translates between them.
+  const [selected, setSelected] = useState<string | null>(null);
   const [tab, setTab] = useState<StudioTab>(selectedTab ?? 'overview');
   const [shelfQuery, setShelfQuery] = useState('');
   const [shelfFilter, setShelfFilter] = useState<StudioShelfFilter>('all');
@@ -147,9 +165,24 @@ export function CreatorStudioView({
   const pickerSearchId = useId();
   const pickerSearchRef = useRef<HTMLInputElement>(null!);
 
+  // What the URL is asking for, readable from inside the shelf fetch below without
+  // making that fetch re-run every time the address changes. Seeded rather than
+  // assigned in an effect because the case that matters is the first render: a deep
+  // link arrives with the shelf request already in flight.
+  const requestedGameRef = useRef(selectedGame);
   useEffect(() => {
-    if (selectedToken) setSelected(selectedToken);
-  }, [selectedToken]);
+    requestedGameRef.current = selectedGame;
+  }, [selectedGame]);
+
+  // Resolve the URL's game segment against the shelf — by slug, or by capability token
+  // for links minted before games were given slugs at submission. A value matching
+  // neither selects nothing: the shelf holds only this creator's games, so a slug
+  // belonging to someone else is indistinguishable from one that does not exist.
+  useEffect(() => {
+    if (!selectedGame) return;
+    const match = games.find((game) => game.slug === selectedGame || game.token === selectedGame);
+    if (match) setSelected(match.token);
+  }, [selectedGame, games]);
 
   useEffect(() => {
     if (!user) {
@@ -174,6 +207,13 @@ export function CreatorStudioView({
         setLoading(false);
         setSelected((current) => {
           if (current && shelf.some((game) => game.token === current)) return current;
+          // A URL naming a game picks that one, or none at all. Falling through to the
+          // newest would answer "show me this game" with a different game, silently —
+          // and since slugs are public, the request may well be for somebody else's.
+          const requested = requestedGameRef.current;
+          if (requested) {
+            return shelf.find((game) => game.slug === requested || game.token === requested)?.token ?? null;
+          }
           return shelf[0]?.token ?? null;
         });
       })
@@ -216,39 +256,49 @@ export function CreatorStudioView({
     };
   }, [user]);
 
-  const selectedGame = useMemo(() => games.find((game) => game.token === selected) ?? null, [games, selected]);
-  const selectedHealth = selectedGame ? healthFor(selectedGame, healthRows) : null;
-  const selectedScorecard = selectedGame?.slug
-    ? (scorecards.find((card) => card.slug === selectedGame.slug) ?? null)
+  const activeGame = useMemo(() => games.find((game) => game.token === selected) ?? null, [games, selected]);
+  const selectedHealth = activeGame ? healthFor(activeGame, healthRows) : null;
+  const selectedScorecard = activeGame?.slug
+    ? (scorecards.find((card) => card.slug === activeGame.slug) ?? null)
     : null;
   const visibleGames = useMemo(
     () => filterStudioGames(games, { filter: shelfFilter, query: shelfQuery }),
     [games, shelfFilter, shelfQuery],
   );
   const showShelfTools = games.length >= STUDIO_SHELF_TOOLS_AT;
+  // The URL named a game and the shelf does not have it: a typo, a game since abandoned,
+  // or somebody else's slug. Said plainly, because an unexplained shelf looks like the
+  // link worked and the game vanished.
+  const missingGame = Boolean(selectedGame) && !loading && !error && games.length > 0 && !activeGame;
   const buildingCount = useMemo(
     () => games.filter((game) => game.lastKnownStatus && STUDIO_LIVE_STATUSES.has(game.lastKnownStatus)).length,
     [games],
   );
   const liveCount = useMemo(() => games.filter((game) => isStudioGamePublished(game)).length, [games]);
 
-  // Keep the visible tab aligned with the selected game. Only write the
-  // capability token into the URL when the route already carried one (a deep
-  // link, or an earlier explicit pick via selectGame/openTab). Bare `/studio`
-  // keeps shelf selection local so a screenshot or history entry doesn't mint a
-  // token the creator never asked for.
+  // Keep the visible tab aligned with the selected game, and the URL on the game's
+  // current address. Only writes an address when the route already carried one (a deep
+  // link, or an earlier explicit pick via selectGame/openTab); bare `/studio` keeps
+  // shelf selection local so a screenshot or history entry doesn't name a game the
+  // creator never asked to put there.
+  //
+  // This is also where an old `/studio/<token>` link upgrades itself: the address it
+  // rewrites to is the slug, so following a link out of a months-old notification email
+  // leaves a readable URL behind and takes the capability token out of history.
   useEffect(() => {
     if (!selected) return;
     const game = games.find((entry) => entry.token === selected);
     if (!game) return;
     const next = resolveTab(game, selectedTab);
     setTab(next);
-    if (!selectedToken) return;
-    const canonical = studioPath(game.token, next);
+    // The route carried no game, so nothing is written back: this is bare `/studio`,
+    // where the shelf's convenience selection is the view's business and not the URL's.
+    if (!selectedGame) return;
+    const canonical = studioPath(studioAddress(game), next);
     if (window.location.pathname !== canonical) {
       onNavigate(canonical, { replace: true });
     }
-  }, [selected, selectedTab, selectedToken, games, onNavigate]);
+  }, [selected, selectedTab, selectedGame, games, onNavigate]);
 
   useEffect(() => {
     if (!pickerOpen) return;
@@ -272,13 +322,13 @@ export function CreatorStudioView({
     setSelected(token);
     setTab(nextTab);
     setPickerOpen(false);
-    onNavigate(studioPath(token, nextTab));
+    if (next) onNavigate(studioPath(studioAddress(next), nextTab));
   }
 
   function openTab(next: StudioTab) {
-    if (!selectedGame || !tabAvailable(selectedGame, next)) return;
+    if (!activeGame || !tabAvailable(activeGame, next)) return;
     setTab(next);
-    onNavigate(studioPath(selectedGame.token, next));
+    onNavigate(studioPath(studioAddress(activeGame), next));
   }
 
   if (!user) {
@@ -311,7 +361,7 @@ export function CreatorStudioView({
 
   // Derived from the same predicate the router uses, so a deep-linked tab can never
   // resolve to a surface with no button to leave it by.
-  const tabItems = selectedGame ? TAB_ORDER.filter((id) => tabAvailable(selectedGame, id)) : [];
+  const tabItems = activeGame ? TAB_ORDER.filter((id) => tabAvailable(activeGame, id)) : [];
 
   return (
     <section className={`studio-panel${tab === 'playtest' ? ' is-playtesting' : ''}`}>
@@ -342,10 +392,10 @@ export function CreatorStudioView({
         <div
           className={[
             'studio-layout',
-            selectedGame ? 'is-game-open' : '',
+            activeGame ? 'is-game-open' : '',
             // Once the shelf is no longer a glanceable handful, collapse it after
             // selection so the work surface owns the viewport (desktop + mobile).
-            selectedGame && showShelfTools ? 'is-focus' : '',
+            activeGame && showShelfTools ? 'is-focus' : '',
           ]
             .filter(Boolean)
             .join(' ')}
@@ -369,7 +419,9 @@ export function CreatorStudioView({
             {shelfList}
           </aside>
 
-          {selectedGame ? (
+          {missingGame ? <p className="studio-empty studio-error">{t('studioPanel.gameNotFound')}</p> : null}
+
+          {activeGame ? (
             <div className="studio-detail">
               <div className="studio-detail-head">
                 <button
@@ -385,16 +437,16 @@ export function CreatorStudioView({
                       {t('studioPanel.shelf.count', { count: games.length })}
                     </span>
                   </span>
-                  <span className="studio-game-switcher-title">{selectedGame.title}</span>
-                  {selectedGame.slug ? <code className="studio-slug">{selectedGame.slug}</code> : null}
+                  <span className="studio-game-switcher-title">{activeGame.title}</span>
+                  {activeGame.slug ? <code className="studio-slug">{activeGame.slug}</code> : null}
                   <PixelIcon name="expand" size={12} />
                 </button>
                 <div className="studio-detail-title-row">
                   <div className="studio-detail-title-block">
-                    <h2>{selectedGame.title}</h2>
-                    {selectedGame.slug ? <code className="studio-slug">{selectedGame.slug}</code> : null}
+                    <h2>{activeGame.title}</h2>
+                    {activeGame.slug ? <code className="studio-slug">{activeGame.slug}</code> : null}
                   </div>
-                  <StudioStatusPill game={selectedGame} />
+                  <StudioStatusPill game={activeGame} />
                 </div>
               </div>
 
@@ -416,11 +468,11 @@ export function CreatorStudioView({
               <div className="studio-tab-panel">
                 {tab === 'overview' ? (
                   <OverviewTab
-                    game={selectedGame}
+                    game={activeGame}
                     health={selectedHealth}
                     onOpenBuild={() => openTab('build')}
                     onOpenPlaytest={() => openTab('playtest')}
-                    onPlay={() => selectedGame.slug && onPlay(selectedGame.slug)}
+                    onPlay={() => activeGame.slug && onPlay(activeGame.slug)}
                     onRemoved={(token) => {
                       setGames((prev) => prev.filter((game) => game.token !== token));
                       setSelected((current) => (current === token ? null : current));
@@ -429,10 +481,10 @@ export function CreatorStudioView({
                   />
                 ) : null}
 
-                {tab === 'build' && !isStudioGamePublished(selectedGame) ? (
+                {tab === 'build' && !isStudioGamePublished(activeGame) ? (
                   <div className="studio-build">
                     <SubmissionStatusView
-                      token={selectedGame.token}
+                      token={activeGame.token}
                       embedded
                       onPlaytest={() => openTab('playtest')}
                       onRetry={
@@ -449,15 +501,15 @@ export function CreatorStudioView({
 
                 {tab === 'playtest' ? (
                   <StudioPlaytestPanel
-                    game={selectedGame}
-                    published={isStudioGamePublished(selectedGame)}
+                    game={activeGame}
+                    published={isStudioGamePublished(activeGame)}
                     onExit={() => openTab('overview')}
                   />
                 ) : null}
 
                 {tab === 'stats' ? (
                   <StatsTab
-                    game={selectedGame}
+                    game={activeGame}
                     health={selectedHealth}
                     days={days}
                     healthDays={healthDays}
@@ -467,7 +519,7 @@ export function CreatorStudioView({
                   />
                 ) : null}
 
-                {tab === 'improve' ? <ImproveTab game={selectedGame} /> : null}
+                {tab === 'improve' ? <ImproveTab game={activeGame} /> : null}
               </div>
             </div>
           ) : null}

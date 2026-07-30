@@ -206,7 +206,7 @@ export async function submitSpec(input: {
   displayName?: string;
   /** Told to the agent, so it writes its progress updates in this language. */
   locale?: string;
-}): Promise<{ token: string; statusUrl: string }> {
+}): Promise<{ token: string; slug?: string; statusUrl: string }> {
   const response = await fetch(`${API_BASE}/api/submissions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -217,7 +217,9 @@ export async function submitSpec(input: {
     await throwResponseError(response);
   }
 
-  return (await response.json()) as { token: string; statusUrl: string };
+  // `slug` is the game's address, minted server-side from the confirmed title. Optional
+  // only because an older API deploy answers without one.
+  return (await response.json()) as { token: string; slug?: string; statusUrl: string };
 }
 
 /**
