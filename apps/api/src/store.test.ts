@@ -236,3 +236,74 @@ describe('InMemoryStore build previews', () => {
     }
   });
 });
+
+/**
+ * Publication authority.
+ *
+ * The point of keeping this out of storage is that withdrawal is immediate and total: no
+ * merge, no revert, and no possibility that an object left in a bucket keeps serving a
+ * game that was taken down.
+ */
+describe('publication registry', () => {
+  const published = {
+    slug: 'comet-courier',
+    state: 'published' as const,
+    currentVersion: 'v20260730T100000Z',
+    publishedAt: '2026-07-30T10:00:00Z',
+  };
+
+  it('publishes a slug at a specific stored version', async () => {
+    const store = new InMemoryStore();
+    await store.setPublication(published);
+
+    expect(await store.getPublication('comet-courier')).toMatchObject({
+      state: 'published',
+      currentVersion: 'v20260730T100000Z',
+    });
+  });
+
+  it('moves a game to a new version without touching the old objects', async () => {
+    // Rollback is the same operation in reverse — a pointer move, not a rebuild.
+    const store = new InMemoryStore();
+    await store.setPublication(published);
+    await store.setPublication({ ...published, currentVersion: 'v2' });
+
+    expect((await store.getPublication('comet-courier'))?.currentVersion).toBe('v2');
+  });
+
+  it('records why and when a game was withdrawn', async () => {
+    // A DSA statement of reasons is written from this; a takedown that only flips a flag
+    // leaves nothing to write it from.
+    const store = new InMemoryStore();
+    await store.setPublication(published);
+
+    expect(await store.takedownPublication('comet-courier', 'infringing assets', '2026-07-30T12:00:00Z')).toBe(true);
+
+    expect(await store.getPublication('comet-courier')).toMatchObject({
+      state: 'disabled',
+      takedownReason: 'infringing assets',
+      takedownAt: '2026-07-30T12:00:00Z',
+    });
+  });
+
+  it('reports a takedown of something never published rather than inventing a record', async () => {
+    const store = new InMemoryStore();
+    expect(await store.takedownPublication('nope', 'x', '2026-07-30T12:00:00Z')).toBe(false);
+  });
+
+  it('keeps a withdrawn game out of nothing — the bake decides, from state', async () => {
+    // listPublications returns every record, including disabled ones. The bake filters on
+    // state rather than on presence, so a withdrawn game is visibly withdrawn instead of
+    // silently absent, and an accidental delete cannot look like a takedown.
+    const store = new InMemoryStore();
+    await store.setPublication(published);
+    await store.setPublication({ ...published, slug: 'other' });
+    await store.takedownPublication('other', 'spam', '2026-07-30T12:00:00Z');
+
+    const all = await store.listPublications();
+    expect(all).toHaveLength(2);
+    expect(all.filter((record) => record.state === 'published').map((record) => record.slug)).toEqual([
+      'comet-courier',
+    ]);
+  });
+});

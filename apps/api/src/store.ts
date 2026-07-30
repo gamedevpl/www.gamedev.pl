@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { Firestore, type DocumentData } from '@google-cloud/firestore';
 import type { AgentTaskState } from './agent-tasks.js';
+import type { PublicationRecord } from './games-store.js';
 import type { JobState, JobTransition } from './job-state.js';
 import type { BuildEvent, SubmissionStatus } from './submission-status.js';
 
@@ -751,6 +752,27 @@ export interface Store {
   setSubmissionPublishedAt(issueNumber: number, at: string): Promise<void>;
   /** Marks a submission abandoned by its creator. */
   setSubmissionAbandoned(issueNumber: number, at: string): Promise<void>;
+  /**
+   * Reads what is currently published for a slug, or null when nothing ever was.
+   *
+   * This — not the presence of an object in the bucket, and not a merge having happened —
+   * is publication authority. Keeping it here is what makes a takedown immediate and
+   * total: one write withdraws a game, and no leftover storage can contradict it.
+   */
+  getPublication(slug: string): Promise<PublicationRecord | null>;
+  /** Publishes (or re-publishes) a slug at a specific stored version. */
+  setPublication(record: PublicationRecord): Promise<void>;
+  /**
+   * Withdraws a game.
+   *
+   * Separate from `setPublication` because a takedown is not a publish with different
+   * arguments: it must record *why* and *when*, which is what a DSA statement of reasons
+   * is written from, and it must be impossible to perform by accident while editing a
+   * version pointer.
+   */
+  takedownPublication(slug: string, reason: string, at: string): Promise<boolean>;
+  /** Every slug currently live — the input the snapshot bake reads. */
+  listPublications(): Promise<PublicationRecord[]>;
   /** Records the creator's language, so the agent can report progress in it. */
   setSubmissionLocale(issueNumber: number, locale: string): Promise<void>;
   /** Records how many QA answers reached the agent with this submission. */
@@ -1054,6 +1076,7 @@ function byNewestFirst(a: { createdAt: string; id: string }, b: { createdAt: str
 export class InMemoryStore implements Store {
   private users = new Map<string, User>();
   private submissions = new Map<number, SubmissionRecord>();
+  private publications = new Map<string, PublicationRecord>();
   private buildEvents = new Map<number, BuildEvent[]>();
   private buildShots = new Map<number, BuildShot[]>();
   private buildPreviews = new Map<number, BuildPreview[]>();
@@ -1172,6 +1195,26 @@ export class InMemoryStore implements Store {
   async setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void> {
     const sub = this.submissions.get(issueNumber);
     if (sub) this.submissions.set(issueNumber, { ...sub, agentState });
+  }
+
+  async getPublication(slug: string): Promise<PublicationRecord | null> {
+    const record = this.publications.get(slug);
+    return record ? { ...record } : null;
+  }
+
+  async setPublication(record: PublicationRecord): Promise<void> {
+    this.publications.set(record.slug, { ...record });
+  }
+
+  async takedownPublication(slug: string, reason: string, at: string): Promise<boolean> {
+    const record = this.publications.get(slug);
+    if (!record) return false;
+    this.publications.set(slug, { ...record, state: 'disabled', takedownAt: at, takedownReason: reason });
+    return true;
+  }
+
+  async listPublications(): Promise<PublicationRecord[]> {
+    return Array.from(this.publications.values()).map((record) => ({ ...record }));
   }
 
   async setSubmissionSlug(issueNumber: number, slug: string): Promise<void> {
@@ -1950,6 +1993,41 @@ export class FirestoreStore implements Store {
 
   async setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void> {
     await this.db.collection('submissions').doc(String(issueNumber)).set({ agentState }, { merge: true });
+  }
+
+  async getPublication(slug: string): Promise<PublicationRecord | null> {
+    const snap = await this.db.collection('games').doc(slug).get();
+    const publication = (snap.data() as { publication?: PublicationRecord } | undefined)?.publication;
+    return publication ?? null;
+  }
+
+  async setPublication(record: PublicationRecord): Promise<void> {
+    // Merged onto the existing game document rather than a collection of its own: votes,
+    // player feedback and scorecards already live at games/{slug}, and a takedown that
+    // has to remember to visit a second place is a takedown that eventually misses one.
+    await this.db.collection('games').doc(record.slug).set({ publication: record }, { merge: true });
+  }
+
+  async takedownPublication(slug: string, reason: string, at: string): Promise<boolean> {
+    const ref = this.db.collection('games').doc(slug);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const current = (snap.data() as { publication?: PublicationRecord } | undefined)?.publication;
+      if (!current) return false;
+      tx.set(
+        ref,
+        { publication: { ...current, state: 'disabled', takedownAt: at, takedownReason: reason } },
+        { merge: true },
+      );
+      return true;
+    });
+  }
+
+  async listPublications(): Promise<PublicationRecord[]> {
+    const snap = await this.db.collection('games').get();
+    return snap.docs
+      .map((doc) => (doc.data() as { publication?: PublicationRecord }).publication)
+      .filter((publication): publication is PublicationRecord => Boolean(publication));
   }
 
   async setSubmissionSlug(issueNumber: number, slug: string): Promise<void> {
