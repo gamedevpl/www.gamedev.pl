@@ -30,6 +30,23 @@ export interface BuildBrief {
   apiBaseUrl: string;
   /** Set for a revision round: what the creator asked to change. Untrusted text. */
   feedback?: string;
+  /**
+   * Set when the previous session ended without delivering.
+   *
+   * Distinct from `feedback` because it is not the creator speaking — nobody asked for
+   * anything, the work may well be finished, and the round exists only because it was
+   * never uploaded. Told apart so the brief can lead with the omission instead of
+   * inventing a change request the creator never made.
+   */
+  undelivered?: boolean;
+  /**
+   * The workspace the previous session worked in, when this round needs to find it.
+   *
+   * Only meaningful alongside `undelivered`. Every other round reads its starting point
+   * from the store, which is the whole reason workspaces are disposable — but work that
+   * was never uploaded is not in the store, and that branch is the only copy of it.
+   */
+  previousWorkspace?: string;
 }
 
 /** What a backend hands back after starting work, recorded on the job. */

@@ -2796,3 +2796,109 @@ describe('games published from the store rather than the repo', () => {
     await app.close();
   });
 });
+
+describe('a session that finishes without delivering', () => {
+  /** Observes a finished session; `hasCandidate` comes from the record, not the stub. */
+  function finishedBackend() {
+    const { backend, briefs } = createBackendStub();
+    return {
+      briefs,
+      backend: {
+        ...backend,
+        observe: async (_ref: string, opts: { hasCandidate: boolean }) => ({
+          state: 'completed' as const,
+          hasCandidate: opts.hasCandidate,
+        }),
+      },
+    };
+  }
+
+  async function jobWithFinishedSession(overrides: { maxDeliveryNudges?: number } = {}) {
+    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { backend, briefs } = finishedBackend();
+    const clock = { t: Date.now() };
+    const cleanup = vi.fn(async () => {});
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: { ...backend, cleanup },
+      submissionTokenSecret: secret,
+      now: () => clock.t,
+      ...overrides,
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setDispatchWorkspace(job.issueNumber, 'copilot/has-the-work');
+    return { app, store, job, briefs, clock, cleanup, token: mintToken(job.issueNumber, secret) };
+  }
+
+  it('sends the session back to deliver instead of failing the build', async () => {
+    // The work is very likely done and sitting on a branch — only the upload is
+    // missing. Asking is far cheaper than the round it would otherwise cost.
+    const { app, store, job, briefs, clock, token } = await jobWithFinishedSession();
+
+    clock.t += 3 * 60 * 1000;
+    const status = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: getAuthHeaders() });
+
+    expect(status.statusCode).toBe(200);
+    const brief = briefs.at(-1);
+    expect(brief?.undelivered).toBe(true);
+    // The branch is the only copy of undelivered work, so the round is told where it is.
+    expect(brief?.previousWorkspace).toBe('copilot/has-the-work');
+    // Building again, not failed: the creator is not shown an error about a round that
+    // is at this moment running.
+    expect((await store.getSubmission(job.issueNumber))?.state).toBe('building');
+
+    await app.close();
+  });
+
+  it('keeps the branch holding the undelivered work', async () => {
+    // Every other round deletes the previous workspace, because the store has the
+    // truth. Here it does not — deleting would destroy what the new round was sent
+    // to recover.
+    const { app, cleanup, clock, token } = await jobWithFinishedSession();
+
+    clock.t += 3 * 60 * 1000;
+    await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: getAuthHeaders() });
+
+    expect(cleanup).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('asks once, then reports the failure rather than retrying forever', async () => {
+    // A setup that cannot deliver fails the same way however many times it is asked,
+    // and every attempt is a real agent session against a real quota.
+    const { app, store, job, briefs, clock, token } = await jobWithFinishedSession();
+
+    clock.t += 3 * 60 * 1000;
+    await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: getAuthHeaders() });
+    const afterFirst = briefs.length;
+
+    // The re-sent session finishes without delivering too.
+    clock.t += 3 * 60 * 1000;
+    const status = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: getAuthHeaders() });
+
+    expect(briefs.length).toBe(afterFirst);
+    expect((await store.getSubmission(job.issueNumber))?.state).toBe('failed');
+    expect(status.json().failure).toEqual({ reason: 'task_completed_without_delivery' });
+
+    await app.close();
+  });
+
+  it('leaves a session that did deliver alone', async () => {
+    const { app, store, job, briefs, clock, token } = await jobWithFinishedSession();
+    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v1');
+
+    clock.t += 3 * 60 * 1000;
+    await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: getAuthHeaders() });
+
+    expect(briefs.at(-1)?.undelivered).toBeUndefined();
+
+    await app.close();
+  });
+});

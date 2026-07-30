@@ -242,6 +242,8 @@ export interface SubmissionRoutesOptions {
    * of issues.
    */
   maxCachedDraftPreviews?: number;
+  /** How many times a job may be sent back for finishing without delivering. */
+  maxDeliveryNudges?: number;
 }
 
 function checkUserAccess(request: FastifyRequest, reply: FastifyReply): boolean {
@@ -457,6 +459,8 @@ export async function registerSubmissionRoutes(
     feedback: string;
     locale: string;
     log: { error: (context: object, message: string) => void };
+    /** Set when this round exists only because the last one never uploaded. */
+    undelivered?: boolean;
   }): Promise<void> {
     if (!agentBackend || !submissionTokenSecret || !store) return;
     const record = await store.getSubmission(input.issueNumber);
@@ -470,6 +474,9 @@ export async function registerSubmissionRoutes(
         locale: input.locale,
         channelToken: mintAgentToken(input.issueNumber, submissionTokenSecret),
         apiBaseUrl: notifyAppBaseUrl,
+        ...(input.undelivered
+          ? { undelivered: true, ...(previous?.workspace ? { previousWorkspace: previous.workspace } : {}) }
+          : {}),
       };
       const result = previous?.refs.length
         ? await agentBackend.resume(brief, {
@@ -486,7 +493,11 @@ export async function registerSubmissionRoutes(
       // round that follows restores the game from the store rather than from a branch.
       // Deleted after the dispatch succeeds, never before — a round that failed to
       // start is a round whose old branch is still the most recent thing we have.
-      if (previous?.workspace && previous.workspace !== result.workspace) {
+      //
+      // Except after a round that never delivered. Nothing was uploaded, so the store
+      // has nothing to restore and that branch is the only copy of the work — deleting
+      // it here would be deleting the very thing the new round was sent to recover.
+      if (!input.undelivered && previous?.workspace && previous.workspace !== result.workspace) {
         await releaseWorkspace(input.issueNumber, previous.workspace, input.log);
       }
       const transition = record?.state
@@ -1084,6 +1095,17 @@ export async function registerSubmissionRoutes(
   const observeQuietMs = 2 * 60 * 1000;
 
   /**
+   * How many times a job may be sent back for finishing without delivering.
+   *
+   * One. A session that forgot the last step takes the reminder; a setup that cannot
+   * deliver at all — a broken token, an agent whose instructions genuinely conflict —
+   * fails the same way however many times it is asked, and each attempt is a real agent
+   * session against a real quota. The second failure is information, not bad luck, and
+   * it belongs in front of an operator rather than in another retry.
+   */
+  const maxDeliveryNudges = options.maxDeliveryNudges ?? 1;
+
+  /**
    * Asks the backend what actually happened to a job whose agent has gone quiet.
    *
    * This is what stands between a dead session and a page that says "building" until
@@ -1124,6 +1146,40 @@ export async function registerSubmissionRoutes(
       }
       const result = reconcileAgentObservation(state, observation);
       if (!result) return null;
+
+      // A session that ran to completion and uploaded nothing is the one failure worth
+      // answering rather than recording. Everything else here is the agent being unable
+      // to continue — crashed, timed out, killed for quota — and sending it back would
+      // just buy the same ending twice. This one finished: the work is very likely done
+      // and sitting on a branch, and the only thing missing is the upload. That is
+      // recoverable by asking, and asking is far cheaper than the round it would
+      // otherwise cost the creator.
+      //
+      // Checked deterministically, from our own record of what was delivered, rather
+      // than from anything the session claims about itself.
+      if (result.reason === 'task_completed_without_delivery' && (record.deliveryNudges ?? 0) < maxDeliveryNudges) {
+        const nudges = await store.recordDeliveryNudge(record.issueNumber);
+        // Counted before dispatching, so a dispatch that throws still spends the budget.
+        // The alternative retries forever against whatever is refusing to start.
+        if (nudges <= maxDeliveryNudges) {
+          app.log.warn(
+            { issueNumber: record.issueNumber, nudge: nudges, workspace: record.dispatch?.workspace },
+            'session finished without delivering; sending it back',
+          );
+          await resumeBuild({
+            issueNumber: record.issueNumber,
+            feedback: '',
+            locale: record.locale ?? 'en',
+            log: app.log,
+            undelivered: true,
+          });
+          // `resumeBuild` has already moved the job back to building. Reporting the
+          // failure here as well would show the creator an error about a round that is
+          // at this moment running again.
+          return null;
+        }
+      }
+
       const transition: JobTransition = {
         to: result.to,
         at: new Date(now()).toISOString(),

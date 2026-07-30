@@ -294,6 +294,23 @@ export async function registerAgentChannelRoutes(
         ...(reason ? { reason } : {}),
         // The creator's language, so the agent can write its next update in it.
         locale: record.locale ?? 'en',
+        // Whether the one step that makes any of this real has happened yet.
+        //
+        // Said on every call rather than once in the brief, because the brief is read
+        // at the start of a session and the omission happens at the end of it. A live
+        // session has been observed doing the whole job, pushing its branch, and
+        // stopping — the instruction was there, thousands of tokens ago, and losing to
+        // a tool that felt like finishing. This rides along with something the agent
+        // is already doing, and it is derived from what we actually stored rather than
+        // from anything the session believes about itself.
+        delivered: Boolean(record.deliveredVersion),
+        ...(record.deliveredVersion
+          ? {}
+          : {
+              mustDeliver:
+                'Nothing has been delivered for this build yet. Pushing a branch is not delivering — ' +
+                'run `npm run submit -- <slug>` before you finish, or this session produces nothing.',
+            }),
       },
     };
   }

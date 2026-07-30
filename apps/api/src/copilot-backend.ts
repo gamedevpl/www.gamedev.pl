@@ -53,15 +53,37 @@ const DEFAULT_MODEL: AgentTaskModel = 'claude-sonnet-4.6';
 export function buildPrompt(brief: BuildBrief): string {
   const slug = brief.slug ?? '(the slug named in your first progress report)';
   const lines = [
-    brief.feedback
-      ? `The creator played the draft of \`${slug}\` and asked for changes. Continue that game — revise it, do not rebuild it.`
-      : `Build a new browser game in \`games/${slug}/\`.`,
+    brief.undelivered
+      ? `Your previous session on \`${slug}\` ended without delivering it. The work may well be finished — that is not the problem. Nothing downstream reads the branch, so a game that was not uploaded does not exist as far as the site or the creator can tell. Check what is there, then deliver it.`
+      : brief.feedback
+        ? `The creator played the draft of \`${slug}\` and asked for changes. Continue that game — revise it, do not rebuild it.`
+        : `Build a new browser game in \`games/${slug}/\`.`,
     '',
     // The branch is not the source of truth and must not be treated as one: a session
     // can start on a fresh branch with none of the earlier work in it, and an agent
     // that "continues" from an empty directory silently delivers a different game than
     // the one the creator gave feedback on. The store has every delivery, exactly.
-    ...(brief.feedback
+    // An undelivered round is the one case where the branch *is* the source of truth:
+    // nothing was uploaded, so the store has nothing to restore, and that branch holds
+    // the only copy of the work. It is deliberately not deleted while this round runs.
+    ...(brief.undelivered && brief.previousWorkspace
+      ? [
+          '## Where your previous work is',
+          '',
+          `It is on \`${brief.previousWorkspace}\`, which was never uploaded. Recover it before`,
+          'you redo any of it:',
+          '',
+          '```bash',
+          `git fetch origin ${brief.previousWorkspace}`,
+          `git checkout origin/${brief.previousWorkspace} -- games/${slug}`,
+          '```',
+          '',
+          'Check it over — run the game’s checks — and if it is good, deliver it. If that',
+          'branch turns out to be empty or broken, build the game as you normally would.',
+          '',
+        ]
+      : []),
+    ...(brief.feedback && !brief.undelivered
       ? [
           '## Before you change anything',
           '',

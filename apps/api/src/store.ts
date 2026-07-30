@@ -88,6 +88,15 @@ export interface SubmissionRecord {
    */
   deliveredVersion?: string;
   /**
+   * How many times this job has been sent back for finishing without delivering.
+   *
+   * Counted rather than inferred from the transition history, which is capped and drops
+   * its oldest entries — a long job would quietly earn fresh nudges as the evidence of
+   * the old ones aged out. Each nudge is a real agent session and a real premium
+   * request, so the ceiling has to hold for the life of the job.
+   */
+  deliveryNudges?: number;
+  /**
    * When we first observed the game published. Together with createdAt it is the
    * only record of how long a build actually took, which is what lets the status
    * page answer "how long will this take?" with a real number instead of a shrug.
@@ -833,6 +842,8 @@ export interface Store {
   setSubmissionSlug(issueNumber: number, slug: string): Promise<void>;
   /** Records the candidate version a delivery just stored, for the preview to read. */
   setSubmissionDeliveredVersion(issueNumber: number, version: string): Promise<void>;
+  /** Counts a send-back for finishing without delivering. Returns the new total. */
+  recordDeliveryNudge(issueNumber: number): Promise<number>;
   /** Stamps the moment a submission was first seen published (for build-time stats). */
   setSubmissionPublishedAt(issueNumber: number, at: string): Promise<void>;
   /** Marks a submission abandoned by its creator. */
@@ -1361,6 +1372,14 @@ export class InMemoryStore implements Store {
   async setSubmissionDeliveredVersion(issueNumber: number, version: string): Promise<void> {
     const sub = this.submissions.get(issueNumber);
     if (sub) this.submissions.set(issueNumber, { ...sub, deliveredVersion: version });
+  }
+
+  async recordDeliveryNudge(issueNumber: number): Promise<number> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub) return 0;
+    const deliveryNudges = (sub.deliveryNudges ?? 0) + 1;
+    this.submissions.set(issueNumber, { ...sub, deliveryNudges });
+    return deliveryNudges;
   }
 
   async getSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {
@@ -2281,6 +2300,19 @@ export class FirestoreStore implements Store {
       .collection('submissions')
       .doc(String(issueNumber))
       .set({ deliveredVersion: version }, { merge: true });
+  }
+
+  async recordDeliveryNudge(issueNumber: number): Promise<number> {
+    // Transactional: two pollers can observe the same undelivered session at once, and
+    // a lost increment here buys the job an extra agent session it was not owed.
+    const ref = this.db.collection('submissions').doc(String(issueNumber));
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return 0;
+      const nudges = ((snap.data() as SubmissionRecord).deliveryNudges ?? 0) + 1;
+      tx.set(ref, { deliveryNudges: nudges }, { merge: true });
+      return nudges;
+    });
   }
 
   async setSubmissionPublishedAt(issueNumber: number, at: string): Promise<void> {
