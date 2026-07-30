@@ -50,6 +50,18 @@ steps:
         set -euo pipefail
         apt-get update -qq
         apt-get install -y -qq --no-install-recommends ffmpeg chromium git ca-certificates
+        # A shim rather than the browser itself, for two reasons: Debian installs it as
+        # `chromium` while the capture harness spawns `google-chrome`, and this step runs
+        # as root, where Chrome will not start without --no-sandbox — a flag
+        # `tools/capture.ts` does not add and does not take from the environment. Both
+        # reasons are spelled out in apps/api/src/gate-trigger.ts; keep the two in step.
+        # `$$` is Cloud Build's escape for a literal `$` — an unescaped one here is read
+        # as a substitution key and the build is rejected before it ever starts.
+        chrome_bin="$$(command -v chromium || command -v chromium-browser || command -v google-chrome)"
+        printf '#!/bin/sh\nexec "%s" --no-sandbox "$$@"\n' "$$chrome_bin" > /usr/local/bin/gate-chrome
+        chmod +x /usr/local/bin/gate-chrome
+        export GAME_CAPTURE_CHROME=/usr/local/bin/gate-chrome
+        export CHROME_PATH=/usr/local/bin/gate-chrome
         cd /workspace/platform
         npm ci --no-audit --no-fund
         npm run gate:run -w @gamedevpl/api -- --slug '${_SLUG}' --version '${_VERSION}'

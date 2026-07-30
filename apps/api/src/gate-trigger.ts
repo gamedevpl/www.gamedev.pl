@@ -81,6 +81,23 @@ function buildSpec(
             'set -euo pipefail',
             'apt-get update -qq',
             'apt-get install -y -qq --no-install-recommends ffmpeg chromium git ca-certificates',
+            // Two separate reasons the harness cannot just be pointed at the browser:
+            //
+            // 1. Debian's package installs `chromium`, but the capture harness defaults to
+            //    spawning `google-chrome` — "a browser is on PATH" is not enough, it has
+            //    to be under a name the harness looks for, or capture dies on ENOENT.
+            // 2. This step runs as root, and Chrome refuses to start as root without
+            //    --no-sandbox. `tools/capture.ts` adds that flag for neither case (its
+            //    sibling `tools/shot.ts` does), and it is not overridable by env — so the
+            //    browser launched, died instantly, and capture saw ECONNRESET on the CDP
+            //    pipe. Fixed here rather than in the games repo on purpose: that file is
+            //    hashed whole into `captureSourceHash`, so touching it restages the media
+            //    of every published game — a catalog-wide recapture to fix our container.
+            'chrome_bin="$(command -v chromium || command -v chromium-browser || command -v google-chrome)"',
+            `printf '#!/bin/sh\\nexec "%s" --no-sandbox "$@"\\n' "$chrome_bin" > /usr/local/bin/gate-chrome`,
+            'chmod +x /usr/local/bin/gate-chrome',
+            'export GAME_CAPTURE_CHROME=/usr/local/bin/gate-chrome',
+            'export CHROME_PATH=/usr/local/bin/gate-chrome',
             'cd /workspace/platform',
             'npm ci --no-audit --no-fund',
             // Single-quoted so a slug or version can never break out of the command.

@@ -24,6 +24,24 @@ describe('createCloudBuildGateTrigger', () => {
     expect(steps[1]!.args[1]).toContain("--slug 'comet-courier' --version 'v1'");
   });
 
+  it('points the capture harness at the browser it actually installed', async () => {
+    // The harness spawns `google-chrome` by default; apt installs `chromium`. Without
+    // this the gate reached capture and died on ENOENT — every run red, so no bundle,
+    // so no draft preview for the creator watching their game get made.
+    const { impl, calls } = stubFetch();
+    const trigger = createCloudBuildGateTrigger({ ...OPTIONS, fetchImpl: impl });
+
+    await trigger!({ slug: 'comet-courier', version: 'v1' });
+
+    const script = (calls[0]!.body.steps as Array<{ args: string[] }>)[1]!.args[1]!;
+    expect(script).toContain('command -v chromium');
+    expect(script).toContain('export GAME_CAPTURE_CHROME=/usr/local/bin/gate-chrome');
+    // The step runs as root, where Chrome exits before it opens the CDP pipe unless the
+    // sandbox is off — capture then fails with an ECONNRESET that names nothing.
+    expect(script).toContain('--no-sandbox');
+    expect(script.indexOf('GAME_CAPTURE_CHROME')).toBeLessThan(script.indexOf('gate:run'));
+  });
+
   it('uses the read-only games token, never a credential that can start agent work', async () => {
     // The gate runs agent-authored code. A token that could dispatch work has no
     // business in that container, which is the same reasoning as cloudbuild-gate.yaml.
