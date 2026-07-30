@@ -105,9 +105,17 @@ echo "==> 1/4 Enabling the Monitoring API"
 gcloud services enable monitoring.googleapis.com --project "$PROJECT_ID"
 
 echo "==> 2/4 Ensuring the email notification channel"
+# Both literals are quoted because this filter is evaluated by the Monitoring API, not by
+# gcloud: an unquoted right-hand side there is a *field reference*, so `type=email` is
+# rejected as an ambiguous field named "email" rather than read as the string. The two
+# `displayName='…'` filters further down are client-side and were already quoted.
+#
+# This is the call the script's idempotence rests on — a filter that errors means it can
+# no longer find the channel it created on the previous run — so it fails loudly rather
+# than being wrapped in something that would let a broken filter look like "no channel".
 CHANNEL_NAME="$(gcloud beta monitoring channels list \
   --project "$PROJECT_ID" \
-  --filter="type=email AND labels.email_address=${ALERT_EMAIL}" \
+  --filter="type=\"email\" AND labels.email_address=\"${ALERT_EMAIL}\"" \
   --format='value(name)' | head -n 1)"
 if [ -z "$CHANNEL_NAME" ]; then
   CHANNEL_NAME="$(gcloud beta monitoring channels create \
