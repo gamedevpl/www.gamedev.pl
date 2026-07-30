@@ -115,15 +115,18 @@ jobs:
           # BETA_ALLOWED_UIDS / BETA_ALLOWED_EMAILS are comma-separated allow lists.
           # Set to false (config, not code) when opening the site publicly.
           #
-          # --max-instances 1: DO NOT RAISE while multiplayer is enabled. Party rooms
-          # are per-instance in-memory state (apps/api/src/mp.ts) — the host opens a
-          # room on whichever container served it, and a phone scanning the QR is
-          # load-balanced independently, so a second instance turns a valid room code
-          # into "no such room". Intermittent, and therefore blamed on the guest's
-          # wifi. Cookie-based --session-affinity does NOT help: it is per-client and
-          # cannot map a guest onto the host's instance. To scale out again, first
-          # split the relay into its own service or move room state somewhere shared
-          # (docs/multiplayer-plan.md §4.6).
+          # The instance ceiling is DERIVED FROM vars.MP_RELAY_URL, never set by hand.
+          # Party rooms are per-instance in-memory state (apps/api/src/mp.ts) — the
+          # host opens a room on whichever container served it, and a phone scanning
+          # the QR is load-balanced independently, so a second instance turns a valid
+          # room code into "no such room". Intermittent, and therefore blamed on the
+          # guest's wifi. Cookie-based --session-affinity does NOT help: it is
+          # per-client and cannot map a guest onto the host's instance.
+          #
+          # Setting MP_RELAY_URL moves room creation to the relay service and stops
+          # this one serving the socket, which is what makes scaling out safe — so the
+          # same variable does both, and the pin cannot be lifted while the rooms are
+          # still here. See docs/multiplayer-plan.md §4.6 and infra/deploy-relay.sh.
           #
           # ZONE_HOST_URL is threaded through from a repo variable rather than being set
           # on the service by hand: --set-env-vars replaces the whole map, so a manually
@@ -140,6 +143,21 @@ jobs:
             ENV_VARS="${ENV_VARS}|ZONE_HOST_URL=${ZONE_HOST_URL_VAL}"
           fi
 
+          # Threaded through the same way as ZONE_HOST_URL, and for the same reason:
+          # --set-env-vars replaces the whole map, so a value set by hand on the service
+          # would be wiped by the next deploy — here that would silently pull room
+          # creation back into this process while the ceiling stayed raised, which is
+          # the worst of both configurations.
+          MP_RELAY_URL_VAL="${{ vars.MP_RELAY_URL }}"
+          if [ -n "$MP_RELAY_URL_VAL" ]; then
+            ENV_VARS="${ENV_VARS}|MP_RELAY_URL=${MP_RELAY_URL_VAL}"
+            MAX_INSTANCES=4
+          else
+            MAX_INSTANCES=1
+          fi
+          echo "MP_RELAY_URL_VAL=${MP_RELAY_URL_VAL}" >> "$GITHUB_ENV"
+          echo "Deploying with --max-instances ${MAX_INSTANCES}"
+
           gcloud run deploy "$SERVICE" \
             --image "$IMAGE" \
             --region "$REGION" \
@@ -149,7 +167,7 @@ jobs:
             --tag candidate \
             --allow-unauthenticated \
             --min-instances 0 \
-            --max-instances 1 \
+            --max-instances "$MAX_INSTANCES" \
             --port 8080 \
             --set-env-vars "$ENV_VARS" \
             "${SECRET_FLAGS[@]}"
@@ -385,6 +403,44 @@ jobs:
           # (apps/e2e/src/gate-prerequisites.test.ts).
           E2E_REQUIRED: '1'
         run: npm run e2e
+
+      - name: Move the party relay onto the same image
+        # Only when the split is switched on. Both roles run one image, so the relay has to
+        # be redeployed whenever the app is — otherwise the socket protocol the freshly
+        # promoted web bundle speaks is answered by whatever image the relay was last given
+        # by hand, and party mode breaks on a version skew nobody deployed on purpose.
+        #
+        # Deliberately BEFORE promotion, not after: the relay is the server and the bundle
+        # is its client, so the server should already understand the protocol by the time
+        # any client speaking it exists. The relay's own env (MP_RELAY_ONLY, the audience,
+        # the caller identity) is left untouched — `--image` alone, so this step cannot
+        # reconfigure the relay by omission the way a --set-env-vars deploy would.
+        if: ${{ vars.MP_RELAY_URL != '' }}
+        run: |
+          RELAY_SERVICE="${{ vars.MP_RELAY_SERVICE || 'gamedev-mp-relay' }}"
+          echo "Updating ${RELAY_SERVICE} to ${IMAGE}"
+          gcloud run services update "$RELAY_SERVICE" \
+            --region "$REGION" \
+            --project "$PROJECT_ID" \
+            --image "$IMAGE"
+
+          RELAY_URL=$(gcloud run services describe "$RELAY_SERVICE" --region "$REGION" \
+            --project "$PROJECT_ID" --format 'value(status.url)')
+          # The app mints its OIDC token for the URL it calls, so a mismatch here is an
+          # authentication failure on every lobby — and one that only shows up when a real
+          # host tries to open one. Cheap to check, invisible otherwise.
+          if [ "$RELAY_URL" != "$MP_RELAY_URL_VAL" ]; then
+            echo "Error: vars.MP_RELAY_URL is '${MP_RELAY_URL_VAL}' but ${RELAY_SERVICE} is at '${RELAY_URL}'."
+            echo "The OIDC audience would not match and room creation would be refused."
+            exit 1
+          fi
+
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${RELAY_URL}/api/health")
+          if [ "$STATUS_CODE" -ne 200 ]; then
+            echo "Error: relay health returned ${STATUS_CODE}; not promoting the app."
+            exit 1
+          fi
+          echo "Relay healthy at ${RELAY_URL}"
 
       - name: Promote candidate revision to 100% traffic
         run: |
