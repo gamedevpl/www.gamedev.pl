@@ -9,6 +9,7 @@ import { InMemoryStore, type Store } from './store.js';
 import { CREATOR_FEEDBACK_MARKER } from './submissions.js';
 import { mintToken } from './submission-token.js';
 import type { AgentBackend, BuildBrief } from './agent-backend.js';
+import type { GamesStore } from './games-store.js';
 import { JOB_ID_FLOOR } from './store.js';
 import { NoopTranslator, type Translator } from './translate.js';
 
@@ -117,6 +118,7 @@ async function createApp(params: {
   contentChecker?: ContentChecker;
   maxCachedDraftPreviews?: number;
   agentBackend?: AgentBackend;
+  agentChannel?: { gamesStore?: GamesStore };
 }): Promise<{ app: FastifyInstance; store: Store; authHeaders: Record<string, string> }> {
   const store = params.store ?? new InMemoryStore();
   await store.upsertUser({ uid: 'g:test-user' });
@@ -137,6 +139,7 @@ async function createApp(params: {
       creationLimitsTtlMs: params.creationLimitsTtlMs,
       translator: params.translator ?? new NoopTranslator(),
       maxCachedDraftPreviews: params.maxCachedDraftPreviews,
+      ...(params.agentChannel ? { agentChannel: params.agentChannel } : {}),
     },
   });
   return { app, store, authHeaders: getAuthHeaders('g:test-user') };
@@ -1140,6 +1143,67 @@ describe('submission preview route', () => {
     expect(body.html).toContain("default-src 'none'");
     expect(getGameSources).toHaveBeenCalledWith('copilot/foo', 'foo');
 
+    await app.close();
+  });
+
+  it('previews a native job from its delivered version, with no pull request to read', async () => {
+    // The regression this exists for: preview used to resolve through findLinkedPR, and
+    // native jobs open no PR — so every creator watched an hour of build activity behind
+    // "this game isn't available yet".
+    const store = new InMemoryStore();
+    const jobId = 1_000_042;
+    await store.upsertUser({ uid: 'g:test-user' });
+    await store.createSubmission(jobId, 'g:test-user', 'TV Tycoon');
+    await store.setSubmissionSlug(jobId, 'tv-tycoon');
+    await store.setSubmissionDeliveredVersion(jobId, 'v20260730T132921286Z-1592fc');
+
+    const gamesStore = {
+      getSourceFile: async (_s: string, _v: string, path: string) =>
+        path === 'index.html' ? '<!doctype html><div id="app"></div>' : path === 'game.ts' ? 'export {};' : null,
+    } as unknown as GamesStore;
+
+    const { githubClient, findLinkedPR } = createGithubClientStub({});
+    const { app, authHeaders } = await createApp({
+      store,
+      githubClient,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(jobId, secret)}/preview`,
+      headers: authHeaders,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ slug: 'tv-tycoon', title: 'TV Tycoon' });
+    // And it never asked GitHub, which is the point: the delivered candidate is the
+    // same tree the gate checks, so the creator plays exactly what gets judged.
+    expect(findLinkedPR).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('tells a native job with nothing delivered yet that there is nothing to play', async () => {
+    // Honest rather than a 502: before the first delivery there genuinely is no game.
+    const store = new InMemoryStore();
+    const jobId = 1_000_043;
+    await store.upsertUser({ uid: 'g:test-user' });
+    await store.createSubmission(jobId, 'g:test-user', 'Not yet');
+    const { app, authHeaders } = await createApp({
+      store,
+      githubClient: createGithubClientStub({}).githubClient,
+      submissionTokenSecret: secret,
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(jobId, secret)}/preview`,
+      headers: authHeaders,
+    });
+
+    expect(res.statusCode).toBe(409);
     await app.close();
   });
 

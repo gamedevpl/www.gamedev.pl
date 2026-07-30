@@ -1871,6 +1871,63 @@ export async function registerSubmissionRoutes(
    * Shared by the token route (the creator's own preview) and the slug route (a
    * read-only share link) so both resolve the exact same document.
    */
+  /**
+   * Assembles the preview for a job that has no pull request.
+   *
+   * Every native job is one of these, so without it a creator watches an hour of build
+   * activity behind "this game isn't available yet" — the preview's source of truth
+   * disappeared with the PR, and nothing replaced it.
+   *
+   * The delivered candidate is the right thing to serve: it is the same tree the gate
+   * checks, so what the creator plays is what gets judged. Before the first delivery
+   * there is genuinely nothing playable, and 409 is the honest answer — the channel's
+   * own pushed previews cover that window and are served elsewhere.
+   */
+  async function replyWithStoredDraft(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    record: SubmissionRecord,
+  ): Promise<FastifyReply | null> {
+    const gamesStore = options.agentChannel?.gamesStore;
+    const { slug, deliveredVersion } = record;
+    if (!gamesStore || !slug || !deliveredVersion) return null;
+
+    const cached = draftPreviewCache.get(record.issueNumber);
+    if (cached && cached.headSha === deliveredVersion && cached.expiresAt > now()) {
+      return reply.send(cached.value);
+    }
+
+    const read = (path: string) => gamesStore.getSourceFile(slug, deliveredVersion, path);
+    const [indexHtml, gameTs, styleCss] = await Promise.all([read('index.html'), read('game.ts'), read('style.css')]);
+    if (!indexHtml || !gameTs) return null;
+
+    const project: GameProject = {
+      title: record.title || slug,
+      description: '',
+      html: indexHtml,
+      js: gameTs,
+      css: styleCss ?? '',
+    };
+    // restrictNetwork, exactly as for a PR-branch draft: this is unreviewed agent output
+    // whether it arrived by push or by upload, and the delivery route it took is not a
+    // reason to trust it any further.
+    const value: DraftPreviewValue = {
+      slug,
+      title: project.title,
+      html: assembleGameHtml(project, { restrictNetwork: true }),
+    };
+    rememberDraftPreview(record.issueNumber, {
+      value,
+      headSha: deliveredVersion,
+      expiresAt: now() + draftPreviewTtlMs,
+    });
+    request.log.info(
+      { issueNumber: record.issueNumber, slug, version: deliveredVersion },
+      'served stored draft preview',
+    );
+    return reply.send(value);
+  }
+
   async function replyWithDraft(
     request: FastifyRequest,
     reply: FastifyReply,
@@ -1882,6 +1939,23 @@ export async function registerSubmissionRoutes(
       request.log.warn({ err, issueNumber, headSha: lastKnown.headSha }, reason);
       return reply.send(lastKnown.value);
     };
+
+    // A native job has no PR to resolve, so this is the whole path for it rather than a
+    // fallback. Tried first for legacy jobs too: once a job has delivered, the stored
+    // candidate is fresher and cheaper than a GitHub round-trip to its branch.
+    const record = await store?.getSubmission(issueNumber);
+    if (record) {
+      const stored = await replyWithStoredDraft(request, reply, record).catch((error) => {
+        request.log.warn({ err: error, issueNumber }, 'stored draft preview failed; falling back');
+        return null;
+      });
+      if (stored) return stored;
+    }
+    if (isNativeJobId(issueNumber)) {
+      const stale = serveLastKnown('no delivery yet for native job; serving last known draft');
+      if (stale) return stale;
+      return reply.status(409).send({ error: 'no preview available for this submission yet' });
+    }
 
     let linkedPr: LinkedPullRequest | null;
     try {

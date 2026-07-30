@@ -564,6 +564,11 @@ export async function registerAgentChannelRoutes(
           issueNumber,
           files: parsed.data.files,
         });
+        // Recorded before the gate is asked to run: this is what the creator's preview
+        // reads, and a delivered game should be playable on the status page whether or
+        // not anything ever verifies it. The gate decides whether it may be *published*,
+        // which is a different question from whether its author can watch it.
+        await store?.setSubmissionDeliveredVersion(issueNumber, version);
         await options.onSourcesDelivered?.({ issueNumber, slug, version });
         options.onEvent?.(issueNumber);
 
