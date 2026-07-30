@@ -261,6 +261,14 @@
       "abandon": "Zatrzymaj build",
       "abandonConfirm": "Potwierdź zatrzymanie"
     },
+    "share": {
+      "title": "Udostępnij wersję roboczą",
+      "on": "Wł.",
+      "off": "Wył.",
+      "hintOff": "Na razie tylko Ty możesz zagrać w tę grę. Włącz, aby każdy z linkiem mógł spróbować — i tak nie trafi do arcade.",
+      "hintOn": "Każdy z tym linkiem może zagrać w najnowszą wersję. To ten sam link, który gra zachowa po publikacji, więc nie trzeba wysyłać go ponownie.",
+      "error": "Nie udało się tego teraz zmienić. Spróbuj ponownie za chwilę."
+    },
     "playtest": {
       "hint": "Zagraj, wstrzymaj w momencie wartym zmiany i wyślij prośbę z tym widokiem oraz sygnałami z sesji.",
       "loading": "Ładujemy grywalny build…",

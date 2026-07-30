@@ -5,7 +5,7 @@ import { AuthModal } from './AuthModal.js';
 import type { GameHealth } from './healthApi.js';
 import { PixelIcon, type PixelIconName } from './PixelIcon.js';
 import { formatRelativeTime } from './relativeTime.js';
-import { studioPath, type StudioTab } from './router.js';
+import { playPath, studioPath, type StudioTab } from './router.js';
 import { abandonSubmission, submitFeedback, type SubmissionApiError, type SubmissionState } from './submissionApi.js';
 import { StudioPlaytestPanel } from './StudioPlaytestPanel.js';
 import {
@@ -25,6 +25,7 @@ import {
   fetchStudioSuggestions,
   fetchGameAutonomy,
   setGameAutonomy,
+  setDraftShared,
   submitImprovement,
   type StudioApiError,
   type StudioGame,
@@ -793,6 +794,86 @@ function OverviewTab({
           </button>
         ) : null}
       </div>
+
+      {!published && game.slug && game.lastKnownStatus !== 'abandoned' ? <DraftShareControl game={game} /> : null}
+    </div>
+  );
+}
+
+/**
+ * Whether anyone else can play this game before it is published.
+ *
+ * Off until the creator turns it on, and the game is in no catalog and no rail either
+ * way — the link is the only way in, which is what makes one switch enough. The link
+ * shown is the game's ordinary permalink, the same one it will keep once it is live,
+ * so there is nothing to re-share when that happens.
+ */
+function DraftShareControl({ game }: { game: StudioGame }) {
+  const { t } = useTranslation();
+  const [shared, setShared] = useState(Boolean(game.draftShared));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const url = game.slug ? new URL(playPath(game.slug), window.location.href).toString() : '';
+
+  async function toggle() {
+    const next = !shared;
+    setBusy(true);
+    setError(null);
+    // Optimistic, and reverted on failure: the switch is the whole control, so leaving
+    // it in the old position while the request runs reads as a dead button.
+    setShared(next);
+    try {
+      await setDraftShared(game.token, next);
+    } catch {
+      setShared(!next);
+      setError(t('studioPanel.share.error'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // No clipboard permission or no clipboard API — the link is on screen to select
+      // by hand, so this needs no error state.
+    }
+  }
+
+  return (
+    <div className="studio-share">
+      <div className="studio-share-head">
+        <h3 className="studio-share-title">{t('studioPanel.share.title')}</h3>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={shared}
+          className={`studio-share-toggle${shared ? ' is-on' : ''}`}
+          onClick={() => void toggle()}
+          disabled={busy}
+        >
+          <span className="studio-share-toggle-track" aria-hidden="true" />
+          {shared ? t('studioPanel.share.on') : t('studioPanel.share.off')}
+        </button>
+      </div>
+      <p className="studio-share-hint">{t(shared ? 'studioPanel.share.hintOn' : 'studioPanel.share.hintOff')}</p>
+      {shared ? (
+        <p className="status-note status-share">
+          <a className="inline-link" href={url}>
+            {url}
+          </a>
+          <button type="button" className="status-share-copy" onClick={() => void copy()}>
+            <PixelIcon name={copied ? 'check' : 'globe'} size={12} />{' '}
+            {copied ? t('statusView.shareCopied') : t('statusView.shareCopy')}
+          </button>
+        </p>
+      ) : null}
+      {error ? <p className="error">{error}</p> : null}
     </div>
   );
 }

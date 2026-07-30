@@ -1048,6 +1048,28 @@ export async function registerSubmissionRoutes(
   }
 
   /**
+   * Whether this request may play the unpublished game at `slug`.
+   *
+   * Two ways in, and no third: you made it, or its creator turned sharing on. There is
+   * no separate draft surface to share — a game keeps one permalink for its whole life
+   * — so this is what stands between "my friend can watch it take shape" and "anyone who
+   * guesses a name can read an unreviewed game".
+   *
+   * Sharing is off until the creator says otherwise. Before this existed, any signed-in
+   * visitor who knew a slug could read any draft, which made every in-progress game
+   * unlisted rather than private and gave its creator no say in it.
+   */
+  async function canPlayDraft(request: FastifyRequest, slug: string): Promise<boolean> {
+    if (!store) return false;
+    const record = await store.getSubmissionBySlug(slug);
+    // An abandoned build is nobody's to play, including its creator's: they stopped it.
+    if (!record || record.abandonedAt) return false;
+    if (record.draftSharedAt) return true;
+    const uid = request.user?.uid;
+    return Boolean(uid && uid === record.ownerUid);
+  }
+
+  /**
    * Whether anything already answers to this name.
    *
    * Three namespaces, because a game can exist in three places and a new build must not
@@ -1497,6 +1519,60 @@ export async function registerSubmissionRoutes(
       },
     });
   });
+
+  /**
+   * The creator decides whether anyone else may play their game before it is published.
+   *
+   * There is no separate draft link to hand out: the game answers at `/play/<slug>` for
+   * its whole life, and this decides who that includes. Off by default, and off is
+   * genuinely off — the game is not in the catalog, not in any rail, and 404s for
+   * everyone but its creator, so the link is the only way in and the creator controls
+   * whether it works.
+   *
+   * Ownership is checked against the store rather than against the token, for the same
+   * reason abandoning is: holding a link somebody shared with you must not be enough to
+   * change who else can see the game.
+   */
+  app.post(
+    '/api/submissions/:token/share',
+    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      if (!submissionTokenSecret) {
+        return reply.status(503).send({ error: 'submissions are not configured' });
+      }
+      if (!checkUserAccess(request, reply)) return;
+      if (!store) {
+        return reply.status(503).send({ error: 'submissions are not configured' });
+      }
+
+      const parsedBody = z.object({ shared: z.boolean() }).safeParse(request.body ?? {});
+      if (!parsedBody.success) {
+        return reply.status(400).send({ error: 'shared must be true or false' });
+      }
+
+      const token = z.string().parse((request.params as { token?: string }).token);
+      let issueNumber: number;
+      try {
+        issueNumber = verifyToken(token, submissionTokenSecret);
+      } catch (error) {
+        if (error instanceof InvalidTokenError) {
+          return reply.status(400).send({ error: 'invalid token' });
+        }
+        throw error;
+      }
+
+      const record = await store.getSubmission(issueNumber);
+      if (!record || record.ownerUid !== request.user!.uid) {
+        return reply.status(403).send({ error: 'only the creator can share this game' });
+      }
+      if (!record.slug) {
+        return reply.status(409).send({ error: 'this game has no address yet' });
+      }
+
+      await store.setDraftShared(issueNumber, parsedBody.data.shared ? new Date(now()).toISOString() : null);
+      return reply.send({ shared: parsedBody.data.shared, slug: record.slug });
+    },
+  );
 
   /**
    * The creator gives up on a build. Closes the issue and the agent's open PR, so
@@ -2660,7 +2736,12 @@ export async function registerSubmissionRoutes(
     }
 
     const record = await store.getSubmissionBySlug(parsedParams.data.slug);
-    if (!record) {
+    // Same rule as `/play/<slug>`, which is now where a draft is shared from: the
+    // creator, or anyone at all once they have turned sharing on. This route used to
+    // serve any draft to any signed-in visitor who knew a slug, which made every
+    // in-progress game unlisted rather than private. Kept working because `/draft/`
+    // links exist in the wild; the app emits `/play/` now.
+    if (!record || !(await canPlayDraft(request, parsedParams.data.slug))) {
       return reply.status(404).send({ error: 'draft not found' });
     }
 
@@ -2881,6 +2962,17 @@ export async function registerSubmissionRoutes(
       }
 
       if (!(await isSlugPublished(githubClient, slug))) {
+        // Not published — but a game has this address from the moment it is submitted,
+        // and its creator can play it, as can anyone they have chosen to share the link
+        // with. One permalink for a game's whole life, before and after it goes live.
+        //
+        // Deliberately after both published paths and outside `gameCache`: that cache is
+        // keyed by slug alone and read before any gate, so a draft written into it would
+        // be served to whoever asked next, share toggle or not.
+        if (await canPlayDraft(request, slug)) {
+          const record = await store?.getSubmissionBySlug(slug);
+          if (record) return replyWithDraft(request, reply, record.issueNumber);
+        }
         return reply.status(404).send({ error: 'game not found' });
       }
 

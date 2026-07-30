@@ -15,6 +15,7 @@ const approveSuggestion = vi.fn();
 const dismissSuggestion = vi.fn();
 const fetchGameAutonomy = vi.fn();
 const setGameAutonomy = vi.fn();
+const setDraftShared = vi.fn();
 let authUser: { uid: string; name: string } | null = null;
 
 vi.mock('./AuthContext', () => ({
@@ -33,6 +34,7 @@ vi.mock('./studioApi', async () => {
     dismissSuggestion: (...args: unknown[]) => dismissSuggestion(...args),
     fetchGameAutonomy: (...args: unknown[]) => fetchGameAutonomy(...args),
     setGameAutonomy: (...args: unknown[]) => setGameAutonomy(...args),
+    setDraftShared: (...args: unknown[]) => setDraftShared(...args),
     submitImprovement: vi.fn(),
   };
 });
@@ -87,6 +89,7 @@ describe('CreatorStudioView', () => {
     fetchGameAutonomy.mockReset();
     fetchGameAutonomy.mockRejectedValue(new Error('not owned'));
     setGameAutonomy.mockReset();
+    setDraftShared.mockReset();
   });
 
   afterEach(() => {
@@ -209,6 +212,71 @@ describe('CreatorStudioView', () => {
     // No tab may exist in the URL that has no button to leave it by.
     const tabLabels = Array.from(container.querySelectorAll('[role="tab"]')).map((button) => button.textContent);
     expect(tabLabels.some((label) => label?.includes('Player feedback'))).toBe(false);
+
+    root.unmount();
+  });
+
+  it('keeps an unpublished game to its creator until they share it', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    setDraftShared.mockResolvedValue({ shared: true, slug: 'tv-tycoon' });
+    fetchStudioGames.mockResolvedValue([
+      {
+        token: 'token-draft',
+        title: 'TV Tycoon',
+        createdAt: '2026-07-30T09:00:00.000Z',
+        lastKnownStatus: 'building',
+        slug: 'tv-tycoon',
+      },
+    ] satisfies StudioGame[]);
+    window.history.replaceState(null, '', '/studio/tv-tycoon/overview');
+
+    const { container, root } = await renderStudio({ selectedGame: 'tv-tycoon', selectedTab: 'overview' });
+
+    const toggle = container.querySelector<HTMLButtonElement>('.studio-share-toggle');
+    expect(toggle?.getAttribute('aria-checked')).toBe('false');
+    // Off means off: no link on screen to copy, because there is nothing that works.
+    expect(container.querySelector('.studio-share .status-share')).toBeNull();
+
+    await act(async () => {
+      toggle!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(setDraftShared).toHaveBeenCalledWith('token-draft', true);
+    expect(container.querySelector('.studio-share-toggle')?.getAttribute('aria-checked')).toBe('true');
+    // The game's ordinary permalink — the same one it keeps once it is published, so
+    // there is nothing to re-send when that happens. Never a separate draft address.
+    expect(container.querySelector('.studio-share .inline-link')?.textContent).toContain('/play/tv-tycoon');
+
+    root.unmount();
+  });
+
+  it('puts the switch back when the change did not take', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    setDraftShared.mockRejectedValue(new Error('nope'));
+    fetchStudioGames.mockResolvedValue([
+      {
+        token: 'token-draft',
+        title: 'TV Tycoon',
+        createdAt: '2026-07-30T09:00:00.000Z',
+        lastKnownStatus: 'building',
+        slug: 'tv-tycoon',
+      },
+    ] satisfies StudioGame[]);
+
+    const { container, root } = await renderStudio({ selectedGame: 'tv-tycoon', selectedTab: 'overview' });
+
+    await act(async () => {
+      container.querySelector('.studio-share-toggle')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    // A switch left showing "on" after a failed write is the worst outcome here: the
+    // creator believes they shared a game that nobody else can open.
+    expect(container.querySelector('.studio-share-toggle')?.getAttribute('aria-checked')).toBe('false');
+    expect(container.querySelector('.studio-share .error')).not.toBeNull();
 
     root.unmount();
   });

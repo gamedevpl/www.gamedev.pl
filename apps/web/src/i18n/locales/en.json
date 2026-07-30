@@ -261,6 +261,14 @@
       "abandon": "Stop build",
       "abandonConfirm": "Confirm stop"
     },
+    "share": {
+      "title": "Share the draft",
+      "on": "On",
+      "off": "Off",
+      "hintOff": "Only you can play this game right now. Turn this on to give anyone with the link a go — it stays out of the arcade either way.",
+      "hintOn": "Anyone with this link can play the latest build. It's the same link the game keeps once it's published, so there's nothing to re-send.",
+      "error": "We couldn't change that just now. Please try again in a moment."
+    },
     "playtest": {
       "hint": "Play the game, pause on a moment worth changing, and send a request with that viewport and live instrumentation attached.",
       "loading": "Loading the playable build…",

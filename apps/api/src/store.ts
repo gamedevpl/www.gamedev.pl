@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { Firestore, type DocumentData } from '@google-cloud/firestore';
+import { FieldValue, Firestore, type DocumentData } from '@google-cloud/firestore';
 import type { AgentTaskState } from './agent-tasks.js';
 import type { PublicationHealthCheck, PublicationRecord } from './games-store.js';
 import type { JobState, JobTransition } from './job-state.js';
@@ -108,6 +108,19 @@ export interface SubmissionRecord {
    * GitHub entirely (an abandoned build must not read as "needs a tweak").
    */
   abandonedAt?: string;
+  /**
+   * When the creator turned on the shared link for this game's draft, if they have.
+   *
+   * A game is addressable at `/play/<slug>` from the moment it is submitted, but until
+   * this is set only its creator may open it there. Absent means off, which is the
+   * default: before it existed, any signed-in visitor who knew a slug could read any
+   * unpublished game, which made every in-progress game unlisted rather than private and
+   * gave the person making it no say in the matter.
+   *
+   * A timestamp rather than a flag because "when did this become shareable" is the
+   * question worth being able to answer later; clearing it turns sharing back off.
+   */
+  draftSharedAt?: string;
   /**
    * How many clarifying questions the creator actually answered before this was
    * submitted — 0 when they skipped the QA panel or it had nothing to ask.
@@ -1001,6 +1014,8 @@ export interface Store {
   setSubmissionPublishedAt(issueNumber: number, at: string): Promise<void>;
   /** Marks a submission abandoned by its creator. */
   setSubmissionAbandoned(issueNumber: number, at: string): Promise<void>;
+  /** Turns the creator's shared draft link on (a timestamp) or off (null). */
+  setDraftShared(issueNumber: number, at: string | null): Promise<void>;
   /**
    * Reads what is currently published for a slug, or null when nothing ever was.
    *
@@ -1664,6 +1679,15 @@ export class InMemoryStore implements Store {
   async setSubmissionAbandoned(issueNumber: number, at: string): Promise<void> {
     const sub = this.submissions.get(issueNumber);
     if (sub) this.submissions.set(issueNumber, { ...sub, abandonedAt: at });
+  }
+
+  async setDraftShared(issueNumber: number, at: string | null): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub) return;
+    const next = { ...sub };
+    if (at) next.draftSharedAt = at;
+    else delete next.draftSharedAt;
+    this.submissions.set(issueNumber, next);
   }
 
   async setSubmissionLocale(issueNumber: number, locale: string): Promise<void> {
@@ -2679,6 +2703,15 @@ export class FirestoreStore implements Store {
 
   async setSubmissionAbandoned(issueNumber: number, at: string): Promise<void> {
     await this.db.collection('submissions').doc(String(issueNumber)).set({ abandonedAt: at }, { merge: true });
+  }
+
+  async setDraftShared(issueNumber: number, at: string | null): Promise<void> {
+    // Deleted rather than set false, so "shared" is one shape everywhere: a timestamp
+    // is present or it is not, and no reader has to know about a legacy falsy value.
+    await this.db
+      .collection('submissions')
+      .doc(String(issueNumber))
+      .set({ draftSharedAt: at ?? FieldValue.delete() }, { merge: true });
   }
 
   async setSubmissionLocale(issueNumber: number, locale: string): Promise<void> {

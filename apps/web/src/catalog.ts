@@ -204,7 +204,10 @@ function parseCatalogSubmittedBy(value: unknown): string | null {
 }
 
 export async function fetchPublishedGame(slug: string): Promise<PublishedGame> {
-  const response = await fetch(`${API_BASE}/api/games/${encodeURIComponent(slug)}`);
+  // Credentialed because a game is playable at this address before it is published —
+  // by its creator always, by anyone else once the creator shares it. Without the
+  // session cookie a creator opening their own unpublished game gets a 404.
+  const response = await fetch(`${API_BASE}/api/games/${encodeURIComponent(slug)}`, { credentials: 'include' });
 
   if (!response.ok) {
     throw new Error(await readApiErrorMessage(response, `Game request failed (${response.status})`));

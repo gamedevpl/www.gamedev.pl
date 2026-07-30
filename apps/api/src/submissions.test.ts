@@ -1065,6 +1065,122 @@ const sampleSources: GameSources = {
   title: 'Bubble Pop Rush',
 };
 
+describe('playing an unpublished game at its permalink', () => {
+  /**
+   * A game answers at `/play/<slug>` from the moment it is submitted. Who that includes
+   * before it is published is the creator's decision, and off is the default — the whole
+   * point of the switch. These pin both halves, because the failure modes are opposite:
+   * a leak on one side, and a creator locked out of their own game on the other.
+   */
+  async function draftApp() {
+    const store = new InMemoryStore();
+    const jobId = 1_000_077;
+    await store.upsertUser({ uid: 'g:test-user' });
+    await store.upsertUser({ uid: 'g:someone-else' });
+    await store.createSubmission(jobId, 'g:test-user', 'TV Tycoon');
+    await store.setSubmissionSlug(jobId, 'tv-tycoon');
+    await store.setSubmissionDeliveredVersion(jobId, 'v1');
+
+    const gamesStore = {
+      getDerivedArtifact: async (_s: string, _v: string, name: string) =>
+        name === 'bundle.html' ? Buffer.from('<!doctype html><title>TV Tycoon</title><canvas></canvas>') : null,
+    } as unknown as GamesStore;
+
+    // The catalog knows nothing about it: an unpublished game is in no catalog and no
+    // rail, so the link is the only way in — which is what makes one switch enough.
+    const { githubClient } = createGithubClientStub({ catalog: [] });
+    const { app, authHeaders } = await createApp({
+      store,
+      githubClient,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+    });
+    return { app, authHeaders, store, jobId };
+  }
+
+  it('lets the creator play their own game before anyone else can', async () => {
+    const { app, authHeaders } = await draftApp();
+
+    const mine = await app.inject({ method: 'GET', url: '/api/games/tv-tycoon', headers: authHeaders });
+    expect(mine.statusCode).toBe(200);
+    expect(mine.json()).toMatchObject({ slug: 'tv-tycoon', title: 'TV Tycoon' });
+
+    // Sharing is off, so it does not exist for anybody else — including signed-in
+    // visitors, who used to be able to read any draft whose slug they knew.
+    const stranger = await app.inject({
+      method: 'GET',
+      url: '/api/games/tv-tycoon',
+      headers: getAuthHeaders('g:someone-else'),
+    });
+    expect(stranger.statusCode).toBe(404);
+
+    const anonymous = await app.inject({ method: 'GET', url: '/api/games/tv-tycoon' });
+    expect(anonymous.statusCode).toBe(404);
+
+    await app.close();
+  });
+
+  it('opens the same permalink to everyone once the creator shares it, and closes it again', async () => {
+    const { app, authHeaders, jobId } = await draftApp();
+
+    const on = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(jobId, secret)}/share`,
+      headers: authHeaders,
+      payload: { shared: true },
+    });
+    expect(on.statusCode).toBe(200);
+    expect(on.json()).toEqual({ shared: true, slug: 'tv-tycoon' });
+
+    // Anyone with the link, signed in or not: it is the game's ordinary permalink, the
+    // same one it keeps once published, so there is nothing to re-send later.
+    expect((await app.inject({ method: 'GET', url: '/api/games/tv-tycoon' })).statusCode).toBe(200);
+
+    const off = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(jobId, secret)}/share`,
+      headers: authHeaders,
+      payload: { shared: false },
+    });
+    expect(off.statusCode).toBe(200);
+    expect((await app.inject({ method: 'GET', url: '/api/games/tv-tycoon' })).statusCode).toBe(404);
+
+    await app.close();
+  });
+
+  it('will not let a link-holder decide who else can see the game', async () => {
+    // The token is a bearer capability that gets shared around by design. Changing who
+    // may see the game is the creator's alone, checked against the store — the same rule
+    // abandoning follows, and for the same reason.
+    const { app, jobId } = await draftApp();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(jobId, secret)}/share`,
+      headers: getAuthHeaders('g:someone-else'),
+      payload: { shared: true },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect((await app.inject({ method: 'GET', url: '/api/games/tv-tycoon' })).statusCode).toBe(404);
+
+    await app.close();
+  });
+
+  it('stops serving a build its creator abandoned, to them as well', async () => {
+    const { app, authHeaders, store, jobId } = await draftApp();
+    await store.setDraftShared(jobId, new Date().toISOString());
+    await store.setSubmissionAbandoned(jobId, new Date().toISOString());
+
+    expect((await app.inject({ method: 'GET', url: '/api/games/tv-tycoon' })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'GET', url: '/api/games/tv-tycoon', headers: authHeaders })).statusCode).toBe(
+      404,
+    );
+
+    await app.close();
+  });
+});
+
 describe('submission preview route', () => {
   it('returns 503 when submissions are not configured', async () => {
     const app = await buildApp({ submissionRoutes: { githubToken: undefined, submissionTokenSecret: undefined } });
