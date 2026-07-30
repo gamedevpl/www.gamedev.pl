@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   canTransition,
   detectStall,
+  fromSubmissionStatus,
   isTerminal,
   JOB_STATES,
+  planObservedStatusTransition,
   reconcileAgentObservation,
   toSubmissionStatus,
   type JobState,
@@ -112,6 +114,52 @@ describe('reconcileAgentObservation', () => {
   it('keeps an idle or input-blocked session in building', () => {
     expect(reconcileAgentObservation('dispatched', { state: 'idle', hasCandidate: false })?.to).toBe('building');
     expect(reconcileAgentObservation('building', { state: 'waiting_for_user', hasCandidate: false })).toBeNull();
+  });
+});
+
+describe('planObservedStatusTransition', () => {
+  const AT = '2026-07-30T12:00:00Z';
+
+  it('adopts a legacy submission that has no state yet', () => {
+    // Everything in flight today predates the job model; this is how those records join
+    // the state machine without a migration.
+    expect(planObservedStatusTransition(undefined, 'building', AT)).toEqual({
+      to: 'building',
+      at: AT,
+      by: 'reconciler',
+      reason: 'adopted_from_derived_status',
+    });
+  });
+
+  it('writes nothing when the derivation agrees with the job', () => {
+    // The usual case by far — a job is polled far more often than it moves.
+    expect(planObservedStatusTransition('building', 'building', AT)).toBeNull();
+  });
+
+  it('records a genuine move', () => {
+    expect(planObservedStatusTransition('building', 'in_review', AT)).toEqual({
+      to: 'ready_for_review',
+      at: AT,
+      by: 'reconciler',
+      reason: 'derived_from_github',
+    });
+  });
+
+  it('refuses to drag a finished job backwards', () => {
+    // A stale poll observing an old issue state must not un-publish a live game.
+    expect(planObservedStatusTransition('published', 'building', AT)).toBeNull();
+    expect(planObservedStatusTransition('canceled', 'building', AT)).toBeNull();
+  });
+
+  it('lets a precise actor override the default attribution', () => {
+    expect(planObservedStatusTransition(undefined, 'queued', AT, 'creator')?.by).toBe('creator');
+  });
+
+  it('round-trips every public status through the internal vocabulary', () => {
+    const statuses = ['queued', 'building', 'in_review', 'publishing', 'published', 'needs_changes'] as const;
+    for (const status of statuses) {
+      expect(toSubmissionStatus(fromSubmissionStatus(status))).toBe(status);
+    }
   });
 });
 

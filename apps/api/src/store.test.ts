@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { InMemoryStore, TELEMETRY_COLLECTION, TELEMETRY_RETENTION_DAYS, telemetryExpiresAt } from './store.js';
+import {
+  InMemoryStore,
+  MAX_JOB_TRANSITIONS,
+  TELEMETRY_COLLECTION,
+  TELEMETRY_RETENTION_DAYS,
+  telemetryExpiresAt,
+} from './store.js';
 
 describe('InMemoryStore', () => {
   it('upserts and retrieves user', async () => {
@@ -19,6 +25,46 @@ describe('InMemoryStore', () => {
 
     const fetched = await store.getUser('g:123');
     expect(fetched).toEqual(created);
+  });
+
+  it('records job transitions as a history, newest state on the record', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(1, 'g:123', 'A game');
+
+    expect(await store.recordJobTransition(1, { to: 'queued', at: '2026-07-30T10:00:00Z', by: 'creator' })).toBe(true);
+    await store.recordJobTransition(1, { to: 'building', at: '2026-07-30T10:05:00Z', by: 'reconciler' });
+
+    const record = await store.getSubmission(1);
+    // The record carries where the job *is*; the history carries how it got there.
+    expect(record?.state).toBe('building');
+    expect(record?.stateSince).toBe('2026-07-30T10:05:00Z');
+    expect(record?.transitions?.map((t) => t.to)).toEqual(['queued', 'building']);
+  });
+
+  it('reports a missing submission rather than inventing one', async () => {
+    const store = new InMemoryStore();
+    expect(await store.recordJobTransition(404, { to: 'queued', at: '2026-07-30T10:00:00Z', by: 'system' })).toBe(
+      false,
+    );
+  });
+
+  it('caps transition history so a flapping reconciler cannot grow the document', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(2, 'g:123', 'A game');
+    for (let i = 0; i < MAX_JOB_TRANSITIONS + 10; i += 1) {
+      await store.recordJobTransition(2, {
+        to: i % 2 === 0 ? 'building' : 'queued',
+        at: new Date(Date.parse('2026-07-30T10:00:00Z') + i * 1000).toISOString(),
+        by: 'reconciler',
+      });
+    }
+
+    const record = await store.getSubmission(2);
+    expect(record?.transitions).toHaveLength(MAX_JOB_TRANSITIONS);
+    // The tail is kept: what anyone debugging a live build actually looks at.
+    expect(record?.transitions?.at(-1)?.at).toBe(
+      new Date(Date.parse('2026-07-30T10:00:00Z') + (MAX_JOB_TRANSITIONS + 9) * 1000).toISOString(),
+    );
   });
 
   it('handles submission tracking', async () => {

@@ -142,6 +142,64 @@ export function toSubmissionStatus(state: JobState): SubmissionStatus {
 }
 
 /**
+ * The inverse projection: the job state implied by a status derived the old way.
+ *
+ * Every submission that predates the job model — and every one still dispatched through
+ * an issue — has only a derived {@link SubmissionStatus}. This is how those get adopted
+ * into the state machine without a migration: the derivation keeps running, and its
+ * result is recorded as an observation rather than answered directly.
+ *
+ * Necessarily lossy, because the public vocabulary is smaller: `needs_changes` cannot
+ * distinguish a rejection from an outright failure, and `abandoned` cannot distinguish a
+ * creator walking away from an operator cancelling. That is fine here — the loss only
+ * affects jobs whose richer state we never observed in the first place, and transitions
+ * written by an actor who *does* know (the operator, the gate) carry the precise state.
+ */
+export function fromSubmissionStatus(status: SubmissionStatus): JobState {
+  switch (status) {
+    case 'queued':
+      return 'queued';
+    case 'building':
+      return 'building';
+    case 'in_review':
+      return 'ready_for_review';
+    case 'publishing':
+      return 'publishing';
+    case 'published':
+      return 'published';
+    case 'needs_changes':
+      return 'needs_changes';
+    case 'abandoned':
+      return 'abandoned';
+  }
+}
+
+/**
+ * Decides what to write when a derived status is observed for a job — the bridge that
+ * lets the existing GitHub derivation feed the state machine instead of bypassing it.
+ *
+ * Returns null when nothing should change, which is the usual answer: a job is polled
+ * far more often than it moves.
+ *
+ * A record with no `state` yet is *adopted* here rather than migrated, and its
+ * `stateSince` deliberately starts at the moment of adoption rather than being
+ * backdated. Backdating would be a guess, and a wrong guess would immediately report
+ * every in-flight legacy build as stalled — the one outcome worse than saying nothing.
+ */
+export function planObservedStatusTransition(
+  current: JobState | undefined,
+  observed: SubmissionStatus,
+  at: string,
+  by: TransitionActor = 'reconciler',
+): JobTransition | null {
+  const to = fromSubmissionStatus(observed);
+  if (!current) return { to, at, by, reason: 'adopted_from_derived_status' };
+  if (to === current) return null;
+  if (!canTransition(current, to)) return null;
+  return { to, at, by, reason: 'derived_from_github' };
+}
+
+/**
  * What an agent backend observed, normalized away from any one vendor's vocabulary.
  * The Copilot adapter maps GitHub's task states onto this; a future SDK-runtime backend
  * maps its execution states onto the same shape, and the rules below do not change.

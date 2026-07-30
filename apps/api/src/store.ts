@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { Firestore, type DocumentData } from '@google-cloud/firestore';
+import type { AgentTaskState } from './agent-tasks.js';
+import type { JobState, JobTransition } from './job-state.js';
 import type { BuildEvent, SubmissionStatus } from './submission-status.js';
 
 /**
@@ -119,7 +121,43 @@ export interface SubmissionRecord {
    * machine-translating them afterwards, and costs us nothing.
    */
   locale?: string;
+  /**
+   * The job's own state, as opposed to one derived from GitHub on every read.
+   *
+   * `lastStatus` above records what a derivation *said*; this records what the job
+   * *is*. The distinction is what makes an operator queue, cancellation, retries and
+   * a real answer to "stuck or slow?" possible at all — none of which can be built on
+   * a value that is recomputed from a third party's UI state each time it is asked for.
+   */
+  state?: JobState;
+  /**
+   * When the job entered {@link state}. The input to every duration question: time in
+   * state, queue age, and whether silence has gone on long enough to be a stall.
+   */
+  stateSince?: string;
+  /**
+   * The state history, oldest first, so a build explains itself afterwards — the
+   * difference between "this took 40 minutes" and "this took 40 minutes because it was
+   * re-dispatched twice after gate failures".
+   *
+   * Capped at {@link MAX_JOB_TRANSITIONS}: a job accrues a dozen or so legitimately, and
+   * the cap exists so that a reconciler bug flapping between two states cannot grow a
+   * document until it hits Firestore's 1 MB limit and takes the submission down with it.
+   */
+  transitions?: JobTransition[];
+  /**
+   * The agent backend's own last reported state, kept so stall detection can prefer
+   * what the agent says over what timestamps imply — an agent that reports it is
+   * blocked on an answer needs no inference at all.
+   */
+  agentState?: AgentTaskState;
 }
+
+/**
+ * How many transitions a submission keeps. Oldest are dropped first; the tail is what
+ * anyone debugging a live build actually looks at.
+ */
+export const MAX_JOB_TRANSITIONS = 50;
 
 /**
  * A change request from the creator, queued for the agent to collect over the build
@@ -688,6 +726,16 @@ export interface Store {
   setSubmissionNotifiedStatus(issueNumber: number, status: SubmissionStatus): Promise<void>;
   /** Records the status last derived from GitHub, whether or not it notified anyone. */
   setSubmissionLastStatus(issueNumber: number, status: SubmissionStatus): Promise<void>;
+  /**
+   * Moves a job to `transition.to`, stamping `stateSince` and appending to the history.
+   *
+   * Callers decide *whether* to move (the rules live in job-state.ts); this only records
+   * the decision. Returns false when the record is gone, so a caller can tell a no-op
+   * from a write.
+   */
+  recordJobTransition(issueNumber: number, transition: JobTransition): Promise<boolean>;
+  /** Records the agent backend's last reported state, for stall detection. */
+  setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void>;
   /** Records the game directory a submission is building, once it is known. */
   setSubmissionSlug(issueNumber: number, slug: string): Promise<void>;
   /** Stamps the moment a submission was first seen published (for build-time stats). */
@@ -1098,6 +1146,23 @@ export class InMemoryStore implements Store {
   async setSubmissionLastStatus(issueNumber: number, status: SubmissionStatus): Promise<void> {
     const sub = this.submissions.get(issueNumber);
     if (sub) this.submissions.set(issueNumber, { ...sub, lastStatus: status });
+  }
+
+  async recordJobTransition(issueNumber: number, transition: JobTransition): Promise<boolean> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub) return false;
+    this.submissions.set(issueNumber, {
+      ...sub,
+      state: transition.to,
+      stateSince: transition.at,
+      transitions: [...(sub.transitions ?? []), transition].slice(-MAX_JOB_TRANSITIONS),
+    });
+    return true;
+  }
+
+  async setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (sub) this.submissions.set(issueNumber, { ...sub, agentState });
   }
 
   async setSubmissionSlug(issueNumber: number, slug: string): Promise<void> {
@@ -1847,6 +1912,33 @@ export class FirestoreStore implements Store {
 
   async setSubmissionLastStatus(issueNumber: number, status: SubmissionStatus): Promise<void> {
     await this.db.collection('submissions').doc(String(issueNumber)).set({ lastStatus: status }, { merge: true });
+  }
+
+  async recordJobTransition(issueNumber: number, transition: JobTransition): Promise<boolean> {
+    const ref = this.db.collection('submissions').doc(String(issueNumber));
+    // A transaction, not a merge: the status poll and the reconciler sweep can both
+    // observe the same job at once, and appending to a list read outside a transaction
+    // loses whichever write landed second — silently, and exactly under the concurrent
+    // load where the history matters most.
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return false;
+      const current = snap.data() as SubmissionRecord;
+      tx.set(
+        ref,
+        {
+          state: transition.to,
+          stateSince: transition.at,
+          transitions: [...(current.transitions ?? []), transition].slice(-MAX_JOB_TRANSITIONS),
+        },
+        { merge: true },
+      );
+      return true;
+    });
+  }
+
+  async setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void> {
+    await this.db.collection('submissions').doc(String(issueNumber)).set({ agentState }, { merge: true });
   }
 
   async setSubmissionSlug(issueNumber: number, slug: string): Promise<void> {

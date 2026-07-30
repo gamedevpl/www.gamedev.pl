@@ -19,12 +19,13 @@ import {
   type GameSnapshotReader,
 } from './game-snapshot.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
+import { planObservedStatusTransition } from './job-state.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { notifyOnTransition, type EmitDeps } from './notify.js';
 import { peekQuota } from './quota-gate.js';
-import { type BuildPreviewSummary, type BuildShotSummary, type Store } from './store.js';
+import { type BuildPreviewSummary, type BuildShotSummary, type Store, type SubmissionRecord } from './store.js';
 import {
   CREATOR_FEEDBACK_MARKER,
   countCreatorClarifications,
@@ -35,6 +36,7 @@ import {
   type BuildEvent,
   type BuildMediaItem,
   type BuildPlayableItem,
+  type SubmissionStatus,
   type SubmissionStatusResponse,
 } from './submission-status.js';
 import { InvalidTokenError, mintToken, verifyToken } from './submission-token.js';
@@ -294,6 +296,29 @@ export async function registerSubmissionRoutes(
   const notifyMailer = options.notifyMailer ?? createMailerFromEnv();
   const notifyAppBaseUrl = options.notifyAppBaseUrl ?? process.env.APP_BASE_URL?.trim() ?? 'https://www.gamedev.pl';
   const unsubscribeSecret = options.unsubscribeSecret ?? process.env.SESSION_SECRET;
+  /**
+   * Feeds a derived status into the job state machine.
+   *
+   * Both the status poll and the sweep call this, so an in-flight build accumulates a
+   * real state and history whichever one happens to observe it first. It is additive
+   * for now — the status route still answers from the derivation — but it is what
+   * populates the record that will answer instead, and it makes time-in-state and
+   * stall detection available immediately for jobs that predate the job model.
+   *
+   * Best effort by design: this is bookkeeping, and a failed write must never turn a
+   * creator's status poll into an error.
+   */
+  async function recordDerivedJobState(record: SubmissionRecord, observed: SubmissionStatus): Promise<void> {
+    if (!store) return;
+    const transition = planObservedStatusTransition(record.state, observed, new Date(now()).toISOString());
+    if (!transition) return;
+    try {
+      await store.recordJobTransition(record.issueNumber, transition);
+    } catch (error) {
+      app.log.error({ err: error, issueNumber: record.issueNumber }, 'job transition write failed');
+    }
+  }
+
   function buildNotifyDeps(): EmitDeps {
     return {
       store: store!,
@@ -1200,6 +1225,7 @@ export async function registerSubmissionRoutes(
             if (record.lastStatus !== status.status) {
               await store.setSubmissionLastStatus(issueNumber, status.status);
             }
+            await recordDerivedJobState(record, status.status);
             await notifyOnTransition(buildNotifyDeps(), record, status, token);
           }
         } catch (notifyError) {
@@ -1601,6 +1627,7 @@ export async function registerSubmissionRoutes(
           if (record.lastStatus !== status.status) {
             await store.setSubmissionLastStatus(record.issueNumber, status.status);
           }
+          await recordDerivedJobState(record, status.status);
           const statusToken = mintToken(record.issueNumber, submissionTokenSecret);
           const result = await notifyOnTransition(buildNotifyDeps(), record, status, statusToken);
           if (result.emitted) emitted += 1;
