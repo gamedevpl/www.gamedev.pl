@@ -142,12 +142,17 @@ describe('HowToPlayPanel', () => {
     outside.remove();
   });
 
-  it('adds the keyboard-only note only for games with no touch path', async () => {
+  it('states touch support from the catalog, and only what the catalog knows', async () => {
     await draw();
     expect(document.querySelector('.howto-note')).toBeNull();
+    expect(rows().some(([key]) => key === 'Touch')).toBe(false);
 
-    await redraw({ keyboardOnly: true });
+    await redraw({ touch: 'gamekit' });
+    expect(rows().at(-1)).toEqual(['Touch', 'On-screen pad on touch screens']);
+
+    await redraw({ touch: 'none' });
     expect(document.querySelector('.howto-note')?.textContent).toContain('keyboard');
+    expect(rows().some(([key]) => key === 'Touch')).toBe(false);
   });
 
   it('renders repeated clauses without a duplicate-key warning', async () => {

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import type { CatalogTouch } from './catalog.js';
 import { PixelIcon } from './PixelIcon.js';
 import { parseControls } from './howToPlay.js';
 
@@ -14,8 +15,12 @@ type HowToPlayPanelProps = {
    * costs a row without answering the question the card exists for.
    */
   gameTitle: string;
-  /** Adds the "keyboard only" line, for games the games-repo build found no touch path in. */
-  keyboardOnly?: boolean;
+  /**
+   * Catalog touch support, derived by the games-repo build from the game's own source —
+   * never authored in a spec — so it can be stated as fact. `gamekit` earns a Touch row;
+   * `none` earns the keyboard-only line.
+   */
+  touch?: CatalogTouch | null;
   onClose: () => void;
 };
 
@@ -29,7 +34,7 @@ const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabi
  * game's own in-shell controls popup is hidden on purpose by the player bridge
  * (`gamePlayer.ts` HIDE_CHROME) because the theater surfaces this chrome instead.
  */
-export function HowToPlayPanel({ open, controls, gameTitle, keyboardOnly = false, onClose }: HowToPlayPanelProps) {
+export function HowToPlayPanel({ open, controls, gameTitle, touch = null, onClose }: HowToPlayPanelProps) {
   const { t } = useTranslation();
   const cardRef = useRef<HTMLDivElement | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
@@ -107,8 +112,16 @@ export function HowToPlayPanel({ open, controls, gameTitle, keyboardOnly = false
               <dd>{row.action}</dd>
             </div>
           ))}
+          {/* Stated, not guessed: `touch` is derived from the game's own source by the
+              games-repo build, so a pad promised here is a pad that exists. */}
+          {touch === 'gamekit' ? (
+            <div className="howto-row">
+              <dt>{t('player.howToPlayTouch')}</dt>
+              <dd>{t('player.howToPlayTouchPad')}</dd>
+            </div>
+          ) : null}
         </dl>
-        {keyboardOnly ? <p className="howto-note">{t('catalog.keyboardOnlyTooltip')}</p> : null}
+        {touch === 'none' ? <p className="howto-note">{t('catalog.keyboardOnlyTooltip')}</p> : null}
         <p className="howto-dismiss">{t('player.howToPlayDismiss')}</p>
       </div>
     </div>,

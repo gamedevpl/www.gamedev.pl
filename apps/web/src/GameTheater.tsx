@@ -451,7 +451,7 @@ export function GameTheater({
         open={howToOpen}
         controls={controls ?? ''}
         gameTitle={displayTitle}
-        keyboardOnly={touch === 'none'}
+        touch={touch}
         onClose={closeHowTo}
       />
     </section>
