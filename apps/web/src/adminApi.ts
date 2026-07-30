@@ -127,8 +127,10 @@ export interface CostReport {
     usd?: number;
   };
   creditsPerPublishedGame: number | null;
+  usdPerPublishedGame: number | null;
   medianTimeToPublishMs: number | null;
   creditsOnUnpublished: number;
+  usdOnUnpublished: number;
   unmeasuredJobs: number;
 }
 

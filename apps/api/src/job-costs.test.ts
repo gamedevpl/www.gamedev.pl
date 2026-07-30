@@ -57,14 +57,57 @@ describe('buildCostReport', () => {
     expect(report.creditsOnUnpublished).toBe(2);
   });
 
-  it('reports money and tokens as absent rather than as zero', () => {
-    // Nothing measures either today. A report claiming $0.00 per game would be a lie in
-    // the shape of a measurement.
+  it('prices credits in money, because the rate is fixed rather than estimated', () => {
+    // 100 credits to the dollar, published by GitHub. Converting is arithmetic, not a
+    // guess, so the money column is a measurement and not a placeholder.
+    const report = buildCostReport([
+      record({ issueNumber: 1, costs: [session(ago(20 * MINUTE)), session(ago(10 * MINUTE))] }),
+    ]);
+
+    expect(report.jobs[0].usd).toBe(0.02);
+    expect(report.totals.usd).toBe(0.02);
+  });
+
+  it('still reports tokens as absent rather than as zero', () => {
+    // Copilot exposes no token counts, and a zero would read as a measurement that came
+    // back empty instead of one that was never taken.
     const report = buildCostReport([record({ issueNumber: 1, costs: [session(ago(10 * MINUTE))] })]);
 
-    expect(report.totals.usd).toBeUndefined();
     expect(report.totals.tokens).toBeUndefined();
+    expect(report.jobs[0].tokens).toBeUndefined();
+  });
+
+  it('leaves money absent on a job nothing was ever billed to', () => {
+    // A job dispatched before the ledger existed has no spending to convert. $0.00 would
+    // say it was free; a dash says it was never measured.
+    const report = buildCostReport([record({ issueNumber: 1, state: 'published', publishedAt: ago(MINUTE) })]);
+
     expect(report.jobs[0].usd).toBeUndefined();
+    expect(report.totals.usd).toBeUndefined();
+  });
+
+  it('prices a published game and the builds that never shipped', () => {
+    const report = buildCostReport([
+      record({ issueNumber: 1, state: 'published', publishedAt: ago(MINUTE), costs: [session(ago(20 * MINUTE))] }),
+      record({ issueNumber: 2, state: 'failed', costs: [session(ago(40 * MINUTE)), session(ago(35 * MINUTE))] }),
+    ]);
+
+    // Three credits spent, one game shipped: three cents a game, two of them wasted.
+    expect(report.usdPerPublishedGame).toBe(0.03);
+    expect(report.usdOnUnpublished).toBe(0.02);
+  });
+
+  it('adds directly-priced spending to converted credits rather than replacing it', () => {
+    // A backend that bills dollars and a backend that bills credits are different
+    // spending on the same job, not two readings of the same spending.
+    const report = buildCostReport([
+      record({
+        issueNumber: 1,
+        costs: [session(ago(20 * MINUTE)), { kind: 'agent_session', at: ago(10 * MINUTE), by: 'backend-b', usd: 0.4 }],
+      }),
+    ]);
+
+    expect(report.jobs[0].usd).toBe(0.41);
   });
 
   it('adds up tokens and money once a backend does report them', () => {

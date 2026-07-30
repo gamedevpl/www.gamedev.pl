@@ -49,6 +49,14 @@ async function render(section: AdminSection = 'queue', onNavigate = vi.fn()) {
   return { container, root, onNavigate };
 }
 
+/** The banner is one line until asked; the rows only exist once it is open. */
+async function openAlerts(container: HTMLElement) {
+  const toggle = container.querySelector('.admin-alerts-summary') as HTMLElement;
+  await act(async () => {
+    toggle.click();
+  });
+}
+
 afterEach(() => {
   document.body.innerHTML = '';
   vi.clearAllMocks();
@@ -110,11 +118,44 @@ describe('AdminConsole', () => {
 
     const { container, root } = await render('telemetry');
 
+    // Closed, it is one line that still says how many and of what kind.
+    expect(container.querySelector('.admin-alerts-summary')?.textContent).toContain('1 ready to publish');
+    // The count rides on the queue tab, because that is where the doing happens.
+    expect(container.querySelector('.admin-tab-badge')?.textContent).toBe('1');
+
+    await openAlerts(container);
     const alerts = container.querySelector('.admin-alerts');
     expect(alerts?.textContent).toContain('Comet Courier');
     expect(alerts?.textContent).toContain('waiting to be published');
-    // The count rides on the queue tab, because that is where the doing happens.
-    expect(container.querySelector('.admin-tab-badge')?.textContent).toBe('1');
+
+    await act(async () => root.unmount());
+  });
+
+  it('sends an alert to the queue, which is the only place it can be acted on', async () => {
+    mocked.fetchAdminSummary.mockResolvedValue(
+      summary({
+        alerts: [
+          {
+            id: 'op-1-build_stalled',
+            kind: 'build_stalled',
+            issueNumber: 1_000_001,
+            title: 'Comet Courier',
+            ownerUid: 'g:1',
+            since: new Date(Date.now() - 20 * 60_000).toISOString(),
+            stall: 'quiet',
+          },
+        ],
+      }),
+    );
+    const onNavigate = vi.fn();
+
+    const { container, root } = await render('telemetry', onNavigate);
+    await openAlerts(container);
+    await act(async () => {
+      (container.querySelector('.admin-alert-open') as HTMLElement).click();
+    });
+
+    expect(onNavigate).toHaveBeenCalledWith('/admin/queue');
 
     await act(async () => root.unmount());
   });
@@ -138,6 +179,7 @@ describe('AdminConsole', () => {
     );
 
     const { container, root } = await render('queue');
+    await openAlerts(container);
 
     expect(container.querySelector('.admin-alert-age')?.textContent).toContain('0m');
     expect(container.textContent).not.toContain('-1m');
@@ -145,12 +187,31 @@ describe('AdminConsole', () => {
     await act(async () => root.unmount());
   });
 
-  it('says so plainly when nothing needs attention', async () => {
+  it('shows no banner at all when nothing is waiting', async () => {
+    // A banner that is always on screen is furniture, not a signal — and the header
+    // counts already say the queue is quiet.
     mocked.fetchAdminSummary.mockResolvedValue(summary());
 
     const { container, root } = await render('queue');
 
-    expect(container.querySelector('.admin-alerts--clear')?.textContent).toBe('Nothing waiting on you.');
+    expect(container.querySelector('.admin-alerts')).toBeNull();
+    expect(container.textContent).not.toContain('waiting on you');
+
+    await act(async () => root.unmount());
+  });
+
+  it('flags a pulled breaker on the tab that can put it back', async () => {
+    // Creation being paused is invisible from five of the six sections otherwise.
+    mocked.fetchAdminSummary.mockResolvedValue(
+      summary({ limits: { paused: true, globalDailySubmissionCap: 50, todaySubmissions: 3 } }),
+    );
+
+    const { container, root } = await render('telemetry');
+
+    const limitsTab = Array.from(container.querySelectorAll('.admin-tab')).find((tab) =>
+      tab.textContent?.startsWith('Limits'),
+    );
+    expect(limitsTab?.querySelector('.admin-tab-badge')?.textContent).toBe('paused');
 
     await act(async () => root.unmount());
   });
@@ -162,7 +223,10 @@ describe('AdminConsole', () => {
     const { container, root } = await render('queue', onNavigate);
     const tokensTab = Array.from(container.querySelectorAll('.admin-tab')).find(
       (tab) => tab.textContent === 'Tokens',
-    ) as HTMLButtonElement;
+    ) as HTMLAnchorElement;
+    // A real href, so the section can also be opened in a new tab the way any other
+    // address on the site can.
+    expect(tokensTab.getAttribute('href')).toBe('/admin/tokens');
     await act(async () => {
       tokensTab.click();
     });
