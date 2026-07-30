@@ -903,9 +903,34 @@ at all and feeds the only autonomous-eligible class.
   the **live** scorecard at approval time, so an erased player is never quoted from a
   stale copy. That is the ⚠️ below, answered at the exact point it bites.
 
-- 📋 Stall alert on a dispatched improvement that never progresses, and measurement
-  records written when it goes live — **at `published`, not at merge**, because there is
-  no merge any more.
+- ✅ **Stall reporting and 14-day measurement** (2026-07-30):
+  [suggestion-outcomes.ts](../apps/api/src/suggestion-outcomes.ts), run by the same
+  nightly sweep — proposing new work and following up on approved work are both "what
+  does the evidence say this morning", and splitting them would buy a fifth scheduler job
+  and a fifth audience for nothing.
+
+  Two edges a machine may decide on its own: `dispatched` → `published` when the job the
+  work went into actually ships, and `published` → `measured` once there is enough
+  post-change play to compare honestly. **Recorded at `published`, not at merge** — there
+  is no merge any more.
+
+  Stalls **reuse `detectStall`** rather than rebuilding an alert against GitHub. The
+  operator queue already ranks stuck jobs; what this adds is the link back to the
+  suggestion that commissioned the work, so a creator's approved improvement going quiet
+  reads as _that_ rather than as an anonymous stuck job. Reported, never acted on.
+
+  ⚠️ **"We could not tell" is never written down as "no effect".** A game with fewer than
+  20 sessions since the change, no scorecard, or no baseline is counted as
+  `notYetMeasurable` and left `published`. The two look identical in a table and mean
+  opposite things — and `neutral` is the one that would teach IL-4's router tuning that
+  fixes do nothing. The baseline is captured **at approval** rather than read back later,
+  because the scorecard is a rolling window: by the time work ships, the "before" has
+  already been partly overwritten by play from during the change.
+
+  Each class is judged on the claim it actually made — a defect on errors per session, a
+  friction on the progression drop, a design change on the downvote rate. A defect fix
+  that happened to move the vote ratio has not been vindicated by the votes.
+
 - ⚠️ **`errorSamples` is the one attacker-controlled field in the health data.** Every
   other number in a scorecard is computed by this service; an error message is a
   string a game chose to emit. It is safe rendered as text to an operator and unsafe

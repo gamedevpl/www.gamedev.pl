@@ -795,6 +795,24 @@ export interface SuggestionRecord {
   /** Who decided, and when — so an approval is attributable rather than ambient. */
   decidedBy?: string;
   decidedAt?: string;
+  /**
+   * The hypothesis metric as it stood when the work was approved.
+   *
+   * Captured at approval rather than read back later, because the scorecard is a rolling
+   * window: by the time an improvement ships, the "before" it should be judged against
+   * has already been partly overwritten by play from during the change.
+   */
+  baseline?: { at: string; metrics: Record<string, number | null> };
+  /** When the job carrying this improvement went live. */
+  publishedAt?: string;
+  /** The verdict, once there is enough post-change play to reach one honestly. */
+  outcome?: {
+    at: string;
+    verdict: 'improved' | 'neutral' | 'regressed';
+    metric: string;
+    before: number | null;
+    after: number | null;
+  };
   /** `computedAt` of the scorecard behind it, so a stale suggestion reads as stale. */
   computedFrom: string;
   createdAt: string;

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Scorecard, Store, SuggestionRecord } from './store.js';
+import { hypothesisMetric, metricFromScorecard } from './suggestion-outcomes.js';
 import type { SubmissionRoutesHandle } from './submissions.js';
 
 /**
@@ -198,12 +199,14 @@ export async function registerSuggestionInboxRoutes(
       return reply.status(429).send({ error: 'daily improvement quota exceeded' });
     }
 
-    const decided = {
-      decidedBy: uid,
-      decidedAt: new Date(now()).toISOString(),
-      updatedAt: new Date(now()).toISOString(),
-    };
+    const at = new Date(now()).toISOString();
     const card = await store.getScorecard(record.slug);
+    // Captured now, not read back after the work ships: the scorecard is a rolling
+    // window, so by then the "before" would be partly play from during the change.
+    const metric = hypothesisMetric(record.class);
+    const baseline =
+      metric && card ? { baseline: { at, metrics: { [metric.key]: metricFromScorecard(card, metric.key) } } } : {};
+    const decided = { decidedBy: uid, decidedAt: at, updatedAt: at, ...baseline };
 
     // The suggestion is keyed by slug; the round is dispatched against the job that owns
     // the game. A published game with no submission never produces a suggestion in the

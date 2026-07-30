@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { InternalAuthVerifier } from './internal-auth.js';
 import { routeScorecard, type Suggestion, type SuggestionClass } from './suggestions.js';
 import { OPEN_SUGGESTION_STATUSES, type Scorecard, type Store, type SuggestionRecord } from './store.js';
+import { advanceSuggestionOutcomes } from './suggestion-outcomes.js';
 
 /**
  * The analyst run (docs/improvement-loop-plan.md IL-3): persists what the router says.
@@ -226,11 +227,27 @@ export async function registerSuggestionSweepRoutes(
           scorecardSampleLimit: options.scorecardSampleLimit,
           onError: (slug, error) => request.log.error({ err: error, slug }, 'suggestion write failed'),
         });
+        // Same run, same schedule: proposing new work and following up on work already
+        // approved are both "what does the evidence say this morning", and splitting them
+        // would buy a fifth scheduler job and a fifth audience for nothing.
+        const outcomes = await advanceSuggestionOutcomes({
+          store,
+          now: options.now,
+          // A creator's approved improvement going quiet is a different event from an
+          // anonymous stuck job, and only this link can say which suggestion it was.
+          onStall: (record, stall) =>
+            request.log.error(
+              { suggestionId: record.id, slug: record.slug, jobId: record.jobId, stall },
+              'improvement job stalled',
+            ),
+          onError: (id, error) => request.log.error({ err: error, suggestionId: id }, 'suggestion outcome failed'),
+        });
         // Error level when anything failed, matching the other sweeps: a scheduled job
         // nobody watches is the kind that fails quietly for weeks.
-        const log = result.failed > 0 ? request.log.error.bind(request.log) : request.log.info.bind(request.log);
-        log({ ...result }, 'suggestion sweep complete');
-        return reply.send(result);
+        const anyFailure = result.failed > 0 || outcomes.failed > 0;
+        const log = anyFailure ? request.log.error.bind(request.log) : request.log.info.bind(request.log);
+        log({ ...result, outcomes }, 'suggestion sweep complete');
+        return reply.send({ ...result, outcomes });
       } catch (error) {
         request.log.error({ err: error }, 'suggestion sweep failed');
         return reply.status(500).send({ error: 'suggestion sweep failed' });
