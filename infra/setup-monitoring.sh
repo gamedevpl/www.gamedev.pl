@@ -484,6 +484,12 @@ EOF
 # single frustrated creator, and the cost of missing the first ten minutes of a probe is
 # nothing compared to the cost of an alert nobody reads.
 #
+# The service is named here as well as on the metric, which looks redundant and is not: the
+# two can drift. A metric is editable in the Console, and the next person to widen its filter
+# — chasing a log line the relay or the zone host emits, say — would silently turn this into
+# a project-wide alert without touching this file. A2 and A7 already carry the same
+# constraint on their own metrics for the same reason. Belt and braces cost one clause.
+#
 # The uid is on every log entry but is not a label here. Concentration is a *diagnosis* step,
 # not a threshold: "is this one uid or forty" is the first question after the email arrives,
 # and it is one Logs Explorer query (printed at the end of this script) rather than a metric
@@ -495,7 +501,7 @@ cat > "${POLICY_DIR}/a14.json" <<EOF
   "conditions": [{
     "displayName": "many rejections in a short window",
     "conditionThreshold": {
-      "filter": "metric.type=\"logging.googleapis.com/user/moderation_rejections\" AND resource.type=\"cloud_run_revision\"",
+      "filter": "metric.type=\"logging.googleapis.com/user/moderation_rejections\" AND resource.type=\"cloud_run_revision\" AND resource.label.\"service_name\"=\"${PRIMARY_SERVICE}\"",
       "aggregations": [{
         "alignmentPeriod": "600s",
         "perSeriesAligner": "ALIGN_SUM",

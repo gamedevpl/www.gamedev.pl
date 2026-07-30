@@ -159,4 +159,13 @@ describe('the alert that reads these logs', () => {
     // than its meaning is how a metric starts counting something else.
     expect(script).toMatch(/moderation_rejections[\s\S]{0,600}resource\.labels\.service_name/);
   });
+
+  it('scopes the alert policy too, not only the metric behind it', () => {
+    // Asserted separately because the metric is editable in the Console: widening its
+    // filter would turn A14 project-wide without this file changing. The policy carrying
+    // its own service constraint means the blast radius of that edit is bounded.
+    const policy = script.slice(script.indexOf('A14 moderation rejection burst'));
+    expect(policy).toContain('logging.googleapis.com/user/moderation_rejections');
+    expect(policy.slice(0, 800)).toContain('service_name');
+  });
 });
