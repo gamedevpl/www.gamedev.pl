@@ -65,6 +65,7 @@ describe('Auth API Routes', () => {
 
   const setupTestServer = async (
     mockUsers: Record<string, { sub: string; email?: string; name?: string; picture?: string }> = {},
+    adminUids?: Set<string>,
   ) => {
     const store = new InMemoryStore();
     const verifier = new MockGoogleVerifier(mockUsers);
@@ -74,6 +75,7 @@ describe('Auth API Routes', () => {
       store,
       sessionSecret: 'test-secret-key',
       googleAuthVerifier: verifier,
+      ...(adminUids ? { adminUids } : {}),
     });
 
     return { app, store };
@@ -174,6 +176,41 @@ describe('Auth API Routes', () => {
 
     expect(meRes.statusCode).toBe(200);
     expect(JSON.parse(meRes.body).user.uid).toBe('g:10002');
+  });
+
+  it('tells an operator’s session that it is one, and says nothing to anyone else', async () => {
+    // The client draws the console link from this rather than from probing an operator
+    // endpoint and reading its 404 as "no" — that probe put an error in every
+    // non-operator's console on every page load.
+    const { app } = await setupTestServer({ 'boss-token': { sub: '10003' } }, new Set(['g:10003']));
+
+    const bossLogin = await app.inject({
+      method: 'POST',
+      url: '/api/auth/google',
+      payload: { idToken: 'boss-token' },
+    });
+    expect(JSON.parse(bossLogin.body).user.admin).toBe(true);
+
+    const meRes = await app.inject({
+      method: 'GET',
+      url: '/api/auth/me',
+      headers: { cookie: (bossLogin.headers['set-cookie'] as string).split(';')[0]! },
+    });
+    expect(JSON.parse(meRes.body).user.admin).toBe(true);
+  });
+
+  it('leaves the flag off a session that is not an operator’s', async () => {
+    // Absent rather than false: a client that has never heard of the flag is
+    // unaffected, and nothing can read `admin: false` as a claim about anything else.
+    const { app } = await setupTestServer({ 'player-token': { sub: '10004' } }, new Set(['g:10003']));
+
+    const login = await app.inject({
+      method: 'POST',
+      url: '/api/auth/google',
+      payload: { idToken: 'player-token' },
+    });
+
+    expect(JSON.parse(login.body).user).not.toHaveProperty('admin');
   });
 
   it('POST /api/auth/logout clears session cookie', async () => {
