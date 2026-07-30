@@ -10,6 +10,20 @@ export function isStudioTab(value: string): value is StudioTab {
   return STUDIO_TABS.has(value as StudioTab);
 }
 
+/**
+ * Operator console sections, in the order they are offered.
+ *
+ * `queue` leads because it is the only one with something to do in it; the rest are
+ * things to look at. In the URL so a refresh, a bookmark, or the link in an alert
+ * notification lands on the section it meant rather than on whichever one is first.
+ */
+export const ADMIN_SECTIONS = ['queue', 'costs', 'telemetry', 'limits', 'tokens', 'suggestions'] as const;
+export type AdminSection = (typeof ADMIN_SECTIONS)[number];
+
+export function isAdminSection(value: string): value is AdminSection {
+  return (ADMIN_SECTIONS as readonly string[]).includes(value);
+}
+
 export type AppRoute =
   | { view: 'home' }
   // A published game being played. The slug is a stable permalink, so refreshing
@@ -25,10 +39,11 @@ export type AppRoute =
   // token rides in the fragment so it never hits access logs or Referer
   // (see docs/path-routing-plan.md § Join, docs/multiplayer-plan.md §4.3).
   | { view: 'join'; code: string; token: string }
-  // The operator telemetry view. Unlisted rather than secret: reaching the route
-  // renders nothing unless the API recognises the caller as an admin, and the API
-  // answers 404 to everyone else.
-  | { view: 'health' }
+  // The operator console. Unlisted rather than secret: reaching the route renders
+  // nothing unless the API recognises the caller as an admin, and the API answers 404
+  // to everyone else. `/health` still resolves here (telemetry) — it was the whole
+  // surface before there was a console, and links to it are in people's bookmarks.
+  | { view: 'admin'; section: AdminSection }
   // Creator control panel: own games, draft build (ex-status), playtest, improve.
   // `/status/:token` is accepted as an alias and resolves here too.
   // Optional `tab` deep-links into a work surface (`/studio/:token/build`).
@@ -50,6 +65,24 @@ const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 // Canonical play prefix is `/play`. `/ay` and `/ai` are accepted aliases (same view);
 // the app rewrites them to `/play/<slug>` so shared URLs stay consistent.
 const PLAY_PREFIX_PATTERN = /^\/(play|ay|ai)\/([^/]+)$/;
+
+/**
+ * Percent-decode one path segment, or null when it is not decodable.
+ *
+ * `decodeURIComponent` throws on malformed encoding — `/play/%E0` is a URIError, not a
+ * bad slug — and a throw here takes the whole app down on a route parse, which is the
+ * one function in the client that must never fail. A segment that cannot be decoded is
+ * a segment that cannot match anything, so null flows into the same `notFound` every
+ * other unrecognised path takes. The API's shell allowlist has always guarded these the
+ * same way (see spa-paths.ts); the client simply did not.
+ */
+function decodeSegment(segment: string): string | null {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Parse the SPA route from pathname (+ optional hash for the join credential).
@@ -79,27 +112,46 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
   if (statusMatch?.[1]) {
     // Legacy status URLs land in Creator Studio — the draft Build tab is the
     // former status / "dev studio" page, now unified with playtest + improve.
-    return { view: 'studio', token: decodeURIComponent(statusMatch[1]) };
+    const token = decodeSegment(statusMatch[1]);
+    if (token) return { view: 'studio', token };
   }
 
   const playMatch = normalizedPath.match(PLAY_PREFIX_PATTERN);
   if (playMatch?.[2]) {
-    const slug = decodeURIComponent(playMatch[2]);
-    if (SLUG_PATTERN.test(slug)) {
+    const slug = decodeSegment(playMatch[2]);
+    if (slug && SLUG_PATTERN.test(slug)) {
       return { view: 'play', slug };
     }
   }
 
   const draftMatch = normalizedPath.match(/^\/draft\/([^/]+)$/);
   if (draftMatch?.[1]) {
-    const slug = decodeURIComponent(draftMatch[1]);
-    if (SLUG_PATTERN.test(slug)) {
+    const slug = decodeSegment(draftMatch[1]);
+    if (slug && SLUG_PATTERN.test(slug)) {
       return { view: 'draft', slug };
     }
   }
 
+  // The console's old address, kept working: it is what the operator has bookmarked.
   if (normalizedPath === '/health') {
-    return { view: 'health' };
+    return { view: 'admin', section: 'telemetry' };
+  }
+
+  if (normalizedPath === '/admin') {
+    return { view: 'admin', section: 'queue' };
+  }
+
+  const adminMatch = normalizedPath.match(/^\/admin\/([^/]+)$/);
+  if (adminMatch?.[1]) {
+    // Matched raw rather than decoded: every section name is fixed lowercase ASCII, so
+    // an encoded one is not a section by definition and there is nothing to decode.
+    const section = adminMatch[1];
+    // An unknown section is a 404 rather than a silent fall back to the queue — same
+    // rule as the studio tabs, and for the same reason: a typo should be visible.
+    if (isAdminSection(section)) {
+      return { view: 'admin', section };
+    }
+    return { view: 'notFound' };
   }
 
   if (normalizedPath === '/studio') {
@@ -111,8 +163,11 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
   // client in step with the API's shell allowlist, which serves those paths a real 404.
   const studioMatch = normalizedPath.match(/^\/studio\/([^/]+)(?:\/([^/]+))?$/);
   if (studioMatch?.[1]) {
-    const token = decodeURIComponent(studioMatch[1]);
-    const tabSegment = studioMatch[2] ? decodeURIComponent(studioMatch[2]) : undefined;
+    const token = decodeSegment(studioMatch[1]);
+    const tabSegment = studioMatch[2] ? decodeSegment(studioMatch[2]) : undefined;
+    if (token === null || tabSegment === null) {
+      return { view: 'notFound' };
+    }
     if (!tabSegment) {
       return { view: 'studio', token };
     }
@@ -142,8 +197,46 @@ export function playPath(slug: string): string {
 }
 
 /**
- * If pathname is a play alias (`/ay/…` or `/ai/…`), return the canonical `/play/…`
- * path to rewrite to. Otherwise null (already canonical, or not a play route).
+ * The current address for a path that has more than one, or null when the path given is
+ * already it.
+ *
+ * Aliases accumulate as surfaces move. `/ay` and `/ai` are short forms of `/play`;
+ * `/status/:token` is where the build page lived before Creator Studio absorbed it;
+ * `/health` is where the operator console lived before it had sections. Every one of
+ * them still resolves, and that is not negotiable — links live in bookmarks, in old
+ * emails, in notifications sent months ago, and breaking them to tidy a route table
+ * would be a strange kind of housekeeping.
+ *
+ * What this adds is the second half: the browser is put back on the current address, so
+ * a URL copied out of the bar is one that will still make sense next year, and a page
+ * someone reports as broken names something that still exists. The rewrite is a
+ * `replaceState`, so the alias does not become a history entry to go Back through.
+ */
+export function canonicalPath(pathname: string): string | null {
+  const route = parsePathRoute(pathname);
+  const canonical = ((): string | null => {
+    switch (route.view) {
+      case 'play':
+        return playPath(route.slug);
+      // Including a bare `/admin`, which lands on the queue: the section a page is
+      // showing belongs in the URL, or a refresh is a different page than a reload.
+      case 'admin':
+        return adminPath(route.section);
+      // Only the token form. `/studio` itself is canonical, and a tab is added by the
+      // view once it knows which game it is showing rather than here.
+      case 'studio':
+        return route.token ? studioPath(route.token, route.tab) : null;
+      default:
+        return null;
+    }
+  })();
+  return canonical && canonical !== pathname ? canonical : null;
+}
+
+/**
+ * @deprecated Prefer {@link canonicalPath}, which covers every alias rather than only
+ * the play prefixes. Kept as its own export because the play aliases are the pair most
+ * likely to be reached for by name.
  */
 export function canonicalPlayPath(pathname: string): string | null {
   const route = parsePathRoute(pathname);
@@ -200,12 +293,17 @@ export function navUpTarget(route: AppRoute): NavUpTarget | null {
         return { path: studioPath(), labelKey: 'upStudio' };
       }
       return { path: '/', labelKey: 'upHome' };
-    case 'health':
+    case 'admin':
     case 'legal':
     case 'contact':
     case 'notFound':
       return { path: '/', labelKey: 'upHome' };
   }
+}
+
+/** Path for an operator console section. Used by the tabs and by alert deep links. */
+export function adminPath(section: AdminSection = 'queue'): string {
+  return `/admin/${section}`;
 }
 
 /** QR / share URL path+fragment for a multiplayer lobby guest. */

@@ -1,0 +1,118 @@
+// @vitest-environment jsdom
+
+import { act, createElement } from 'react';
+import { createRoot } from 'react-dom/client';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { CreationLimitsPanel } from './CreationLimitsPanel.js';
+import type { CreationLimits } from './adminApi.js';
+
+const mocked = vi.hoisted(() => ({
+  fetchAdminSummary: vi.fn(),
+  fetchCreationLimits: vi.fn(),
+  setCreationLimits: vi.fn(),
+  fetchSuggestions: vi.fn(),
+  fetchAccessTokens: vi.fn(),
+  mintAccessToken: vi.fn(),
+  revokeAccessToken: vi.fn(),
+}));
+
+vi.mock('./adminApi.js', () => mocked);
+
+function limits(overrides: Partial<CreationLimits> = {}): CreationLimits {
+  return {
+    stored: null,
+    effective: { paused: false, globalDailySubmissionCap: 50 },
+    today: { dateStr: '2026-07-30', submissions: 12 },
+    propagationMs: 60_000,
+    ...overrides,
+  };
+}
+
+async function render() {
+  (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  await act(async () => {
+    root.render(createElement(CreationLimitsPanel, {}));
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  return { container, root };
+}
+
+function button(container: HTMLElement, label: string): HTMLButtonElement {
+  const found = Array.from(container.querySelectorAll('button')).find((element) => element.textContent === label);
+  if (!found) throw new Error(`no button labelled ${label}`);
+  return found as HTMLButtonElement;
+}
+
+afterEach(() => {
+  document.body.innerHTML = '';
+  vi.clearAllMocks();
+});
+
+describe('CreationLimitsPanel', () => {
+  it('reports what is in force, not what happens to be stored', async () => {
+    // Nothing stored still means a ceiling: the deployed default. An operator deciding
+    // whether to pause needs the number actually being enforced.
+    mocked.fetchCreationLimits.mockResolvedValue(limits());
+
+    const { container, root } = await render();
+
+    expect(container.querySelector('.health-summary')?.textContent).toContain('12 of 50 used today');
+    expect(container.querySelector('.health-note')?.textContent).toContain('Nothing stored');
+
+    await act(async () => root.unmount());
+  });
+
+  it('pauses creation and reports when the change is everywhere', async () => {
+    mocked.fetchCreationLimits.mockResolvedValue(limits());
+    mocked.setCreationLimits.mockResolvedValue(
+      limits({ stored: { paused: true }, effective: { paused: true, globalDailySubmissionCap: 50 } }),
+    );
+
+    const { container, root } = await render();
+    await act(async () => {
+      button(container, 'Pause creation').click();
+    });
+
+    expect(mocked.setCreationLimits).toHaveBeenCalledWith({ paused: true });
+    expect(container.querySelector('.health-summary')?.textContent).toContain('Creation is paused');
+    // The button flips to the way out, so an incident does not end with a paused site
+    // and no visible way to unpause it.
+    expect(button(container, 'Resume creation')).toBeTruthy();
+    expect(container.querySelector('.admin-limits-message')?.textContent).toContain('within 60s');
+
+    await act(async () => root.unmount());
+  });
+
+  it('clears a stored ceiling rather than freezing today’s number into it', async () => {
+    mocked.fetchCreationLimits.mockResolvedValue(limits({ stored: { globalDailySubmissionCap: 20 } }));
+    mocked.setCreationLimits.mockResolvedValue(limits());
+
+    const { container, root } = await render();
+    await act(async () => {
+      button(container, 'Use the deployed default').click();
+    });
+
+    expect(mocked.setCreationLimits).toHaveBeenCalledWith({ globalDailySubmissionCap: null });
+
+    await act(async () => root.unmount());
+  });
+
+  it('surfaces a refusal instead of pretending the change landed', async () => {
+    mocked.fetchCreationLimits.mockResolvedValue(limits());
+    mocked.setCreationLimits.mockResolvedValue({ error: 'nothing to change' });
+
+    const { container, root } = await render();
+    await act(async () => {
+      button(container, 'Pause creation').click();
+    });
+
+    expect(container.querySelector('.admin-limits-message')?.textContent).toBe('nothing to change');
+    expect(container.querySelector('.health-summary')?.textContent).toContain('Creation is open');
+
+    await act(async () => root.unmount());
+  });
+});

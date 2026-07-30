@@ -163,10 +163,13 @@ export function routeKind(view: string): VisitRouteKind {
     case 'draft':
     case 'join':
     case 'legal':
-    case 'health':
     case 'studio':
     case 'notFound':
       return view;
+    // The console reports as `health`, the name it had when the funnel started
+    // recording it. Renaming the bucket would split one surface's history in two.
+    case 'admin':
+      return 'health';
     // Contact shares the public-chrome posture of legal pages (reachable without a
     // session, outside the creator funnel). Folding it into `legal` keeps the
     // visit vocabulary stable without inventing a new funnel bucket for a form.

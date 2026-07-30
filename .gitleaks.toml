@@ -23,6 +23,14 @@ paths = [
   '''app/css/fontello-embedded\.css''',
 ]
 regexes = [
+  # Two placeholder access-token ids from the operator console's tests: the hex
+  # digits in order, and the hex digits reversed. `generic-api-key` fires on any
+  # 16-char hex string, which is exactly the shape of a token id (`^[0-9a-f]{16}$`),
+  # so a made-up one is indistinguishable from a real one by rule. The fixtures
+  # themselves are zero-entropy now (`aaaa…`), but both strings are permanently in
+  # the history of PR #360 and CI scans every commit.
+  '''0123456789abcdef''',
+  '''fedcba9876543210''',
   # Google AdSense client id from the 2017 site (only in git history now).
   # AdSense client ids ship in public page HTML by design — not a secret.
   '''ca-pub-0288128369759519''',

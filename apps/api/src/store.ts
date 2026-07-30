@@ -187,7 +187,47 @@ export interface SubmissionRecord {
    * workspace. The newest is the one to observe.
    */
   dispatch?: { backend: string; refs: string[]; workspace?: string };
+  /**
+   * What this job has cost, one entry per thing that was billed.
+   *
+   * Recorded at the moment of spending rather than reconstructed later: a session that
+   * was started is a session that is charged for whatever happens next, and by the time
+   * a job is published the evidence of how many rounds it took has been overwritten by
+   * the rounds themselves.
+   */
+  costs?: JobCostEntry[];
 }
+
+/**
+ * One billed thing, attached to the job that incurred it.
+ *
+ * The units are deliberately plural. Copilot bills a *premium request* per session and
+ * exposes no token counts at all — so credits is the only honest number we can record
+ * for it, and a schema built around tokens would have had to lie or leave them zero.
+ * `tokens` and `usd` exist unpopulated for the backend that would report them
+ * (docs: architecture B), so that arriving is a writer, not a migration.
+ */
+export interface JobCostEntry {
+  kind: 'agent_session' | 'gate_run';
+  at: string;
+  /** Who charged for it: `copilot`, `cloud-build`. */
+  by: string;
+  /** The vendor's own id, so a line on a bill can be traced back to a job. */
+  ref?: string;
+  /** Premium requests. One per agent session, which is how Copilot bills. */
+  credits?: number;
+  /** Model tokens, when a backend reports them. Nothing does today. */
+  tokens?: { input: number; output: number };
+  /** Money, when a service reports it directly rather than in its own unit. */
+  usd?: number;
+}
+
+/**
+ * How many cost entries a job keeps. Higher than the transition cap: transitions are
+ * how a job got somewhere and only the tail matters, while a dropped cost entry is
+ * money that silently stops being counted.
+ */
+export const MAX_JOB_COSTS = 200;
 
 /**
  * How many transitions a submission keeps. Oldest are dropped first; the tail is what
@@ -482,7 +522,18 @@ export type NotificationType =
    * (docs/improvement-loop-plan.md IL-2). Unlike the three above it is not tied to one
    * submission, which is why its id is keyed by week rather than by issue number.
    */
-  | 'creator.digest';
+  | 'creator.digest'
+  /**
+   * The operator's own queue, delivered instead of waited on
+   * (`operator-alerts.ts`). These do not go to the creator: they go to every uid in
+   * ADMIN_UIDS, because the thing being reported — a build waiting on the publish
+   * decision, one that failed, one that has stopped moving — is nobody else's to act
+   * on, and the creator already has their own status page for their own game.
+   */
+  | 'operator.review_ready'
+  | 'operator.build_failed'
+  | 'operator.build_stalled'
+  | 'operator.feedback_undelivered';
 
 /**
  * The types that are about one submission, and so can render "«game title» happened".
@@ -492,7 +543,10 @@ export type NotificationType =
  * means a fourth submission event joins the email and push copy automatically, while a
  * second non-submission event has to be thought about.
  */
-export type SubmissionNotificationType = Exclude<NotificationType, 'creator.digest'>;
+export type SubmissionNotificationType = Extract<NotificationType, `submission.${string}`>;
+
+/** The operator-facing half, derived the same way and for the same reason. */
+export type OperatorNotificationType = Extract<NotificationType, `operator.${string}`>;
 
 export interface StoredNotification {
   /** Deterministic id (e.g. `sub-142-published`) so emission is idempotent. */
@@ -816,6 +870,12 @@ export interface Store {
   setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void>;
   /** Appends a dispatch ref, recording which backend is building this job and where. */
   recordDispatch(issueNumber: number, dispatch: { backend: string; ref: string; workspace?: string }): Promise<void>;
+  /**
+   * Appends one billed thing to a job's ledger. Best-effort by contract: a cost that
+   * fails to record must never fail the work it was recording, because the alternative
+   * is dropping a build to keep the books.
+   */
+  recordJobCost(issueNumber: number, entry: JobCostEntry): Promise<void>;
   /**
    * Records where a dispatched job's work actually lives, once the backend can say.
    *
@@ -1335,6 +1395,15 @@ export class InMemoryStore implements Store {
         refs: [...(existing?.refs ?? []), dispatch.ref],
         workspace: dispatch.workspace ?? existing?.workspace,
       },
+    });
+  }
+
+  async recordJobCost(issueNumber: number, entry: JobCostEntry): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub) return;
+    this.submissions.set(issueNumber, {
+      ...sub,
+      costs: [...(sub.costs ?? []), entry].slice(-MAX_JOB_COSTS),
     });
   }
 
@@ -2238,6 +2307,19 @@ export class FirestoreStore implements Store {
         },
         { merge: true },
       );
+    });
+  }
+
+  async recordJobCost(issueNumber: number, entry: JobCostEntry): Promise<void> {
+    const ref = this.db.collection('submissions').doc(String(issueNumber));
+    // Transactional like every other append here: two rounds of a job can be charged
+    // within the same second, and a read outside a transaction loses one of them —
+    // which is the one failure mode a ledger may not have.
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return;
+      const existing = (snap.data() as SubmissionRecord).costs ?? [];
+      tx.set(ref, { costs: [...existing, entry].slice(-MAX_JOB_COSTS) }, { merge: true });
     });
   }
 

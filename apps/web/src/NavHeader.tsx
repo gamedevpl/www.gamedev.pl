@@ -1,4 +1,4 @@
-import { useState, type MouseEvent } from 'react';
+import { useEffect, useState, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
 import { AuthModal } from './AuthModal.js';
@@ -6,6 +6,7 @@ import { LanguageSwitcher } from './LanguageSwitcher.js';
 import { Mascot } from './Mascot.js';
 import { NotificationBell } from './NotificationBell.js';
 import { PixelIcon } from './PixelIcon.js';
+import { fetchAdminSummary } from './adminApi.js';
 import { usePageScrolling } from './usePageScrolling.js';
 import githubIcon from './assets/github-mark-white.svg';
 
@@ -17,6 +18,8 @@ type NavHeaderProps = {
   onHome: () => void;
   /** Opens the creator control panel. */
   onStudio: () => void;
+  /** Opens the operator console. Only ever called from a link only operators are shown. */
+  onAdmin: () => void;
   /**
    * Android-style Up target for non-home surfaces. Null on home, join, play, and
    * while an immersive theater owns escape. Never history.back() — deep links
@@ -26,13 +29,62 @@ type NavHeaderProps = {
   onUp?: (path: string) => void;
 };
 
-export function NavHeader({ activeBuildCount, onNavigate, onHome, onStudio, upTarget = null, onUp }: NavHeaderProps) {
+export function NavHeader({
+  activeBuildCount,
+  onNavigate,
+  onHome,
+  onStudio,
+  onAdmin,
+  upTarget = null,
+  onUp,
+}: NavHeaderProps) {
   const { t } = useTranslation();
   const { user, logout } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   // Header mark mimes the visitor: pull a phone and scroll a tiny feed while the page moves.
   const pageScrolling = usePageScrolling();
+  /**
+   * How many jobs are waiting on this person, or null when they are not an operator —
+   * which is everyone. The console has been reachable only by knowing its URL, so the
+   * one surface with something to *do* on it was the one nothing linked to.
+   *
+   * The summary endpoint is the admission test: it answers 404 to everybody else, so a
+   * non-operator gets `null` and no link, and nothing here has to know why.
+   */
+  const [alertCount, setAlertCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      setAlertCount(null);
+      return;
+    }
+    let cancelled = false;
+    const read = () =>
+      fetchAdminSummary()
+        .then((summary) => {
+          if (cancelled) return;
+          setAlertCount(summary ? summary.alerts.length : null);
+          // Whether someone is an operator does not change while they browse, and
+          // almost nobody is one. Polling on regardless would have every signed-in
+          // visitor asking a question with a known answer, forever, at 404 apiece.
+          if (!summary) clearInterval(timer);
+        })
+        .catch(() => {
+          // A failed read is not evidence of anything; leave the link as it was and
+          // keep the timer, since the next read may well succeed.
+        });
+    // Slower than the console's own poll: this is a badge somebody glances at, not a
+    // queue they are working, and it rides along on every page of the site. Started
+    // before the first read so that read can stop it — it only ever runs on a later
+    // microtask, so the binding is always initialized by then.
+    const timer = setInterval(read, 120_000);
+    void read();
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [user]);
 
   const handleNavClick = (sectionId: string) => {
     onNavigate(sectionId);
@@ -148,6 +200,25 @@ export function NavHeader({ activeBuildCount, onNavigate, onHome, onStudio, upTa
                   </span>
                 )}
               </button>
+
+              {/* Operators only — everyone else never learns this exists, which is the
+                  same posture the API takes when asked. */}
+              {alertCount !== null && (
+                <button
+                  className="nav-link"
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    onAdmin();
+                  }}
+                >
+                  <PixelIcon name="wrench" size={14} /> Operator
+                  {alertCount > 0 && (
+                    <span className="specs-count-badge" aria-label={`${alertCount} waiting on you`}>
+                      {alertCount}
+                    </span>
+                  )}
+                </button>
+              )}
 
               {/* Controls that live in the header bar on a desktop but cannot fit
                   beside it on a phone. Hidden above the mobile breakpoint, where

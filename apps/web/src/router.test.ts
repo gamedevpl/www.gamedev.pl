@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canonicalPath,
   canonicalPlayPath,
   draftPath,
   joinPath,
@@ -69,9 +70,26 @@ describe('parsePathRoute', () => {
     expect(parsePathRoute('/join/K7M3QP/abc-DEF_123')).toEqual({ view: 'notFound' });
   });
 
-  it('parses the unlisted health route', () => {
-    expect(parsePathRoute('/health')).toEqual({ view: 'health' });
-    // Trailing segments are not the health view.
+  it('survives malformed percent-encoding on every segment it decodes', () => {
+    // `decodeURIComponent('%E0')` throws. Each of these used to take the SPA with it.
+    expect(parsePathRoute('/play/%E0')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/draft/%E0')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/status/%E0')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/studio/%E0')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/studio/tok/%E0')).toEqual({ view: 'notFound' });
+  });
+
+  it('parses the unlisted operator console, and keeps its old address working', () => {
+    expect(parsePathRoute('/admin')).toEqual({ view: 'admin', section: 'queue' });
+    expect(parsePathRoute('/admin/telemetry')).toEqual({ view: 'admin', section: 'telemetry' });
+    // `/health` was the whole operator page before the console existed, and is what is
+    // in the operator's bookmarks — it resolves to the section it used to be.
+    expect(parsePathRoute('/health')).toEqual({ view: 'admin', section: 'telemetry' });
+    // A section that does not exist is a typo, and says so.
+    expect(parsePathRoute('/admin/nope')).toEqual({ view: 'notFound' });
+    // Malformed percent-encoding is a 404, not a URIError: route parsing runs on every
+    // navigation, and a throw there takes the whole app down.
+    expect(parsePathRoute('/admin/%E0')).toEqual({ view: 'notFound' });
     expect(parsePathRoute('/health/brick-storm')).toEqual({ view: 'notFound' });
   });
 
@@ -135,6 +153,29 @@ describe('path builders', () => {
     expect(canonicalPlayPath('/play/sky-dodge')).toBeNull();
     expect(canonicalPlayPath('/draft/sky-dodge')).toBeNull();
     expect(canonicalPlayPath('/')).toBeNull();
+  });
+
+  it('sends every old address to the one that replaced it', () => {
+    // The aliases keep resolving — bookmarks, old emails, notifications sent months
+    // ago — but the bar is put back on the current address so a copied URL survives.
+    expect(canonicalPath('/ay/sky-dodge')).toBe('/play/sky-dodge');
+    expect(canonicalPath('/ai/sky-dodge')).toBe('/play/sky-dodge');
+    expect(canonicalPath('/health')).toBe('/admin/telemetry');
+    expect(canonicalPath('/status/tok-abc')).toBe('/studio/tok-abc');
+    // A bare /admin names no section; the queue is what it shows, so that is what it says.
+    expect(canonicalPath('/admin')).toBe('/admin/queue');
+  });
+
+  it('leaves an address that is already current alone', () => {
+    // Returning a path here would mean a replaceState on every navigation.
+    expect(canonicalPath('/play/sky-dodge')).toBeNull();
+    expect(canonicalPath('/admin/telemetry')).toBeNull();
+    expect(canonicalPath('/studio/tok-abc')).toBeNull();
+    expect(canonicalPath('/studio/tok-abc/build')).toBeNull();
+    expect(canonicalPath('/studio')).toBeNull();
+    expect(canonicalPath('/draft/sky-dodge')).toBeNull();
+    expect(canonicalPath('/')).toBeNull();
+    expect(canonicalPath('/nonsense')).toBeNull();
   });
 
   it('builds a draft path that round-trips', () => {
@@ -206,7 +247,7 @@ describe('navUpTarget', () => {
   });
 
   it('sends browsable non-studio surfaces home', () => {
-    expect(navUpTarget({ view: 'health' })).toEqual({ path: '/', labelKey: 'upHome' });
+    expect(navUpTarget({ view: 'admin', section: 'queue' })).toEqual({ path: '/', labelKey: 'upHome' });
     expect(navUpTarget({ view: 'legal', doc: 'privacy' })).toEqual({ path: '/', labelKey: 'upHome' });
     expect(navUpTarget({ view: 'contact' })).toEqual({ path: '/', labelKey: 'upHome' });
     expect(navUpTarget({ view: 'notFound' })).toEqual({ path: '/', labelKey: 'upHome' });

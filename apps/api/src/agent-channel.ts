@@ -188,7 +188,16 @@ export interface AgentChannelOptions {
   /** Deliveries one build may make per hour. */
   maxSubmitsPerWindow?: number;
   /** Called when a candidate version lands, so the job can move on to the gate. */
-  onSourcesDelivered?: (input: { issueNumber: number; slug: string; version: string }) => Promise<void> | void;
+  /**
+   * Starts whatever verifies a delivery. May answer with what the run cost — the gate
+   * trigger reports Cloud Build's own build id, which is booked below so a line on the
+   * bill can be traced back to the game that caused it.
+   */
+  onSourcesDelivered?: (input: {
+    issueNumber: number;
+    slug: string;
+    version: string;
+  }) => Promise<{ buildId?: string } | void> | void;
 }
 
 type RejectionReason = 'stopped' | 'rate_limited' | 'too_many_events' | 'too_many_shots';
@@ -604,7 +613,21 @@ export async function registerAgentChannelRoutes(
             });
           }
         }
-        await options.onSourcesDelivered?.({ issueNumber, slug, version });
+        const gate = await options.onSourcesDelivered?.({ issueNumber, slug, version });
+        // Booked here rather than inside the trigger because this is where the job is
+        // known: the trigger takes a slug and a version and has no idea whose ledger to
+        // write to. Best-effort like every other write in this handler — the delivery has
+        // already been accepted, and refusing it now would make the agent upload again.
+        if (store && gate?.buildId) {
+          await store
+            .recordJobCost(issueNumber, {
+              kind: 'gate_run',
+              at: new Date().toISOString(),
+              by: 'cloud-build',
+              ref: gate.buildId,
+            })
+            .catch(() => {});
+        }
         options.onEvent?.(issueNumber);
 
         return reply.send({

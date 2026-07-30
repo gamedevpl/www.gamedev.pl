@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AdminJobsPanel } from './AdminJobsPanel.js';
 import {
   fetchGameHealth,
   fetchVisitFunnel,
@@ -17,6 +16,9 @@ import { ScorecardPanel } from './ScorecardPanel.js';
 
 /**
  * Operator view over play telemetry (docs/improvement-loop-plan.md IL-2).
+ *
+ * The telemetry section of the console (see AdminConsole) — it was the whole operator
+ * page before there was a console, which is why `/health` still resolves to it.
  *
  * Deliberately not translated: this is a single-operator surface, not a product one,
  * and adding a dozen keys to every locale for a page no player can reach would cost
@@ -123,9 +125,9 @@ export function GameHealthView() {
   return (
     <section className="health">
       <header className="health-header">
-        {/* The page carries the queue and both telemetry streams, so the title names
-            what it is rather than any one of them. */}
-        <h1>Operator</h1>
+        {/* A section of the console now, not a page: the console owns the title, the
+            alerts and the queue, and this is the telemetry inside it. */}
+        <h2 className="health-section-title">Telemetry</h2>
         <div className="health-windows">
           {WINDOWS.map((window) => (
             <button
@@ -139,12 +141,6 @@ export function GameHealthView() {
           ))}
         </div>
       </header>
-
-      {/* First, because it is the only part of this page with something to *do*: a
-          build waiting on approval is the one thing here that goes stale by being
-          unread. Its own loading and permission states are handled inside, so a slow
-          telemetry read never delays the queue. */}
-      <AdminJobsPanel />
 
       {state === 'loading' && <p className="health-empty">Reading telemetry…</p>}
       {state === 'error' && <p className="health-empty">Could not read telemetry.</p>}

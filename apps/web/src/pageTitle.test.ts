@@ -83,7 +83,7 @@ describe('resolveDocumentTitle', () => {
     expect(resolveDocumentTitle({ view: 'join', code: 'K7M3QP', token: 't' }, { copy })).toBe(
       'Join the game — Gamedev.pl',
     );
-    expect(resolveDocumentTitle({ view: 'health' }, { copy })).toBe('Telemetry — Gamedev.pl');
+    expect(resolveDocumentTitle({ view: 'admin', section: 'queue' }, { copy })).toBe('Telemetry — Gamedev.pl');
     expect(resolveDocumentTitle({ view: 'legal', doc: 'privacy' }, { copy })).toBe('Privacy Policy — Gamedev.pl');
     expect(resolveDocumentTitle({ view: 'legal', doc: 'terms' }, { copy })).toBe('Terms of Service — Gamedev.pl');
     expect(resolveDocumentTitle({ view: 'contact' }, { copy })).toBe('Contact — Gamedev.pl');

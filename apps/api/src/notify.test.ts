@@ -4,6 +4,7 @@ import { ConsoleMailer, type EmailMessage, type Mailer } from './mailer.js';
 import {
   absoluteAppUrl,
   emitDigestNotification,
+  emitOperatorAlert,
   emitSubmissionNotification,
   notifyOnTransition,
   statusToEvent,
@@ -446,5 +447,91 @@ describe('digest opt-out', () => {
     );
 
     expect(sent).toHaveLength(1);
+  });
+});
+
+describe('emitOperatorAlert', () => {
+  let store: InMemoryStore;
+  let mailer: ConsoleMailer;
+
+  const alert = {
+    id: 'op-1000001-review_ready',
+    kind: 'review_ready' as const,
+    issueNumber: 1_000_001,
+    title: 'Comet Courier',
+    ownerUid: 'g:creator',
+    slug: 'comet-courier',
+    since: '2026-07-30T11:00:00Z',
+  };
+
+  const deps = () => ({
+    store,
+    mailer,
+    appBaseUrl: 'https://www.gamedev.pl',
+    unsubscribeSecret: 'secret',
+    adminUids: ['g:boss'],
+  });
+
+  beforeEach(async () => {
+    store = new InMemoryStore();
+    mailer = new ConsoleMailer(() => {});
+    await store.upsertUser({ uid: 'g:boss', email: 'boss@example.com' });
+  });
+
+  it('notifies every operator and links them to the queue', async () => {
+    await store.upsertUser({ uid: 'g:second', email: 'second@example.com' });
+
+    const { created } = await emitOperatorAlert({ ...deps(), adminUids: ['g:boss', 'g:second'] }, alert);
+
+    expect(created).toBe(2);
+    const [notification] = await store.listNotifications('g:boss');
+    expect(notification).toMatchObject({
+      id: 'op-1000001-review_ready',
+      type: 'operator.review_ready',
+      titleKey: 'notifications.operator.review_ready.title',
+      link: '/admin/queue',
+      params: { title: 'Comet Courier', issueNumber: '1000001' },
+    });
+    expect(mailer.sent.map((message) => message.to)).toEqual(['boss@example.com', 'second@example.com']);
+  });
+
+  it('says nothing the second time the sweep sees the same situation', async () => {
+    await emitOperatorAlert(deps(), alert);
+    const second = await emitOperatorAlert(deps(), alert);
+
+    expect(second.created).toBe(0);
+    expect(mailer.sent).toHaveLength(1);
+    expect(await store.listNotifications('g:boss')).toHaveLength(1);
+  });
+
+  it('reaches an operator who unsubscribed from creator mail', async () => {
+    // An alert is a pager, not a subscription. Someone who once clicked "unsubscribe" on
+    // a build notification must not thereby have silenced their own queue.
+    await store.setEmailUnsubscribed('g:boss', new Date().toISOString());
+
+    await emitOperatorAlert(deps(), alert);
+
+    expect(mailer.sent).toHaveLength(1);
+    expect(mailer.sent[0].headers?.['List-Unsubscribe']).toBeUndefined();
+  });
+
+  it('carries the stall kind into the notification, so the fix is legible', async () => {
+    await emitOperatorAlert(deps(), {
+      ...alert,
+      id: 'op-1000001-build_stalled',
+      kind: 'build_stalled',
+      stall: 'quiet',
+    });
+
+    const [notification] = await store.listNotifications('g:boss');
+    expect(notification.params.detail).toBe('quiet');
+    expect(mailer.sent[0].text).toContain('(quiet)');
+  });
+
+  it('creates the in-app record even when email is not configured', async () => {
+    const { created } = await emitOperatorAlert({ store, adminUids: ['g:boss'] }, alert);
+
+    expect(created).toBe(1);
+    expect(await store.listNotifications('g:boss')).toHaveLength(1);
   });
 });

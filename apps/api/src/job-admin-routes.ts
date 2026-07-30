@@ -1,6 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { isAdminSession } from './admin.js';
-import { detectStall, isTerminal, toSubmissionStatus, type JobStall, type JobState } from './job-state.js';
+import {
+  detectStall,
+  isTerminal,
+  resolveJobState,
+  toSubmissionStatus,
+  type JobStall,
+  type JobState,
+} from './job-state.js';
 import type { GamesStore } from './games-store.js';
 import type { Store, SubmissionRecord } from './store.js';
 
@@ -67,10 +74,10 @@ export function buildJobQueue(records: SubmissionRecord[], now: number): JobQueu
   const jobs = records
     .map((record): JobQueueEntry | null => {
       // A record adopted into the job model has a state; one that has never been polled
-      // since this shipped does not. Fall back to what the last derivation said so the
-      // queue is complete from the first request rather than filling in gradually.
-      const state: JobState | undefined =
-        record.state ?? (record.lastStatus ? jobStateFromLastStatus(record.lastStatus) : undefined);
+      // since this shipped does not. `resolveJobState` falls back to what the last
+      // derivation said, so the queue is complete from the first request rather than
+      // filling in gradually.
+      const state = resolveJobState(record);
       if (!state || isTerminal(state)) return null;
 
       const stateSince = record.stateSince ?? record.createdAt;
@@ -98,28 +105,6 @@ export function buildJobQueue(records: SubmissionRecord[], now: number): JobQueu
   for (const job of jobs) byState[job.state] = (byState[job.state] ?? 0) + 1;
 
   return { jobs, byState, stalled: jobs.filter((job) => job.stall).length };
-}
-
-/** Narrow bridge for records that predate adoption — same mapping as job-state's. */
-function jobStateFromLastStatus(status: SubmissionRecord['lastStatus']): JobState | undefined {
-  switch (status) {
-    case 'queued':
-      return 'queued';
-    case 'building':
-      return 'building';
-    case 'in_review':
-      return 'ready_for_review';
-    case 'publishing':
-      return 'publishing';
-    case 'published':
-      return 'published';
-    case 'needs_changes':
-      return 'needs_changes';
-    case 'abandoned':
-      return 'abandoned';
-    default:
-      return undefined;
-  }
 }
 
 export async function registerJobAdminRoutes(
