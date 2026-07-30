@@ -148,7 +148,14 @@ export async function runGate(slug: string, version: string, deps: GateRunnerDep
         // The tail, not the head: the chain fails at the bottom and the last lines are
         // the ones naming the check that stopped it.
         report: tail(check.output, 4000),
-        artifacts: [],
+        // A red verdict is about whether this may be *published*. It is not a reason the
+        // creator should be unable to look at what their agent built — and for a while
+        // it was exactly that: a red gate stored nothing, the draft preview serves a
+        // gate artifact, so a build that finished reached the studio as an empty panel
+        // with no explanation. Stored under its own name, never `bundle.html`: publishing
+        // checks `manifest.gate.green` and the play route reads only the bundle, so an
+        // unverified document has no path to a player either way.
+        artifacts: await storePreview(deps, slug, version, harness),
         durationMs: now() - startedAt,
       };
     }
@@ -195,6 +202,43 @@ async function materializeCandidate(store: GamesStore, manifest: VersionManifest
     const target = path.join(gameDir, relative);
     await mkdir(path.dirname(target), { recursive: true });
     await writeFile(target, content, 'utf8');
+  }
+}
+
+/**
+ * Stores a playable document for a candidate the check refused.
+ *
+ * Assembled by the same function and from the same materialized sources as the green
+ * path's `bundle.html`, so it carries the identical serve-time policy — the restrictive
+ * CSP, the provenance marking, the credential scan, the byte budget. What it does not
+ * carry is a verdict, which is why it lives under a different name and why nothing that
+ * serves a *published* game will look at it.
+ *
+ * Best effort by construction. A candidate can fail the check precisely because it
+ * cannot be assembled — sources that do not transpile, a credential in the bundle, a
+ * document over budget — and in that case there is no preview to store and the red
+ * verdict already says everything there is to say. Throwing here would turn a reported
+ * failure into a crashed gate, which is strictly less information.
+ */
+async function storePreview(
+  deps: GateRunnerDeps,
+  slug: string,
+  version: string,
+  harness: string,
+): Promise<string[]> {
+  try {
+    const preview = await (deps.assembleBundle ?? assembleFromHarness)(harness, slug);
+    if (preview === null) return [];
+    await deps.store.putDerivedArtifact(
+      slug,
+      version,
+      'preview.html',
+      Buffer.from(preview, 'utf8'),
+      'text/html; charset=utf-8',
+    );
+    return ['preview.html'];
+  } catch {
+    return [];
   }
 }
 

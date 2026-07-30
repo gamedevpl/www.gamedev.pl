@@ -19,12 +19,21 @@ register; see the `internal-ops-repo` skill for access.
 What stays here is everything that is *already* public knowledge from
 [`deployment.md`](../deployment.md) — the secret names and how to rotate each one.
 
-One property worth stating in the open, because it constrains how the credential may be
-scoped and anyone touching the workflow needs it: **`SITE_DISPATCH_TOKEN` cannot be
-granted narrowly.** `repository_dispatch` is gated by Contents: read+write, so despite its
-name it is a *write-capable* credential on the platform repo, held by the games repo.
-Scope it to that single repository, and treat a leak of it as a compromise of the platform
-repo rather than a nuisance.
+Two properties are worth stating in the open, because they constrain how these credentials
+may be scoped and anyone touching the workflows needs them.
+
+**`SITE_DISPATCH_TOKEN` cannot be granted narrowly.** `repository_dispatch` is gated by
+Contents: read+write, so despite its name it is a *write-capable* credential on the
+platform repo, held by the games repo. Scope it to that single repository, and treat a leak
+of it as a compromise of the platform repo rather than a nuisance.
+
+**`agent-tasks-token` cannot be a machine identity.** GitHub's agent tasks API accepts only
+*user-to-server* tokens — App installation tokens are explicitly unsupported — so this is
+necessarily a human's fine-grained PAT, carrying a human's expiry. There is no version of
+it a service account can hold, which makes the calendar reminder the only mitigation. It is
+deliberately separate from `github-token` so that a dispatch outage cannot become a serving
+outage: see `createAgentBackendFromEnv` in `apps/api/src/agent-backend-env.ts`, which
+returns `undefined` rather than throwing when the token is absent.
 
 ## 2. Rotation order
 
@@ -47,6 +56,7 @@ rotation should never cascade — but only if you can tell which one broke.
 | Secret | Verify |
 | --- | --- |
 | `github-token` | Submit a test spec, or `curl -s https://www.gamedev.pl/api/health` then check logs for GitHub auth errors |
+| `agent-tasks-token` | Submit a test spec and confirm it gains a `dispatch` record instead of sitting at `queued`. The `agent dispatch enabled` log line proves only that a token is *present* — it is written at container start, before anything is called |
 | `GAMES_REPO_TOKEN` | Re-run the *Publish games snapshot* workflow — it reads the games repo and must go green |
 | `SITE_DISPATCH_TOKEN` | Merge anything trivial to the games repo `main`; a *Publish games snapshot* run must appear in the platform repo within a minute |
 | `session-secret` | ⚠️ Rotating this **invalidates every session** — every user is signed out. Not a routine rotation; do it deliberately, ideally announced |
@@ -56,6 +66,42 @@ rotation should never cascade — but only if you can tell which one broke.
 
 The three marked ⚠️ are **user-visible** rotations. They are not emergencies to be done
 quickly — they are changes to be scheduled.
+
+### `agent-tasks-token`, end to end
+
+The one credential where the whole §2 order matters in a single sitting, because revoking
+before verifying stops every build. Nothing here touches IAM: `secretAccessor` is already
+granted to the Cloud Run runtime SA on the secret, and adding a version does not change it.
+
+```bash
+# 1. New version of the EXISTING secret — not a new secret, and not an Actions secret.
+#    Stdin keeps the value out of shell history: paste, then Ctrl-D.
+gcloud secrets versions add agent-tasks-token --data-file=- --project gamedevpl
+
+# 2. Make it take effect. The env var maps to agent-tasks-token:latest and Cloud Run
+#    resolves that at instance start, so without a new revision the cutover happens
+#    whenever instances happen to recycle. Re-asserting the mapping forces one without
+#    leaving a stray ROTATED_AT behind.
+gcloud run services update gamedev-app --region europe-west1 --project gamedevpl \
+  --update-secrets=AGENT_TASKS_TOKEN=agent-tasks-token:latest
+
+# 3. Verify with a real submission (see the table above), then disable rather than
+#    destroy — disabling is reversible for the minutes when it still might not be.
+gcloud secrets versions disable <OLD_VERSION> --secret=agent-tasks-token --project gamedevpl
+```
+
+Revoke the old PAT on GitHub last.
+
+**When minting the replacement**, the scope is `Agent tasks: read and write` on the games
+repo. Two things bite here:
+
+- A fine-grained PAT is **capped by its owning account's own access**. Mint it on an
+  account with only read on the games repo and the token page will show write while every
+  call 403s at runtime. The token settings page is not the authority; the account's repo
+  access is.
+- It belongs to a *person*, so the dependency is that person's account staying healthy —
+  not only the expiry date. A 2FA reset, an account recovery, or that person losing repo
+  access stops creation exactly the same way an expiry does.
 
 ## 4. Compromise, rather than routine rotation
 

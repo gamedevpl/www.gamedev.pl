@@ -33,6 +33,24 @@
     "prefs": {
       "digestOn": "Weekly summary on",
       "digestOff": "Weekly summary off"
+    },
+    "operator": {
+      "review_ready": {
+        "title": "A build is waiting to be published",
+        "body": "“{{title}}” passed the gate."
+      },
+      "build_failed": {
+        "title": "A build failed",
+        "body": "“{{title}}” ended without delivering."
+      },
+      "build_stalled": {
+        "title": "A build has stopped moving",
+        "body": "“{{title}}” has gone quiet ({{detail}})."
+      },
+      "feedback_undelivered": {
+        "title": "A change request is not reaching the agent",
+        "body": "“{{title}}” has a change request nobody has collected."
+      }
     }
   },
   "header": {
@@ -286,8 +304,8 @@
       "error": "Could not send the request right now. Please try again."
     },
     "feedback": {
-      "title": "Player feedback — coming soon",
-      "body": "Written player comments and vote themes will land here once capture ships. Your play stats above already show how sessions go."
+      "title": "Player feedback",
+      "body": "Votes, note counts and what players wrote appear under Stats, from the nightly roll-up. A per-note reading list will land here."
     },
     "suggestions": {
       "title": "Suggested improvements",

@@ -70,7 +70,7 @@ export function resolveDocumentTitle(route: AppRoute, ctx: DocumentTitleContext)
         : brandedPageTitle(ctx.copy.draft);
     case 'join':
       return brandedPageTitle(ctx.copy.join);
-    case 'health':
+    case 'admin':
       return brandedPageTitle(ctx.copy.health);
     case 'studio':
       return ctx.studioTitle?.trim()

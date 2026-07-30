@@ -39,6 +39,14 @@ export const ALLOWED_SOURCE_FILES = [
   // so a delivery without it is one the gate cannot check — it fails at the trace stage
   // with `no committed trace`, having proved nothing about the game.
   'TRACE.json',
+  // The per-game playtest contract the harness requires of every game (validate Check
+  // 26, `tools/lib/playtest-contract.ts`). Same shape of dependency as TRACE.json: a
+  // harness-side requirement that only the agent can satisfy, so leaving it off this
+  // list does not keep anything out — it makes every delivery unpassable. It did: the
+  // check landed in the games repo while this list stayed as it was, and from then on
+  // each delivered game reached validate and stopped there, with no gate artifacts and
+  // therefore no draft preview for the creator watching.
+  'PLAYTEST.json',
   'index.html',
   'game.ts',
   'style.css',
@@ -155,6 +163,17 @@ export function validateSourceUpload(files: SourceFile[]): SourceFile[] {
       'TRACE.json is required — the gate diffs your game against it and cannot verify a ' +
         'delivery without one. Record it with `npm run trace -- <slug> --accept`, read what ' +
         'it captured, then deliver again.',
+    );
+  }
+  // Same reasoning as TRACE.json, and the same failure without it: the harness's Check
+  // 26 refuses a game that does not declare its progress landmarks, so a delivery
+  // missing this one is stored, reported as accepted, and then stops at validate having
+  // produced no bundle at all. Told now, while the agent still exists to act on it.
+  if (!seen.has('PLAYTEST.json')) {
+    throw new InvalidUploadError(
+      'PLAYTEST.json is required — it declares the progress landmarks your CAPTURE.json ' +
+        'run must reach, and the gate refuses a game without one. The minimum is ' +
+        '{"expectProgress": ["round-start"]}; list richer landmarks if your capture reaches them.',
     );
   }
 

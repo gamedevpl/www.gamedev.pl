@@ -6,6 +6,16 @@ export interface User {
   name?: string;
   picture?: string;
   tier: 'standard' | 'trusted' | 'blocked';
+  /**
+   * Present, and true, only for an operator on a browser session.
+   *
+   * Not authorization — every operator route re-checks the allowlist itself, and a
+   * client that set this by hand would gain nothing but a link to a page that answers
+   * "not found". It exists so the app can decide whether to *offer* the console without
+   * asking an operator-only endpoint and reading its 404 as "no", which cost everybody
+   * else a console error on every page load.
+   */
+  admin?: boolean;
 }
 
 export type WaitlistStatus = 'unknown' | 'not_on_list' | 'pending' | 'approved' | 'rejected';

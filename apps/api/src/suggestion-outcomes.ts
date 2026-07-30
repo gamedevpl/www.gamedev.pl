@@ -140,7 +140,8 @@ export async function advanceSuggestionOutcomes(deps: SuggestionOutcomeDeps): Pr
     failed: 0,
   };
 
-  const inFlight = await store.listSuggestions({ status: ['dispatched', 'published'], limit: 500 });
+  // Unbounded on purpose: a suggestion missed here is work nobody follows up on.
+  const inFlight = await store.listSuggestions({ status: ['dispatched', 'published'] });
 
   for (const record of inFlight) {
     try {

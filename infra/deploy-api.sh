@@ -33,7 +33,7 @@
 #   MAIL_FROM=...              (RFC 5322 sender; defaults to noreply@mail.gamedev.pl)
 #   INVITE_URL=...             (where invitees land; defaults to https://www.gamedev.pl)
 #   NOTIFY_SWEEP_AUDIENCE=...  (sweep endpoint URL; enables OIDC auth on /api/internal/notify-sweep)
-#   NOTIFY_SWEEP_SA=...        (Cloud Scheduler SA email allowed to call the sweeps; shared by all three)
+#   NOTIFY_SWEEP_SA=...        (Cloud Scheduler SA email allowed to call the sweeps; shared by all four)
 #   DIGEST_SWEEP_AUDIENCE=...   (digest endpoint URL; enables OIDC auth on the
 #                                weekly creator digest sweep)
 #   SUGGESTION_SWEEP_AUDIENCE=... (suggestion endpoint URL; enables OIDC auth on the
@@ -42,6 +42,9 @@
 #                               /api/internal/scorecard-sweep. Separate from the notify
 #                               audience because an OIDC audience is the endpoint's own
 #                               URL — one sweep's token must not be replayable at the other.)
+#   SUGGESTION_SWEEP_AUDIENCE=... (suggestion endpoint URL; enables OIDC auth on
+#                               /api/internal/suggestion-sweep, the IL-3 router run over
+#                               the scorecards. Its own audience for the same reason.)
 #   MP_RELAY_URL=...           (gamedev-mp-relay's URL, from infra/deploy-relay.sh; moves
 #                               party room creation to that service AND lifts this
 #                               service's --max-instances pin. One switch for both on
@@ -117,8 +120,12 @@ gcloud artifacts repositories describe "$REPO" --location "$REGION" --project "$
        --location "$REGION" --project "$PROJECT_ID" --description "gamedev.pl images"
 
 echo "==> Building image via Cloud Build: ${IMAGE}"
+# MP_RELAY_URL goes to the *build* as well as the service env below. The socket URL is
+# inlined into the bundle at build time, so a service that knows about the relay while its
+# bundle does not is the worst of both: room creation forwards correctly and every client
+# then dials an origin that no longer serves /api/mp/ws.
 gcloud builds submit "$REPO_ROOT" --config "$REPO_ROOT/infra/cloudbuild.yaml" \
-  --substitutions "_IMAGE=${IMAGE},_GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID},_APPLE_SERVICES_ID=${APPLE_SERVICES_ID}" \
+  --substitutions "_IMAGE=${IMAGE},_GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID},_APPLE_SERVICES_ID=${APPLE_SERVICES_ID},_MP_RELAY_URL=${MP_RELAY_URL}" \
   --project "$PROJECT_ID"
 
 # Wire whichever secrets exist into one --set-secrets list (multiple --set-secrets

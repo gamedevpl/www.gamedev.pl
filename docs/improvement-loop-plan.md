@@ -368,7 +368,7 @@ Two interchangeable executors, same contract (consistent with
 
 - **Analyst/babysitter run** — a scheduled coding-agent session (Claude Code /
   agy / any CLI agent on a cron, or a scheduled workflow) that: reads scorecards
-  → produces/updates `suggestions/` docs → files issues for approved and
+  → produces/updates `suggestions/` docs → dispatches jobs for approved and
   autonomous-eligible items → checks on open improvement PRs (validation green?
   stalled? needs a `verify-agent-work` pass?) → writes the digest. It does
   **not** write game code itself.
@@ -471,7 +471,7 @@ considerably:
   idea as GameTheater) with pause/resume on the bar and the note sheet layered
   over the game — not an inset iframe inside Studio chrome.
 - ✅ **Suggestion inbox** (2026-07-30) — cards with insight → evidence →
-  [Approve → files issue] / [Dismiss with reason], in the studio's stats tab beside the
+  [Approve → dispatches a job] / [Dismiss with reason], in the studio's stats tab beside the
   reactions block, because a suggestion is a reading of the same evidence
   ([CreatorStudioView.tsx](../apps/web/src/CreatorStudioView.tsx),
   [suggestion-inbox.ts](../apps/api/src/suggestion-inbox.ts)). Dismissal reasons are a
@@ -658,8 +658,11 @@ at all and feeds the only autonomous-eligible class.
   here, and vice versa; the scheduler service account is shared):
 
   ```bash
-  SWEEP_URL="$(gcloud run services describe gamedev-app --region europe-west1 \
-    --project gamedevpl --format 'value(status.url)')/api/internal/scorecard-sweep"
+  # The host is the project-number one, hardcoded on purpose: `status.url` returns the
+  # *hash* host (gamedev-app-ll6xk4myya-ew.a.run.app), and an audience that disagrees by a
+  # hostname is rejected exactly like a missing one — a silent 401 that looks like a sweep
+  # that simply found nothing. Deriving it has now been wrong twice.
+  SWEEP_URL="https://gamedev-app-334141807880.europe-west1.run.app/api/internal/scorecard-sweep"
   SA=notify-sweep@gamedevpl.iam.gserviceaccount.com
   # Redeploy with SCORECARD_SWEEP_AUDIENCE="$SWEEP_URL" set (NOTIFY_SWEEP_SA already is), then:
   gcloud scheduler jobs create http scorecard-sweep --location europe-west1 --project gamedevpl \
@@ -747,8 +750,8 @@ at all and feeds the only autonomous-eligible class.
   Provisioning — again its own audience, since the audience is the endpoint URL:
 
   ```bash
-  SWEEP_URL="$(gcloud run services describe gamedev-app --region europe-west1 \
-    --project gamedevpl --format 'value(status.url)')/api/internal/digest-sweep"
+  # Project-number host, not `status.url` — see the note on the scorecard block above.
+  SWEEP_URL="https://gamedev-app-334141807880.europe-west1.run.app/api/internal/digest-sweep"
   SA=notify-sweep@gamedevpl.iam.gserviceaccount.com
   # Redeploy with DIGEST_SWEEP_AUDIENCE="$SWEEP_URL" set, then:
   gcloud scheduler jobs create http digest-sweep --location europe-west1 --project gamedevpl \
@@ -880,10 +883,10 @@ at all and feeds the only autonomous-eligible class.
 
 - ✅ **Inbox, approval and dismissal** (2026-07-30):
   `GET /api/me/suggestions`, `POST .../:id/approve`, `POST .../:id/dismiss`
-  ([suggestion-inbox.ts](../apps/api/src/suggestion-inbox.ts)). Approve files an
-  evidence-fenced `improvement` issue through the _same_ games-repo client the submission
-  routes resolved, and spends the `improvements` quota, so approving cannot outrun the
-  budget the plan reserved for it.
+  ([suggestion-inbox.ts](../apps/api/src/suggestion-inbox.ts)). Approve starts an
+  improvement round through the _same_ `startImprovementRound` as the creator's own
+  improve request — a new job seeded with the game's slug — and spends the `improvements`
+  quota, so approving cannot outrun the budget the plan reserved for it.
 
   **Approval is durable even when the handoff fails.** This is the plan's preferred
   mitigation for a failed handoff, implemented: if the round cannot be started — backend

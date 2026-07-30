@@ -9,13 +9,13 @@ import type { SubmissionRoutesHandle } from './submissions.js';
  * The suggestion inbox (docs/improvement-loop-plan.md IL-3 creator surface).
  *
  * The analyst run proposes; this is where a human decides. Three routes: read your own
- * queue, approve one into a games-repo issue, or dismiss it with a reason.
+ * queue, approve one into a round of agent work, or dismiss it with a reason.
  *
- * **Approving starts a round of work; it does not file an issue.** Dispatch is something
- * this platform owns now — a native job resumes its own workspace through the agent
- * backend, and only a legacy issue-numbered submission still travels through GitHub.
- * Both live behind `startImprovementRound`, shared with the creator's own improve
- * request, so the two cannot disagree about how work reaches an agent.
+ * **Approving starts a job; it does not file an issue.** Dispatch is something this
+ * platform owns now — an improvement is a new job seeded with the game's slug, and the
+ * agent revises the delivered sources rather than building from nothing. It goes through
+ * the same `startImprovementRound` as the creator's own improve request, so the two
+ * cannot disagree about how work reaches an agent.
  *
  * **Approval is durable even when the handoff fails.** If the round cannot be started,
  * the suggestion lands in `no-implementer` with the reason attached instead of returning
@@ -230,7 +230,6 @@ export async function registerSuggestionInboxRoutes(
         issueNumber: submission.issueNumber,
         text: brief,
         title: `Improve ${record.slug}: ${record.class}`,
-        legacyBody: brief,
         locale: submission.locale ?? 'en',
         log: request.log,
       });
@@ -239,9 +238,9 @@ export async function registerSuggestionInboxRoutes(
             ...record,
             ...decided,
             status: 'dispatched',
-            // The job the work now lives in — a new native job, or a legacy issue number.
-            // Recorded either way so the measurement pass can ask whether it shipped.
-            jobId: started.route === 'job' ? started.jobId : started.issueNumber,
+            // The job the work now lives in, so the measurement pass can ask whether it
+            // ever shipped.
+            jobId: started.jobId,
           }
         : {
             ...record,

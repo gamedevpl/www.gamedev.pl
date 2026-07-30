@@ -5,7 +5,14 @@ function stubFetch(response: Partial<Response> = {}) {
   const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
   const impl = (async (url: string | URL, init: RequestInit = {}) => {
     calls.push({ url: String(url), body: JSON.parse(String(init.body ?? '{}')) });
-    return { ok: true, status: 200, text: async () => '', ...response } as Response;
+    return {
+      ok: true,
+      status: 200,
+      text: async () => '',
+      // Cloud Build answers a create with a long-running operation carrying the build.
+      json: async () => ({ metadata: { build: { id: 'build-abc' } } }),
+      ...response,
+    } as Response;
   }) as unknown as typeof fetch;
   return { impl, calls };
 }
@@ -42,6 +49,24 @@ describe('createCloudBuildGateTrigger', () => {
     expect(script.indexOf('GAME_CAPTURE_CHROME')).toBeLessThan(script.indexOf('gate:run'));
   });
 
+  it('reports the build id, so a line on the bill can be traced back to a game', async () => {
+    // Previously read off the response and dropped, which left cost attribution with no
+    // join at all between a GCP charge and the game that caused it.
+    const { impl } = stubFetch();
+    const trigger = createCloudBuildGateTrigger({ ...OPTIONS, fetchImpl: impl });
+
+    await expect(trigger!({ slug: 'comet-courier', version: 'v1' })).resolves.toEqual({ buildId: 'build-abc' });
+  });
+
+  it('keeps the gate running when the response is not the shape we expected', async () => {
+    // The build is already queued by the time this is parsed. An unrecognised body costs
+    // us the id, and must not cost us the verification.
+    const { impl } = stubFetch({ json: async () => ({ nothing: 'useful' }) });
+    const trigger = createCloudBuildGateTrigger({ ...OPTIONS, fetchImpl: impl });
+
+    await expect(trigger!({ slug: 'comet-courier', version: 'v1' })).resolves.toEqual({});
+  });
+
   it('uses the read-only games token, never a credential that can start agent work', async () => {
     // The gate runs agent-authored code. A token that could dispatch work has no
     // business in that container, which is the same reasoning as cloudbuild-gate.yaml.
@@ -63,7 +88,9 @@ describe('createCloudBuildGateTrigger', () => {
     const error = vi.fn();
     const trigger = createCloudBuildGateTrigger({ ...OPTIONS, fetchImpl: impl }, { error, info: vi.fn() });
 
-    await expect(trigger!({ slug: 'comet-courier', version: 'v1' })).resolves.toBeUndefined();
+    // Resolves with no build id, which is the same statement as "this cost nothing":
+    // the caller books a gate run only when there was one.
+    await expect(trigger!({ slug: 'comet-courier', version: 'v1' })).resolves.toEqual({});
     // Loud, because the consequence is silent: nothing will ever verify this candidate
     // unless somebody notices.
     expect(error).toHaveBeenCalled();

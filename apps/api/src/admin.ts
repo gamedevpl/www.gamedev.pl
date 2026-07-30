@@ -8,6 +8,10 @@ import {
   type PartitionScanBudget,
 } from './telemetry-health.js';
 import { routeAll, type Suggestion } from './suggestions.js';
+import { buildJobQueue } from './job-admin-routes.js';
+import type { JobState } from './job-state.js';
+import { buildCostReport } from './job-costs.js';
+import { detectOperatorAlerts, type OperatorAlert } from './operator-alerts.js';
 import { summarizeVisitFunnel, type VisitFunnel } from './visit-funnel.js';
 import { summarizeCreatorMetrics, type CreatorMetrics } from './creator-metrics.js';
 import { DEFAULT_CREATION_LIMITS_TTL_MS, resolveDefaultGlobalDailyCap } from './creation-limits.js';
@@ -16,6 +20,7 @@ import {
   type CreationLimits,
   type Scorecard,
   type Store,
+  type SubmissionRecord,
   type TelemetryEvent,
   type User,
   type VisitEvent,
@@ -149,6 +154,30 @@ export interface CreatorsResponse {
  */
 const MAX_SUBMISSIONS_SAMPLED = 100;
 
+/**
+ * How far back the cost report reaches, in published games.
+ *
+ * The window is what makes the answer useful: "what does a game cost" is a question
+ * about the current pipeline, and averaging it against builds from three architectures
+ * ago would produce a number that is true of nothing.
+ */
+const MAX_COST_SUBMISSIONS = 100;
+
+/**
+ * The one read the console header and the nav badge share.
+ *
+ * Everything in it is already answerable from other routes; what it adds is being cheap
+ * enough to call on every page load. The nav needs two things — may this person see the
+ * console at all, and is there anything in it demanding them — and getting those from
+ * `/api/admin/jobs` would mean shipping the whole queue to draw one dot.
+ */
+export interface AdminSummaryResponse {
+  /** Jobs waiting on a person, worst first. Short by construction — see operator-alerts. */
+  alerts: OperatorAlert[];
+  queue: { active: number; stalled: number; byState: Partial<Record<JobState, number>> };
+  limits: { paused: boolean; globalDailySubmissionCap: number; todaySubmissions: number };
+}
+
 export function isAdmin(uid: string | undefined, adminUids: Set<string> | undefined): boolean {
   return uid !== undefined && adminUids !== undefined && adminUids.has(uid);
 }
@@ -197,6 +226,84 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
       propagationMs: creationLimitsTtlMs,
     };
   }
+
+  /**
+   * When each open job's oldest uncollected change request arrived.
+   *
+   * One query per active job, which is the only read on this route that is not O(1) —
+   * paid because the alternative is a console whose alert list is missing the one kind
+   * the sweep can see, and an operator learning to distrust the number. The active set
+   * is open submissions only, and the sweep walks the same set every two minutes doing
+   * strictly more work per record.
+   */
+  async function pendingFeedbackAges(records: SubmissionRecord[]): Promise<Map<number, string>> {
+    const ages = new Map<number, string>();
+    await Promise.all(
+      records.map(async (record) => {
+        const [oldest] = await store.listPendingCreatorMessages(record.issueNumber, { limit: 1 });
+        if (oldest) ages.set(record.issueNumber, oldest.createdAt);
+      }),
+    );
+    return ages;
+  }
+
+  /**
+   * Console header and nav badge in one request.
+   *
+   * Same 404-to-everyone-else contract as the reads below, which is what makes it usable
+   * as the admin test the client has never had: the web app has no idea who is an
+   * operator, so until now the console could only be reached by knowing the URL and the
+   * page could only say "not found" after the fact.
+   */
+  app.get('/api/admin/summary', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) {
+      return reply.status(404).send({ error: 'not found' });
+    }
+
+    const [records, limits] = await Promise.all([store.listActiveSubmissions(), readCreationLimits()]);
+    const at = now();
+    const queue = buildJobQueue(records, at);
+    const body: AdminSummaryResponse = {
+      alerts: detectOperatorAlerts(records, at, await pendingFeedbackAges(records)),
+      queue: { active: queue.jobs.length, stalled: queue.stalled, byState: queue.byState },
+      limits: {
+        paused: limits.effective.paused,
+        globalDailySubmissionCap: limits.effective.globalDailySubmissionCap,
+        todaySubmissions: limits.today.submissions,
+      },
+    };
+    return reply.status(200).send(body);
+  });
+
+  /**
+   * What building games has cost, per job and in aggregate.
+   *
+   * Reads the jobs in flight plus the last {@link MAX_COST_SUBMISSIONS} that published —
+   * deliberately not "everything ever", because the answer worth having is what a game
+   * costs *now*, and a window that reached back to launch would average today against a
+   * pipeline that no longer exists. It also bounds the read, like every other route here.
+   *
+   * A job appears in the window whether or not it has a ledger. One dispatched before
+   * any of this was recorded contributes nothing and is counted in `unmeasuredJobs`, so
+   * a small total reads as "not measured yet" rather than as "cheap".
+   */
+  app.get('/api/admin/costs', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) {
+      return reply.status(404).send({ error: 'not found' });
+    }
+
+    const [active, published] = await Promise.all([
+      store.listActiveSubmissions(),
+      store.listRecentlyPublished(MAX_COST_SUBMISSIONS),
+    ]);
+    // A job can be in both lists — active is "not abandoned and not yet notified as
+    // published", which a freshly published one still satisfies. Counting it twice would
+    // double its credits in the very total the report exists for.
+    const byIssue = new Map<number, SubmissionRecord>();
+    for (const record of [...active, ...published]) byIssue.set(record.issueNumber, record);
+
+    return reply.status(200).send(buildCostReport([...byIssue.values()]));
+  });
 
   app.get('/api/admin/creation-limits', async (request, reply) => {
     if (!isAdminSession(request, adminUids)) {

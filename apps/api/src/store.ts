@@ -187,7 +187,47 @@ export interface SubmissionRecord {
    * workspace. The newest is the one to observe.
    */
   dispatch?: { backend: string; refs: string[]; workspace?: string };
+  /**
+   * What this job has cost, one entry per thing that was billed.
+   *
+   * Recorded at the moment of spending rather than reconstructed later: a session that
+   * was started is a session that is charged for whatever happens next, and by the time
+   * a job is published the evidence of how many rounds it took has been overwritten by
+   * the rounds themselves.
+   */
+  costs?: JobCostEntry[];
 }
+
+/**
+ * One billed thing, attached to the job that incurred it.
+ *
+ * The units are deliberately plural. Copilot bills a *premium request* per session and
+ * exposes no token counts at all — so credits is the only honest number we can record
+ * for it, and a schema built around tokens would have had to lie or leave them zero.
+ * `tokens` and `usd` exist unpopulated for the backend that would report them
+ * (docs: architecture B), so that arriving is a writer, not a migration.
+ */
+export interface JobCostEntry {
+  kind: 'agent_session' | 'gate_run';
+  at: string;
+  /** Who charged for it: `copilot`, `cloud-build`. */
+  by: string;
+  /** The vendor's own id, so a line on a bill can be traced back to a job. */
+  ref?: string;
+  /** Premium requests. One per agent session, which is how Copilot bills. */
+  credits?: number;
+  /** Model tokens, when a backend reports them. Nothing does today. */
+  tokens?: { input: number; output: number };
+  /** Money, when a service reports it directly rather than in its own unit. */
+  usd?: number;
+}
+
+/**
+ * How many cost entries a job keeps. Higher than the transition cap: transitions are
+ * how a job got somewhere and only the tail matters, while a dropped cost entry is
+ * money that silently stops being counted.
+ */
+export const MAX_JOB_COSTS = 200;
 
 /**
  * How many transitions a submission keeps. Oldest are dropped first; the tail is what
@@ -199,16 +239,16 @@ export const MAX_JOB_TRANSITIONS = 50;
  * Where our own job ids start.
  *
  * Chosen to sit far above any number GitHub will plausibly assign an issue in the games
- * repo (which is in the low hundreds), so the boundary never has to be revisited and a
- * job's id alone says which era it belongs to. Jobs below the floor were keyed by a real
- * issue and are still served that way; jobs at or above it never had one.
+ * repo (which is in the low hundreds). It began as a discriminator — a job's id alone
+ * said which era it belonged to, and routes branched on it — and that job is finished:
+ * the GitHub-keyed path was removed on 2026-07-30 and `isNativeJobId` with it.
+ *
+ * **The floor itself stays, and not for history.** Those old jobs are still documents in
+ * `submissions`, keyed by their issue number, and a document key is forever. Allocating
+ * from 1 would hand a new build the id of a real creator's old one and quietly write into
+ * their record. The floor is what makes the id space append-only.
  */
 export const JOB_ID_FLOOR = 1_000_000;
-
-/** Whether this job was created after job identity stopped coming from GitHub. */
-export function isNativeJobId(id: number): boolean {
-  return id >= JOB_ID_FLOOR;
-}
 
 /**
  * A change request from the creator, queued for the agent to collect over the build
@@ -482,7 +522,18 @@ export type NotificationType =
    * (docs/improvement-loop-plan.md IL-2). Unlike the three above it is not tied to one
    * submission, which is why its id is keyed by week rather than by issue number.
    */
-  | 'creator.digest';
+  | 'creator.digest'
+  /**
+   * The operator's own queue, delivered instead of waited on
+   * (`operator-alerts.ts`). These do not go to the creator: they go to every uid in
+   * ADMIN_UIDS, because the thing being reported — a build waiting on the publish
+   * decision, one that failed, one that has stopped moving — is nobody else's to act
+   * on, and the creator already has their own status page for their own game.
+   */
+  | 'operator.review_ready'
+  | 'operator.build_failed'
+  | 'operator.build_stalled'
+  | 'operator.feedback_undelivered';
 
 /**
  * The types that are about one submission, and so can render "«game title» happened".
@@ -492,7 +543,10 @@ export type NotificationType =
  * means a fourth submission event joins the email and push copy automatically, while a
  * second non-submission event has to be thought about.
  */
-export type SubmissionNotificationType = Exclude<NotificationType, 'creator.digest'>;
+export type SubmissionNotificationType = Extract<NotificationType, `submission.${string}`>;
+
+/** The operator-facing half, derived the same way and for the same reason. */
+export type OperatorNotificationType = Extract<NotificationType, `operator.${string}`>;
 
 export interface StoredNotification {
   /** Deterministic id (e.g. `sub-142-published`) so emission is idempotent. */
@@ -900,6 +954,12 @@ export interface Store {
   setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void>;
   /** Appends a dispatch ref, recording which backend is building this job and where. */
   recordDispatch(issueNumber: number, dispatch: { backend: string; ref: string; workspace?: string }): Promise<void>;
+  /**
+   * Appends one billed thing to a job's ledger. Best-effort by contract: a cost that
+   * fails to record must never fail the work it was recording, because the alternative
+   * is dropping a build to keep the books.
+   */
+  recordJobCost(issueNumber: number, entry: JobCostEntry): Promise<void>;
   /**
    * Records where a dispatched job's work actually lives, once the backend can say.
    *
@@ -1482,6 +1542,15 @@ export class InMemoryStore implements Store {
         refs: [...(existing?.refs ?? []), dispatch.ref],
         workspace: dispatch.workspace ?? existing?.workspace,
       },
+    });
+  }
+
+  async recordJobCost(issueNumber: number, entry: JobCostEntry): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub) return;
+    this.submissions.set(issueNumber, {
+      ...sub,
+      costs: [...(sub.costs ?? []), entry].slice(-MAX_JOB_COSTS),
     });
   }
 
@@ -2188,14 +2257,24 @@ export class InMemoryStore implements Store {
       .filter((record) => (opts?.ownerUid ? record.ownerUid === opts.ownerUid : true))
       .map((record) => structuredClone(record))
       .sort(compareSuggestions)
-      .slice(0, opts?.limit ?? 200);
+      // No limit means every match, matching Firestore's paged read. Defaulting to a
+      // number here would make the in-memory store agree with production only while the
+      // collection stayed small — the divergence that hides until it matters.
+      .slice(0, opts?.limit ?? Number.MAX_SAFE_INTEGER);
   }
 
   async listGameSlugs(): Promise<string[]> {
     // Union of every slug this store knows anything about, mirroring Firestore's
     // `listDocuments()`, which also returns a game whose document never existed but
     // whose subcollections do.
-    return [...new Set([...this.votes.keys(), ...this.playerFeedback.keys(), ...this.scorecards.keys()])].sort();
+    return [
+      ...new Set([
+        ...this.votes.keys(),
+        ...this.playerFeedback.keys(),
+        ...this.scorecards.keys(),
+        ...this.suggestions.keys(),
+      ]),
+    ].sort();
   }
 
   async deletePlayerFeedbackByUid(uid: string): Promise<number> {
@@ -2428,6 +2507,19 @@ export class FirestoreStore implements Store {
         },
         { merge: true },
       );
+    });
+  }
+
+  async recordJobCost(issueNumber: number, entry: JobCostEntry): Promise<void> {
+    const ref = this.db.collection('submissions').doc(String(issueNumber));
+    // Transactional like every other append here: two rounds of a job can be charged
+    // within the same second, and a read outside a transaction loses one of them —
+    // which is the one failure mode a ledger may not have.
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return;
+      const existing = (snap.data() as SubmissionRecord).costs ?? [];
+      tx.set(ref, { costs: [...existing, entry].slice(-MAX_JOB_COSTS) }, { merge: true });
     });
   }
 
@@ -3476,6 +3568,7 @@ export class FirestoreStore implements Store {
     return snap.docs.map((doc) => doc.data() as Scorecard).sort(compareScorecards);
   }
 
+
   async listGameSlugs(): Promise<string[]> {
     // `listDocuments()` rather than `get()`: it lists references without reading
     // documents, and — the part that matters here — it includes games whose parent
@@ -3557,11 +3650,36 @@ export class FirestoreStore implements Store {
     // `in` caps at 30 values and there are 8 statuses, so this never needs chunking.
     if (opts?.status?.length) query = query.where('status', 'in', opts.status);
     if (opts?.ownerUid) query = query.where('ownerUid', '==', opts.ownerUid);
-    // No `orderBy`: combining one with these filters is exactly what needs a composite
-    // index per filter combination, and the result is bounded by the catalog. Ordering
-    // is applied in memory by the shared comparator, so both stores agree.
-    const snap = await query.limit(opts?.limit ?? 200).get();
-    return snap.docs.map((doc) => doc.data() as SuggestionRecord).sort(compareSuggestions);
+
+    // Deliberately **no** `orderBy`: combining one with these equality filters is exactly
+    // what needs a composite index per filter combination. Without one the query is
+    // implicitly ordered by `__name__`, which is always indexed — deterministic, but
+    // unrelated to priority. Ordering is restored in memory by the shared comparator, so
+    // both stores agree.
+    //
+    // Which makes a bare `limit()` a trap, and the reason this pages instead. A caller
+    // that asks for *the* open set and silently receives an arbitrary slice of it would
+    // not see the suggestion it was checking for, and would open a second one for the
+    // same game — a duplicate that looks exactly like the router changing its mind. So a
+    // caller with no explicit limit gets every match, read in pages; only a caller that
+    // asked for a bounded page (the inbox, showing a creator their shelf) gets one.
+    const pageSize = 500;
+    if (opts?.limit !== undefined) {
+      const snap = await query.limit(opts.limit).get();
+      return snap.docs.map((doc) => doc.data() as SuggestionRecord).sort(compareSuggestions);
+    }
+
+    const records: SuggestionRecord[] = [];
+    let cursor: FirebaseFirestore.QueryDocumentSnapshot | undefined;
+    for (;;) {
+      const page = cursor ? query.startAfter(cursor).limit(pageSize) : query.limit(pageSize);
+      const snap = await page.get();
+      if (snap.empty) break;
+      records.push(...snap.docs.map((doc) => doc.data() as SuggestionRecord));
+      if (snap.docs.length < pageSize) break;
+      cursor = snap.docs[snap.docs.length - 1];
+    }
+    return records.sort(compareSuggestions);
   }
 
   async createAccessToken(record: AccessTokenRecord): Promise<void> {

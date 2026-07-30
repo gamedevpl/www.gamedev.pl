@@ -15,15 +15,21 @@ const MINIMAL: SourceFile[] = [
   // The behavioural golden is part of a minimal delivery, not an extra: without it the
   // gate stops at the trace stage and the version can never reach a verdict.
   { path: 'TRACE.json', content: '{"samples":[]}' },
+  // Same status as the golden above, for the same reason: the harness's Check 26 refuses
+  // a game that does not declare its progress landmarks, so a delivery without this one
+  // reaches validate and stops there having produced nothing.
+  { path: 'PLAYTEST.json', content: '{"expectProgress":["round-start"]}' },
 ];
 
 describe('validateSourceUpload — the delivery contract', () => {
   it('accepts a minimal game', () => {
-    expect(validateSourceUpload(MINIMAL)).toHaveLength(4);
+    expect(validateSourceUpload(MINIMAL)).toHaveLength(MINIMAL.length);
   });
 
   it('accepts the game’s own modules', () => {
-    expect(validateSourceUpload([...MINIMAL, { path: 'entities/player.ts', content: 'export {};' }])).toHaveLength(5);
+    expect(validateSourceUpload([...MINIMAL, { path: 'entities/player.ts', content: 'export {};' }])).toHaveLength(
+      MINIMAL.length + 1,
+    );
   });
 
   it('refuses harness-shaped paths so a diff visibly respects the boundary', () => {
@@ -70,6 +76,17 @@ describe('validateSourceUpload — the delivery contract', () => {
     expect(validateSourceUpload(MINIMAL).map((f) => f.path)).toContain('TRACE.json');
     expect(() => validateSourceUpload(MINIMAL.filter((f) => f.path !== 'TRACE.json'))).toThrow(
       /TRACE\.json is required/,
+    );
+  });
+
+  it('accepts and requires the playtest contract the harness checks against', () => {
+    // The same failure as the golden above, made a second time. Check 26 landed in the
+    // games repo requiring PLAYTEST.json; this list was not updated, so no agent could
+    // deliver one — and every game built afterwards passed capture, stopped at validate,
+    // and produced no bundle. The creator saw a finished build with nothing to play.
+    expect(validateSourceUpload(MINIMAL).map((f) => f.path)).toContain('PLAYTEST.json');
+    expect(() => validateSourceUpload(MINIMAL.filter((f) => f.path !== 'PLAYTEST.json'))).toThrow(
+      /PLAYTEST\.json is required/,
     );
   });
 

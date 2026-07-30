@@ -5,6 +5,9 @@ substitutions:
   _IMAGE: '' # e.g. europe-central2-docker.pkg.dev/PROJECT/gamedev/api:latest
   _GOOGLE_OAUTH_CLIENT_ID: ''
   _APPLE_SERVICES_ID: ''
+  # Must match the MP_RELAY_URL passed to the *service* env. The bundle needs it too: the
+  # socket URL is inlined at build time, not read from the server.
+  _MP_RELAY_URL: ''
 steps:
   - name: gcr.io/cloud-builders/docker
     args:
@@ -15,6 +18,8 @@ steps:
       - 'VITE_GOOGLE_OAUTH_CLIENT_ID=${_GOOGLE_OAUTH_CLIENT_ID}'
       - '--build-arg'
       - 'VITE_APPLE_SERVICES_ID=${_APPLE_SERVICES_ID}'
+      - '--build-arg'
+      - 'VITE_MP_RELAY_URL=${_MP_RELAY_URL}'
       - '-t'
       - '${_IMAGE}'
       - '.'

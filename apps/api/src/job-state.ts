@@ -181,6 +181,19 @@ export function fromSubmissionStatus(status: SubmissionStatus): JobState {
 }
 
 /**
+ * The state a stored job is in, as far as anything can tell.
+ *
+ * A record adopted into the job model carries its own state; one that has not been
+ * polled since the model shipped carries only the last derived status. Readers that
+ * skipped the second case filled in gradually rather than being complete on the first
+ * request, and every one of them wrote the same three lines — so the fallback lives
+ * here, structurally typed to avoid dragging the store's record type into a pure module.
+ */
+export function resolveJobState(record: { state?: JobState; lastStatus?: SubmissionStatus }): JobState | undefined {
+  return record.state ?? (record.lastStatus ? fromSubmissionStatus(record.lastStatus) : undefined);
+}
+
+/**
  * Decides what to write when a derived status is observed for a job — the bridge that
  * lets the existing GitHub derivation feed the state machine instead of bypassing it.
  *

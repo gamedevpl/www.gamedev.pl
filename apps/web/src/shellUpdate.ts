@@ -62,8 +62,18 @@ export function watchShellUpdates(): void {
 
   navigator.serviceWorker.addEventListener('message', (event: MessageEvent) => {
     const data = event.data as { type?: string; revision?: string } | null;
-    if (data?.type !== 'shell-updated') return;
-    notePending(typeof data.revision === 'string' && data.revision ? data.revision : 'updated');
+    if (data?.type === 'shell-updated') {
+      notePending(typeof data.revision === 'string' && data.revision ? data.revision : 'updated');
+      return;
+    }
+    // Hashed shell asset missing (eviction / deploy race). One guarded reload is
+    // enough to pick up a fresh worker; looping would need a new miss after that.
+    if (data?.type === 'shell-asset-miss') {
+      const guardKey = 'gamedev_shell_asset_reload';
+      if (readSession(guardKey)) return;
+      writeSession(guardKey, '1');
+      window.location.reload();
+    }
   });
 
   const requestUpdate = () => {

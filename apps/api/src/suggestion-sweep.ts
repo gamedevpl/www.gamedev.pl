@@ -55,12 +55,17 @@ export function isActionable(suggestionClass: SuggestionClass): boolean {
 export const MAX_SCORECARDS_SAMPLED = 1_000;
 
 /**
- * A suggestion's id is `(slug, class, the scorecard it was computed from)`.
+ * The id a suggestion is *created* with: `(slug, class, the scorecard behind it)`.
  *
  * That makes re-running the sweep against one night's scorecards idempotent by
- * construction rather than by a guard: the same evidence produces the same id and
- * overwrites its own document. A game cannot route to two classes off one scorecard, so
- * the triple is unique per routing decision.
+ * construction rather than by a guard — the same evidence produces the same id and
+ * overwrites its own document, and a game cannot route to two classes off one scorecard.
+ *
+ * Stated as "created with" rather than as a standing invariant, because it stops being
+ * derivable the moment the evidence moves: an update keeps the id and advances
+ * `computedFrom`, deliberately, so a decision already attached to the card survives. An
+ * id is therefore a stable handle, not a checksum — do not recompute one to find a
+ * record, and do not read `computedFrom` back out of it.
  */
 export function suggestionId(slug: string, suggestionClass: string, computedFrom: string): string {
   const stamp = computedFrom.replace(/[^0-9A-Za-z]/g, '-');
@@ -101,9 +106,8 @@ export interface SuggestionSweepDeps {
     text: string;
     title: string;
     locale: string;
-    legacyBody: string;
     log: { error: (context: object, message: string) => void };
-  }) => Promise<{ route: 'job'; jobId: number } | { route: 'issue'; issueNumber: number } | null>;
+  }) => Promise<{ route: 'job'; jobId: number } | null>;
   /** Builds the brief an autonomously dispatched agent receives. */
   buildBrief?: (record: SuggestionRecord, untrusted: Scorecard['untrusted'] | null) => string;
   log?: { error: (context: object, message: string) => void };
@@ -135,10 +139,9 @@ export async function runSuggestionSweep(deps: SuggestionSweepDeps): Promise<Sug
   // One read for the whole open set rather than one per game: the sweep already holds
   // every scorecard, and a per-slug lookup would be a query per catalog entry to answer
   // a question one query answers.
-  const open = await store.listSuggestions({
-    status: [...OPEN_SUGGESTION_STATUSES],
-    limit: sampleLimit,
-  });
+  // No limit: this is the set the reconciliation is checked against, and a bounded read
+  // that quietly dropped an open suggestion would open a second one for the same game.
+  const open = await store.listSuggestions({ status: [...OPEN_SUGGESTION_STATUSES] });
   const openBySlug = new Map<string, SuggestionRecord>();
   for (const record of open) {
     // Ordered worst-first by the shared comparator, so the first per slug is the one a
@@ -158,10 +161,7 @@ export async function runSuggestionSweep(deps: SuggestionSweepDeps): Promise<Sug
 
   // Read once for the whole run: the budget is a property of the day and the week, not of
   // whichever game happens to be considered first.
-  const decided = await store.listSuggestions({
-    status: ['dispatched', 'published', 'measured'],
-    limit: 500,
-  });
+  const decided = await store.listSuggestions({ status: ['dispatched', 'published', 'measured'] });
 
   const closeOpen = async (record: SuggestionRecord, reason: string): Promise<void> => {
     await store.putSuggestion({ ...record, status: 'obsolete', statusReason: reason, updatedAt: at });
@@ -259,7 +259,6 @@ export async function runSuggestionSweep(deps: SuggestionSweepDeps): Promise<Sug
         issueNumber: submission.issueNumber,
         text: deps.buildBrief(fresh, card.untrusted),
         title: `Improve ${card.slug}: ${routed.class}`,
-        legacyBody: deps.buildBrief(fresh, card.untrusted),
         locale: submission.locale ?? 'en',
         log: deps.log ?? { error: () => {} },
       });
@@ -273,7 +272,7 @@ export async function runSuggestionSweep(deps: SuggestionSweepDeps): Promise<Sug
         decidedAt: at,
         ...(metric ? { baseline: { at, metrics: { [metric.key]: metricFromScorecard(card, metric.key) } } } : {}),
         ...(started
-          ? { status: 'dispatched' as const, jobId: started.route === 'job' ? started.jobId : started.issueNumber }
+          ? { status: 'dispatched' as const, jobId: started.jobId }
           : {
               status: 'no-implementer' as const,
               statusReason: 'could not start a round of work; this can be retried',

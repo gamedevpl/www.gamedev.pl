@@ -100,6 +100,33 @@ export interface Suggestion {
 }
 
 /**
+ * A suggestion as the nightly sweep persists it, at `games/{slug}/suggestion/current`.
+ *
+ * Two timestamps, because they answer different questions and a single one would hide the
+ * failure worth seeing. `computedFrom` is the *scorecard's* stamp and goes stale when the
+ * scorecard sweep stops; `sweptAt` is this sweep's own and goes stale when the router run
+ * stops. Collapsing them would make a dead scorecard sweep look like a dead router, and —
+ * worse in the other direction — a dead router look alive because the numbers under it
+ * were fresh.
+ */
+export interface StoredSuggestion extends Suggestion {
+  /** When the sweep that wrote this doc ran. */
+  sweptAt: string;
+}
+
+/**
+ * Presentation order: worst first, slug as the tie-break.
+ *
+ * The tie-break carries the same weight it does for scorecards — `healthy` and
+ * `insufficient-data` both score priority 0, so equal priorities are the common case
+ * rather than an edge one, and ordering on priority alone would let the list reshuffle
+ * between reads and change which rows survive a limit.
+ */
+export function compareSuggestions(a: Suggestion, b: Suggestion): number {
+  return b.priority - a.priority || a.slug.localeCompare(b.slug);
+}
+
+/**
  * The steepest single drop between consecutive progression landmarks.
  *
  * Progression labels are ordered by how many sessions reached them, so consecutive pairs
@@ -240,5 +267,5 @@ function severity(errorsPerSession: number, stallRate: number): number {
  * Silence would be indistinguishable from the router never having run.
  */
 export function routeAll(scorecards: Scorecard[]): Suggestion[] {
-  return scorecards.map(routeScorecard).sort((a, b) => b.priority - a.priority || a.slug.localeCompare(b.slug));
+  return scorecards.map(routeScorecard).sort(compareSuggestions);
 }

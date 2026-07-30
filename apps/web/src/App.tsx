@@ -8,11 +8,12 @@ import { HeroPromptSection } from './HeroPromptSection.js';
 import { ArcadeCatalog } from './ArcadeCatalog.js';
 import { CreatorStudioView } from './CreatorStudioView.js';
 import { DraftView } from './DraftView.js';
-import { GameHealthView } from './GameHealthView.js';
+import { AdminConsole } from './AdminConsole.js';
 import { PixelIcon } from './PixelIcon.js';
 import { CreatorQA, type QAQuestion } from './CreatorQA.js';
 import {
-  canonicalPlayPath,
+  adminPath,
+  canonicalPath,
   NAVIGATE_EVENT,
   navUpTarget,
   parsePathRoute,
@@ -31,9 +32,14 @@ import { SiteFooter } from './SiteFooter.js';
 import { resolveDocumentTitle } from './pageTitle.js';
 import { useDocumentTitle } from './useDocumentTitle.js';
 
-/** Read the current URL into an AppRoute, rewriting `/ay|/ai/<slug>` → `/play/<slug>`. */
+/**
+ * Read the current URL into an AppRoute, putting the browser on the current address
+ * first — `/ay|/ai/<slug>` → `/play/<slug>`, `/status/<token>` → `/studio/<token>`,
+ * `/health` → `/admin/telemetry`. The old address still works; it just does not stay
+ * in the bar to be copied out of.
+ */
 function readLocationRoute(): AppRoute {
-  const canonical = canonicalPlayPath(window.location.pathname);
+  const canonical = canonicalPath(window.location.pathname);
   if (canonical) {
     window.history.replaceState(null, '', canonical);
   }
@@ -572,6 +578,7 @@ export function App() {
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
+          onAdmin={() => navigate(adminPath())}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -592,6 +599,7 @@ export function App() {
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
+          onAdmin={() => navigate(adminPath())}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -613,6 +621,7 @@ export function App() {
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
+          onAdmin={() => navigate(adminPath())}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -641,6 +650,7 @@ export function App() {
         onNavigate={handleNavigateSection}
         onHome={() => navigate('/')}
         onStudio={() => navigate(studioPath())}
+        onAdmin={() => navigate(adminPath())}
         upTarget={headerUp}
         onUp={navigate}
       />
@@ -650,8 +660,8 @@ export function App() {
       <PullToRefresh enabled={route.view === 'home' && !stageContent} onRefresh={handlePullToRefresh} />
 
       <main className="content">
-        {route.view === 'health' ? (
-          <GameHealthView />
+        {route.view === 'admin' ? (
+          <AdminConsole section={route.section} onNavigate={navigate} />
         ) : route.view === 'studio' ? (
           <CreatorStudioView
             selectedToken={route.token}

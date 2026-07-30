@@ -181,12 +181,19 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     privateBeta,
     betaAllowedUids,
     betaAllowedEmails,
+    // So the session can tell the client whether to offer the operator console. Not
+    // authorization — every operator route still checks this same set itself.
+    adminUids,
   });
 
   const submissionSeams = await registerSubmissionRoutes(app, {
     ...options.submissionRoutes,
     store,
     contentChecker,
+    // Same allowlist the console is gated on: the people who can see the queue are the
+    // people its alerts are addressed to. Two lists would drift, and the failure mode of
+    // drift here is an alert nobody receives.
+    adminUids,
     agentBackend: options.submissionRoutes?.agentBackend ?? createAgentBackendFromEnv(app.log),
     agentChannel: {
       ...options.submissionRoutes?.agentChannel,

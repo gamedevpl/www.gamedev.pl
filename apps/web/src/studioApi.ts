@@ -121,7 +121,14 @@ export interface StudioSuggestion {
   jobId?: number;
   computedFrom: string;
   createdAt: string;
-  untrustedContext: {
+  /**
+   * Present on the list read, which joins it from the live scorecard.
+   *
+   * Absent — not null — on the approve and dismiss responses, which return the stored
+   * record and that deliberately carries no untrusted text. Optional rather than required
+   * so the type says which of those two a caller is holding.
+   */
+  untrustedContext?: {
     errorSamples: Array<{ message: string; count: number }>;
     progressLabels: Array<{ label: string; sessions: number }>;
     feedbackThemes: Array<{ theme: string; count: number }>;
