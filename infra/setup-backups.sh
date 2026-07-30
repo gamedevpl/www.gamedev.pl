@@ -260,7 +260,7 @@ echo "    computes a per-run prefix ships, so it stops generating alerts you mus
 echo "      gcloud scheduler jobs pause firestore-daily-export --location ${FIRESTORE_REGION} --project ${PROJECT_ID}"
 echo ""
 echo "    Verify the native schedules now, rather than trusting this output:"
-echo "      gcloud firestore backups schedules list --database='"'"'(default)'"'"' --project ${PROJECT_ID}"
+echo "      gcloud firestore backups schedules list --database='(default)' --project ${PROJECT_ID}"
 echo "      # and, once a backup has been taken (up to 24h):"
 echo "      gcloud firestore backups list --location ${FIRESTORE_REGION} --project ${PROJECT_ID}"
 echo ""
