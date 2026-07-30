@@ -1400,6 +1400,44 @@ describe('submission preview route', () => {
     await app.close();
   });
 
+  it('shows the creator a build the gate refused, rather than nothing at all', async () => {
+    // The regression this exists for, found on a real game: the gate went red, a red run
+    // stored no artifacts, and the preview only ever read `bundle.html` — so a build that
+    // had finished reached the studio as an empty panel that explained nothing. Whether a
+    // candidate may be *published* is a different question from whether the person who
+    // asked for it may look at it.
+    const store = new InMemoryStore();
+    const jobId = 1_000_046;
+    await store.upsertUser({ uid: 'g:test-user' });
+    await store.createSubmission(jobId, 'g:test-user', 'TV Tycoon');
+    await store.setSubmissionSlug(jobId, 'tv-tycoon');
+    await store.setSubmissionDeliveredVersion(jobId, 'v20260730T193202008Z-ca16cf');
+
+    const gamesStore = {
+      getDerivedArtifact: async (_s: string, _v: string, name: string) =>
+        name === 'preview.html' ? Buffer.from('<!doctype html><title>TV Tycoon</title><canvas></canvas>') : null,
+    } as unknown as GamesStore;
+
+    const { githubClient } = createGithubClientStub({});
+    const { app, authHeaders } = await createApp({
+      store,
+      githubClient,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(jobId, secret)}/preview`,
+      headers: authHeaders,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ slug: 'tv-tycoon', title: 'TV Tycoon' });
+
+    await app.close();
+  });
+
   it('does not report a broken preview as one that has not started', async () => {
     // A delivered job whose sources will not read is a failure, not a state. Saying
     // "not yet" to a creator whose game was delivered an hour ago sends them back to

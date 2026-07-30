@@ -2246,11 +2246,20 @@ export async function registerSubmissionRoutes(
       return reply.send(cached.value);
     }
 
-    const bundle = await gamesStore.getDerivedArtifact(slug, deliveredVersion, 'bundle.html');
-    // Absent rather than broken: the gate has not finished, or it went red and produced
-    // nothing. Both are "not ready", and the channel's own pushed previews cover the
-    // window. A store that *errors* throws out of here instead, and is reported as the
-    // failure it is.
+    // The verified bundle first, then the gate's red-run preview. Both are assembled by
+    // the same code from the same sources, so this is not a choice between a good and a
+    // degraded document — it is only about whether the run that produced it also passed.
+    // Falling back is the point: a creator being unable to look at their own build
+    // because it failed a check is the least useful moment to hide it from them, and for
+    // a while that is what happened — a red gate stored nothing, so the studio showed an
+    // empty panel and said nothing about why.
+    let bundle = await gamesStore.getDerivedArtifact(slug, deliveredVersion, 'bundle.html');
+    const artifact = bundle ? 'bundle.html' : 'preview.html';
+    bundle ??= await gamesStore.getDerivedArtifact(slug, deliveredVersion, 'preview.html');
+    // Absent rather than broken: the gate has not finished, or it went red early enough
+    // that there was nothing assemblable to keep. Both are "not ready", and the channel's
+    // own pushed previews cover the window. A store that *errors* throws out of here
+    // instead, and is reported as the failure it is.
     if (bundle === null) return null;
 
     const value: DraftPreviewValue = { slug, title: record.title || slug, html: bundle.toString('utf8') };
@@ -2260,7 +2269,7 @@ export async function registerSubmissionRoutes(
       expiresAt: now() + draftPreviewTtlMs,
     });
     request.log.info(
-      { issueNumber: record.issueNumber, slug, version: deliveredVersion },
+      { issueNumber: record.issueNumber, slug, version: deliveredVersion, artifact },
       'served gate-built preview for a delivered version',
     );
     return reply.send(value);

@@ -109,17 +109,43 @@ describe('runGate', () => {
     expect(outcome.report.length).toBeLessThan(4200);
   });
 
-  it('stores nothing derived when the check fails', async () => {
-    // A red run must not leave a bundle behind that a later step could mistake for
-    // verified output.
+  it('leaves a playable preview when the check fails, but never a bundle', async () => {
+    // Both halves matter and they pull against each other. A red run must not leave a
+    // `bundle.html` behind that a later step could mistake for verified output — but it
+    // must leave *something*, because the creator's draft preview serves a gate artifact
+    // and storing nothing is what turned a failed check into a studio panel that showed
+    // an empty box and explained nothing.
     const { store, derived } = stubStore();
 
-    await runGate('comet-courier', 'v1', {
+    const outcome = await runGate('comet-courier', 'v1', {
       store,
       prepareHarness: harnessDir,
       run: async () => ({ code: 1, output: 'failed' }),
+      assembleBundle: stubAssemble,
     });
 
+    expect(outcome.green).toBe(false);
+    expect(derived.map((entry) => entry.name)).toEqual(['preview.html']);
+    expect(outcome.artifacts).toEqual(['preview.html']);
+  });
+
+  it('reports a red verdict even when the candidate cannot be assembled at all', async () => {
+    // The common case for "no preview": sources that fail the check precisely because
+    // they do not assemble. The verdict is still the answer, and a gate that crashed
+    // while trying to be helpful would replace a reported failure with no report.
+    const { store, derived } = stubStore();
+
+    const outcome = await runGate('comet-courier', 'v1', {
+      store,
+      prepareHarness: harnessDir,
+      run: async () => ({ code: 1, output: 'validate: Check 4 exceeded the byte budget' }),
+      assembleBundle: async () => {
+        throw new Error('credential found in bundle');
+      },
+    });
+
+    expect(outcome.green).toBe(false);
+    expect(outcome.report).toContain('Check 4');
     expect(derived).toEqual([]);
   });
 
