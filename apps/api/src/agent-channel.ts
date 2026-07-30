@@ -288,6 +288,45 @@ export async function registerAgentChannelRoutes(
   }
 
   /**
+   * Our own verdict on what this build delivered, as the agent needs to hear it.
+   *
+   * The gate is the step an agent cannot see. It runs after the upload, in our
+   * container, against our engine — so a session that delivers and exits learns nothing,
+   * and the next round starts from a report nobody read. Carrying the verdict on the
+   * channel closes that: `npm run submit` waits on it, and an agent still polling its
+   * inbox finds it without being told to look.
+   *
+   * Read only once something has been delivered. Before that there is nothing to have a
+   * verdict about, and this is on the path of an inbox poll that runs at up to 600/hour
+   * per build — a store read bought with nothing is a store read not worth making.
+   *
+   * Best effort: a store that will not answer must not take down the channel an agent
+   * uses to report progress and read its creator's messages. Absent reads as "no verdict
+   * yet", which is what the agent would have seen a moment earlier anyway.
+   */
+  async function gateVerdict(record: SubmissionRecord) {
+    const { slug, deliveredVersion } = record;
+    if (!options.gamesStore || !slug || !deliveredVersion) return null;
+    try {
+      const manifest = await options.gamesStore.getManifest(slug, deliveredVersion);
+      if (!manifest?.gate) return null;
+      return {
+        // Named so the agent can tell a verdict about *this* delivery from a stale one
+        // about the previous round — the difference between "fix it" and "already fixed".
+        version: deliveredVersion,
+        green: manifest.gate.green,
+        ranAt: manifest.gate.ranAt,
+        // The tail is where the chain names the check that stopped it; the runner has
+        // already trimmed to 4000 characters for exactly this reason.
+        ...(manifest.gate.report ? { report: manifest.gate.report } : {}),
+      };
+    } catch (error) {
+      app.log.warn({ err: error, issueNumber: record.issueNumber, slug }, 'could not read the gate verdict');
+      return null;
+    }
+  }
+
+  /**
    * The body every channel call returns: what the creator has asked for, and whether
    * there is any point continuing. `stop` is the one that pays for itself — today an
    * agent keeps building for minutes after a creator hits "stop", because nothing
@@ -296,8 +335,10 @@ export async function registerAgentChannelRoutes(
   async function channelState(issueNumber: number, record: SubmissionRecord) {
     const pending: CreatorMessage[] = await store!.listPendingCreatorMessages(issueNumber);
     const reason = stopReason(record);
+    const gate = await gateVerdict(record);
     return {
       pending: pending.map((message) => ({ id: message.id, text: message.text, createdAt: message.createdAt })),
+      ...(gate ? { gate } : {}),
       control: {
         stop: reason !== null,
         ...(reason ? { reason } : {}),
@@ -313,6 +354,22 @@ export async function registerAgentChannelRoutes(
         // is already doing, and it is derived from what we actually stored rather than
         // from anything the session believes about itself.
         delivered: Boolean(record.deliveredVersion),
+        // Delivering is not finishing. The gate runs *after* the upload, against our
+        // engine, and it is the thing that decides whether any of this can be published
+        // — so an agent that delivers and stops has handed over a game nobody can ship
+        // and will never know why. This is the same trick as `mustDeliver` above: say it
+        // on every call, derived from what we stored, rather than once in a brief read
+        // thousands of tokens ago.
+        ...(gate && !gate.green
+          ? {
+              mustFixGate:
+                `The gate ran against your delivery and refused it (${gate.version}). You are not ` +
+                'done: nothing can be published until it passes. Read `gate.report` below — it ends ' +
+                'with the check that stopped the chain — fix the cause in your game, and deliver ' +
+                'again with `npm run submit -- <slug>`. Re-delivering without a fix just stores ' +
+                'another version that fails the same way.',
+            }
+          : {}),
         ...(record.deliveredVersion
           ? {}
           : {

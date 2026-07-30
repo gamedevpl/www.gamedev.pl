@@ -219,6 +219,14 @@ Decisions worth remembering:
 - **Events bypass the 60s status cache** with a 5s cache of their own, invalidated on append. The
   GitHub-derived part of a status is worth a minute; an agent's live update is worth seconds.
 - **Caps:** 240 events/hour and 500 events/build, 300 chars each, sanitized as untrusted text.
+- **The channel carries our verdict back.** Every reply includes `gate` once something has been
+  delivered — `{ version, green, ranAt, report }` read from the delivered version's manifest — and
+  `control.mustFixGate` when it is red. The gate is the one step an agent cannot see: it runs after
+  the upload, in our container, against our engine, so a session that delivered and exited learned
+  nothing and the next round began from a report nobody had read. `npm run submit` in the games repo
+  waits on this and exits non-zero on red, which is what makes the agent's own last command tell it
+  the work is not finished. Read only after a delivery — before that there is no verdict to have,
+  and this rides an inbox poll that runs at up to 600/hour per build.
 
 The creator's language is captured at submission (`SubmissionRecord.locale`), written into the
 issue, and returned in every `control` block, so the agent writes its sentence in that language and

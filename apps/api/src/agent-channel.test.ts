@@ -583,6 +583,79 @@ describe('agent build channel', () => {
       expect(stored[0]).toMatchObject({ slug: 'comet-courier', issueNumber: ISSUE });
     });
 
+    it('tells the agent the gate refused its delivery, and that it is not done', async () => {
+      // The step an agent cannot see: the gate runs after the upload, in our container,
+      // against our engine. A session that delivered and exited learned nothing, so the
+      // report nobody read became the next round's starting point. It is carried on the
+      // channel the agent is already polling, for the same reason `mustDeliver` is.
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      await store.setSubmissionSlug(ISSUE, 'comet-courier');
+      await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
+      const { gamesStore } = stubGamesStore();
+      app = await createApp(store, {
+        gamesStore: {
+          ...gamesStore,
+          getManifest: async () => ({
+            gate: {
+              green: false,
+              ranAt: '2026-07-30T19:35:00Z',
+              report: 'Check 26 failed: every control is pointer-driven',
+            },
+          }),
+        } as unknown as GamesStore,
+      });
+
+      const response = await app.inject({ method: 'GET', url: '/api/agent/build/inbox', headers: agentHeaders() });
+
+      expect(response.json()).toMatchObject({
+        gate: { version: 'v1', green: false, report: 'Check 26 failed: every control is pointer-driven' },
+      });
+      expect(response.json().control.mustFixGate).toContain('not');
+    });
+
+    it('does not nudge a build whose gate passed', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      await store.setSubmissionSlug(ISSUE, 'comet-courier');
+      await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
+      const { gamesStore } = stubGamesStore();
+      app = await createApp(store, {
+        gamesStore: {
+          ...gamesStore,
+          getManifest: async () => ({ gate: { green: true, ranAt: '2026-07-30T19:35:00Z' } }),
+        } as unknown as GamesStore,
+      });
+
+      const response = await app.inject({ method: 'GET', url: '/api/agent/build/inbox', headers: agentHeaders() });
+
+      expect(response.json()).toMatchObject({ gate: { green: true } });
+      expect(response.json().control.mustFixGate).toBeUndefined();
+    });
+
+    it('keeps the channel working when the gate verdict cannot be read', async () => {
+      // The channel is how an agent reports progress and reads its creator's messages.
+      // A store that will not answer must cost it the verdict, not both.
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      await store.setSubmissionSlug(ISSUE, 'comet-courier');
+      await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
+      const { gamesStore } = stubGamesStore();
+      app = await createApp(store, {
+        gamesStore: {
+          ...gamesStore,
+          getManifest: async () => {
+            throw new Error('games store read failed: 503');
+          },
+        } as unknown as GamesStore,
+      });
+
+      const response = await app.inject({ method: 'GET', url: '/api/agent/build/inbox', headers: agentHeaders() });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().gate).toBeUndefined();
+    });
+
     it('refuses a delivery aimed at a different game than the job owns', async () => {
       // The token is minted per job. An agent that has been associated with one game must
       // not be able to write into another game's history by asking to.
