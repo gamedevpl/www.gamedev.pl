@@ -187,7 +187,16 @@ export async function buildWorldApp(options: WorldAppOptions): Promise<WorldApp>
           // cannot start any zone at all answers `zone_unavailable` to every join and logs
           // nothing, and reads from the outside exactly like a host with no traffic. The
           // cause goes to the log, where the person who can fix it is the only one reading.
-          if (reason === 'zone_unavailable') app.log.error({ err: error }, 'zone admission failed');
+          //
+          // `err` is the *cause* rather than the wrapper, because the wrapper's stack
+          // begins where the error was caught and its message is the wire reason repeated.
+          // Logging it was logging the fact that something failed to whoever already knew.
+          // The unwrapped case keeps the error itself — that is a fault that escaped the
+          // admission path entirely, and its own stack is the informative one.
+          if (reason === 'zone_unavailable') {
+            const cause = error instanceof ZoneAdmissionError ? error.cause : undefined;
+            app.log.error({ err: cause ?? error, reason }, 'zone admission failed');
+          }
           connection.close(reason);
         } finally {
           admitting = false;

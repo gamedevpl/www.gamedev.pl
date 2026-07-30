@@ -171,8 +171,8 @@ export class ZoneHost {
         this.zones.delete(claims.zone);
         this.members.delete(claims.zone);
       }
-      if (error instanceof ZoneFullError) throw new ZoneAdmissionError('zone_full');
-      throw new ZoneAdmissionError('zone_unavailable');
+      if (error instanceof ZoneFullError) throw new ZoneAdmissionError('zone_full', { cause: error });
+      throw new ZoneAdmissionError('zone_unavailable', { cause: error });
     } finally {
       const pending = (this.admitting.get(claims.zone) ?? 1) - 1;
       if (pending > 0) this.admitting.set(claims.zone, pending);
@@ -252,9 +252,22 @@ export class ZoneHost {
   }
 }
 
+/**
+ * Why a join was refused — and, when something threw, what actually threw.
+ *
+ * The `reason` is what goes on the wire and it is deliberately incurious: telling a
+ * caller which part of a ticket was wrong helps only somebody holding a stolen one. That
+ * makes the `cause` the operator's entire supply of truth, so it must survive being
+ * wrapped. It did not, at first: the first `zone_unavailable` this alerting ever caught
+ * arrived with a stack that began inside `admit` and said nothing about what `join` had
+ * hit, which is precisely the blindness the log line was added to end.
+ */
 export class ZoneAdmissionError extends Error {
-  constructor(public readonly reason: string) {
-    super(reason);
+  constructor(
+    public readonly reason: string,
+    options?: { cause?: unknown },
+  ) {
+    super(reason, options);
     this.name = 'ZoneAdmissionError';
   }
 }
