@@ -326,13 +326,7 @@ function initialSignals(): { signals: CatalogSortSignals; ready: boolean } {
   return { signals: payloadToSignals(cached), ready: true };
 }
 
-function InProgressCard({
-  item,
-  onOpenStatus,
-}: {
-  item: CreatorGameItem;
-  onOpenStatus: (token: string) => void;
-}) {
+function InProgressCard({ item, onOpenStatus }: { item: CreatorGameItem; onOpenStatus: (token: string) => void }) {
   const { t, i18n } = useTranslation();
   const status = item.status;
   const isLive = status !== null && CREATOR_LIVE_STATUSES.has(status);
@@ -463,15 +457,8 @@ export function ArcadeCatalog({
   const orderedEntries = useMemo(() => {
     // Ignore a sticky your_games pref when signed out or you have nothing yours —
     // otherwise the whole catalog would look empty for no good reason.
-    const activeFilters = canFilterYourGames
-      ? filters
-      : new Set([...filters].filter((id) => id !== 'your_games'));
-    const filtered = applyCatalogFilters(
-      catalogEntries,
-      activeFilters,
-      signals.affinityLastPlayed,
-      mySlugs,
-    );
+    const activeFilters = canFilterYourGames ? filters : new Set([...filters].filter((id) => id !== 'your_games'));
+    const filtered = applyCatalogFilters(catalogEntries, activeFilters, signals.affinityLastPlayed, mySlugs);
     return orderCatalogEntries(filtered, sortMode, signals, mySlugs);
   }, [catalogEntries, sortMode, filters, signals, mySlugs, canFilterYourGames]);
 
@@ -499,10 +486,7 @@ export function ArcadeCatalog({
     });
   }
   const awaitingSignals =
-    catalogStatus === 'ready' &&
-    catalogEntries.length > 0 &&
-    catalogSortNeedsSignals(sortMode) &&
-    !signalsReady;
+    catalogStatus === 'ready' && catalogEntries.length > 0 && catalogSortNeedsSignals(sortMode) && !signalsReady;
 
   const emptyMessage =
     yourGamesOnly && notPlayedOnly && (catalogEntries.length > 0 || mySlugs.size > 0)
@@ -584,7 +568,11 @@ export function ArcadeCatalog({
                           aria-checked={sortMode === mode}
                           onClick={() => handleSortChange(mode)}
                         >
-                          {sortMode === mode ? <PixelIcon name="check" size={12} /> : <span className="catalog-sort-check-spacer" />}
+                          {sortMode === mode ? (
+                            <PixelIcon name="check" size={12} />
+                          ) : (
+                            <span className="catalog-sort-check-spacer" />
+                          )}
                           <span className="catalog-sort-option-label">{t(`catalog.sort.${mode}`)}</span>
                         </button>
                       </li>
@@ -596,6 +584,15 @@ export function ArcadeCatalog({
           </div>
         ) : null}
       </div>
+
+      {catalogStatus === 'ready' && catalogError ? (
+        <div className="catalog-refresh-error" role="status">
+          <p className="catalog-refresh-error__text">{t('catalog.refreshError', { message: catalogError })}</p>
+          <button type="button" className="secondary-btn catalog-refresh-error__retry" onClick={onRetryCatalog}>
+            <PixelIcon name="undo" size={13} /> {t('catalog.retry')}
+          </button>
+        </div>
+      ) : null}
 
       {catalogStatus === 'loading' || awaitingSignals ? (
         <MascotMoment className="catalog-state" emotion="busy" size={56} title={t('mascot.busyAlt')}>
@@ -622,9 +619,7 @@ export function ArcadeCatalog({
       ) : (
         <div className="catalog-grid">
           {onOpenStatus
-            ? inProgress.map((item) => (
-                <InProgressCard key={item.token} item={item} onOpenStatus={onOpenStatus} />
-              ))
+            ? inProgress.map((item) => <InProgressCard key={item.token} item={item} onOpenStatus={onOpenStatus} />)
             : null}
           {orderedEntries.map((entry) => (
             <CatalogCard

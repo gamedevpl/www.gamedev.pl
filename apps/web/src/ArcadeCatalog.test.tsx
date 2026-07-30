@@ -234,3 +234,59 @@ describe('ArcadeCatalog shared-world badge', () => {
     });
   });
 });
+
+describe('ArcadeCatalog soft-refresh failure', () => {
+  beforeEach(async () => {
+    installIntersectionObserverMock();
+    sessionStorage.setItem(
+      'gdpl.catalogSortSignals',
+      JSON.stringify({ items: [], popularity: [], lastPlayed: [], newest: [] }),
+    );
+    await i18n.changeLanguage('en');
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+    sessionStorage.clear();
+    localStorage.clear();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('keeps the grid and shows a retryable banner when ready but catalogError is set', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ items: [] })));
+    const onRetryCatalog = vi.fn();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(ArcadeCatalog, {
+          catalogStatus: 'ready',
+          catalogError: '502 Bad Gateway',
+          catalogEntries: entries,
+          onPlayGame: vi.fn(),
+          onPlayTogether: vi.fn(),
+          onRetryCatalog,
+        }),
+      );
+      await flushEffects();
+    });
+
+    const banner = container.querySelector('.catalog-refresh-error');
+    expect(banner?.textContent).toMatch(/Could not refresh the catalog/);
+    expect(banner?.textContent).toContain('502 Bad Gateway');
+    expect(container.querySelectorAll('.catalog-card')).toHaveLength(2);
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.catalog-refresh-error__retry')?.click();
+    });
+    expect(onRetryCatalog).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+});
