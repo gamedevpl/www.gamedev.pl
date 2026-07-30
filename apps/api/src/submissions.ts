@@ -1048,6 +1048,37 @@ export async function registerSubmissionRoutes(
   }
 
   /**
+   * Reads back a slug this job just wrote, and settles who actually holds it.
+   *
+   * `getSubmissionBySlug` is the same oracle every later lookup uses — the draft route,
+   * the play route, the delivery check — so asking it "who owns this name" is exactly the
+   * question that matters, and it answers deterministically even when two records share
+   * a slug. Whoever it does not name has lost the race and takes a different name; the
+   * winner is undisturbed and never learns any of this happened.
+   *
+   * Returns the slug this job ended up with, or null when even the second attempt lost.
+   */
+  async function confirmSlugClaim(issueNumber: number, slug: string, title: string): Promise<string | null> {
+    if (!store) return slug;
+    const holds = async (candidate: string): Promise<boolean> => {
+      const holder = await store.getSubmissionBySlug(candidate);
+      return holder?.issueNumber === issueNumber;
+    };
+
+    if (await holds(slug)) return slug;
+
+    // Lost. Mint again, this time treating anything we do not ourselves hold as taken,
+    // and write it before re-reading — the second write is what makes the second read
+    // meaningful.
+    const retry = await mintGameSlug(title, async (candidate) => {
+      if (candidate === slug) return true;
+      return isSlugClaimed(candidate, issueNumber);
+    });
+    await store.setSubmissionSlug(issueNumber, retry);
+    return (await holds(retry)) ? retry : null;
+  }
+
+  /**
    * Whether this request may play the unpublished game at `slug`.
    *
    * Two ways in, and no third: you made it, or its creator turned sharing on. There is
@@ -1427,11 +1458,30 @@ export async function registerSubmissionRoutes(
       // only on its first delivery, which left every build with a stretch — minutes at
       // best — where the thing being built had no name a URL could use. That is why the
       // creator's own studio addressed their game by a capability token.
-      const slug = await mintGameSlug(sanitizedTitle, (candidate) => isSlugClaimed(candidate));
+      const wanted = await mintGameSlug(sanitizedTitle, (candidate) => isSlugClaimed(candidate));
 
       const jobId = await store.allocateJobId();
       await store.createSubmission(jobId, request.user!.uid, sanitizedTitle);
-      await store.setSubmissionSlug(jobId, slug);
+      await store.setSubmissionSlug(jobId, wanted);
+
+      // Minting is a read then a write, so two submissions of the same title can both be
+      // told a name is free. Nothing about that is visible until much later and then it
+      // is severe: both agents deliver into one games-store slug, interleaving two
+      // different games' sources under it, and whichever job loses the by-slug lookup
+      // becomes unplayable to its own creator. So the claim is read back and the loser
+      // finds out here — before an agent has been dispatched, before the creator has been
+      // given an address, while a different name still costs nothing.
+      const slug = await confirmSlugClaim(jobId, wanted, sanitizedTitle);
+      if (!slug) {
+        // Both attempts lost, which means something is racing us persistently rather
+        // than by coincidence. Fail loudly instead of building a game that cannot be
+        // addressed: the creator can try again, and their quota is the price of the
+        // agent time this never spent.
+        await store.setSubmissionAbandoned(jobId, new Date(now()).toISOString());
+        request.log.error({ issueNumber: jobId, slug: wanted }, 'could not claim a slug for a new submission');
+        return reply.status(409).send({ error: 'name_unavailable' });
+      }
+
       await store.setSubmissionLocale(jobId, creatorLocale);
       // Raw, not sanitized: the sanitizer strips the '##' that marks the block.
       await store.setSubmissionClarificationCount(jobId, countCreatorClarifications(parsed.data.concept));

@@ -483,6 +483,11 @@ export function App() {
         // creator can see their remaining count on the hero to check it.
       } else if (message === 'creation_over_capacity') {
         setSubmissionError(t('errors.creationOverCapacity'));
+        // Two submissions of the same title raced for its address and this one lost
+        // twice. Rare, and recoverable by renaming — which is a thing the creator can
+        // now actually do, because they picked the name in the first place.
+      } else if (message === 'name_unavailable') {
+        setSubmissionError(t('errors.nameUnavailable'));
       } else if (message.includes('quota')) {
         setSubmissionError(t('auth.quotaExceeded'));
       } else if (message.includes('blocked')) {

@@ -572,6 +572,86 @@ describe('submission routes', () => {
     expect(second.json().slug).toBe('space-miner-2');
   });
 
+  it('gives the loser of a slug race a different name rather than a shared one', async () => {
+    // Minting reads then writes, so two submissions of one title can both be told a name
+    // is free. Nothing about that shows until much later and then it is severe: both
+    // agents deliver into the same games-store slug, and whichever job loses the by-slug
+    // lookup becomes unplayable to its own creator. The claim is read back, so the loser
+    // finds out while a different name still costs nothing.
+    const { githubClient } = createGithubClientStub({ issueNumber: 94 });
+    const store = new InMemoryStore();
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
+
+    // Somebody else took the name in the window between our probe and our write.
+    const realProbe = store.getSubmissionBySlug.bind(store);
+    let raced = false;
+    store.getSubmissionBySlug = async (slug: string) => {
+      if (slug === 'space-miner' && !raced) {
+        raced = true;
+        return { issueNumber: 999_999, ownerUid: 'g:someone-else', createdAt: '', title: 'Space Miner', slug };
+      }
+      return realProbe(slug);
+    };
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: {
+        title: 'Space Miner',
+        concept: 'Dig asteroids for ore and sell it at the station before your fuel runs out.',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    // A different address, not a shared one — and not a failure either, because the
+    // creator has nothing to fix and nothing has been dispatched yet.
+    expect(res.json().slug).toBe('space-miner-2');
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    expect(job.slug).toBe('space-miner-2');
+
+    await app.close();
+  });
+
+  it('refuses the submission outright when it cannot claim any name', async () => {
+    // Losing twice means something is racing us persistently rather than by coincidence.
+    // Better a creator who is told to rename than a game that cannot be addressed.
+    const { githubClient } = createGithubClientStub({ issueNumber: 95 });
+    const { backend, briefs } = createBackendStub();
+    const store = new InMemoryStore();
+    const { app, authHeaders } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      store,
+    });
+
+    store.getSubmissionBySlug = async (slug: string) => ({
+      issueNumber: 999_999,
+      ownerUid: 'g:someone-else',
+      createdAt: '',
+      title: 'Space Miner',
+      slug,
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: {
+        title: 'Space Miner',
+        concept: 'Dig asteroids for ore and sell it at the station before your fuel runs out.',
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toBe('name_unavailable');
+    // And no agent was sent to build a game that has nowhere to live.
+    expect(briefs).toHaveLength(0);
+
+    await app.close();
+  });
+
   it('records how many QA answers came with the concept', async () => {
     const { githubClient } = createGithubClientStub({ issueNumber: 92 });
     const store = new InMemoryStore();
