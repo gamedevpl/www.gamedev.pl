@@ -330,7 +330,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // let into the closed beta is not the same as being allowed to read every game's
   // numbers. Unset means the route admits nobody, which is the right default for a
   // surface whose whole purpose is seeing across other people's games.
-  await registerAdminRoutes(app, { store, adminUids });
+  // The creation-breaker knobs come from the submission-route options so the operator
+  // surface reports the same ceiling and the same propagation delay the gate actually
+  // enforces, rather than a second copy of the defaults that could drift from it.
+  await registerAdminRoutes(app, {
+    store,
+    adminUids,
+    globalDailySubmissionCap: options.submissionRoutes?.globalDailySubmissionCap,
+    creationLimitsTtlMs: options.submissionRoutes?.creationLimitsTtlMs,
+  });
 
   // The nightly Distill step (docs/improvement-loop-plan.md IL-2): rolls the telemetry
   // window plus vote/feedback counts into one scorecard per game. Authenticated by the

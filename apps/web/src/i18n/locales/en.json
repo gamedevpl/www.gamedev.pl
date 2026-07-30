@@ -475,6 +475,8 @@
   },
   "errors": {
     "generic": "Something went wrong",
+    "creationPaused": "New games are paused for a moment while we look at something on our side. Your daily allowance hasn't been touched — please try again shortly.",
+    "creationOverCapacity": "We've hit today's ceiling on new games across the whole site, so we can't start another one right now. Your own allowance is untouched and still there tomorrow.",
     "contentRejected": {
       "profanity": "That includes language we can't publish. Please rephrase and try again.",
       "adult": "That describes adult content, which we can't generate. Please rephrase and try again.",

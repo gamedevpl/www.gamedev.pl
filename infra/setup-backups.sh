@@ -30,13 +30,26 @@
 # This script is idempotent — safe to re-run after changing any of the knobs above.
 set -euo pipefail
 
+# Every gcloud call here is GA, so none should prompt — but the existence checks below
+# discard both streams, so any prompt that did appear would be invisible and the script
+# would wait on stdin forever. setup-monitoring.sh hung exactly that way. Prompts off.
+export CLOUDSDK_CORE_DISABLE_PROMPTS=1
+
 PROJECT_ID="${PROJECT_ID:-gamedevpl}"
 # The bucket must live where the database lives: Firestore refuses to export across
 # locations, and this database is in europe-central2 (the app is in europe-west1 —
 # see docs/deployment.md; that split is deliberate and predates the domain mapping).
 FIRESTORE_REGION="${FIRESTORE_REGION:-europe-central2}"
 BACKUP_BUCKET="${BACKUP_BUCKET:-${PROJECT_ID}-firestore-backups}"
-EXPORT_SCHEDULE="${EXPORT_SCHEDULE:-17 3 * * *}"
+# Twice a day, and the second run is what makes the staleness alert possible at all.
+# Monitoring caps an absence condition's duration at 23h30m, so A4 in setup-monitoring.sh
+# cannot ask "no successful export in 36 hours" — and with a single daily export, *any*
+# window shorter than 24h elapses between two healthy runs and emails every morning. Two
+# runs 12h apart mean a 23h30m silence takes two consecutive failures to produce, which is
+# the "tolerate one hiccup, escalate a real outage" behaviour the 36h window was for. The
+# side benefit is the honest one: it halves the worst-case data loss to 12 hours.
+# Overriding this back to daily is supported, at the price of A4 firing after one miss.
+EXPORT_SCHEDULE="${EXPORT_SCHEDULE:-17 3,15 * * *}"
 EXPORT_RETENTION_DAYS="${EXPORT_RETENTION_DAYS:-30}"
 EXPORT_SA_NAME="${EXPORT_SA_NAME:-firestore-export}"
 EXPORT_SA="${EXPORT_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
@@ -102,23 +115,49 @@ else
     --display-name="Firestore scheduled export" \
     --project="$PROJECT_ID"
   echo "    Created ${EXPORT_SA}."
+  # A brand-new service account is not immediately usable in an IAM binding: the identity
+  # propagates asynchronously, and add-iam-policy-binding answers "Service account … does
+  # not exist" until it lands. That is exactly how the first real run of this script died,
+  # one line after successfully creating the account.
+  printf '    Waiting for the identity to propagate'
+  for _ in $(seq 1 30); do
+    if gcloud iam service-accounts describe "$EXPORT_SA" --project "$PROJECT_ID" >/dev/null 2>&1; then
+      break
+    fi
+    printf '.'
+    sleep 2
+  done
+  printf '\n'
 fi
+
+# Even once `describe` answers, the policy layer can still lag behind, so the grants below
+# are retried rather than allowed to fail the whole run on a race that clears itself in
+# seconds. The last attempt runs unsuppressed: a genuine permission problem has to be
+# readable, not buried under retries.
+grant_with_retry() {
+  local attempt
+  for attempt in 1 2 3 4; do
+    if "$@" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep $((attempt * 3))
+  done
+  "$@" >/dev/null
+}
 
 echo "==> 5/6 Granting the export SA exactly what it needs"
 # datastore.importExportAdmin can start an export but cannot read document contents,
 # and objectCreator can write new objects but cannot read or delete existing ones. So a
 # compromise of this identity cannot exfiltrate the database and cannot destroy older
 # backups — which is the property that makes a backup worth having during an incident.
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+grant_with_retry gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:${EXPORT_SA}" \
   --role="roles/datastore.importExportAdmin" \
-  --condition=None \
-  >/dev/null
-gcloud storage buckets add-iam-policy-binding "gs://${BACKUP_BUCKET}" \
+  --condition=None
+grant_with_retry gcloud storage buckets add-iam-policy-binding "gs://${BACKUP_BUCKET}" \
   --member="serviceAccount:${EXPORT_SA}" \
   --role="roles/storage.objectCreator" \
-  --project="$PROJECT_ID" \
-  >/dev/null
+  --project="$PROJECT_ID"
 echo "    importExportAdmin + objectCreator granted (no read, no delete)."
 
 echo "==> 6/6 Ensuring the daily export job"

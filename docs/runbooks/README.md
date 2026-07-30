@@ -27,15 +27,49 @@ Planned, not yet written: `event-mode.md` (pre-warm before a meetup or launch sp
 
 Provisioned by [`infra/setup-monitoring.sh`](../../infra/setup-monitoring.sh).
 
-| #   | Fires when                                                               | Go to                                            |
-| --- | ------------------------------------------------------------------------ | ------------------------------------------------ |
-| A1  | Uptime check on `/api/health` fails from most probers for 5 min          | [`site-down-triage.md`](./site-down-triage.md)   |
-| A2  | Cloud Run 5xx sustained over 10 min                                      | [`site-down-triage.md`](./site-down-triage.md)   |
-| A3  | A scheduled job fails repeatedly (notify-sweep, or the daily export)     | §below                                           |
-| A4  | The daily Firestore export has not succeeded in 36h                      | [`restore-firestore.md`](./restore-firestore.md) |
-| A5  | Billing budget at 50 / 90 / 100%                                         | Cost review — see the ops repo's readiness plan  |
-| A6  | The zone host could not start a zone (log-based, rate-limited to hourly) | [`zones-down-triage.md`](./zones-down-triage.md) |
-| A7  | `gamedev-world` 5xx sustained over 10 min                                | [`zones-down-triage.md`](./zones-down-triage.md) |
+| #   | Policy name                                     | Fires when                                                               | Go to                                            |
+| --- | ----------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------ |
+| A1  | `A1 <service> site down (uptime check failing)` | That service's uptime check fails from most probers for 5 min            | [`site-down-triage.md`](./site-down-triage.md)   |
+| A2  | `A2 <service> Cloud Run 5xx rate elevated`      | That service's Cloud Run 5xx sustained over 10 min                       | [`site-down-triage.md`](./site-down-triage.md)   |
+| A3  | `A3 notify-sweep failing`                       | >2 failed Cloud Scheduler attempts in 15 min, any job (log-based)        | §below                                           |
+| A4  | `A4 no successful Firestore export`             | No successful export logged in 23h30m (inert until the first one)        | [`restore-firestore.md`](./restore-firestore.md) |
+| A5  | (billing budget, created by hand)               | Billing budget at 50 / 90 / 100%                                         | Cost review — see the ops repo's readiness plan  |
+| A6  | `A6 zone admission failing`                     | The zone host could not start a zone (log-based, rate-limited to hourly) | [`zones-down-triage.md`](./zones-down-triage.md) |
+| A7  | `A7 world service 5xx rate elevated`            | `gamedev-world` 5xx sustained over 10 min                                | [`zones-down-triage.md`](./zones-down-triage.md) |
+
+**A1 and A2 name the service; the rest do not.** A1/A2 exist once per Cloud Run service
+answering requests (`gamedev-app`, and the party relay when it takes traffic), so the
+policy name tells you _which_ service is down before you open anything — and A1's
+condition is scoped to that service's own uptime check rather than to "any check in the
+project". Each such service needs its own `SERVICE=… ./infra/setup-monitoring.sh` run or
+it has no A1/A2 at all. A3/A4 watch project-wide Cloud Scheduler jobs and A6/A7 name
+`gamedev-world` directly, so there is exactly one of each and they are written only on the
+primary run.
+
+**A3 and A4 are log-based, because Cloud Scheduler emits no metrics here.** The first
+real run of `setup-monitoring.sh` failed on `cloudscheduler.googleapis.com/job/attempt_count`;
+a sweep of every metric descriptor visible to the project found no `cloudscheduler.*` metric
+at all, so the original A3/A4 were unarmed by construction. Both now count log entries
+(`resource.type="cloud_scheduler_job"`) through the log-based metrics
+`scheduler_job_errors` and `firestore_export_succeeded`.
+
+Two consequences worth knowing before you trust either:
+
+- **Pausing a job does not test A3.** A paused job makes no attempts, so it logs no
+  failures and there is nothing to count — this was true of the metric version too, so the
+  "pause notify-sweep and wait for the email" instruction that used to be here could never
+  have worked. To test it, point the job at a wrong path for ~8 minutes and put it back;
+  the script prints the exact commands.
+- **A4 is inert until the first successful export.** An absence condition needs a time
+  series that once existed, and a log-based metric with no matching entries has no series.
+  It becomes real protection only after `setup-backups.sh` has run and one export has
+  landed.
+- **A4's window is 23h30m, and that is why the export runs twice a day.** Monitoring caps
+  absence durations at 23h30m, so the 36h window this wanted is not expressible. Against a
+  single daily export, any window under 24h elapses between two healthy runs and emails
+  every morning; with runs 12h apart, 23h30m of silence takes two consecutive failures.
+  `setup-monitoring.sh` and `setup-backups.sh` are coupled through this — reverting the
+  export to daily makes A4 fire after a single miss.
 
 **A6 has no uptime check behind it, on purpose.** Probing a scale-to-zero service every
 five minutes keeps an instance warm around the clock and turns `$0` at rest into roughly

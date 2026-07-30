@@ -475,6 +475,8 @@
   },
   "errors": {
     "generic": "Coś poszło nie tak",
+    "creationPaused": "Tworzenie nowych gier jest na chwilę wstrzymane — sprawdzamy coś u nas. Twój dzienny limit pozostaje nietknięty, spróbuj ponownie za moment.",
+    "creationOverCapacity": "Osiągnęliśmy dzisiejszy limit nowych gier w całym serwisie, więc nie możemy teraz zacząć kolejnej. Twój własny limit jest nietknięty i będzie czekał jutro.",
     "contentRejected": {
       "profanity": "To zawiera słownictwo, którego nie możemy opublikować. Popraw treść i spróbuj ponownie.",
       "adult": "To opisuje treści dla dorosłych, których nie możemy wygenerować. Popraw treść i spróbuj ponownie.",

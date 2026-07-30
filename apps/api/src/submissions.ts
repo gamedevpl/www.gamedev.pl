@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { registerAgentChannelRoutes, type AgentChannelOptions } from './agent-channel.js';
 import { mintAgentToken } from './agent-token.js';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
+import { createCreationGate, CREATION_REFUSAL_CODES, type CreationGate } from './creation-limits.js';
 import {
   createGitHubClient,
   type CatalogGameEntry,
@@ -179,6 +180,16 @@ export interface SubmissionRoutesOptions {
   now?: () => number;
   store?: Store;
   dailySubmissionQuota?: number;
+  /**
+   * The global creation breaker (pause switch + shared daily ceiling). Built from the
+   * store by default; an explicit null disables it, which is what the tests that assert
+   * pre-breaker behaviour pass.
+   */
+  creationGate?: CreationGate | null;
+  /** Global ceiling used when the Firestore config doc sets none. See creation-limits.ts. */
+  globalDailySubmissionCap?: number;
+  /** How long the breaker's config is cached — the delay on a flip taking effect. */
+  creationLimitsTtlMs?: number;
   dailyFeedbackQuota?: number;
   /** Separate from submissions so improving a live game does not crowd out creating one. */
   dailyImprovementQuota?: number;
@@ -297,6 +308,23 @@ export async function registerSubmissionRoutes(
   const now = options.now ?? Date.now;
   const store = options.store;
   const dailySubmissionQuota = options.dailySubmissionQuota ?? 5;
+
+  // Per-user quotas bound one creator; this bounds everyone at once, and can be pulled
+  // without a redeploy (creation-limits.ts explains why that mattered enough to put the
+  // config in Firestore). Absent a store there is nothing to count in, so no breaker.
+  const creationGate =
+    options.creationGate === undefined
+      ? store
+        ? createCreationGate({
+            store,
+            now,
+            ttlMs: options.creationLimitsTtlMs,
+            defaultGlobalDailyCap: options.globalDailySubmissionCap,
+            logWarn: (payload, message) => app.log.warn(payload, message),
+          })
+        : null
+      : options.creationGate;
+
   const dailyFeedbackQuota = options.dailyFeedbackQuota ?? 20;
   // Start small (docs/improvement-loop-plan.md): agent runs are scarce, and a published
   // improvement is a real implementer job — not a draft tweak.
@@ -1044,7 +1072,22 @@ export async function registerSubmissionRoutes(
       return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
     }
 
-    // 5. User daily quota check (only increment after payload & IP checks pass)
+    // 5. The global circuit-breaker: the pause switch and everyone's shared daily
+    // ceiling (creation-limits.ts). Deliberately ahead of the per-user quota and of
+    // every GitHub write, so a request refused here costs the creator nothing — which
+    // is precisely what the message they get promises. `bot:` accounts are outside it;
+    // the reason is in creation-limits.ts.
+    if (creationGate) {
+      const gate = await creationGate.checkAndSpend(request.user!.uid, dateStr);
+      if (!gate.allowed) {
+        // A distinct code rather than the shared "quota" wording: the creator's own
+        // allowance is intact, and a message implying otherwise would be a lie they
+        // could check.
+        return reply.status(429).send({ error: CREATION_REFUSAL_CODES[gate.reason] });
+      }
+    }
+
+    // 6. User daily quota check (only increment after payload & IP checks pass)
     if (store) {
       const quota = await store.checkAndIncrementQuota(request.user!.uid, dateStr, dailySubmissionQuota, 'submissions');
       if (!quota.allowed) {
