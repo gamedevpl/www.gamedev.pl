@@ -52,10 +52,12 @@ export interface JobCostSummary {
   tokens?: { input: number; output: number };
   /**
    * What this job cost, in money: credits at the fixed rate plus anything a service
-   * priced directly. Absent only when nothing was measured at all — a job with a ledger
-   * has a real figure, and one without says so by having none.
+   * priced directly.
    *
-   * Excludes the gate's Cloud Build minutes, which nothing reports yet.
+   * Absent when no *priced* spending was recorded — which is not the same as no ledger.
+   * A gate run is booked as an entry with neither credits nor dollars, because Cloud
+   * Build minutes are billed and nothing reads the price back, so a job can have a
+   * ledger and still have nothing to report here.
    */
   usd?: number;
   /** Creation to the last thing that happened to it. */
@@ -148,8 +150,8 @@ function summarize(record: SubmissionRecord): JobCostSummary {
     gateRuns: entries.filter((entry) => entry.kind === 'gate_run').length,
     // Absent rather than zero: nothing reports tokens yet, and a zero would read as a
     // measurement that came back empty instead of one that was never taken. Money is
-    // absent on the same rule — but a job with credits always has some, so the dash now
-    // means "nothing billed to this job", not "we cannot say".
+    // absent on the same rule — a missing figure means no priced spending was recorded,
+    // which still includes the case of a job whose only entries are unpriced gate runs.
     ...(tokens.input + tokens.output > 0 ? { tokens } : {}),
     ...(usd > 0 ? { usd } : {}),
     elapsedMs: Math.max(0, lastActivityAt(record) - Date.parse(record.createdAt)),

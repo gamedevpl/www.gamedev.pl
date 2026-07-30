@@ -136,6 +136,28 @@ describe('CostsPanel', () => {
     await act(async () => root.unmount());
   });
 
+  it('dashes the window total when nothing in it was priced, rather than claiming $0.00', async () => {
+    // The headline has to answer the same way the rows do; $0.00 would read as a
+    // measurement that came back zero instead of one that was never taken.
+    mocked.fetchCostReport.mockResolvedValue(
+      report({
+        jobs: [job({ sessions: 0, credits: 0, gateRuns: 1, usd: undefined })],
+        totals: { jobs: 1, sessions: 0, credits: 0, gateRuns: 1, published: 1 },
+        usdPerPublishedGame: null,
+      }),
+    );
+
+    const { container, root } = await render();
+
+    // The last group is the window total. "Spent on builds that never shipped" stays
+    // $0.00 here on purpose — there are no unpublished jobs, so nothing wasted is a
+    // measured zero rather than an unmeasured one.
+    const groups = container.querySelectorAll('.admin-cost-headline > div');
+    expect(groups[groups.length - 1].querySelector('dd')?.textContent).toBe('—');
+
+    await act(async () => root.unmount());
+  });
+
   it('says the totals are a floor when jobs predate the ledger', async () => {
     mocked.fetchCostReport.mockResolvedValue(report({ unmeasuredJobs: 3 }));
 

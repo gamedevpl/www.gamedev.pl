@@ -86,6 +86,17 @@ describe('buildCostReport', () => {
     expect(report.totals.usd).toBeUndefined();
   });
 
+  it('leaves money absent on a ledger that holds only unpriced entries', () => {
+    // Having a ledger is not the same as having a price. A gate run books an entry with
+    // neither credits nor dollars, because Cloud Build minutes are billed and nothing
+    // reads the price back — so "no figure" here means unpriced, not free.
+    const report = buildCostReport([record({ issueNumber: 1, costs: [gateRun(ago(10 * MINUTE))] })]);
+
+    expect(report.jobs[0].gateRuns).toBe(1);
+    expect(report.jobs[0].usd).toBeUndefined();
+    expect(report.unmeasuredJobs).toBe(0);
+  });
+
   it('prices a published game and the builds that never shipped', () => {
     const report = buildCostReport([
       record({ issueNumber: 1, state: 'published', publishedAt: ago(MINUTE), costs: [session(ago(20 * MINUTE))] }),

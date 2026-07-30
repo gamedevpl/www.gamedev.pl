@@ -111,7 +111,11 @@ export function CostsPanel() {
         </div>
         <div>
           <dt>Spent in this window</dt>
-          <dd>{money(totals.usd ?? 0)}</dd>
+          {/* A dash, not $0.00: an absent total means nothing in the window was priced,
+              which is not the same claim as "the window cost nothing". The rows below
+              use the same rule, and a headline that disagreed with them would be the
+              one number a reader trusts least. */}
+          <dd>{totals.usd === undefined ? '—' : money(totals.usd)}</dd>
           <dd className="admin-cost-sub">{totals.credits} credits</dd>
         </div>
       </dl>
