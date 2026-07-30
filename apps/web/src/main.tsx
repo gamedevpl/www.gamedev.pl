@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { App } from './App.js';
 import { AuthProvider } from './AuthContext.js';
 import { recordVisit, watchInstallPrompt } from './pwa.js';
+import { watchShellUpdates } from './shellUpdate.js';
 import { startVisitTracking } from './visitTelemetry.js';
 import './i18n/index.js';
 import './styles.css';
@@ -20,9 +21,15 @@ startVisitTracking();
  * `recordVisit` because "has this person been here before" must count every session,
  * including the ones spent on the beta splash or a controller page — routes where the
  * install banner deliberately never renders and so could never do the counting itself.
+ *
+ * `watchShellUpdates` for the same timing reason as the install prompt: the worker can
+ * activate and post `shell-updated` while the auth splash is still up, long before
+ * `AppUpdateBanner` mounts. Without an early listener the message is gone and an
+ * iPhone Home Screen reopen stays on a stale shell with no Reload offer.
  */
 watchInstallPrompt();
 recordVisit();
+watchShellUpdates();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
