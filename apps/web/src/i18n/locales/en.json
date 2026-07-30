@@ -129,6 +129,7 @@
     "gameLoading": "Loading game…",
     "gameLoadError": "Could not load this game.",
     "retry": "Retry",
+    "refreshError": "Could not refresh the catalog. {{message}}",
     "empty": "No published games yet. Type a concept above to build the very first one!",
     "error": "Could not load the catalog. {{message}}",
     "genre": "Genre",

@@ -129,6 +129,7 @@
     "gameLoading": "Wczytywanie gry…",
     "gameLoadError": "Nie udało się wczytać tej gry.",
     "retry": "Spróbuj ponownie",
+    "refreshError": "Nie udało się odświeżyć katalogu. {{message}}",
     "empty": "Brak jeszcze opublikowanych gier. Wpisz pomysł powyżej, aby stworzyć pierwszą z nich!",
     "error": "Nie udało się wczytać katalogu. {{message}}",
     "genre": "Gatunek",

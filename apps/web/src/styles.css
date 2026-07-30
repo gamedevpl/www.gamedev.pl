@@ -2205,6 +2205,31 @@ body.player-open {
   max-width: 36rem;
 }
 
+/* Soft-refresh failure: last-good grid stays; this sits above it with Retry. */
+.catalog-refresh-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 107, 107, 0.35);
+  border-radius: 10px;
+  background: rgba(255, 107, 107, 0.08);
+}
+
+.catalog-refresh-error__text {
+  margin: 0;
+  flex: 1 1 12rem;
+  color: var(--error);
+  font-size: 0.92rem;
+}
+
+.catalog-refresh-error__retry {
+  flex: none;
+}
+
 .game-viewport-container .load-error {
   min-height: 100%;
 }

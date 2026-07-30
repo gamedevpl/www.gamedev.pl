@@ -260,6 +260,9 @@ export function App() {
     // flipping to `loading` would blank the arcade for every pull. First load and
     // recovering from an error still show the busy mascot.
     setCatalogStatus((prev) => (prev === 'ready' ? 'ready' : 'loading'));
+    // Clear a previous soft-refresh notice as soon as another attempt starts, so the
+    // banner does not linger over a grid that is already being re-fetched.
+    setCatalogError(null);
 
     void fetchCatalog()
       .then((entries) => {
@@ -271,7 +274,10 @@ export function App() {
       .catch((err: unknown) => {
         if (cancelled) return;
         // Keep whatever was on screen if a soft refresh fails — a transient 502
-        // should not erase a catalog the visitor was already browsing.
+        // should not erase a catalog the visitor was already browsing. The error
+        // still lands in `catalogError` so ArcadeCatalog can show a non-blocking
+        // refresh-failed banner above the last-good grid (full error UI only when
+        // there was nothing to keep).
         setCatalogEntries((prev) => (prev.length > 0 ? prev : []));
         setCatalogError(err instanceof Error ? err.message : null);
         setCatalogStatus((prev) => (prev === 'ready' ? 'ready' : 'error'));
