@@ -17,9 +17,16 @@ type NavHeaderProps = {
   onHome: () => void;
   /** Opens the creator control panel. */
   onStudio: () => void;
+  /**
+   * Android-style Up target for non-home surfaces. Null on home, join, play, and
+   * while an immersive theater owns escape. Never history.back() — deep links
+   * still land on a real parent.
+   */
+  upTarget?: { path: string; ariaLabel: string } | null;
+  onUp?: (path: string) => void;
 };
 
-export function NavHeader({ activeBuildCount, onNavigate, onHome, onStudio }: NavHeaderProps) {
+export function NavHeader({ activeBuildCount, onNavigate, onHome, onStudio, upTarget = null, onUp }: NavHeaderProps) {
   const { t } = useTranslation();
   const { user, logout } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -43,6 +50,17 @@ export function NavHeader({ activeBuildCount, onNavigate, onHome, onStudio }: Na
   return (
     <header className="app-header">
       <div className="logo-brand">
+        {upTarget && onUp ? (
+          <button
+            type="button"
+            className="nav-up"
+            aria-label={upTarget.ariaLabel}
+            title={upTarget.ariaLabel}
+            onClick={() => onUp(upTarget.path)}
+          >
+            <PixelIcon name="arrowLeft" size={16} />
+          </button>
+        ) : null}
         <a href="/" className="logo" onClick={handleLogoClick}>
           <Mascot
             className="mascot--logo"

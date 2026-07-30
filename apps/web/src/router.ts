@@ -166,6 +166,47 @@ export function studioPath(token?: string, tab?: StudioTab): string {
   return tab ? `${base}/${tab}` : base;
 }
 
+/**
+ * Parent path for the NavHeader "Up" chevron — Android-style Up, not browser Back.
+ *
+ * Always a real in-app parent so a deep link still has somewhere safe to go.
+ * Returns null when the surface owns its own escape (home, join, play/draft
+ * theater, studio playtest overlay) or when Up would be meaningless.
+ */
+export type NavUpTarget = {
+  path: string;
+  /** i18n key under `header.*` for the button's accessible name. */
+  labelKey: 'upHome' | 'upStudio';
+};
+
+export function navUpTarget(route: AppRoute): NavUpTarget | null {
+  switch (route.view) {
+    // Draft opens GameTheater inside DraftView without App `stageContent`, so the
+    // header would otherwise keep an Up control behind the aria-modal. Close /
+    // the error-page home link own escape here, same as `/play`.
+    case 'home':
+    case 'join':
+    case 'play':
+    case 'draft':
+      return null;
+    case 'studio':
+      // Playtest is a full-viewport theater with its own Close back to overview.
+      if (route.tab === 'playtest') return null;
+      if (route.token && route.tab) {
+        return { path: studioPath(route.token), labelKey: 'upStudio' };
+      }
+      if (route.token) {
+        return { path: studioPath(), labelKey: 'upStudio' };
+      }
+      return { path: '/', labelKey: 'upHome' };
+    case 'health':
+    case 'legal':
+    case 'contact':
+    case 'notFound':
+      return { path: '/', labelKey: 'upHome' };
+  }
+}
+
 /** QR / share URL path+fragment for a multiplayer lobby guest. */
 export function joinPath(code: string, token: string): string {
   return `/join/${code}#${token}`;

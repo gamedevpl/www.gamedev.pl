@@ -99,7 +99,34 @@ a {
 .logo-brand {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
+}
+
+/* Android-style Up — parent path, not browser history. 44px tap floor on phones. */
+.nav-up {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.nav-up:hover {
+  color: var(--turquoise);
+  background: rgba(0, 228, 172, 0.08);
+}
+
+.nav-up:focus-visible {
+  outline: 2px solid var(--turquoise);
+  outline-offset: 2px;
 }
 
 .app-header .logo {
@@ -2722,10 +2749,11 @@ body.player-open {
 
   /* min-width:0 lets the brand shrink, but the anchor inside it does not — at
      320px with the Polish "Zaloguj się" it drew straight through the button.
-     Clipping the wordmark is the safe failure here; a collision is not. */
+     Clipping the wordmark is the safe failure here; a collision is not.
+     Keep overflow on `.logo` only so the Up chevron is never clipped. */
   .logo-brand {
     min-width: 0;
-    overflow: hidden;
+    gap: 2px;
   }
 
   .app-header .logo {
