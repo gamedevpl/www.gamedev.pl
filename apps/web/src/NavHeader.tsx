@@ -45,17 +45,20 @@ export function NavHeader({
   // Header mark mimes the visitor: pull a phone and scroll a tiny feed while the page moves.
   const pageScrolling = usePageScrolling();
   /**
-   * How many jobs are waiting on this person, or null when they are not an operator —
-   * which is everyone. The console has been reachable only by knowing its URL, so the
-   * one surface with something to *do* on it was the one nothing linked to.
+   * How many jobs are waiting on this person. Only ever read for an operator.
    *
-   * The summary endpoint is the admission test: it answers 404 to everybody else, so a
-   * non-operator gets `null` and no link, and nothing here has to know why.
+   * Whether someone *is* one comes from the session (`user.admin`) rather than from
+   * probing an operator endpoint and reading its 404 as "no". That probe was the
+   * obvious implementation and the wrong one: it asked a settled question on every page
+   * load, and for everybody who is not an operator — which is everybody — it answered
+   * with an error in the browser console. The deploy gate that fails on console errors
+   * caught it, correctly.
    */
   const [alertCount, setAlertCount] = useState<number | null>(null);
+  const isOperator = user?.admin === true;
 
   useEffect(() => {
-    if (!user) {
+    if (!isOperator) {
       setAlertCount(null);
       return;
     }
@@ -63,28 +66,20 @@ export function NavHeader({
     const read = () =>
       fetchAdminSummary()
         .then((summary) => {
-          if (cancelled) return;
-          setAlertCount(summary ? summary.alerts.length : null);
-          // Whether someone is an operator does not change while they browse, and
-          // almost nobody is one. Polling on regardless would have every signed-in
-          // visitor asking a question with a known answer, forever, at 404 apiece.
-          if (!summary) clearInterval(timer);
+          if (!cancelled) setAlertCount(summary ? summary.alerts.length : 0);
         })
         .catch(() => {
-          // A failed read is not evidence of anything; leave the link as it was and
-          // keep the timer, since the next read may well succeed.
+          // A failed read is not evidence of anything; leave the badge as it was.
         });
-    // Slower than the console's own poll: this is a badge somebody glances at, not a
-    // queue they are working, and it rides along on every page of the site. Started
-    // before the first read so that read can stop it — it only ever runs on a later
-    // microtask, so the binding is always initialized by then.
-    const timer = setInterval(read, 120_000);
     void read();
+    // Slower than the console's own poll: this is a badge somebody glances at, not a
+    // queue they are working, and it rides along on every page of the site.
+    const timer = setInterval(read, 120_000);
     return () => {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [user]);
+  }, [isOperator]);
 
   const handleNavClick = (sectionId: string) => {
     onNavigate(sectionId);
@@ -203,7 +198,7 @@ export function NavHeader({
 
               {/* Operators only — everyone else never learns this exists, which is the
                   same posture the API takes when asked. */}
-              {alertCount !== null && (
+              {isOperator && (
                 <button
                   className="nav-link"
                   onClick={() => {
@@ -212,7 +207,7 @@ export function NavHeader({
                   }}
                 >
                   <PixelIcon name="wrench" size={14} /> Operator
-                  {alertCount > 0 && (
+                  {alertCount !== null && alertCount > 0 && (
                     <span className="specs-count-badge" aria-label={`${alertCount} waiting on you`}>
                       {alertCount}
                     </span>

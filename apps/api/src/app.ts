@@ -172,6 +172,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     privateBeta,
     betaAllowedUids,
     betaAllowedEmails,
+    // So the session can tell the client whether to offer the operator console. Not
+    // authorization — every operator route still checks this same set itself.
+    adminUids,
   });
 
   await registerSubmissionRoutes(app, {

@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { OAuth2Client } from 'google-auth-library';
 import { z } from 'zod';
 import { isAccessTokenExpired, looksLikeAccessToken, parseAccessToken, verifyTokenSecret } from './access-token.js';
+import { isAdmin, isAdminSession } from './admin.js';
 import { resolveAppleAccount } from './apple-account.js';
 import { createAppleAuthVerifierFromEnv, parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { readBearerToken } from './bearer.js';
@@ -199,6 +200,16 @@ export interface AuthPluginOptions {
   privateBeta?: boolean;
   betaAllowedUids?: Set<string>;
   betaAllowedEmails?: Set<string>;
+  /**
+   * Operators, so the session can say so.
+   *
+   * Nothing here is authorization — every operator route re-checks the same allowlist
+   * itself. This is only how the *client* learns whether to draw a door it is allowed
+   * through, and it exists because the alternative was probing an operator endpoint on
+   * every page load and reading its 404 as "no": one console error per visit for
+   * everybody who is not an operator, which is most people.
+   */
+  adminUids?: Set<string>;
 }
 
 const GoogleAuthSchema = z.object({
@@ -254,6 +265,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
   const isAuthConfigured = Boolean(sessionSecret && (googleClientId || options.googleAuthVerifier)) || !isProd;
 
   const effectiveSessionSecret = sessionSecret ?? 'dev-session-secret-change-me';
+  const adminUids = options.adminUids;
   const sessionSecretPrev = options.sessionSecretPrev ?? process.env.SESSION_SECRET_PREV;
 
   const verifier = options.googleAuthVerifier ?? new DefaultGoogleAuthVerifier(googleClientId);
@@ -475,7 +487,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
           maxAge: DEFAULT_SESSION_DURATION_SECONDS,
         });
 
-        return { user };
+        return sessionPayload(user, isAdmin(user.uid, adminUids));
       } catch (err) {
         const message = err instanceof Error ? err.message : 'google token verification failed';
         return reply.status(401).send({ error: message });
@@ -570,7 +582,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
           maxAge: DEFAULT_SESSION_DURATION_SECONDS,
         });
 
-        return { user };
+        return sessionPayload(user, isAdmin(user.uid, adminUids));
       } catch (err) {
         const message = err instanceof Error ? err.message : 'apple token verification failed';
         return reply.status(401).send({ error: message });
@@ -757,7 +769,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
       maxAge: DEFAULT_SESSION_DURATION_SECONDS,
     });
 
-    return { user };
+    return sessionPayload(user, isAdmin(user.uid, adminUids));
   });
 
   app.post('/api/auth/logout', async (_request, reply) => {
@@ -775,8 +787,22 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
     if (request.user.tier === 'blocked') {
       return reply.status(403).send({ error: 'account is blocked' });
     }
-    return { user: request.user };
+    // `isAdminSession`, not `isAdmin`: a request authenticated with a personal access
+    // token acts as its user but is never treated as an operator, and the flag the client
+    // draws its door from must not disagree with the routes behind that door.
+    return sessionPayload(request.user, isAdminSession(request, adminUids));
   });
+}
+
+/**
+ * The session as the client is told it. Adds one derived flag to the stored user.
+ *
+ * `admin` is present only when true, so a client that has never heard of it is
+ * unaffected, and a reader cannot mistake `admin: false` for a claim about anything
+ * other than this request.
+ */
+function sessionPayload(user: User, isOperator: boolean): { user: User & { admin?: true } } {
+  return { user: isOperator ? { ...user, admin: true } : user };
 }
 
 export function checkUserAccess(request: FastifyRequest, reply: FastifyReply): boolean {

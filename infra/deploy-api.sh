@@ -114,8 +114,12 @@ gcloud artifacts repositories describe "$REPO" --location "$REGION" --project "$
        --location "$REGION" --project "$PROJECT_ID" --description "gamedev.pl images"
 
 echo "==> Building image via Cloud Build: ${IMAGE}"
+# MP_RELAY_URL goes to the *build* as well as the service env below. The socket URL is
+# inlined into the bundle at build time, so a service that knows about the relay while its
+# bundle does not is the worst of both: room creation forwards correctly and every client
+# then dials an origin that no longer serves /api/mp/ws.
 gcloud builds submit "$REPO_ROOT" --config "$REPO_ROOT/infra/cloudbuild.yaml" \
-  --substitutions "_IMAGE=${IMAGE},_GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID},_APPLE_SERVICES_ID=${APPLE_SERVICES_ID}" \
+  --substitutions "_IMAGE=${IMAGE},_GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID},_APPLE_SERVICES_ID=${APPLE_SERVICES_ID},_MP_RELAY_URL=${MP_RELAY_URL}" \
   --project "$PROJECT_ID"
 
 # Wire whichever secrets exist into one --set-secrets list (multiple --set-secrets
