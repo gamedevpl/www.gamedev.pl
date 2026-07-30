@@ -33,6 +33,20 @@
     "prefs": {
       "digestOn": "Cotygodniowe podsumowanie włączone",
       "digestOff": "Cotygodniowe podsumowanie wyłączone"
+    },
+    "operator": {
+      "review_ready": {
+        "title": "Build czeka na publikację",
+        "body": "„{{title}}” przeszedł kontrolę."
+      },
+      "build_failed": {
+        "title": "Build się nie powiódł",
+        "body": "„{{title}}” zakończył się bez dostarczenia gry."
+      },
+      "build_stalled": {
+        "title": "Build stanął w miejscu",
+        "body": "„{{title}}” milczy ({{detail}})."
+      }
     }
   },
   "header": {

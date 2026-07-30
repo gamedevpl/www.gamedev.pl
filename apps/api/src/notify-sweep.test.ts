@@ -102,7 +102,7 @@ describe('POST /api/internal/notify-sweep', () => {
       headers: { authorization: 'Bearer scheduler-token' },
     });
     expect(first.statusCode).toBe(200);
-    expect(first.json()).toEqual({ scanned: 1, emitted: 1, stalled: 0 });
+    expect(first.json()).toEqual({ scanned: 1, emitted: 1, alerts: 0, alerted: 0, stalled: 0 });
 
     const list = await store.listNotifications('g:owner');
     expect(list).toHaveLength(1);
@@ -116,7 +116,7 @@ describe('POST /api/internal/notify-sweep', () => {
       url: '/api/internal/notify-sweep',
       headers: { authorization: 'Bearer scheduler-token' },
     });
-    expect(second.json()).toEqual({ scanned: 0, emitted: 0, stalled: 0 });
+    expect(second.json()).toEqual({ scanned: 0, emitted: 0, alerts: 0, alerted: 0, stalled: 0 });
     await app.close();
   });
 
@@ -218,6 +218,89 @@ describe('POST /api/internal/notify-sweep', () => {
     });
     const res = await app.inject({ method: 'POST', url: '/api/internal/notify-sweep' });
     expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+});
+
+// The operator half of the same sweep. It runs over the set of jobs already being
+// scanned, so the cost is a pure function and whatever the alerts themselves cost.
+describe('operator alerts on the notify sweep', () => {
+  async function sweep(app: Awaited<ReturnType<typeof buildSweepApp>>) {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/internal/notify-sweep',
+      headers: { authorization: 'Bearer scheduler-token' },
+    });
+    expect(res.statusCode).toBe(200);
+    return res.json();
+  }
+
+  async function appWithOperator(store: InMemoryStore, adminUids: string | undefined) {
+    return buildApp({
+      store,
+      sessionSecret: 'dev-session-secret-change-me',
+      ...(adminUids ? { adminUids } : {}),
+      submissionRoutes: {
+        githubToken: 'token',
+        submissionTokenSecret: secret,
+        gamesRepo: 'gamedevpl/www.gamedev.pl-games',
+        githubClient: buildingGithubClient(),
+        internalAuthVerifier: acceptAll,
+      },
+    });
+  }
+
+  it('tells the operator about a build waiting on the publish decision', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    await store.createSubmission(1_000_001, 'g:creator', 'Comet Courier');
+    await store.recordJobTransition(1_000_001, {
+      to: 'ready_for_review',
+      at: new Date().toISOString(),
+      by: 'gate',
+      reason: 'gate_green',
+    });
+    const app = await appWithOperator(store, 'g:boss');
+
+    expect(await sweep(app)).toMatchObject({ alerts: 1, alerted: 1 });
+    const [notification] = await store.listNotifications('g:boss');
+    expect(notification).toMatchObject({ type: 'operator.review_ready', link: '/admin/queue' });
+
+    // Twice through the scheduler is one notification: the situation has not changed.
+    expect(await sweep(app)).toMatchObject({ alerts: 1, alerted: 0 });
+    expect(await store.listNotifications('g:boss')).toHaveLength(1);
+    await app.close();
+  });
+
+  it('counts the alert but tells nobody when no operator is configured', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(1_000_002, 'g:creator', 'Comet Courier');
+    await store.recordJobTransition(1_000_002, {
+      to: 'ready_for_review',
+      at: new Date().toISOString(),
+      by: 'gate',
+      reason: 'gate_green',
+    });
+    const app = await appWithOperator(store, undefined);
+
+    expect(await sweep(app)).toMatchObject({ alerts: 1, alerted: 0 });
+    await app.close();
+  });
+
+  it('does not alert on a build that is merely slow', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    await store.createSubmission(1_000_003, 'g:creator', 'Comet Courier');
+    await store.recordJobTransition(1_000_003, {
+      to: 'building',
+      at: new Date().toISOString(),
+      by: 'reconciler',
+      reason: 'task_in_progress',
+    });
+    const app = await appWithOperator(store, 'g:boss');
+
+    expect(await sweep(app)).toMatchObject({ alerts: 0, alerted: 0 });
+    expect(await store.listNotifications('g:boss')).toEqual([]);
     await app.close();
   });
 });

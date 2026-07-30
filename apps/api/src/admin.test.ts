@@ -2,7 +2,13 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { InMemoryStore, type Scorecard, type TelemetryEvent, type VisitEvent } from './store.js';
-import type { CreationLimitsResponse, HealthResponse, ScorecardsResponse, VisitsResponse } from './admin.js';
+import type {
+  AdminSummaryResponse,
+  CreationLimitsResponse,
+  HealthResponse,
+  ScorecardsResponse,
+  VisitsResponse,
+} from './admin.js';
 import { runScorecardSweep } from './scorecard.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
@@ -533,5 +539,55 @@ describe('/api/admin/creation-limits', () => {
     // The refusals are refusals, not silent no-ops.
     expect(await store.getCreationLimits()).toBeNull();
     await app.close();
+  });
+});
+
+describe('GET /api/admin/summary', () => {
+  it('answers 404 to a signed-in non-admin, like every other operator route', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:player' });
+    const app = await appWith(store);
+
+    const res = await app.inject({ method: 'GET', url: '/api/admin/summary', headers: authHeaders('g:player') });
+
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('returns what needs doing, the queue behind it, and the breaker', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    await store.createSubmission(1_000_001, 'g:boss', 'Comet Courier');
+    await store.recordJobTransition(1_000_001, {
+      to: 'ready_for_review',
+      at: new Date().toISOString(),
+      by: 'gate',
+      reason: 'gate_green',
+    });
+    const app = await appWith(store);
+
+    const res = await app.inject({ method: 'GET', url: '/api/admin/summary', headers: authHeaders('g:boss') });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as AdminSummaryResponse;
+    expect(body.alerts).toHaveLength(1);
+    expect(body.alerts[0]).toMatchObject({ kind: 'review_ready', issueNumber: 1_000_001, title: 'Comet Courier' });
+    expect(body.queue).toMatchObject({ active: 1, stalled: 0, byState: { ready_for_review: 1 } });
+    expect(body.limits.paused).toBe(false);
+  });
+
+  it('reports the breaker an operator just pulled', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    const app = await appWith(store);
+    await app.inject({
+      method: 'POST',
+      url: '/api/admin/creation-limits',
+      headers: authHeaders('g:boss'),
+      payload: { paused: true },
+    });
+
+    const res = await app.inject({ method: 'GET', url: '/api/admin/summary', headers: authHeaders('g:boss') });
+
+    expect((res.json() as AdminSummaryResponse).limits.paused).toBe(true);
   });
 });

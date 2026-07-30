@@ -482,7 +482,17 @@ export type NotificationType =
    * (docs/improvement-loop-plan.md IL-2). Unlike the three above it is not tied to one
    * submission, which is why its id is keyed by week rather than by issue number.
    */
-  | 'creator.digest';
+  | 'creator.digest'
+  /**
+   * The operator's own queue, delivered instead of waited on
+   * (`operator-alerts.ts`). These do not go to the creator: they go to every uid in
+   * ADMIN_UIDS, because the thing being reported — a build waiting on the publish
+   * decision, one that failed, one that has stopped moving — is nobody else's to act
+   * on, and the creator already has their own status page for their own game.
+   */
+  | 'operator.review_ready'
+  | 'operator.build_failed'
+  | 'operator.build_stalled';
 
 /**
  * The types that are about one submission, and so can render "«game title» happened".
@@ -492,7 +502,10 @@ export type NotificationType =
  * means a fourth submission event joins the email and push copy automatically, while a
  * second non-submission event has to be thought about.
  */
-export type SubmissionNotificationType = Exclude<NotificationType, 'creator.digest'>;
+export type SubmissionNotificationType = Extract<NotificationType, `submission.${string}`>;
+
+/** The operator-facing half, derived the same way and for the same reason. */
+export type OperatorNotificationType = Extract<NotificationType, `operator.${string}`>;
 
 export interface StoredNotification {
   /** Deterministic id (e.g. `sub-142-published`) so emission is idempotent. */

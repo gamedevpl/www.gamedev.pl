@@ -8,6 +8,9 @@ import {
   type PartitionScanBudget,
 } from './telemetry-health.js';
 import { routeAll, type Suggestion } from './suggestions.js';
+import { buildJobQueue } from './job-admin-routes.js';
+import type { JobState } from './job-state.js';
+import { detectOperatorAlerts, type OperatorAlert } from './operator-alerts.js';
 import { summarizeVisitFunnel, type VisitFunnel } from './visit-funnel.js';
 import { summarizeCreatorMetrics, type CreatorMetrics } from './creator-metrics.js';
 import { DEFAULT_CREATION_LIMITS_TTL_MS, resolveDefaultGlobalDailyCap } from './creation-limits.js';
@@ -149,6 +152,21 @@ export interface CreatorsResponse {
  */
 const MAX_SUBMISSIONS_SAMPLED = 100;
 
+/**
+ * The one read the console header and the nav badge share.
+ *
+ * Everything in it is already answerable from other routes; what it adds is being cheap
+ * enough to call on every page load. The nav needs two things — may this person see the
+ * console at all, and is there anything in it demanding them — and getting those from
+ * `/api/admin/jobs` would mean shipping the whole queue to draw one dot.
+ */
+export interface AdminSummaryResponse {
+  /** Jobs waiting on a person, worst first. Short by construction — see operator-alerts. */
+  alerts: OperatorAlert[];
+  queue: { active: number; stalled: number; byState: Partial<Record<JobState, number>> };
+  limits: { paused: boolean; globalDailySubmissionCap: number; todaySubmissions: number };
+}
+
 export function isAdmin(uid: string | undefined, adminUids: Set<string> | undefined): boolean {
   return uid !== undefined && adminUids !== undefined && adminUids.has(uid);
 }
@@ -197,6 +215,34 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
       propagationMs: creationLimitsTtlMs,
     };
   }
+
+  /**
+   * Console header and nav badge in one request.
+   *
+   * Same 404-to-everyone-else contract as the reads below, which is what makes it usable
+   * as the admin test the client has never had: the web app has no idea who is an
+   * operator, so until now the console could only be reached by knowing the URL and the
+   * page could only say "not found" after the fact.
+   */
+  app.get('/api/admin/summary', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) {
+      return reply.status(404).send({ error: 'not found' });
+    }
+
+    const [records, limits] = await Promise.all([store.listActiveSubmissions(), readCreationLimits()]);
+    const at = now();
+    const queue = buildJobQueue(records, at);
+    const body: AdminSummaryResponse = {
+      alerts: detectOperatorAlerts(records, at),
+      queue: { active: queue.jobs.length, stalled: queue.stalled, byState: queue.byState },
+      limits: {
+        paused: limits.effective.paused,
+        globalDailySubmissionCap: limits.effective.globalDailySubmissionCap,
+        todaySubmissions: limits.today.submissions,
+      },
+    };
+    return reply.status(200).send(body);
+  });
 
   app.get('/api/admin/creation-limits', async (request, reply) => {
     if (!isAdminSession(request, adminUids)) {

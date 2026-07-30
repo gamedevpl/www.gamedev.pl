@@ -33,6 +33,20 @@
     "prefs": {
       "digestOn": "Weekly summary on",
       "digestOff": "Weekly summary off"
+    },
+    "operator": {
+      "review_ready": {
+        "title": "A build is waiting to be published",
+        "body": "“{{title}}” passed the gate."
+      },
+      "build_failed": {
+        "title": "A build failed",
+        "body": "“{{title}}” ended without delivering."
+      },
+      "build_stalled": {
+        "title": "A build has stopped moving",
+        "body": "“{{title}}” has gone quiet ({{detail}})."
+      }
     }
   },
   "header": {

@@ -9,13 +9,18 @@ import {
   digestNotificationMessage,
   digestPushContent,
   normalizeLocale,
+  operatorNotificationMessage,
+  operatorPushContent,
   submissionNotificationMessage,
   submissionPushContent,
   type DigestEmailParams,
 } from './email-templates.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
+import type { OperatorAlert } from './operator-alerts.js';
 import { createPusherFromEnv, type Pusher } from './pusher.js';
 import type {
+  NotificationType,
+  OperatorNotificationType,
   StoredNotification,
   SubmissionNotificationType,
   SubmissionRecord,
@@ -42,6 +47,11 @@ const STATUS_TO_EVENT: Partial<Record<SubmissionStatus, SubmissionNotificationTy
 
 export function statusToEvent(status: SubmissionStatus): SubmissionNotificationType | null {
   return STATUS_TO_EVENT[status] ?? null;
+}
+
+/** Narrows a stored notification's type, so the two audiences cannot be crossed by accident. */
+function isOperatorNotification(type: NotificationType): type is OperatorNotificationType {
+  return type.startsWith('operator.');
 }
 
 /**
@@ -84,6 +94,10 @@ export interface EmitDeps {
  */
 async function maybeSendEmail(deps: EmitDeps, uid: string, notification: StoredNotification): Promise<void> {
   if (notification.emailedAt) return;
+  // Operator alerts have their own send (see `emitOperatorAlert`): they carry no
+  // unsubscribe and must not be silenced by one. Guarded here rather than left to the
+  // call sites so a future caller cannot accidentally route one through creator mail.
+  if (isOperatorNotification(notification.type)) return;
 
   // Explicit deps win (tests inject them). Otherwise fall back to env config so
   // the default call sites send email in prod with no extra wiring: a real mailer
@@ -150,7 +164,10 @@ async function maybePush(deps: EmitDeps, uid: string, notification: StoredNotifi
     const { title, body } =
       notification.type === 'creator.digest'
         ? digestPushContent(locale, digestEmailParams(notification, '', ''))
-        : submissionPushContent(locale, notification.type, notification.params.title ?? '');
+        : isOperatorNotification(notification.type)
+          ? // English regardless of the reader's locale — see the operator copy's comment.
+            operatorPushContent(notification.type, notification.params.title ?? '')
+          : submissionPushContent(locale, notification.type, notification.params.title ?? '');
     const payload = { title, body, url: absoluteAppUrl(appBaseUrl, notification.link), tag: notification.id };
 
     await Promise.all(
@@ -191,6 +208,80 @@ function digestEmailParams(
     actionUrl,
     unsubscribeUrl,
   };
+}
+
+/**
+ * Fan an operator alert out to everyone who can act on it.
+ *
+ * Deliberately not routed through `maybeSendEmail`: that path is built for creator mail,
+ * where an unsubscribe is a right and a send is skipped when it was exercised. An alert
+ * is the opposite kind of message — the queue telling its operator it needs them — and a
+ * pager that someone silenced eighteen months ago by clicking "unsubscribe" on a build
+ * notification would fail exactly when it mattered and say nothing about why.
+ *
+ * The in-app notification is still the durable record, and its id is the alert's, so a
+ * sweep running every two minutes emits each situation once.
+ */
+export async function emitOperatorAlert(
+  deps: EmitDeps & { adminUids: Iterable<string> },
+  alert: OperatorAlert,
+): Promise<{ created: number }> {
+  const createdAt = deps.now ? new Date(deps.now()).toISOString() : new Date().toISOString();
+  const type: OperatorNotificationType = `operator.${alert.kind}`;
+  let created = 0;
+
+  for (const uid of deps.adminUids) {
+    const result = await deps.store.createNotification(uid, {
+      id: alert.id,
+      type,
+      createdAt,
+      titleKey: `notifications.${type}.title`,
+      bodyKey: `notifications.${type}.body`,
+      params: {
+        title: alert.title,
+        issueNumber: String(alert.issueNumber),
+        ...(alert.stall ? { detail: alert.stall } : {}),
+      },
+      link: OPERATOR_ALERT_LINK,
+    });
+    if (!result.created) continue;
+    created += 1;
+    await sendOperatorEmail(deps, uid, alert, type);
+    await maybePush(deps, uid, result.notification);
+  }
+
+  return { created };
+}
+
+/** Where an operator notification lands: the queue, which is where the action is. */
+const OPERATOR_ALERT_LINK = '/admin/queue';
+
+/** Best-effort, like every other send here: a failed alert email must not fail the sweep. */
+async function sendOperatorEmail(
+  deps: EmitDeps,
+  uid: string,
+  alert: OperatorAlert,
+  type: OperatorNotificationType,
+): Promise<void> {
+  const mailer = deps.mailer ?? (process.env.RESEND_API_KEY ? createMailerFromEnv() : undefined);
+  if (!mailer) return;
+
+  try {
+    const user = await deps.store.getUser(uid);
+    if (!user?.email) return;
+    const appBaseUrl = deps.appBaseUrl ?? process.env.APP_BASE_URL?.trim() ?? 'https://www.gamedev.pl';
+    await mailer.send(
+      operatorNotificationMessage(user.email, type, {
+        title: alert.title,
+        issueNumber: alert.issueNumber,
+        actionUrl: absoluteAppUrl(appBaseUrl, OPERATOR_ALERT_LINK),
+        ...(alert.stall ? { detail: alert.stall } : {}),
+      }),
+    );
+    await deps.store.markNotificationEmailed(uid, alert.id);
+  } catch (err) {
+    deps.logError?.(err, 'operator alert email send failed');
+  }
 }
 
 export interface SubmissionNotificationEvent {

@@ -34,7 +34,8 @@ import {
 import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
-import { notifyOnTransition, type EmitDeps } from './notify.js';
+import { emitOperatorAlert, notifyOnTransition, type EmitDeps } from './notify.js';
+import { detectOperatorAlerts } from './operator-alerts.js';
 import { peekQuota } from './quota-gate.js';
 import {
   isNativeJobId,
@@ -244,6 +245,12 @@ export interface SubmissionRoutesOptions {
   maxCachedDraftPreviews?: number;
   /** How many times a job may be sent back for finishing without delivering. */
   maxDeliveryNudges?: number;
+  /**
+   * Who gets the operator alerts the sweep raises. Empty (the default) means the queue
+   * is still visible in the console and nobody is told about it — which is the honest
+   * default for an environment that has not named an operator.
+   */
+  adminUids?: Set<string>;
 }
 
 function checkUserAccess(request: FastifyRequest, reply: FastifyReply): boolean {
@@ -326,6 +333,7 @@ export async function registerSubmissionRoutes(
   const fetchImpl = options.fetchImpl ?? fetch;
   const now = options.now ?? Date.now;
   const store = options.store;
+  const adminUids = options.adminUids;
   const dailySubmissionQuota = options.dailySubmissionQuota ?? 5;
 
   // Per-user quotas bound one creator; this bounds everyone at once, and can be pulled
@@ -2119,18 +2127,51 @@ export async function registerSubmissionRoutes(
           request.log.error({ err: sweepError, issueNumber: record.issueNumber }, 'sweep item failed');
         }
       }
+      // Then the operator's own half of the sweep.
+      //
+      // Raised here rather than at each transition because the alerts are not all
+      // transitions: a stall is time passing, and there is no moment anybody could have
+      // written it. This loop already runs every couple of minutes over exactly the set
+      // of jobs that could be in trouble, so it is the one place all three kinds are
+      // observable. Idempotent per job and kind, so re-running it does not re-notify.
+      let alerted = 0;
+      const alerts = detectOperatorAlerts(active, now());
+      if (adminUids && adminUids.size > 0) {
+        for (const alert of alerts) {
+          try {
+            const { created } = await emitOperatorAlert({ ...buildNotifyDeps(), adminUids }, alert);
+            alerted += created;
+          } catch (alertError) {
+            request.log.error({ err: alertError, alert: alert.id }, 'operator alert emit failed');
+          }
+        }
+      }
+
       // Logged at error level so it surfaces without new infrastructure, the same way
       // the scorecard sweep reports its failures — a nightly job nobody watches is
       // exactly the kind that fails quietly for weeks.
       const sweepLog =
         stalledIssues.length > 0 ? request.log.error.bind(request.log) : request.log.info.bind(request.log);
       sweepLog(
-        { scanned: active.length, emitted, stalled: stalledIssues.length, stalledIssues },
+        {
+          scanned: active.length,
+          emitted,
+          alerts: alerts.length,
+          alerted,
+          stalled: stalledIssues.length,
+          stalledIssues,
+        },
         stalledIssues.length > 0
           ? 'creator feedback undelivered past the stall threshold — the games-repo @copilot relay may be down'
           : 'notify sweep complete',
       );
-      return reply.send({ scanned: active.length, emitted, stalled: stalledIssues.length });
+      return reply.send({
+        scanned: active.length,
+        emitted,
+        alerts: alerts.length,
+        alerted,
+        stalled: stalledIssues.length,
+      });
     },
   );
 
