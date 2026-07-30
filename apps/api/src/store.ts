@@ -161,6 +161,14 @@ export interface SubmissionRecord {
    * queries — the shape of read amplification this whole change exists to remove.
    */
   lastAgentSignalAt?: string;
+  /**
+   * Which backend is building this job and where.
+   *
+   * `refs` accumulates because a revision round is a *new* task rather than a new session
+   * on the old one, so a job that has been revised twice has three refs sharing one
+   * workspace. The newest is the one to observe.
+   */
+  dispatch?: { backend: string; refs: string[]; workspace?: string };
 }
 
 /**
@@ -746,6 +754,8 @@ export interface Store {
   recordJobTransition(issueNumber: number, transition: JobTransition): Promise<boolean>;
   /** Records the agent backend's last reported state, for stall detection. */
   setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void>;
+  /** Appends a dispatch ref, recording which backend is building this job and where. */
+  recordDispatch(issueNumber: number, dispatch: { backend: string; ref: string; workspace?: string }): Promise<void>;
   /** Records the game directory a submission is building, once it is known. */
   setSubmissionSlug(issueNumber: number, slug: string): Promise<void>;
   /** Stamps the moment a submission was first seen published (for build-time stats). */
@@ -1195,6 +1205,23 @@ export class InMemoryStore implements Store {
   async setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void> {
     const sub = this.submissions.get(issueNumber);
     if (sub) this.submissions.set(issueNumber, { ...sub, agentState });
+  }
+
+  async recordDispatch(
+    issueNumber: number,
+    dispatch: { backend: string; ref: string; workspace?: string },
+  ): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub) return;
+    const existing = sub.dispatch;
+    this.submissions.set(issueNumber, {
+      ...sub,
+      dispatch: {
+        backend: dispatch.backend,
+        refs: [...(existing?.refs ?? []), dispatch.ref],
+        workspace: dispatch.workspace ?? existing?.workspace,
+      },
+    });
   }
 
   async getPublication(slug: string): Promise<PublicationRecord | null> {
@@ -1993,6 +2020,34 @@ export class FirestoreStore implements Store {
 
   async setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void> {
     await this.db.collection('submissions').doc(String(issueNumber)).set({ agentState }, { merge: true });
+  }
+
+  async recordDispatch(
+    issueNumber: number,
+    dispatch: { backend: string; ref: string; workspace?: string },
+  ): Promise<void> {
+    const ref = this.db.collection('submissions').doc(String(issueNumber));
+    // Transactional for the same reason transitions are: a dispatch and a reconciler
+    // observation can land together, and appending to a list read outside a transaction
+    // drops one of them.
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return;
+      const existing = (snap.data() as SubmissionRecord).dispatch;
+      tx.set(
+        ref,
+        {
+          dispatch: {
+            backend: dispatch.backend,
+            refs: [...(existing?.refs ?? []), dispatch.ref],
+            ...((dispatch.workspace ?? existing?.workspace)
+              ? { workspace: dispatch.workspace ?? existing?.workspace }
+              : {}),
+          },
+        },
+        { merge: true },
+      );
+    });
   }
 
   async getPublication(slug: string): Promise<PublicationRecord | null> {

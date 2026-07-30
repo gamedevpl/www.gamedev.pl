@@ -19,6 +19,7 @@ import {
   type GameSnapshotReader,
 } from './game-snapshot.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
+import type { AgentBackend } from './agent-backend.js';
 import { detectStall, fromSubmissionStatus, planObservedStatusTransition } from './job-state.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
@@ -186,6 +187,11 @@ export interface SubmissionRoutesOptions {
   /** Localizes the agent's English build log; defaults to createTranslatorFromEnv(). */
   translator?: Translator;
   /** Caps and seams for the agent build channel; see registerAgentChannelRoutes. */
+  /**
+   * Which coding-agent backend builds submitted games. Absent means dispatch is not
+   * wired in this environment and the games repo's label workflow still starts builds.
+   */
+  agentBackend?: AgentBackend;
   agentChannel?: Pick<
     AgentChannelOptions,
     'maxEventsPerBuild' | 'maxEventsPerWindow' | 'gamesStore' | 'maxSubmitsPerWindow' | 'onSourcesDelivered'
@@ -292,6 +298,7 @@ export async function registerSubmissionRoutes(
   const improvementRateLimitWindowMs = 60 * 60 * 1000;
   const maxImprovementsPerWindow = 10;
   const internalAuthVerifier = options.internalAuthVerifier ?? createInternalAuthVerifierFromEnv();
+  const agentBackend = options.agentBackend;
 
   // Shared deps for notification emission (in-app + best-effort email). The mailer
   // degrades to a no-op without RESEND_API_KEY, and email is skipped entirely
@@ -319,6 +326,62 @@ export async function registerSubmissionRoutes(
       await store.recordJobTransition(record.issueNumber, transition);
     } catch (error) {
       app.log.error({ err: error, issueNumber: record.issueNumber }, 'job transition write failed');
+    }
+  }
+
+  /**
+   * Hands a job to a coding agent.
+   *
+   * This is what replaces the games repo's `assign-copilot.yml` — a workflow whose only
+   * job was assigning a bot the REST API will not list, needing a PAT of its own because
+   * the default token could not do it. Dispatching from here also means the *product*
+   * decides which backend and which model builds a game, rather than that being a
+   * property of a label somebody put on an issue.
+   *
+   * The GitHub issue survives for now as the job's identity — every store key, every
+   * token and the whole build channel are derived from its number — but nothing reads it
+   * as a work item any more. Re-keying jobs onto ids we mint is a change of its own, and
+   * doing it in the same step as moving dispatch would put two risky migrations in one
+   * deploy for no gain.
+   *
+   * Best effort against a missing backend: without one configured (local development, or
+   * before the dispatch credential exists in an environment) the submission still
+   * succeeds and the label workflow remains the path that starts it. A creator must never
+   * lose a submission to orchestration that is not wired up yet.
+   */
+  async function dispatchBuild(input: {
+    issueNumber: number;
+    spec: string;
+    locale: string;
+    log: { error: (context: object, message: string) => void };
+  }): Promise<void> {
+    // Without the signing secret there is no per-job channel credential to give the
+    // agent, and an agent that cannot report or deliver is worse than one never started.
+    if (!agentBackend || !submissionTokenSecret) return;
+    try {
+      const result = await agentBackend.dispatch({
+        issueNumber: input.issueNumber,
+        spec: input.spec,
+        locale: input.locale,
+        channelToken: mintAgentToken(input.issueNumber, submissionTokenSecret),
+        apiBaseUrl: notifyAppBaseUrl,
+      });
+      await store?.recordDispatch(input.issueNumber, {
+        backend: agentBackend.name,
+        ref: result.ref,
+        workspace: result.workspace,
+      });
+      await store?.recordJobTransition(input.issueNumber, {
+        to: 'dispatched',
+        at: new Date(now()).toISOString(),
+        by: 'system',
+        reason: `dispatched_to_${agentBackend.name}`,
+      });
+    } catch (error) {
+      // A failed dispatch leaves the job `queued`, which is exactly what the operator
+      // queue reports as `not_dispatched` once it has waited long enough — so this
+      // surfaces as a visible stalled job rather than a silently dead one.
+      input.log.error({ err: error, issueNumber: input.issueNumber }, 'agent dispatch failed');
     }
   }
 
@@ -1021,6 +1084,13 @@ export async function registerSubmissionRoutes(
       } catch (channelError) {
         request.log.error({ err: channelError, issueNumber: issue.number }, 'failed to attach build channel');
       }
+
+      await dispatchBuild({
+        issueNumber: issue.number,
+        spec: parsed.data.concept,
+        locale: creatorLocale,
+        log: request.log,
+      });
 
       const token = mintToken(issue.number, submissionTokenSecret);
       return reply.send({ token, statusUrl: `/api/submissions/${token}` });

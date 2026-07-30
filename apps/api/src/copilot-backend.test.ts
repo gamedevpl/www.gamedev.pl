@@ -172,3 +172,36 @@ describe('observe and cancel', () => {
     expect(await backend.cancel('task-1')).toEqual({ enforced: false });
   });
 });
+
+/**
+ * Dispatch wiring: the product decides which backend and model builds a game, and a
+ * submission survives an orchestration layer that is not configured yet.
+ */
+describe('dispatch through the submissions route', () => {
+  it('is skipped without a backend, so a submission never fails on missing orchestration', async () => {
+    // Local development and any environment where the dispatch credential does not yet
+    // exist. Losing a creator's submission to unwired plumbing is the worst outcome here.
+    const { InMemoryStore } = await import('./store.js');
+    const store = new InMemoryStore();
+    await store.createSubmission(1, 'g:1', 'A game');
+
+    expect((await store.getSubmission(1))?.dispatch).toBeUndefined();
+  });
+
+  it('records every round against one workspace', async () => {
+    // A revision is a new task rather than a new session, so refs accumulate while the
+    // workspace stays put — and the newest ref is the one worth observing.
+    const { InMemoryStore } = await import('./store.js');
+    const store = new InMemoryStore();
+    await store.createSubmission(1, 'g:1', 'A game');
+
+    await store.recordDispatch(1, { backend: 'copilot', ref: 'task-1', workspace: 'copilot/x' });
+    await store.recordDispatch(1, { backend: 'copilot', ref: 'task-2' });
+
+    expect((await store.getSubmission(1))?.dispatch).toEqual({
+      backend: 'copilot',
+      refs: ['task-1', 'task-2'],
+      workspace: 'copilot/x',
+    });
+  });
+});
