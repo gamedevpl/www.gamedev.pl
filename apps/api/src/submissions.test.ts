@@ -1157,9 +1157,11 @@ describe('submission preview route', () => {
     await store.setSubmissionSlug(jobId, 'tv-tycoon');
     await store.setSubmissionDeliveredVersion(jobId, 'v20260730T132921286Z-1592fc');
 
+    // The gate's bundle, not the raw sources: game.ts is TypeScript importing GameKit
+    // modules, so inlining it would serve a page that loads and does nothing.
     const gamesStore = {
-      getSourceFile: async (_s: string, _v: string, path: string) =>
-        path === 'index.html' ? '<!doctype html><div id="app"></div>' : path === 'game.ts' ? 'export {};' : null,
+      getDerivedArtifact: async (_s: string, _v: string, name: string) =>
+        name === 'bundle.html' ? Buffer.from('<!doctype html><title>TV Tycoon</title><canvas></canvas>') : null,
     } as unknown as GamesStore;
 
     const { githubClient, findLinkedPR } = createGithubClientStub({});
@@ -1197,8 +1199,8 @@ describe('submission preview route', () => {
     await store.setSubmissionDeliveredVersion(jobId, 'v1');
 
     const gamesStore = {
-      getSourceFile: async () => {
-        throw new Error('games store read of index.html failed: 503');
+      getDerivedArtifact: async () => {
+        throw new Error('games store read of bundle.html failed: 503');
       },
     } as unknown as GamesStore;
 
@@ -1219,18 +1221,19 @@ describe('submission preview route', () => {
     await app.close();
   });
 
-  it('treats a version missing its own sources as broken, not as undelivered', async () => {
+  it('waits rather than guessing when the gate has not bundled a delivery yet', async () => {
+    // Delivered but not yet gated is a real intermediate state, and the honest answer is
+    // "nothing to play". Assembling something from the raw sources instead would serve a
+    // page that loads and is dead — worse than saying nothing is ready, because it reads
+    // as the creator's game being broken.
     const store = new InMemoryStore();
     const jobId = 1_000_045;
     await store.upsertUser({ uid: 'g:test-user' });
-    await store.createSubmission(jobId, 'g:test-user', 'Incomplete');
-    await store.setSubmissionSlug(jobId, 'incomplete-game');
+    await store.createSubmission(jobId, 'g:test-user', 'Not gated yet');
+    await store.setSubmissionSlug(jobId, 'ungated-game');
     await store.setSubmissionDeliveredVersion(jobId, 'v1');
 
-    // Stored, but game.ts is absent — the manifest claims a file the store does not have.
-    const gamesStore = {
-      getSourceFile: async (_s: string, _v: string, path: string) => (path === 'index.html' ? '<!doctype html>' : null),
-    } as unknown as GamesStore;
+    const gamesStore = { getDerivedArtifact: async () => null } as unknown as GamesStore;
 
     const { app, authHeaders } = await createApp({
       store,
@@ -1245,7 +1248,7 @@ describe('submission preview route', () => {
       headers: authHeaders,
     });
 
-    expect(res.statusCode).toBe(502);
+    expect(res.statusCode).toBe(409);
     await app.close();
   });
 

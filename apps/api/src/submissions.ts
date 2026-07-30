@@ -768,7 +768,12 @@ export async function registerSubmissionRoutes(
   const draftPreviewTtlMs = 5 * 60_000;
   const maxCachedDraftPreviews = options.maxCachedDraftPreviews ?? 50;
   type DraftPreviewValue = { slug: string; title: string; html: string };
-  type CachedDraftPreview = { value: DraftPreviewValue; headSha: string; expiresAt: number };
+  /**
+   * `revision` rather than `headSha`: a preview now comes either from a PR branch (a
+   * commit sha) or from a delivered candidate (a games-store version id). Naming the
+   * field after one of its two sources made every log line about the other one wrong.
+   */
+  type CachedDraftPreview = { value: DraftPreviewValue; revision: string; expiresAt: number };
   const draftPreviewCache = new Map<number, CachedDraftPreview>();
   const draftPreviewRefreshes = new Map<string, Promise<DraftPreviewValue>>();
 
@@ -1867,21 +1872,28 @@ export async function registerSubmissionRoutes(
   );
 
   /**
-   * Assembles the preview for a job that has no pull request.
+   * Serves the preview for a job that has no pull request.
    *
    * Every native job is one of these, so without it a creator watches an hour of build
    * activity behind "this game isn't available yet" — the preview's source of truth
    * disappeared with the PR, and nothing replaced it.
    *
-   * The delivered candidate is the right thing to serve: it is the same tree the gate
-   * checks, so what the creator plays is what gets judged. Before the first delivery
-   * there is genuinely nothing playable, and 409 is the honest answer — the channel's
-   * own pushed previews cover that window and are served elsewhere.
+   * It serves the **gate's own bundle**, not the delivered sources. That is not a
+   * shortcut, it is the only correct option: a game is not three files. `game.ts` is
+   * TypeScript that imports the GameKit modules its `GAME.json` declares, and the PR
+   * path assembles a playable document by reading those modules, inlining audio and
+   * music assets, and transpiling the whole thing. Inlining raw `game.ts` into a script
+   * tag would produce a page that loads and is dead on arrival — strictly worse than
+   * saying nothing is ready, because it looks like the creator's game is broken.
    *
-   * Returns null for exactly one reason: **this job has nothing delivered to serve**.
-   * Anything else — an unreadable object, a version claiming files it never stored —
-   * throws, because a broken preview and an unstarted one are different facts and a
-   * creator told "not yet" about a failure will wait for something that is not coming.
+   * The bundle is also the artifact that will actually ship, with serve-time policy
+   * already applied by the side that owns it, so the creator plays the exact document a
+   * player would. It exists once the gate has run.
+   *
+   * Returns null for exactly one reason: **there is nothing to serve yet** — no
+   * delivery, or a delivery the gate has not bundled. Anything else throws, because a
+   * broken preview and an unstarted one are different facts, and a creator told "not
+   * yet" about a failure will wait for something that is not coming.
    */
   async function replyWithStoredDraft(
     request: FastifyRequest,
@@ -1893,45 +1905,26 @@ export async function registerSubmissionRoutes(
     if (!gamesStore || !slug || !deliveredVersion) return null;
 
     const cached = draftPreviewCache.get(record.issueNumber);
-    if (cached && cached.headSha === deliveredVersion && cached.expiresAt > now()) {
+    if (cached && cached.revision === deliveredVersion && cached.expiresAt > now()) {
       return reply.send(cached.value);
     }
 
-    const read = (path: string) => gamesStore.getSourceFile(slug, deliveredVersion, path);
-    const [indexHtml, gameTs, styleCss] = await Promise.all([read('index.html'), read('game.ts'), read('style.css')]);
-    // `=== null` is the absence, not falsiness: a stored-but-empty file is a delivery
-    // that went wrong, and reporting it as "nothing delivered yet" would hide that.
-    // Empty content reaches assembleGameHtml and comes back as EmptyProjectError, which
-    // the caller renders as "could not be previewed" — the accurate answer.
-    if (indexHtml === null || gameTs === null) {
-      const incomplete = new Error(`version ${deliveredVersion} is missing index.html or game.ts`);
-      incomplete.name = 'StoredDraftIncompleteError';
-      throw incomplete;
-    }
+    const bundle = await gamesStore.getDerivedArtifact(slug, deliveredVersion, 'bundle.html');
+    // Absent rather than broken: the gate has not finished, or it went red and produced
+    // nothing. Both are "not ready", and the channel's own pushed previews cover the
+    // window. A store that *errors* throws out of here instead, and is reported as the
+    // failure it is.
+    if (bundle === null) return null;
 
-    const project: GameProject = {
-      title: record.title || slug,
-      description: '',
-      html: indexHtml,
-      js: gameTs,
-      css: styleCss ?? '',
-    };
-    // restrictNetwork, exactly as for a PR-branch draft: this is unreviewed agent output
-    // whether it arrived by push or by upload, and the delivery route it took is not a
-    // reason to trust it any further.
-    const value: DraftPreviewValue = {
-      slug,
-      title: project.title,
-      html: assembleGameHtml(project, { restrictNetwork: true }),
-    };
+    const value: DraftPreviewValue = { slug, title: record.title || slug, html: bundle.toString('utf8') };
     rememberDraftPreview(record.issueNumber, {
       value,
-      headSha: deliveredVersion,
+      revision: deliveredVersion,
       expiresAt: now() + draftPreviewTtlMs,
     });
     request.log.info(
       { issueNumber: record.issueNumber, slug, version: deliveredVersion },
-      'served stored draft preview',
+      'served gate-built preview for a delivered version',
     );
     return reply.send(value);
   }
@@ -1944,7 +1937,7 @@ export async function registerSubmissionRoutes(
     const serveLastKnown = (reason: string, err?: unknown): FastifyReply | null => {
       const lastKnown = draftPreviewCache.get(issueNumber);
       if (!lastKnown) return null;
-      request.log.warn({ err, issueNumber, headSha: lastKnown.headSha }, reason);
+      request.log.warn({ err, issueNumber, revision: lastKnown.revision }, reason);
       return reply.send(lastKnown.value);
     };
 
@@ -2009,7 +2002,7 @@ export async function registerSubmissionRoutes(
     // branch name when fixtures (or a sparse GraphQL payload) omit the SHA.
     const headSha = linkedPr.headRefOid ?? headRefName;
     const cached = draftPreviewCache.get(issueNumber);
-    if (cached && cached.headSha === headSha && cached.expiresAt > now()) {
+    if (cached && cached.revision === headSha && cached.expiresAt > now()) {
       return reply.send(cached.value);
     }
 
@@ -2046,7 +2039,7 @@ export async function registerSubmissionRoutes(
       if (!inFlight) draftPreviewRefreshes.set(refreshKey, refresh);
 
       const value = await refresh;
-      rememberDraftPreview(issueNumber, { value, headSha, expiresAt: now() + draftPreviewTtlMs });
+      rememberDraftPreview(issueNumber, { value, revision: headSha, expiresAt: now() + draftPreviewTtlMs });
       return reply.send(value);
     } catch (error) {
       if (
