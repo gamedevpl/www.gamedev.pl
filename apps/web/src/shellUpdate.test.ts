@@ -53,6 +53,22 @@ describe('shellUpdate', () => {
     expect(pendingShellUpdate()).toBeNull();
   });
 
+  it('reloads once when the worker reports a missing shell asset', () => {
+    const reload = vi.fn();
+    Object.defineProperty(window, 'location', {
+      value: { ...window.location, reload },
+      configurable: true,
+    });
+    watchShellUpdates();
+
+    const event = new Event('message') as MessageEvent;
+    Object.defineProperty(event, 'data', { value: { type: 'shell-asset-miss', revision: 'abc123' } });
+    serviceWorker.dispatchEvent(event);
+    serviceWorker.dispatchEvent(event);
+
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
   it('asks the registration to update when the app returns to the foreground', async () => {
     const update = vi.fn(async () => undefined);
     serviceWorker.getRegistration.mockResolvedValue({ update });

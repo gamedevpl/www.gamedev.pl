@@ -172,7 +172,29 @@ async function navigationResponse(request) {
 
 async function precachedOrNetwork(request, pathname) {
   const cached = await caches.match(pathname, { cacheName: CACHE });
-  return cached ?? fetch(request);
+  if (cached) return cached;
+
+  // Cache miss on a hashed shell file: usually a deploy race or iOS Cache Storage
+  // eviction. Fetching from the network is fine when the file still exists; a 404
+  // is the white-screen case (HTML without its JS). Ask open pages to reload once
+  // onto whatever worker/update is available rather than sit on an empty #root.
+  try {
+    const response = await fetch(request);
+    if (!response.ok) {
+      void suggestReloadAfterShellMiss();
+    }
+    return response;
+  } catch (error) {
+    void suggestReloadAfterShellMiss();
+    throw error;
+  }
+}
+
+async function suggestReloadAfterShellMiss() {
+  const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  for (const client of clients) {
+    client.postMessage({ type: 'shell-asset-miss', revision: BUILD.revision });
+  }
 }
 
 self.addEventListener('push', (event) => {

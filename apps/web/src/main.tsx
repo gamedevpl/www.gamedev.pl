@@ -31,6 +31,10 @@ watchInstallPrompt();
 recordVisit();
 watchShellUpdates();
 
+// Clears the index.html boot watchdog — React is about to replace #root.
+const booted = (window as Window & { __gamedevBooted?: () => void }).__gamedevBooted;
+if (typeof booted === 'function') booted();
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <AuthProvider>

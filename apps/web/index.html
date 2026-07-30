@@ -13,6 +13,7 @@
          app to portrait would take that away. -->
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#0f1418" />
+    <meta name="color-scheme" content="dark" />
     <!-- The browser-tab icon, which the manifest does not cover: manifest icons are for
          the installed app, so without this a desktop tab falls back to requesting
          /favicon.ico — which this site does not serve, costing every visit a 404 and
@@ -28,9 +29,123 @@
     <meta name="apple-mobile-web-app-title" content="Gamedev.pl" />
 
     <title>Gamedev.pl — Describe a game, play it</title>
+
+    <!--
+      First paint for the installed PWA. Styles and the boot mark live here — not in the
+      hashed CSS bundle — so an iPhone Home Screen open never flashes the browser's
+      default white between the OS splash and React. Same idea as offline.html: paint
+      dark without waiting for /assets/*. React replaces #root on mount.
+    -->
+    <style>
+      html {
+        background: #0f1418;
+        color-scheme: dark;
+      }
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: #0f1418;
+        background-image: radial-gradient(circle at 50% 0%, #1a232b 0%, #0f1418 70%);
+        color: #f0f4f8;
+      }
+      #root {
+        min-height: 100vh;
+      }
+      .boot {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        padding: 24px;
+        box-sizing: border-box;
+        font-family:
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+        text-align: center;
+      }
+      .boot__logo {
+        font-size: 1.75rem;
+        font-weight: 700;
+        letter-spacing: -0.5px;
+        color: #fff;
+      }
+      .boot__logo span {
+        color: #00e4ac;
+        font-weight: 300;
+      }
+      .boot__recover {
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        max-width: 28ch;
+      }
+      .boot.is-stuck .boot__recover {
+        display: flex;
+      }
+      .boot__recover p {
+        margin: 0;
+        color: #9fb0bd;
+        line-height: 1.45;
+        font-size: 0.95rem;
+      }
+      .boot__recover button {
+        margin-top: 4px;
+        padding: 12px 22px;
+        min-height: 44px;
+        border: 0;
+        border-radius: 10px;
+        background: #00e4ac;
+        color: #0f1418;
+        font: inherit;
+        font-weight: 600;
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot" id="boot" aria-hidden="true">
+        <div class="boot__logo">gamedev<span>.pl</span></div>
+        <div class="boot__recover">
+          <p id="boot-recover-text">Still loading — tap to reload.</p>
+          <button id="boot-recover-btn" type="button">Reload</button>
+        </div>
+      </div>
+    </div>
+    <!--
+      Classic script on purpose: if the module graph never boots (evicted shell asset,
+      deploy race), this is what can still offer a reload. Cleared from main.tsx once
+      React mounts.
+    -->
+    <script>
+      (function () {
+        var boot = document.getElementById('boot');
+        var btn = document.getElementById('boot-recover-btn');
+        var text = document.getElementById('boot-recover-text');
+        if (!boot || !btn) return;
+        if ((navigator.language || '').toLowerCase().indexOf('pl') === 0 && text) {
+          text.textContent = 'Nadal się wczytuje — stuknij, aby odświeżyć.';
+          btn.textContent = 'Odśwież';
+        }
+        btn.addEventListener('click', function () {
+          location.reload();
+        });
+        window.setTimeout(function () {
+          if (!boot.isConnected) return;
+          boot.classList.add('is-stuck');
+          boot.removeAttribute('aria-hidden');
+        }, 8000);
+        window.__gamedevBooted = function () {
+          /* main.tsx calls this; the timeout becomes a no-op once #root is replaced */
+        };
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
