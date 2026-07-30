@@ -178,6 +178,21 @@ export interface SubmissionRecord {
 export const MAX_JOB_TRANSITIONS = 50;
 
 /**
+ * Where our own job ids start.
+ *
+ * Chosen to sit far above any number GitHub will plausibly assign an issue in the games
+ * repo (which is in the low hundreds), so the boundary never has to be revisited and a
+ * job's id alone says which era it belongs to. Jobs below the floor were keyed by a real
+ * issue and are still served that way; jobs at or above it never had one.
+ */
+export const JOB_ID_FLOOR = 1_000_000;
+
+/** Whether this job was created after job identity stopped coming from GitHub. */
+export function isNativeJobId(id: number): boolean {
+  return id >= JOB_ID_FLOOR;
+}
+
+/**
  * A change request from the creator, queued for the agent to collect over the build
  * channel (docs/agent-live-channel-plan.md §4). The PR comment remains the durable
  * record and the thing that *wakes* a stopped agent; this queue is the fast path for
@@ -756,6 +771,20 @@ export interface Store {
   setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void>;
   /** Appends a dispatch ref, recording which backend is building this job and where. */
   recordDispatch(issueNumber: number, dispatch: { backend: string; ref: string; workspace?: string }): Promise<void>;
+  /**
+   * Allocates a job id of our own.
+   *
+   * Job identity used to be a GitHub issue number, which meant creating a work item in
+   * someone else's system before we could name our own job — and made every store key,
+   * every token and the whole build channel depend on that call succeeding.
+   *
+   * Ids stay numeric so none of that has to change; only their *source* moves. They are
+   * allocated from {@link JOB_ID_FLOOR} upward, well clear of any real issue number, so
+   * the two eras are distinguishable by value alone: below the floor is a legacy
+   * issue-keyed job, at or above it is one of ours. That is what lets both be served
+   * side by side without a migration or a discriminator column.
+   */
+  allocateJobId(): Promise<number>;
   /** Records the game directory a submission is building, once it is known. */
   setSubmissionSlug(issueNumber: number, slug: string): Promise<void>;
   /** Stamps the moment a submission was first seen published (for build-time stats). */
@@ -1087,6 +1116,7 @@ export class InMemoryStore implements Store {
   private users = new Map<string, User>();
   private submissions = new Map<number, SubmissionRecord>();
   private publications = new Map<string, PublicationRecord>();
+  private nextJobId = JOB_ID_FLOOR;
   private buildEvents = new Map<number, BuildEvent[]>();
   private buildShots = new Map<number, BuildShot[]>();
   private buildPreviews = new Map<number, BuildPreview[]>();
@@ -1205,6 +1235,11 @@ export class InMemoryStore implements Store {
   async setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void> {
     const sub = this.submissions.get(issueNumber);
     if (sub) this.submissions.set(issueNumber, { ...sub, agentState });
+  }
+
+  async allocateJobId(): Promise<number> {
+    this.nextJobId = Math.max(this.nextJobId, JOB_ID_FLOOR) + 1;
+    return this.nextJobId;
   }
 
   async recordDispatch(
@@ -2020,6 +2055,17 @@ export class FirestoreStore implements Store {
 
   async setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void> {
     await this.db.collection('submissions').doc(String(issueNumber)).set({ agentState }, { merge: true });
+  }
+
+  async allocateJobId(): Promise<number> {
+    const ref = this.db.collection('counters').doc('jobs');
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const current = (snap.data() as { next?: number } | undefined)?.next ?? JOB_ID_FLOOR;
+      const next = Math.max(current, JOB_ID_FLOOR) + 1;
+      tx.set(ref, { next }, { merge: true });
+      return next;
+    });
   }
 
   async recordDispatch(
