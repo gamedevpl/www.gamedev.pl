@@ -179,7 +179,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     betaAllowedEmails,
   });
 
-  const gamesRepoClient = await registerSubmissionRoutes(app, {
+  const submissionSeams = await registerSubmissionRoutes(app, {
     ...options.submissionRoutes,
     store,
     contentChecker,
@@ -387,7 +387,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // suggestion and requesting an improvement cannot disagree about where issues go.
   await registerSuggestionInboxRoutes(app, {
     store,
-    githubClient: gamesRepoClient ?? undefined,
+    startImprovementRound: submissionSeams.startImprovementRound,
     ...options.suggestionInboxRoutes,
   });
 

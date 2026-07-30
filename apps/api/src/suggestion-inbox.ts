@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import type { GitHubClient } from './github-client.js';
 import type { Scorecard, Store, SuggestionRecord } from './store.js';
+import type { SubmissionRoutesHandle } from './submissions.js';
 
 /**
  * The suggestion inbox (docs/improvement-loop-plan.md IL-3 creator surface).
@@ -9,12 +9,16 @@ import type { Scorecard, Store, SuggestionRecord } from './store.js';
  * The analyst run proposes; this is where a human decides. Three routes: read your own
  * queue, approve one into a games-repo issue, or dismiss it with a reason.
  *
- * **Approval is durable even when the handoff fails.** The plan's preferred mitigation
- * for the `@copilot` relay risk is to treat *no implementer available* as a first-class
- * state rather than an error, and that is what happens here: if the issue cannot be
- * filed, the suggestion lands in `no-implementer` with the reason attached instead of
- * returning 502 and losing the decision. A creator who clicked Approve should never have
- * to wonder whether it counted.
+ * **Approving starts a round of work; it does not file an issue.** Dispatch is something
+ * this platform owns now — a native job resumes its own workspace through the agent
+ * backend, and only a legacy issue-numbered submission still travels through GitHub.
+ * Both live behind `startImprovementRound`, shared with the creator's own improve
+ * request, so the two cannot disagree about how work reaches an agent.
+ *
+ * **Approval is durable even when the handoff fails.** If the round cannot be started,
+ * the suggestion lands in `no-implementer` with the reason attached instead of returning
+ * 502 and losing the decision. A creator who clicked Approve should never have to wonder
+ * whether it counted.
  *
  * **Dismissal reasons are a fixed vocabulary, not free text.** They exist to tune the
  * router, so they need to be countable; and a free-text field on a card that will later
@@ -57,14 +61,19 @@ export interface InboxSuggestion extends SuggestionRecord {
 
 export interface SuggestionInboxRoutesOptions {
   store: Store;
-  /** Absent in dev and in tests that do not exercise filing — approval then parks in `no-implementer`. */
-  githubClient?: GitHubClient;
+  /**
+   * Starts the improvement round an approval turns into.
+   *
+   * Absent in dev and in deployments that cannot dispatch — approval then parks in
+   * `no-implementer`, which is a state the creator can see rather than a lost click.
+   */
+  startImprovementRound?: SubmissionRoutesHandle['startImprovementRound'];
   now?: () => number;
   dailyImprovementQuota?: number;
 }
 
 /**
- * The issue body an implementer receives.
+ * The brief an implementer receives.
  *
  * Two blocks, and the split is the whole point. The **evidence** block is computed by
  * this service — counts, rates, session totals — so it is safe to state plainly as
@@ -76,7 +85,7 @@ export interface SuggestionInboxRoutesOptions {
  * strings are present because an implementer genuinely needs them to fix a crash, and
  * they are read live so an erased player is not quoted from a stale copy.
  */
-export function buildIssueBody(record: SuggestionRecord, untrusted: Scorecard['untrusted'] | null): string {
+export function buildImprovementBrief(record: SuggestionRecord, untrusted: Scorecard['untrusted'] | null): string {
   const lines = [
     `Player-evidence improvement for published game \`${record.slug}\`.`,
     '',
@@ -124,7 +133,7 @@ export async function registerSuggestionInboxRoutes(
   app: FastifyInstance,
   options: SuggestionInboxRoutesOptions,
 ): Promise<void> {
-  const { store, githubClient } = options;
+  const { store, startImprovementRound } = options;
   const now = options.now ?? (() => Date.now());
   const dailyImprovementQuota = options.dailyImprovementQuota ?? Number(process.env.DAILY_IMPROVEMENT_QUOTA ?? '2');
 
@@ -196,34 +205,46 @@ export async function registerSuggestionInboxRoutes(
     };
     const card = await store.getScorecard(record.slug);
 
+    // The suggestion is keyed by slug; the round is dispatched against the job that owns
+    // the game. A published game with no submission never produces a suggestion in the
+    // first place (the sweep skips it), so this resolves for anything reachable here.
+    const submission = await store.getSubmissionBySlug(record.slug);
+    const brief = buildImprovementBrief(record, card?.untrusted ?? null);
+
     let next: SuggestionRecord;
-    if (!githubClient) {
-      // Not an error: the plan asks for "no implementer available" to be a state the
-      // creator can see. Their decision is recorded either way.
+    if (!startImprovementRound || !submission) {
+      // Not an error: "no implementer available" is a state the creator can see. Their
+      // decision is recorded either way.
       next = {
         ...record,
         ...decided,
         status: 'no-implementer',
-        statusReason: 'issue filing is not configured on this deployment',
+        statusReason: 'work cannot be dispatched from this deployment',
       };
     } else {
-      try {
-        const issue = await githubClient.createIssue({
-          title: `Improve ${record.slug}: ${record.class}`,
-          body: buildIssueBody(record, card?.untrusted ?? null),
-          // The sibling label to `new-game`, which games-repo auto-assign watches.
-          labels: ['improvement'],
-        });
-        next = { ...record, ...decided, status: 'issue-filed', issueNumber: issue.number };
-      } catch (error) {
-        request.log.error({ err: error, id }, 'failed to file improvement issue for suggestion');
-        next = {
-          ...record,
-          ...decided,
-          status: 'no-implementer',
-          statusReason: 'could not reach the implementer; this can be retried',
-        };
-      }
+      const started = await startImprovementRound({
+        issueNumber: submission.issueNumber,
+        text: brief,
+        title: `Improve ${record.slug}: ${record.class}`,
+        legacyBody: brief,
+        locale: submission.locale ?? 'en',
+        log: request.log,
+      });
+      next = started
+        ? {
+            ...record,
+            ...decided,
+            status: 'issue-filed',
+            // Only the legacy leg has an issue to point at; a native job reports through
+            // the build channel instead, so there is nothing to record here.
+            ...(started.route === 'issue' ? { issueNumber: started.issueNumber } : {}),
+          }
+        : {
+            ...record,
+            ...decided,
+            status: 'no-implementer',
+            statusReason: 'could not start a round of work; this can be retried',
+          };
     }
 
     await store.putSuggestion(next);

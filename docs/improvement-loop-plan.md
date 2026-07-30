@@ -5,13 +5,14 @@
 > the creator-facing scorecard all shipped, so a creator can now answer all three
 > of IL-2's exit questions without an agent. **IL-3 is in progress**: the router
 > classifies live scorecards at `GET /api/admin/suggestions`, and the nightly
-> analyst run persists what it says into `suggestions/`, where a creator can approve
-> one into an evidence-fenced issue or dismiss it with a reason. What remains is the
+> analyst run persists what it says into `suggestions/`, where a creator can approve one
+> into a dispatched round of agent work or dismiss it with a reason. What remains is the
 > stall alert and the 14-day measurement, described under IL-3 below. Note that as of the
 > first reading no game yet routes to an actionable class, so the queue is
 > correctly empty until play volume catches up; that is data, not a defect.
 > **IL-4 has not started**: it depends on IL-3's exit, a merged and measured
-> improvement.
+> improvement. **The `@copilot` relay this plan called its biggest risk is retired** —
+> the platform owns dispatch now; see "Dispatch is ours now".
 > Revised against the shipped platform (first drafted 2026-07-23) —
 > everything the first draft listed as a dependency is now live: catalog, player,
 > submission → Copilot → PR → publish, notifications (in-app + email + push), and
@@ -79,17 +80,17 @@ never-raw-text-in, never auto-merge. What changed is that most of the plumbing
 it proposed to build now exists for other reasons, and two of its decisions were
 made from stale premises.
 
-| First draft assumed                                                       | Reality on 2026-07-25                                                                                                                                                                             | Consequence for this plan                                                                              |
-| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Telemetry needs a new games-repo `postMessage` convention before it works | The app **already injects a bridge** into every game it plays ([gamePlayer.ts](../apps/web/src/gamePlayer.ts)), with a `gdpl-host` / `gdpl-player` envelope                                       | Funnel + error capture ship with **zero games-repo changes**. Only progression depth needs game opt-in |
-| Games are addressed as `games/{gameId}`                                   | Half right, and the half that was wrong cost a day: a **submission** is `submissions/{issueNumber}`, but a **game** is a games-repo slug, and only 8 of 42 catalog games have a submission at all | Keyed by `slug`. Re-keying on the submission was tried first and silently dropped ~95% of play         |
-| "No email sender exists", so the digest is on-site only                   | Mailer, templates, unsubscribe tokens, Web Push and an in-app bell all shipped                                                                                                                    | **Decision reversed**: the digest rides the existing notification seam                                 |
-| The improvement quota would need new quota machinery                      | `UsageCounters` is already a named-kind counter set (`submissions`, `previews`, `mocks`, `refines`, `feedback`)                                                                                   | The separate improvement quota is one new counter kind                                                 |
-| Theme extraction uses "Vertex Flash-Lite plumbing"                        | Vertex calls now route through the genaicode seam ([genai.ts](../apps/api/src/genai.ts)); moderation runs Gemini 3 Flash                                                                          | Naming corrected; the seam is the integration point, not Vertex directly                               |
-| Written feedback → agent is a thing to design                             | `POST /api/submissions/:token/feedback` already does it: moderate → sanitize → fenced PR comment → queue into the agent inbox                                                                     | The Act plane's delivery path is **built and proven**; player feedback is the missing sibling          |
-| An agent's progress arrives by git                                        | The build channel ([agent-channel.ts](../apps/api/src/agent-channel.ts)) takes progress, screenshots, and hands back queued creator requests                                                      | Improvement runs get live progress and before/after shots for free                                     |
-| "Assign the issue to Copilot" is a solved primitive                       | Bot `@copilot` mentions are dropped silently; re-mentions are relayed under a licensed human PAT                                                                                                  | The autonomy story is **gated on that relay**, and it is now the loop's biggest single risk            |
-| Games are single-player, one player per session                           | Party mode ships: one shared screen, 2–8 phone controllers, guests with no account and ephemeral rooms                                                                                            | Sessions are no longer 1:1 with players; guest privacy constrains what may be recorded                 |
+| First draft assumed                                                       | Reality on 2026-07-25                                                                                                                                                                                                                  | Consequence for this plan                                                                              |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Telemetry needs a new games-repo `postMessage` convention before it works | The app **already injects a bridge** into every game it plays ([gamePlayer.ts](../apps/web/src/gamePlayer.ts)), with a `gdpl-host` / `gdpl-player` envelope                                                                            | Funnel + error capture ship with **zero games-repo changes**. Only progression depth needs game opt-in |
+| Games are addressed as `games/{gameId}`                                   | Half right, and the half that was wrong cost a day: a **submission** is `submissions/{issueNumber}`, but a **game** is a games-repo slug, and only 8 of 42 catalog games have a submission at all                                      | Keyed by `slug`. Re-keying on the submission was tried first and silently dropped ~95% of play         |
+| "No email sender exists", so the digest is on-site only                   | Mailer, templates, unsubscribe tokens, Web Push and an in-app bell all shipped                                                                                                                                                         | **Decision reversed**: the digest rides the existing notification seam                                 |
+| The improvement quota would need new quota machinery                      | `UsageCounters` is already a named-kind counter set (`submissions`, `previews`, `mocks`, `refines`, `feedback`)                                                                                                                        | The separate improvement quota is one new counter kind                                                 |
+| Theme extraction uses "Vertex Flash-Lite plumbing"                        | Vertex calls now route through the genaicode seam ([genai.ts](../apps/api/src/genai.ts)); moderation runs Gemini 3 Flash                                                                                                               | Naming corrected; the seam is the integration point, not Vertex directly                               |
+| Written feedback → agent is a thing to design                             | `POST /api/submissions/:token/feedback` already does it: moderate → sanitize → fenced PR comment → queue into the agent inbox                                                                                                          | The Act plane's delivery path is **built and proven**; player feedback is the missing sibling          |
+| An agent's progress arrives by git                                        | The build channel ([agent-channel.ts](../apps/api/src/agent-channel.ts)) takes progress, screenshots, and hands back queued creator requests                                                                                           | Improvement runs get live progress and before/after shots for free                                     |
+| "Assign the issue to Copilot" is a solved primitive                       | **Superseded (2026-07-29/30).** The relay is gone: the platform owns dispatch through the agent-tasks API and a job state machine ([agent-backend.ts](../apps/api/src/agent-backend.ts), [job-state.ts](../apps/api/src/job-state.ts)) | The autonomy story is **no longer gated on a relay**. IL-3/IL-4 dispatch work, they do not file issues |
+| Games are single-player, one player per session                           | Party mode ships: one shared screen, 2–8 phone controllers, guests with no account and ephemeral rooms                                                                                                                                 | Sessions are no longer 1:1 with players; guest privacy constrains what may be recorded                 |
 
 Two things the first draft got right and this revision keeps unchanged: the
 router's Defect / Friction / Design-change split, and the measurement plane.
@@ -256,7 +257,7 @@ flowchart TD
     subgraph Act
       LOOP["Improvement agent (scheduled babysitter run)"] --> AGG
       LOOP -->|insight + hypothesis| ROUTE{Router}
-      ROUTE -->|"bounded fix, game opted in"| ISSUE["Games-repo issue → Copilot via relay"]
+      ROUTE -->|"bounded fix, game opted in"| ISSUE["Improvement round dispatched to the agent backend"]
       ROUTE -->|behavior/design change| SUGG["Suggestion card → creator approves → issue"]
       ROUTE -->|low value / low data| DIGEST["Digest notification (bell/email/push)"]
       ISSUE --> PR["PR + validation"]
@@ -395,32 +396,39 @@ So an improvement is **initiated** by a durable artifact — a new issue, or a P
 comment on an existing one — exactly as creator feedback already is. The channel
 is for the run once it is alive, never the way to start it.
 
-### The Copilot identity constraint is the loop's main risk
+### Dispatch is ours now — this risk is retired
 
-Autonomy assumes the loop can hand an issue to an implementer unattended. Today
-it cannot do so cleanly: bot-authored `@copilot` mentions are silently dropped,
-the org cannot buy Copilot seats without Enterprise, and mentions are re-posted
-by a relay workflow under a licensed human's PAT. Everything in IL-3 and IL-4
-that says "assign Copilot" therefore runs through that relay, and inherits its
-failure modes (PAT expiry, workflow disabled, rate limits).
+**Superseded 2026-07-29/30.** This section used to describe the loop's biggest single
+risk: bot-authored `@copilot` mentions are dropped, the org cannot buy Copilot seats
+without Enterprise, and mentions were re-posted by a relay workflow under a licensed
+human's PAT — so everything in IL-3 and IL-4 that said "assign Copilot" inherited that
+relay's failure modes.
 
-Mitigations, in preference order: keep the relay path but monitor it explicitly
-(a suggestion stuck in `issue-filed` with no PR after N hours is an alert, not a
-silent stall); allow a local CLI agent as the implementer for defect-class work,
-where the change is small and validation is decisive; and treat "no implementer
-available" as a first-class suggestion state, surfaced to the creator rather than
-hidden.
+None of that is true any more. The platform owns build orchestration: a job state
+machine ([job-state.ts](../apps/api/src/job-state.ts)), a backend seam every coding agent
+plugs into ([agent-backend.ts](../apps/api/src/agent-backend.ts)), and dispatch through
+the Copilot **agent tasks** API ([agent-tasks.ts](../apps/api/src/agent-tasks.ts)) that
+starts work from a bare prompt with no issue, no label, and no relay.
 
-The first of those is now partly built, for the creator-feedback half of the relay
-rather than the suggestion half: the notify sweep counts change requests that no
-agent has collected within an hour and logs at `error` when any exist
-([submissions.ts](../apps/api/src/submissions.ts), `/api/internal/notify-sweep`).
-It reuses the sweep's existing loop over active submissions, so it costs no new
-endpoint, schedule, or auth surface. Two limits worth stating: the queue write that
-makes a request visible is best-effort, so a stall on a request whose write failed
-stays invisible; and this watches the relay's _effect_, not the workflow itself — a
-relay that breaks while no creator happens to be iterating is still silent until
-someone sends feedback.
+What that changes for this plan, concretely:
+
+- **IL-3 approval dispatches a round of work**, it does not file an issue. A native job
+  resumes its own workspace; only legacy issue-numbered submissions still travel through
+  GitHub, and both live behind one shared `startImprovementRound` so the creator's own
+  improve request and an approved suggestion cannot disagree about how work reaches an
+  agent.
+- **"No implementer available" survives as a state anyway.** It was designed as a
+  mitigation for the relay being down; it earns its place regardless, because a backend
+  can still fail and a creator who clicked Approve deserves to know their decision was
+  recorded rather than silently dropped.
+- **Stall detection moved with it.** `detectStall` and `DEFAULT_STALL_THRESHOLDS` in
+  job-state.ts already watch a job that stopped making progress, so IL-3's "stuck in
+  `issue-filed` with no PR" alert should be expressed in terms of job state rather than
+  rebuilt against GitHub.
+
+The one piece of the old mitigation still worth keeping is the notify sweep's count of
+change requests no agent collected within an hour — it watches the effect rather than the
+mechanism, so it survived the mechanism changing.
 
 ### Budgeting
 
@@ -878,8 +886,8 @@ at all and feeds the only autonomous-eligible class.
   budget the plan reserved for it.
 
   **Approval is durable even when the handoff fails.** This is the plan's preferred
-  mitigation for the relay risk, implemented: if the issue cannot be filed — relay down,
-  filing unconfigured — the suggestion lands in `no-implementer` with the reason attached
+  mitigation for a failed handoff, implemented: if the round cannot be started — backend
+  down, dispatch unconfigured — the suggestion lands in `no-implementer` with the reason attached
   and the studio says "approved, but no coding agent was available; you can retry". A 502
   would have discarded the decision and made Approve a button that sometimes silently
   does nothing.
@@ -903,10 +911,9 @@ at all and feeds the only autonomous-eligible class.
   exactly that. Fence or summarize it; the "evidence in, never raw text in" principle
   above is what this concretely means in practice.
 - Exit: first player-evidence-driven improvement merged and measured. **Blocked two
-  independent ways**, and they want different remedies: the `@copilot` relay has no
-  working primitive for handing work to an agent (a decision), and as of the first
-  reading no game routes to an actionable class, so there is nothing to hand over even
-  if it did (data volume). Neither is unblocked by writing more of this phase.
+  waiting on **data volume**: as of the first reading no game routes to an actionable
+  class, so there is nothing to hand to an agent yet. The relay blocker this bullet used
+  to name is gone — the platform dispatches work itself now.
 
 ### Phase IL-4 — Bounded autonomy
 
@@ -941,7 +948,7 @@ at all and feeds the only autonomous-eligible class.
   `listSubmissionsByOwner` already backs the surface. A merged remix makes the
   remixer a watcher (digest visibility, no approval rights). Avoids
   multi-approver deadlock.
-- **Measured outcomes drive catalog *sort order*, not a second section.** The
+- **Measured outcomes drive catalog _sort order_, not a second section.** The
   home arcade reorders by scorecard aggregates and signed-in play affinity
   ([recommendations.md](./recommendations.md)). Anonymous play telemetry still
   never identifies a person; affinity is account data erased with the account.

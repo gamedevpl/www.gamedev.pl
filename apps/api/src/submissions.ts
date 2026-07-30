@@ -301,19 +301,34 @@ function sendMedia(
   return reply.type(entry.contentType).send(entry.body);
 }
 
+/** What `registerSubmissionRoutes` hands back for other route modules to build on. */
+export interface SubmissionRoutesHandle {
+  /** The resolved games-repo client, or null when this deployment cannot reach one. */
+  githubClient: GitHubClient | null;
+  /**
+   * Starts a post-publish improvement round, choosing job dispatch or a legacy issue.
+   *
+   * Exported rather than reimplemented so the suggestion inbox and the creator's own
+   * improve request cannot disagree about how work reaches an agent. Dispatch stopped
+   * being "create an issue"; a second copy of that decision is a second thing to migrate.
+   */
+  startImprovementRound: (input: {
+    issueNumber: number;
+    text: string;
+    title: string;
+    locale: string;
+    legacyBody: string;
+    log: { error: (context: object, message: string) => void };
+  }) => Promise<{ route: 'job' } | { route: 'issue'; issueNumber: number } | null>;
+}
+
 /**
- * Registers the submission routes and hands back the games-repo client it resolved.
- *
- * The return value exists so the suggestion inbox can file issues through the *same*
- * client rather than resolving one of its own. Client resolution here depends on the
- * token, the token secret and the local-games fallback together; a second copy of that
- * logic elsewhere is a copy that drifts, and this file already carries a warning about
- * exactly that hazard for the token secret.
+ * Registers the submission routes and hands back the seams other modules build on.
  */
 export async function registerSubmissionRoutes(
   app: FastifyInstance,
   options: SubmissionRoutesOptions = {},
-): Promise<GitHubClient | null> {
+): Promise<SubmissionRoutesHandle> {
   const githubToken = options.githubToken ?? process.env.GITHUB_TOKEN;
   const gamesRepo = options.gamesRepo ?? process.env.GAMES_REPO ?? 'gamedevpl/www.gamedev.pl-games';
 
@@ -517,6 +532,57 @@ export async function registerSubmissionRoutes(
       // The creator's request is already queued on the build channel, so a failed
       // resume costs the round its head start, not the request itself.
       input.log.error({ err: error, issueNumber: input.issueNumber }, 'agent resume failed');
+    }
+  }
+
+  /**
+   * Starts a round of post-publish improvement work on an already-published game.
+   *
+   * Exists so the two things that ask for such a round — the creator's own improve
+   * request, and an approved player-evidence suggestion (IL-3) — cannot disagree about
+   * *how* work reaches an agent. That mattered the moment dispatch stopped being "create
+   * an issue": a native job resumes its own workspace and never touches GitHub, while a
+   * legacy issue-numbered submission still has to, and picking the wrong one silently
+   * files work nobody collects.
+   *
+   * The split here is deliberately the same `isNativeJobId` test the draft-feedback path
+   * already makes, rather than a second opinion about it. When the legacy leg is finally
+   * retired, this is one branch to delete instead of two that have drifted.
+   */
+  async function startImprovementRound(input: {
+    issueNumber: number;
+    /** Already moderated and sanitized. Untrusted text: data, never instructions. */
+    text: string;
+    /** Issue title, used only on the legacy leg. */
+    title: string;
+    locale: string;
+    /** Legacy-leg issue body, which carries its own fencing. */
+    legacyBody: string;
+    log: { error: (context: object, message: string) => void };
+  }): Promise<{ route: 'job' } | { route: 'issue'; issueNumber: number } | null> {
+    if (isNativeJobId(input.issueNumber)) {
+      await resumeBuild({
+        issueNumber: input.issueNumber,
+        feedback: input.text,
+        locale: input.locale,
+        log: input.log,
+      });
+      return { route: 'job' };
+    }
+
+    if (!githubClient) return null;
+    try {
+      const issue = await githubClient.createIssue({
+        title: input.title,
+        body: input.legacyBody,
+        // Games-repo auto-assign watches `new-game`; `improvement` is the sibling label
+        // for post-publish work. Only reachable for legacy submissions.
+        labels: ['improvement'],
+      });
+      return { route: 'issue', issueNumber: issue.number };
+    } catch (error) {
+      input.log.error({ err: error, issueNumber: input.issueNumber }, 'failed to create improvement issue');
+      return null;
     }
   }
 
@@ -2049,25 +2115,27 @@ export async function registerSubmissionRoutes(
         ...(contextBlock ? ['', contextBlock] : []),
       ].join('\n');
 
-      try {
-        const issue = await githubClient.createIssue({
-          title: sanitizedTitle,
-          body: issueBody,
-          // Games-repo auto-assign watches `new-game`; `improvement` is the sibling label
-          // for post-publish work (docs/improvement-loop-plan.md). If the label is missing
-          // on the remote the create fails — that is a deploy/config problem, not silent.
-          labels: ['improvement'],
-        });
-        return reply.send({
-          ok: true,
-          issueNumber: issue.number,
-          slug: record.slug,
-          ...(shotId ? { shotId } : {}),
-        });
-      } catch (error) {
-        request.log.error({ err: error }, 'failed to create improvement issue');
+      // One path for every post-publish round, so a creator's own request and an approved
+      // suggestion reach an agent the same way. A native job resumes its workspace; only
+      // a legacy submission still files an issue.
+      const started = await startImprovementRound({
+        issueNumber,
+        text: contextBlock ? `${sanitizedFeedback}\n\n${contextBlock}` : sanitizedFeedback,
+        title: sanitizedTitle,
+        legacyBody: issueBody,
+        // The record was already loaded above for the ownership check.
+        locale: record.locale ?? 'en',
+        log: request.log,
+      });
+      if (!started) {
         return reply.status(502).send({ error: 'failed to submit improvement request' });
       }
+      return reply.send({
+        ok: true,
+        ...(started.route === 'issue' ? { issueNumber: started.issueNumber } : {}),
+        slug: record.slug,
+        ...(shotId ? { shotId } : {}),
+      });
     },
   );
 
@@ -2937,5 +3005,5 @@ export async function registerSubmissionRoutes(
     onEvent: (issueNumber) => eventsCache.delete(issueNumber),
   });
 
-  return githubClient;
+  return { githubClient, startImprovementRound };
 }
