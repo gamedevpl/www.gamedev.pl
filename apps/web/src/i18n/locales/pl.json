@@ -308,7 +308,7 @@
       "reasonWontFix": "Nie warto zmieniać",
       "reasonNotNow": "Nie teraz",
       "reasonBadEvidence": "Te liczby wyglądają źle",
-      "filed": "Utworzono zgłoszenie #{{issueNumber}}",
+      "filed": "Agent kodujący już nad tym pracuje.",
       "noImplementer": "Zatwierdzono, ale żaden agent kodujący nie był dostępny. Możesz spróbować później.",
       "rejected": "Odrzucone",
       "failed": "Nie udało się. Spróbuj ponownie.",

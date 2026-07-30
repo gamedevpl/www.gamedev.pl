@@ -117,7 +117,8 @@ export interface StudioSuggestion {
   evidence: Array<{ finding: string; metrics: Record<string, number | null> }>;
   status: string;
   statusReason?: string;
-  issueNumber?: number;
+  /** The job the approved work lives in, once one exists. */
+  jobId?: number;
   computedFrom: string;
   createdAt: string;
   untrustedContext: {

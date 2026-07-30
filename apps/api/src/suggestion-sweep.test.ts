@@ -42,7 +42,8 @@ const crashy = (slug: string, errors = 40, computedAt?: string) =>
 
 let store: InMemoryStore;
 
-let nextIssue = 1;
+const PUBLISHED_ISSUE = 1;
+let nextIssue = PUBLISHED_ISSUE;
 
 async function publish(slug: string, ownerUid = 'creator-1'): Promise<void> {
   const issueNumber = nextIssue++;
@@ -55,7 +56,7 @@ const sweep = () => runSuggestionSweep({ store, now: () => AT });
 
 beforeEach(() => {
   store = new InMemoryStore();
-  nextIssue = 1;
+  nextIssue = PUBLISHED_ISSUE;
 });
 
 describe('runSuggestionSweep — creating', () => {
@@ -212,6 +213,44 @@ describe('runSuggestionSweep — closing', () => {
   });
 });
 
+describe('runSuggestionSweep — a game with work already in flight', () => {
+  it('does not close a suggestion just because an improvement job is unpublished', async () => {
+    // The bug this exists to prevent: an approved suggestion creates a *new* job on the
+    // same slug, and that job is not published yet. Resolving the newest submission for
+    // the slug would read the game as unpublished and close the very suggestion that
+    // commissioned the work — silently, and looking exactly like the router changing
+    // its mind.
+    await publish('crashy');
+    await store.putScorecard('crashy', crashy('crashy'));
+    await sweep();
+    const [open] = await store.listSuggestions();
+    expect(open.status).toBe('proposed');
+
+    // Approval creates the improvement job: same slug, newer, not published.
+    const improvementJob = 2_000_000;
+    await store.createSubmission(improvementJob, 'creator-1', 'crashy');
+    await store.setSubmissionSlug(improvementJob, 'crashy');
+
+    const result = await runSuggestionSweep({ store, now: () => AT + 86_400_000 });
+
+    expect(result.skippedUnowned).toBe(0);
+    expect(result.obsoleted).toBe(0);
+    expect((await store.listSuggestions())[0].status).toBe('proposed');
+  });
+
+  it('still closes one when the game really is gone', async () => {
+    await publish('crashy');
+    await store.putScorecard('crashy', crashy('crashy'));
+    await sweep();
+    await store.setSubmissionAbandoned(PUBLISHED_ISSUE, '2026-07-30T00:00:00.000Z');
+
+    const result = await runSuggestionSweep({ store, now: () => AT + 86_400_000 });
+
+    expect(result.obsoleted).toBe(1);
+    expect((await store.listSuggestions())[0].statusReason).toContain('no longer published');
+  });
+});
+
 describe('runSuggestionSweep — resilience', () => {
   it('reports a floor rather than a total when there are more scorecards than it sampled', async () => {
     for (const slug of ['a', 'b', 'c']) {
@@ -230,8 +269,8 @@ describe('runSuggestionSweep — resilience', () => {
     await publish('bad');
     await store.putScorecard('good', crashy('good'));
     await store.putScorecard('bad', crashy('bad'));
-    const realGet = store.getSubmissionBySlug.bind(store);
-    store.getSubmissionBySlug = async (slug: string) => {
+    const realGet = store.getPublishedSubmissionBySlug.bind(store);
+    store.getPublishedSubmissionBySlug = async (slug: string) => {
       if (slug === 'bad') throw new Error('firestore said no');
       return realGet(slug);
     };

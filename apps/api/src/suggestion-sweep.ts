@@ -138,12 +138,16 @@ export async function runSuggestionSweep(deps: SuggestionSweepDeps): Promise<Sug
         continue;
       }
 
-      // An abandoned or unpublished game is not work anyone wants proposed, and a game
-      // with no submission has no creator on this platform to propose it to. Counted
-      // rather than skipped silently — this is most of the catalog, and a reader
+      // The *published* job, not the newest one touching this slug. An improvement is a
+      // new job on an existing game, so a game with work in flight has an unpublished
+      // submission as its most recent — and asking for the newest would read that as
+      // "no longer published" and close the very suggestion that commissioned the work.
+      //
+      // A game with no submission at all has no creator on this platform to propose to.
+      // Counted rather than skipped silently: this is most of the catalog, and a reader
       // comparing `scanned` against `created` deserves to see where the rest went.
-      const submission = await store.getSubmissionBySlug(card.slug);
-      if (!submission?.publishedAt || submission.abandonedAt) {
+      const submission = await store.getPublishedSubmissionBySlug(card.slug);
+      if (!submission) {
         if (existing) await closeOpen(existing, 'game is no longer published');
         skippedUnowned += 1;
         continue;

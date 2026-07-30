@@ -308,7 +308,7 @@
       "reasonWontFix": "Not worth changing",
       "reasonNotNow": "Not right now",
       "reasonBadEvidence": "These numbers look wrong",
-      "filed": "Issue #{{issueNumber}} filed",
+      "filed": "A coding agent is working on this now.",
       "noImplementer": "Approved, but no coding agent was available. You can retry this later.",
       "rejected": "Dismissed",
       "failed": "That did not go through. Please try again.",

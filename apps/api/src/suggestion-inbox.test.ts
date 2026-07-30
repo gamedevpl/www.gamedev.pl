@@ -138,7 +138,7 @@ describe('POST /api/me/suggestions/:id/approve', () => {
     const res = await app.inject({ method: 'POST', url: '/api/me/suggestions/sug-crashy-defect-2026-07-30/approve' });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().suggestion).toMatchObject({ status: 'issue-filed', decidedBy: OWNER });
+    expect(res.json().suggestion).toMatchObject({ status: 'dispatched', decidedBy: OWNER });
     // No issue number for a native job — there is no issue. Recording one would invent a
     // GitHub artefact that does not exist.
     expect(res.json().suggestion.issueNumber).toBeUndefined();
@@ -182,7 +182,7 @@ describe('POST /api/me/suggestions/:id/approve', () => {
     // Otherwise a double-click is duplicate work for an implementer and a reason for the
     // creator to stop trusting the button.
     await publish('crashy');
-    await store.putSuggestion(suggestion({ status: 'issue-filed' }));
+    await store.putSuggestion(suggestion({ status: 'dispatched' }));
     const start = dispatches();
     const app = await appFor(start);
 
@@ -317,6 +317,49 @@ describe('the inbox without a session', () => {
 
     expect([read.statusCode, approve.statusCode, dismiss.statusCode]).toEqual([401, 401, 401]);
     expect((await store.getSuggestion('sug-crashy-defect-2026-07-30'))?.status).toBe('proposed');
+    await app.close();
+  });
+});
+
+describe('an improvement is a new job', () => {
+  it('never resumes the published job, because published is terminal', async () => {
+    // job-state.ts is explicit: `published: []`, "improvements start a *new* job, so
+    // publishing is terminal for this one". Resuming would dispatch an agent and then
+    // silently record no transition, leaving work that can never reach gating, review or
+    // publication — and nothing would say so.
+    const dispatched: Array<{ issueNumber: number; slug?: string; feedback?: string }> = [];
+    await publish('crashy');
+    await store.putSuggestion(suggestion());
+
+    const app = await buildApp({
+      store,
+      suggestionInboxRoutes: {
+        now: () => AT,
+        dailyImprovementQuota: 5,
+        startImprovementRound: async (input) => {
+          // Stand in for the real implementation: allocate a fresh job on the same slug.
+          const source = await store.getSubmission(input.issueNumber);
+          const jobId = await store.allocateJobId();
+          await store.createSubmission(jobId, source!.ownerUid, source!.title);
+          await store.setSubmissionSlug(jobId, source!.slug!);
+          dispatched.push({ issueNumber: jobId, slug: source!.slug, feedback: input.text });
+          return { route: 'job', jobId };
+        },
+      },
+    });
+    app.addHook('onRequest', async (request) => {
+      (request as { user?: { uid: string } }).user = { uid: OWNER };
+    });
+
+    const res = await app.inject({ method: 'POST', url: '/api/me/suggestions/sug-crashy-defect-2026-07-30/approve' });
+
+    // A different job from the published one, carrying the slug so the agent revises the
+    // existing game rather than building a new one.
+    expect(dispatched[0].issueNumber).not.toBe(PUBLISHED_JOB_ID);
+    expect(dispatched[0].slug).toBe('crashy');
+    expect(res.json().suggestion.jobId).toBe(dispatched[0].issueNumber);
+    // The published job is untouched and still published.
+    expect((await store.getSubmission(PUBLISHED_JOB_ID))?.publishedAt).toBeTruthy();
     await app.close();
   });
 });

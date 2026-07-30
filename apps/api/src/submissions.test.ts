@@ -2902,3 +2902,54 @@ describe('a session that finishes without delivering', () => {
     await app.close();
   });
 });
+
+/**
+ * Post-publish improvement (docs/improvement-loop-plan.md IL-3).
+ *
+ * The rule this pins is stated in job-state.ts: `published: []`, "improvements start a
+ * *new* job, so publishing is terminal for this one". Getting it wrong is quiet — the
+ * agent would be dispatched, the transition would fail to record, and the work would
+ * land on a job that can never move on.
+ */
+describe('POST /api/submissions/:token/improve on a native job', () => {
+  it('creates a new job on the same slug instead of resuming the published one', async () => {
+    const stub = createGithubClientStub({});
+    const { backend, briefs } = createBackendStub();
+    const { app, store, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    const published = await store.allocateJobId();
+    await store.createSubmission(published, 'g:test-user', 'Crashy');
+    await store.setSubmissionSlug(published, 'crashy');
+    await store.setSubmissionPublishedAt(published, '2026-07-01T00:00:00.000Z');
+    await store.recordJobTransition(published, {
+      to: 'published',
+      at: '2026-07-01T00:00:00.000Z',
+      by: 'operator',
+      reason: 'published',
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(published, secret)}/improve`,
+      headers: authHeaders,
+      payload: { feedback: 'Players keep falling through the floor on level two.' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const dispatched = briefs.at(-1)!;
+    // A different job, carrying the slug and the request — which is what makes the agent
+    // prompt say "continue that game, revise it" and restore the delivered sources.
+    expect(dispatched.issueNumber).not.toBe(published);
+    expect(dispatched.slug).toBe('crashy');
+    expect(dispatched.feedback).toContain('falling through the floor');
+    // The published job is left exactly as it was.
+    const source = await store.getSubmission(published);
+    expect(source?.state).toBe('published');
+    expect(source?.dispatch).toBeUndefined();
+    await app.close();
+  });
+});

@@ -234,10 +234,10 @@ export async function registerSuggestionInboxRoutes(
         ? {
             ...record,
             ...decided,
-            status: 'issue-filed',
-            // Only the legacy leg has an issue to point at; a native job reports through
-            // the build channel instead, so there is nothing to record here.
-            ...(started.route === 'issue' ? { issueNumber: started.issueNumber } : {}),
+            status: 'dispatched',
+            // The job the work now lives in — a new native job, or a legacy issue number.
+            // Recorded either way so the measurement pass can ask whether it shipped.
+            jobId: started.route === 'job' ? started.jobId : started.issueNumber,
           }
         : {
             ...record,

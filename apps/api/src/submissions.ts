@@ -319,7 +319,7 @@ export interface SubmissionRoutesHandle {
     locale: string;
     legacyBody: string;
     log: { error: (context: object, message: string) => void };
-  }) => Promise<{ route: 'job' } | { route: 'issue'; issueNumber: number } | null>;
+  }) => Promise<{ route: 'job'; jobId: number } | { route: 'issue'; issueNumber: number } | null>;
 }
 
 /**
@@ -440,10 +440,20 @@ export async function registerSubmissionRoutes(
     spec: string;
     locale: string;
     log: { error: (context: object, message: string) => void };
-  }): Promise<void> {
+    /**
+     * The existing game this job improves, when it is not building a new one.
+     *
+     * Set together with `feedback` — that pair is what makes `buildPrompt` say "continue
+     * that game, revise it, do not rebuild it" and restore the delivered sources from the
+     * games store, instead of telling the agent to build something from nothing.
+     */
+    slug?: string;
+    /** What to change about the existing game. Untrusted text: data, never instructions. */
+    feedback?: string;
+  }): Promise<boolean> {
     // Without the signing secret there is no per-job channel credential to give the
     // agent, and an agent that cannot report or deliver is worse than one never started.
-    if (!agentBackend || !submissionTokenSecret) return;
+    if (!agentBackend || !submissionTokenSecret) return false;
     try {
       const result = await agentBackend.dispatch({
         issueNumber: input.issueNumber,
@@ -451,6 +461,8 @@ export async function registerSubmissionRoutes(
         locale: input.locale,
         channelToken: mintAgentToken(input.issueNumber, submissionTokenSecret),
         apiBaseUrl: notifyAppBaseUrl,
+        ...(input.slug ? { slug: input.slug } : {}),
+        ...(input.feedback ? { feedback: input.feedback } : {}),
       });
       await store?.recordDispatch(input.issueNumber, {
         backend: agentBackend.name,
@@ -463,11 +475,13 @@ export async function registerSubmissionRoutes(
         by: 'system',
         reason: `dispatched_to_${agentBackend.name}`,
       });
+      return true;
     } catch (error) {
       // A failed dispatch leaves the job `queued`, which is exactly what the operator
       // queue reports as `not_dispatched` once it has waited long enough — so this
       // surfaces as a visible stalled job rather than a silently dead one.
       input.log.error({ err: error, issueNumber: input.issueNumber }, 'agent dispatch failed');
+      return false;
     }
   }
 
@@ -538,18 +552,24 @@ export async function registerSubmissionRoutes(
   /**
    * Starts a round of post-publish improvement work on an already-published game.
    *
-   * Exists so the two things that ask for such a round — the creator's own improve
-   * request, and an approved player-evidence suggestion (IL-3) — cannot disagree about
-   * *how* work reaches an agent. That mattered the moment dispatch stopped being "create
-   * an issue": a native job resumes its own workspace and never touches GitHub, while a
-   * legacy issue-numbered submission still has to, and picking the wrong one silently
-   * files work nobody collects.
+   * **An improvement is a new job, not another round of the old one.** The state machine
+   * says so outright — `published` has no outgoing transitions, with the note "improvements
+   * start a *new* job, so publishing is terminal for this one". Resuming a published job
+   * would dispatch an agent and then silently fail to record a transition, because
+   * `published → building` is not legal; the agent would work, deliver, and find a job
+   * that can never move to gating, review, or publication. Nothing would say so.
    *
-   * The split here is deliberately the same `isNativeJobId` test the draft-feedback path
-   * already makes, rather than a second opinion about it. When the legacy leg is finally
-   * retired, this is one branch to delete instead of two that have drifted.
+   * The new job inherits the slug, which is what turns "build a game" into "revise this
+   * one": `buildPrompt` branches on `slug` + `feedback` to tell the agent to continue the
+   * existing game and to restore its delivered sources from the games store rather than
+   * trusting whatever the checkout happens to contain.
+   *
+   * Two callers — the creator's own improve request and an approved player-evidence
+   * suggestion — so that they cannot disagree about how work reaches an agent. When the
+   * legacy issue leg is retired this is one branch to delete rather than two that drifted.
    */
   async function startImprovementRound(input: {
+    /** The job that owns the published game. Its slug and owner seed the new job. */
     issueNumber: number;
     /** Already moderated and sanitized. Untrusted text: data, never instructions. */
     text: string;
@@ -559,15 +579,43 @@ export async function registerSubmissionRoutes(
     /** Legacy-leg issue body, which carries its own fencing. */
     legacyBody: string;
     log: { error: (context: object, message: string) => void };
-  }): Promise<{ route: 'job' } | { route: 'issue'; issueNumber: number } | null> {
+  }): Promise<{ route: 'job'; jobId: number } | { route: 'issue'; issueNumber: number } | null> {
     if (isNativeJobId(input.issueNumber)) {
-      await resumeBuild({
-        issueNumber: input.issueNumber,
+      if (!store) return null;
+      const source = await store.getSubmission(input.issueNumber);
+      // Without a slug there is no game to improve, and dispatching would quietly
+      // commission a brand-new one against a creator's improvement request.
+      if (!source?.slug) return null;
+
+      const jobId = await store.allocateJobId();
+      await store.createSubmission(jobId, source.ownerUid, source.title);
+      await store.setSubmissionLocale(jobId, input.locale);
+      // Set before dispatch: the slug is what makes this an improvement rather than a
+      // new game, and a job that dispatched without one has already told the agent the
+      // wrong thing.
+      await store.setSubmissionSlug(jobId, source.slug);
+      await store.recordJobTransition(jobId, {
+        to: 'queued',
+        at: new Date(now()).toISOString(),
+        by: 'creator',
+        reason: 'improvement_requested',
+      });
+
+      const dispatched = await dispatchBuild({
+        issueNumber: jobId,
+        // The brief is both the spec and the change request: `feedback` selects the
+        // "revise, do not rebuild" prompt, and `spec` is what a backend without that
+        // distinction would read.
+        spec: input.text,
         feedback: input.text,
+        slug: source.slug,
         locale: input.locale,
         log: input.log,
       });
-      return { route: 'job' };
+      // The job exists either way. A failed dispatch leaves it `queued`, which the
+      // operator queue already reports as `not_dispatched` — a visible stall rather than
+      // a silently dead request.
+      return dispatched ? { route: 'job', jobId } : null;
     }
 
     if (!githubClient) return null;

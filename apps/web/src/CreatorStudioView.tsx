@@ -956,7 +956,7 @@ function SuggestedImprovements({ slug }: { slug: string | undefined }) {
     setSuggestions((rows) => (rows ?? []).map((row) => (row.id === updated.id ? updated : row)));
 
   const decided = (suggestions ?? []).filter(
-    (entry) => entry.slug === slug && (entry.status === 'issue-filed' || entry.status === 'no-implementer'),
+    (entry) => entry.slug === slug && (entry.status === 'dispatched' || entry.status === 'no-implementer'),
   );
 
   async function act(id: string, run: () => Promise<StudioSuggestion>) {
@@ -983,8 +983,8 @@ function SuggestedImprovements({ slug }: { slug: string | undefined }) {
 
       {decided.map((entry) => (
         <p key={entry.id} className="studio-suggestion-outcome">
-          {entry.status === 'issue-filed'
-            ? t('studioPanel.suggestions.filed', { issueNumber: entry.issueNumber })
+          {entry.status === 'dispatched'
+            ? t('studioPanel.suggestions.filed')
             : t('studioPanel.suggestions.noImplementer')}
         </p>
       ))}

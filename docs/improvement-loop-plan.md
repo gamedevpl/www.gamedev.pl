@@ -260,9 +260,9 @@ flowchart TD
       ROUTE -->|"bounded fix, game opted in"| ISSUE["Improvement round dispatched to the agent backend"]
       ROUTE -->|behavior/design change| SUGG["Suggestion card → creator approves → issue"]
       ROUTE -->|low value / low data| DIGEST["Digest notification (bell/email/push)"]
-      ISSUE --> PR["PR + validation"]
+      ISSUE --> PR["Delivered sources + our gate"]
       PR -.->|live progress + shots| CH["/api/agent/build/*"]
-      PR -->|human review, never auto-merge| MERGE["Merge → republish"]
+      PR -->|ready_for_review, never automatic| MERGE["Review → publish"]
     end
 
     MERGE -->|before/after metrics| AGG
@@ -293,7 +293,8 @@ games/{slug}/
   playerFeedback/{id}  ← { uid, text, createdAt } — post-moderation only
 telemetry/{yyyy-mm-dd}/playEvents/{id}  ← raw events, 90-day TTL, keyed by slug
 suggestions/{id}       ← { slug, insight, proposedAction, evidence, status:
-                           proposed|approved|rejected|issue-filed|merged|measured }
+                           proposed|approved|rejected|dispatched|no-implementer|
+                           published|measured|obsolete }
 ```
 
 Notes on the shape:
@@ -349,12 +350,12 @@ autonomous-eligible defect class.
 
 ## The router: what may be autonomous vs suggested
 
-| Class                                                | Examples                                                                                                                 | Route                                                                                                                                                                |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Defect** (implementation violates spec or crashes) | errors in N% of sessions, game never reaches ready, stalls mid-play, softlock reports corroborated by quit-at-same-point | **Autonomous-eligible**: agent files the issue and drives the PR without waiting for the creator (still human-merged). Creator is notified.                          |
-| **Friction** (spec-compatible tuning)                | difficulty spike at a progression cliff, unreadable text, missing touch controls where the spec doesn't forbid them      | **Suggest by default**; autonomous only if the creator opted the game into "auto-tune" and the change is expressible as a small spec _clarification_, not a redesign |
-| **Design change** (spec must change)                 | "add a second enemy type", "make levels shorter", theme/feel feedback                                                    | **Always suggest.** Creator approval converts it into a remix-path spec change issue                                                                                 |
-| **Insufficient data / low value**                    | 4 opens this month                                                                                                       | Digest line only; no agent run spent                                                                                                                                 |
+| Class                                                | Examples                                                                                                                 | Route                                                                                                                                                                              |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Defect** (implementation violates spec or crashes) | errors in N% of sessions, game never reaches ready, stalls mid-play, softlock reports corroborated by quit-at-same-point | **Autonomous-eligible**: a job is dispatched without waiting for the creator, who is notified. Still cannot self-publish — `publishing` is reachable only from `ready_for_review`. |
+| **Friction** (spec-compatible tuning)                | difficulty spike at a progression cliff, unreadable text, missing touch controls where the spec doesn't forbid them      | **Suggest by default**; autonomous only if the creator opted the game into "auto-tune" and the change is expressible as a small spec _clarification_, not a redesign               |
+| **Design change** (spec must change)                 | "add a second enemy type", "make levels shorter", theme/feel feedback                                                    | **Always suggest.** Creator approval converts it into a remix-path spec change issue                                                                                               |
+| **Insufficient data / low value**                    | 4 opens this month                                                                                                       | Digest line only; no agent run spent                                                                                                                                               |
 
 Every routed action carries its **evidence block** (scorecard excerpts +
 feedback theme counts) into the issue body, fenced as data. The hypothesis is
@@ -423,8 +424,8 @@ What that changes for this plan, concretely:
   recorded rather than silently dropped.
 - **Stall detection moved with it.** `detectStall` and `DEFAULT_STALL_THRESHOLDS` in
   job-state.ts already watch a job that stopped making progress, so IL-3's "stuck in
-  `issue-filed` with no PR" alert should be expressed in terms of job state rather than
-  rebuilt against GitHub.
+  dispatched with no pull request" alert should be expressed in terms of job state rather
+  than rebuilt against GitHub.
 
 The one piece of the old mitigation still worth keeping is the notify sweep's count of
 change requests no agent collected within an hour — it watches the effect rather than the
@@ -438,7 +439,7 @@ creation submissions always taking quota priority over improvements.
 
 ## Closing the loop: measurement
 
-A suggestion is not "done" at merge. The `suggestions/{id}` doc stores the
+A suggestion is not "done" when the work lands. The `suggestions/{id}` doc stores the
 pre-change scorecard snapshot and the hypothesis metric; 14 days after
 republish the aggregation job writes the post-change comparison and the
 babysitter marks it `measured: improved | neutral | regressed`. Regressions
@@ -902,8 +903,9 @@ at all and feeds the only autonomous-eligible class.
   the **live** scorecard at approval time, so an erased player is never quoted from a
   stale copy. That is the ⚠️ below, answered at the exact point it bites.
 
-- 📋 Stall alert on `issue-filed` → no PR. Measurement records written at merge; 14-day
-  post-change comparison.
+- 📋 Stall alert on a dispatched improvement that never progresses, and measurement
+  records written when it goes live — **at `published`, not at merge**, because there is
+  no merge any more.
 - ⚠️ **`errorSamples` is the one attacker-controlled field in the health data.** Every
   other number in a scorecard is computed by this service; an error message is a
   string a game chose to emit. It is safe rendered as text to an operator and unsafe

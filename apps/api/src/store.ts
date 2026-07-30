@@ -738,17 +738,21 @@ export interface Scorecard {
 /**
  * Where a suggestion is in its life (docs/improvement-loop-plan.md IL-3).
  *
- * `no-implementer` is a state rather than an error because the plan asks for it to be:
- * the `@copilot` relay can be down, and a creator who approved something deserves to see
- * "nobody is available to do this" instead of an approval that appears to have worked and
- * then silently does nothing.
+ * Named for what this platform does, not for GitHub. `dispatched` and `published` were
+ * `issue-filed` and `merged` in the first draft — from a time when work reached an agent
+ * as an issue and shipped as a merge. Neither is true now: an improvement is a job we
+ * dispatch, and it goes live through the gate and review rather than through a merge.
+ *
+ * `no-implementer` is a state rather than an error: a creator who approved something
+ * deserves to see "nobody was available to do this" instead of an approval that appears
+ * to have worked and then silently does nothing.
  *
  * `obsolete` is the one the sweep can reach on its own — a defect that stopped showing up
  * in the evidence. Closing it by measurement rather than leaving it open forever is what
  * keeps an inbox from filling with problems that already went away.
  */
 export type SuggestionStatus =
-  'proposed' | 'approved' | 'rejected' | 'issue-filed' | 'no-implementer' | 'merged' | 'measured' | 'obsolete';
+  'proposed' | 'approved' | 'rejected' | 'dispatched' | 'no-implementer' | 'published' | 'measured' | 'obsolete';
 
 /** Statuses where nobody has decided yet, so the sweep may still revise or close them. */
 export const OPEN_SUGGESTION_STATUSES: readonly SuggestionStatus[] = ['proposed'];
@@ -780,8 +784,14 @@ export interface SuggestionRecord {
   status: SuggestionStatus;
   /** Why it reached its current status, when a human or the sweep had a reason. */
   statusReason?: string;
-  /** The games-repo issue this became, once an implementer was successfully handed it. */
-  issueNumber?: number;
+  /**
+   * The job this became once an implementer was handed the work.
+   *
+   * A native improvement is a new job, so this is that job's id — which is also how the
+   * measurement pass finds out whether the work ever shipped. Only a legacy submission
+   * puts a GitHub issue number here, and that leg is on its way out.
+   */
+  jobId?: number;
   /** Who decided, and when — so an approval is attributable rather than ambient. */
   decidedBy?: string;
   decidedAt?: string;
@@ -995,8 +1005,22 @@ export interface Store {
   /**
    * Resolves a slug back to its submission — the lookup behind shareable draft
    * links. Returns null for a slug no submission has claimed.
+   *
+   * **Newest first when more than one job claims the slug**, which is now the normal
+   * case rather than a curiosity: an improvement is a new job on an existing game, so a
+   * published game plus an in-flight improvement is two submissions with one slug.
    */
   getSubmissionBySlug(slug: string): Promise<SubmissionRecord | null>;
+  /**
+   * The *published* submission for a slug, ignoring in-flight work on the same game.
+   *
+   * Separate from the lookup above because "who owns this game" and "what is the latest
+   * job touching it" stopped being the same question the moment improvements became new
+   * jobs. Asking the newest for ownership would mean a game with an improvement running
+   * reads as unpublished — and anything that treats unpublished as "no longer live"
+   * would quietly retract work it had just commissioned.
+   */
+  getPublishedSubmissionBySlug(slug: string): Promise<SubmissionRecord | null>;
   /**
    * Submissions the sweep should still check: those not yet in a terminal,
    * already-notified state (published / needs_changes recorded as last-notified).
@@ -1478,7 +1502,19 @@ export class InMemoryStore implements Store {
   }
 
   async getSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {
-    const match = Array.from(this.submissions.values()).find((s) => s.slug === slug);
+    // Newest first, matching the Firestore implementation. It used to take whatever
+    // `find` reached first, which agreed with production only while a slug never had
+    // more than one job — no longer true now that an improvement is a new job.
+    const match = Array.from(this.submissions.values())
+      .filter((s) => s.slug === slug)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    return match ? { ...match } : null;
+  }
+
+  async getPublishedSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {
+    const match = Array.from(this.submissions.values())
+      .filter((s) => s.slug === slug && s.publishedAt && !s.abandonedAt)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
     return match ? { ...match } : null;
   }
 
@@ -2708,6 +2744,18 @@ export class FirestoreStore implements Store {
     // directory, but if two submissions ever raced onto one, the newest wins.
     const snap = await this.db.collection('submissions').where('slug', '==', slug).get();
     const records = snap.docs.map((d) => d.data() as SubmissionRecord);
+    records.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return records[0] ?? null;
+  }
+
+  async getPublishedSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {
+    // Same single-field query, filtered in memory: adding `where('publishedAt','!=',null)`
+    // would need a composite index for a result set already bounded by how many jobs have
+    // touched one game.
+    const snap = await this.db.collection('submissions').where('slug', '==', slug).get();
+    const records = snap.docs
+      .map((d) => d.data() as SubmissionRecord)
+      .filter((record) => record.publishedAt && !record.abandonedAt);
     records.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return records[0] ?? null;
   }
