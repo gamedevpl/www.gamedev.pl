@@ -3,12 +3,14 @@
 > Status: ✅ **IL-1 (Capture) complete** (2026-07-26) and ✅ **IL-2 (Distill)
 > complete** (2026-07-28) — scheduled aggregation, feedback-theme extraction and
 > the creator-facing scorecard all shipped, so a creator can now answer all three
-> of IL-2's exit questions without an agent. **IL-3 is one slice in**: the router
-> classifies live scorecards at `GET /api/admin/suggestions`, and the rest of the
-> phase is blocked two independent ways — the `@copilot` relay (a decision), and
-> the fact that no game yet routes to an actionable class (data volume; see the
-> first reading under IL-3). **IL-4 has not started**, correctly: it depends on
-> IL-3's exit, which is a merged and measured improvement.
+> of IL-2's exit questions without an agent. **IL-3 is in progress**: the router
+> classifies live scorecards at `GET /api/admin/suggestions`, and the nightly
+> analyst run persists what it says into `suggestions/`. What remains — the inbox,
+> approval, and measurement — is described under IL-3 below. Note that as of the
+> first reading no game yet routes to an actionable class, so the queue is
+> correctly empty until play volume catches up; that is data, not a defect.
+> **IL-4 has not started**: it depends on IL-3's exit, a merged and measured
+> improvement.
 > Revised against the shipped platform (first drafted 2026-07-23) —
 > everything the first draft listed as a dependency is now live: catalog, player,
 > submission → Copilot → PR → publish, notifications (in-app + email + push), and
