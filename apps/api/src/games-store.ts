@@ -34,6 +34,11 @@ export const ALLOWED_SOURCE_FILES = [
   'GAME.json',
   'CAPTURE.json',
   'ACCEPTANCE.json',
+  // The committed behavioural golden. It is not source in the ordinary sense, but the
+  // gate replays CAPTURE.json against our engine and diffs the result against this file,
+  // so a delivery without it is one the gate cannot check — it fails at the trace stage
+  // with `no committed trace`, having proved nothing about the game.
+  'TRACE.json',
   'index.html',
   'game.ts',
   'style.css',
@@ -139,6 +144,18 @@ export function validateSourceUpload(files: SourceFile[]): SourceFile[] {
   if (!seen.has('SPEC.md')) throw new InvalidUploadError('SPEC.md is required — it is the spec of record for the game');
   if (!seen.has('index.html') || !seen.has('game.ts')) {
     throw new InvalidUploadError('index.html and game.ts are required — a game must be playable');
+  }
+  // Refused here rather than stored and failed later. Without the golden the gate cannot
+  // reach a verdict at all — it stops at the trace stage having proved nothing — so
+  // accepting the upload would mean storing a version that is dead on arrival, and
+  // telling the agent it had succeeded. It is still running at this moment and can
+  // record the golden and retry; twenty minutes later it is gone.
+  if (!seen.has('TRACE.json')) {
+    throw new InvalidUploadError(
+      'TRACE.json is required — the gate diffs your game against it and cannot verify a ' +
+        'delivery without one. Record it with `npm run trace -- <slug> --accept`, read what ' +
+        'it captured, then deliver again.',
+    );
   }
 
   return files.map((file) => ({ path: file.path.trim(), content: file.content }));

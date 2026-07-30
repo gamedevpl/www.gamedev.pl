@@ -12,15 +12,18 @@ const MINIMAL: SourceFile[] = [
   { path: 'SPEC.md', content: '---\ntitle: A game\n---\n' },
   { path: 'index.html', content: '<!doctype html>' },
   { path: 'game.ts', content: 'export {};' },
+  // The behavioural golden is part of a minimal delivery, not an extra: without it the
+  // gate stops at the trace stage and the version can never reach a verdict.
+  { path: 'TRACE.json', content: '{"samples":[]}' },
 ];
 
 describe('validateSourceUpload — the delivery contract', () => {
   it('accepts a minimal game', () => {
-    expect(validateSourceUpload(MINIMAL)).toHaveLength(3);
+    expect(validateSourceUpload(MINIMAL)).toHaveLength(4);
   });
 
   it('accepts the game’s own modules', () => {
-    expect(validateSourceUpload([...MINIMAL, { path: 'entities/player.ts', content: 'export {};' }])).toHaveLength(4);
+    expect(validateSourceUpload([...MINIMAL, { path: 'entities/player.ts', content: 'export {};' }])).toHaveLength(5);
   });
 
   it('refuses harness-shaped paths so a diff visibly respects the boundary', () => {
@@ -56,6 +59,18 @@ describe('validateSourceUpload — the delivery contract', () => {
         { path: 'game.ts', content: 'x' },
       ]),
     ).toThrow(/SPEC.md is required/);
+  });
+
+  it('accepts and requires the behavioural golden the gate checks against', () => {
+    // Both halves, because they failed apart. The games repo's submit tool sends
+    // TRACE.json; this list did not include it, so the server answered 400 and named
+    // every file that *was* deliverable — and a real agent read that message, dropped
+    // the golden, and delivered a version the gate could only fail. A delivery contract
+    // that disagrees with the tool implementing it teaches the agent to route around it.
+    expect(validateSourceUpload(MINIMAL).map((f) => f.path)).toContain('TRACE.json');
+    expect(() => validateSourceUpload(MINIMAL.filter((f) => f.path !== 'TRACE.json'))).toThrow(
+      /TRACE\.json is required/,
+    );
   });
 
   it('caps total upload size', () => {
