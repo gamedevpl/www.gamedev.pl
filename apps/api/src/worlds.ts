@@ -161,7 +161,12 @@ export async function registerWorldRoutes(app: FastifyInstance, options: WorldRo
           uid: request.user?.uid,
           category: verdict.category,
         });
-        return reply.status(422).send({ error: 'that text was rejected', category: verdict.category });
+        // `?? 'other'` for the same reason the log line normalizes: `category` is optional
+        // on the verdict, and JSON drops an undefined value rather than sending null — so a
+        // checker that refused without classifying would produce a 422 with no category at
+        // all, and the client's `errors.contentRejected.<category>` lookup would resolve to
+        // nothing. Every other moderated route already normalized here; this one did not.
+        return reply.status(422).send({ error: 'that text was rejected', category: verdict.category ?? 'other' });
       }
     }
 

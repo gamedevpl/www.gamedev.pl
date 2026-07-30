@@ -109,6 +109,27 @@ describe('every moderating module reports its rejections', () => {
     expect(readFileSync(resolve(here, name), 'utf8')).toContain('logModerationRejection(');
   });
 
+  it.each(callSites)('%s sends a category the client can actually look up', (name) => {
+    // `category` is optional on a verdict, and JSON drops an undefined value rather than
+    // sending null — so a checker that refuses without classifying produces a 422 with no
+    // category field at all, and the client's `errors.contentRejected.<category>` lookup
+    // resolves to nothing. Every route normalized this except the worlds one, which is the
+    // shape of defect that survives precisely because five siblings are correct.
+    //
+    // Whitespace is collapsed first so the assertion does not depend on how prettier
+    // happens to wrap a long line.
+    const normalized = readFileSync(resolve(here, name), 'utf8').replace(/\s+/g, ' ');
+    const sendArguments = normalized
+      .split('.send(')
+      .slice(1)
+      .map((fragment) => fragment.slice(0, 200));
+    for (const argument of sendArguments) {
+      if (argument.includes('category:')) {
+        expect(argument).toContain("?? 'other'");
+      }
+    }
+  });
+
   it.each(callSites)('%s reports once per rejection branch', (name) => {
     // A module can moderate several surfaces (submissions moderates specs and two flavours
     // of feedback). Counting the 422s against the log calls catches the half-wired case:
