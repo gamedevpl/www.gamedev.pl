@@ -5,6 +5,7 @@
 // its own; callers pass an `isSlugPublished` probe.
 
 import type { LinkedPullRequest } from './github-client.js';
+import type { JobStall } from './job-state.js';
 
 export type SubmissionStatus =
   | 'queued'
@@ -159,6 +160,18 @@ export interface SubmissionStatusResponseBase {
    * it is any fun, which is the only question they can really answer.
    */
   playable?: BuildPlayableItem[];
+  /**
+   * Why this build looks stuck, when it does — `awaiting_input`, `not_dispatched`,
+   * `quiet`, or `gate_not_started`. Absent means it is progressing normally.
+   *
+   * The creator-experience review's open finding was that we could say "the agent has
+   * been quiet" but never "the agent errored", so a stuck build and a slow one read
+   * identically and the honest-looking answer was the discouraging one. This is the
+   * field that distinguishes them, and it is deliberately a closed vocabulary rather
+   * than a sentence: the UI renders its own translated copy for each case, so a Polish
+   * creator gets Polish without a translation round-trip.
+   */
+  stall?: JobStall;
 }
 
 /**

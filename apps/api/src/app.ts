@@ -8,6 +8,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import { registerAccessTokenRoutes } from './access-token-routes.js';
+import { registerJobAdminRoutes } from './job-admin-routes.js';
 import { registerAdminRoutes } from './admin.js';
 import { parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
@@ -341,6 +342,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // a Google identity, or any bypass route. Same operator allowlist as the views above,
   // and session-only, so a token can never mint another.
   await registerAccessTokenRoutes(app, { store, adminUids });
+
+  // The build queue, answered from the store alone. Until jobs carried their own state
+  // there was nothing to answer it with: deriving every in-flight submission's status on
+  // demand is the fan-out that has rate-limited the site before.
+  await registerJobAdminRoutes(app, { store, adminUids });
 
   // Creator control panel (docs/improvement-loop-plan.md IL-2 creator surface). Own
   // shelf + per-game health for games this uid owns — not the operator catalog view.

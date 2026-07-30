@@ -19,7 +19,7 @@ import {
   type GameSnapshotReader,
 } from './game-snapshot.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
-import { planObservedStatusTransition } from './job-state.js';
+import { detectStall, fromSubmissionStatus, planObservedStatusTransition } from './job-state.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
@@ -1226,6 +1226,17 @@ export async function registerSubmissionRoutes(
               await store.setSubmissionLastStatus(issueNumber, status.status);
             }
             await recordDerivedJobState(record, status.status);
+            // Say *why* a build looks stuck rather than leaving the page to imply it
+            // from silence. Computed after the transition write so it reflects the
+            // observation just recorded, not the one before it.
+            const stall = detectStall({
+              state: record.state ?? fromSubmissionStatus(status.status),
+              stateSince: record.stateSince ?? record.createdAt,
+              lastAgentSignalAt: record.lastAgentSignalAt,
+              agentState: record.agentState,
+              now: now(),
+            });
+            if (stall) status.stall = stall;
             await notifyOnTransition(buildNotifyDeps(), record, status, token);
           }
         } catch (notifyError) {

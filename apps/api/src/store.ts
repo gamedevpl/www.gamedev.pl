@@ -151,6 +151,15 @@ export interface SubmissionRecord {
    * blocked on an answer needs no inference at all.
    */
   agentState?: AgentTaskState;
+  /**
+   * When the agent last said anything over the build channel.
+   *
+   * Denormalized from the events subcollection on purpose: judging whether a build has
+   * gone quiet is the operator queue's main job, and reading the newest event for every
+   * in-flight submission would turn one page load into a fan-out of subcollection
+   * queries — the shape of read amplification this whole change exists to remove.
+   */
+  lastAgentSignalAt?: string;
 }
 
 /**
@@ -1203,6 +1212,8 @@ export class InMemoryStore implements Store {
     const existing = this.buildEvents.get(issueNumber) ?? [];
     existing.push(record);
     this.buildEvents.set(issueNumber, existing);
+    const submission = this.submissions.get(issueNumber);
+    if (submission) this.submissions.set(issueNumber, { ...submission, lastAgentSignalAt: record.createdAt });
     return { ...record };
   }
 
@@ -1992,6 +2003,14 @@ export class FirestoreStore implements Store {
     // Firestore rejects undefined values; optional fields are simply absent instead.
     const document = Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined));
     await this.eventsCollection(issueNumber).doc(record.id).set(document);
+    // Denormalized onto the parent so the operator queue can judge silence for every
+    // in-flight job without a subcollection read per job. Merged separately rather than
+    // transactionally: losing a race here costs a slightly stale liveness timestamp,
+    // which is not worth a transaction on the hottest write in the channel.
+    await this.db
+      .collection('submissions')
+      .doc(String(issueNumber))
+      .set({ lastAgentSignalAt: record.createdAt }, { merge: true });
     return record;
   }
 
