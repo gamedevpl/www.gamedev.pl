@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canonicalPath,
   canonicalPlayPath,
   draftPath,
   joinPath,
@@ -152,6 +153,29 @@ describe('path builders', () => {
     expect(canonicalPlayPath('/play/sky-dodge')).toBeNull();
     expect(canonicalPlayPath('/draft/sky-dodge')).toBeNull();
     expect(canonicalPlayPath('/')).toBeNull();
+  });
+
+  it('sends every old address to the one that replaced it', () => {
+    // The aliases keep resolving — bookmarks, old emails, notifications sent months
+    // ago — but the bar is put back on the current address so a copied URL survives.
+    expect(canonicalPath('/ay/sky-dodge')).toBe('/play/sky-dodge');
+    expect(canonicalPath('/ai/sky-dodge')).toBe('/play/sky-dodge');
+    expect(canonicalPath('/health')).toBe('/admin/telemetry');
+    expect(canonicalPath('/status/tok-abc')).toBe('/studio/tok-abc');
+    // A bare /admin names no section; the queue is what it shows, so that is what it says.
+    expect(canonicalPath('/admin')).toBe('/admin/queue');
+  });
+
+  it('leaves an address that is already current alone', () => {
+    // Returning a path here would mean a replaceState on every navigation.
+    expect(canonicalPath('/play/sky-dodge')).toBeNull();
+    expect(canonicalPath('/admin/telemetry')).toBeNull();
+    expect(canonicalPath('/studio/tok-abc')).toBeNull();
+    expect(canonicalPath('/studio/tok-abc/build')).toBeNull();
+    expect(canonicalPath('/studio')).toBeNull();
+    expect(canonicalPath('/draft/sky-dodge')).toBeNull();
+    expect(canonicalPath('/')).toBeNull();
+    expect(canonicalPath('/nonsense')).toBeNull();
   });
 
   it('builds a draft path that round-trips', () => {

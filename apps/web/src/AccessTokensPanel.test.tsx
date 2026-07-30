@@ -20,7 +20,7 @@ vi.mock('./adminApi.js', () => mocked);
 
 function token(overrides: Partial<AccessToken> = {}): AccessToken {
   return {
-    tokenId: '0123456789abcdef',
+    tokenId: 'aaaaaaaaaaaaaaaa',
     uid: 'g:agent',
     name: 'agent VM',
     createdAt: '2026-07-01T10:00:00Z',
@@ -75,7 +75,7 @@ afterEach(() => {
 
 describe('AccessTokensPanel', () => {
   it('lists the tokens an account holds and offers to revoke each one', async () => {
-    mocked.fetchAccessTokens.mockResolvedValue([token(), token({ tokenId: 'fedcba9876543210', expired: true })]);
+    mocked.fetchAccessTokens.mockResolvedValue([token(), token({ tokenId: 'bbbbbbbbbbbbbbbb', expired: true })]);
 
     const { container, root } = await render();
     await type(inputFor(container, 'Account uid'), 'g:agent');

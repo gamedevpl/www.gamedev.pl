@@ -13,7 +13,7 @@ import { PixelIcon } from './PixelIcon.js';
 import { CreatorQA, type QAQuestion } from './CreatorQA.js';
 import {
   adminPath,
-  canonicalPlayPath,
+  canonicalPath,
   NAVIGATE_EVENT,
   navUpTarget,
   parsePathRoute,
@@ -32,9 +32,14 @@ import { SiteFooter } from './SiteFooter.js';
 import { resolveDocumentTitle } from './pageTitle.js';
 import { useDocumentTitle } from './useDocumentTitle.js';
 
-/** Read the current URL into an AppRoute, rewriting `/ay|/ai/<slug>` → `/play/<slug>`. */
+/**
+ * Read the current URL into an AppRoute, putting the browser on the current address
+ * first — `/ay|/ai/<slug>` → `/play/<slug>`, `/status/<token>` → `/studio/<token>`,
+ * `/health` → `/admin/telemetry`. The old address still works; it just does not stay
+ * in the bar to be copied out of.
+ */
 function readLocationRoute(): AppRoute {
-  const canonical = canonicalPlayPath(window.location.pathname);
+  const canonical = canonicalPath(window.location.pathname);
   if (canonical) {
     window.history.replaceState(null, '', canonical);
   }

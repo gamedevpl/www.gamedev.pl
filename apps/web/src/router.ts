@@ -197,8 +197,46 @@ export function playPath(slug: string): string {
 }
 
 /**
- * If pathname is a play alias (`/ay/…` or `/ai/…`), return the canonical `/play/…`
- * path to rewrite to. Otherwise null (already canonical, or not a play route).
+ * The current address for a path that has more than one, or null when the path given is
+ * already it.
+ *
+ * Aliases accumulate as surfaces move. `/ay` and `/ai` are short forms of `/play`;
+ * `/status/:token` is where the build page lived before Creator Studio absorbed it;
+ * `/health` is where the operator console lived before it had sections. Every one of
+ * them still resolves, and that is not negotiable — links live in bookmarks, in old
+ * emails, in notifications sent months ago, and breaking them to tidy a route table
+ * would be a strange kind of housekeeping.
+ *
+ * What this adds is the second half: the browser is put back on the current address, so
+ * a URL copied out of the bar is one that will still make sense next year, and a page
+ * someone reports as broken names something that still exists. The rewrite is a
+ * `replaceState`, so the alias does not become a history entry to go Back through.
+ */
+export function canonicalPath(pathname: string): string | null {
+  const route = parsePathRoute(pathname);
+  const canonical = ((): string | null => {
+    switch (route.view) {
+      case 'play':
+        return playPath(route.slug);
+      // Including a bare `/admin`, which lands on the queue: the section a page is
+      // showing belongs in the URL, or a refresh is a different page than a reload.
+      case 'admin':
+        return adminPath(route.section);
+      // Only the token form. `/studio` itself is canonical, and a tab is added by the
+      // view once it knows which game it is showing rather than here.
+      case 'studio':
+        return route.token ? studioPath(route.token, route.tab) : null;
+      default:
+        return null;
+    }
+  })();
+  return canonical && canonical !== pathname ? canonical : null;
+}
+
+/**
+ * @deprecated Prefer {@link canonicalPath}, which covers every alias rather than only
+ * the play prefixes. Kept as its own export because the play aliases are the pair most
+ * likely to be reached for by name.
  */
 export function canonicalPlayPath(pathname: string): string | null {
   const route = parsePathRoute(pathname);
