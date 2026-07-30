@@ -103,6 +103,14 @@ echo "==> 3/6 Deploying ${SERVICE}"
 #
 # --max-instances 1 is the pin, moved. It stays here for as long as a room lives in one
 # process's memory; the app service is what gets to scale.
+#
+# Note the `^|^` prefix on --set-env-vars. gcloud's default separator is a comma, so
+# without it the whole string is parsed as ONE variable named MP_RELAY_ONLY whose value
+# happens to contain the other two. That does not fail — it deploys, and it deploys
+# something much worse than a broken relay: MP_RELAY_ONLY would not equal "1", so the
+# service would come up in *app* mode, and PRIVATE_BETA would be unset, so the beta wall
+# would be off. The result is a second, fully public, unwalled copy of the entire site on
+# a run.app URL. deploy-api.sh uses the same `^|^` idiom for the same reason.
 MAX_INSTANCES="${MAX_INSTANCES:-1}"
 if [ "$MAX_INSTANCES" != "1" ]; then
   echo "!! MAX_INSTANCES=${MAX_INSTANCES}: a guest routed to a second instance cannot see" >&2
@@ -119,7 +127,7 @@ gcloud run deploy "$SERVICE" \
   --max-instances "$MAX_INSTANCES" \
   --timeout 3600 \
   --port 8080 \
-  --set-env-vars "MP_RELAY_ONLY=1|PRIVATE_BETA=true|MP_RELAY_CALLER_SA=${CALLER_SA}" \
+  --set-env-vars "^|^MP_RELAY_ONLY=1|PRIVATE_BETA=true|MP_RELAY_CALLER_SA=${CALLER_SA}" \
   --set-secrets "SESSION_SECRET=session-secret:latest"
 
 echo "==> 4/6 Reading the service URL"
@@ -146,7 +154,34 @@ gcloud run services update "$SERVICE" \
   >/dev/null
 echo "    MP_RELAY_AUDIENCE=${RELAY_URL}"
 
-echo "==> 6/6 Verifying the relay is serving"
+echo "==> 6/6 Verifying the deployed configuration"
+# Read the env back rather than trusting that the flags above were parsed as intended.
+#
+# This exists because of a real defect in the first version of this script: the separator
+# prefix was missing, which gcloud accepts silently and collapses three variables into one.
+# Nothing downstream would have said so plainly — the service starts, health returns 200,
+# and the *symptom* would have been the create-route probe below failing with a 404 that
+# reads like an auth problem. Meanwhile the relay would have been serving the whole site
+# with no beta wall. So: assert the three names exist as three separate variables, which is
+# exactly the property a separator bug destroys.
+#
+# Whitespace is squeezed out first because JSON formatting is not a stable contract.
+ENV_JSON="$(gcloud run services describe "$SERVICE" --region "$REGION" --project "$PROJECT_ID" \
+  --format=json | tr -d ' \n')"
+for VAR in MP_RELAY_ONLY PRIVATE_BETA MP_RELAY_CALLER_SA MP_RELAY_AUDIENCE; do
+  if ! printf '%s' "$ENV_JSON" | grep -q "\"name\":\"${VAR}\""; then
+    echo "Error: ${VAR} is not set on ${SERVICE}." >&2
+    echo "  If several are missing at once, suspect the --set-env-vars separator: gcloud" >&2
+    echo "  splits on commas unless the value starts with ^|^, and silently folds the rest" >&2
+    echo "  into the first variable's value." >&2
+    echo "  This service may currently be serving the site unwalled. Fix or delete it now:" >&2
+    echo "    gcloud run services delete ${SERVICE} --region ${REGION} --project ${PROJECT_ID}" >&2
+    exit 1
+  fi
+done
+echo "    MP_RELAY_ONLY, PRIVATE_BETA, MP_RELAY_CALLER_SA, MP_RELAY_AUDIENCE all present."
+
+echo "==> Verifying the relay is serving"
 # Health is public on every role. A 200 here proves the image booted in relay mode; it does
 # not prove the create route works, which is what the smoke step below is for.
 STATUS_CODE="$(curl -s -o /dev/null -w '%{http_code}' "${RELAY_URL}/api/health" || true)"
