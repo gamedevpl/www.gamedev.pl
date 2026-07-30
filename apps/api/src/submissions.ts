@@ -1944,21 +1944,23 @@ export async function registerSubmissionRoutes(
     // A native job has no PR to resolve, so this is the whole path for it rather than a
     // fallback. Tried first for legacy jobs too: once a job has delivered, the stored
     // candidate is fresher and cheaper than a GitHub round-trip to its branch.
-    const record = await store?.getSubmission(issueNumber);
+    //
+    // Guarded on the games store rather than read unconditionally: this endpoint is
+    // polled for the whole length of a build, and without a store the record could not
+    // change the answer — so fetching it would be a Firestore read per poll, per
+    // watcher, bought with nothing.
     const native = isNativeJobId(issueNumber);
+    const record = options.agentChannel?.gamesStore ? await store?.getSubmission(issueNumber) : null;
     if (record) {
       try {
         const stored = await replyWithStoredDraft(request, reply, record);
         if (stored) return stored;
       } catch (error) {
-        if (
-          error instanceof EmptyProjectError ||
-          error instanceof ProjectTooLargeError ||
-          error instanceof CredentialLeakError
-        ) {
-          request.log.warn({ err: error, issueNumber }, 'stored draft failed hygiene checks');
-          return reply.status(422).send({ error: 'this game could not be previewed' });
-        }
+        // No hygiene-error branch here on purpose. This path serves the gate's own
+        // bundle byte-for-byte and never assembles anything, so EmptyProjectError and
+        // friends cannot arise — and catching them would only mislabel a store read
+        // failure as "this game could not be previewed", which is a claim about the
+        // game rather than about us.
         const stale = serveLastKnown('stored draft read failed; serving last known draft', error);
         if (stale) return stale;
         // A native job has no second source, so this is the end of the line and it is a
