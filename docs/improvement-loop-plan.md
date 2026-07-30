@@ -1,10 +1,18 @@
 # Game Improvement Loop: feedback-driven, agent-assisted iteration
 
-> Status: ✅ **IL-1 (Capture) is complete** (2026-07-26); IL-2's read path
-> (operator health view, votes, creator return, `end`/`score`/`progress` depth
-> reads) is also live, and IL-2's remaining pieces (scheduled aggregation,
-> feedback-theme extraction, the creator-facing scorecard) and IL-3 onward are
-> still design. Revised against the shipped platform (first drafted 2026-07-23) —
+> Status: ✅ **IL-1 (Capture) complete** (2026-07-26) and ✅ **IL-2 (Distill)
+> complete** (2026-07-28) — scheduled aggregation, feedback-theme extraction and
+> the creator-facing scorecard all shipped, so a creator can now answer all three
+> of IL-2's exit questions without an agent. ✅ **IL-3 (Suggest) is code complete**:
+> router → persist → inbox → approve/dismiss → dispatch → follow → measure. Note that as
+> of the first reading no game yet routes to an actionable class, so the queue is
+> correctly empty until play volume catches up; that is data, not a defect. The phase's
+> *exit* — a first improvement merged and measured — therefore waits on play, not on code.
+> **IL-4 is in place**: per-game autonomy (default `suggest`, which acts on nothing), a
+> 2/day global and 1/game/week budget, and — structurally — no way for autonomous work to
+> publish itself, since `publishing` is reachable only from `ready_for_review`. **The `@copilot` relay this plan called its biggest risk is retired** —
+> the platform owns dispatch now; see "Dispatch is ours now".
+> Revised against the shipped platform (first drafted 2026-07-23) —
 > everything the first draft listed as a dependency is now live: catalog, player,
 > submission → Copilot → PR → publish, notifications (in-app + email + push), and
 > a live agent channel. The revision matters because three of the original design
@@ -71,17 +79,17 @@ never-raw-text-in, never auto-merge. What changed is that most of the plumbing
 it proposed to build now exists for other reasons, and two of its decisions were
 made from stale premises.
 
-| First draft assumed                                                       | Reality on 2026-07-25                                                                                                                                                                             | Consequence for this plan                                                                              |
-| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Telemetry needs a new games-repo `postMessage` convention before it works | The app **already injects a bridge** into every game it plays ([gamePlayer.ts](../apps/web/src/gamePlayer.ts)), with a `gdpl-host` / `gdpl-player` envelope                                       | Funnel + error capture ship with **zero games-repo changes**. Only progression depth needs game opt-in |
-| Games are addressed as `games/{gameId}`                                   | Half right, and the half that was wrong cost a day: a **submission** is `submissions/{issueNumber}`, but a **game** is a games-repo slug, and only 8 of 42 catalog games have a submission at all | Keyed by `slug`. Re-keying on the submission was tried first and silently dropped ~95% of play         |
-| "No email sender exists", so the digest is on-site only                   | Mailer, templates, unsubscribe tokens, Web Push and an in-app bell all shipped                                                                                                                    | **Decision reversed**: the digest rides the existing notification seam                                 |
-| The improvement quota would need new quota machinery                      | `UsageCounters` is already a named-kind counter set (`submissions`, `previews`, `mocks`, `refines`, `feedback`)                                                                                   | The separate improvement quota is one new counter kind                                                 |
-| Theme extraction uses "Vertex Flash-Lite plumbing"                        | Vertex calls now route through the genaicode seam ([genai.ts](../apps/api/src/genai.ts)); moderation runs Gemini 3 Flash                                                                          | Naming corrected; the seam is the integration point, not Vertex directly                               |
-| Written feedback → agent is a thing to design                             | `POST /api/submissions/:token/feedback` already does it: moderate → sanitize → fenced PR comment → queue into the agent inbox                                                                     | The Act plane's delivery path is **built and proven**; player feedback is the missing sibling          |
-| An agent's progress arrives by git                                        | The build channel ([agent-channel.ts](../apps/api/src/agent-channel.ts)) takes progress, screenshots, and hands back queued creator requests                                                      | Improvement runs get live progress and before/after shots for free                                     |
-| "Assign the issue to Copilot" is a solved primitive                       | Bot `@copilot` mentions are dropped silently; re-mentions are relayed under a licensed human PAT                                                                                                  | The autonomy story is **gated on that relay**, and it is now the loop's biggest single risk            |
-| Games are single-player, one player per session                           | Party mode ships: one shared screen, 2–8 phone controllers, guests with no account and ephemeral rooms                                                                                            | Sessions are no longer 1:1 with players; guest privacy constrains what may be recorded                 |
+| First draft assumed                                                       | Reality on 2026-07-25                                                                                                                                                                                                                  | Consequence for this plan                                                                              |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Telemetry needs a new games-repo `postMessage` convention before it works | The app **already injects a bridge** into every game it plays ([gamePlayer.ts](../apps/web/src/gamePlayer.ts)), with a `gdpl-host` / `gdpl-player` envelope                                                                            | Funnel + error capture ship with **zero games-repo changes**. Only progression depth needs game opt-in |
+| Games are addressed as `games/{gameId}`                                   | Half right, and the half that was wrong cost a day: a **submission** is `submissions/{issueNumber}`, but a **game** is a games-repo slug, and only 8 of 42 catalog games have a submission at all                                      | Keyed by `slug`. Re-keying on the submission was tried first and silently dropped ~95% of play         |
+| "No email sender exists", so the digest is on-site only                   | Mailer, templates, unsubscribe tokens, Web Push and an in-app bell all shipped                                                                                                                                                         | **Decision reversed**: the digest rides the existing notification seam                                 |
+| The improvement quota would need new quota machinery                      | `UsageCounters` is already a named-kind counter set (`submissions`, `previews`, `mocks`, `refines`, `feedback`)                                                                                                                        | The separate improvement quota is one new counter kind                                                 |
+| Theme extraction uses "Vertex Flash-Lite plumbing"                        | Vertex calls now route through the genaicode seam ([genai.ts](../apps/api/src/genai.ts)); moderation runs Gemini 3 Flash                                                                                                               | Naming corrected; the seam is the integration point, not Vertex directly                               |
+| Written feedback → agent is a thing to design                             | `POST /api/submissions/:token/feedback` already does it: moderate → sanitize → fenced PR comment → queue into the agent inbox                                                                                                          | The Act plane's delivery path is **built and proven**; player feedback is the missing sibling          |
+| An agent's progress arrives by git                                        | The build channel ([agent-channel.ts](../apps/api/src/agent-channel.ts)) takes progress, screenshots, and hands back queued creator requests                                                                                           | Improvement runs get live progress and before/after shots for free                                     |
+| "Assign the issue to Copilot" is a solved primitive                       | **Superseded (2026-07-29/30).** The relay is gone: the platform owns dispatch through the agent-tasks API and a job state machine ([agent-backend.ts](../apps/api/src/agent-backend.ts), [job-state.ts](../apps/api/src/job-state.ts)) | The autonomy story is **no longer gated on a relay**. IL-3/IL-4 dispatch work, they do not file issues |
+| Games are single-player, one player per session                           | Party mode ships: one shared screen, 2–8 phone controllers, guests with no account and ephemeral rooms                                                                                                                                 | Sessions are no longer 1:1 with players; guest privacy constrains what may be recorded                 |
 
 Two things the first draft got right and this revision keeps unchanged: the
 router's Defect / Friction / Design-change split, and the measurement plane.
@@ -248,12 +256,12 @@ flowchart TD
     subgraph Act
       LOOP["Improvement agent (scheduled babysitter run)"] --> AGG
       LOOP -->|insight + hypothesis| ROUTE{Router}
-      ROUTE -->|"bounded fix, game opted in"| ISSUE["Games-repo issue → Copilot via relay"]
+      ROUTE -->|"bounded fix, game opted in"| ISSUE["Improvement round dispatched to the agent backend"]
       ROUTE -->|behavior/design change| SUGG["Suggestion card → creator approves → issue"]
       ROUTE -->|low value / low data| DIGEST["Digest notification (bell/email/push)"]
-      ISSUE --> PR["PR + validation"]
+      ISSUE --> PR["Delivered sources + our gate"]
       PR -.->|live progress + shots| CH["/api/agent/build/*"]
-      PR -->|human review, never auto-merge| MERGE["Merge → republish"]
+      PR -->|ready_for_review, never automatic| MERGE["Review → publish"]
     end
 
     MERGE -->|before/after metrics| AGG
@@ -284,7 +292,8 @@ games/{slug}/
   playerFeedback/{id}  ← { uid, text, createdAt } — post-moderation only
 telemetry/{yyyy-mm-dd}/playEvents/{id}  ← raw events, 90-day TTL, keyed by slug
 suggestions/{id}       ← { slug, insight, proposedAction, evidence, status:
-                           proposed|approved|rejected|issue-filed|merged|measured }
+                           proposed|approved|rejected|dispatched|no-implementer|
+                           published|measured|obsolete }
 ```
 
 Notes on the shape:
@@ -340,12 +349,12 @@ autonomous-eligible defect class.
 
 ## The router: what may be autonomous vs suggested
 
-| Class                                                | Examples                                                                                                                 | Route                                                                                                                                                                |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Defect** (implementation violates spec or crashes) | errors in N% of sessions, game never reaches ready, stalls mid-play, softlock reports corroborated by quit-at-same-point | **Autonomous-eligible**: agent files the issue and drives the PR without waiting for the creator (still human-merged). Creator is notified.                          |
-| **Friction** (spec-compatible tuning)                | difficulty spike at a progression cliff, unreadable text, missing touch controls where the spec doesn't forbid them      | **Suggest by default**; autonomous only if the creator opted the game into "auto-tune" and the change is expressible as a small spec _clarification_, not a redesign |
-| **Design change** (spec must change)                 | "add a second enemy type", "make levels shorter", theme/feel feedback                                                    | **Always suggest.** Creator approval converts it into a remix-path spec change issue                                                                                 |
-| **Insufficient data / low value**                    | 4 opens this month                                                                                                       | Digest line only; no agent run spent                                                                                                                                 |
+| Class                                                | Examples                                                                                                                 | Route                                                                                                                                                                              |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Defect** (implementation violates spec or crashes) | errors in N% of sessions, game never reaches ready, stalls mid-play, softlock reports corroborated by quit-at-same-point | **Autonomous-eligible**: a job is dispatched without waiting for the creator, who is notified. Still cannot self-publish — `publishing` is reachable only from `ready_for_review`. |
+| **Friction** (spec-compatible tuning)                | difficulty spike at a progression cliff, unreadable text, missing touch controls where the spec doesn't forbid them      | **Suggest by default**; autonomous only if the creator opted the game into "auto-tune" and the change is expressible as a small spec _clarification_, not a redesign               |
+| **Design change** (spec must change)                 | "add a second enemy type", "make levels shorter", theme/feel feedback                                                    | **Always suggest.** Creator approval converts it into a remix-path spec change issue                                                                                               |
+| **Insufficient data / low value**                    | 4 opens this month                                                                                                       | Digest line only; no agent run spent                                                                                                                                               |
 
 Every routed action carries its **evidence block** (scorecard excerpts +
 feedback theme counts) into the issue body, fenced as data. The hypothesis is
@@ -359,7 +368,7 @@ Two interchangeable executors, same contract (consistent with
 
 - **Analyst/babysitter run** — a scheduled coding-agent session (Claude Code /
   agy / any CLI agent on a cron, or a scheduled workflow) that: reads scorecards
-  → produces/updates `suggestions/` docs → files issues for approved and
+  → produces/updates `suggestions/` docs → dispatches jobs for approved and
   autonomous-eligible items → checks on open improvement PRs (validation green?
   stalled? needs a `verify-agent-work` pass?) → writes the digest. It does
   **not** write game code itself.
@@ -387,32 +396,39 @@ So an improvement is **initiated** by a durable artifact — a new issue, or a P
 comment on an existing one — exactly as creator feedback already is. The channel
 is for the run once it is alive, never the way to start it.
 
-### The Copilot identity constraint is the loop's main risk
+### Dispatch is ours now — this risk is retired
 
-Autonomy assumes the loop can hand an issue to an implementer unattended. Today
-it cannot do so cleanly: bot-authored `@copilot` mentions are silently dropped,
-the org cannot buy Copilot seats without Enterprise, and mentions are re-posted
-by a relay workflow under a licensed human's PAT. Everything in IL-3 and IL-4
-that says "assign Copilot" therefore runs through that relay, and inherits its
-failure modes (PAT expiry, workflow disabled, rate limits).
+**Superseded 2026-07-29/30.** This section used to describe the loop's biggest single
+risk: bot-authored `@copilot` mentions are dropped, the org cannot buy Copilot seats
+without Enterprise, and mentions were re-posted by a relay workflow under a licensed
+human's PAT — so everything in IL-3 and IL-4 that said "assign Copilot" inherited that
+relay's failure modes.
 
-Mitigations, in preference order: keep the relay path but monitor it explicitly
-(a suggestion stuck in `issue-filed` with no PR after N hours is an alert, not a
-silent stall); allow a local CLI agent as the implementer for defect-class work,
-where the change is small and validation is decisive; and treat "no implementer
-available" as a first-class suggestion state, surfaced to the creator rather than
-hidden.
+None of that is true any more. The platform owns build orchestration: a job state
+machine ([job-state.ts](../apps/api/src/job-state.ts)), a backend seam every coding agent
+plugs into ([agent-backend.ts](../apps/api/src/agent-backend.ts)), and dispatch through
+the Copilot **agent tasks** API ([agent-tasks.ts](../apps/api/src/agent-tasks.ts)) that
+starts work from a bare prompt with no issue, no label, and no relay.
 
-The first of those is now partly built, for the creator-feedback half of the relay
-rather than the suggestion half: the notify sweep counts change requests that no
-agent has collected within an hour and logs at `error` when any exist
-([submissions.ts](../apps/api/src/submissions.ts), `/api/internal/notify-sweep`).
-It reuses the sweep's existing loop over active submissions, so it costs no new
-endpoint, schedule, or auth surface. Two limits worth stating: the queue write that
-makes a request visible is best-effort, so a stall on a request whose write failed
-stays invisible; and this watches the relay's _effect_, not the workflow itself — a
-relay that breaks while no creator happens to be iterating is still silent until
-someone sends feedback.
+What that changes for this plan, concretely:
+
+- **IL-3 approval dispatches a round of work**, it does not file an issue. A native job
+  resumes its own workspace; only legacy issue-numbered submissions still travel through
+  GitHub, and both live behind one shared `startImprovementRound` so the creator's own
+  improve request and an approved suggestion cannot disagree about how work reaches an
+  agent.
+- **"No implementer available" survives as a state anyway.** It was designed as a
+  mitigation for the relay being down; it earns its place regardless, because a backend
+  can still fail and a creator who clicked Approve deserves to know their decision was
+  recorded rather than silently dropped.
+- **Stall detection moved with it.** `detectStall` and `DEFAULT_STALL_THRESHOLDS` in
+  job-state.ts already watch a job that stopped making progress, so IL-3's "stuck in
+  dispatched with no pull request" alert should be expressed in terms of job state rather
+  than rebuilt against GitHub.
+
+The one piece of the old mitigation still worth keeping is the notify sweep's count of
+change requests no agent collected within an hour — it watches the effect rather than the
+mechanism, so it survived the mechanism changing.
 
 ### Budgeting
 
@@ -422,7 +438,7 @@ creation submissions always taking quota priority over improvements.
 
 ## Closing the loop: measurement
 
-A suggestion is not "done" at merge. The `suggestions/{id}` doc stores the
+A suggestion is not "done" when the work lands. The `suggestions/{id}` doc stores the
 pre-change scorecard snapshot and the hypothesis metric; 14 days after
 republish the aggregation job writes the post-change comparison and the
 babysitter marks it `measured: improved | neutral | regressed`. Regressions
@@ -454,9 +470,28 @@ considerably:
   Studio playtest assumes landscape and opens as a full-viewport theater (same
   idea as GameTheater) with pause/resume on the bar and the note sheet layered
   over the game — not an inset iframe inside Studio chrome.
-- 📋 **Suggestion inbox** — cards with insight → evidence → proposed change →
-  [Approve → files issue] / [Dismiss with reason]. Dismissal reasons feed router
-  tuning. Approval reuses the feedback-comment path that already works.
+- ✅ **The superseded per-game suggestion docs are drained** (2026-07-30). An earlier
+  slice wrote the router's whole output — including its `untrustedContext` block of game-
+  and player-authored strings — to `games/{slug}/suggestion/current`. This design stores
+  no untrusted text and joins the live scorecard instead, which is what keeps erasure
+  working: a player who erases their signals drops out of the next nightly recomputation
+  everywhere that reads it.
+
+  Those documents were the exception, and the reason this is finishing a migration rather
+  than tidying: nothing reads or refreshes them, and the erase path cannot find them, so a
+  player's words would sit frozen in them indefinitely. The sweep deletes up to 300 a run
+  and reports `legacyPurged`, which drains to zero within a night or two and stays there.
+  A number that keeps reappearing means something is still writing them.
+
+- ✅ **Suggestion inbox** (2026-07-30) — cards with insight → evidence →
+  [Approve → dispatches a job] / [Dismiss with reason], in the studio's stats tab beside the
+  reactions block, because a suggestion is a reading of the same evidence
+  ([CreatorStudioView.tsx](../apps/web/src/CreatorStudioView.tsx),
+  [suggestion-inbox.ts](../apps/api/src/suggestion-inbox.ts)). Dismissal reasons are a
+  **fixed vocabulary** rather than free text: they exist to tune the router, so they have
+  to be countable, and a free-text field on a card that later feeds an agent's context is
+  a prompt-injection surface with no reason to exist — the creator's own words already
+  have a home in the improve endpoint.
 - 📋 **Autonomy toggle** per game: `digest only` / `suggest` (default) /
   `auto-fix defects` / `auto-tune within spec`.
 - 📋 **Digest** — a batched notification, not a new channel. `NotificationType`
@@ -739,12 +774,19 @@ at all and feeds the only autonomous-eligible class.
 
   Closed until that job and env var exist, like every other internal sweep.
 
-- 📋 Votes and feedback themes in the studio. `/api/me/studio/health` recomputes from raw
-  events, so it can answer "is my game working" and "where do players drop off" but not
-  "what do they say" — votes, feedback counts and themes exist only on the scorecard. The
-  last of IL-2's three exit questions, and the smallest remaining piece of it.
-- Exit: a creator can answer "is my game working, where do players drop off,
-  what do they say" without any agent involvement.
+- ✅ **Votes and feedback themes in the studio** (2026-07-28, #289):
+  [creator-studio.ts](../apps/api/src/creator-studio.ts) serves votes, feedback counts and
+  themes for a creator's own games, rendered in
+  [CreatorStudioView.tsx](../apps/web/src/CreatorStudioView.tsx). `/api/me/studio/health`
+  recomputes from raw events and so could never answer "what do they say" at any window
+  size — votes, feedback and themes are not derived from play events at all. This route
+  reads the scorecards the nightly sweep already wrote instead: one document per game, and
+  it means the studio and the weekly digest cannot report different numbers, because both
+  read the same document. A game with no scorecard is absent rather than present with
+  zeros — unmeasured is not measured-as-nothing, the same distinction the router makes.
+- ✅ **Exit met** (2026-07-28): a creator can answer all three questions — "is my game
+  working", "where do players drop off", "what do they say" — without any agent
+  involvement.
 
 ### Phase IL-3 — Suggest (agent in the loop, human approves everything)
 
@@ -778,34 +820,69 @@ at all and feeds the only autonomous-eligible class.
   rather than filtered, so a game being passed over is visible and distinguishable from
   the router never having run.
 
+- 🔍 **First reading against production, 2026-07-28.** The router was run over the live
+  scorecards the day it deployed, before anything was built on top of it. Of 21 games,
+  **20 routed to `insufficient-data` and one to `healthy`** (`apex-sprint`, 227 sessions).
+  No game reached `defect`, `friction` or `design-change`.
+
+  That is the correct answer, not a disappointing one: capture went live 2026-07-25, so a
+  three-day window against a floor of 20 sessions is mostly games nobody has played yet.
+  `cannon-fodder-squad` was nearest at 10. Three games — `breach-protocol`, `brick-storm`,
+  `settlers-of-the-north` — already carry `progressLabels`, so the friction path has real
+  input waiting behind volume rather than behind code.
+
+  **The consequence is a sequencing one, and it is why the next bullet has not been
+  built.** Persisting `suggestions/` today would persist twenty copies of "come back
+  later". The floor is the one number here nobody has validated against real traffic, and
+  the cheap way to validate it is to re-read the endpoint as sessions accumulate — not to
+  lower it until something fires, which is precisely the noise the floor exists to reject.
+
+  This is also the payoff of shipping the router computed-on-read: the reading cost one
+  HTTP request and changed the plan, where the same lesson learned after building
+  persistence and an inbox would have cost both.
+
 - ✅ **Babysitter analyst run** (2026-07-30): `POST /api/internal/suggestion-sweep`
-  ([suggestion-sweep.ts](../apps/api/src/suggestion-sweep.ts)) runs the router over every
-  current scorecard nightly and writes `games/{slug}/suggestion/current`. Same OIDC
-  internal-endpoint pattern as the sweeps above; still files nothing, assigns nothing,
-  notifies nobody.
+  ([suggestion-sweep.ts](../apps/api/src/suggestion-sweep.ts)) persists what the router
+  says into `suggestions/{id}`. Still **files nothing and notifies nobody** — approving is
+  a separate human step.
 
-  **Why persist what `/api/admin/suggestions` already computes on read.** They answer
-  different questions. The read path is one operator asking what the router thinks _now_.
-  The stored doc is what it said _last night_ — which is what an inbox can carry a decision
-  against, and what lets a proposal outlive the scorecard behind it, since every sweep
-  overwrites those. Both call the same pure `routeScorecard`, so the two views cannot
-  drift into disagreeing about the same game.
+  The work is not creating suggestions but not creating them twice. A nightly run over a
+  problem that lasts a month must produce one card, not thirty, so the sweep reconciles
+  against the open set rather than appending: the same game still routing to the same
+  class **updates** its suggestion in place (same id, same `createdAt`, so a decision
+  already attached to it survives new evidence); a game routing to a _different_ class
+  supersedes the old card, because a difficulty cliff is not the same proposal as a crash;
+  and a game that stops routing to anything actionable has its card closed as `obsolete`.
+  Problems do go away on their own, and an inbox that can only grow is one nobody reads
+  twice.
 
-  Two judgements worth carrying forward:
+  **The sweep only ever revises `proposed`.** Once a human has approved or rejected
+  something, a cron that silently reopens or closes it is what teaches people not to trust
+  the queue — so it leaves those alone even when the evidence disappears entirely.
 
-  - **Two timestamps, not one.** `computedFrom` is the scorecard's stamp, `sweptAt` is this
-    run's. Collapsing them hides the failure most worth seeing: a router run over month-old
-    scorecards succeeds, reports every game healthy, and is worthless. One stamp would
-    report whichever half was fresh.
-  - **Every class is counted, including the zeros.** A result that omitted empty classes
-    would print identically whether there were no defects tonight or the defect branch had
-    stopped being reachable — and this is a job nobody watches.
+  Idempotence is by construction rather than by a guard: an id is
+  `(slug, class, the scorecard's computedAt)`, so re-running against one night's
+  scorecards overwrites its own documents.
 
-  Scheduled at `30 3 * * *`, ten minutes behind the scorecard sweep's `20 3`: routing this
-  morning's numbers rather than yesterday's is the entire value of running it nightly.
+  ⚠️ **The stored record deliberately carries no untrusted text.** The router's
+  `untrustedContext` is dropped; the record keeps `slug` + `computedFrom`, and a reader
+  who wants those strings joins the live scorecard. That is a privacy decision, not a size
+  one: feedback themes derive from player text, and the erase path works by making the
+  nightly sweep recompute scorecards without the erased rows. A suggestion that copied
+  them would be a second home for that text — one nothing refreshes once the suggestion is
+  closed, and one the erase path knows nothing about. Referencing beats copying, because
+  erasure keeps working through machinery that already implements it.
+
+  Provisioning — again its own audience, since an audience is the endpoint's own URL:
 
   ```bash
-  # Project-number host, not `status.url` — see the note on the scorecard block above.
+  # Use the SAME host form as the other sweeps' audiences. Do NOT derive it from
+  # `--format 'value(status.url)'`: Cloud Run answers on two hostnames
+  # (`gamedev-app-334141807880.europe-west1.run.app` and `gamedev-app-<hash>-ew.a.run.app`),
+  # `status.url` returns the second, and the deployed audiences use the first. The
+  # verifier compares the `aud` claim exactly, so a job built from `status.url` while the
+  # env var holds the other form 401s on every fire — silently, until someone reads the
+  # logs. This nearly shipped for the digest sweep on 2026-07-28.
   SWEEP_URL="https://gamedev-app-334141807880.europe-west1.run.app/api/internal/suggestion-sweep"
   SA=notify-sweep@gamedevpl.iam.gserviceaccount.com
   # Redeploy with SUGGESTION_SWEEP_AUDIENCE="$SWEEP_URL" set, then:
@@ -814,30 +891,115 @@ at all and feeds the only autonomous-eligible class.
     --oidc-service-account-email "$SA" --oidc-token-audience "$SWEEP_URL"
   ```
 
-  Closed until that job and env var exist, like every other internal sweep.
+  Scheduled after the 03:20 scorecard sweep, because it reads what that run wrote.
+  Closed until the job and the env var exist, like every other internal sweep.
 
-- 📋 Operator readback of the persisted suggestions. `/api/admin/suggestions` still
-  recomputes on read, so it shows what the router thinks rather than what the sweep stored
-  — a stored suggestion nobody can look at has the same failure mode the scorecards read
-  was added to close (#262), and the same fix.
-- Suggestion inbox UI; Approve → structured improvement issue (evidence-fenced)
-  → Copilot **via the relay**, with a stall alert on `issue-filed` → no PR.
-- Measurement records written at merge; 14-day post-change comparison.
+- ✅ **Inbox, approval and dismissal** (2026-07-30):
+  `GET /api/me/suggestions`, `POST .../:id/approve`, `POST .../:id/dismiss`
+  ([suggestion-inbox.ts](../apps/api/src/suggestion-inbox.ts)). Approve starts an
+  improvement round through the _same_ `startImprovementRound` as the creator's own
+  improve request — a new job seeded with the game's slug — and spends the `improvements`
+  quota, so approving cannot outrun the budget the plan reserved for it.
+
+  **Approval is durable even when the handoff fails.** This is the plan's preferred
+  mitigation for a failed handoff, implemented: if the round cannot be started — backend
+  down, dispatch unconfigured — the suggestion lands in `no-implementer` with the reason attached
+  and the studio says "approved, but no coding agent was available; you can retry". A 502
+  would have discarded the decision and made Approve a button that sometimes silently
+  does nothing.
+
+  Somebody else's suggestion is **404, not 403**: a 403 confirms the id exists, and these
+  ids are derivable from a public slug. Re-deciding a decided suggestion is 409, so a
+  double-click cannot file duplicate work.
+
+  The issue body splits what this service measured from what a game and its players
+  wrote. Findings and metrics are stated plainly; the untrusted strings follow inside a
+  fenced block labelled as data that does not override the task — and they are read from
+  the **live** scorecard at approval time, so an erased player is never quoted from a
+  stale copy. That is the ⚠️ below, answered at the exact point it bites.
+
+- ✅ **Stall reporting and 14-day measurement** (2026-07-30):
+  [suggestion-outcomes.ts](../apps/api/src/suggestion-outcomes.ts), run by the same
+  nightly sweep — proposing new work and following up on approved work are both "what
+  does the evidence say this morning", and splitting them would buy a fifth scheduler job
+  and a fifth audience for nothing.
+
+  Two edges a machine may decide on its own: `dispatched` → `published` when the job the
+  work went into actually ships, and `published` → `measured` once there is enough
+  post-change play to compare honestly. **Recorded at `published`, not at merge** — there
+  is no merge any more.
+
+  Stalls **reuse `detectStall`** rather than rebuilding an alert against GitHub. The
+  operator queue already ranks stuck jobs; what this adds is the link back to the
+  suggestion that commissioned the work, so a creator's approved improvement going quiet
+  reads as _that_ rather than as an anonymous stuck job. Reported, never acted on.
+
+  ⚠️ **"We could not tell" is never written down as "no effect".** A game with fewer than
+  20 sessions since the change, no scorecard, or no baseline is counted as
+  `notYetMeasurable` and left `published`. The two look identical in a table and mean
+  opposite things — and `neutral` is the one that would teach IL-4's router tuning that
+  fixes do nothing. The baseline is captured **at approval** rather than read back later,
+  because the scorecard is a rolling window: by the time work ships, the "before" has
+  already been partly overwritten by play from during the change.
+
+  Each class is judged on the claim it actually made — a defect on errors per session, a
+  friction on the progression drop, a design change on the downvote rate. A defect fix
+  that happened to move the vote ratio has not been vindicated by the votes.
+
 - ⚠️ **`errorSamples` is the one attacker-controlled field in the health data.** Every
   other number in a scorecard is computed by this service; an error message is a
   string a game chose to emit. It is safe rendered as text to an operator and unsafe
   interpolated into an agent's instructions — this is the phase that will want to do
   exactly that. Fence or summarize it; the "evidence in, never raw text in" principle
   above is what this concretely means in practice.
-- Exit: first player-evidence-driven improvement merged and measured.
+- Exit: first player-evidence-driven improvement merged and measured. **Blocked two
+  waiting on **data volume**: as of the first reading no game routes to an actionable
+  class, so there is nothing to hand to an agent yet. The relay blocker this bullet used
+  to name is gone — the platform dispatches work itself now.
 
 ### Phase IL-4 — Bounded autonomy
 
-- Autonomy toggles per game; defect-class issues filed without waiting for
-  creator approval (notification instead).
-- Budget enforcement, router tuning from dismissal reasons and measured outcomes.
-- Exit: a crash-class defect goes from telemetry signal to merged fix with the
-  only human touch being PR review.
+- ✅ **Autonomy is per game, and the default acts on nothing** (2026-07-30):
+  [autonomy.ts](../apps/api/src/autonomy.ts), set from the studio's stats tab.
+  `digest-only` / `suggest` (default) / `auto-fix-defects` / `auto-tune`. Per game rather
+  than per account, because a creator can reasonably want a crash fixed unasked on the
+  game they no longer play and to be consulted about everything on the one they are still
+  shaping.
+
+  ⚠️ **No mode permits a design change.** That class means the spec itself has to change,
+  and the spec is the creator's statement of what they wanted — a machine rewriting it
+  unasked has stopped improving their game and started replacing it. There is deliberately
+  no setting that overrides this, and a test asserts every mode refuses.
+
+- ✅ **"Never auto-merge" is now structural rather than policy.** `publishing` is
+  reachable only from `ready_for_review`, so nothing dispatched autonomously can reach the
+  site without the human review that is the moderation boundary. The worst an over-eager
+  router can do is spend an agent run and produce a candidate somebody declines. This
+  phase therefore needed no enforcement of its own — the state machine already has it.
+
+- ✅ **Budget** (2/day globally, 1/game/week): two ceilings because they bound different
+  failures. The global one bounds **cost** — a router bug that suddenly finds forty defects
+  should spend two agent runs, not forty. The per-game one bounds **nuisance** — a game
+  whose evidence keeps routing to defect would otherwise be rebuilt nightly while its
+  creator watches. Spend is derived from the suggestions themselves rather than kept in a
+  counter, because a counter is a second source of truth that can drift from the work it
+  claims to describe. Creator approvals do not count against it; those already spend the
+  `improvements` quota.
+
+  A withheld suggestion stays `proposed` with the reason attached rather than being
+  dropped — a ceiling is a reason to wait, not to forget.
+
+- ✅ **The creator is notified, without a new notification type.** An autonomous
+  improvement is a new job, so the existing notify sweep emits `submission.building` and
+  then `submission.published` to its owner. The plan's "notification instead" is satisfied
+  by machinery that already shipped.
+
+- 📋 Router tuning from dismissal reasons and measured outcomes. The inputs now exist —
+  `bad-evidence` dismissals and `improved | neutral | regressed` verdicts — but nothing
+  reads them yet, and it should stay a thing an operator does with evidence in hand rather
+  than a loop that tunes itself.
+- Exit: a crash-class defect goes from telemetry signal to published fix with the only
+  human touch being review.
 
 ## Decided defaults (revisit if evidence disagrees)
 

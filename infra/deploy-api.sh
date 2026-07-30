@@ -36,6 +36,8 @@
 #   NOTIFY_SWEEP_SA=...        (Cloud Scheduler SA email allowed to call the sweeps; shared by all four)
 #   DIGEST_SWEEP_AUDIENCE=...   (digest endpoint URL; enables OIDC auth on the
 #                                weekly creator digest sweep)
+#   SUGGESTION_SWEEP_AUDIENCE=... (suggestion endpoint URL; enables OIDC auth on the
+#                                nightly IL-3 analyst run)
 #   SCORECARD_SWEEP_AUDIENCE=... (scorecard endpoint URL; enables OIDC auth on
 #                               /api/internal/scorecard-sweep. Separate from the notify
 #                               audience because an OIDC audience is the endpoint's own

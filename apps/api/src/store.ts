@@ -4,7 +4,6 @@ import type { AgentTaskState } from './agent-tasks.js';
 import type { PublicationRecord } from './games-store.js';
 import type { JobState, JobTransition } from './job-state.js';
 import type { BuildEvent, SubmissionStatus } from './submission-status.js';
-import { compareSuggestions, type StoredSuggestion } from './suggestions.js';
 
 /**
  * Uid namespace for automation accounts (docs/agent-access-tokens.md).
@@ -790,6 +789,90 @@ export interface Scorecard {
   untrusted: ScorecardUntrusted;
 }
 
+/**
+ * Where a suggestion is in its life (docs/improvement-loop-plan.md IL-3).
+ *
+ * Named for what this platform does, not for GitHub. `dispatched` and `published` were
+ * `issue-filed` and `merged` in the first draft — from a time when work reached an agent
+ * as an issue and shipped as a merge. Neither is true now: an improvement is a job we
+ * dispatch, and it goes live through the gate and review rather than through a merge.
+ *
+ * `no-implementer` is a state rather than an error: a creator who approved something
+ * deserves to see "nobody was available to do this" instead of an approval that appears
+ * to have worked and then silently does nothing.
+ *
+ * `obsolete` is the one the sweep can reach on its own — a defect that stopped showing up
+ * in the evidence. Closing it by measurement rather than leaving it open forever is what
+ * keeps an inbox from filling with problems that already went away.
+ */
+export type SuggestionStatus =
+  'proposed' | 'approved' | 'rejected' | 'dispatched' | 'no-implementer' | 'published' | 'measured' | 'obsolete';
+
+/** Statuses where nobody has decided yet, so the sweep may still revise or close them. */
+export const OPEN_SUGGESTION_STATUSES: readonly SuggestionStatus[] = ['proposed'];
+
+/**
+ * A persisted suggestion.
+ *
+ * **Deliberately carries no untrusted text.** The in-memory `Suggestion` the router
+ * returns has an `untrustedContext` block of game- and player-authored strings; this
+ * record drops it and keeps only `slug` + `computedFrom`, so a reader that wants those
+ * strings joins the *live* scorecard for them.
+ *
+ * That is a privacy decision, not a size one. Feedback themes are derived from player
+ * text, and the erase path works by making the nightly sweep recompute a scorecard
+ * without the erased rows. A suggestion that copied those strings would be a second
+ * place they live — one no sweep refreshes once the suggestion is closed, and one the
+ * erase path knows nothing about. Referencing beats copying: erasure keeps working
+ * through the machinery that already implements it.
+ */
+export interface SuggestionRecord {
+  id: string;
+  slug: string;
+  /** Null for the majority of the catalog that has no submission, so no creator to ask. */
+  ownerUid: string | null;
+  class: string;
+  priority: number;
+  /** Findings and metrics computed by this service. Safe to render and to interpolate. */
+  evidence: Array<{ finding: string; metrics: Record<string, number | null> }>;
+  status: SuggestionStatus;
+  /** Why it reached its current status, when a human or the sweep had a reason. */
+  statusReason?: string;
+  /**
+   * The job this became once an implementer was handed the work.
+   *
+   * A native improvement is a new job, so this is that job's id — which is also how the
+   * measurement pass finds out whether the work ever shipped. Only a legacy submission
+   * puts a GitHub issue number here, and that leg is on its way out.
+   */
+  jobId?: number;
+  /** Who decided, and when — so an approval is attributable rather than ambient. */
+  decidedBy?: string;
+  decidedAt?: string;
+  /**
+   * The hypothesis metric as it stood when the work was approved.
+   *
+   * Captured at approval rather than read back later, because the scorecard is a rolling
+   * window: by the time an improvement ships, the "before" it should be judged against
+   * has already been partly overwritten by play from during the change.
+   */
+  baseline?: { at: string; metrics: Record<string, number | null> };
+  /** When the job carrying this improvement went live. */
+  publishedAt?: string;
+  /** The verdict, once there is enough post-change play to reach one honestly. */
+  outcome?: {
+    at: string;
+    verdict: 'improved' | 'neutral' | 'regressed';
+    metric: string;
+    before: number | null;
+    after: number | null;
+  };
+  /** `computedAt` of the scorecard behind it, so a stale suggestion reads as stale. */
+  computedFrom: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type WaitlistStatus = 'pending' | 'approved' | 'rejected';
 
 export interface WaitlistEntry {
@@ -1000,8 +1083,22 @@ export interface Store {
   /**
    * Resolves a slug back to its submission — the lookup behind shareable draft
    * links. Returns null for a slug no submission has claimed.
+   *
+   * **Newest first when more than one job claims the slug**, which is now the normal
+   * case rather than a curiosity: an improvement is a new job on an existing game, so a
+   * published game plus an in-flight improvement is two submissions with one slug.
    */
   getSubmissionBySlug(slug: string): Promise<SubmissionRecord | null>;
+  /**
+   * The *published* submission for a slug, ignoring in-flight work on the same game.
+   *
+   * Separate from the lookup above because "who owns this game" and "what is the latest
+   * job touching it" stopped being the same question the moment improvements became new
+   * jobs. Asking the newest for ownership would mean a game with an improvement running
+   * reads as unpublished — and anything that treats unpublished as "no longer live"
+   * would quietly retract work it had just commissioned.
+   */
+  getPublishedSubmissionBySlug(slug: string): Promise<SubmissionRecord | null>;
   /**
    * Submissions the sweep should still check: those not yet in a terminal,
    * already-notified state (published / needs_changes recorded as last-notified).
@@ -1146,18 +1243,48 @@ export interface Store {
    */
   listScorecards(opts?: { limit?: number }): Promise<Scorecard[]>;
   /**
-   * Overwrites a game's current suggestion (docs/improvement-loop-plan.md IL-3).
+   * What the creator has allowed the platform to do to a game unasked (IL-4).
    *
-   * Overwrite rather than append, matching the scorecard: a suggestion is what the router
-   * says about the game *now*, and a nightly history of proposals nobody acted on is a
-   * collection that only grows. Approval state, when the inbox arrives, is a record of a
-   * human decision and belongs somewhere a recompute cannot erase it.
+   * Keyed by slug rather than by submission, like every other per-game fact, because a
+   * game now outlives the job that built it — an improvement is a new job, and a setting
+   * that lived on a submission would be silently forgotten the first time one ran.
    */
-  putSuggestion(slug: string, suggestion: StoredSuggestion): Promise<void>;
-  /** A game's current suggestion, or null before the first sweep has routed it. */
-  getSuggestion(slug: string): Promise<StoredSuggestion | null>;
-  /** Every game's current suggestion, worst first. Bounded, like the scorecard listing. */
-  listSuggestions(opts?: { limit?: number }): Promise<StoredSuggestion[]>;
+  getGameAutonomy(slug: string): Promise<string | null>;
+  setGameAutonomy(slug: string, mode: string): Promise<void>;
+  /**
+   * Deletes up to `limit` documents left by the superseded per-game suggestion sweep.
+   *
+   * One-shot cleanup, not a permanent feature. An earlier IL-3 slice wrote the router's
+   * whole output — including its `untrustedContext` block of game- and player-authored
+   * strings — to `games/{slug}/suggestion/current`, overwritten nightly. This design
+   * stores no untrusted text and joins the live scorecard instead, which is what keeps
+   * erasure working: a player who erases their signals drops out of the next nightly
+   * recomputation everywhere that reads it.
+   *
+   * Those documents are the exception. Nothing reads or refreshes them any more, and the
+   * erase path does not know they exist — so a player's words would sit frozen in them
+   * indefinitely. Deleting them is finishing the migration, not tidying.
+   *
+   * Returns how many were removed, so the sweep can report the drain once and then
+   * report nothing forever.
+   */
+  purgeLegacyGameSuggestions(limit: number): Promise<number>;
+  /** Writes a suggestion whole (docs/improvement-loop-plan.md IL-3). */
+  putSuggestion(record: SuggestionRecord): Promise<void>;
+  /** One suggestion by id, or null. */
+  getSuggestion(id: string): Promise<SuggestionRecord | null>;
+  /**
+   * Suggestions, newest first, optionally narrowed.
+   *
+   * Filtering happens in the query for `status` and `ownerUid` because those are the two
+   * a caller always has, and sorting happens in memory: a composite index per filter
+   * combination would be real infrastructure for a listing bounded by the catalog.
+   */
+  listSuggestions(opts?: {
+    status?: SuggestionStatus[];
+    ownerUid?: string;
+    limit?: number;
+  }): Promise<SuggestionRecord[]>;
   /**
    * Every slug that has a `games/{slug}` entry — including games whose document does
    * not exist but which have subcollections (votes, feedback, scorecard).
@@ -1244,6 +1371,28 @@ export function compareScorecards(a: Scorecard, b: Scorecard): number {
   return b.computedAt.localeCompare(a.computedAt) || a.slug.localeCompare(b.slug);
 }
 
+/**
+ * Presentation order for suggestions: worst first, then newest, then slug.
+ *
+ * Priority leads because this list is a queue of work rather than a log — the question
+ * it answers is "what should be looked at first". `createdAt` and `slug` follow for the
+ * same reason `compareScorecards` needs a tie-break: one sweep stamps a single timestamp
+ * across every row it writes, and equal priorities are common (every `proposed` defect
+ * on a game with the same session count sorts alike), so without them the queue would
+ * reshuffle between reads.
+ *
+ * Shared by both stores so the in-memory one used by tests cannot disagree with the
+ * Firestore one used in production.
+ */
+export function compareSuggestions(a: SuggestionRecord, b: SuggestionRecord): number {
+  return (
+    b.priority - a.priority ||
+    b.createdAt.localeCompare(a.createdAt) ||
+    a.slug.localeCompare(b.slug) ||
+    a.id.localeCompare(b.id)
+  );
+}
+
 /** A zeroed counter set — the shape every usage read falls back to. */
 function emptyUsageCounters(): UsageCounters {
   return {
@@ -1296,8 +1445,9 @@ export class InMemoryStore implements Store {
   private worldEntries = new Map<string, Map<string, WorldEntryRecord>>();
   // slug -> current scorecard
   private scorecards = new Map<string, Scorecard>();
-  // slug -> current suggestion
-  private suggestions = new Map<string, StoredSuggestion>();
+  private suggestions = new Map<string, SuggestionRecord>();
+  private gameAutonomy = new Map<string, string>();
+  private legacyGameSuggestions = new Set<string>();
   // tokenId -> personal access token record
   private accessTokens = new Map<string, AccessTokenRecord>();
 
@@ -1468,7 +1618,19 @@ export class InMemoryStore implements Store {
   }
 
   async getSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {
-    const match = Array.from(this.submissions.values()).find((s) => s.slug === slug);
+    // Newest first, matching the Firestore implementation. It used to take whatever
+    // `find` reached first, which agreed with production only while a slug never had
+    // more than one job — no longer true now that an improvement is a new job.
+    const match = Array.from(this.submissions.values())
+      .filter((s) => s.slug === slug)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    return match ? { ...match } : null;
+  }
+
+  async getPublishedSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {
+    const match = Array.from(this.submissions.values())
+      .filter((s) => s.slug === slug && s.publishedAt && !s.abandonedAt)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
     return match ? { ...match } : null;
   }
 
@@ -2086,20 +2248,55 @@ export class InMemoryStore implements Store {
       .slice(0, opts?.limit ?? 200);
   }
 
-  async putSuggestion(slug: string, suggestion: StoredSuggestion): Promise<void> {
-    this.suggestions.set(slug, structuredClone(suggestion));
+  async getGameAutonomy(slug: string): Promise<string | null> {
+    return this.gameAutonomy.get(slug) ?? null;
   }
 
-  async getSuggestion(slug: string): Promise<StoredSuggestion | null> {
-    const found = this.suggestions.get(slug);
+  async purgeLegacyGameSuggestions(limit: number): Promise<number> {
+    const doomed = [...this.legacyGameSuggestions].slice(0, limit);
+    for (const slug of doomed) this.legacyGameSuggestions.delete(slug);
+    return doomed.length;
+  }
+
+  /**
+   * Seeds a legacy per-game suggestion doc.
+   *
+   * Deliberately **not** on the `Store` interface: nothing in the product writes these
+   * any more, and adding a writer for something only the purge should touch would invite
+   * one. It exists so a test can prove the purge removes what production will find.
+   */
+  seedLegacyGameSuggestion(slug: string): void {
+    this.legacyGameSuggestions.add(slug);
+  }
+
+  async setGameAutonomy(slug: string, mode: string): Promise<void> {
+    this.gameAutonomy.set(slug, mode);
+  }
+
+  async putSuggestion(record: SuggestionRecord): Promise<void> {
+    this.suggestions.set(record.id, structuredClone(record));
+  }
+
+  async getSuggestion(id: string): Promise<SuggestionRecord | null> {
+    const found = this.suggestions.get(id);
     return found ? structuredClone(found) : null;
   }
 
-  async listSuggestions(opts?: { limit?: number }): Promise<StoredSuggestion[]> {
+  async listSuggestions(opts?: {
+    status?: SuggestionStatus[];
+    ownerUid?: string;
+    limit?: number;
+  }): Promise<SuggestionRecord[]> {
+    const wanted = opts?.status ? new Set(opts.status) : null;
     return [...this.suggestions.values()]
-      .map((suggestion) => structuredClone(suggestion))
+      .filter((record) => (wanted ? wanted.has(record.status) : true))
+      .filter((record) => (opts?.ownerUid ? record.ownerUid === opts.ownerUid : true))
+      .map((record) => structuredClone(record))
       .sort(compareSuggestions)
-      .slice(0, opts?.limit ?? 200);
+      // No limit means every match, matching Firestore's paged read. Defaulting to a
+      // number here would make the in-memory store agree with production only while the
+      // collection stayed small — the divergence that hides until it matters.
+      .slice(0, opts?.limit ?? Number.MAX_SAFE_INTEGER);
   }
 
   async listGameSlugs(): Promise<string[]> {
@@ -2711,6 +2908,18 @@ export class FirestoreStore implements Store {
     // directory, but if two submissions ever raced onto one, the newest wins.
     const snap = await this.db.collection('submissions').where('slug', '==', slug).get();
     const records = snap.docs.map((d) => d.data() as SubmissionRecord);
+    records.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return records[0] ?? null;
+  }
+
+  async getPublishedSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {
+    // Same single-field query, filtered in memory: adding `where('publishedAt','!=',null)`
+    // would need a composite index for a result set already bounded by how many jobs have
+    // touched one game.
+    const snap = await this.db.collection('submissions').where('slug', '==', slug).get();
+    const records = snap.docs
+      .map((d) => d.data() as SubmissionRecord)
+      .filter((record) => record.publishedAt && !record.abandonedAt);
     records.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return records[0] ?? null;
   }
@@ -3395,39 +3604,6 @@ export class FirestoreStore implements Store {
     return snap.docs.map((doc) => doc.data() as Scorecard).sort(compareScorecards);
   }
 
-  // Under the game, beside the scorecard, for the reason `setPublication` gives: a
-  // takedown that has to remember to visit a second place is a takedown that eventually
-  // misses one. `current` is again a fixed doc id, so a game has exactly one suggestion.
-  private suggestionRef(slug: string) {
-    return this.gameRef(slug).collection('suggestion').doc('current');
-  }
-
-  async putSuggestion(slug: string, suggestion: StoredSuggestion): Promise<void> {
-    // `set` without merge, like the scorecard: a suggestion is a whole judgement, and a
-    // merge would leave last night's evidence array alive under this night's class.
-    await this.suggestionRef(slug).set(suggestion);
-  }
-
-  async getSuggestion(slug: string): Promise<StoredSuggestion | null> {
-    const snap = await this.suggestionRef(slug).get();
-    return snap.exists ? (snap.data() as StoredSuggestion) : null;
-  }
-
-  async listSuggestions(opts?: { limit?: number }): Promise<StoredSuggestion[]> {
-    // Deliberately **no** `orderBy`. Firestore auto-indexes single fields at COLLECTION
-    // scope only, never COLLECTION_GROUP, so ordering this group by any field would need
-    // a hand-provisioned index — the exact 9 FAILED_PRECONDITION that took the whole
-    // operator page down when `scorecard.computedAt` was added (infra/setup-gcp.sh step
-    // 7/8). Without one, the query is implicitly ordered by `__name__`, which is always
-    // indexed, so the limit takes the first N games by slug: deterministic, and a fair
-    // cut when one sweep writes every doc in the same pass. Priority order is restored
-    // below, where it costs nothing.
-    const snap = await this.db
-      .collectionGroup('suggestion')
-      .limit(opts?.limit ?? 200)
-      .get();
-    return snap.docs.map((doc) => doc.data() as StoredSuggestion).sort(compareSuggestions);
-  }
 
   async listGameSlugs(): Promise<string[]> {
     // `listDocuments()` rather than `get()`: it lists references without reading
@@ -3469,6 +3645,90 @@ export class FirestoreStore implements Store {
   async getScorecard(slug: string): Promise<Scorecard | null> {
     const snap = await this.scorecardRef(slug).get();
     return snap.exists ? (snap.data() as Scorecard) : null;
+  }
+
+  // Top-level rather than under `games/{slug}`: a suggestion is read as a queue across
+  // every game ("what needs attention") far more often than per game, and a collection
+  // group would be the third one in this schema for no gain over a plain collection.
+  private suggestionRef(id: string) {
+    return this.db.collection('suggestions').doc(id);
+  }
+
+  async purgeLegacyGameSuggestions(limit: number): Promise<number> {
+    // A bare collection-group read needs no custom index — no filter, no ordering — so
+    // this finds the leftovers wherever they are rather than only under games that still
+    // have a scorecard. A game whose scorecard has since expired is exactly the one whose
+    // stale copy nobody would otherwise reach.
+    const snap = await this.db.collectionGroup('suggestion').limit(limit).get();
+    if (snap.empty) return 0;
+    const batch = this.db.batch();
+    for (const doc of snap.docs) batch.delete(doc.ref);
+    await batch.commit();
+    return snap.size;
+  }
+
+  async getGameAutonomy(slug: string): Promise<string | null> {
+    const snap = await this.gameRef(slug).get();
+    return (snap.data() as { autonomy?: string } | undefined)?.autonomy ?? null;
+  }
+
+  async setGameAutonomy(slug: string, mode: string): Promise<void> {
+    // Merge: the game document carries other per-game facts, and a whole-document write
+    // here would drop them.
+    await this.gameRef(slug).set({ autonomy: mode }, { merge: true });
+  }
+
+  async putSuggestion(record: SuggestionRecord): Promise<void> {
+    // Whole-document `set`, like a scorecard: a suggestion is a snapshot of one routing
+    // decision, and merging would leave evidence from a previous window sitting beside a
+    // newer status.
+    await this.suggestionRef(record.id).set(stripUndefined(record));
+  }
+
+  async getSuggestion(id: string): Promise<SuggestionRecord | null> {
+    const snap = await this.suggestionRef(id).get();
+    return snap.exists ? (snap.data() as SuggestionRecord) : null;
+  }
+
+  async listSuggestions(opts?: {
+    status?: SuggestionStatus[];
+    ownerUid?: string;
+    limit?: number;
+  }): Promise<SuggestionRecord[]> {
+    let query: FirebaseFirestore.Query = this.db.collection('suggestions');
+    // `in` caps at 30 values and there are 8 statuses, so this never needs chunking.
+    if (opts?.status?.length) query = query.where('status', 'in', opts.status);
+    if (opts?.ownerUid) query = query.where('ownerUid', '==', opts.ownerUid);
+
+    // Deliberately **no** `orderBy`: combining one with these equality filters is exactly
+    // what needs a composite index per filter combination. Without one the query is
+    // implicitly ordered by `__name__`, which is always indexed — deterministic, but
+    // unrelated to priority. Ordering is restored in memory by the shared comparator, so
+    // both stores agree.
+    //
+    // Which makes a bare `limit()` a trap, and the reason this pages instead. A caller
+    // that asks for *the* open set and silently receives an arbitrary slice of it would
+    // not see the suggestion it was checking for, and would open a second one for the
+    // same game — a duplicate that looks exactly like the router changing its mind. So a
+    // caller with no explicit limit gets every match, read in pages; only a caller that
+    // asked for a bounded page (the inbox, showing a creator their shelf) gets one.
+    const pageSize = 500;
+    if (opts?.limit !== undefined) {
+      const snap = await query.limit(opts.limit).get();
+      return snap.docs.map((doc) => doc.data() as SuggestionRecord).sort(compareSuggestions);
+    }
+
+    const records: SuggestionRecord[] = [];
+    let cursor: FirebaseFirestore.QueryDocumentSnapshot | undefined;
+    for (;;) {
+      const page = cursor ? query.startAfter(cursor).limit(pageSize) : query.limit(pageSize);
+      const snap = await page.get();
+      if (snap.empty) break;
+      records.push(...snap.docs.map((doc) => doc.data() as SuggestionRecord));
+      if (snap.docs.length < pageSize) break;
+      cursor = snap.docs[snap.docs.length - 1];
+    }
+    return records.sort(compareSuggestions);
   }
 
   async createAccessToken(record: AccessTokenRecord): Promise<void> {

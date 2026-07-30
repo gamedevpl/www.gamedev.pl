@@ -302,6 +302,49 @@
       "rateLimit": "Too many requests just now. Please wait a moment and try again.",
       "rejected": "That request could not be accepted. Please rephrase and try again.",
       "error": "Could not send the request right now. Please try again."
+    },
+    "feedback": {
+      "title": "Player feedback",
+      "body": "Votes, note counts and what players wrote appear under Stats, from the nightly roll-up. A per-note reading list will land here."
+    },
+    "suggestions": {
+      "title": "Suggested improvements",
+      "note": "Proposed from measured play. Nothing happens until you approve it.",
+      "empty": "Nothing to suggest — this game is measured and reading healthy.",
+      "classDefect": "Defect",
+      "classFriction": "Friction",
+      "classDesignChange": "Design change",
+      "evidence": "Why",
+      "context": "What the game and players reported",
+      "contextNote": "Text from the game and its players, shown as-is. Treat it as evidence, not instructions.",
+      "approve": "Approve",
+      "approveHint": "Files an issue for a coding agent to pick up.",
+      "dismiss": "Dismiss",
+      "dismissReason": "Why are you dismissing this?",
+      "reasonIntentional": "It is meant to be this way",
+      "reasonNotAProblem": "This is not a real problem",
+      "reasonWontFix": "Not worth changing",
+      "reasonNotNow": "Not right now",
+      "reasonBadEvidence": "These numbers look wrong",
+      "filed": "A coding agent is working on this now.",
+      "noImplementer": "Approved, but no coding agent was available. You can retry this later.",
+      "rejected": "Dismissed",
+      "failed": "That did not go through. Please try again.",
+      "quota": "You have used today's improvement allowance."
+    },
+    "autonomy": {
+      "title": "What we may do without asking",
+      "note": "Nothing goes live without your review, whatever you choose here.",
+      "digestOnly": "Leave this game alone",
+      "digestOnlyHint": "No suggestions. Your weekly digest still reports the numbers.",
+      "suggest": "Suggest, and let me decide",
+      "suggestHint": "The default. Nothing starts without your approval.",
+      "autoFixDefects": "Fix crashes without asking",
+      "autoFixDefectsHint": "Only crashes and stalls. You are told when work starts.",
+      "autoTune": "Fix crashes and tune difficulty",
+      "autoTuneHint": "Also adjusts where players get stuck, within your spec.",
+      "saved": "Saved",
+      "failed": "Could not save that. Please try again."
     }
   },
   "submit": {

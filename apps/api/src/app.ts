@@ -33,8 +33,13 @@ import { registerNotificationRoutes } from './notifications.js';
 import { registerPlayerFeedbackRoutes, type PlayerFeedbackRoutesOptions } from './player-feedback.js';
 import { registerPushRoutes } from './push-routes.js';
 import { registerDigestRoutes, type DigestRoutesOptions } from './digest.js';
+import { registerSuggestionSweepRoutes, type SuggestionSweepRoutesOptions } from './suggestion-sweep.js';
+import {
+  buildImprovementBrief,
+  registerSuggestionInboxRoutes,
+  type SuggestionInboxRoutesOptions,
+} from './suggestion-inbox.js';
 import { registerScorecardRoutes, type ScorecardRoutesOptions } from './scorecard.js';
-import { registerSuggestionRoutes, type SuggestionRoutesOptions } from './suggestion-sweep.js';
 import { createInternalAuthVerifierFromEnv } from './internal-auth.js';
 import { registerRefineRoute, type SpecRefiner } from './refine.js';
 import { InMemoryStore, type Store } from './store.js';
@@ -88,7 +93,9 @@ export interface BuildAppOptions {
   /** Seams for the nightly scorecard sweep; defaults to OIDC-or-deny-all from env. */
   scorecardRoutes?: Partial<Omit<ScorecardRoutesOptions, 'store'>>;
   digestRoutes?: Partial<Omit<DigestRoutesOptions, 'store'>>;
-  suggestionRoutes?: Partial<Omit<SuggestionRoutesOptions, 'store'>>;
+  suggestionSweepRoutes?: Partial<Omit<SuggestionSweepRoutesOptions, 'store'>>;
+  /** Seams for the creator suggestion inbox; the GitHub client is shared with submissions. */
+  suggestionInboxRoutes?: Partial<Omit<SuggestionInboxRoutesOptions, 'store'>>;
   /** Seams for the public contact form (mailer fake in tests). */
   contactRoutes?: ContactRoutesOptions;
   // Private beta allowlist — uids (comma-separated) allowed to sign in and access gated routes
@@ -179,7 +186,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     adminUids,
   });
 
-  await registerSubmissionRoutes(app, {
+  const submissionSeams = await registerSubmissionRoutes(app, {
     ...options.submissionRoutes,
     store,
     contentChecker,
@@ -376,14 +383,28 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     ...options.digestRoutes,
   });
 
-  // The nightly Suggest step (docs/improvement-loop-plan.md IL-3): runs the router over
-  // the scorecards the Distill sweep wrote and persists what it says. Scheduled after the
-  // scorecard sweep for the obvious reason — routing last night's numbers is a job that
-  // succeeds while saying nothing true. Files nothing, notifies nobody.
-  await registerSuggestionRoutes(app, {
+  // The analyst run (docs/improvement-loop-plan.md IL-3): persists what the router says
+  // about the scorecards above, reconciling against the open set so a problem that lasts
+  // a month is one card rather than thirty. Files nothing and notifies nobody — approval
+  // is a separate human step.
+  await registerSuggestionSweepRoutes(app, {
     store,
     internalAuthVerifier: createInternalAuthVerifierFromEnv(process.env, 'suggestionSweep'),
-    ...options.suggestionRoutes,
+    // IL-4: the sweep can start work itself, but only for games whose creator opted in.
+    // Same dispatch path as an approval, so autonomous and human-approved work cannot
+    // reach an agent by different routes.
+    startImprovementRound: submissionSeams.startImprovementRound,
+    buildBrief: buildImprovementBrief,
+    ...options.suggestionSweepRoutes,
+  });
+
+  // Where a human decides (docs/improvement-loop-plan.md IL-3 creator surface). Files
+  // through the same games-repo client the submission routes resolved, so approving a
+  // suggestion and requesting an improvement cannot disagree about where issues go.
+  await registerSuggestionInboxRoutes(app, {
+    store,
+    startImprovementRound: submissionSeams.startImprovementRound,
+    ...options.suggestionInboxRoutes,
   });
 
   // Issuing personal access tokens (docs/agent-access-tokens.md) — the credential that

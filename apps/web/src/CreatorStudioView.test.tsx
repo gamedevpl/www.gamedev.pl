@@ -10,6 +10,11 @@ import type { StudioGame, StudioScorecard } from './studioApi.js';
 const fetchStudioGames = vi.fn();
 const fetchStudioHealth = vi.fn();
 const fetchStudioScorecards = vi.fn();
+const fetchStudioSuggestions = vi.fn();
+const approveSuggestion = vi.fn();
+const dismissSuggestion = vi.fn();
+const fetchGameAutonomy = vi.fn();
+const setGameAutonomy = vi.fn();
 let authUser: { uid: string; name: string } | null = null;
 
 vi.mock('./AuthContext', () => ({
@@ -23,6 +28,11 @@ vi.mock('./studioApi', async () => {
     fetchStudioGames: (...args: unknown[]) => fetchStudioGames(...args),
     fetchStudioHealth: (...args: unknown[]) => fetchStudioHealth(...args),
     fetchStudioScorecards: (...args: unknown[]) => fetchStudioScorecards(...args),
+    fetchStudioSuggestions: (...args: unknown[]) => fetchStudioSuggestions(...args),
+    approveSuggestion: (...args: unknown[]) => approveSuggestion(...args),
+    dismissSuggestion: (...args: unknown[]) => dismissSuggestion(...args),
+    fetchGameAutonomy: (...args: unknown[]) => fetchGameAutonomy(...args),
+    setGameAutonomy: (...args: unknown[]) => setGameAutonomy(...args),
     submitImprovement: vi.fn(),
   };
 });
@@ -57,6 +67,7 @@ async function renderStudio(props: Partial<Parameters<typeof CreatorStudioView>[
     await fetchStudioGames.mock.results[0]?.value;
     await fetchStudioHealth.mock.results[0]?.value;
     await fetchStudioScorecards.mock.results[0]?.value;
+    await fetchStudioSuggestions.mock.results[0]?.value;
   });
   return { container, root, onNavigate };
 }
@@ -69,6 +80,13 @@ describe('CreatorStudioView', () => {
     fetchStudioHealth.mockResolvedValue({ days: [], truncated: false, games: [] });
     fetchStudioScorecards.mockReset();
     fetchStudioScorecards.mockResolvedValue([]);
+    fetchStudioSuggestions.mockReset();
+    fetchStudioSuggestions.mockResolvedValue([]);
+    approveSuggestion.mockReset();
+    dismissSuggestion.mockReset();
+    fetchGameAutonomy.mockReset();
+    fetchGameAutonomy.mockRejectedValue(new Error('not owned'));
+    setGameAutonomy.mockReset();
   });
 
   afterEach(() => {
@@ -255,6 +273,13 @@ describe('CreatorStudioView — what players think', () => {
     fetchStudioHealth.mockResolvedValue({ days: [], truncated: false, games: [] });
     fetchStudioScorecards.mockReset();
     fetchStudioScorecards.mockResolvedValue([]);
+    fetchStudioSuggestions.mockReset();
+    fetchStudioSuggestions.mockResolvedValue([]);
+    approveSuggestion.mockReset();
+    dismissSuggestion.mockReset();
+    fetchGameAutonomy.mockReset();
+    fetchGameAutonomy.mockRejectedValue(new Error('not owned'));
+    setGameAutonomy.mockReset();
   });
 
   afterEach(() => {
@@ -275,6 +300,146 @@ describe('CreatorStudioView — what players think', () => {
     }
     return { container, root };
   }
+
+  describe('suggested improvements', () => {
+    function suggestion(partial: Record<string, unknown> = {}) {
+      return {
+        id: 'sug-sky-dodge-defect-1',
+        slug: 'sky-dodge',
+        class: 'defect',
+        priority: 40,
+        evidence: [{ finding: '40 uncaught errors across 100 sessions.', metrics: { errors: 40 } }],
+        status: 'proposed',
+        computedFrom: '2026-07-28T03:00:00.000Z',
+        createdAt: '2026-07-28T03:10:00.000Z',
+        untrustedContext: null,
+        ...partial,
+      };
+    }
+
+    it('shows the evidence and offers a decision', async () => {
+      fetchStudioSuggestions.mockResolvedValue([suggestion()]);
+
+      const { container, root } = await openStats();
+
+      expect(container.textContent).toContain('Suggested improvements');
+      expect(container.textContent).toContain('40 uncaught errors across 100 sessions.');
+      expect(container.textContent).toContain('Approve');
+      root.unmount();
+    });
+
+    it('renders what a game reported as text, never as markup', async () => {
+      // Same guarantee the feedback themes above already carry: an error message is a
+      // string a game chose to emit, and this surface is one an operator reads.
+      fetchStudioSuggestions.mockResolvedValue([
+        suggestion({
+          untrustedContext: {
+            errorSamples: [{ message: '<img src=x onerror=alert(1)>', count: 3 }],
+            progressLabels: [],
+            feedbackThemes: [],
+          },
+        }),
+      ]);
+
+      const { container, root } = await openStats();
+
+      expect(container.textContent).toContain('<img src=x onerror=alert(1)>');
+      expect(container.querySelector('img')).toBeNull();
+      root.unmount();
+    });
+
+    it('tells the creator their approval counted even when no agent was available', async () => {
+      // The whole reason `no-implementer` is a state rather than an error. Reporting a
+      // failure here would make Approve look like it silently did nothing.
+      fetchStudioSuggestions.mockResolvedValue([suggestion()]);
+      approveSuggestion.mockResolvedValue(suggestion({ status: 'no-implementer' }));
+
+      const { container, root } = await openStats();
+      const approve = Array.from(container.querySelectorAll('button')).find(
+        (button) => button.textContent?.trim() === 'Approve',
+      );
+      await act(async () => {
+        approve?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+
+      expect(container.textContent).toContain('no coding agent was available');
+      root.unmount();
+    });
+
+    it('asks why before dismissing, and sends the reason', async () => {
+      fetchStudioSuggestions.mockResolvedValue([suggestion()]);
+      dismissSuggestion.mockResolvedValue(suggestion({ status: 'rejected', statusReason: 'intentional' }));
+
+      const { container, root } = await openStats();
+      const dismiss = Array.from(container.querySelectorAll('button')).find(
+        (button) => button.textContent?.trim() === 'Dismiss',
+      );
+      await act(async () => {
+        dismiss?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      expect(container.textContent).toContain('Why are you dismissing this?');
+
+      const reason = Array.from(container.querySelectorAll('button')).find(
+        (button) => button.textContent?.trim() === 'It is meant to be this way',
+      );
+      await act(async () => {
+        reason?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+
+      expect(dismissSuggestion).toHaveBeenCalledWith('sug-sky-dodge-defect-1', 'intentional');
+      root.unmount();
+    });
+
+    it('stays out of the way when the router has nothing to say', async () => {
+      fetchStudioSuggestions.mockResolvedValue([]);
+
+      const { container, root } = await openStats();
+
+      expect(container.textContent).not.toContain('Suggested improvements');
+      root.unmount();
+    });
+  });
+
+  describe('autonomy permission', () => {
+    it('shows the creator what may happen without asking, and reassures about publishing', async () => {
+      fetchGameAutonomy.mockResolvedValue('suggest');
+
+      const { container, root } = await openStats();
+
+      expect(container.textContent).toContain('What we may do without asking');
+      // The reassurance is load-bearing: it is a property of the job state machine, not a
+      // promise, and a creator deciding this needs to know it.
+      expect(container.textContent).toContain('Nothing goes live without your review');
+      expect(container.textContent).toContain('Suggest, and let me decide');
+      root.unmount();
+    });
+
+    it('saves the choice the creator makes', async () => {
+      fetchGameAutonomy.mockResolvedValue('suggest');
+      setGameAutonomy.mockResolvedValue('auto-fix-defects');
+
+      const { container, root } = await openStats();
+      const option = Array.from(container.querySelectorAll('label')).find((label) =>
+        label.textContent?.includes('Fix crashes without asking'),
+      );
+      const radio = option?.querySelector('input');
+      await act(async () => {
+        radio?.click();
+      });
+
+      expect(setGameAutonomy).toHaveBeenCalledWith('sky-dodge', 'auto-fix-defects');
+      root.unmount();
+    });
+
+    it('shows nothing at all when the setting cannot be read', async () => {
+      // A game the creator does not own, or a deployment without the route. It must not
+      // take the stats page down with it.
+      const { container, root } = await openStats();
+
+      expect(container.textContent).not.toContain('What we may do without asking');
+      root.unmount();
+    });
+  });
 
   it('shows votes, note count and what players wrote', async () => {
     fetchStudioScorecards.mockResolvedValue([scorecard()]);

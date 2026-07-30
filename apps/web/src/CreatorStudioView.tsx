@@ -17,13 +17,20 @@ import {
 } from './studioShelf.js';
 import { SubmissionStatusView } from './SubmissionStatusView.js';
 import {
+  approveSuggestion,
+  dismissSuggestion,
   fetchStudioGames,
   fetchStudioHealth,
   fetchStudioScorecards,
+  fetchStudioSuggestions,
+  fetchGameAutonomy,
+  setGameAutonomy,
   submitImprovement,
   type StudioApiError,
   type StudioGame,
   type StudioScorecard,
+  type StudioSuggestion,
+  type AutonomyMode,
 } from './studioApi.js';
 
 /**
@@ -826,6 +833,10 @@ function StatsTab({
 
       <PlayerReactions scorecard={scorecard} />
 
+      <SuggestedImprovements slug={game.slug} />
+
+      <AutonomySetting slug={game.slug} />
+
       {health && health.errorSamples.length > 0 ? (
         <div className="studio-error-samples">
           <h3 className="health-section-title">{t('studioPanel.stats.errorSamples')}</h3>
@@ -903,6 +914,266 @@ function PlayerReactions({ scorecard }: { scorecard: StudioScorecard | null }) {
     </div>
   );
 }
+
+/**
+ * The suggestion inbox for one game (docs/improvement-loop-plan.md IL-3).
+ *
+ * Cards read insight → evidence → decide. Two things are deliberate here.
+ *
+ * The **evidence** the platform measured is stated plainly, while the game's and players'
+ * own words sit in a separate block labelled as such. React escapes both, so neither is
+ * a markup risk; the separation is about not letting a string somebody else chose read
+ * as though this platform were asserting it.
+ *
+ * **Approving can succeed without an implementer.** The API records the decision and
+ * reports `no-implementer` when the coding agent could not be reached, so this renders
+ * that as a real outcome with a retry rather than as a failure — the creator's click
+ * counted either way.
+ */
+function SuggestedImprovements({ slug }: { slug: string | undefined }) {
+  const { t } = useTranslation();
+  const [suggestions, setSuggestions] = useState<StudioSuggestion[] | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [dismissing, setDismissing] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchStudioSuggestions()
+      .then((rows) => {
+        if (!cancelled) setSuggestions(rows);
+      })
+      // A queue that fails to load must not take the stats page down with it.
+      .catch(() => {
+        if (!cancelled) setSuggestions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const mine = useMemo(
+    () => (suggestions ?? []).filter((entry) => entry.slug === slug && entry.status === 'proposed'),
+    [suggestions, slug],
+  );
+
+  const replace = (updated: StudioSuggestion) =>
+    setSuggestions((rows) => (rows ?? []).map((row) => (row.id === updated.id ? updated : row)));
+
+  const decided = (suggestions ?? []).filter(
+    (entry) => entry.slug === slug && (entry.status === 'dispatched' || entry.status === 'no-implementer'),
+  );
+
+  async function act(id: string, run: () => Promise<StudioSuggestion>) {
+    setBusyId(id);
+    setError(null);
+    try {
+      replace(await run());
+      setDismissing(null);
+    } catch (caught) {
+      const status = (caught as { status?: number }).status;
+      setError(status === 429 ? t('studioPanel.suggestions.quota') : t('studioPanel.suggestions.failed'));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  if (suggestions === null || (mine.length === 0 && decided.length === 0)) return null;
+
+  return (
+    <div className="studio-suggestions">
+      <h3 className="health-section-title">{t('studioPanel.suggestions.title')}</h3>
+      <p className="health-note">{t('studioPanel.suggestions.note')}</p>
+      {error ? <p className="studio-error">{error}</p> : null}
+
+      {decided.map((entry) => (
+        <p key={entry.id} className="studio-suggestion-outcome">
+          {entry.status === 'dispatched'
+            ? t('studioPanel.suggestions.filed')
+            : t('studioPanel.suggestions.noImplementer')}
+        </p>
+      ))}
+
+      {mine.map((entry) => (
+        <article key={entry.id} className="studio-suggestion">
+          <h4 className="studio-suggestion-class">{classLabel(entry.class, t)}</h4>
+
+          <ul className="studio-suggestion-evidence">
+            {entry.evidence.map((item) => (
+              <li key={item.finding}>{item.finding}</li>
+            ))}
+          </ul>
+
+          <SuggestionContext context={entry.untrustedContext} />
+
+          {dismissing === entry.id ? (
+            <div className="studio-suggestion-reasons">
+              <p>{t('studioPanel.suggestions.dismissReason')}</p>
+              {DISMISS_REASON_KEYS.map(([reason, key]) => (
+                <button
+                  key={reason}
+                  type="button"
+                  className="studio-suggestion-reason"
+                  disabled={busyId === entry.id}
+                  onClick={() => act(entry.id, () => dismissSuggestion(entry.id, reason))}
+                >
+                  {t(key)}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="studio-suggestion-actions">
+              <button
+                type="button"
+                className="studio-suggestion-approve"
+                disabled={busyId === entry.id}
+                onClick={() => act(entry.id, () => approveSuggestion(entry.id))}
+                title={t('studioPanel.suggestions.approveHint')}
+              >
+                {t('studioPanel.suggestions.approve')}
+              </button>
+              <button
+                type="button"
+                className="studio-suggestion-dismiss"
+                disabled={busyId === entry.id}
+                onClick={() => setDismissing(entry.id)}
+              >
+                {t('studioPanel.suggestions.dismiss')}
+              </button>
+            </div>
+          )}
+        </article>
+      ))}
+    </div>
+  );
+}
+
+/** The fixed dismissal vocabulary the API accepts, paired with its translation key. */
+const DISMISS_REASON_KEYS: Array<[string, string]> = [
+  ['intentional', 'studioPanel.suggestions.reasonIntentional'],
+  ['not-a-problem', 'studioPanel.suggestions.reasonNotAProblem'],
+  ['wont-fix', 'studioPanel.suggestions.reasonWontFix'],
+  ['not-now', 'studioPanel.suggestions.reasonNotNow'],
+  ['bad-evidence', 'studioPanel.suggestions.reasonBadEvidence'],
+];
+
+function classLabel(suggestionClass: string, t: (key: string) => string): string {
+  if (suggestionClass === 'defect') return t('studioPanel.suggestions.classDefect');
+  if (suggestionClass === 'friction') return t('studioPanel.suggestions.classFriction');
+  if (suggestionClass === 'design-change') return t('studioPanel.suggestions.classDesignChange');
+  return suggestionClass;
+}
+
+/** Game- and player-authored strings, kept visually separate from what we measured. */
+function SuggestionContext({ context }: { context: StudioSuggestion['untrustedContext'] }) {
+  const { t } = useTranslation();
+  const samples = context?.errorSamples ?? [];
+  const themes = context?.feedbackThemes ?? [];
+  if (!samples.length && !themes.length) return null;
+
+  return (
+    <div className="studio-suggestion-context">
+      <h5 className="studio-themes-title">{t('studioPanel.suggestions.context')}</h5>
+      <p className="health-note">{t('studioPanel.suggestions.contextNote')}</p>
+      <ul className="studio-theme-list">
+        {samples.map((sample) => (
+          <li key={sample.message}>
+            {sample.message} <span className="health-error-count">×{sample.count}</span>
+          </li>
+        ))}
+        {themes.map((theme) => (
+          <li key={theme.theme}>
+            {theme.theme} <span className="health-error-count">×{theme.count}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * What the platform may do to this game without asking (IL-4).
+ *
+ * Framed as permission rather than as a feature toggle, and it says the reassuring part
+ * out loud: nothing reaches the site without the creator's review whatever they pick.
+ * That is not marketing — `publishing` is reachable only from `ready_for_review` in the
+ * job state machine, so it is a property of the system rather than a promise about it.
+ */
+function AutonomySetting({ slug }: { slug: string | undefined }) {
+  const { t } = useTranslation();
+  const [mode, setMode] = useState<AutonomyMode | null>(null);
+  const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  useEffect(() => {
+    if (!slug) return;
+    let cancelled = false;
+    fetchGameAutonomy(slug)
+      .then((value) => {
+        if (!cancelled) setMode(value);
+      })
+      // A game the creator does not own, or a deployment without this route, simply has
+      // no control to show — it must not break the stats page around it.
+      .catch(() => {
+        if (!cancelled) setMode(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
+
+  if (!slug || mode === null) return null;
+
+  async function choose(next: AutonomyMode) {
+    if (!slug) return;
+    const previous = mode;
+    setMode(next);
+    setState('saving');
+    try {
+      setMode(await setGameAutonomy(slug, next));
+      setState('saved');
+    } catch {
+      // Put it back rather than leave the control showing a setting that is not stored.
+      setMode(previous);
+      setState('error');
+    }
+  }
+
+  return (
+    <div className="studio-autonomy">
+      <h3 className="health-section-title">{t('studioPanel.autonomy.title')}</h3>
+      <p className="health-note">{t('studioPanel.autonomy.note')}</p>
+      <ul className="studio-autonomy-options">
+        {AUTONOMY_CHOICES.map(([value, labelKey, hintKey]) => (
+          <li key={value}>
+            <label className={value === mode ? 'studio-autonomy-option is-active' : 'studio-autonomy-option'}>
+              <input
+                type="radio"
+                name={`autonomy-${slug}`}
+                checked={value === mode}
+                disabled={state === 'saving'}
+                onChange={() => choose(value)}
+              />
+              <span>
+                <strong>{t(labelKey)}</strong>
+                <small>{t(hintKey)}</small>
+              </span>
+            </label>
+          </li>
+        ))}
+      </ul>
+      {state === 'error' ? <p className="studio-error">{t('studioPanel.autonomy.failed')}</p> : null}
+      {state === 'saved' ? <p className="studio-autonomy-saved">{t('studioPanel.autonomy.saved')}</p> : null}
+    </div>
+  );
+}
+
+/** Ordered least to most permission, so the list reads as a scale rather than a menu. */
+const AUTONOMY_CHOICES: Array<[AutonomyMode, string, string]> = [
+  ['digest-only', 'studioPanel.autonomy.digestOnly', 'studioPanel.autonomy.digestOnlyHint'],
+  ['suggest', 'studioPanel.autonomy.suggest', 'studioPanel.autonomy.suggestHint'],
+  ['auto-fix-defects', 'studioPanel.autonomy.autoFixDefects', 'studioPanel.autonomy.autoFixDefectsHint'],
+  ['auto-tune', 'studioPanel.autonomy.autoTune', 'studioPanel.autonomy.autoTuneHint'],
+];
 
 function ImproveTab({ game }: { game: StudioGame }) {
   const { t } = useTranslation();

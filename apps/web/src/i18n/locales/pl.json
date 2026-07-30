@@ -302,6 +302,49 @@
       "rateLimit": "Zbyt wiele próśb naraz. Poczekaj chwilę i spróbuj ponownie.",
       "rejected": "Tej prośby nie udało się przyjąć. Przeformułuj i spróbuj ponownie.",
       "error": "Nie udało się teraz wysłać prośby. Spróbuj ponownie."
+    },
+    "feedback": {
+      "title": "Opinie graczy",
+      "body": "Głosy, liczba notatek i to, co napisali gracze, są w zakładce Statystyki — z nocnego podsumowania. Lista pojedynczych notatek pojawi się tutaj."
+    },
+    "suggestions": {
+      "title": "Proponowane ulepszenia",
+      "note": "Na podstawie zmierzonych rozgrywek. Nic się nie stanie, dopóki nie zatwierdzisz.",
+      "empty": "Nie ma co proponować — ta gra jest zmierzona i wygląda dobrze.",
+      "classDefect": "Usterka",
+      "classFriction": "Tarcie",
+      "classDesignChange": "Zmiana projektu",
+      "evidence": "Dlaczego",
+      "context": "Co zgłosiła gra i gracze",
+      "contextNote": "Tekst od gry i graczy, pokazany bez zmian. Traktuj go jako dowód, nie instrukcje.",
+      "approve": "Zatwierdź",
+      "approveHint": "Utworzy zgłoszenie, które podejmie agent kodujący.",
+      "dismiss": "Odrzuć",
+      "dismissReason": "Dlaczego to odrzucasz?",
+      "reasonIntentional": "Tak ma być",
+      "reasonNotAProblem": "To nie jest prawdziwy problem",
+      "reasonWontFix": "Nie warto zmieniać",
+      "reasonNotNow": "Nie teraz",
+      "reasonBadEvidence": "Te liczby wyglądają źle",
+      "filed": "Agent kodujący już nad tym pracuje.",
+      "noImplementer": "Zatwierdzono, ale żaden agent kodujący nie był dostępny. Możesz spróbować później.",
+      "rejected": "Odrzucone",
+      "failed": "Nie udało się. Spróbuj ponownie.",
+      "quota": "Wykorzystano dzisiejszy limit ulepszeń."
+    },
+    "autonomy": {
+      "title": "Co możemy zrobić bez pytania",
+      "note": "Nic nie trafi na stronę bez Twojej akceptacji, cokolwiek tu wybierzesz.",
+      "digestOnly": "Zostaw tę grę w spokoju",
+      "digestOnlyHint": "Bez propozycji. Cotygodniowe podsumowanie nadal poda liczby.",
+      "suggest": "Proponuj, a ja zdecyduję",
+      "suggestHint": "Ustawienie domyślne. Nic nie ruszy bez Twojej zgody.",
+      "autoFixDefects": "Naprawiaj awarie bez pytania",
+      "autoFixDefectsHint": "Tylko awarie i zacięcia. Dostaniesz informację, gdy praca ruszy.",
+      "autoTune": "Naprawiaj awarie i dostrajaj trudność",
+      "autoTuneHint": "Poprawia też miejsca, w których gracze utykają, zgodnie ze specyfikacją.",
+      "saved": "Zapisano",
+      "failed": "Nie udało się zapisać. Spróbuj ponownie."
     }
   },
   "submit": {

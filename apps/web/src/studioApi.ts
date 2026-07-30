@@ -102,3 +102,97 @@ export async function submitImprovement(
   }
   return (await response.json()) as { ok: boolean; issueNumber: number; slug: string; shotId?: string };
 }
+
+/**
+ * One suggestion the router proposed for a game the creator owns.
+ *
+ * `untrustedContext` is joined server-side from the live scorecard and is **never
+ * trusted markup** — it is game- and player-authored text, rendered as text only.
+ */
+export interface StudioSuggestion {
+  id: string;
+  slug: string;
+  class: 'defect' | 'friction' | 'design-change' | string;
+  priority: number;
+  evidence: Array<{ finding: string; metrics: Record<string, number | null> }>;
+  status: string;
+  statusReason?: string;
+  /** The job the approved work lives in, once one exists. */
+  jobId?: number;
+  computedFrom: string;
+  createdAt: string;
+  /**
+   * Present on the list read, which joins it from the live scorecard.
+   *
+   * Absent — not null — on the approve and dismiss responses, which return the stored
+   * record and that deliberately carries no untrusted text. Optional rather than required
+   * so the type says which of those two a caller is holding.
+   */
+  untrustedContext?: {
+    errorSamples: Array<{ message: string; count: number }>;
+    progressLabels: Array<{ label: string; sessions: number }>;
+    feedbackThemes: Array<{ theme: string; count: number }>;
+  } | null;
+}
+
+/** The creator's own suggestion queue, worst first. */
+export async function fetchStudioSuggestions(): Promise<StudioSuggestion[]> {
+  const response = await fetch(`${API_BASE}/api/me/suggestions`, { credentials: 'include' });
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+  const body = (await response.json()) as { suggestions?: StudioSuggestion[] };
+  return body.suggestions ?? [];
+}
+
+/** Approves a suggestion. Resolves even when no implementer was available — read `status`. */
+export async function approveSuggestion(id: string): Promise<StudioSuggestion> {
+  const response = await fetch(`${API_BASE}/api/me/suggestions/${encodeURIComponent(id)}/approve`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+  return ((await response.json()) as { suggestion: StudioSuggestion }).suggestion;
+}
+
+/** Dismisses a suggestion with one of the fixed reasons the API accepts. */
+export async function dismissSuggestion(id: string, reason: string): Promise<StudioSuggestion> {
+  const response = await fetch(`${API_BASE}/api/me/suggestions/${encodeURIComponent(id)}/dismiss`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ reason }),
+  });
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+  return ((await response.json()) as { suggestion: StudioSuggestion }).suggestion;
+}
+
+/** What the platform may do to a game without asking (docs/improvement-loop-plan.md IL-4). */
+export type AutonomyMode = 'digest-only' | 'suggest' | 'auto-fix-defects' | 'auto-tune';
+
+export async function fetchGameAutonomy(slug: string): Promise<AutonomyMode> {
+  const response = await fetch(`${API_BASE}/api/me/games/${encodeURIComponent(slug)}/autonomy`, {
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+  return ((await response.json()) as { mode: AutonomyMode }).mode;
+}
+
+export async function setGameAutonomy(slug: string, mode: AutonomyMode): Promise<AutonomyMode> {
+  const response = await fetch(`${API_BASE}/api/me/games/${encodeURIComponent(slug)}/autonomy`, {
+    method: 'PUT',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ mode }),
+  });
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+  return ((await response.json()) as { mode: AutonomyMode }).mode;
+}

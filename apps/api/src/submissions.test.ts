@@ -1589,10 +1589,20 @@ describe('submission feedback route', () => {
 });
 
 describe('POST /api/submissions/:token/improve', () => {
-  it('opens an improvement issue for a published game the caller owns', async () => {
+  it('dispatches a job for a published game the caller owns, rather than filing an issue', async () => {
+    // Changed deliberately (IL-3). This used to create a games-repo issue, which was the
+    // last caller of that path after #347 moved dispatch in-house — and nothing collects
+    // such an issue any more, so the request went nowhere. An improvement is now a new
+    // job carrying the game's slug.
     const { githubClient, createIssue } = createGithubClientStub({ issueNumber: 501 });
     const store = new InMemoryStore();
-    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
+    const { backend, briefs } = createBackendStub();
+    const { app, authHeaders } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      store,
+    });
     await store.createSubmission(123, 'g:test-user', 'Sky Dodge');
     await store.setSubmissionSlug(123, 'sky-dodge');
     await store.setSubmissionPublishedAt(123, '2026-07-20T00:00:00.000Z');
@@ -1605,14 +1615,11 @@ describe('POST /api/submissions/:token/improve', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ ok: true, issueNumber: 501, slug: 'sky-dodge' });
-    expect(createIssue).toHaveBeenCalledTimes(1);
-    const issue = createIssue.mock.calls[0]![0];
-    expect(issue.title).toContain('Sky Dodge');
-    expect(issue.labels).toEqual(['improvement']);
-    expect(issue.body).toContain('sky-dodge');
-    expect(issue.body).toContain('Make level two less punishing and add a checkpoint.');
-    expect(issue.body).toContain('```text');
+    expect(res.json()).toMatchObject({ ok: true, slug: 'sky-dodge' });
+    expect(createIssue).not.toHaveBeenCalled();
+    const dispatched = briefs.at(-1)!;
+    expect(dispatched.slug).toBe('sky-dodge');
+    expect(dispatched.feedback).toContain('Make level two less punishing');
 
     await app.close();
   });
@@ -2246,6 +2253,57 @@ describe('what a build costs', () => {
     expect(record?.costs?.map((entry) => entry.ref)).toEqual(['task-1', 'task-2']);
     expect(record?.costs?.every((entry) => entry.credits === 1)).toBe(true);
 
+    await app.close();
+  });
+});
+
+/**
+ * Post-publish improvement (docs/improvement-loop-plan.md IL-3).
+ *
+ * The rule this pins is stated in job-state.ts: `published: []`, "improvements start a
+ * *new* job, so publishing is terminal for this one". Getting it wrong is quiet — the
+ * agent would be dispatched, the transition would fail to record, and the work would
+ * land on a job that can never move on.
+ */
+describe('POST /api/submissions/:token/improve', () => {
+  it('creates a new job on the same slug instead of resuming the published one', async () => {
+    const stub = createGithubClientStub({});
+    const { backend, briefs } = createBackendStub();
+    const { app, store, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    const published = await store.allocateJobId();
+    await store.createSubmission(published, 'g:test-user', 'Crashy');
+    await store.setSubmissionSlug(published, 'crashy');
+    await store.setSubmissionPublishedAt(published, '2026-07-01T00:00:00.000Z');
+    await store.recordJobTransition(published, {
+      to: 'published',
+      at: '2026-07-01T00:00:00.000Z',
+      by: 'operator',
+      reason: 'published',
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(published, secret)}/improve`,
+      headers: authHeaders,
+      payload: { feedback: 'Players keep falling through the floor on level two.' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const dispatched = briefs.at(-1)!;
+    // A different job, carrying the slug and the request — which is what makes the agent
+    // prompt say "continue that game, revise it" and restore the delivered sources.
+    expect(dispatched.issueNumber).not.toBe(published);
+    expect(dispatched.slug).toBe('crashy');
+    expect(dispatched.feedback).toContain('falling through the floor');
+    // The published job is left exactly as it was.
+    const source = await store.getSubmission(published);
+    expect(source?.state).toBe('published');
+    expect(source?.dispatch).toBeUndefined();
     await app.close();
   });
 });
