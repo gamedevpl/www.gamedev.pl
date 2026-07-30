@@ -63,15 +63,23 @@ export function NavHeader({
     const read = () =>
       fetchAdminSummary()
         .then((summary) => {
-          if (!cancelled) setAlertCount(summary ? summary.alerts.length : null);
+          if (cancelled) return;
+          setAlertCount(summary ? summary.alerts.length : null);
+          // Whether someone is an operator does not change while they browse, and
+          // almost nobody is one. Polling on regardless would have every signed-in
+          // visitor asking a question with a known answer, forever, at 404 apiece.
+          if (!summary) clearInterval(timer);
         })
         .catch(() => {
-          // A failed read is not evidence of anything; leave the link as it was.
+          // A failed read is not evidence of anything; leave the link as it was and
+          // keep the timer, since the next read may well succeed.
         });
-    void read();
     // Slower than the console's own poll: this is a badge somebody glances at, not a
-    // queue they are working, and it rides along on every page of the site.
+    // queue they are working, and it rides along on every page of the site. Started
+    // before the first read so that read can stop it — it only ever runs on a later
+    // microtask, so the binding is always initialized by then.
     const timer = setInterval(read, 120_000);
+    void read();
     return () => {
       cancelled = true;
       clearInterval(timer);

@@ -39,11 +39,16 @@ export function AccessTokensPanel() {
     try {
       const result = await fetchAccessTokens(forUid.trim());
       if (result === null) {
+        // Cleared, not left standing: a list from the previous uid sitting under the new
+        // one reads as that account's tokens, and revoking off a mislabelled list is a
+        // mistake this panel would have invited.
+        setTokens(null);
         setMessage('not found');
         return;
       }
       setTokens(result);
     } catch {
+      setTokens(null);
       setMessage('could not reach the API');
     } finally {
       setBusy(false);
@@ -82,6 +87,10 @@ export function AccessTokensPanel() {
         const { ok } = await revokeAccessToken(tokenId);
         setMessage(ok ? 'revoked' : 'could not revoke that token');
         await list(uid);
+      } catch {
+        // A revoke whose request never left is the one failure that must not look like
+        // silence: the operator would walk away believing the credential is dead.
+        setMessage('could not reach the API');
       } finally {
         setBusy(false);
       }

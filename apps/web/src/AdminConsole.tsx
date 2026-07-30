@@ -41,7 +41,10 @@ const ALERT_COPY: Record<OperatorAlert['kind'], string> = {
 
 /** Rough age, in the same vocabulary the queue uses. */
 function since(at: string, now: number): string {
-  const ms = now - Date.parse(at);
+  // Clamped, because these two clocks are not the same clock: `at` is the server's and
+  // `now` is the browser's, and a browser running a minute behind would otherwise
+  // report a build as having been waiting "-1m".
+  const ms = Math.max(0, now - Date.parse(at));
   if (!Number.isFinite(ms)) return '';
   const minutes = Math.floor(ms / 60_000);
   if (minutes < 60) return `${minutes}m`;

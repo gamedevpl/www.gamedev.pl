@@ -126,6 +126,49 @@ describe('AccessTokensPanel', () => {
     await act(async () => root.unmount());
   });
 
+  it('clears the list when a lookup comes back empty-handed', async () => {
+    // Otherwise the previous account's tokens sit under the new uid, and revoking off a
+    // mislabelled list is a mistake this panel would have invited.
+    mocked.fetchAccessTokens.mockResolvedValueOnce([token()]).mockResolvedValueOnce(null);
+
+    const { container, root } = await render();
+    await type(inputFor(container, 'Account uid'), 'g:agent');
+    await act(async () => {
+      button(container, 'List').click();
+    });
+    expect(container.querySelectorAll('.admin-token-row')).toHaveLength(1);
+
+    await type(inputFor(container, 'Account uid'), 'g:nobody');
+    await act(async () => {
+      button(container, 'List').click();
+    });
+
+    expect(container.querySelectorAll('.admin-token-row')).toHaveLength(0);
+    expect(container.querySelector('.admin-limits-message')?.textContent).toBe('not found');
+
+    await act(async () => root.unmount());
+  });
+
+  it('says so when a revoke never reached the API, rather than going quiet', async () => {
+    // The one failure that must not look like silence: an operator would walk away
+    // believing the credential is dead.
+    mocked.fetchAccessTokens.mockResolvedValue([token()]);
+    mocked.revokeAccessToken.mockRejectedValue(new Error('offline'));
+
+    const { container, root } = await render();
+    await type(inputFor(container, 'Account uid'), 'g:agent');
+    await act(async () => {
+      button(container, 'List').click();
+    });
+    await act(async () => {
+      button(container, 'Revoke').click();
+    });
+
+    expect(container.querySelector('.admin-limits-message')?.textContent).toBe('could not reach the API');
+
+    await act(async () => root.unmount());
+  });
+
   it('refuses to mint without both an account and a label', async () => {
     const { container, root } = await render();
 

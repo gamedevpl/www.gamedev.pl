@@ -67,6 +67,24 @@ const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const PLAY_PREFIX_PATTERN = /^\/(play|ay|ai)\/([^/]+)$/;
 
 /**
+ * Percent-decode one path segment, or null when it is not decodable.
+ *
+ * `decodeURIComponent` throws on malformed encoding — `/play/%E0` is a URIError, not a
+ * bad slug — and a throw here takes the whole app down on a route parse, which is the
+ * one function in the client that must never fail. A segment that cannot be decoded is
+ * a segment that cannot match anything, so null flows into the same `notFound` every
+ * other unrecognised path takes. The API's shell allowlist has always guarded these the
+ * same way (see spa-paths.ts); the client simply did not.
+ */
+function decodeSegment(segment: string): string | null {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Parse the SPA route from pathname (+ optional hash for the join credential).
  * Unknown / invalid paths become `notFound` (not home) so the URL stays visible.
  */
@@ -94,21 +112,22 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
   if (statusMatch?.[1]) {
     // Legacy status URLs land in Creator Studio — the draft Build tab is the
     // former status / "dev studio" page, now unified with playtest + improve.
-    return { view: 'studio', token: decodeURIComponent(statusMatch[1]) };
+    const token = decodeSegment(statusMatch[1]);
+    if (token) return { view: 'studio', token };
   }
 
   const playMatch = normalizedPath.match(PLAY_PREFIX_PATTERN);
   if (playMatch?.[2]) {
-    const slug = decodeURIComponent(playMatch[2]);
-    if (SLUG_PATTERN.test(slug)) {
+    const slug = decodeSegment(playMatch[2]);
+    if (slug && SLUG_PATTERN.test(slug)) {
       return { view: 'play', slug };
     }
   }
 
   const draftMatch = normalizedPath.match(/^\/draft\/([^/]+)$/);
   if (draftMatch?.[1]) {
-    const slug = decodeURIComponent(draftMatch[1]);
-    if (SLUG_PATTERN.test(slug)) {
+    const slug = decodeSegment(draftMatch[1]);
+    if (slug && SLUG_PATTERN.test(slug)) {
       return { view: 'draft', slug };
     }
   }
@@ -124,7 +143,9 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
 
   const adminMatch = normalizedPath.match(/^\/admin\/([^/]+)$/);
   if (adminMatch?.[1]) {
-    const section = decodeURIComponent(adminMatch[1]);
+    // Matched raw rather than decoded: every section name is fixed lowercase ASCII, so
+    // an encoded one is not a section by definition and there is nothing to decode.
+    const section = adminMatch[1];
     // An unknown section is a 404 rather than a silent fall back to the queue — same
     // rule as the studio tabs, and for the same reason: a typo should be visible.
     if (isAdminSection(section)) {
@@ -142,8 +163,11 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
   // client in step with the API's shell allowlist, which serves those paths a real 404.
   const studioMatch = normalizedPath.match(/^\/studio\/([^/]+)(?:\/([^/]+))?$/);
   if (studioMatch?.[1]) {
-    const token = decodeURIComponent(studioMatch[1]);
-    const tabSegment = studioMatch[2] ? decodeURIComponent(studioMatch[2]) : undefined;
+    const token = decodeSegment(studioMatch[1]);
+    const tabSegment = studioMatch[2] ? decodeSegment(studioMatch[2]) : undefined;
+    if (token === null || tabSegment === null) {
+      return { view: 'notFound' };
+    }
     if (!tabSegment) {
       return { view: 'studio', token };
     }

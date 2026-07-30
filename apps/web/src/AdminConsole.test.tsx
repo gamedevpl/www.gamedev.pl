@@ -119,6 +119,32 @@ describe('AdminConsole', () => {
     await act(async () => root.unmount());
   });
 
+  it('never reports a negative age when the browser clock runs behind', async () => {
+    // `since` is the server's clock and `now` is the browser's. A minute of skew used to
+    // render an alert as having waited "-1m".
+    mocked.fetchAdminSummary.mockResolvedValue(
+      summary({
+        alerts: [
+          {
+            id: 'op-1-review_ready',
+            kind: 'review_ready',
+            issueNumber: 1_000_001,
+            title: 'Comet Courier',
+            ownerUid: 'g:1',
+            since: new Date(Date.now() + 90_000).toISOString(),
+          },
+        ],
+      }),
+    );
+
+    const { container, root } = await render('queue');
+
+    expect(container.querySelector('.admin-alert-age')?.textContent).toContain('0m');
+    expect(container.textContent).not.toContain('-1m');
+
+    await act(async () => root.unmount());
+  });
+
   it('says so plainly when nothing needs attention', async () => {
     mocked.fetchAdminSummary.mockResolvedValue(summary());
 

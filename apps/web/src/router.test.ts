@@ -69,6 +69,15 @@ describe('parsePathRoute', () => {
     expect(parsePathRoute('/join/K7M3QP/abc-DEF_123')).toEqual({ view: 'notFound' });
   });
 
+  it('survives malformed percent-encoding on every segment it decodes', () => {
+    // `decodeURIComponent('%E0')` throws. Each of these used to take the SPA with it.
+    expect(parsePathRoute('/play/%E0')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/draft/%E0')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/status/%E0')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/studio/%E0')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/studio/tok/%E0')).toEqual({ view: 'notFound' });
+  });
+
   it('parses the unlisted operator console, and keeps its old address working', () => {
     expect(parsePathRoute('/admin')).toEqual({ view: 'admin', section: 'queue' });
     expect(parsePathRoute('/admin/telemetry')).toEqual({ view: 'admin', section: 'telemetry' });
@@ -77,6 +86,9 @@ describe('parsePathRoute', () => {
     expect(parsePathRoute('/health')).toEqual({ view: 'admin', section: 'telemetry' });
     // A section that does not exist is a typo, and says so.
     expect(parsePathRoute('/admin/nope')).toEqual({ view: 'notFound' });
+    // Malformed percent-encoding is a 404, not a URIError: route parsing runs on every
+    // navigation, and a throw there takes the whole app down.
+    expect(parsePathRoute('/admin/%E0')).toEqual({ view: 'notFound' });
     expect(parsePathRoute('/health/brick-storm')).toEqual({ view: 'notFound' });
   });
 

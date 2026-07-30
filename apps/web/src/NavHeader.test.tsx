@@ -102,10 +102,13 @@ describe('NavHeader Up chevron', () => {
 describe('NavHeader operator link', () => {
   beforeEach(async () => {
     await i18n.changeLanguage('en');
+    // The badge polls; the tests that care about that advance the clock themselves.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
   });
 
   afterEach(() => {
     document.body.innerHTML = '';
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -184,6 +187,25 @@ describe('NavHeader operator link', () => {
 
     await act(async () => link.click());
     expect(onAdmin).toHaveBeenCalled();
+
+    await act(async () => root.unmount());
+  });
+
+  it('stops asking once it knows the answer is no', async () => {
+    // Whether someone is an operator does not change while they browse, and almost
+    // nobody is one. Left polling, every signed-in visitor would ask a question with a
+    // known answer every two minutes, forever, at one 404 apiece.
+    const { root } = await renderWith({ status: 404, body: { error: 'not found' } });
+    const summaryCalls = () =>
+      vi.mocked(globalThis.fetch).mock.calls.filter(([input]) => String(input).endsWith('/api/admin/summary')).length;
+
+    expect(summaryCalls()).toBe(1);
+    await act(async () => {
+      vi.advanceTimersByTime(10 * 60_000);
+      await Promise.resolve();
+    });
+
+    expect(summaryCalls()).toBe(1);
 
     await act(async () => root.unmount());
   });
