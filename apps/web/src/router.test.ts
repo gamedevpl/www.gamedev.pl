@@ -188,9 +188,11 @@ describe('navUpTarget', () => {
     expect(navUpTarget({ view: 'studio', token: 'tok', tab: 'playtest' })).toBeNull();
   });
 
-  it('walks studio tab → game → shelf → home', () => {
+  it('walks studio game work surfaces to the shelf, then home', () => {
+    // Tab → shelf (not `/studio/:token`): a bare token URL is rewritten back onto
+    // the default tab, which would cancel the Up for in-progress Build views.
     expect(navUpTarget({ view: 'studio', token: 'tok', tab: 'build' })).toEqual({
-      path: '/studio/tok',
+      path: '/studio',
       labelKey: 'upStudio',
     });
     expect(navUpTarget({ view: 'studio', token: 'tok' })).toEqual({
