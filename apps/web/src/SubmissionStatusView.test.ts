@@ -12,6 +12,12 @@ import {
   getSubmissionStatus,
   submitFeedback,
 } from './submissionApi.js';
+import { submitImprovement } from './studioApi.js';
+
+vi.mock('./studioApi', async () => {
+  const actual = await vi.importActual<typeof import('./studioApi')>('./studioApi');
+  return { ...actual, submitImprovement: vi.fn() };
+});
 
 vi.mock('./submissionApi', async () => {
   const actual = await vi.importActual<typeof import('./submissionApi')>('./submissionApi');
@@ -30,6 +36,7 @@ const mockedGetSubmissionPreview = vi.mocked(getSubmissionPreview);
 const mockedGetChannelPlayable = vi.mocked(getChannelPlayable);
 const mockedSubmitFeedback = vi.mocked(submitFeedback);
 const mockedAbandonSubmission = vi.mocked(abandonSubmission);
+const mockedSubmitImprovement = vi.mocked(submitImprovement);
 
 async function flushEffects() {
   await Promise.resolve();
@@ -425,6 +432,52 @@ describe('SubmissionStatusView', () => {
     const description = container.querySelector('.status-description')?.textContent ?? '';
     expect(description).toContain('An agent is coding your game right now');
     expect(description).not.toContain('statusView.');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('offers the same one box on a published game, and sends it somewhere else', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({ status: 'published', slug: 'tv-tycoon' });
+    mockedSubmitImprovement.mockResolvedValue({ ok: true, issueNumber: 5, slug: 'tv-tycoon' });
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/status/live-token');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'live-token', embedded: true }));
+      await flushEffects();
+    });
+
+    // A published game used to have no composer here at all — asking for a change meant
+    // knowing to go to a different tab, which meant knowing the game's lifecycle state.
+    const box = container.querySelector<HTMLTextAreaElement>('.status-feedback-input');
+    expect(box).not.toBeNull();
+
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+      setter?.call(box, 'The second level is far too hard, please add a checkpoint.');
+      box!.dispatchEvent(new Event('input', { bubbles: true }));
+      await flushEffects();
+    });
+    await act(async () => {
+      container
+        .querySelector('.status-feedback .primary-btn')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+
+    // Routed from the state the server reported, not from a mode the creator picked.
+    expect(mockedSubmitImprovement).toHaveBeenCalledWith(
+      'live-token',
+      'The second level is far too hard, please add a checkpoint.',
+    );
+    expect(mockedSubmitFeedback).not.toHaveBeenCalled();
 
     await act(async () => {
       root.unmount();
@@ -829,9 +882,10 @@ describe('SubmissionStatusView', () => {
 
     const entries = [...container.querySelectorAll('.build-activity-item')].map((node) => node.textContent ?? '');
     expect(entries).toHaveLength(2);
-    // Newest first: the commit that answered the request sits above the request.
-    expect(entries[0]).toContain('Speed up the car');
-    expect(entries[1]).toContain('Make the car faster please.');
+    // A conversation's order: the creator's request, then the commit that answered it,
+    // with the newest at the bottom next to the box they reply in.
+    expect(entries[0]).toContain('Make the car faster please.');
+    expect(entries[1]).toContain('Speed up the car');
     expect(container.querySelectorAll('.build-activity-revision')).toHaveLength(1);
 
     await act(async () => {
@@ -1073,7 +1127,7 @@ describe('SubmissionStatusView stop & retry', () => {
     });
   });
 
-  it('shows pictures of the build, newest first, before any commit exists', async () => {
+  it('shows pictures of the build on the thread, before any commit exists', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     // Still queued: no PR, no preview, nothing committed. The only pictures that can
     // exist at this point are ones the agent pushed straight down the channel.
@@ -1099,7 +1153,10 @@ describe('SubmissionStatusView stop & retry', () => {
     // Thumbnails live on the timeline, not as a banner above it.
     const shots = container.querySelectorAll('.build-activity-shot img');
     expect(shots).toHaveLength(2);
-    expect(shots[0]!.getAttribute('src')).toContain('/api/submissions/media-token/shot/shot-2');
+    // Oldest first, like the rest of the thread: the newest picture is the one nearest
+    // the composer, which is where the eye already is.
+    expect(shots[0]!.getAttribute('src')).toContain('/api/submissions/media-token/shot/shot-1');
+    expect(shots[1]!.getAttribute('src')).toContain('/api/submissions/media-token/shot/shot-2');
     // The agent's own caption is what the creator reads, not a generic placeholder.
     expect(container.textContent).toContain('The bridge holds');
     expect(container.querySelector('.status-lightbox')).toBeNull();
@@ -1110,7 +1167,7 @@ describe('SubmissionStatusView stop & retry', () => {
     });
     const lightbox = container.querySelector('.status-lightbox-image') as HTMLImageElement | null;
     expect(lightbox).not.toBeNull();
-    expect(lightbox!.getAttribute('src')).toContain('/api/submissions/media-token/shot/shot-2');
+    expect(lightbox!.getAttribute('src')).toContain('/api/submissions/media-token/shot/shot-1');
 
     await act(async () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));

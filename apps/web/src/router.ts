@@ -1,13 +1,40 @@
 import type { LegalDocId } from './legal/types.js';
 
-/** Creator Studio work surface. Persisted in the URL so a refresh or shared link
- * reopens the same tab on the same game. */
-export type StudioTab = 'overview' | 'build' | 'playtest' | 'stats' | 'improve';
+/**
+ * Creator Studio work surface. Persisted in the URL so a refresh or shared link
+ * reopens the same surface on the same game.
+ *
+ * Three, where there were five. Making a game is a conversation with an agent, and the
+ * studio was five tabs across the top of it — with the same act (say what to change)
+ * living in three of them, so which box a creator was allowed depended on a lifecycle
+ * state they had to know to find it. Now: the thread, the things beside the thread, and
+ * the one surface that genuinely takes over the screen.
+ */
+export type StudioTab = 'thread' | 'details' | 'playtest';
 
-const STUDIO_TABS = new Set<StudioTab>(['overview', 'build', 'playtest', 'stats', 'improve']);
+/**
+ * Every name a surface has answered to, including the five-tab vocabulary that came
+ * before. Old names resolve to the surface that absorbed them and the studio rewrites
+ * the URL, so a bookmark or a notification link from months ago lands somewhere real
+ * and quietly becomes current.
+ */
+const STUDIO_TAB_ALIASES: Record<string, StudioTab> = {
+  thread: 'thread',
+  build: 'thread',
+  improve: 'thread',
+  details: 'details',
+  overview: 'details',
+  stats: 'details',
+  playtest: 'playtest',
+};
+
+/** The surface this URL segment names, or null when it names nothing. */
+export function parseStudioTab(value: string): StudioTab | null {
+  return STUDIO_TAB_ALIASES[value] ?? null;
+}
 
 export function isStudioTab(value: string): value is StudioTab {
-  return STUDIO_TABS.has(value as StudioTab);
+  return parseStudioTab(value) !== null;
 }
 
 /**
@@ -182,10 +209,13 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
     if (!tabSegment) {
       return { view: 'studio', game };
     }
-    if (!isStudioTab(tabSegment)) {
+    // Resolved, not passed through: the route carries the surface, and an old name for
+    // it stops existing the moment it is parsed.
+    const tab = parseStudioTab(tabSegment);
+    if (!tab) {
       return { view: 'notFound' };
     }
-    return { view: 'studio', game, tab: tabSegment };
+    return { view: 'studio', game, tab };
   }
 
   // Hybrid join: /join/<code>#<token> — credential stays out of the request line.

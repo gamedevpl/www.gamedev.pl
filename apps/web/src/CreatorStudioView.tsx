@@ -6,7 +6,7 @@ import type { GameHealth } from './healthApi.js';
 import { PixelIcon, type PixelIconName } from './PixelIcon.js';
 import { formatRelativeTime } from './relativeTime.js';
 import { playPath, studioPath, type StudioTab } from './router.js';
-import { abandonSubmission, submitFeedback, type SubmissionApiError, type SubmissionState } from './submissionApi.js';
+import { abandonSubmission, type SubmissionState } from './submissionApi.js';
 import { StudioPlaytestPanel } from './StudioPlaytestPanel.js';
 import {
   filterStudioGames,
@@ -26,8 +26,6 @@ import {
   fetchGameAutonomy,
   setGameAutonomy,
   setDraftShared,
-  submitImprovement,
-  type StudioApiError,
   type StudioGame,
   type StudioScorecard,
   type StudioSuggestion,
@@ -37,16 +35,24 @@ import {
 /**
  * Creator control panel (docs/improvement-loop-plan.md IL-2 creator surface).
  *
- * One place for the whole creator loop: shelf of owned games, the draft Build
- * (former status / "dev studio" page), playtest-with-pause prompting, play
- * health, and post-publish improve.
+ * One game is one thread, and the thread is the studio.
  *
- * Shelf scales past a handful of games: compact rows, search/filter once the
- * list grows, and on narrow viewports a game switcher (picker sheet) so the
- * work surface is not buried under ten cards.
+ * Making a game here is a conversation with an agent, and this screen used to be five
+ * tabs laid across the top of it — with the same act, "say what to change", living in
+ * three of them, so which box a creator was allowed depended on a lifecycle state they
+ * had to know in order to find it. There are three surfaces now: the thread, the things
+ * beside the thread (facts, sharing, play health, stopping it), and playtest, which
+ * genuinely takes the screen. The composer at the foot of the thread is the only one,
+ * and it always targets the game's current state — published or not, there is only ever
+ * the tip to work on.
  *
- * Selection + active tab live in the URL (`/studio/:token/:tab`) so a refresh
- * or shared link reopens the same work surface.
+ * Shelf scales past a handful of games: compact rows, search/filter once the list grows,
+ * and on narrow viewports a game switcher (picker sheet) so the thread is not buried
+ * under ten cards.
+ *
+ * Selection + surface live in the URL (`/studio/<slug>/<surface>`) so a refresh or a
+ * shared link reopens the same place. The five old tab names still resolve, onto
+ * whichever surface absorbed them.
  */
 
 const STATUS_ICONS: Record<SubmissionState, PixelIconName> = {
@@ -61,14 +67,12 @@ const STATUS_ICONS: Record<SubmissionState, PixelIconName> = {
 
 const WINDOWS = [1, 7, 30];
 
-/** Tab strip order, and the label each tab carries. */
-const TAB_ORDER: readonly StudioTab[] = ['overview', 'build', 'playtest', 'stats', 'improve'];
+/** Surface strip order, and the label each one carries. */
+const TAB_ORDER: readonly StudioTab[] = ['thread', 'details', 'playtest'];
 const TAB_LABELS: Record<StudioTab, string> = {
-  overview: 'studioPanel.tabs.overview',
-  build: 'studioPanel.tabs.build',
+  thread: 'studioPanel.tabs.thread',
+  details: 'studioPanel.tabs.details',
   playtest: 'studioPanel.tabs.playtest',
-  stats: 'studioPanel.tabs.stats',
-  improve: 'studioPanel.tabs.improve',
 };
 
 type NavigateOptions = { replace?: boolean };
@@ -88,25 +92,30 @@ type CreatorStudioViewProps = {
   onRetryConcept?: (concept: string) => void;
 };
 
-function defaultTabFor(game: StudioGame | null): StudioTab {
-  if (!game) return 'overview';
-  return isStudioGamePublished(game) ? 'overview' : 'build';
+/**
+ * The thread, always — for a game being built and for one that is live.
+ *
+ * Both used to land somewhere else: a build opened on its status page, a published game
+ * on a facts panel. But the question a creator arrives with is the same either way —
+ * what has happened, and how do I ask for the next thing — and that is one surface.
+ */
+function defaultTabFor(): StudioTab {
+  return 'thread';
 }
 
 /**
- * Which surfaces exist for this game. Must stay in step with the rendered tab list
- * below: a tab that resolves but has no button and no panel is a blank work surface.
+ * Which surfaces exist for this game. All three, for every game: the thread reads the
+ * build's history and takes the next message whatever state it is in, the details panel
+ * always has facts to show, and playtest always has something to play or a reason it
+ * does not yet.
  */
-function tabAvailable(game: StudioGame, tab: StudioTab): boolean {
-  const published = isStudioGamePublished(game);
-  if (tab === 'build') return !published;
-  if (tab === 'stats') return published;
+function tabAvailable(_game: StudioGame, _tab: StudioTab): boolean {
   return true;
 }
 
 function resolveTab(game: StudioGame, requested?: StudioTab): StudioTab {
   if (requested && tabAvailable(game, requested)) return requested;
-  return defaultTabFor(game);
+  return defaultTabFor();
 }
 
 /**
@@ -158,7 +167,7 @@ export function CreatorStudioView({
   // Internally a game is its token — that is what every API call on this screen takes.
   // The URL says slug; the shelf is what translates between them.
   const [selected, setSelected] = useState<string | null>(null);
-  const [tab, setTab] = useState<StudioTab>(selectedTab ?? 'overview');
+  const [tab, setTab] = useState<StudioTab>(selectedTab ?? 'thread');
   const [shelfQuery, setShelfQuery] = useState('');
   const [shelfFilter, setShelfFilter] = useState<StudioShelfFilter>('all');
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -319,7 +328,7 @@ export function CreatorStudioView({
 
   function selectGame(token: string) {
     const next = games.find((game) => game.token === token) ?? null;
-    const nextTab = defaultTabFor(next);
+    const nextTab = defaultTabFor();
     setSelected(token);
     setTab(nextTab);
     setPickerOpen(false);
@@ -467,24 +476,13 @@ export function CreatorStudioView({
               </div>
 
               <div className="studio-tab-panel">
-                {tab === 'overview' ? (
-                  <OverviewTab
-                    game={activeGame}
-                    health={selectedHealth}
-                    onOpenBuild={() => openTab('build')}
-                    onOpenPlaytest={() => openTab('playtest')}
-                    onPlay={() => activeGame.slug && onPlay(activeGame.slug)}
-                    onRemoved={(token) => {
-                      setGames((prev) => prev.filter((game) => game.token !== token));
-                      setSelected((current) => (current === token ? null : current));
-                      onNavigate(studioPath());
-                    }}
-                  />
-                ) : null}
-
-                {tab === 'build' && !isStudioGamePublished(activeGame) ? (
+                {/* The thread is the game. Keyed on the token so switching games starts a
+                    new conversation rather than showing the previous one's tail while the
+                    first poll of the new one is in flight. */}
+                {tab === 'thread' ? (
                   <div className="studio-build">
                     <SubmissionStatusView
+                      key={activeGame.token}
                       token={activeGame.token}
                       embedded
                       onPlaytest={() => openTab('playtest')}
@@ -504,12 +502,14 @@ export function CreatorStudioView({
                   <StudioPlaytestPanel
                     game={activeGame}
                     published={isStudioGamePublished(activeGame)}
-                    onExit={() => openTab('overview')}
+                    onExit={() => openTab('thread')}
                   />
                 ) : null}
 
-                {tab === 'stats' ? (
-                  <StatsTab
+                {/* Everything that is about the game rather than said to it: when it was
+                    made, who can play it, how it is doing, and how to stop it. */}
+                {tab === 'details' ? (
+                  <DetailsPanel
                     game={activeGame}
                     health={selectedHealth}
                     days={days}
@@ -517,10 +517,16 @@ export function CreatorStudioView({
                     truncated={truncated}
                     scorecard={selectedScorecard}
                     onDaysChange={setDays}
+                    onOpenThread={() => openTab('thread')}
+                    onOpenPlaytest={() => openTab('playtest')}
+                    onPlay={() => activeGame.slug && onPlay(activeGame.slug)}
+                    onRemoved={(token) => {
+                      setGames((prev) => prev.filter((game) => game.token !== token));
+                      setSelected((current) => (current === token ? null : current));
+                      onNavigate(studioPath());
+                    }}
                   />
                 ) : null}
-
-                {tab === 'improve' ? <ImproveTab game={activeGame} /> : null}
               </div>
             </div>
           ) : null}
@@ -709,17 +715,32 @@ function StudioShelfList({
   );
 }
 
-function OverviewTab({
+/**
+ * The things beside the thread: when the game was made, how it is doing, who can play
+ * it, and how to stop it. Everything here is *about* the game; the thread is where it
+ * is talked to.
+ */
+function DetailsPanel({
   game,
   health,
-  onOpenBuild,
+  days,
+  healthDays,
+  truncated,
+  scorecard,
+  onDaysChange,
+  onOpenThread,
   onOpenPlaytest,
   onPlay,
   onRemoved,
 }: {
   game: StudioGame;
   health: GameHealth | null;
-  onOpenBuild: () => void;
+  days: number;
+  healthDays: string[];
+  truncated: boolean;
+  scorecard: StudioScorecard | null;
+  onDaysChange: (days: number) => void;
+  onOpenThread: () => void;
   onOpenPlaytest: () => void;
   onPlay: () => void;
   onRemoved: (token: string) => void;
@@ -776,7 +797,7 @@ function OverviewTab({
             <PixelIcon name="play" size={12} /> {t('myGames.play')}
           </button>
         ) : (
-          <button type="button" className="primary-btn" onClick={onOpenBuild}>
+          <button type="button" className="primary-btn" onClick={onOpenThread}>
             <PixelIcon name="wrench" size={12} /> {t('studioPanel.overview.openBuild')}
           </button>
         )}
@@ -796,6 +817,21 @@ function OverviewTab({
       </div>
 
       {!published && game.slug && game.lastKnownStatus !== 'abandoned' ? <DraftShareControl game={game} /> : null}
+
+      {/* Only once there is play to report on. Before a game is live every one of these
+          numbers is zero, and a wall of zeroes reads as a verdict rather than as
+          "nobody has played it yet, because nobody can". */}
+      {published ? (
+        <StatsSection
+          game={game}
+          health={health}
+          days={days}
+          healthDays={healthDays}
+          truncated={truncated}
+          scorecard={scorecard}
+          onDaysChange={onDaysChange}
+        />
+      ) : null}
     </div>
   );
 }
@@ -878,7 +914,7 @@ function DraftShareControl({ game }: { game: StudioGame }) {
   );
 }
 
-function StatsTab({
+function StatsSection({
   game,
   health,
   days,
@@ -1303,78 +1339,3 @@ const AUTONOMY_CHOICES: Array<[AutonomyMode, string, string]> = [
   ['auto-fix-defects', 'studioPanel.autonomy.autoFixDefects', 'studioPanel.autonomy.autoFixDefectsHint'],
   ['auto-tune', 'studioPanel.autonomy.autoTune', 'studioPanel.autonomy.autoTuneHint'],
 ];
-
-function ImproveTab({ game }: { game: StudioGame }) {
-  const { t } = useTranslation();
-  const published = isStudioGamePublished(game);
-  const [text, setText] = useState('');
-  const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle');
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleSubmit() {
-    const trimmed = text.trim();
-    if (trimmed.length < 10 || state === 'sending') return;
-    setState('sending');
-    setError(null);
-    try {
-      if (published) {
-        await submitImprovement(game.token, trimmed);
-      } else {
-        await submitFeedback(game.token, trimmed);
-      }
-      setText('');
-      setState('sent');
-    } catch (err) {
-      const apiErr = err as StudioApiError | SubmissionApiError;
-      const message = apiErr.message ?? '';
-      if (message.includes('quota')) {
-        setError(t('studioPanel.improve.quota'));
-      } else if (apiErr.status === 429 || message.includes('too many')) {
-        setError(t('studioPanel.improve.rateLimit'));
-      } else if (apiErr.status === 422) {
-        setError(t('studioPanel.improve.rejected'));
-      } else {
-        setError(t('studioPanel.improve.error'));
-      }
-      setState('idle');
-    }
-  }
-
-  return (
-    <div className="status-feedback studio-improve">
-      <h3 className="status-feedback-title">
-        {published ? t('studioPanel.improve.titlePublished') : t('studioPanel.improve.titleDraft')}
-      </h3>
-      <p className="status-feedback-hint">
-        {published ? t('studioPanel.improve.hintPublished') : t('studioPanel.improve.hintDraft')}
-      </p>
-      <textarea
-        className="status-feedback-input"
-        rows={5}
-        value={text}
-        onChange={(event) => {
-          setText(event.target.value);
-          if (state === 'sent') setState('idle');
-        }}
-        placeholder={t('studioPanel.improve.placeholder')}
-        disabled={state === 'sending'}
-      />
-      <div className="status-feedback-actions">
-        <button
-          type="button"
-          className="primary-btn"
-          disabled={text.trim().length < 10 || state === 'sending'}
-          onClick={() => void handleSubmit()}
-        >
-          {state === 'sending' ? t('studioPanel.improve.sending') : t('studioPanel.improve.submit')}
-        </button>
-        {state === 'sent' ? (
-          <span className="status-feedback-sent">
-            <PixelIcon name="check" size={13} /> {t('studioPanel.improve.sent')}
-          </span>
-        ) : null}
-      </div>
-      {error ? <p className="error">{error}</p> : null}
-    </div>
-  );
-}

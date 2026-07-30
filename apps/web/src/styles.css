@@ -3834,6 +3834,45 @@ body.player-open {
   margin: 0;
 }
 
+/* The thread's reply box. Pinned to the foot of the conversation, and visibly the place
+   the thread is heading rather than one more panel stacked under it. */
+.status-composer {
+  margin-top: 20px;
+  border: 1px solid rgba(0, 228, 172, 0.28);
+  background: linear-gradient(180deg, rgba(0, 228, 172, 0.05), transparent 60%);
+}
+
+/* The creator's own messages, set across from the agent's — without this a request
+   they sent and the reply to it are two identical grey rows. */
+.build-activity-item.is-mine {
+  flex-direction: row-reverse;
+  text-align: right;
+}
+
+.build-activity-item.is-mine .build-activity-body {
+  align-items: flex-end;
+  border-radius: 10px;
+  background: rgba(0, 228, 172, 0.08);
+  border: 1px solid rgba(0, 228, 172, 0.2);
+  padding: 8px 12px;
+}
+
+.build-activity-item.is-mine .build-activity-label {
+  color: var(--turquoise);
+}
+
+@media (max-width: 640px) {
+  /* Too little width left for two sides of a conversation; the label carries it. */
+  .build-activity-item.is-mine {
+    flex-direction: row;
+    text-align: left;
+  }
+
+  .build-activity-item.is-mine .build-activity-body {
+    align-items: flex-start;
+  }
+}
+
 /* Naming the game — the step the build waits on, so it leads the panel and is sized
    like a decision rather than like one more field among the clarifying questions. */
 .qa-name {

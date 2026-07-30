@@ -244,11 +244,9 @@
       "closePicker": "Zamknij listę gier"
     },
     "tabs": {
-      "overview": "Przegląd",
-      "build": "Build",
-      "playtest": "Playtest",
-      "stats": "Statystyki",
-      "improve": "Ulepsz"
+      "thread": "Wątek",
+      "details": "Szczegóły",
+      "playtest": "Testuj"
     },
     "overview": {
       "status": "Status",
@@ -454,6 +452,8 @@
       "hint": "Zagrałeś i coś jest nie tak? Napisz agentowi, co zmienić, a poprawi Twoją grę.",
       "titleBuilding": "Chcesz coś podpowiedzieć?",
       "hintBuilding": "Gra wciąż powstaje — nie musisz czekać. Napisz, co zmienić, a agent odbierze wiadomość przy najbliższej aktualizacji.",
+      "titlePublished": "Poproś o zmianę",
+      "hintPublished": "Twoja gra jest opublikowana. Opisz, co zmienić — agent podejmie to jako ulepszenie.",
       "placeholder": "np. przyspiesz samochód, dodaj drugą trasę, użyj jaśniejszych kolorów…",
       "submit": "Wyślij uwagi",
       "sending": "Wysyłanie…",

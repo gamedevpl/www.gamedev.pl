@@ -181,37 +181,38 @@ describe('CreatorStudioView', () => {
 
     const { container, root, onNavigate } = await renderStudio({ selectedGame: 'token-0' });
 
-    const improveTab = Array.from(container.querySelectorAll('[role="tab"]')).find((button) =>
-      button.textContent?.includes('Improve'),
+    const detailsTab = Array.from(container.querySelectorAll('[role="tab"]')).find((button) =>
+      button.textContent?.includes('Details'),
     );
-    expect(improveTab).toBeTruthy();
+    expect(detailsTab).toBeTruthy();
 
     await act(async () => {
-      improveTab!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      detailsTab!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    expect(onNavigate).toHaveBeenCalledWith('/studio/token-0/improve');
+    expect(onNavigate).toHaveBeenCalledWith('/studio/token-0/details');
 
     root.unmount();
   });
 
-  it('falls back to the default tab when the deep-linked one does not exist for the game', async () => {
+  it('lands an old tab name on the surface that absorbed it, and corrects the URL', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
-    // token-0 is still building, so Stats has nothing to show for it.
     fetchStudioGames.mockResolvedValue(manyGames(2));
+    // The shape of a link from before there were three surfaces. The router resolves
+    // `stats` onto Details; what is asserted here is that the address follows.
     window.history.replaceState(null, '', '/studio/token-0/stats');
 
-    const { container, root, onNavigate } = await renderStudio({ selectedGame: 'token-0', selectedTab: 'stats' });
+    const { container, root, onNavigate } = await renderStudio({ selectedGame: 'token-0', selectedTab: 'details' });
 
-    // Landed on Build, and the URL was corrected in place rather than pushed.
     const activeTab = container.querySelector('[role="tab"][aria-selected="true"]');
-    expect(activeTab?.textContent).toContain('Build');
-    expect(onNavigate).toHaveBeenCalledWith('/studio/token-0/build', { replace: true });
-    // No tab may exist in the URL that has no button to leave it by.
+    expect(activeTab?.textContent).toContain('Details');
+    // In place, so the old address does not become a history entry to go Back through.
+    expect(onNavigate).toHaveBeenCalledWith('/studio/token-0/details', { replace: true });
+    // Every surface in the URL has a button to leave it by.
     const tabLabels = Array.from(container.querySelectorAll('[role="tab"]')).map((button) => button.textContent);
-    expect(tabLabels.some((label) => label?.includes('Player feedback'))).toBe(false);
+    expect(tabLabels).toEqual(['Thread', 'Details', 'Playtest']);
 
     root.unmount();
   });
@@ -232,7 +233,7 @@ describe('CreatorStudioView', () => {
     ] satisfies StudioGame[]);
     window.history.replaceState(null, '', '/studio/tv-tycoon/overview');
 
-    const { container, root } = await renderStudio({ selectedGame: 'tv-tycoon', selectedTab: 'overview' });
+    const { container, root } = await renderStudio({ selectedGame: 'tv-tycoon', selectedTab: 'details' });
 
     const toggle = container.querySelector<HTMLButtonElement>('.studio-share-toggle');
     expect(toggle?.getAttribute('aria-checked')).toBe('false');
@@ -267,7 +268,7 @@ describe('CreatorStudioView', () => {
       },
     ] satisfies StudioGame[]);
 
-    const { container, root } = await renderStudio({ selectedGame: 'tv-tycoon', selectedTab: 'overview' });
+    const { container, root } = await renderStudio({ selectedGame: 'tv-tycoon', selectedTab: 'details' });
 
     await act(async () => {
       container.querySelector('.studio-share-toggle')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -310,7 +311,7 @@ describe('CreatorStudioView', () => {
     expect(container.querySelector('.studio-detail-title-block h2')?.textContent).toContain('Game 2');
     // …and leaves a readable URL behind it, taking the capability out of history. In
     // place, so the old address does not become an entry to go Back through.
-    expect(onNavigate).toHaveBeenCalledWith('/studio/game-2/overview', { replace: true });
+    expect(onNavigate).toHaveBeenCalledWith('/studio/game-2/thread', { replace: true });
 
     root.unmount();
   });
@@ -356,7 +357,7 @@ describe('CreatorStudioView', () => {
     });
     // And when it is written, it names the game — not the capability token that used
     // to sit in the URL bar, in history, and in every screenshot of this screen.
-    expect(onNavigate).toHaveBeenCalledWith('/studio/game-2/overview');
+    expect(onNavigate).toHaveBeenCalledWith('/studio/game-2/thread');
 
     root.unmount();
   });
@@ -413,7 +414,7 @@ describe('CreatorStudioView — what players think', () => {
     await i18n.changeLanguage('en');
     const { container, root } = await renderStudio();
     const statsTab = Array.from(container.querySelectorAll('button')).find((button) =>
-      button.textContent?.trim().startsWith('Stats'),
+      button.textContent?.trim().startsWith('Details'),
     );
     if (statsTab) {
       await act(async () => {

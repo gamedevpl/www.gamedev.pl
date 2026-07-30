@@ -18,8 +18,9 @@ import {
   type SubmissionPreview,
   type SubmissionStatus,
 } from './submissionApi.js';
-import { draftPath, playPath, statusPath, studioPath } from './router.js';
+import { statusPath, studioPath } from './router.js';
 import { formatRelativeTime } from './relativeTime.js';
+import { submitImprovement } from './studioApi.js';
 
 const TERMINAL_STATUSES = new Set<SubmissionStatus['status']>(['published', 'needs_changes', 'abandoned']);
 /** Statuses that halt the linear timeline rather than sitting on a step of it. */
@@ -298,15 +299,11 @@ export function SubmissionStatusView({
       t(`statusView.states.${status.status}.description`)
     : '';
 
-  // The link to hand to someone else. Deliberately *not* the tracking URL: that one
-  // carries the status token, which grants change requests and spends the creator's
-  // quota. A slug link is watch-only, and survives the game being published.
-  const shareUrl = useMemo(() => {
-    const slug = status?.slug ?? status?.preview?.slug;
-    if (!slug) return null;
-    const path = status?.status === 'published' ? playPath(slug) : draftPath(slug);
-    return new URL(path, window.location.href).toString();
-  }, [status?.slug, status?.preview?.slug, status?.status]);
+  // No share link here any more. It used to be shown unconditionally and pointed at
+  // `/draft/<slug>`, which was readable by any signed-in visitor who knew the slug.
+  // Sharing an unpublished game is now the creator's decision, made on one switch in
+  // Creator Studio; advertising a link that 404s until that switch is on would be worse
+  // than not offering one. A published game shares from the theater, as it always has.
 
   // Auto-load the live preview as soon as one is available, and silently refresh it
   // whenever the agent pushes a new commit (headSha changes) — no click required.
@@ -456,8 +453,6 @@ export function SubmissionStatusView({
             </span>
           </div>
         ) : null}
-        {shareUrl ? <ShareLink url={shareUrl} /> : null}
-
         {loading ? (
           <p className="catalog-state">{t('statusView.loading')}</p>
         ) : errorMessage ? (
@@ -549,23 +544,6 @@ export function SubmissionStatusView({
               </p>
             ) : null}
 
-            {/* Order matters: "played it — want changes?" follows straight on from the
-                play card, so the ask lands while the game is still in mind. The build
-                log is reference material and sits underneath.
-
-                This used to wait for a preview, which waits for a pull request — so the
-                first stretch of the build, when redirecting the agent is cheapest and the
-                creator is most likely to spot a misreading of their idea, was the one
-                stretch they could not say anything. The agent picks messages up off the
-                channel on its next report, so a note left now lands in a minute or two. */}
-            {status.status !== 'published' && status.status !== 'abandoned' ? (
-              <FeedbackPanel
-                token={token}
-                building={!preview && !channelHtml}
-                onSent={(text) => setPendingRevisions((current) => [...current, { text, at: Date.now() }])}
-              />
-            ) : null}
-
             <BuildProgressPanel
               token={token}
               progress={status.progress}
@@ -573,6 +551,24 @@ export function SubmissionStatusView({
               media={status.media ?? []}
               pendingRevisions={pendingRevisions}
             />
+
+            {/* One box, at the bottom, where a conversation keeps its reply — and it is
+                the only one. There used to be three, all of them the same act: steer the
+                build, request a change on the draft, improve the published game. Which
+                one a creator was allowed depended on the game's lifecycle state, so they
+                had to know it to find the right box. The server knows it; the placeholder
+                says where the message lands, and the creator just writes.
+
+                No mode to pick, either: a game is either published or it is not, and
+                there is only ever the current version to work on. */}
+            {status.status !== 'abandoned' ? (
+              <FeedbackPanel
+                token={token}
+                published={status.status === 'published'}
+                building={!preview && !channelHtml}
+                onSent={(text) => setPendingRevisions((current) => [...current, { text, at: Date.now() }])}
+              />
+            ) : null}
 
             {/* Only alarm when nothing is playable. A channel draft can succeed while
                 the PR-branch assemble 502s (GitHub rate limits); showing both a Play
@@ -669,36 +665,6 @@ function AbandonControl({ token }: { token: string }) {
         {t('statusView.abandon.no')}
       </button>
     </span>
-  );
-}
-
-/** Watch-only link to the game, with one-tap copy (the point is to send it to someone). */
-function ShareLink({ url }: { url: string }) {
-  const { t } = useTranslation();
-  const [copied, setCopied] = useState(false);
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // No clipboard permission (or no clipboard API) — the link is right there to
-      // select by hand, so this needs no error state.
-    }
-  };
-
-  return (
-    <p className="status-note status-share">
-      {t('statusView.shareLink')}{' '}
-      <a className="inline-link" href={url}>
-        {url}
-      </a>
-      <button type="button" className="status-share-copy" onClick={() => void copy()}>
-        <PixelIcon name={copied ? 'check' : 'globe'} size={12} />{' '}
-        {copied ? t('statusView.shareCopied') : t('statusView.shareCopy')}
-      </button>
-    </p>
   );
 }
 
@@ -805,10 +771,13 @@ function ShotLightbox({ token, item, onClose }: { token: string; item: BuildMedi
  */
 function FeedbackPanel({
   token,
+  published,
   building,
   onSent,
 }: {
   token: string;
+  /** Routes the message: an improvement on the live game, or a change on the build. */
+  published: boolean;
   building: boolean;
   onSent: (text: string) => void;
 }) {
@@ -824,7 +793,10 @@ function FeedbackPanel({
     setState('sending');
     setError(null);
     try {
-      await submitFeedback(token, trimmed);
+      // Same box, same act, different destination — decided here from the state the
+      // server reported rather than by asking the creator which one they meant.
+      if (published) await submitImprovement(token, trimmed);
+      else await submitFeedback(token, trimmed);
       setState('sent');
       setText('');
       // Echo it into the activity feed straight away: the API only sees it once the
@@ -845,14 +817,26 @@ function FeedbackPanel({
     }
   };
 
+  // Three states, one box. The copy is the only thing that changes, and it changes so
+  // the creator can see where their message is about to go without having chosen.
+  const hintKey = published
+    ? 'statusView.feedback.hintPublished'
+    : building
+      ? 'statusView.feedback.hintBuilding'
+      : 'statusView.feedback.hint';
+
   return (
-    <div className="status-feedback">
+    <div className="status-feedback status-composer">
       <h3 className="status-feedback-title">
-        {t(building ? 'statusView.feedback.titleBuilding' : 'statusView.feedback.title')}
+        {t(
+          published
+            ? 'statusView.feedback.titlePublished'
+            : building
+              ? 'statusView.feedback.titleBuilding'
+              : 'statusView.feedback.title',
+        )}
       </h3>
-      <p className="status-feedback-hint">
-        {t(building ? 'statusView.feedback.hintBuilding' : 'statusView.feedback.hint')}
-      </p>
+      <p className="status-feedback-hint">{t(hintKey)}</p>
       <textarea
         className="status-feedback-input"
         value={text}
@@ -981,8 +965,12 @@ function buildActivityFeed(
     }
   }
 
-  // Newest first — that's what makes the build feel live.
-  return entries.filter((entry) => Number.isFinite(entry.at)).sort((a, b) => b.at - a.at);
+  // Oldest first, because this is a conversation and that is the order conversations
+  // are read in: the newest thing sits at the bottom, next to the box you reply in.
+  // It used to be newest-first, which put the creator's own last message at the top,
+  // furthest from the composer, and made the thread read backwards once it had more
+  // than a couple of entries in it.
+  return entries.filter((entry) => Number.isFinite(entry.at)).sort((a, b) => a.at - b.at);
 }
 
 function BuildProgressPanel({
@@ -1024,7 +1012,7 @@ function BuildProgressPanel({
   // What the agent says it is doing beats what we infer from its checklist — fall
   // back to the first unfinished task only when it has written nothing.
   const currentStep = headline ? undefined : checklist.find((item) => !item.checked);
-  const lastUpdate = activity[0];
+  const lastUpdate = activity[activity.length - 1];
   // A long gap between pushes is normal, but silence with no explanation reads as
   // "it's broken" — say so plainly instead of letting the creator guess.
   const isQuiet = lastUpdate !== undefined && Date.now() - lastUpdate.at > QUIET_BUILD_MS;
@@ -1095,7 +1083,17 @@ function BuildProgressPanel({
             {activity.map((entry, index) => (
               <li
                 key={`${entry.kind}-${entry.at}-${index}`}
-                className={`build-activity-item build-activity-${entry.kind}${index === 0 ? ' build-progress-commit-latest' : ''}`}
+                className={[
+                  'build-activity-item',
+                  `build-activity-${entry.kind}`,
+                  // The creator's own messages sit on the other side of the thread, the
+                  // way they do in any conversation — without it, a request they sent and
+                  // the agent's reply to it are two identical grey rows.
+                  entry.kind === 'revision' ? 'is-mine' : '',
+                  index === activity.length - 1 ? 'build-progress-commit-latest' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
               >
                 <span className="build-activity-icon" aria-hidden="true">
                   <PixelIcon
