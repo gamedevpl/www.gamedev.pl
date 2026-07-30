@@ -543,6 +543,7 @@ describe('agent build channel', () => {
       { path: 'SPEC.md', content: '---\ntitle: A game\n---\n' },
       { path: 'index.html', content: '<!doctype html>' },
       { path: 'game.ts', content: 'export {};' },
+      { path: 'TRACE.json', content: '{"samples":[]}' },
     ];
 
     function stubGamesStore() {
