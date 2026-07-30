@@ -102,7 +102,9 @@ a {
   gap: 8px;
 }
 
-/* Android-style Up — parent path, not browser history. 44px tap floor on phones. */
+/* Android-style Up — parent path, not browser history. 44px tap floor on phones.
+   `no-drag` keeps the control clickable in Chromium desktop PWAs, where the top
+   of the window can otherwise be claimed as a caption/drag region. */
 .nav-up {
   display: inline-flex;
   align-items: center;
@@ -117,6 +119,8 @@ a {
   background: transparent;
   color: var(--text);
   cursor: pointer;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 
 .nav-up:hover {

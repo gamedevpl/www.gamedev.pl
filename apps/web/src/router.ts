@@ -192,9 +192,10 @@ export function navUpTarget(route: AppRoute): NavUpTarget | null {
     case 'studio':
       // Playtest is a full-viewport theater with its own Close back to overview.
       if (route.tab === 'playtest') return null;
-      if (route.token && route.tab) {
-        return { path: studioPath(route.token), labelKey: 'upStudio' };
-      }
+      // Any selected-game URL (with or without a tab) goes to the shelf — not to
+      // `/studio/:token`. CreatorStudioView canonicalizes a bare token URL onto the
+      // default tab (Build for in-progress games), which would immediately undo an
+      // Up that only stripped the tab and make the chevron look broken.
       if (route.token) {
         return { path: studioPath(), labelKey: 'upStudio' };
       }
