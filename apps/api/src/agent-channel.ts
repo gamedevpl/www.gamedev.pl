@@ -197,6 +197,12 @@ export interface AgentChannelOptions {
     issueNumber: number;
     slug: string;
     version: string;
+    /**
+     * The delivery path never sets this; it exists so the operator's health re-gate can
+     * reuse the same configured trigger (see gate-trigger.ts) instead of a second one
+     * that would drift.
+     */
+    mode?: 'health';
   }) => Promise<{ buildId?: string } | void> | void;
 }
 

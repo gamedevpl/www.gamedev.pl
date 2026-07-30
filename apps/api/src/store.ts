@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { Firestore, type DocumentData } from '@google-cloud/firestore';
 import type { AgentTaskState } from './agent-tasks.js';
-import type { PublicationRecord } from './games-store.js';
+import type { PublicationHealthCheck, PublicationRecord } from './games-store.js';
 import type { JobState, JobTransition } from './job-state.js';
 import type { BuildEvent, SubmissionStatus } from './submission-status.js';
 
@@ -518,6 +518,13 @@ export type NotificationType =
   | 'submission.published'
   | 'submission.needs_changes'
   /**
+   * The engine moved and this creator's *published* game no longer passes the check it
+   * was accepted under (the health re-gate). Deliberately a nudge, not a takedown
+   * notice: the game keeps serving — its baked bundle froze the engine it shipped with —
+   * and the ask is an improvement round, which rebuilds it against the current engine.
+   */
+  | 'submission.game_health'
+  /**
    * Weekly summary of how a creator's published games are doing
    * (docs/improvement-loop-plan.md IL-2). Unlike the three above it is not tied to one
    * submission, which is why its id is keyed by week rather than by issue number.
@@ -533,7 +540,9 @@ export type NotificationType =
   | 'operator.review_ready'
   | 'operator.build_failed'
   | 'operator.build_stalled'
-  | 'operator.feedback_undelivered';
+  | 'operator.feedback_undelivered'
+  /** A health re-gate came back red: a live game no longer passes on the current engine. */
+  | 'operator.game_unhealthy';
 
 /**
  * The types that are about one submission, and so can render "«game title» happened".
@@ -1011,6 +1020,12 @@ export interface Store {
    * version pointer.
    */
   takedownPublication(slug: string, reason: string, at: string): Promise<boolean>;
+  /**
+   * Records or updates the publication's health re-gate (request, verdict, and
+   * notified-at are all patches of the same record — see PublicationHealthCheck).
+   * False when the slug has no publication to attach it to.
+   */
+  setPublicationHealthCheck(slug: string, check: PublicationHealthCheck): Promise<boolean>;
   /** Every slug currently live — the input the snapshot bake reads. */
   listPublications(): Promise<PublicationRecord[]>;
   /** Records the creator's language, so the agent can report progress in it. */
@@ -1586,6 +1601,13 @@ export class InMemoryStore implements Store {
 
   async setPublication(record: PublicationRecord): Promise<void> {
     this.publications.set(record.slug, { ...record });
+  }
+
+  async setPublicationHealthCheck(slug: string, check: PublicationHealthCheck): Promise<boolean> {
+    const record = this.publications.get(slug);
+    if (!record) return false;
+    this.publications.set(slug, { ...record, healthCheck: { ...check } });
+    return true;
   }
 
   async takedownPublication(slug: string, reason: string, at: string): Promise<boolean> {
@@ -2584,6 +2606,20 @@ export class FirestoreStore implements Store {
     // player feedback and scorecards already live at games/{slug}, and a takedown that
     // has to remember to visit a second place is a takedown that eventually misses one.
     await this.db.collection('games').doc(record.slug).set({ publication: record }, { merge: true });
+  }
+
+  async setPublicationHealthCheck(slug: string, check: PublicationHealthCheck): Promise<boolean> {
+    const ref = this.db.collection('games').doc(slug);
+    // Transactional for the same reason takedown is: the sweep writing a verdict can
+    // race an operator re-requesting, and a merge from a stale read would resurrect
+    // whichever check the other side just replaced.
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const current = (snap.data() as { publication?: PublicationRecord } | undefined)?.publication;
+      if (!current) return false;
+      tx.set(ref, { publication: { ...current, healthCheck: check } }, { merge: true });
+      return true;
+    });
   }
 
   async takedownPublication(slug: string, reason: string, at: string): Promise<boolean> {

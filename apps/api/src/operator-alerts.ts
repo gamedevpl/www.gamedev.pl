@@ -29,7 +29,15 @@ export type OperatorAlertKind =
    * comment lands, no session starts, and the creator waits on an answer that is not
    * coming. This is the only symptom.
    */
-  | 'feedback_undelivered';
+  | 'feedback_undelivered'
+  /**
+   * A *published* game's health re-gate came back red: it no longer passes the check on
+   * the current engine. Not produced by `detectOperatorAlerts` — that walks active
+   * jobs, and this is about a finished one — the sweep raises it directly when it reads
+   * the verdict off the manifest. The game keeps serving either way; the creator has
+   * been nudged, and this is the operator's copy of that fact.
+   */
+  | 'game_unhealthy';
 
 export interface OperatorAlert {
   /**
@@ -73,6 +81,9 @@ const KIND_ORDER: Record<OperatorAlertKind, number> = {
   feedback_undelivered: 1,
   build_stalled: 2,
   build_failed: 3,
+  // Last because it is the least urgent thing here: the game still serves, and the
+  // creator — not the operator — holds the fix.
+  game_unhealthy: 4,
 };
 
 /**

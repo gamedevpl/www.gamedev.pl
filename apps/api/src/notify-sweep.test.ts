@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
+import type { GamesStore } from './games-store.js';
 import type { CatalogGameEntry, GitHubClient, LinkedPullRequest } from './github-client.js';
 import type { InternalAuthVerifier } from './internal-auth.js';
 import { InMemoryStore } from './store.js';
@@ -112,7 +113,15 @@ describe('POST /api/internal/notify-sweep', () => {
       headers: { authorization: 'Bearer scheduler-token' },
     });
     expect(first.statusCode).toBe(200);
-    expect(first.json()).toEqual({ scanned: 1, emitted: 1, alerts: 0, alerted: 0, stalled: 0 });
+    expect(first.json()).toEqual({
+      scanned: 1,
+      emitted: 1,
+      alerts: 0,
+      alerted: 0,
+      stalled: 0,
+      healthResolved: 0,
+      unhealthy: 0,
+    });
 
     const list = await store.listNotifications('g:owner');
     expect(list).toHaveLength(1);
@@ -126,7 +135,15 @@ describe('POST /api/internal/notify-sweep', () => {
       url: '/api/internal/notify-sweep',
       headers: { authorization: 'Bearer scheduler-token' },
     });
-    expect(second.json()).toEqual({ scanned: 0, emitted: 0, alerts: 0, alerted: 0, stalled: 0 });
+    expect(second.json()).toEqual({
+      scanned: 0,
+      emitted: 0,
+      alerts: 0,
+      alerted: 0,
+      stalled: 0,
+      healthResolved: 0,
+      unhealthy: 0,
+    });
     await app.close();
   });
 
@@ -345,6 +362,124 @@ describe('undelivered feedback reaches the operator, not just the log', () => {
     expect(res.json()).toMatchObject({ stalled: 1, alerts: 1, alerted: 1 });
     const [notification] = await store.listNotifications('g:boss');
     expect(notification.type).toBe('operator.feedback_undelivered');
+    await app.close();
+  });
+});
+
+/**
+ * The health half of the sweep: verdicts of re-gates in flight, read back off the
+ * manifest exactly the way the acceptance verdict is.
+ */
+describe('health re-gate verdicts on the notify sweep', () => {
+  const REQUESTED_AT = '2026-07-30T12:00:00.000Z';
+  const RAN_AT = '2026-07-30T12:20:00.000Z';
+
+  async function sweep(app: Awaited<ReturnType<typeof buildApp>>) {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/internal/notify-sweep',
+      headers: { authorization: 'Bearer scheduler-token' },
+    });
+    expect(res.statusCode).toBe(200);
+    return res.json();
+  }
+
+  async function appWithPendingCheck(health: { green: boolean; ranAt: string } | null) {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    await store.upsertUser({ uid: 'g:creator' });
+    await store.createSubmission(1_000_042, 'g:creator', 'Sky Dodge');
+    await store.setSubmissionPublishedAt(1_000_042, '2026-07-01T00:00:00.000Z');
+    await store.setPublication({
+      slug: 'sky-dodge',
+      state: 'published',
+      currentVersion: 'v1',
+      publishedAt: '2026-07-01T00:00:00.000Z',
+    });
+    await store.setPublicationHealthCheck('sky-dodge', { version: 'v1', requestedAt: REQUESTED_AT });
+
+    const gamesStore = {
+      getManifest: async () => ({
+        slug: 'sky-dodge',
+        version: 'v1',
+        createdAt: '2026-06-30T00:00:00.000Z',
+        issueNumber: 1_000_042,
+        sourceFiles: [],
+        ...(health ? { health: { ...health, report: 'trace diverged' } } : {}),
+      }),
+    } as unknown as GamesStore;
+
+    const app = await buildApp({
+      store,
+      sessionSecret: 'dev-session-secret-change-me',
+      adminUids: 'g:boss',
+      submissionRoutes: {
+        githubToken: 'token',
+        submissionTokenSecret: secret,
+        gamesRepo: 'gamedevpl/www.gamedev.pl-games',
+        githubClient: publishedGithubClient(),
+        internalAuthVerifier: acceptAll,
+        agentChannel: { gamesStore },
+      },
+    });
+    return { app, store };
+  }
+
+  it('nudges the creator and copies the operator when a live game goes red', async () => {
+    const { app, store } = await appWithPendingCheck({ green: false, ranAt: RAN_AT });
+
+    expect(await sweep(app)).toMatchObject({ healthResolved: 1, unhealthy: 1 });
+
+    // The creator's nudge deep-links to the studio, where the improvement round it is
+    // asking for actually starts.
+    const creator = (await store.listNotifications('g:creator')).find(
+      (notification) => notification.type === 'submission.game_health',
+    );
+    expect(creator).toMatchObject({ link: '/studio', params: { title: 'Sky Dodge' } });
+
+    const operator = (await store.listNotifications('g:boss')).find(
+      (notification) => notification.type === 'operator.game_unhealthy',
+    );
+    expect(operator).toBeDefined();
+
+    const publication = await store.getPublication('sky-dodge');
+    expect(publication?.healthCheck).toMatchObject({ green: false, verdictAt: RAN_AT });
+    expect(publication?.healthCheck?.notifiedAt).toBeDefined();
+
+    // The situation has not changed, so a second sweep says nothing new.
+    expect(await sweep(app)).toMatchObject({ healthResolved: 0, unhealthy: 0 });
+    expect(
+      (await store.listNotifications('g:creator')).filter(
+        (notification) => notification.type === 'submission.game_health',
+      ),
+    ).toHaveLength(1);
+
+    await app.close();
+  });
+
+  it('records a green verdict quietly — nothing is waiting on anybody', async () => {
+    const { app, store } = await appWithPendingCheck({ green: true, ranAt: RAN_AT });
+
+    expect(await sweep(app)).toMatchObject({ healthResolved: 1, unhealthy: 0 });
+
+    const publication = await store.getPublication('sky-dodge');
+    expect(publication?.healthCheck).toMatchObject({ green: true, verdictAt: RAN_AT });
+    expect(
+      (await store.listNotifications('g:creator')).filter(
+        (notification) => notification.type === 'submission.game_health',
+      ),
+    ).toHaveLength(0);
+
+    await app.close();
+  });
+
+  it('keeps waiting when the manifest only holds an older run’s verdict', async () => {
+    // A verdict older than the request answers the previous question, not this one.
+    const { app, store } = await appWithPendingCheck({ green: false, ranAt: '2026-07-30T11:00:00.000Z' });
+
+    expect(await sweep(app)).toMatchObject({ healthResolved: 0, unhealthy: 0 });
+    expect((await store.getPublication('sky-dodge'))?.healthCheck?.verdictAt).toBeUndefined();
+
     await app.close();
   });
 });

@@ -11,6 +11,8 @@ const mocked = vi.hoisted(() => ({
   publishJob: vi.fn(),
   cancelJob: vi.fn(),
   retryJob: vi.fn(),
+  fetchPublishedGames: vi.fn(),
+  regateGame: vi.fn(),
 }));
 
 vi.mock('./adminJobsApi.js', () => mocked);
@@ -36,6 +38,11 @@ function queue(jobs: JobQueueEntry[]): JobQueueResponse {
 }
 
 async function render() {
+  // The published shelf loads alongside the queue in every test; individual tests
+  // override with real data when the shelf is what they are about.
+  if (mocked.fetchPublishedGames.getMockImplementation() === undefined) {
+    mocked.fetchPublishedGames.mockResolvedValue([]);
+  }
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   const container = document.createElement('div');
   document.body.appendChild(container);
@@ -220,6 +227,59 @@ describe('AdminJobsPanel', () => {
     });
 
     expect(container.querySelector('.admin-job-message')?.textContent).toContain('cancel it instead');
+
+    await act(async () => root.unmount());
+  });
+
+  it('shows the published shelf with its health, and re-gates in one click', async () => {
+    mocked.fetchJobQueue.mockResolvedValue(queue([]));
+    mocked.fetchPublishedGames.mockResolvedValue([
+      {
+        slug: 'comet-courier',
+        state: 'published',
+        currentVersion: 'v1',
+        publishedAt: '2026-07-01T10:00:00Z',
+        healthCheck: {
+          version: 'v1',
+          requestedAt: '2026-07-29T10:00:00Z',
+          green: false,
+          verdictAt: '2026-07-29T10:20:00Z',
+        },
+      },
+      { slug: 'apex-sprint', state: 'published', currentVersion: 'v2', publishedAt: '2026-07-02T10:00:00Z' },
+    ]);
+    mocked.regateGame.mockResolvedValue({ ok: true, buildId: 'b1' });
+
+    const { container, root } = await render();
+
+    const shelf = container.querySelector('.admin-published');
+    expect(shelf?.textContent).toContain('comet-courier');
+    // A red verdict is loud, and says the creator already knows.
+    expect(shelf?.textContent).toContain('FAILING');
+    expect(shelf?.textContent).toContain('creator nudged');
+    // A game never checked says so rather than implying an answer.
+    expect(shelf?.textContent).toContain('never checked');
+
+    const regate = Array.from(shelf?.querySelectorAll('button') ?? []).find(
+      (button) => button.textContent === 'Re-gate',
+    ) as HTMLButtonElement;
+    await act(async () => {
+      regate.click();
+      await Promise.resolve();
+    });
+    expect(mocked.regateGame).toHaveBeenCalledWith('comet-courier');
+    expect(shelf?.textContent).toContain('health check started');
+
+    await act(async () => root.unmount());
+  });
+
+  it('hides the shelf entirely when nothing is published', async () => {
+    mocked.fetchJobQueue.mockResolvedValue(queue([job()]));
+    mocked.fetchPublishedGames.mockResolvedValue([]);
+
+    const { container, root } = await render();
+
+    expect(container.querySelector('.admin-published')).toBeNull();
 
     await act(async () => root.unmount());
   });

@@ -33,6 +33,7 @@ const SHORT_TYPE: Record<SubmissionNotificationType, string> = {
   'submission.building': 'building',
   'submission.published': 'published',
   'submission.needs_changes': 'needs-changes',
+  'submission.game_health': 'game-health',
 };
 
 // Which derived statuses are worth a notification, and as which event. queued,
@@ -347,9 +348,15 @@ export async function emitSubmissionNotification(
   const id = `sub-${event.issueNumber}-${SHORT_TYPE[event.type]}`;
   const now = deps.now ? new Date(deps.now()).toISOString() : new Date().toISOString();
 
-  // Published games deep-link to play; everything else to the status page.
+  // Published games deep-link to play; the health nudge to the studio, where the
+  // improvement round it is asking for actually starts; everything else to the
+  // status page.
   const link =
-    event.type === 'submission.published' && event.slug ? `/play/${event.slug}` : `/status/${event.statusToken}`;
+    event.type === 'submission.published' && event.slug
+      ? `/play/${event.slug}`
+      : event.type === 'submission.game_health'
+        ? '/studio'
+        : `/status/${event.statusToken}`;
 
   const { created, notification } = await deps.store.createNotification(event.uid, {
     id,

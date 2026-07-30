@@ -141,6 +141,22 @@ const notificationCopy: Record<
     en: { subject: 'Your gamedev.pl submission needs changes', lead: 'needs another look.', cta: 'See details' },
     pl: { subject: 'Twoje zgłoszenie na gamedev.pl wymaga zmian', lead: 'wymaga poprawek.', cta: 'Zobacz szczegóły' },
   },
+  // A nudge, not an alarm: the live game keeps working — its published bundle froze the
+  // engine it shipped with — but the platform underneath has moved on, and an
+  // improvement round is what brings the game along. Framed as an invitation because
+  // it is one: the creator touching their game again is the good outcome here.
+  'submission.game_health': {
+    en: {
+      subject: 'Your game could use a refresh',
+      lead: 'no longer passes our checks on the latest engine. It still plays fine — but a quick improvement round would bring it up to date.',
+      cta: 'Improve it',
+    },
+    pl: {
+      subject: 'Twoja gra przydałaby się odświeżyć',
+      lead: 'nie przechodzi już naszych testów na najnowszym silniku. Nadal działa — ale krótka runda ulepszeń przywróci ją do formy.',
+      cta: 'Ulepsz ją',
+    },
+  },
 };
 
 const unsubscribeLine: Record<Locale, string> = {
@@ -318,6 +334,11 @@ const operatorCopy: Record<OperatorNotificationType, { subject: string; lead: st
   'operator.feedback_undelivered': {
     subject: 'A change request is not reaching the agent',
     lead: 'has a creator’s change request that no agent has collected — the relay may be down.',
+    cta: 'Open the queue',
+  },
+  'operator.game_unhealthy': {
+    subject: 'A live game failed its health check',
+    lead: 'no longer passes the check on the current engine. It still serves — the creator has been nudged to refresh it.',
     cta: 'Open the queue',
   },
 };

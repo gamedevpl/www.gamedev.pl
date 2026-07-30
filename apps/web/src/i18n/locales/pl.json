@@ -22,6 +22,10 @@
       "needs_changes": {
         "title": "Twoje zgłoszenie wymaga zmian",
         "body": "„{{title}}” wymaga poprawek."
+      },
+      "game_health": {
+        "title": "Twoja gra przydałaby się odświeżyć",
+        "body": "„{{title}}” nie przechodzi już naszych testów na najnowszym silniku. Nadal działa — runda ulepszeń przywróci ją do formy."
       }
     },
     "creator": {
@@ -50,6 +54,10 @@
       "feedback_undelivered": {
         "title": "Prośba o zmianę nie dociera do agenta",
         "body": "„{{title}}” ma prośbę o zmianę, której nikt nie odebrał."
+      },
+      "game_unhealthy": {
+        "title": "Opublikowana gra nie przeszła kontroli",
+        "body": "„{{title}}” nie przechodzi już testów na aktualnym silniku. Twórca dostał zachętę do odświeżenia."
       }
     }
   },

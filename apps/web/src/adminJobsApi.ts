@@ -108,6 +108,44 @@ export async function cancelJob(issueNumber: number): Promise<CancelResult | { r
   return { refused: known.find((code) => code === body.error) ?? 'unknown' };
 }
 
+export interface PublicationHealthCheck {
+  version: string;
+  requestedAt: string;
+  buildId?: string;
+  green?: boolean;
+  verdictAt?: string;
+  notifiedAt?: string;
+}
+
+export interface PublishedGame {
+  slug: string;
+  state: 'published' | 'archived' | 'disabled';
+  currentVersion: string;
+  publishedAt: string;
+  healthCheck?: PublicationHealthCheck;
+}
+
+export async function fetchPublishedGames(): Promise<PublishedGame[] | null> {
+  const response = await fetch('/api/admin/games', { credentials: 'include' });
+  if (response.status === 404 || response.status === 401) return null;
+  if (!response.ok) throw new Error(`published games failed: ${response.status}`);
+  return ((await response.json()) as { games: PublishedGame[] }).games;
+}
+
+export type RegateRefusal = 'not_published' | 'version_missing' | 'gate_unavailable' | 'store_unavailable' | 'unknown';
+
+/** Starts a health re-gate of a published game against the current engine. */
+export async function regateGame(slug: string): Promise<{ ok: true; buildId?: string } | { refused: RegateRefusal }> {
+  const response = await fetch(`/api/admin/games/${encodeURIComponent(slug)}/regate`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (response.ok) return (await response.json()) as { ok: true; buildId?: string };
+  const body = (await response.json().catch(() => ({}))) as { error?: string };
+  const known: RegateRefusal[] = ['not_published', 'version_missing', 'gate_unavailable', 'store_unavailable'];
+  return { refused: known.find((code) => code === body.error) ?? 'unknown' };
+}
+
 export interface RetryResult {
   ok: true;
   state: 'building';

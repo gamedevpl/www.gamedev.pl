@@ -29,7 +29,7 @@ import {
 import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
-import { emitOperatorAlert, notifyOnTransition, type EmitDeps } from './notify.js';
+import { emitOperatorAlert, emitSubmissionNotification, notifyOnTransition, type EmitDeps } from './notify.js';
 import { detectOperatorAlerts, FEEDBACK_STALL_MS } from './operator-alerts.js';
 import { isAdminSession } from './admin.js';
 import { peekQuota } from './quota-gate.js';
@@ -2033,6 +2033,79 @@ export async function registerSubmissionRoutes(
     return reply.send({ ok: true, state: 'building', creditsSpent: 1 });
   });
 
+  /**
+   * The published shelf, as the operator sees it: what is live, at which version, and
+   * what the last health re-gate said. Slugs only — a publication's identity is its
+   * slug, and joining titles back through manifests would cost a read per game on a
+   * list that exists to be glanced at.
+   */
+  app.get('/api/admin/games', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });
+    if (!store) return reply.status(503).send({ error: 'store_unavailable' });
+    const publications = await store.listPublications();
+    return reply.send({
+      games: publications.sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt)),
+    });
+  });
+
+  /**
+   * Re-gates a published game against the *current* engine — the manual trigger of the
+   * break-and-nudge loop.
+   *
+   * The published bundle froze the engine it shipped with, so serving is immune to
+   * engine changes; what drifts is whether the game would still pass a rebuild. This
+   * runs the same gate on the game's current version with the engine pin overridden,
+   * records the verdict as `manifest.health` (never touching the acceptance verdict,
+   * which is provenance), and leaves the read-back to the sweep — the same pattern the
+   * acceptance gate uses, for the same reason: the verdict is durable in the store, and
+   * a callback would be a second source of a fact the manifest already holds.
+   *
+   * A red verdict nudges the creator rather than pulling the game: an improvement round
+   * rebuilds it against the current engine, and inviting one is the point.
+   */
+  app.post<{ Params: { slug: string } }>('/api/admin/games/:slug/regate', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });
+    if (!store) return reply.status(503).send({ error: 'store_unavailable' });
+    const gamesStore = options.agentChannel?.gamesStore;
+    const gateTrigger = options.agentChannel?.onSourcesDelivered;
+    if (!gamesStore || !gateTrigger) return reply.status(503).send({ error: 'gate_unavailable' });
+
+    const slug = request.params.slug;
+    const publication = await store.getPublication(slug);
+    if (!publication) return reply.status(404).send({ error: 'not_found' });
+    if (publication.state !== 'published') {
+      return reply.status(409).send({ error: 'not_published', state: publication.state });
+    }
+
+    const version = publication.currentVersion;
+    const manifest = await gamesStore.getManifest(slug, version);
+    if (!manifest) return reply.status(409).send({ error: 'version_missing' });
+
+    const requestedAt = new Date(now()).toISOString();
+    const triggered = await gateTrigger({ issueNumber: manifest.issueNumber, slug, version, mode: 'health' });
+    const buildId = triggered && typeof triggered === 'object' ? triggered.buildId : undefined;
+
+    // Replaces any previous check wholesale: the question is always about the latest
+    // run, and a stale verdict left beside a fresh request would read as an answer.
+    await store.setPublicationHealthCheck(slug, {
+      version,
+      requestedAt,
+      ...(buildId ? { buildId } : {}),
+    });
+    // Booked to the job that built the game — a health run is a gate run on the bill,
+    // and this is the one place the issue number is known.
+    if (buildId) {
+      await store.recordJobCost(manifest.issueNumber, {
+        kind: 'gate_run',
+        at: requestedAt,
+        by: 'cloud-build',
+        ref: buildId,
+      });
+    }
+
+    return reply.send({ ok: true, slug, version, ...(buildId ? { buildId } : {}) });
+  });
+
   // The notification sweep (docs/notifications-plan.md N1): the closed-tab backstop
   // for the opportunistic poll-path detection above. Cloud Scheduler POSTs here with
   // an OIDC token; we derive the current status of every still-active submission and
@@ -2127,6 +2200,73 @@ export async function registerSubmissionRoutes(
         }
       }
 
+      // The health half of the sweep: read back verdicts of re-gates in flight. The
+      // gate ran remotely, wrote to the manifest and exited — same read-back pattern as
+      // the acceptance verdict. Bounded: one manifest read per *pending* check, and a
+      // publication with no check (or a resolved one) costs nothing.
+      let healthResolved = 0;
+      let unhealthy = 0;
+      const healthGamesStore = options.agentChannel?.gamesStore;
+      if (healthGamesStore) {
+        const publications = await store.listPublications().catch(() => []);
+        for (const publication of publications) {
+          const check = publication.healthCheck;
+          if (!check || check.verdictAt) continue;
+          try {
+            const manifest = await healthGamesStore.getManifest(publication.slug, check.version);
+            const health = manifest?.health;
+            // A verdict older than the request is the previous run's answer, not this
+            // one's — the run we are waiting for has not written yet.
+            if (!health || Date.parse(health.ranAt) < Date.parse(check.requestedAt)) continue;
+
+            healthResolved += 1;
+            const resolved = { ...check, green: health.green, verdictAt: health.ranAt };
+            if (health.green) {
+              await store.setPublicationHealthCheck(publication.slug, resolved);
+              continue;
+            }
+
+            unhealthy += 1;
+            // Red: the game still serves — its baked bundle froze the engine it shipped
+            // with — but a rebuild would fail. Nudge the creator, whose improvement
+            // round is the fix, and copy the operator. Notified-at is written only
+            // after both, so an emit that dies retries next sweep; the emits themselves
+            // are idempotent by id.
+            const submission = manifest ? await store.getSubmission(manifest.issueNumber) : null;
+            if (submission) {
+              await emitSubmissionNotification(buildNotifyDeps(), {
+                uid: submission.ownerUid,
+                type: 'submission.game_health',
+                issueNumber: submission.issueNumber,
+                gameTitle: submission.title,
+                statusToken: mintToken(submission.issueNumber, submissionTokenSecret),
+              });
+            }
+            if (adminUids && adminUids.size > 0) {
+              await emitOperatorAlert(
+                { ...buildNotifyDeps(), adminUids },
+                {
+                  id: `op-health-${publication.slug}-${check.version}`,
+                  kind: 'game_unhealthy',
+                  issueNumber: manifest?.issueNumber ?? 0,
+                  title: submission?.title ?? publication.slug,
+                  ownerUid: submission?.ownerUid ?? '',
+                  slug: publication.slug,
+                  since: health.ranAt,
+                },
+              );
+            }
+            await store.setPublicationHealthCheck(publication.slug, {
+              ...resolved,
+              notifiedAt: new Date(now()).toISOString(),
+            });
+          } catch (healthError) {
+            // One unreadable manifest must not abort the sweep — same rule as above.
+            request.log.error({ err: healthError, slug: publication.slug }, 'health check read failed');
+          }
+        }
+      }
+
       // Logged at error level so it surfaces without new infrastructure, the same way
       // the scorecard sweep reports its failures — a nightly job nobody watches is
       // exactly the kind that fails quietly for weeks.
@@ -2140,6 +2280,8 @@ export async function registerSubmissionRoutes(
           alerted,
           stalled: stalledIssues.length,
           stalledIssues,
+          healthResolved,
+          unhealthy,
         },
         stalledIssues.length > 0
           ? 'creator feedback undelivered past the stall threshold — the games-repo @copilot relay may be down'
@@ -2151,6 +2293,8 @@ export async function registerSubmissionRoutes(
         alerts: alerts.length,
         alerted,
         stalled: stalledIssues.length,
+        healthResolved,
+        unhealthy,
       });
     },
   );

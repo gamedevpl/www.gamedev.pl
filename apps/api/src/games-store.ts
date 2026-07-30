@@ -200,10 +200,42 @@ export interface VersionManifest {
   engineRef?: string;
   /** Verdict of our own gate. A version without a green one is never publishable. */
   gate?: { green: boolean; ranAt: string; report?: string };
+  /**
+   * The most recent *health* verdict: the same check re-run later against the current
+   * engine, asking "does this game still work on today's GameKit".
+   *
+   * A separate field from `gate` on purpose. The gate verdict is provenance — "it worked
+   * when we accepted it" — and a red health run overwriting it would erase the one fact
+   * that justified the publication. Health is the opposite kind of record: always the
+   * latest run, expected to change as the engine moves, and never consulted by
+   * publishing.
+   */
+  health?: { green: boolean; ranAt: string; engineRef?: string; report?: string };
   sourceFiles: string[];
 }
 
 export type PublicationState = 'published' | 'archived' | 'disabled';
+
+/**
+ * One health re-gate of a published game, requested by the operator and resolved by the
+ * sweep (the gate runs remotely, writes to the manifest and exits — same read-back
+ * pattern as the acceptance verdict, for the same reason).
+ *
+ * Kept on the publication rather than the job: the job that built this game is terminal
+ * and its state machine must stay finished. Health is a property of what is *live*.
+ */
+export interface PublicationHealthCheck {
+  /** The stored version the check ran against — current at request time. */
+  version: string;
+  requestedAt: string;
+  /** Cloud Build's id for the run, when the trigger reported one. */
+  buildId?: string;
+  /** Set once the sweep reads the verdict off the manifest. */
+  green?: boolean;
+  verdictAt?: string;
+  /** Set once a red verdict has nudged the creator, so sweep re-runs stay quiet. */
+  notifiedAt?: string;
+}
 
 /**
  * What is live, decided here rather than by what exists in the bucket.
@@ -219,6 +251,8 @@ export interface PublicationRecord {
   publishedAt: string;
   takedownAt?: string;
   takedownReason?: string;
+  /** The latest health re-gate, when one has been requested. See the type's own doc. */
+  healthCheck?: PublicationHealthCheck;
 }
 
 export interface GamesStore {
@@ -233,8 +267,29 @@ export interface GamesStore {
   }): Promise<{ version: string; manifest: VersionManifest }>;
   getManifest(slug: string, version: string): Promise<VersionManifest | null>;
   getSourceFile(slug: string, version: string, path: string): Promise<string | null>;
-  /** Records our gate's verdict against a version. Only a green one may publish. */
-  putGateResult(slug: string, version: string, result: { green: boolean; report?: string }): Promise<void>;
+  /**
+   * Records our gate's verdict against a version. Only a green one may publish.
+   *
+   * `engineRef` is the commit the run actually checked against, resolved from the
+   * harness itself. Stamped only when the manifest carries none: deliveries do not pin
+   * an engine yet, and the gate run is the first moment anything knows the concrete sha
+   * a green verdict is reproducible against.
+   */
+  putGateResult(
+    slug: string,
+    version: string,
+    result: { green: boolean; report?: string; engineRef?: string },
+  ): Promise<void>;
+  /**
+   * Records a *health* verdict — the check re-run against the current engine, long
+   * after acceptance. Never touches `gate` or `engineRef`: health answers "does it
+   * still work", and must not rewrite the record of what was accepted.
+   */
+  putHealthResult(
+    slug: string,
+    version: string,
+    result: { green: boolean; report?: string; engineRef?: string },
+  ): Promise<void>;
   /** Stores an artifact the gate produced — bundle or media. Agents never write these. */
   putDerivedArtifact(slug: string, version: string, name: string, body: Buffer, contentType: string): Promise<void>;
   getDerivedArtifact(slug: string, version: string, name: string): Promise<Buffer | null>;
@@ -365,6 +420,23 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       if (!existing) throw new Error(`no manifest for ${slug}@${version}`);
       const manifest = JSON.parse(existing.toString('utf8')) as VersionManifest;
       manifest.gate = { green: result.green, ranAt: new Date(now()).toISOString(), report: result.report };
+      // First writer wins: the ref the *first* gate run checked against is the one the
+      // verdict is reproducible against, and a re-run must not quietly repin it.
+      if (result.engineRef && !manifest.engineRef) manifest.engineRef = result.engineRef;
+      await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
+    },
+
+    async putHealthResult(slug, version, result) {
+      const prefix = versionPrefix(slug, version);
+      const existing = await readObject(`${prefix}/manifest.json`);
+      if (!existing) throw new Error(`no manifest for ${slug}@${version}`);
+      const manifest = JSON.parse(existing.toString('utf8')) as VersionManifest;
+      manifest.health = {
+        green: result.green,
+        ranAt: new Date(now()).toISOString(),
+        ...(result.engineRef ? { engineRef: result.engineRef } : {}),
+        ...(result.report ? { report: result.report } : {}),
+      };
       await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
     },
 

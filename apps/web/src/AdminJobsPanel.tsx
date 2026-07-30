@@ -2,12 +2,16 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   cancelJob,
   fetchJobQueue,
+  fetchPublishedGames,
   publishJob,
+  regateGame,
   retryJob,
   type CancelRefusal,
   type JobQueueEntry,
   type JobQueueResponse,
+  type PublishedGame,
   type PublishRefusal,
+  type RegateRefusal,
   type RetryRefusal,
 } from './adminJobsApi.js';
 
@@ -61,6 +65,140 @@ const RETRY_COPY: Record<RetryRefusal, string> = {
 function retryable(job: JobQueueEntry): boolean {
   if (job.state === 'failed' || job.state === 'needs_changes') return true;
   return (job.state === 'building' || job.state === 'dispatched') && job.stall !== null;
+}
+
+const REGATE_COPY: Record<RegateRefusal, string> = {
+  not_published: 'not currently published — nothing live to check',
+  version_missing: 'the published version is missing from the store',
+  gate_unavailable: 'the gate is not configured on this deployment',
+  store_unavailable: 'the store is not configured on this deployment',
+  unknown: 'refused, and the reason was not one this console knows',
+};
+
+/**
+ * The health column in words. Three honest states: never asked, asked and waiting
+ * (with the age, because a request the gate never picked up looks exactly like a slow
+ * one until someone reads the date), and answered.
+ */
+function healthLabel(game: PublishedGame, now: number): string {
+  const check = game.healthCheck;
+  if (!check) return 'never checked';
+  if (!check.verdictAt) {
+    const minutes = Math.max(0, Math.floor((now - Date.parse(check.requestedAt)) / 60_000));
+    return `checking… (${minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h`} ago)`;
+  }
+  return check.green ? `healthy (${check.verdictAt.slice(0, 10)})` : `FAILING (${check.verdictAt.slice(0, 10)})`;
+}
+
+function PublishedRow({ game, onChanged }: { game: PublishedGame; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const onRegate = useCallback(async () => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const result = await regateGame(game.slug);
+      if ('refused' in result) {
+        setMessage(REGATE_COPY[result.refused]);
+      } else {
+        setMessage('health check started — the verdict lands within a few sweeps');
+        onChanged();
+      }
+    } catch {
+      setMessage('could not reach the API');
+    } finally {
+      setBusy(false);
+    }
+  }, [game.slug, onChanged]);
+
+  const failing = game.healthCheck?.verdictAt && game.healthCheck.green === false;
+
+  return (
+    <tr className={failing ? 'admin-job-row is-stalled' : 'admin-job-row'}>
+      <td>
+        <div className="admin-job-title">{game.slug}</div>
+        <div className="admin-job-sub">{game.currentVersion}</div>
+      </td>
+      <td>{game.publishedAt.slice(0, 10)}</td>
+      <td>
+        <span className="admin-job-state">{healthLabel(game, Date.now())}</span>
+        {failing ? <div className="admin-job-stall">creator nudged to refresh</div> : null}
+      </td>
+      <td>
+        <button className="admin-job-publish" onClick={onRegate} disabled={busy}>
+          {busy ? 'Starting…' : 'Re-gate'}
+        </button>
+        {message ? <div className="admin-job-message">{message}</div> : null}
+      </td>
+    </tr>
+  );
+}
+
+/**
+ * What is live, and whether it still passes on today's engine.
+ *
+ * The queue above answers for builds in flight; published games are terminal jobs and
+ * would never appear there — yet they are the only thing players actually see. This is
+ * where the break-and-nudge loop starts: re-gate a game, and a red verdict nudges its
+ * creator to run an improvement round. The game keeps serving either way — its baked
+ * bundle froze the engine it shipped with.
+ */
+function PublishedGames() {
+  const [games, setGames] = useState<PublishedGame[] | null>(null);
+  const [state, setState] = useState<'loading' | 'ready' | 'forbidden' | 'error'>('loading');
+
+  const load = useCallback(async () => {
+    try {
+      const response = await fetchPublishedGames();
+      if (response === null) {
+        setState('forbidden');
+        return;
+      }
+      setGames(response);
+      setState('ready');
+    } catch {
+      setState('error');
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+    // Half the queue's cadence: health verdicts arrive on the sweep's schedule, not in
+    // seconds, and this table changes far less often than the queue above it.
+    const timer = setInterval(() => void load(), 60_000);
+    return () => clearInterval(timer);
+  }, [load]);
+
+  // Forbidden renders nothing at all: the queue above has already said "Not found" to
+  // a stranger, and a second copy would only say it twice.
+  if (state === 'forbidden') return null;
+  if (state === 'loading') return null;
+  if (state === 'error') return <p className="health-empty">Could not read the published shelf.</p>;
+  if (!games || games.length === 0) return null;
+
+  return (
+    <section className="admin-published">
+      <h2 className="health-section-title">Published</h2>
+      <div className="health-table-scroll">
+        <table className="health-table">
+          <thead>
+            <tr>
+              <th>Game</th>
+              <th>Published</th>
+              <th>Health</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {games.map((game) => (
+              <PublishedRow key={game.slug} game={game} onChanged={() => void load()} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
 }
 
 /** Short, sortable duration: an operator reads "2h 5m", not 7_500_000. */
@@ -264,6 +402,8 @@ export function AdminJobsPanel() {
           </table>
         </div>
       )}
+
+      <PublishedGames />
     </section>
   );
 }

@@ -26,6 +26,13 @@
  * Usage:
  *   npm run gate:run -w @gamedevpl/api -- --slug <slug> --version <version>
  *   npm run gate:run -w @gamedevpl/api -- --slug <slug> --version <version> --keep-harness
+ *   npm run gate:run -w @gamedevpl/api -- --slug <slug> --version <version> --health
+ *
+ * `--health` re-runs the same check against the *current* engine (`main`, not the
+ * manifest's pin) and records the verdict as `manifest.health` instead of
+ * `manifest.gate`. The acceptance verdict is provenance and must survive a red re-run;
+ * health is expected to change as the engine moves. A red health run still exits
+ * non-zero so the Cloud Build history shows it red.
  */
 
 import { spawn } from 'node:child_process';
@@ -86,35 +93,58 @@ async function main(): Promise<void> {
   const repo = process.env.GAMES_REPO?.trim() ?? 'gamedevpl/www.gamedev.pl-games';
   const store = createGcsGamesStore({ bucket });
   const harnesses: string[] = [];
+  const health = process.argv.includes('--health');
 
-  const outcome = await runGate(slug, version, {
-    store,
-    run,
-    async prepareHarness(engineRef) {
-      // A real clone rather than the tarball reader the bake uses: the gate has to *run*
-      // the repo's toolchain, which means node_modules, the browser and ffmpeg — a
-      // read-only file source cannot be npm-installed or executed.
-      const dir = await mkdtemp(path.join(tmpdir(), 'gate-harness-'));
-      harnesses.push(dir);
-      const url = `https://x-access-token:${token}@github.com/${repo}.git`;
-      // Shallow and single-branch: the gate needs the tree at one ref, and the history
-      // it would otherwise pull is ~200 MB of capture media it will never read.
-      const clone = await run('git', ['clone', '--depth', '1', '--branch', engineRef, url, dir], process.cwd());
-      if (clone.code !== 0) throw new Error(`could not fetch harness at ${engineRef}`);
-      const install = await run('npm', ['ci', '--no-audit', '--no-fund'], dir);
-      if (install.code !== 0) throw new Error('harness install failed');
-      return dir;
+  const outcome = await runGate(
+    slug,
+    version,
+    {
+      store,
+      run,
+      async prepareHarness(engineRef) {
+        // A real clone rather than the tarball reader the bake uses: the gate has to *run*
+        // the repo's toolchain, which means node_modules, the browser and ffmpeg — a
+        // read-only file source cannot be npm-installed or executed.
+        const dir = await mkdtemp(path.join(tmpdir(), 'gate-harness-'));
+        harnesses.push(dir);
+        const url = `https://x-access-token:${token}@github.com/${repo}.git`;
+        // Shallow and single-branch: the gate needs the tree at one ref, and the history
+        // it would otherwise pull is ~200 MB of capture media it will never read.
+        const clone = await run('git', ['clone', '--depth', '1', '--branch', engineRef, url, dir], process.cwd());
+        if (clone.code !== 0) throw new Error(`could not fetch harness at ${engineRef}`);
+        const install = await run('npm', ['ci', '--no-audit', '--no-fund'], dir);
+        if (install.code !== 0) throw new Error('harness install failed');
+        return dir;
+      },
     },
-  });
+    // Health asks about today's engine, so the manifest's pin is exactly the thing to
+    // ignore. An acceptance run passes nothing and lets the pin (or `main`) decide.
+    health ? { engineRef: 'main' } : {},
+  );
 
-  await store.putGateResult(slug, version, { green: outcome.green, report: outcome.report });
+  if (health) {
+    await store.putHealthResult(slug, version, {
+      green: outcome.green,
+      report: outcome.report,
+      engineRef: outcome.engineCommit,
+    });
+  } else {
+    // The resolved sha rides along so the manifest ends up pinned to what was actually
+    // checked — the first run stamps it, later runs leave the pin alone.
+    await store.putGateResult(slug, version, {
+      green: outcome.green,
+      report: outcome.report,
+      engineRef: outcome.engineCommit,
+    });
+  }
 
   if (!process.argv.includes('--keep-harness')) {
     await Promise.all(harnesses.map((dir) => rm(dir, { recursive: true, force: true }).catch(() => {})));
   }
 
   console.log(
-    `\ngate ${outcome.green ? 'PASSED' : 'FAILED'} for ${slug}@${version} in ${Math.round(outcome.durationMs / 1000)}s`,
+    `\n${health ? 'health check' : 'gate'} ${outcome.green ? 'PASSED' : 'FAILED'} for ${slug}@${version} ` +
+      `in ${Math.round(outcome.durationMs / 1000)}s`,
   );
   if (outcome.artifacts.length) console.log(`stored: ${outcome.artifacts.join(', ')}`);
   if (!outcome.green) console.error(outcome.report);

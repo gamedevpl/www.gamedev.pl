@@ -41,6 +41,12 @@ export interface GateTriggerOptions {
 export interface GateTriggerInput {
   slug: string;
   version: string;
+  /**
+   * `health` re-runs the check against the current engine and records the verdict as
+   * `manifest.health`, leaving the acceptance verdict alone. Omitted means the
+   * acceptance gate, exactly as before.
+   */
+  mode?: 'health';
 }
 
 const DEFAULTS = {
@@ -103,7 +109,10 @@ function buildSpec(
             // Single-quoted so a slug or version can never break out of the command.
             // Both are already validated upstream — the slug against SLUG_PATTERN, the
             // version because we generated it — and this is the belt to that braces.
-            `npm run gate:run -w @gamedevpl/api -- --slug '${input.slug}' --version '${input.version}'`,
+            // `--health` is our own constant, appended from a two-value union, never
+            // from input text.
+            `npm run gate:run -w @gamedevpl/api -- --slug '${input.slug}' --version '${input.version}'` +
+              (input.mode === 'health' ? ' --health' : ''),
           ].join('\n'),
         ],
       },
@@ -118,8 +127,10 @@ function buildSpec(
     },
     options: { logging: 'CLOUD_LOGGING_ONLY', machineType: 'E2_HIGHCPU_8' },
     timeout: '3600s',
-    // Searchable in the Cloud Build history: "show me every gate run for this game".
-    tags: ['gate', `slug-${input.slug}`],
+    // Searchable in the Cloud Build history: "show me every gate run for this game" —
+    // and health runs carry their own tag so a fleet re-check reads as one, not as a
+    // wave of failing acceptance gates.
+    tags: ['gate', ...(input.mode === 'health' ? ['health'] : []), `slug-${input.slug}`],
   };
 }
 

@@ -7265,6 +7265,11 @@ body.player-open {
   cursor: default;
 }
 
+/* The published shelf sits under the queue, clearly a second thing. */
+.admin-published {
+  margin-top: 2rem;
+}
+
 .admin-job-message {
   margin-top: 0.35rem;
   font-size: 0.78rem;

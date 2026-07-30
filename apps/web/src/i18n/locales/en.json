@@ -22,6 +22,10 @@
       "needs_changes": {
         "title": "Your submission needs changes",
         "body": "“{{title}}” needs another look."
+      },
+      "game_health": {
+        "title": "Your game could use a refresh",
+        "body": "“{{title}}” no longer passes our checks on the latest engine. It still plays — an improvement round would bring it up to date."
       }
     },
     "creator": {
@@ -50,6 +54,10 @@
       "feedback_undelivered": {
         "title": "A change request is not reaching the agent",
         "body": "“{{title}}” has a change request nobody has collected."
+      },
+      "game_unhealthy": {
+        "title": "A live game failed its health check",
+        "body": "“{{title}}” no longer passes on the current engine. The creator has been nudged."
       }
     }
   },

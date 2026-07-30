@@ -37,6 +37,7 @@ const ALERT_COPY: Record<OperatorAlert['kind'], string> = {
   // Names the suspect, because this one is never about the game: the request landed
   // and the relay that wakes an agent for it did not fire.
   feedback_undelivered: 'change request never collected — check the relay',
+  game_unhealthy: 'live game failing on the current engine — creator nudged',
 };
 
 /** The same kinds again, short enough to sit several to a line in the summary. */
@@ -45,6 +46,7 @@ const ALERT_SHORT: Record<OperatorAlert['kind'], string> = {
   build_failed: 'failed',
   build_stalled: 'stopped',
   feedback_undelivered: 'undelivered feedback',
+  game_unhealthy: 'unhealthy live game',
 };
 
 /** Rough age, in the same vocabulary the queue uses. */

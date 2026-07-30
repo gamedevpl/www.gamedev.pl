@@ -119,7 +119,15 @@ async function createApp(params: {
   contentChecker?: ContentChecker;
   maxCachedDraftPreviews?: number;
   agentBackend?: AgentBackend;
-  agentChannel?: { gamesStore?: GamesStore };
+  agentChannel?: {
+    gamesStore?: GamesStore;
+    onSourcesDelivered?: (input: {
+      issueNumber: number;
+      slug: string;
+      version: string;
+      mode?: 'health';
+    }) => Promise<{ buildId?: string } | void>;
+  };
   adminUids?: string;
 }): Promise<{ app: FastifyInstance; store: Store; authHeaders: Record<string, string> }> {
   const store = params.store ?? new InMemoryStore();
@@ -2602,5 +2610,135 @@ describe('operator cancel and retry', () => {
     expect(response.json()).toMatchObject({ error: 'dispatch_failed' });
 
     await second.app.close();
+  });
+});
+
+/**
+ * The operator's health re-gate: the manual trigger of the break-and-nudge loop. The
+ * verdict's read-back and the nudge itself are covered with the sweep
+ * (notify-sweep.test.ts); this is the request side.
+ */
+describe('operator health re-gate', () => {
+  const bossHeaders = () => getAuthHeaders('g:boss');
+
+  async function appWithPublishedGame(publicationState: 'published' | 'disabled' = 'published') {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:test-user' });
+    await store.upsertUser({ uid: 'g:boss' });
+    await store.createSubmission(1_000_042, 'g:creator', 'Sky Dodge');
+    await store.setPublication({
+      slug: 'sky-dodge',
+      state: publicationState,
+      currentVersion: 'v1',
+      publishedAt: '2026-07-01T00:00:00.000Z',
+    });
+
+    const triggered: Array<{ issueNumber: number; slug: string; version: string; mode?: 'health' }> = [];
+    const gamesStore = {
+      getManifest: async () => ({
+        slug: 'sky-dodge',
+        version: 'v1',
+        createdAt: '2026-06-30T00:00:00.000Z',
+        issueNumber: 1_000_042,
+        sourceFiles: [],
+      }),
+    } as unknown as GamesStore;
+
+    const { app } = await createApp({
+      githubClient: createGithubClientStub({}).githubClient,
+      store,
+      submissionTokenSecret: secret,
+      adminUids: 'g:boss',
+      agentChannel: {
+        gamesStore,
+        onSourcesDelivered: async (input) => {
+          triggered.push(input);
+          return { buildId: 'health-build-1' };
+        },
+      },
+    });
+    return { app, store, triggered };
+  }
+
+  it('answers 404 to a non-operator', async () => {
+    const { app } = await appWithPublishedGame();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/games/sky-dodge/regate',
+      headers: getAuthHeaders('g:someone-else'),
+    });
+    expect(response.statusCode).toBe(404);
+
+    await app.close();
+  });
+
+  it('starts a health run against the current engine and records what it asked', async () => {
+    const { app, store, triggered } = await appWithPublishedGame();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/games/sky-dodge/regate',
+      headers: bossHeaders(),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ ok: true, slug: 'sky-dodge', version: 'v1', buildId: 'health-build-1' });
+    // Same configured trigger the delivery path uses, in health mode — a second
+    // trigger would be a second definition of the gate.
+    expect(triggered).toEqual([{ issueNumber: 1_000_042, slug: 'sky-dodge', version: 'v1', mode: 'health' }]);
+
+    // The pending check is what the sweep will resolve.
+    const publication = await store.getPublication('sky-dodge');
+    expect(publication?.healthCheck).toMatchObject({ version: 'v1', buildId: 'health-build-1' });
+    expect(publication?.healthCheck?.verdictAt).toBeUndefined();
+
+    // A health run is a gate run on the bill, booked to the job that built the game.
+    const record = await store.getSubmission(1_000_042);
+    expect(record?.costs).toEqual([
+      expect.objectContaining({ kind: 'gate_run', by: 'cloud-build', ref: 'health-build-1' }),
+    ]);
+
+    await app.close();
+  });
+
+  it('refuses a game that is not currently published', async () => {
+    // Nothing is live, so there is nothing whose health could mean anything.
+    const { app, triggered } = await appWithPublishedGame('disabled');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/games/sky-dodge/regate',
+      headers: bossHeaders(),
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ error: 'not_published', state: 'disabled' });
+    expect(triggered).toHaveLength(0);
+
+    await app.close();
+  });
+
+  it('lists the published shelf with its health for the console', async () => {
+    const { app, store } = await appWithPublishedGame();
+    await store.setPublicationHealthCheck('sky-dodge', {
+      version: 'v1',
+      requestedAt: '2026-07-29T10:00:00.000Z',
+      green: false,
+      verdictAt: '2026-07-29T10:20:00.000Z',
+    });
+
+    const response = await app.inject({ method: 'GET', url: '/api/admin/games', headers: bossHeaders() });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().games).toEqual([
+      expect.objectContaining({
+        slug: 'sky-dodge',
+        currentVersion: 'v1',
+        healthCheck: expect.objectContaining({ green: false }),
+      }),
+    ]);
+
+    await app.close();
   });
 });
