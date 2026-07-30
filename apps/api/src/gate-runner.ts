@@ -55,9 +55,11 @@ const DEFAULT_ARTIFACT_ROOTS = {
 /**
  * Files the capture harness produces that are worth keeping.
  *
- * `TRACE.json` is included deliberately: it is the behavioural golden the games repo
- * validates against, so storing it with the version is what lets a later run tell
- * "this game changed" from "the engine changed underneath it".
+ * `.json` is here for the capture's own `metadata.json`, which describes what each
+ * screenshot shows. The behavioural golden is *not* collected here: `TRACE.json` lives
+ * at the game root, arrives as part of the delivered sources, and is an input to this
+ * run rather than an output of it — which is the whole reason the trace stage can
+ * compare against it.
  */
 const MEDIA_EXTENSIONS = ['.png', '.mp4', '.json'];
 
@@ -94,7 +96,13 @@ export async function runGate(slug: string, version: string, deps: GateRunnerDep
   try {
     await materializeCandidate(deps.store, manifest, gameDir);
 
-    const check = await deps.run('npm', ['run', 'check:game', '--', slug, '--accept'], harness);
+    // Deliberately without `--accept`. That flag re-records the behavioural golden
+    // instead of checking against it, which would make the trace stage unconditionally
+    // pass and quietly retire the one check that can catch a game behaving differently
+    // here than it did for the agent. The candidate ships its own `TRACE.json`, and the
+    // gate replays it against *our* engine: a golden recorded against a locally
+    // modified GameKit fails here, which is precisely the thing worth catching.
+    const check = await deps.run('npm', ['run', 'check:game', '--', slug], harness);
     if (check.code !== 0) {
       return {
         green: false,

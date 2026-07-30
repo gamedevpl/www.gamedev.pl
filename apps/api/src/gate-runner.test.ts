@@ -54,7 +54,19 @@ describe('runGate', () => {
 
     expect(outcome.green).toBe(true);
     expect(sourcesSeenByCheck).toBe('contents of game.ts');
-    expect(run).toHaveBeenCalledWith('npm', ['run', 'check:game', '--', 'comet-courier', '--accept'], harness);
+    expect(run).toHaveBeenCalledWith('npm', ['run', 'check:game', '--', 'comet-courier'], harness);
+  });
+
+  it('checks the delivered behavioural golden instead of re-recording it', async () => {
+    // `--accept` re-records TRACE.json rather than diffing against it, which would make
+    // the trace stage pass unconditionally and retire the one check that catches a game
+    // behaving differently on our engine than it did on the agent's.
+    const { store } = stubStore();
+    const run = vi.fn(async () => ({ code: 0, output: '' }));
+
+    await runGate('comet-courier', 'v1', { store, prepareHarness: harnessDir, run });
+
+    expect(run.mock.calls[0]![1]).not.toContain('--accept');
   });
 
   it('runs against the engine the version was built for, not whatever is current', async () => {
