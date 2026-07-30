@@ -9,7 +9,7 @@ import {
   type ZoneSnapshot,
   type ZoneSnapshotStore,
 } from '@gamedevpl/zone-core';
-import { ZoneHost, type ZoneConnection } from './host.js';
+import { ZoneAdmissionError, ZoneHost, type ZoneConnection } from './host.js';
 
 /**
  * The host's own bookkeeping, which `app.test.ts` cannot reach through a socket.
@@ -48,6 +48,15 @@ function memoryStore(): ZoneSnapshotStore {
   return {
     load: async (id) => saved.get(id) ?? null,
     save: async (id, snapshot) => void saved.set(id, snapshot),
+  };
+}
+
+/** A source that fails the way the network does: after the join has already begun. */
+function failingSource(error: Error): SimSource {
+  return {
+    load: async () => {
+      throw error;
+    },
   };
 }
 
@@ -157,6 +166,28 @@ describe('ZoneHost admission', () => {
     const later = await host.admit(ticketFor('p3'), silentConnection());
     expect(later.zone).toBe(a.zone);
     expect(host.liveZoneCount).toBe(1);
+    host.shutdown?.();
+  });
+});
+
+describe('a refused admission', () => {
+  it('carries what actually failed, not just the word for it', async () => {
+    // The wire reason is one of a handful of fixed strings and is meant to be incurious,
+    // so the operator's only supply of truth is the cause. It used to be dropped at the
+    // wrap: the first `zone_unavailable` the alerting ever caught arrived with a stack
+    // beginning inside `admit` and a message that was the wire reason repeated, which is
+    // the exact blindness the log line was added to end. An alert that fires without a
+    // cause is a doorbell.
+    const boom = new Error('games repo said no');
+    const host = makeHost(failingSource(boom));
+
+    await expect(host.admit(ticketFor('p1'), silentConnection())).rejects.toThrow(ZoneAdmissionError);
+
+    const error = await host.admit(ticketFor('p2'), silentConnection()).catch((caught) => caught);
+    expect(error).toBeInstanceOf(ZoneAdmissionError);
+    expect((error as ZoneAdmissionError).reason).toBe('zone_unavailable');
+    expect((error as ZoneAdmissionError).cause).toBe(boom);
+
     host.shutdown?.();
   });
 });
