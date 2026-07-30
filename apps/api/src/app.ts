@@ -33,6 +33,7 @@ import { registerNotificationRoutes } from './notifications.js';
 import { registerPlayerFeedbackRoutes, type PlayerFeedbackRoutesOptions } from './player-feedback.js';
 import { registerPushRoutes } from './push-routes.js';
 import { registerDigestRoutes, type DigestRoutesOptions } from './digest.js';
+import { registerSuggestionSweepRoutes, type SuggestionSweepRoutesOptions } from './suggestion-sweep.js';
 import { registerScorecardRoutes, type ScorecardRoutesOptions } from './scorecard.js';
 import { createInternalAuthVerifierFromEnv } from './internal-auth.js';
 import { registerRefineRoute, type SpecRefiner } from './refine.js';
@@ -87,6 +88,7 @@ export interface BuildAppOptions {
   /** Seams for the nightly scorecard sweep; defaults to OIDC-or-deny-all from env. */
   scorecardRoutes?: Partial<Omit<ScorecardRoutesOptions, 'store'>>;
   digestRoutes?: Partial<Omit<DigestRoutesOptions, 'store'>>;
+  suggestionSweepRoutes?: Partial<Omit<SuggestionSweepRoutesOptions, 'store'>>;
   /** Seams for the public contact form (mailer fake in tests). */
   contactRoutes?: ContactRoutesOptions;
   // Private beta allowlist — uids (comma-separated) allowed to sign in and access gated routes
@@ -365,6 +367,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     store,
     internalAuthVerifier: createInternalAuthVerifierFromEnv(process.env, 'digestSweep'),
     ...options.digestRoutes,
+  });
+
+  // The analyst run (docs/improvement-loop-plan.md IL-3): persists what the router says
+  // about the scorecards above, reconciling against the open set so a problem that lasts
+  // a month is one card rather than thirty. Files nothing and notifies nobody — approval
+  // is a separate human step.
+  await registerSuggestionSweepRoutes(app, {
+    store,
+    internalAuthVerifier: createInternalAuthVerifierFromEnv(process.env, 'suggestionSweep'),
+    ...options.suggestionSweepRoutes,
   });
 
   // Issuing personal access tokens (docs/agent-access-tokens.md) — the credential that

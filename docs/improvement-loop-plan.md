@@ -808,9 +808,59 @@ at all and feeds the only autonomous-eligible class.
   HTTP request and changed the plan, where the same lesson learned after building
   persistence and an inbox would have cost both.
 
-- 📋 Babysitter analyst run (scheduled) persisting `suggestions/` from the router above.
-  **Deliberately deferred** — see the first reading above. Waiting on data volume, not on
-  a design question.
+- ✅ **Babysitter analyst run** (2026-07-30): `POST /api/internal/suggestion-sweep`
+  ([suggestion-sweep.ts](../apps/api/src/suggestion-sweep.ts)) persists what the router
+  says into `suggestions/{id}`. Still **files nothing and notifies nobody** — approving is
+  a separate human step.
+
+  The work is not creating suggestions but not creating them twice. A nightly run over a
+  problem that lasts a month must produce one card, not thirty, so the sweep reconciles
+  against the open set rather than appending: the same game still routing to the same
+  class **updates** its suggestion in place (same id, same `createdAt`, so a decision
+  already attached to it survives new evidence); a game routing to a _different_ class
+  supersedes the old card, because a difficulty cliff is not the same proposal as a crash;
+  and a game that stops routing to anything actionable has its card closed as `obsolete`.
+  Problems do go away on their own, and an inbox that can only grow is one nobody reads
+  twice.
+
+  **The sweep only ever revises `proposed`.** Once a human has approved or rejected
+  something, a cron that silently reopens or closes it is what teaches people not to trust
+  the queue — so it leaves those alone even when the evidence disappears entirely.
+
+  Idempotence is by construction rather than by a guard: an id is
+  `(slug, class, the scorecard's computedAt)`, so re-running against one night's
+  scorecards overwrites its own documents.
+
+  ⚠️ **The stored record deliberately carries no untrusted text.** The router's
+  `untrustedContext` is dropped; the record keeps `slug` + `computedFrom`, and a reader
+  who wants those strings joins the live scorecard. That is a privacy decision, not a size
+  one: feedback themes derive from player text, and the erase path works by making the
+  nightly sweep recompute scorecards without the erased rows. A suggestion that copied
+  them would be a second home for that text — one nothing refreshes once the suggestion is
+  closed, and one the erase path knows nothing about. Referencing beats copying, because
+  erasure keeps working through machinery that already implements it.
+
+  Provisioning — again its own audience, since an audience is the endpoint's own URL:
+
+  ```bash
+  # Use the SAME host form as the other sweeps' audiences. Do NOT derive it from
+  # `--format 'value(status.url)'`: Cloud Run answers on two hostnames
+  # (`gamedev-app-334141807880.europe-west1.run.app` and `gamedev-app-<hash>-ew.a.run.app`),
+  # `status.url` returns the second, and the deployed audiences use the first. The
+  # verifier compares the `aud` claim exactly, so a job built from `status.url` while the
+  # env var holds the other form 401s on every fire — silently, until someone reads the
+  # logs. This nearly shipped for the digest sweep on 2026-07-28.
+  SWEEP_URL="https://gamedev-app-334141807880.europe-west1.run.app/api/internal/suggestion-sweep"
+  SA=notify-sweep@gamedevpl.iam.gserviceaccount.com
+  # Redeploy with SUGGESTION_SWEEP_AUDIENCE="$SWEEP_URL" set, then:
+  gcloud scheduler jobs create http suggestion-sweep --location europe-west1 --project gamedevpl \
+    --schedule '30 3 * * *' --uri "$SWEEP_URL" --http-method POST \
+    --oidc-service-account-email "$SA" --oidc-token-audience "$SWEEP_URL"
+  ```
+
+  Scheduled after the 03:20 scorecard sweep, because it reads what that run wrote.
+  Closed until the job and the env var exist, like every other internal sweep.
+
 - Suggestion inbox UI; Approve → structured improvement issue (evidence-fenced)
   → Copilot **via the relay**, with a stall alert on `issue-filed` → no PR.
 - Measurement records written at merge; 14-day post-change comparison.
