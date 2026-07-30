@@ -54,6 +54,9 @@ export function isActionable(suggestionClass: SuggestionClass): boolean {
  */
 export const MAX_SCORECARDS_SAMPLED = 1_000;
 
+/** Leftover per-game suggestion docs deleted per run. See `purgeLegacyGameSuggestions`. */
+const LEGACY_PURGE_PER_RUN = 300;
+
 /**
  * The id a suggestion is *created* with: `(slug, class, the scorecard behind it)`.
  *
@@ -80,6 +83,13 @@ export interface SuggestionSweepResult {
   autoWithheld: number;
   /** Games whose creator set `digest-only`. Counted rather than skipped silently. */
   mutedByCreator: number;
+  /**
+   * Documents removed from the superseded per-game suggestion collection.
+   *
+   * Expected to drain to zero within a run or two and stay there. A number that keeps
+   * appearing means something is still writing them.
+   */
+  legacyPurged: number;
   /** True when there were more scorecards than the sample limit — a floor, not a total. */
   truncated: boolean;
   created: number;
@@ -158,6 +168,12 @@ export async function runSuggestionSweep(deps: SuggestionSweepDeps): Promise<Sug
   let autoDispatched = 0;
   let autoWithheld = 0;
   let mutedByCreator = 0;
+
+  // Finishing the previous design's migration rather than tidying: those documents hold a
+  // frozen copy of player- and game-authored text that nothing refreshes and the erase
+  // path cannot find. Bounded per run so a large backlog is drained over a few nights
+  // instead of turning one nightly job into an unbounded delete.
+  const legacyPurged = await store.purgeLegacyGameSuggestions(LEGACY_PURGE_PER_RUN);
 
   // Read once for the whole run: the budget is a property of the day and the week, not of
   // whichever game happens to be considered first.
@@ -304,6 +320,7 @@ export async function runSuggestionSweep(deps: SuggestionSweepDeps): Promise<Sug
     autoDispatched,
     autoWithheld,
     mutedByCreator,
+    legacyPurged,
   };
 }
 

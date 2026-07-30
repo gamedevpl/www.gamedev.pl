@@ -1251,6 +1251,24 @@ export interface Store {
    */
   getGameAutonomy(slug: string): Promise<string | null>;
   setGameAutonomy(slug: string, mode: string): Promise<void>;
+  /**
+   * Deletes up to `limit` documents left by the superseded per-game suggestion sweep.
+   *
+   * One-shot cleanup, not a permanent feature. An earlier IL-3 slice wrote the router's
+   * whole output — including its `untrustedContext` block of game- and player-authored
+   * strings — to `games/{slug}/suggestion/current`, overwritten nightly. This design
+   * stores no untrusted text and joins the live scorecard instead, which is what keeps
+   * erasure working: a player who erases their signals drops out of the next nightly
+   * recomputation everywhere that reads it.
+   *
+   * Those documents are the exception. Nothing reads or refreshes them any more, and the
+   * erase path does not know they exist — so a player's words would sit frozen in them
+   * indefinitely. Deleting them is finishing the migration, not tidying.
+   *
+   * Returns how many were removed, so the sweep can report the drain once and then
+   * report nothing forever.
+   */
+  purgeLegacyGameSuggestions(limit: number): Promise<number>;
   /** Writes a suggestion whole (docs/improvement-loop-plan.md IL-3). */
   putSuggestion(record: SuggestionRecord): Promise<void>;
   /** One suggestion by id, or null. */
@@ -1429,6 +1447,7 @@ export class InMemoryStore implements Store {
   private scorecards = new Map<string, Scorecard>();
   private suggestions = new Map<string, SuggestionRecord>();
   private gameAutonomy = new Map<string, string>();
+  private legacyGameSuggestions = new Set<string>();
   // tokenId -> personal access token record
   private accessTokens = new Map<string, AccessTokenRecord>();
 
@@ -2231,6 +2250,23 @@ export class InMemoryStore implements Store {
 
   async getGameAutonomy(slug: string): Promise<string | null> {
     return this.gameAutonomy.get(slug) ?? null;
+  }
+
+  async purgeLegacyGameSuggestions(limit: number): Promise<number> {
+    const doomed = [...this.legacyGameSuggestions].slice(0, limit);
+    for (const slug of doomed) this.legacyGameSuggestions.delete(slug);
+    return doomed.length;
+  }
+
+  /**
+   * Seeds a legacy per-game suggestion doc.
+   *
+   * Deliberately **not** on the `Store` interface: nothing in the product writes these
+   * any more, and adding a writer for something only the purge should touch would invite
+   * one. It exists so a test can prove the purge removes what production will find.
+   */
+  seedLegacyGameSuggestion(slug: string): void {
+    this.legacyGameSuggestions.add(slug);
   }
 
   async setGameAutonomy(slug: string, mode: string): Promise<void> {
@@ -3616,6 +3652,19 @@ export class FirestoreStore implements Store {
   // group would be the third one in this schema for no gain over a plain collection.
   private suggestionRef(id: string) {
     return this.db.collection('suggestions').doc(id);
+  }
+
+  async purgeLegacyGameSuggestions(limit: number): Promise<number> {
+    // A bare collection-group read needs no custom index — no filter, no ordering — so
+    // this finds the leftovers wherever they are rather than only under games that still
+    // have a scorecard. A game whose scorecard has since expired is exactly the one whose
+    // stale copy nobody would otherwise reach.
+    const snap = await this.db.collectionGroup('suggestion').limit(limit).get();
+    if (snap.empty) return 0;
+    const batch = this.db.batch();
+    for (const doc of snap.docs) batch.delete(doc.ref);
+    await batch.commit();
+    return snap.size;
   }
 
   async getGameAutonomy(slug: string): Promise<string | null> {

@@ -470,6 +470,19 @@ considerably:
   Studio playtest assumes landscape and opens as a full-viewport theater (same
   idea as GameTheater) with pause/resume on the bar and the note sheet layered
   over the game — not an inset iframe inside Studio chrome.
+- ✅ **The superseded per-game suggestion docs are drained** (2026-07-30). An earlier
+  slice wrote the router's whole output — including its `untrustedContext` block of game-
+  and player-authored strings — to `games/{slug}/suggestion/current`. This design stores
+  no untrusted text and joins the live scorecard instead, which is what keeps erasure
+  working: a player who erases their signals drops out of the next nightly recomputation
+  everywhere that reads it.
+
+  Those documents were the exception, and the reason this is finishing a migration rather
+  than tidying: nothing reads or refreshes them, and the erase path cannot find them, so a
+  player's words would sit frozen in them indefinitely. The sweep deletes up to 300 a run
+  and reports `legacyPurged`, which drains to zero within a night or two and stays there.
+  A number that keeps reappearing means something is still writing them.
+
 - ✅ **Suggestion inbox** (2026-07-30) — cards with insight → evidence →
   [Approve → dispatches a job] / [Dismiss with reason], in the studio's stats tab beside the
   reactions block, because a suggestion is a reading of the same evidence

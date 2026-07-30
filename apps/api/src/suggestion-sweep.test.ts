@@ -420,3 +420,29 @@ describe('runSuggestionSweep — bounded autonomy (IL-4)', () => {
     expect(await store.listSuggestions()).toHaveLength(0);
   });
 });
+
+describe('runSuggestionSweep — draining the superseded per-game docs', () => {
+  it('deletes them and then reports nothing forever', async () => {
+    // Finishing a migration, not tidying. Those documents hold a frozen copy of player-
+    // and game-authored text that nothing refreshes and the erase path cannot find, so a
+    // player who erased their signals would still be quoted inside them.
+    for (const slug of ['a-game', 'b-game', 'c-game']) store.seedLegacyGameSuggestion(slug);
+
+    const first = await sweep();
+    const second = await sweep();
+
+    expect(first.legacyPurged).toBe(3);
+    expect(second.legacyPurged).toBe(0);
+  });
+
+  it('runs even when there is nothing else for the sweep to do', async () => {
+    // No scorecards at all — the drain must not be conditional on there being work,
+    // or a quiet platform would keep the leftovers indefinitely.
+    store.seedLegacyGameSuggestion('orphan');
+
+    const result = await sweep();
+
+    expect(result.scanned).toBe(0);
+    expect(result.legacyPurged).toBe(1);
+  });
+});
