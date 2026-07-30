@@ -126,6 +126,74 @@ describe('SubmissionStatusView', () => {
     });
   });
 
+  it('offers playtesting next to playing, once there is something to play', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      playable: [{ ref: 'newest', slug: 'puppy-stroll', createdAt: new Date().toISOString() }],
+    });
+    mockedGetChannelPlayable.mockResolvedValue('<!doctype html><canvas></canvas>');
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/status/playtest-token');
+
+    const onPlaytest = vi.fn();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'playtest-token', embedded: true, onPlaytest }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    // The delivered moment used to have exactly one call to action — Play — and the
+    // surface that turns playing into a message to the agent was a tab you had to
+    // think of. It now sits on the card, next to the game it is about.
+    const playtest = container.querySelector<HTMLButtonElement>('.status-playtest-cta');
+    expect(playtest?.textContent).toContain('Playtest');
+
+    await act(async () => {
+      playtest?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+    expect(onPlaytest).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('leaves the playtest call to action out when there is no playtest surface to open', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      playable: [{ ref: 'newest', slug: 'puppy-stroll', createdAt: new Date().toISOString() }],
+    });
+    mockedGetChannelPlayable.mockResolvedValue('<!doctype html><canvas></canvas>');
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/status/standalone-token');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    // Standalone (a legacy /status link), where the studio's playtest surface is not
+    // on screen to switch to.
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'standalone-token' }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.status-play-cta')).not.toBeNull();
+    expect(container.querySelector('.status-playtest-cta')).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('does not show a preview error when a channel draft loaded but the PR preview failed', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     // The Studio screenshot case: open PR (so we try the branch assemble) + a
@@ -246,11 +314,21 @@ describe('SubmissionStatusView', () => {
     });
   });
 
-  it('shows the submitted prompt and a ticking elapsed timer while the build is running', async () => {
+  it('shows the submitted prompt, and beats from the agent’s last update rather than from submission', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-    mockedGetSubmissionStatus.mockResolvedValue({ status: 'building' });
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      events: [
+        {
+          id: 'evt-1',
+          kind: 'step',
+          text: 'Blocking out the arena',
+          createdAt: new Date(Date.now() - 4 * 60_000).toISOString(),
+        },
+      ],
+    });
     await i18n.changeLanguage('en');
-    window.history.pushState(null, '', '/status/elapsed-token');
+    window.history.pushState(null, '', '/status/heartbeat-token');
 
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -259,10 +337,9 @@ describe('SubmissionStatusView', () => {
     await act(async () => {
       root.render(
         createElement(SubmissionStatusView, {
-          token: 'elapsed-token',
+          token: 'heartbeat-token',
           submittedTitle: 'Circus Cat',
           submittedConcept: 'A black cat dodging hula hoops',
-          submittedAt: Date.now() - 134_000,
         }),
       );
       await flushEffects();
@@ -270,8 +347,84 @@ describe('SubmissionStatusView', () => {
 
     // The prompt the player typed is echoed back, so they can see what they asked for.
     expect(container.textContent).toContain('A black cat dodging hula hoops');
-    // 134s -> "2m 14s", proving the duration formatting and that the timer is mounted.
-    expect(container.textContent).toContain('2m 14s');
+    // The pill measures the build's pulse, not its age: a stopwatch from submission
+    // said "in progress for 8h" on a build that had finished and was waiting on us.
+    expect(container.querySelector('.status-heartbeat')?.textContent).toContain('4 minutes ago');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('has no heartbeat to show before the agent has done anything', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({ status: 'queued' });
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/status/silent-token');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'silent-token' }));
+      await flushEffects();
+    });
+
+    // "Live" alone, with nothing after it — better than inventing a duration for a
+    // build that has not reported anything yet.
+    expect(container.querySelector('.status-live')).not.toBeNull();
+    expect(container.querySelector('.status-heartbeat')).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('describes a delivered build waiting to go live, instead of claiming checks are running', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({ status: 'in_review', phase: 'ready_for_review' });
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/status/delivered-token');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'delivered-token' }));
+      await flushEffects();
+    });
+
+    const description = container.querySelector('.status-description')?.textContent ?? '';
+    expect(description).toContain('waiting for the last look');
+    expect(description).not.toContain('Automated checks are making sure');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('falls back to the coarse status copy for a phase with nothing of its own to say', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({ status: 'building', phase: 'building' });
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/status/building-token');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'building-token' }));
+      await flushEffects();
+    });
+
+    // No `phases.building` key exists — the status sentence must show through rather
+    // than the raw key leaking onto the page.
+    const description = container.querySelector('.status-description')?.textContent ?? '';
+    expect(description).toContain('An agent is coding your game right now');
+    expect(description).not.toContain('statusView.');
 
     await act(async () => {
       root.unmount();

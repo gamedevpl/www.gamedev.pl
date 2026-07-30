@@ -66,8 +66,31 @@ export type BuildEvent = {
   createdAt: string;
 };
 
+/**
+ * The build job's own state, finer than {@link SubmissionState}.
+ *
+ * `status` drives the five-step timeline and cannot grow without changing what the
+ * timeline draws; this says which of the several situations behind one step the build
+ * is actually in, so the sentence under the timeline can be true. Absent on builds we
+ * derive from GitHub rather than run ourselves.
+ */
+export type BuildPhase =
+  | 'queued'
+  | 'dispatched'
+  | 'building'
+  | 'submitted'
+  | 'gating'
+  | 'ready_for_review'
+  | 'publishing'
+  | 'published'
+  | 'needs_changes'
+  | 'failed'
+  | 'canceled'
+  | 'abandoned';
+
 export type SubmissionStatus = {
   status: SubmissionState;
+  phase?: BuildPhase;
   slug?: string;
   /** Present while an unmerged PR is open: the game can be previewed from its branch. */
   preview?: { slug: string };

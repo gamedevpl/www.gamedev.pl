@@ -479,8 +479,8 @@
         "description": "An agent is coding your game right now. Watch it take shape below — no need to refresh."
       },
       "in_review": {
-        "label": "Play-testing",
-        "description": "Automated checks are making sure your game actually runs clean."
+        "label": "Final check",
+        "description": "Your game is built and has passed its checks. It's waiting for the last look before going live."
       },
       "publishing": {
         "label": "Going live",
@@ -499,7 +499,14 @@
         "description": "You stopped this build. The agent is no longer working on it — start a new idea whenever you like."
       }
     },
-    "elapsed": "In progress for {{duration}}",
+    "phases": {
+      "dispatched": "An agent has picked up your idea and is getting started.",
+      "submitted": "The agent delivered your game. We're checking it over now.",
+      "gating": "Automated checks are making sure your game actually runs clean.",
+      "ready_for_review": "Your game passed every check. It's waiting for the last look before going live."
+    },
+    "updatedAgo": "updated {{time}}",
+    "playtestCta": "Playtest & prompt",
     "live": "Live",
     "shareLink": "Share this game (watch only):",
     "shareCopy": "Copy",

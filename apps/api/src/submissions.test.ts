@@ -776,6 +776,46 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  it('reports the job phase alongside the status, so the page can say which wait this is', async () => {
+    // `toSubmissionStatus` is lossy on purpose — `gating` and `building` arrive as one
+    // word, and `ready_for_review` (delivered, checked, waiting on us) arrives as the
+    // same "in_review" the page described as "checks are running". The finer state rides
+    // along so the sentence under the timeline can be true for hours at a time.
+    const { githubClient } = createGithubClientStub({ issueNumber: 91 });
+    const { backend } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'ready_for_review',
+      at: new Date().toISOString(),
+      by: 'system',
+      reason: 'gate_green',
+    });
+
+    const status = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}`,
+      headers: authHeaders,
+    });
+
+    expect(status.statusCode).toBe(200);
+    expect(status.json().status).toBe('in_review');
+    expect(status.json().phase).toBe('ready_for_review');
+
+    await app.close();
+  });
+
   it('learns the branch a dispatch is working on, so a revision resumes it', async () => {
     // The task API answers `startTask` before the agent has a branch, so this is the
     // only moment it can be learned. Without it `resume` degrades to a fresh dispatch

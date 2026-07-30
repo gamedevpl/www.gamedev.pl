@@ -479,8 +479,8 @@
         "description": "Agent właśnie pisze Twoją grę. Obserwuj poniżej, jak powstaje — nie musisz odświeżać."
       },
       "in_review": {
-        "label": "Testujemy",
-        "description": "Automatyczne testy sprawdzają, czy gra działa bez zarzutu."
+        "label": "Ostatni sprawdzian",
+        "description": "Twoja gra jest gotowa i przeszła testy. Czeka na ostatnie spojrzenie przed publikacją."
       },
       "publishing": {
         "label": "Publikujemy",
@@ -499,7 +499,14 @@
         "description": "Zatrzymałeś tę grę. Agent już nad nią nie pracuje — możesz zacząć nowy pomysł, kiedy zechcesz."
       }
     },
-    "elapsed": "Trwa od {{duration}}",
+    "phases": {
+      "dispatched": "Agent podjął Twój pomysł i właśnie zaczyna pracę.",
+      "submitted": "Agent dostarczył Twoją grę. Właśnie ją sprawdzamy.",
+      "gating": "Automatyczne testy sprawdzają, czy gra działa bez zarzutu.",
+      "ready_for_review": "Twoja gra przeszła wszystkie testy. Czeka na ostatnie spojrzenie przed publikacją."
+    },
+    "updatedAgo": "aktualizacja {{time}}",
+    "playtestCta": "Zagraj i podpowiedz",
     "live": "Na żywo",
     "shareLink": "Podziel się tą grą (tylko do oglądania):",
     "shareCopy": "Kopiuj",

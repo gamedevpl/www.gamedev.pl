@@ -2274,8 +2274,9 @@ body.player-open {
   gap: 10px;
 }
 
-/* "Live · 2m 14s" — the page polls on its own, so say so rather than leaving
-   the reader wondering whether they need to refresh. */
+/* "Live · updated 3 minutes ago" — the page polls on its own, so say so rather than
+   leaving the reader wondering whether they need to refresh. The trailing half is the
+   build's pulse, not a stopwatch: what matters is when the agent last moved. */
 .status-live {
   display: inline-flex;
   align-items: center;
@@ -2290,7 +2291,7 @@ body.player-open {
   white-space: nowrap;
 }
 
-.status-elapsed {
+.status-heartbeat {
   font-variant-numeric: tabular-nums;
 }
 
@@ -2514,6 +2515,15 @@ body.player-open {
 .status-play-card-info {
   min-width: 0;
   flex: 1 1 260px;
+}
+
+/* Play and Playtest travel together: one opens the game, the other opens the surface
+   where pausing it and pointing at the problem turns into a message to the agent. */
+.status-play-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .status-play-badge {
@@ -4391,7 +4401,14 @@ body.player-open {
     align-items: stretch;
   }
 
-  .status-play-cta {
+  .status-play-card-actions {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .status-play-cta,
+  .status-playtest-cta {
     width: 100%;
     justify-content: center;
   }

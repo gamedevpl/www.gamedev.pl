@@ -1057,6 +1057,9 @@ export async function registerSubmissionRoutes(
     const state = record.state ?? 'queued';
     const status: SubmissionStatusResponse = {
       status: record.abandonedAt ? 'abandoned' : toSubmissionStatus(state),
+      // The unprojected state travels alongside the projection: `toSubmissionStatus` is
+      // lossy by design, and the page needs the loss back to describe the wait honestly.
+      ...(record.abandonedAt ? {} : { phase: state }),
       ...(record.slug ? { slug: record.slug } : {}),
     };
     // `failed` projects onto `needs_changes`, which the page renders as "waiting for

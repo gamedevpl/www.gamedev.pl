@@ -19,7 +19,7 @@ import {
   type SubmissionStatus,
 } from './submissionApi.js';
 import { draftPath, playPath, statusPath, studioPath } from './router.js';
-import { formatDuration, formatRelativeTime } from './relativeTime.js';
+import { formatRelativeTime } from './relativeTime.js';
 
 const TERMINAL_STATUSES = new Set<SubmissionStatus['status']>(['published', 'needs_changes', 'abandoned']);
 /** Statuses that halt the linear timeline rather than sitting on a step of it. */
@@ -51,21 +51,51 @@ const STATUS_ICONS: Record<SubmissionStatus['status'], PixelIconName> = {
 const TIMELINE_STEPS: SubmissionStatus['status'][] = ['queued', 'building', 'in_review', 'publishing', 'published'];
 
 /**
- * Ticking "in progress for 2m 14s" readout. The submission time only exists in
- * localStorage (the API doesn't return it), so this is hidden when the link is
- * opened on a device that didn't submit it.
+ * When the build last did something worth seeing, or null before it has.
+ *
+ * Deliberately the *agent's* moments only — its events, its pictures, its playable
+ * builds, its commits — and not the creator's own change requests. A creator who has
+ * just sent a message would otherwise reset the heartbeat with it and be told the
+ * build is fresh, which is the one moment they are actually waiting on a reply.
  */
-function ElapsedTimer({ since, running }: { since: number; running: boolean }) {
-  const { t } = useTranslation();
-  const [now, setNow] = useState(() => Date.now());
+function latestAgentActivityAt(status: SubmissionStatus | null): number | null {
+  if (!status) return null;
+  const times = [
+    ...(status.events ?? []).map((event) => Date.parse(event.createdAt)),
+    ...(status.media ?? []).map((item) => (item.createdAt ? Date.parse(item.createdAt) : Number.NaN)),
+    ...(status.playable ?? []).map((item) => (item.createdAt ? Date.parse(item.createdAt) : Number.NaN)),
+    ...(status.progress?.commits ?? []).map((commit) => Date.parse(commit.committedDate)),
+  ].filter((time) => Number.isFinite(time));
+  return times.length > 0 ? Math.max(...times) : null;
+}
+
+/**
+ * "Live · updated 3 minutes ago" — the build's pulse.
+ *
+ * This replaced a stopwatch counting from submission, which was the page's most
+ * prominent number and its least informative: on a build that had delivered, passed
+ * its checks and been waiting to go live for hours, it read "In progress for 8h 00m"
+ * directly above a checklist saying every task was done. Time since the last sign of
+ * life answers the question the stopwatch was being read for — is this thing moving? —
+ * and keeps answering it correctly once the agent has finished.
+ *
+ * Re-renders on a slow timer because the text is a relative time that goes stale on
+ * its own; the minute granularity is why 30s is often enough and 1s would be waste.
+ */
+function BuildHeartbeat({ at }: { at: number }) {
+  const { t, i18n } = useTranslation();
+  const [, setTick] = useState(0);
 
   useEffect(() => {
-    if (!running) return;
-    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    const id = window.setInterval(() => setTick((n) => n + 1), 30_000);
     return () => window.clearInterval(id);
-  }, [running]);
+  }, []);
 
-  return <span className="status-elapsed">{t('statusView.elapsed', { duration: formatDuration(now - since) })}</span>;
+  return (
+    <span className="status-heartbeat">
+      {t('statusView.updatedAgo', { time: formatRelativeTime(at, i18n.language) })}
+    </span>
+  );
 }
 
 function StatusTimeline({ current }: { current: SubmissionStatus['status'] }) {
@@ -119,10 +149,14 @@ type SubmissionStatusViewProps = {
   token: string;
   submittedTitle?: string;
   submittedConcept?: string;
-  submittedAt?: number;
   trackingUrl?: string;
   /** Sends the creator home with this idea loaded, ready to edit and resubmit. */
   onRetry?: (concept: string) => void;
+  /**
+   * Opens the studio's playtest surface on this game. Present only when this view is
+   * embedded in Creator Studio, which is the only place that surface exists.
+   */
+  onPlaytest?: () => void;
   /**
    * When true, this view is nested inside Creator Studio (the Build tab). The
    * outer studio chrome already names the game — skip the page-level heading /
@@ -135,9 +169,9 @@ export function SubmissionStatusView({
   token,
   submittedTitle,
   submittedConcept,
-  submittedAt,
   trackingUrl,
   onRetry,
+  onPlaytest,
   embedded = false,
 }: SubmissionStatusViewProps) {
   const { t, i18n } = useTranslation();
@@ -250,6 +284,19 @@ export function SubmissionStatusView({
   }, [i18n.language, t, token]);
 
   const publishedGameTitle = submittedTitle ?? status?.slug ?? t('statusView.publishedGameTitle');
+  const heartbeatAt = latestAgentActivityAt(status);
+
+  /**
+   * What is happening, in the creator's words.
+   *
+   * Only the phases that mean something the coarse status cannot say carry their own
+   * sentence (see `statusView.phases`); everything else falls through to the status
+   * copy rather than being written twice and drifting.
+   */
+  const stateDescription = status
+    ? (status.phase ? t(`statusView.phases.${status.phase}`, { defaultValue: '' }) : '') ||
+      t(`statusView.states.${status.status}.description`)
+    : '';
 
   // The link to hand to someone else. Deliberately *not* the tracking URL: that one
   // carries the status token, which grants change requests and spends the creator's
@@ -378,10 +425,10 @@ export function SubmissionStatusView({
                 <span className="status-live">
                   <span className="live-dot" aria-hidden="true" />
                   {t('statusView.live')}
-                  {submittedAt ? (
+                  {heartbeatAt !== null ? (
                     <>
                       {' · '}
-                      <ElapsedTimer since={submittedAt} running />
+                      <BuildHeartbeat at={heartbeatAt} />
                     </>
                   ) : null}
                 </span>
@@ -400,10 +447,10 @@ export function SubmissionStatusView({
             <span className="status-live">
               <span className="live-dot" aria-hidden="true" />
               {t('statusView.live')}
-              {submittedAt ? (
+              {heartbeatAt !== null ? (
                 <>
                   {' · '}
-                  <ElapsedTimer since={submittedAt} running />
+                  <BuildHeartbeat at={heartbeatAt} />
                 </>
               ) : null}
             </span>
@@ -429,7 +476,7 @@ export function SubmissionStatusView({
           <>
             <StatusTimeline current={status.status} />
             <p className="status-description" aria-live="polite">
-              {t(`statusView.states.${status.status}.description`)}
+              {stateDescription}
             </p>
 
             {status.progress?.checks === 'FAILURE' ? (
@@ -481,6 +528,7 @@ export function SubmissionStatusView({
                 subtitle={t('statusView.draftHint')}
                 cta={t('statusView.playDraft')}
                 onPlay={openDraft}
+                {...(onPlaytest ? { secondary: { label: t('statusView.playtestCta'), onClick: onPlaytest } } : {})}
               />
             ) : channelHtml && latestChannelBuild ? (
               <PlayCard
@@ -493,6 +541,7 @@ export function SubmissionStatusView({
                 subtitle={latestChannelBuild.label ?? t('statusView.playableHint')}
                 cta={t('statusView.playDraft')}
                 onPlay={openChannel}
+                {...(onPlaytest ? { secondary: { label: t('statusView.playtestCta'), onClick: onPlaytest } } : {})}
               />
             ) : previewLoading || channelLoading ? (
               <p className="status-preview-pending">
@@ -666,6 +715,7 @@ function PlayCard({
   subtitle,
   cta,
   onPlay,
+  secondary,
 }: {
   badge: ReactNode;
   badgeClass?: string;
@@ -673,6 +723,12 @@ function PlayCard({
   subtitle?: string;
   cta: string;
   onPlay: () => void;
+  /**
+   * The other thing to do with a playable build. Playtesting is the studio's own
+   * surface — pause the game, point at what is wrong, send the frame with the note —
+   * and until this button existed the only route to it was noticing a tab.
+   */
+  secondary?: { label: string; onClick: () => void };
 }) {
   return (
     <div className="status-play-card">
@@ -681,9 +737,16 @@ function PlayCard({
         <h3 className="status-play-card-title">{title}</h3>
         {subtitle ? <p className="status-play-card-sub">{subtitle}</p> : null}
       </div>
-      <button className="primary-btn status-play-cta" onClick={onPlay}>
-        <PixelIcon name="play" size={13} /> {cta}
-      </button>
+      <div className="status-play-card-actions">
+        <button className="primary-btn status-play-cta" onClick={onPlay}>
+          <PixelIcon name="play" size={13} /> {cta}
+        </button>
+        {secondary ? (
+          <button className="secondary-btn status-playtest-cta" onClick={secondary.onClick}>
+            <PixelIcon name="wrench" size={13} /> {secondary.label}
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }
