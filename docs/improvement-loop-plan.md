@@ -3,13 +3,11 @@
 > Status: ✅ **IL-1 (Capture) complete** (2026-07-26) and ✅ **IL-2 (Distill)
 > complete** (2026-07-28) — scheduled aggregation, feedback-theme extraction and
 > the creator-facing scorecard all shipped, so a creator can now answer all three
-> of IL-2's exit questions without an agent. **IL-3 is in progress**: the router
-> classifies live scorecards at `GET /api/admin/suggestions`, and the nightly
-> analyst run persists what it says into `suggestions/`, where a creator can approve one
-> into a dispatched round of agent work or dismiss it with a reason. What remains is the
-> stall alert and the 14-day measurement, described under IL-3 below. Note that as of the
-> first reading no game yet routes to an actionable class, so the queue is
-> correctly empty until play volume catches up; that is data, not a defect.
+> of IL-2's exit questions without an agent. ✅ **IL-3 (Suggest) is code complete**:
+> router → persist → inbox → approve/dismiss → dispatch → follow → measure. Note that as
+> of the first reading no game yet routes to an actionable class, so the queue is
+> correctly empty until play volume catches up; that is data, not a defect. The phase's
+> *exit* — a first improvement merged and measured — therefore waits on play, not on code.
 > **IL-4 is in place**: per-game autonomy (default `suggest`, which acts on nothing), a
 > 2/day global and 1/game/week budget, and — structurally — no way for autonomous work to
 > publish itself, since `publishing` is reachable only from `ready_for_review`. **The `@copilot` relay this plan called its biggest risk is retired** —
