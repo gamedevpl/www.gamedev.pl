@@ -7,6 +7,7 @@ import { mintAgentToken } from './agent-token.js';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import { createCreationGate, CREATION_REFUSAL_CODES, type CreationGate } from './creation-limits.js';
 import {
+  catalogEntryFromSpec,
   createGitHubClient,
   type CatalogGameEntry,
   type CatalogGameMedia,
@@ -22,6 +23,7 @@ import {
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
 import type { AgentBackend } from './agent-backend.js';
 import {
+  canTransition,
   detectStall,
   fromSubmissionStatus,
   planObservedStatusTransition,
@@ -836,6 +838,10 @@ export async function registerSubmissionRoutes(
   // a published game only changes on a new merge to main.
   const catalogTtlMs = 10 * 60_000;
   let catalogCache: { expiresAt: number; entries: CatalogGameEntry[] } | null = null;
+  // Store-published games, cached on the same window as the repo catalog above: this
+  // route is hit by every visitor, and each entry costs a stored-object read.
+  const storeCatalogTtlMs = catalogTtlMs;
+  let storeCatalogCache: { expiresAt: number; value: CatalogGameEntry[] } | null = null;
   let catalogRefresh: Promise<CatalogGameEntry[]> | null = null;
   /**
    * Last time isSlugPublished forced a cache bypass. Status polls for a
@@ -1130,6 +1136,46 @@ export async function registerSubmissionRoutes(
       // Best effort by design: the answer to "observation failed" is the status the
       // record already has, not an error on a page that was only ever polling.
       app.log.error({ err: error, issueNumber: record.issueNumber }, 'agent observation failed');
+      return null;
+    }
+  }
+
+  /**
+   * Reads our own gate's verdict off the delivered version and moves the job on it.
+   *
+   * The gate runs in Cloud Build, writes its verdict to the version manifest, and exits.
+   * Nothing told the job — so a delivered game sat in `submitted` forever no matter what
+   * the gate said, and the creator watched a page that had stopped meaning anything.
+   *
+   * Read here rather than pushed back by the gate because the verdict is already durable
+   * in the store: a callback would need its own credential, its own retry, and would
+   * still be a second source of a fact the manifest already holds. A poll that reads it
+   * cannot disagree with the store, and a gate run that dies before reporting is
+   * indistinguishable from one that never ran — which is the honest reading.
+   */
+  async function reconcileGateVerdict(record: SubmissionRecord): Promise<JobTransition | null> {
+    const gamesStore = options.agentChannel?.gamesStore;
+    if (!gamesStore || !store || !record.deliveredVersion || !record.slug) return null;
+    const state = record.state ?? 'queued';
+    if (state !== 'submitted' && state !== 'gating') return null;
+    try {
+      const manifest = await gamesStore.getManifest(record.slug, record.deliveredVersion);
+      const verdict = manifest?.gate;
+      if (!verdict) return null;
+      // Green means publishable, never published: the human review this waits for is the
+      // moderation boundary, and a gate that promoted past it would quietly delete it.
+      const to = verdict.green ? 'ready_for_review' : 'needs_changes';
+      if (!canTransition(state, to)) return null;
+      const transition: JobTransition = {
+        to,
+        at: verdict.ranAt,
+        by: 'gate',
+        reason: verdict.green ? 'gate_green' : 'gate_red',
+      };
+      const recorded = await store.recordJobTransition(record.issueNumber, transition);
+      return recorded ? transition : null;
+    } catch (error) {
+      app.log.error({ err: error, issueNumber: record.issueNumber }, 'could not read the gate verdict');
       return null;
     }
   }
@@ -1518,7 +1564,10 @@ export async function registerSubmissionRoutes(
       if (isNativeJobId(issueNumber)) {
         let record = await store?.getSubmission(issueNumber);
         if (record) {
-          const observed = await reconcileNativeJob(record);
+          // Two things can have moved the job since the last poll, and they own different
+          // stretches of it: the agent's own session up to delivery, our gate after it.
+          // Neither fires on both, so asking for both costs one of them nothing.
+          const observed = (await reconcileNativeJob(record)) ?? (await reconcileGateVerdict(record));
           if (observed) {
             record = {
               ...record,
@@ -2537,6 +2586,80 @@ export async function registerSubmissionRoutes(
     return replyWithDraft(request, reply, record.issueNumber);
   });
 
+  /**
+   * The playable document for a store-published game, or null if this is not one.
+   *
+   * Returns the gate's own `bundle.html`: the gate assembles it through the same
+   * `assembleGameHtml` the bake uses, so the CSP, the AI Act provenance marking and the
+   * credential scan are already applied to the exact bytes that passed the check. There
+   * is nothing left to build at serve time, which is why store games need no bake.
+   *
+   * A publication whose bundle is missing returns null rather than throwing, so the
+   * request falls through to the repo path — during the migration a slug can legitimately
+   * exist on both sides, and a store record with no artifact must not take a working
+   * game off the site.
+   */
+  async function storePublishedGame(slug: string): Promise<{ slug: string; title: string; html: string } | null> {
+    const gamesStore = options.agentChannel?.gamesStore;
+    if (!store || !gamesStore) return null;
+    const publication = await store.getPublication(slug);
+    if (publication?.state !== 'published') return null;
+    const bundle = await gamesStore.getDerivedArtifact(slug, publication.currentVersion, 'bundle.html');
+    if (!bundle) {
+      app.log.error({ slug, version: publication.currentVersion }, 'published game has no stored bundle');
+      return null;
+    }
+    const spec = await gamesStore.getSourceFile(slug, publication.currentVersion, 'SPEC.md');
+    const title = (spec && catalogEntryFromSpec(slug, spec, () => null)?.title) || slug;
+    return { slug, title, html: bundle.toString('utf8') };
+  }
+
+  /**
+   * The catalog entries for games published from the store rather than from the repo.
+   *
+   * A delivered game is never committed, so the games-repo catalog cannot see it and a
+   * published game would be invisible on the site that published it. Read from the
+   * publication registry, described by the same `catalogEntryFromSpec` the repo path
+   * uses, and given the same cache window as the rest of the catalog: this is one
+   * Firestore read plus a small object read per store game, on a route the whole site
+   * hits.
+   *
+   * Repo slugs win. During the migration a game can exist on both sides — delivered to
+   * the store and still committed — and listing it twice would put two cards for one
+   * game in front of players. The repo copy is the one the snapshot bake serves, so it
+   * is the one that keeps the slug.
+   */
+  async function storeCatalogEntries(repoSlugs: string[]): Promise<CatalogGameEntry[]> {
+    const gamesStore = options.agentChannel?.gamesStore;
+    if (!store || !gamesStore) return [];
+    const cached = storeCatalogCache;
+    if (cached && cached.expiresAt > now()) return cached.value;
+
+    try {
+      const taken = new Set(repoSlugs);
+      const publications = (await store.listPublications()).filter(
+        (record) => record.state === 'published' && !taken.has(record.slug),
+      );
+      const entries: CatalogGameEntry[] = [];
+      for (const record of publications) {
+        const spec = await gamesStore.getSourceFile(record.slug, record.currentVersion, 'SPEC.md');
+        if (spec === null) continue;
+        const entry = catalogEntryFromSpec(record.slug, spec, () => null);
+        // Published is a decision the operator already made and recorded here; the
+        // spec's own `status` describes the repo workflow this game never went through.
+        if (entry) entries.push({ ...entry, status: 'published' });
+      }
+      storeCatalogCache = { value: entries, expiresAt: now() + storeCatalogTtlMs };
+      return entries;
+    } catch (error) {
+      // The repo catalog is already in hand and is most of the site. Failing the whole
+      // list because the store half could not be read would take down games that have
+      // nothing to do with this path.
+      app.log.error({ err: error }, 'could not read store-published games for the catalog');
+      return cached?.value ?? [];
+    }
+  }
+
   // The public game catalog, derived from SPEC.md frontmatter on the games repo's
   // default branch via the authenticated API. This (not public GitHub Pages) is
   // what the web app lists, so the games repo itself can be private — the app's
@@ -2548,7 +2671,8 @@ export async function registerSubmissionRoutes(
 
     try {
       const entries = await getCatalogEntries(githubClient);
-      return reply.send(entries.filter((entry) => entry.status === 'published'));
+      const published = entries.filter((entry) => entry.status === 'published');
+      return reply.send([...published, ...(await storeCatalogEntries(published.map((entry) => entry.slug)))]);
     } catch (error) {
       if (error instanceof SnapshotUnavailableError) {
         request.log.error({ err: error }, 'snapshot catalog unavailable');
@@ -2664,6 +2788,17 @@ export async function registerSubmissionRoutes(
     }
 
     try {
+      // Store-published first: a delivered game is never committed, so the repo catalog
+      // does not know it exists and would 404 a game the operator published. Its document
+      // is the one the gate assembled — same assembler, same CSP, provenance and
+      // credential scan as the bake applies to a repo game — so this serves an artifact
+      // rather than building one.
+      const stored = await storePublishedGame(slug);
+      if (stored) {
+        gameCache.set(slug, { value: stored, expiresAt: currentTime + gameTtlMs });
+        return reply.send(stored);
+      }
+
       if (!(await isSlugPublished(githubClient, slug))) {
         return reply.status(404).send({ error: 'game not found' });
       }

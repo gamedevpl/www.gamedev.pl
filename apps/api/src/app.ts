@@ -376,7 +376,18 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // The build queue, answered from the store alone. Until jobs carried their own state
   // there was nothing to answer it with: deriving every in-flight submission's status on
   // demand is the fan-out that has rate-limited the site before.
-  await registerJobAdminRoutes(app, { store, adminUids });
+  await registerJobAdminRoutes(app, {
+    store,
+    adminUids,
+    // The same store the delivery path writes to — resolved the same way, so publishing
+    // and delivery can never end up pointed at different buckets. Publishing re-reads
+    // the gate verdict off the manifest rather than trusting the job's derived state.
+    gamesStore:
+      options.submissionRoutes?.agentChannel?.gamesStore ??
+      (process.env.GAMES_STORE_BUCKET?.trim()
+        ? createGcsGamesStore({ bucket: process.env.GAMES_STORE_BUCKET.trim() })
+        : undefined),
+  });
 
   // Creator control panel (docs/improvement-loop-plan.md IL-2 creator surface). Own
   // shelf + per-game health for games this uid owns — not the operator catalog view.

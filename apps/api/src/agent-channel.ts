@@ -2,7 +2,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { InvalidAgentTokenError, readBearerToken, verifyAgentToken } from './agent-token.js';
 import { InvalidUploadError, type GamesStore } from './games-store.js';
-import type { CreatorMessage, Store, SubmissionRecord } from './store.js';
+import { canTransition } from './job-state.js';
+import { isNativeJobId, type CreatorMessage, type Store, type SubmissionRecord } from './store.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from './submission-status.js';
 
 /**
@@ -569,6 +570,23 @@ export async function registerAgentChannelRoutes(
         // not anything ever verifies it. The gate decides whether it may be *published*,
         // which is a different question from whether its author can watch it.
         await store?.setSubmissionDeliveredVersion(issueNumber, version);
+        // Past the agent, and recorded as such. Without this the job stays `building`,
+        // and the agent's own session then reports `completed` with a candidate present
+        // — which the reconciler reads as "done, ready for review". That would promote a
+        // game to the review queue on the agent's say-so, before our gate had run and
+        // whatever it might have said. `submitted` is the state the reconciler refuses
+        // to move, which is exactly the protection this needs.
+        if (store && isNativeJobId(issueNumber)) {
+          const current = record.state ?? 'building';
+          if (canTransition(current, 'submitted')) {
+            await store.recordJobTransition(issueNumber, {
+              to: 'submitted',
+              at: new Date().toISOString(),
+              by: 'agent',
+              reason: 'sources_delivered',
+            });
+          }
+        }
         await options.onSourcesDelivered?.({ issueNumber, slug, version });
         options.onEvent?.(issueNumber);
 

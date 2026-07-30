@@ -21,7 +21,10 @@
 
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import type { GameProject } from '@gamedevpl/game-generator';
+import { assembleGameHtml } from './assemble.js';
 import type { GamesStore, VersionManifest } from './games-store.js';
+import { createLocalGamesClient } from './local-games-repo.js';
 
 export interface GateOutcome {
   green: boolean;
@@ -44,13 +47,49 @@ export interface GateRunnerDeps {
   run(command: string, args: string[], cwd: string): Promise<{ code: number; output: string }>;
   now?: () => number;
   /** Where to look for artifacts the check produced, relative to the harness root. */
-  artifactRoots?: { bundle: (slug: string) => string; media: (slug: string) => string };
+  artifactRoots?: { media: (slug: string) => string };
+  /**
+   * Builds the document that will actually be served, from the checked harness.
+   * Injected so the runner can be tested without esbuild or a games-repo tree.
+   */
+  assembleBundle?: (harness: string, slug: string) => Promise<string | null>;
 }
 
 const DEFAULT_ARTIFACT_ROOTS = {
-  bundle: (slug: string) => path.join('dist', 'games', slug, 'index.html'),
   media: (slug: string) => path.join('games', slug, 'media'),
 };
+
+/**
+ * Assembles the served document from the harness the check just passed against.
+ *
+ * Deliberately *not* the games repo's own `dist/` build output, which is what this used
+ * to store. That output is the repo's idea of a playable page; it is not ours, and the
+ * difference is the whole of serve-time policy — the restrictive CSP that stops a game
+ * calling home, the AI Act art. 50(2) provenance marking, the credential scan, the byte
+ * budget. All four live in `assembleGameHtml`, none of them are in `tools/build.ts`, and
+ * shipping the repo's build meant shipping a document with none of them.
+ *
+ * Assembling here rather than at serve time is what keeps one definition of "what a
+ * served game is" across the three things that need one: the creator's draft preview,
+ * the published game, and the snapshot bake. It also belongs here for the reason the
+ * gate itself does — this repo owns the policy, and the harness is already checked out
+ * with the GameKit modules the assembler has to resolve.
+ */
+async function assembleFromHarness(harness: string, slug: string): Promise<string | null> {
+  const client = createLocalGamesClient({ rootDir: harness });
+  const sources = await client.getGameSources('main', slug);
+  if (!sources) return null;
+  const project: GameProject = {
+    title: sources.title ?? slug,
+    description: '',
+    html: sources.indexHtml,
+    js: sources.gameJs,
+    css: sources.styleCss,
+  };
+  // Matches the bake and the play route exactly: a game is self-contained by repo
+  // policy, so it is locked to its own inline assets.
+  return assembleGameHtml(project, { restrictNetwork: true });
+}
 
 /**
  * Files the capture harness produces that are worth keeping.
@@ -114,7 +153,22 @@ export async function runGate(slug: string, version: string, deps: GateRunnerDep
       };
     }
 
-    const artifacts = await collectArtifacts(deps, slug, version, harness, roots);
+    let artifacts: string[];
+    try {
+      artifacts = await collectArtifacts(deps, slug, version, harness, roots);
+    } catch (error) {
+      // A game the repo's own check accepts can still be one we refuse to serve: the
+      // credential scan and the byte budget live in the assembler, not in `check:game`.
+      // That is a red verdict with a reason the agent can act on, not a crash — a run
+      // that dies here would leave the version with no verdict at all, which reads as a
+      // gate that never ran rather than one that said no.
+      return {
+        green: false,
+        report: error instanceof Error ? error.message : String(error),
+        artifacts: [],
+        durationMs: now() - startedAt,
+      };
+    }
 
     return {
       green: true,
@@ -154,12 +208,20 @@ async function collectArtifacts(
 ): Promise<string[]> {
   const stored: string[] = [];
 
-  const bundlePath = path.join(harness, roots.bundle(slug));
-  const bundle = await readFile(bundlePath).catch(() => null);
-  if (bundle) {
-    await deps.store.putDerivedArtifact(slug, version, 'bundle.html', bundle, 'text/html; charset=utf-8');
-    stored.push('bundle.html');
-  }
+  // A green check with no servable document is not a pass. Letting it through would
+  // store a version that reads as publishable and has nothing to publish — and the
+  // failure would surface later, as a creator's preview that never appears, rather
+  // than here where the run that caused it is still in front of someone.
+  const bundle = await (deps.assembleBundle ?? assembleFromHarness)(harness, slug);
+  if (bundle === null) throw new Error(`check:game passed for ${slug} but its sources could not be assembled`);
+  await deps.store.putDerivedArtifact(
+    slug,
+    version,
+    'bundle.html',
+    Buffer.from(bundle, 'utf8'),
+    'text/html; charset=utf-8',
+  );
+  stored.push('bundle.html');
 
   const mediaDir = path.join(harness, roots.media(slug));
   const { readdir } = await import('node:fs/promises');

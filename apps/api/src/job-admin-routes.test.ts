@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { buildApp } from './app.js';
+import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
+import type { GamesStore } from './games-store.js';
 import { buildJobQueue } from './job-admin-routes.js';
-import type { SubmissionRecord } from './store.js';
+import { InMemoryStore, type SubmissionRecord } from './store.js';
 
 const NOW = Date.parse('2026-07-30T12:00:00Z');
 const MINUTE = 60_000;
@@ -138,5 +141,118 @@ describe('buildJobQueue', () => {
     );
 
     expect(queue.jobs[0].stall).toBe('awaiting_input');
+  });
+});
+
+describe('POST /api/admin/jobs/:issueNumber/publish', () => {
+  const sessionSecret = 'dev-session-secret-change-me';
+  const adminHeaders = { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken('g:boss', sessionSecret)}` };
+
+  /** A store holding one delivered version, gated as told. */
+  function gamesStoreWith(gate: { green: boolean } | null, bundle = '<!doctype html>assembled') {
+    return {
+      getManifest: async () => ({
+        slug: 'comet-courier',
+        version: 'v1',
+        createdAt: '2026-07-30T10:00:00Z',
+        issueNumber: 1_000_001,
+        sourceFiles: ['SPEC.md'],
+        ...(gate ? { gate: { ...gate, ranAt: '2026-07-30T11:00:00Z' } } : {}),
+      }),
+      getSourceFile: async () => '---\ntitle: Comet Courier\n---\n',
+      getDerivedArtifact: async () => Buffer.from(bundle, 'utf8'),
+      putCandidateSources: async () => ({ version: 'v1', manifest: {} }),
+      putGateResult: async () => {},
+      putDerivedArtifact: async () => {},
+    } as unknown as GamesStore;
+  }
+
+  async function appWithJob(gamesStore: GamesStore) {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    await store.createSubmission(1_000_001, 'g:boss', 'Comet Courier');
+    await store.setSubmissionSlug(1_000_001, 'comet-courier');
+    await store.setSubmissionDeliveredVersion(1_000_001, 'v1');
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      adminUids: 'g:boss',
+      submissionRoutes: { agentChannel: { gamesStore } },
+    });
+    return { app, store };
+  }
+
+  it('publishes a gate-green build and records how it got there', async () => {
+    const { app, store } = await appWithJob(gamesStoreWith({ green: true }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/jobs/1000001/publish',
+      headers: adminHeaders,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(await store.getPublication('comet-courier')).toMatchObject({
+      slug: 'comet-courier',
+      state: 'published',
+      currentVersion: 'v1',
+    });
+    // Through `publishing`, not straight to `published`: the intermediate state is what
+    // a failed publish has to fall back from, and skipping it leaves no record it existed.
+    const record = await store.getSubmission(1_000_001);
+    expect(record?.state).toBe('published');
+    expect(record?.transitions?.map((entry) => entry.to)).toEqual(['publishing', 'published']);
+    expect(record?.publishedAt).toBeTruthy();
+
+    await app.close();
+  });
+
+  it('refuses to publish a version our own gate failed', async () => {
+    const { app, store } = await appWithJob(gamesStoreWith({ green: false }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/jobs/1000001/publish',
+      headers: adminHeaders,
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error).toBe('gate_red');
+    expect(await store.getPublication('comet-courier')).toBeNull();
+
+    await app.close();
+  });
+
+  it('refuses a version nothing has gated yet', async () => {
+    const { app, store } = await appWithJob(gamesStoreWith(null));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/jobs/1000001/publish',
+      headers: adminHeaders,
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error).toBe('not_gated');
+    expect(await store.getPublication('comet-courier')).toBeNull();
+
+    await app.close();
+  });
+
+  it('is invisible to a non-admin, like the rest of the operator surface', async () => {
+    const { app, store } = await appWithJob(gamesStoreWith({ green: true }));
+    await store.upsertUser({ uid: 'g:someone' });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/jobs/1000001/publish',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken('g:someone', sessionSecret)}` },
+    });
+
+    // 404 rather than 403: the operator surface does not confirm its own existence.
+    expect(response.statusCode).toBe(404);
+    expect(await store.getPublication('comet-courier')).toBeNull();
+
+    await app.close();
   });
 });
