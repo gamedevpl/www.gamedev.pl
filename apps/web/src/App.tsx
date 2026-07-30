@@ -11,6 +11,7 @@ import { DraftView } from './DraftView.js';
 import { AdminConsole } from './AdminConsole.js';
 import { PixelIcon } from './PixelIcon.js';
 import { CreatorQA, type QAQuestion } from './CreatorQA.js';
+import { deriveTitleFromConcept } from './gameTitle.js';
 import {
   adminPath,
   canonicalPath,
@@ -314,12 +315,13 @@ export function App() {
     });
   }, []);
 
-  // Bring the clarifying-questions panel into view when the refiner returns some.
+  // Bring the confirm panel into view when it opens. Keyed on the spec rather than on
+  // the questions: the panel now appears for a clean concept too, to be named.
   useEffect(() => {
-    if (qaQuestions.length > 0) {
+    if (pendingSpec) {
       qaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
     }
-  }, [qaQuestions]);
+  }, [pendingSpec]);
 
   // Menu navigation is scroll-to-section, but the sections only exist on the home
   // route — from a status page we have to go home first and scroll once the target
@@ -387,7 +389,7 @@ export function App() {
   // The generation gate: before spending a submission we run the spec refiner. If it
   // returns clarifying questions, generation pauses on the QA panel until they're
   // answered; a clean spec (or a refiner error — fail-open) submits straight through.
-  async function handleSubmitSpec(title: string, concept: string, displayName: string = '') {
+  async function handleSubmitSpec(concept: string, displayName: string = '') {
     if (!user) {
       // The wall between "wrote an idea" and "made an account". Everything before this
       // is anonymous, so this is the only place that drop-off is visible at all.
@@ -396,33 +398,37 @@ export function App() {
       return;
     }
 
-    const trimmedTitle = title.trim();
     const trimmedConcept = concept.trim();
-    if (!trimmedTitle || !trimmedConcept) return;
+    if (!trimmedConcept) return;
 
     setSubmissionStatus('refining');
     setSubmissionError(null);
 
+    let questions: QAQuestion[] = [];
+    let suggestedTitle: string | undefined;
     try {
-      const { questions } = await refineSpec({
-        title: trimmedTitle,
-        concept: trimmedConcept,
-        locale: i18n.language,
-      });
-      if (questions.length > 0) {
-        recordCreateStep('qa_shown');
-        const spec = { title: trimmedTitle, concept: trimmedConcept, displayName: displayName.trim() };
-        setPendingSpec(spec);
-        setQaQuestions(questions);
-        savePendingQa({ spec, questions, answers: { selected: {}, custom: {} } });
-        setSubmissionStatus('idle');
-        return;
-      }
+      const refined = await refineSpec({ concept: trimmedConcept, locale: i18n.language });
+      questions = refined.questions;
+      suggestedTitle = refined.suggestedTitle;
     } catch {
-      // Fail-open: a refiner outage must never block creation — submit as-is.
+      // Fail-open: a refiner outage must never block creation. It does not skip the
+      // naming step either — that would put us back to games named by truncation —
+      // so the confirm panel opens on a title derived from the prompt instead.
     }
 
-    await submitRefinedSpec(trimmedTitle, trimmedConcept, displayName.trim());
+    if (questions.length > 0) recordCreateStep('qa_shown');
+
+    // The confirm step always happens now, questions or not: it is where the game gets
+    // its name, and a build must not start without one the creator has seen.
+    const spec = {
+      title: suggestedTitle ?? deriveTitleFromConcept(trimmedConcept),
+      concept: trimmedConcept,
+      displayName: displayName.trim(),
+    };
+    setPendingSpec(spec);
+    setQaQuestions(questions);
+    savePendingQa({ spec, questions, answers: { selected: {}, custom: {} } });
+    setSubmissionStatus('idle');
   }
 
   // Actually creates the submission (after the QA gate) and jumps to its status page.
@@ -487,10 +493,12 @@ export function App() {
   // dropped the creator into blank space for however long the API took to create the
   // issue — they had just clicked a button and the page answered by deleting itself.
   // On failure it stays up with the error, so the answers survive a retry.
-  const handleQaComplete = async (finalConcept: string) => {
+  const handleQaComplete = async (finalConcept: string, title: string) => {
     const spec = pendingSpec;
     if (!spec) return;
-    await submitRefinedSpec(spec.title, finalConcept, spec.displayName);
+    // The name the creator settled on, which is the step that gates the build.
+    recordCreateStep('title_confirmed');
+    await submitRefinedSpec(title, finalConcept, spec.displayName);
   };
 
   const handleQaCancel = () => {
@@ -501,10 +509,25 @@ export function App() {
 
   // Every keystroke and chip lands in storage, so the round survives a reload at any
   // point rather than only between questions.
+  const latestAnswersRef = useRef<PendingQaAnswers>({ selected: {}, custom: {} });
   const handleQaAnswersChange = useCallback(
     (answers: PendingQaAnswers) => {
+      latestAnswersRef.current = answers;
       if (!pendingSpec) return;
       savePendingQa({ spec: pendingSpec, questions: qaQuestions, answers });
+    },
+    [pendingSpec, qaQuestions],
+  );
+
+  // The name is parked with the answers, for the same reason: an edited title is work,
+  // and a reload that kept the answers but silently restored the model's suggestion
+  // would be the one part of the panel that lies about having been saved.
+  const handleQaTitleChange = useCallback(
+    (title: string) => {
+      if (!pendingSpec) return;
+      const spec = { ...pendingSpec, title };
+      setPendingSpec(spec);
+      savePendingQa({ spec, questions: qaQuestions, answers: latestAnswersRef.current });
     },
     [pendingSpec, qaQuestions],
   );
@@ -708,19 +731,23 @@ export function App() {
                 onPlayGame={handlePlayGame}
                 submissionStatus={submissionStatus}
                 submissionError={submissionError}
-                onSubmitSpec={(title, concept) => void handleSubmitSpec(title, concept)}
+                onSubmitSpec={(concept) => void handleSubmitSpec(concept)}
                 mockStatus={mockStatus}
                 mockError={mockError}
                 onGenerateMock={(prompt) => void handleGenerateMock(prompt)}
               />
             </div>
 
-            {qaQuestions.length > 0 && pendingSpec && (
+            {/* Gated on the pending spec alone: the panel is the naming step, which
+                always happens, and the questions are the part that is sometimes empty. */}
+            {pendingSpec && (
               <div ref={qaRef}>
                 <CreatorQA
                   questions={qaQuestions}
                   initialConcept={pendingSpec.concept}
+                  initialTitle={pendingSpec.title}
                   onSubmitWithConcept={handleQaComplete}
+                  onTitleChange={handleQaTitleChange}
                   onCancel={handleQaCancel}
                   submitting={submissionStatus === 'loading'}
                   error={submissionError}

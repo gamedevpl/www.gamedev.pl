@@ -13,7 +13,7 @@ type HeroPromptSectionProps = {
   /** 'refining' is the pre-submission spec-refiner call; nothing has been sent yet. */
   submissionStatus: 'idle' | 'refining' | 'loading';
   submissionError: string | null;
-  onSubmitSpec: (title: string, concept: string) => void;
+  onSubmitSpec: (concept: string) => void;
   mockStatus: 'idle' | 'loading' | 'error';
   mockError: string | null;
   // Kept for the demo generator; the primary Build action no longer auto-fires a
@@ -278,11 +278,14 @@ export function HeroPromptSection({
         : `Game idea with attached visuals: ${attachSummary}`;
     }
 
-    const autoTitle = trimmed.slice(0, 40).trim() || 'My Visual AI Game';
     // Recorded here rather than in the handler: this is the visitor asking for a game,
     // which happens whether or not they turn out to be signed in.
     recordCreateStep('spec_submitted');
-    onSubmitSpec(autoTitle, finalPrompt);
+    // No title is invented here any more. This used to send the prompt's first 40
+    // characters as the game's name, and that string went on to be the name — in the
+    // studio, in the catalog, in the agent's brief. Naming happens in the confirm step,
+    // where the creator can see it and change it.
+    onSubmitSpec(finalPrompt);
   };
 
   return (

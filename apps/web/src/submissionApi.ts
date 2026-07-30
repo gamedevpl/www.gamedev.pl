@@ -335,7 +335,8 @@ export async function submitFeedback(
   return (await response.json()) as { ok: boolean; target: string; shotId?: string };
 }
 
-export async function refineSpec(input: { title: string; concept: string; locale?: string }): Promise<{
+/** What the pre-submission refiner has to say about a concept. */
+export type RefinedSpec = {
   questions: Array<{
     id: string;
     question: string;
@@ -343,7 +344,21 @@ export async function refineSpec(input: { title: string; concept: string; locale
     allowFreeText?: boolean;
     multiple?: boolean;
   }>;
-}> {
+  /**
+   * A name for the game, proposed from the concept. The creator confirms or replaces
+   * it before anything is built; absent when the model had nothing usable to offer,
+   * which is the caller's cue to fall back to a name derived from the prompt.
+   */
+  suggestedTitle?: string;
+};
+
+/**
+ * Asks the refiner to read a concept: name it, and say what it still needs to know.
+ *
+ * `title` is optional and normally omitted — the creator has not been asked for one at
+ * this point in the flow, which is the whole reason `suggestedTitle` comes back.
+ */
+export async function refineSpec(input: { title?: string; concept: string; locale?: string }): Promise<RefinedSpec> {
   const response = await fetch(`${API_BASE}/api/submissions/refine`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -355,13 +370,5 @@ export async function refineSpec(input: { title: string; concept: string; locale
     await throwResponseError(response);
   }
 
-  return (await response.json()) as {
-    questions: Array<{
-      id: string;
-      question: string;
-      options: Array<{ label: string; detail?: string }>;
-      allowFreeText?: boolean;
-      multiple?: boolean;
-    }>;
-  };
+  return (await response.json()) as RefinedSpec;
 }

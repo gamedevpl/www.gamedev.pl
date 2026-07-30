@@ -50,6 +50,7 @@ const CreateStepSchema = z.enum([
   'spec_submitted',
   'signin_required',
   'qa_shown',
+  'title_confirmed',
   'submission_created',
 ]);
 /**

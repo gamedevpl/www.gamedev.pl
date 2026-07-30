@@ -375,6 +375,11 @@
   "qa": {
     "title": "Refine Your Game Idea (Optional)",
     "subtitle": "Click any proposed options to clarify your spec, or hit 'Create Now' to submit immediately.",
+    "titleNameOnly": "Name your game",
+    "subtitleNameOnly": "Your idea is clear enough to build. Give it a name and we'll get started.",
+    "nameLabel": "Game name",
+    "namePlaceholder": "e.g. TV Tycoon",
+    "nameHint": "This is what your game will be called everywhere. You can change it now — not later.",
     "createNow": "Create Now",
     "analyzing": "Analyzing your idea…",
     "otherPlaceholder": "Other / Custom answer…",

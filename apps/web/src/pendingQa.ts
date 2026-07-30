@@ -38,11 +38,13 @@ export function loadPendingQa(): PendingQaSession | null {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as PendingQaSession;
+    // An empty question list is a real session now, not a corrupt one: the confirm
+    // panel opens for every concept so the game can be named, and a clean concept
+    // reaches it with nothing to clarify. The concept is what makes a session
+    // meaningful; the title may legitimately be blank while the creator picks one.
     if (
-      !parsed?.spec?.title ||
-      !parsed.spec.concept ||
+      !parsed?.spec?.concept ||
       !Array.isArray(parsed.questions) ||
-      parsed.questions.length === 0 ||
       typeof parsed.savedAt !== 'number' ||
       Date.now() - parsed.savedAt > MAX_AGE_MS
     ) {
@@ -52,7 +54,7 @@ export function loadPendingQa(): PendingQaSession | null {
     return {
       ...parsed,
       // displayName is optional to the creator, so tolerate its absence in older blobs.
-      spec: { ...parsed.spec, displayName: parsed.spec.displayName ?? '' },
+      spec: { ...parsed.spec, title: parsed.spec.title ?? '', displayName: parsed.spec.displayName ?? '' },
       answers: { selected: parsed.answers?.selected ?? {}, custom: parsed.answers?.custom ?? {} },
     };
   } catch {

@@ -70,6 +70,7 @@ export const CREATE_STEPS = [
   'spec_submitted',
   'signin_required',
   'qa_shown',
+  'title_confirmed',
   'submission_created',
 ] as const;
 

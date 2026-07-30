@@ -47,9 +47,23 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function mockApi(options: { onRefine?: () => void; gate?: Promise<void> } = {}) {
-  return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+function mockApi(
+  options: {
+    onRefine?: () => void;
+    gate?: Promise<void>;
+    /** Empty models a fully-specified concept: nothing to clarify, still to be named. */
+    questions?: typeof QUESTIONS;
+    suggestedTitle?: string;
+    refineFails?: boolean;
+    onSubmit?: (body: { title: string; concept: string }) => void;
+  } = {},
+) {
+  return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = String(input);
+    if (url.endsWith('/api/submissions') && init?.method === 'POST') {
+      options.onSubmit?.(JSON.parse(String(init.body)) as { title: string; concept: string });
+      return new Response(JSON.stringify({ token: 'tok-1', statusUrl: '/api/submissions/tok-1' }));
+    }
     if (url.endsWith('/api/auth/me')) {
       return new Response(JSON.stringify({ user: { uid: 'g:test', tier: 'standard' } }));
     }
@@ -65,7 +79,13 @@ function mockApi(options: { onRefine?: () => void; gate?: Promise<void> } = {}) 
     if (url.endsWith('/api/submissions/refine')) {
       options.onRefine?.();
       if (options.gate) await options.gate;
-      return new Response(JSON.stringify({ questions: QUESTIONS }));
+      if (options.refineFails) return new Response(JSON.stringify({ error: 'boom' }), { status: 500 });
+      return new Response(
+        JSON.stringify({
+          questions: options.questions ?? QUESTIONS,
+          ...(options.suggestedTitle ? { suggestedTitle: options.suggestedTitle } : {}),
+        }),
+      );
     }
     return new Response(JSON.stringify({}), { status: 404 });
   });
@@ -201,6 +221,52 @@ describe('the QA gate in App', () => {
     expect(container.querySelector('.qa-container')).toBeNull();
     // Left behind, it would resurrect the abandoned idea on the next visit.
     expect(localStorage.getItem('gamedev_pending_qa')).toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
+  it('stops to have the game named even when there is nothing to clarify', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    const submitted: Array<{ title: string; concept: string }> = [];
+    mockApi({ questions: [], suggestedTitle: 'Castaway Craft', onSubmit: (body) => submitted.push(body) });
+
+    const { container, root } = await renderApp();
+    await submitIdea(container);
+
+    // A clean concept used to go straight to the agent, and the name it was built
+    // under was the prompt's first 40 characters. Now it waits here.
+    expect(submitted).toHaveLength(0);
+    expect(container.querySelector('.qa-container')).not.toBeNull();
+    expect(container.querySelector<HTMLInputElement>('.qa-name-input')?.value).toBe('Castaway Craft');
+
+    await act(async () => {
+      container.querySelector('.btn-create-now')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(submitted).toHaveLength(1);
+    expect(submitted[0]!.title).toBe('Castaway Craft');
+
+    await act(async () => root.unmount());
+  });
+
+  it('still asks for a name when the refiner is down, falling back to one from the prompt', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    const submitted: Array<{ title: string; concept: string }> = [];
+    mockApi({ refineFails: true, onSubmit: (body) => submitted.push(body) });
+
+    const { container, root } = await renderApp();
+    await submitIdea(container);
+
+    // Failing open must not mean skipping the step — that is how truncated prompts
+    // became titles in the first place. The suggestion degrades; the gate does not.
+    expect(submitted).toHaveLength(0);
+    const name = container.querySelector<HTMLInputElement>('.qa-name-input');
+    expect(name?.value).toBe('A survival game on a desert island with');
+    expect(container.querySelectorAll('.qa-card')).toHaveLength(0);
 
     await act(async () => root.unmount());
   });

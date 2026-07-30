@@ -375,6 +375,11 @@
   "qa": {
     "title": "Doprecyzuj swój pomysł (Opcjonalnie)",
     "subtitle": "Kliknij sugerowane opcje, aby doprecyzować specyfikację, lub naciśnij 'Stwórz teraz', aby natychmiast wysłać.",
+    "titleNameOnly": "Nazwij swoją grę",
+    "subtitleNameOnly": "Twój pomysł jest wystarczająco jasny. Nadaj mu nazwę, a zaczynamy.",
+    "nameLabel": "Nazwa gry",
+    "namePlaceholder": "np. Telewizyjny Potentat",
+    "nameHint": "Tak Twoja gra będzie się nazywać wszędzie. Możesz to zmienić teraz — później już nie.",
     "createNow": "Stwórz teraz",
     "analyzing": "Analizuję Twój pomysł…",
     "otherPlaceholder": "Inna / Własna odpowiedź…",

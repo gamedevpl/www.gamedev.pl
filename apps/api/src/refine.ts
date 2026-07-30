@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { checkUserAccess } from './auth.js';
 import { createVertexClient, type VertexGenerationConfig } from './genai.js';
 import type { ContentChecker } from './moderation.js';
+import { sanitizeCreatorText } from './submission-status.js';
 import type { Store } from './store.js';
 import { logModerationRejection } from './moderation-metrics.js';
 
@@ -24,10 +25,25 @@ export interface RefineQuestion {
 
 export interface RefineResponse {
   questions: RefineQuestion[];
+  /**
+   * A name for the game, in the creator's language.
+   *
+   * Games used to be named by truncation — the first 40 characters of the prompt, cut
+   * mid-word — and that string became the title everywhere: the studio, the catalog, the
+   * agent's brief. The model is already reading the concept to write its questions, so
+   * naming it costs nothing extra; the creator confirms or replaces it before anything
+   * is built. Absent when the model declines or the call fails open.
+   */
+  suggestedTitle?: string;
 }
 
 export interface RefineParams {
-  title: string;
+  /**
+   * A name the creator already has in mind. Optional: the flow that calls this has not
+   * asked for one yet — that is what `suggestedTitle` is for — and seeding the model
+   * with a truncated fragment of the concept only anchored it on the truncation.
+   */
+  title?: string;
   concept: string;
   locale?: string;
 }
@@ -61,7 +77,35 @@ export const DEFAULT_REFINE_TIMEOUT_MS = 20_000;
 const REFINE_CACHE_TTL_MS = 10 * 60_000;
 const REFINE_CACHE_MAX_ENTRIES = 200;
 
+/**
+ * The submission route's own title bounds. A suggestion that could not be submitted
+ * unedited is worse than no suggestion: the creator would meet the validation error on
+ * a name they never wrote.
+ */
+const MIN_TITLE_LENGTH = 3;
+const MAX_TITLE_LENGTH = 80;
+
+/**
+ * A model-proposed title, or undefined when there is nothing usable.
+ *
+ * The model is asked for a bare name and mostly gives one, but it also sometimes wraps
+ * it in quotes or ends it with a full stop, and a title is about to be shown in a text
+ * input and then carried by the game forever. Single-lined here rather than at the
+ * route because every caller of a refiner wants the same thing, stubs included.
+ */
+function cleanSuggestedTitle(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const cleaned = sanitizeCreatorText(raw, { singleLine: true })
+    .replace(/^["'“”„«»]+|["'“”„«»]+$/g, '')
+    .replace(/[.!?,;:]+$/, '')
+    .trim()
+    .slice(0, MAX_TITLE_LENGTH)
+    .trim();
+  return cleaned.length >= MIN_TITLE_LENGTH ? cleaned : undefined;
+}
+
 const RefineResultSchema = z.object({
+  suggestedTitle: z.string().optional(),
   questions: z
     .array(
       z.object({
@@ -120,13 +164,17 @@ export class VertexSpecRefiner implements SpecRefiner {
 
     try {
       const promptText = `You are a helpful game design assistant for gamedev.pl.
-Analyze the following game title and concept specification.
-Identify up to 4 underspecified or missing gameplay/design dimensions (such as visual style, controls, difficulty/pacing, or win/lose conditions) that would help a coding agent build a better game.
+Analyze the following game concept specification.
 
-Language requirement: Formulate questions and options in the language specified (${params.locale ?? 'en'}).
+Do two things:
+1. Propose "suggestedTitle": a short, catchy name for this game — at most 6 words, no quotes, no trailing punctuation. Name the game, do not describe it, and never echo the concept text back as a sentence.
+2. Identify up to 4 underspecified or missing gameplay/design dimensions (such as visual style, controls, difficulty/pacing, or win/lose conditions) that would help a coding agent build a better game.
+
+Language requirement: Write the title, questions and options in the language specified (${params.locale ?? 'en'}).
 
 Respond STRICTLY with a JSON object following this schema:
 {
+  "suggestedTitle": "Short Game Name",
   "questions": [
     {
       "id": "short_unique_id",
@@ -142,9 +190,8 @@ Respond STRICTLY with a JSON object following this schema:
 
 Set "multiple": true only when the options genuinely combine rather than compete — "which mechanics should be in?" can take several, "which visual style?" cannot. Default to false.
 
-If the concept is already fully specified, return {"questions": []}.
-
-Game Title: "${params.title}"
+If the concept is already fully specified, return an empty "questions" array — but always propose a title.
+${params.title ? `\nThe creator's working title, to improve on or keep: "${params.title}"\n` : ''}
 Game Concept:
 """
 ${params.concept}
@@ -155,7 +202,10 @@ ${params.concept}
         .signal(AbortSignal.timeout(this.timeoutMs))
         .json((value) => RefineResultSchema.parse(value));
 
+      const suggestedTitle = cleanSuggestedTitle(parsed.suggestedTitle);
+
       return {
+        ...(suggestedTitle ? { suggestedTitle } : {}),
         questions: (parsed.questions ?? []).slice(0, 4).map((q, idx) => ({
           id: q.id ?? `q_${idx}`,
           question: q.question ?? '',
@@ -188,7 +238,14 @@ export class StubSpecRefiner implements SpecRefiner {
 }
 
 const RefineRequestSchema = z.object({
-  title: z.string().trim().min(3, 'title must be at least 3 characters').max(80, 'title must be at most 80 characters'),
+  // Optional since the naming step moved *after* this call: the app no longer has a
+  // title to send, and the one it used to send was the prompt's first 40 characters.
+  title: z
+    .string()
+    .trim()
+    .min(3, 'title must be at least 3 characters')
+    .max(80, 'title must be at most 80 characters')
+    .optional(),
   concept: z
     .string()
     .trim()
@@ -244,9 +301,9 @@ export async function registerRefineRoute(app: FastifyInstance, options: RefineR
    */
   const refineCache = new Map<string, { expiresAt: number; result: RefineResponse }>();
 
-  const cacheKey = (data: { title: string; concept: string; locale?: string }) =>
+  const cacheKey = (data: { title?: string; concept: string; locale?: string }) =>
     createHash('sha256')
-      .update(`${data.locale ?? 'en'}\x00${data.title}\x00${data.concept}`)
+      .update(`${data.locale ?? 'en'}\x00${data.title ?? ''}\x00${data.concept}`)
       .digest('hex');
 
   const readCache = (key: string, now: number): RefineResponse | null => {
@@ -262,7 +319,9 @@ export async function registerRefineRoute(app: FastifyInstance, options: RefineR
   const writeCache = (key: string, result: RefineResponse, now: number) => {
     // Never cache a fail-open: an empty answer is exactly what a timeout produces,
     // and pinning that for ten minutes would turn one slow call into a dead panel.
-    if (result.questions.length === 0) return;
+    // A title with no questions is not that — it is a fully-specified concept that the
+    // model still named — so emptiness is only disqualifying when it is total.
+    if (result.questions.length === 0 && !result.suggestedTitle) return;
     if (refineCache.size >= REFINE_CACHE_MAX_ENTRIES) {
       const oldest = refineCache.keys().next().value;
       if (oldest !== undefined) refineCache.delete(oldest);
@@ -296,7 +355,10 @@ export async function registerRefineRoute(app: FastifyInstance, options: RefineR
     }
 
     // 2. Content moderation (422 on reject, spends no quota / vertex calls)
-    const moderation = await contentChecker.checkFields([parseResult.data.title, parseResult.data.concept]);
+    const moderatedFields = [parseResult.data.title, parseResult.data.concept].filter((field): field is string =>
+      Boolean(field),
+    );
+    const moderation = await contentChecker.checkFields(moderatedFields);
     if (!moderation.allowed) {
       logModerationRejection(request.log, {
         surface: 'refine',
@@ -322,7 +384,7 @@ export async function registerRefineRoute(app: FastifyInstance, options: RefineR
     const startedAt = Date.now();
     try {
       const result = await specRefiner.refine({
-        title: parseResult.data.title,
+        ...(parseResult.data.title ? { title: parseResult.data.title } : {}),
         concept: parseResult.data.concept,
         locale: parseResult.data.locale,
       });

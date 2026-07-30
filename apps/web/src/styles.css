@@ -3834,6 +3834,34 @@ body.player-open {
   margin: 0;
 }
 
+/* Naming the game — the step the build waits on, so it leads the panel and is sized
+   like a decision rather than like one more field among the clarifying questions. */
+.qa-name {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.qa-name-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-heading, #fff);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.qa-name-input {
+  font-size: 1.15rem;
+  font-weight: 600;
+  padding: 12px 14px;
+}
+
+.qa-name-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted, #94a3b8);
+}
+
 .qa-actions {
   display: flex;
   align-items: center;
