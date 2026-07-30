@@ -53,17 +53,22 @@ agent-runner container, auth proxy, job tokens, and orchestrator) was **removed 
 reasons** and is not a future phase. Read
 [`games-repo.md`](docs/games-repo.md) before making architectural assumptions.
 
-## Deployment status (2026-07-22)
+## Deployment status (2026-07-30)
 
 The steel thread is **built and deployed** — all milestones M0–M5 merged. The app (web + API,
-one same-origin service) is **live on Cloud Run** at
-`https://gamedev-app-334141807880.europe-central2.run.app` (GCP project `gamedevpl`); the live
-`www.gamedev.pl` GitHub Pages site is untouched.
+one same-origin service) is **live on Cloud Run in `europe-west1`** (GCP project `gamedevpl`)
+and serves **`https://www.gamedev.pl`** through a native domain mapping. It is no longer a
+GitHub Pages site — the domain *is* the app.
 
-- **The deployed app is locked behind HTTP Basic Auth** (`site-basic-auth` secret) — a
-  temporary "not public yet" gate. Browse/play is live and verified in production.
-- **Submissions are pending one owner secret** (`github-token`, a games-repo-scoped PAT); until
-  it exists, submission routes return 503 by design.
+Firestore lives in `europe-central2`, which is why backup and scheduler commands use a
+different region from deploy commands. That split is deliberate, not a typo.
+
+- **Access is gated by Google/Apple sign-in plus a closed-beta allowlist**, not by HTTP Basic
+  Auth. The old `site-basic-auth` gate is gone: no code reads `SITE_BASIC_AUTH`, and the
+  secret is mapped into none of the three Cloud Run services. Browse/play is live and
+  verified in production.
+- **Submissions work.** `github-token` exists in Secret Manager; the 503-by-design behaviour
+  described here previously applied only before that secret was created.
 - **Nothing dispatches through GitHub any more.** A job is handed straight to an agent and a
   revision is a new task on its workspace, so the games repo's `assign-copilot` and
   `relay-creator-feedback` workflows — and the `COPILOT_ASSIGN_TOKEN` PAT they needed — were
