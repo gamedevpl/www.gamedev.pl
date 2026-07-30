@@ -22,8 +22,8 @@
 > - **Browse/play is fully live**; games play sandboxed from the games origin. **Submissions
 >   go live once the `github-token` secret is added** (see M5 below) — until then submission
 >   routes return 503 by design.
-> - **M4 auto-assign works but requires the `COPILOT_ASSIGN_TOKEN` PAT** (the default Actions
->   `GITHUB_TOKEN` cannot assign the Copilot bot). That secret is set on the games repo.
+> - **M4's auto-assign is gone (2026-07-30).** It solved dispatch through GitHub; dispatch no
+>   longer goes through GitHub. The workflow and its PAT were deleted — see §M4.
 
 ## 0. Definition of done — the steel thread
 
@@ -235,9 +235,13 @@ In `www.gamedev.pl-games`:
   assignees.
 - ✅ **Empirical outcome (verified 2026-07-22):** the default `GITHUB_TOKEN` is
   **insufficient** — it returns an empty `suggestedActors` set and cannot assign the Copilot
-  bot. A repo-secret PAT **`COPILOT_ASSIGN_TOKEN`** (fine-grained, Issues: read/write) is
-  **required** and is set on the games repo; the workflow uses it via
-  `${{ secrets.COPILOT_ASSIGN_TOKEN || secrets.GITHUB_TOKEN }}`.
+  bot. A repo-secret PAT **`COPILOT_ASSIGN_TOKEN`** (fine-grained, Issues: read/write) was
+  **required**, and that requirement is why the token existed at all.
+- 🗑️ **Removed 2026-07-30.** Job identity stopped coming from GitHub: a build is dispatched
+  straight to an agent, so there is no issue to assign and no bot mention to launder through
+  a licensed identity. Both workflows were deleted from the games repo and the PAT retired.
+  The finding above is kept because it is the reason the token existed — anyone reviving
+  GitHub-mediated dispatch will hit the same wall.
 
 **Acceptance ✅:** a labeled test issue was assigned to `copilot-swe-agent` hands-off and
 Copilot opened a PR from it (verified with throwaway issues, since closed).

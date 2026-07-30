@@ -64,8 +64,10 @@ one same-origin service) is **live on Cloud Run** at
   temporary "not public yet" gate. Browse/play is live and verified in production.
 - **Submissions are pending one owner secret** (`github-token`, a games-repo-scoped PAT); until
   it exists, submission routes return 503 by design.
-- **M4 auto-assign requires the `COPILOT_ASSIGN_TOKEN` PAT** on the games repo — the default
-  Actions `GITHUB_TOKEN` cannot assign the Copilot bot (empirically verified).
+- **Nothing dispatches through GitHub any more.** A job is handed straight to an agent and a
+  revision is a new task on its workspace, so the games repo's `assign-copilot` and
+  `relay-creator-feedback` workflows — and the `COPILOT_ASSIGN_TOKEN` PAT they needed — were
+  deleted on 2026-07-30.
 - Deploy via [`infra/deploy-api.sh`](infra/deploy-api.sh) (imperative `gcloud`, **not**
   Terraform — the `infra/*.tf` files are an intentional no-op placeholder). Full deploy state,
   the secret table, and how to enable submissions / remove the lock are in
