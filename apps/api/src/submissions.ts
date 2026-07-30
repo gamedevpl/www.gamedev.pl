@@ -1950,7 +1950,8 @@ export async function registerSubmissionRoutes(
     // change the answer — so fetching it would be a Firestore read per poll, per
     // watcher, bought with nothing.
     const native = isNativeJobId(issueNumber);
-    const record = options.agentChannel?.gamesStore ? await store?.getSubmission(issueNumber) : null;
+    const gamesStore = options.agentChannel?.gamesStore;
+    const record = gamesStore ? await store?.getSubmission(issueNumber) : null;
     if (record) {
       try {
         const stored = await replyWithStoredDraft(request, reply, record);
@@ -1977,6 +1978,14 @@ export async function registerSubmissionRoutes(
     if (native) {
       const stale = serveLastKnown('no delivery yet for native job; serving last known draft');
       if (stale) return stale;
+      // Without a store this deployment can never preview a native job — there is no PR
+      // to fall back to and nowhere for a delivery to land. 409 would say "not yet"
+      // about something that is never coming, which is the same lie as reporting a
+      // failure as a pending state, just told to an operator instead of a creator.
+      if (!gamesStore) {
+        request.log.error({ issueNumber }, 'preview requested for a native job with no games store configured');
+        return reply.status(503).send({ error: 'previews are not configured on this deployment' });
+      }
       return reply.status(409).send({ error: 'no preview available for this submission yet' });
     }
 

@@ -1252,8 +1252,36 @@ describe('submission preview route', () => {
     await app.close();
   });
 
+  it('says a deployment cannot preview at all rather than implying it might later', async () => {
+    // No games store means no delivery can ever land and no PR to fall back to, so a
+    // native job here is permanently unpreviewable. 409 would promise a creator
+    // something that is never coming — the same lie as reporting a failure as pending,
+    // told to whoever is running the deployment instead.
+    const store = new InMemoryStore();
+    const jobId = 1_000_046;
+    await store.upsertUser({ uid: 'g:test-user' });
+    await store.createSubmission(jobId, 'g:test-user', 'No store here');
+
+    const { app, authHeaders } = await createApp({
+      store,
+      githubClient: createGithubClientStub({}).githubClient,
+      submissionTokenSecret: secret,
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(jobId, secret)}/preview`,
+      headers: authHeaders,
+    });
+
+    expect(res.statusCode).toBe(503);
+    await app.close();
+  });
+
   it('tells a native job with nothing delivered yet that there is nothing to play', async () => {
     // Honest rather than a 502: before the first delivery there genuinely is no game.
+    // The store is configured here — that is what makes this "not yet" rather than
+    // "never", and the difference is the point.
     const store = new InMemoryStore();
     const jobId = 1_000_043;
     await store.upsertUser({ uid: 'g:test-user' });
@@ -1262,6 +1290,7 @@ describe('submission preview route', () => {
       store,
       githubClient: createGithubClientStub({}).githubClient,
       submissionTokenSecret: secret,
+      agentChannel: { gamesStore: { getDerivedArtifact: async () => null } as unknown as GamesStore },
     });
 
     const res = await app.inject({
