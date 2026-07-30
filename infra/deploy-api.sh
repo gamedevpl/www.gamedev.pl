@@ -33,13 +33,16 @@
 #   MAIL_FROM=...              (RFC 5322 sender; defaults to noreply@mail.gamedev.pl)
 #   INVITE_URL=...             (where invitees land; defaults to https://www.gamedev.pl)
 #   NOTIFY_SWEEP_AUDIENCE=...  (sweep endpoint URL; enables OIDC auth on /api/internal/notify-sweep)
-#   NOTIFY_SWEEP_SA=...        (Cloud Scheduler SA email allowed to call the sweeps; shared by all three)
+#   NOTIFY_SWEEP_SA=...        (Cloud Scheduler SA email allowed to call the sweeps; shared by all four)
 #   DIGEST_SWEEP_AUDIENCE=...   (digest endpoint URL; enables OIDC auth on the
 #                                weekly creator digest sweep)
 #   SCORECARD_SWEEP_AUDIENCE=... (scorecard endpoint URL; enables OIDC auth on
 #                               /api/internal/scorecard-sweep. Separate from the notify
 #                               audience because an OIDC audience is the endpoint's own
 #                               URL — one sweep's token must not be replayable at the other.)
+#   SUGGESTION_SWEEP_AUDIENCE=... (suggestion endpoint URL; enables OIDC auth on
+#                               /api/internal/suggestion-sweep, the IL-3 router run over
+#                               the scorecards. Its own audience for the same reason.)
 #   MP_RELAY_URL=...           (gamedev-mp-relay's URL, from infra/deploy-relay.sh; moves
 #                               party room creation to that service AND lifts this
 #                               service's --max-instances pin. One switch for both on
@@ -92,6 +95,7 @@ NOTIFY_SWEEP_AUDIENCE="${NOTIFY_SWEEP_AUDIENCE:-}"
 NOTIFY_SWEEP_SA="${NOTIFY_SWEEP_SA:-}"
 SCORECARD_SWEEP_AUDIENCE="${SCORECARD_SWEEP_AUDIENCE:-}"
 DIGEST_SWEEP_AUDIENCE="${DIGEST_SWEEP_AUDIENCE:-}"
+SUGGESTION_SWEEP_AUDIENCE="${SUGGESTION_SWEEP_AUDIENCE:-}"
 # Web Push (docs/notifications-plan.md M2). Public key is public by design (env var);
 # the private key is a Secret Manager secret wired in below. Push is off without them.
 VAPID_PUBLIC_KEY="${VAPID_PUBLIC_KEY:-}"
@@ -226,6 +230,9 @@ fi
 
 if [ -n "$DIGEST_SWEEP_AUDIENCE" ]; then
   ENV_VARS="${ENV_VARS}|DIGEST_SWEEP_AUDIENCE=${DIGEST_SWEEP_AUDIENCE}"
+fi
+if [ -n "$SUGGESTION_SWEEP_AUDIENCE" ]; then
+  ENV_VARS="${ENV_VARS}|SUGGESTION_SWEEP_AUDIENCE=${SUGGESTION_SWEEP_AUDIENCE}"
 fi
 if [ -n "$VAPID_PUBLIC_KEY" ]; then
   ENV_VARS="${ENV_VARS}|VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}"

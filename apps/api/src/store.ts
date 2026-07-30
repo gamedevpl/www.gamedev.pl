@@ -4,6 +4,7 @@ import type { AgentTaskState } from './agent-tasks.js';
 import type { PublicationRecord } from './games-store.js';
 import type { JobState, JobTransition } from './job-state.js';
 import type { BuildEvent, SubmissionStatus } from './submission-status.js';
+import { compareSuggestions, type StoredSuggestion } from './suggestions.js';
 
 /**
  * Uid namespace for automation accounts (docs/agent-access-tokens.md).
@@ -1145,6 +1146,19 @@ export interface Store {
    */
   listScorecards(opts?: { limit?: number }): Promise<Scorecard[]>;
   /**
+   * Overwrites a game's current suggestion (docs/improvement-loop-plan.md IL-3).
+   *
+   * Overwrite rather than append, matching the scorecard: a suggestion is what the router
+   * says about the game *now*, and a nightly history of proposals nobody acted on is a
+   * collection that only grows. Approval state, when the inbox arrives, is a record of a
+   * human decision and belongs somewhere a recompute cannot erase it.
+   */
+  putSuggestion(slug: string, suggestion: StoredSuggestion): Promise<void>;
+  /** A game's current suggestion, or null before the first sweep has routed it. */
+  getSuggestion(slug: string): Promise<StoredSuggestion | null>;
+  /** Every game's current suggestion, worst first. Bounded, like the scorecard listing. */
+  listSuggestions(opts?: { limit?: number }): Promise<StoredSuggestion[]>;
+  /**
    * Every slug that has a `games/{slug}` entry — including games whose document does
    * not exist but which have subcollections (votes, feedback, scorecard).
    *
@@ -1282,6 +1296,8 @@ export class InMemoryStore implements Store {
   private worldEntries = new Map<string, Map<string, WorldEntryRecord>>();
   // slug -> current scorecard
   private scorecards = new Map<string, Scorecard>();
+  // slug -> current suggestion
+  private suggestions = new Map<string, StoredSuggestion>();
   // tokenId -> personal access token record
   private accessTokens = new Map<string, AccessTokenRecord>();
 
@@ -2070,11 +2086,34 @@ export class InMemoryStore implements Store {
       .slice(0, opts?.limit ?? 200);
   }
 
+  async putSuggestion(slug: string, suggestion: StoredSuggestion): Promise<void> {
+    this.suggestions.set(slug, structuredClone(suggestion));
+  }
+
+  async getSuggestion(slug: string): Promise<StoredSuggestion | null> {
+    const found = this.suggestions.get(slug);
+    return found ? structuredClone(found) : null;
+  }
+
+  async listSuggestions(opts?: { limit?: number }): Promise<StoredSuggestion[]> {
+    return [...this.suggestions.values()]
+      .map((suggestion) => structuredClone(suggestion))
+      .sort(compareSuggestions)
+      .slice(0, opts?.limit ?? 200);
+  }
+
   async listGameSlugs(): Promise<string[]> {
     // Union of every slug this store knows anything about, mirroring Firestore's
     // `listDocuments()`, which also returns a game whose document never existed but
     // whose subcollections do.
-    return [...new Set([...this.votes.keys(), ...this.playerFeedback.keys(), ...this.scorecards.keys()])].sort();
+    return [
+      ...new Set([
+        ...this.votes.keys(),
+        ...this.playerFeedback.keys(),
+        ...this.scorecards.keys(),
+        ...this.suggestions.keys(),
+      ]),
+    ].sort();
   }
 
   async deletePlayerFeedbackByUid(uid: string): Promise<number> {
@@ -3354,6 +3393,40 @@ export class FirestoreStore implements Store {
       .limit(opts?.limit ?? 200)
       .get();
     return snap.docs.map((doc) => doc.data() as Scorecard).sort(compareScorecards);
+  }
+
+  // Under the game, beside the scorecard, for the reason `setPublication` gives: a
+  // takedown that has to remember to visit a second place is a takedown that eventually
+  // misses one. `current` is again a fixed doc id, so a game has exactly one suggestion.
+  private suggestionRef(slug: string) {
+    return this.gameRef(slug).collection('suggestion').doc('current');
+  }
+
+  async putSuggestion(slug: string, suggestion: StoredSuggestion): Promise<void> {
+    // `set` without merge, like the scorecard: a suggestion is a whole judgement, and a
+    // merge would leave last night's evidence array alive under this night's class.
+    await this.suggestionRef(slug).set(suggestion);
+  }
+
+  async getSuggestion(slug: string): Promise<StoredSuggestion | null> {
+    const snap = await this.suggestionRef(slug).get();
+    return snap.exists ? (snap.data() as StoredSuggestion) : null;
+  }
+
+  async listSuggestions(opts?: { limit?: number }): Promise<StoredSuggestion[]> {
+    // Deliberately **no** `orderBy`. Firestore auto-indexes single fields at COLLECTION
+    // scope only, never COLLECTION_GROUP, so ordering this group by any field would need
+    // a hand-provisioned index — the exact 9 FAILED_PRECONDITION that took the whole
+    // operator page down when `scorecard.computedAt` was added (infra/setup-gcp.sh step
+    // 7/8). Without one, the query is implicitly ordered by `__name__`, which is always
+    // indexed, so the limit takes the first N games by slug: deterministic, and a fair
+    // cut when one sweep writes every doc in the same pass. Priority order is restored
+    // below, where it costs nothing.
+    const snap = await this.db
+      .collectionGroup('suggestion')
+      .limit(opts?.limit ?? 200)
+      .get();
+    return snap.docs.map((doc) => doc.data() as StoredSuggestion).sort(compareSuggestions);
   }
 
   async listGameSlugs(): Promise<string[]> {

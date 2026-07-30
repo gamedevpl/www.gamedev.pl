@@ -636,8 +636,11 @@ at all and feeds the only autonomous-eligible class.
   here, and vice versa; the scheduler service account is shared):
 
   ```bash
-  SWEEP_URL="$(gcloud run services describe gamedev-app --region europe-west1 \
-    --project gamedevpl --format 'value(status.url)')/api/internal/scorecard-sweep"
+  # The host is the project-number one, hardcoded on purpose: `status.url` returns the
+  # *hash* host (gamedev-app-ll6xk4myya-ew.a.run.app), and an audience that disagrees by a
+  # hostname is rejected exactly like a missing one — a silent 401 that looks like a sweep
+  # that simply found nothing. Deriving it has now been wrong twice.
+  SWEEP_URL="https://gamedev-app-334141807880.europe-west1.run.app/api/internal/scorecard-sweep"
   SA=notify-sweep@gamedevpl.iam.gserviceaccount.com
   # Redeploy with SCORECARD_SWEEP_AUDIENCE="$SWEEP_URL" set (NOTIFY_SWEEP_SA already is), then:
   gcloud scheduler jobs create http scorecard-sweep --location europe-west1 --project gamedevpl \
@@ -725,8 +728,8 @@ at all and feeds the only autonomous-eligible class.
   Provisioning — again its own audience, since the audience is the endpoint URL:
 
   ```bash
-  SWEEP_URL="$(gcloud run services describe gamedev-app --region europe-west1 \
-    --project gamedevpl --format 'value(status.url)')/api/internal/digest-sweep"
+  # Project-number host, not `status.url` — see the note on the scorecard block above.
+  SWEEP_URL="https://gamedev-app-334141807880.europe-west1.run.app/api/internal/digest-sweep"
   SA=notify-sweep@gamedevpl.iam.gserviceaccount.com
   # Redeploy with DIGEST_SWEEP_AUDIENCE="$SWEEP_URL" set, then:
   gcloud scheduler jobs create http digest-sweep --location europe-west1 --project gamedevpl \
@@ -775,7 +778,48 @@ at all and feeds the only autonomous-eligible class.
   rather than filtered, so a game being passed over is visible and distinguishable from
   the router never having run.
 
-- 📋 Babysitter analyst run (scheduled) persisting `suggestions/` from the router above.
+- ✅ **Babysitter analyst run** (2026-07-30): `POST /api/internal/suggestion-sweep`
+  ([suggestion-sweep.ts](../apps/api/src/suggestion-sweep.ts)) runs the router over every
+  current scorecard nightly and writes `games/{slug}/suggestion/current`. Same OIDC
+  internal-endpoint pattern as the sweeps above; still files nothing, assigns nothing,
+  notifies nobody.
+
+  **Why persist what `/api/admin/suggestions` already computes on read.** They answer
+  different questions. The read path is one operator asking what the router thinks _now_.
+  The stored doc is what it said _last night_ — which is what an inbox can carry a decision
+  against, and what lets a proposal outlive the scorecard behind it, since every sweep
+  overwrites those. Both call the same pure `routeScorecard`, so the two views cannot
+  drift into disagreeing about the same game.
+
+  Two judgements worth carrying forward:
+
+  - **Two timestamps, not one.** `computedFrom` is the scorecard's stamp, `sweptAt` is this
+    run's. Collapsing them hides the failure most worth seeing: a router run over month-old
+    scorecards succeeds, reports every game healthy, and is worthless. One stamp would
+    report whichever half was fresh.
+  - **Every class is counted, including the zeros.** A result that omitted empty classes
+    would print identically whether there were no defects tonight or the defect branch had
+    stopped being reachable — and this is a job nobody watches.
+
+  Scheduled at `30 3 * * *`, ten minutes behind the scorecard sweep's `20 3`: routing this
+  morning's numbers rather than yesterday's is the entire value of running it nightly.
+
+  ```bash
+  # Project-number host, not `status.url` — see the note on the scorecard block above.
+  SWEEP_URL="https://gamedev-app-334141807880.europe-west1.run.app/api/internal/suggestion-sweep"
+  SA=notify-sweep@gamedevpl.iam.gserviceaccount.com
+  # Redeploy with SUGGESTION_SWEEP_AUDIENCE="$SWEEP_URL" set, then:
+  gcloud scheduler jobs create http suggestion-sweep --location europe-west1 --project gamedevpl \
+    --schedule '30 3 * * *' --uri "$SWEEP_URL" --http-method POST \
+    --oidc-service-account-email "$SA" --oidc-token-audience "$SWEEP_URL"
+  ```
+
+  Closed until that job and env var exist, like every other internal sweep.
+
+- 📋 Operator readback of the persisted suggestions. `/api/admin/suggestions` still
+  recomputes on read, so it shows what the router thinks rather than what the sweep stored
+  — a stored suggestion nobody can look at has the same failure mode the scorecards read
+  was added to close (#262), and the same fix.
 - Suggestion inbox UI; Approve → structured improvement issue (evidence-fenced)
   → Copilot **via the relay**, with a stall alert on `issue-filed` → no PR.
 - Measurement records written at merge; 14-day post-change comparison.
@@ -820,7 +864,7 @@ at all and feeds the only autonomous-eligible class.
   `listSubmissionsByOwner` already backs the surface. A merged remix makes the
   remixer a watcher (digest visibility, no approval rights). Avoids
   multi-approver deadlock.
-- **Measured outcomes drive catalog *sort order*, not a second section.** The
+- **Measured outcomes drive catalog _sort order_, not a second section.** The
   home arcade reorders by scorecard aggregates and signed-in play affinity
   ([recommendations.md](./recommendations.md)). Anonymous play telemetry still
   never identifies a person; affinity is account data erased with the account.
