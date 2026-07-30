@@ -533,6 +533,29 @@ describe('getGameMedia', () => {
   });
 });
 
+describe('getRefSha', () => {
+  it('resolves a ref to its commit and refuses one that could address something else', async () => {
+    const fetchImpl = vi.fn(
+      async () => new Response(JSON.stringify({ sha: 'abc123' }), { status: 200 }),
+    ) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    await expect(client.getRefSha('main')).resolves.toBe('abc123');
+    // Slashed refs stay slashed — they have to, to resolve at all — so traversal is
+    // refused outright rather than escaped away.
+    await expect(client.getRefSha('../../octocat/hello/commits/main')).resolves.toBeNull();
+    await expect(client.getRefSha('main; rm -rf')).resolves.toBeNull();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('answers null when the ref does not resolve, so the caller starts nothing', async () => {
+    const fetchImpl = vi.fn(async () => new Response('not found', { status: 404 })) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    await expect(client.getRefSha('main')).resolves.toBeNull();
+  });
+});
+
 describe('getGameSources', () => {
   it('bundles selected GameKit modules, audio assets, music catalog, and shared shell styles', async () => {
     const files = new Map<string, string | Uint8Array>([

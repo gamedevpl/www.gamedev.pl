@@ -33,6 +33,7 @@ import { registerNotificationRoutes } from './notifications.js';
 import { registerPlayerFeedbackRoutes, type PlayerFeedbackRoutesOptions } from './player-feedback.js';
 import { registerPushRoutes } from './push-routes.js';
 import { registerDigestRoutes, type DigestRoutesOptions } from './digest.js';
+import { parseBatchSize, registerHealthSweepRoutes, type HealthSweepRoutesOptions } from './game-health.js';
 import { registerSuggestionSweepRoutes, type SuggestionSweepRoutesOptions } from './suggestion-sweep.js';
 import {
   buildImprovementBrief,
@@ -94,6 +95,8 @@ export interface BuildAppOptions {
   scorecardRoutes?: Partial<Omit<ScorecardRoutesOptions, 'store'>>;
   digestRoutes?: Partial<Omit<DigestRoutesOptions, 'store'>>;
   suggestionSweepRoutes?: Partial<Omit<SuggestionSweepRoutesOptions, 'store'>>;
+  /** Seams for the published-shelf health sweep; defaults to OIDC-or-deny-all from env. */
+  healthSweepRoutes?: Partial<HealthSweepRoutesOptions>;
   /** Seams for the creator suggestion inbox; the GitHub client is shared with submissions. */
   suggestionInboxRoutes?: Partial<Omit<SuggestionInboxRoutesOptions, 'store'>>;
   /** Seams for the public contact form (mailer fake in tests). */
@@ -186,6 +189,19 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     adminUids,
   });
 
+  // Where a delivered game is stored, and what verifies it. Resolved once and shared by
+  // every registration that needs them: three copies of these expressions is three ways
+  // for delivery, publishing and the health sweep to end up pointed at different buckets
+  // or different gates.
+  const gamesStore =
+    options.submissionRoutes?.agentChannel?.gamesStore ??
+    (process.env.GAMES_STORE_BUCKET?.trim()
+      ? createGcsGamesStore({ bucket: process.env.GAMES_STORE_BUCKET.trim() })
+      : undefined);
+  const gateTrigger =
+    options.submissionRoutes?.agentChannel?.onSourcesDelivered ??
+    createCloudBuildGateTrigger(gateTriggerOptionsFromEnv(), app.log);
+
   const submissionSeams = await registerSubmissionRoutes(app, {
     ...options.submissionRoutes,
     store,
@@ -197,20 +213,14 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     agentBackend: options.submissionRoutes?.agentBackend ?? createAgentBackendFromEnv(app.log),
     agentChannel: {
       ...options.submissionRoutes?.agentChannel,
-      // Where a delivered game is stored. Without a bucket the delivery verb answers
-      // 503 rather than accepting an agent's work and silently dropping it — which is
-      // the right behaviour for local development, where there is no bucket at all.
-      gamesStore:
-        options.submissionRoutes?.agentChannel?.gamesStore ??
-        (process.env.GAMES_STORE_BUCKET?.trim()
-          ? createGcsGamesStore({ bucket: process.env.GAMES_STORE_BUCKET.trim() })
-          : undefined),
+      // Without a bucket the delivery verb answers 503 rather than accepting an agent's
+      // work and silently dropping it — which is the right behaviour for local
+      // development, where there is no bucket at all.
+      gamesStore,
       // Run the gate as soon as a game is delivered. Without this a candidate is stored
       // and never verified, so it can never publish — the upload path would end in a
       // queue nobody drains.
-      onSourcesDelivered:
-        options.submissionRoutes?.agentChannel?.onSourcesDelivered ??
-        createCloudBuildGateTrigger(gateTriggerOptionsFromEnv(), app.log),
+      onSourcesDelivered: gateTrigger,
     },
   });
 
@@ -398,6 +408,27 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     ...options.suggestionSweepRoutes,
   });
 
+  // The break-and-nudge loop's own clock (game-health.ts). A published game serves from a
+  // frozen bundle, so a moving engine never breaks what players load — what it breaks is
+  // the game's ability to be rebuilt, and only a re-run of the gate can tell us that
+  // happened. This is what makes the loop autonomous: the console's Re-gate button is a
+  // human noticing, and nobody was going to notice every time GameKit moved.
+  await registerHealthSweepRoutes(app, {
+    store,
+    gamesStore,
+    gateTrigger,
+    // The same client the submission routes resolved: one place holds the games-repo
+    // credential, and "what is today's engine commit" is a games-repo read like any other.
+    githubClient: submissionSeams.githubClient ?? undefined,
+    internalAuthVerifier: createInternalAuthVerifierFromEnv(process.env, 'healthSweep'),
+    // Matches run-gate.ts's `--health`, which checks against the branch rather than the
+    // version's pin. Two different answers to "what is today's engine" would make the
+    // sweep start runs it then judges stale the moment they finish.
+    engineRef: process.env.GAMES_ENGINE_REF?.trim() || undefined,
+    batch: parseBatchSize(process.env.HEALTH_SWEEP_BATCH),
+    ...options.healthSweepRoutes,
+  });
+
   // Where a human decides (docs/improvement-loop-plan.md IL-3 creator surface). Files
   // through the same games-repo client the submission routes resolved, so approving a
   // suggestion and requesting an improvement cannot disagree about where issues go.
@@ -419,14 +450,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await registerJobAdminRoutes(app, {
     store,
     adminUids,
-    // The same store the delivery path writes to — resolved the same way, so publishing
-    // and delivery can never end up pointed at different buckets. Publishing re-reads
-    // the gate verdict off the manifest rather than trusting the job's derived state.
-    gamesStore:
-      options.submissionRoutes?.agentChannel?.gamesStore ??
-      (process.env.GAMES_STORE_BUCKET?.trim()
-        ? createGcsGamesStore({ bucket: process.env.GAMES_STORE_BUCKET.trim() })
-        : undefined),
+    // The same store the delivery path writes to, so publishing and delivery can never
+    // end up pointed at different buckets. Publishing re-reads the gate verdict off the
+    // manifest rather than trusting the job's derived state.
+    gamesStore,
   });
 
   // Creator control panel (docs/improvement-loop-plan.md IL-2 creator surface). Own

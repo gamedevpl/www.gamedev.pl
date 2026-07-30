@@ -13,6 +13,7 @@ import {
   SnapshotUnavailableError,
   type GameSnapshotReader,
 } from './game-snapshot.js';
+import { startHealthCheck } from './game-health.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
 import type { AgentBackend } from './agent-backend.js';
 import {
@@ -2077,33 +2078,14 @@ export async function registerSubmissionRoutes(
       return reply.status(409).send({ error: 'not_published', state: publication.state });
     }
 
-    const version = publication.currentVersion;
-    const manifest = await gamesStore.getManifest(slug, version);
-    if (!manifest) return reply.status(409).send({ error: 'version_missing' });
+    // Same starter the scheduled sweep uses (game-health.ts), so a run an operator asks
+    // for and a run the schedule asks for produce identical records. The one thing the
+    // button ignores is the sweep's recheck cooldown — clicking it *is* the judgement
+    // call the cooldown exists to make on nobody's behalf.
+    const start = await startHealthCheck({ store, gamesStore, gateTrigger, now }, publication);
+    if (!start.started) return reply.status(409).send({ error: start.reason });
 
-    const requestedAt = new Date(now()).toISOString();
-    const triggered = await gateTrigger({ issueNumber: manifest.issueNumber, slug, version, mode: 'health' });
-    const buildId = triggered && typeof triggered === 'object' ? triggered.buildId : undefined;
-
-    // Replaces any previous check wholesale: the question is always about the latest
-    // run, and a stale verdict left beside a fresh request would read as an answer.
-    await store.setPublicationHealthCheck(slug, {
-      version,
-      requestedAt,
-      ...(buildId ? { buildId } : {}),
-    });
-    // Booked to the job that built the game — a health run is a gate run on the bill,
-    // and this is the one place the issue number is known.
-    if (buildId) {
-      await store.recordJobCost(manifest.issueNumber, {
-        kind: 'gate_run',
-        at: requestedAt,
-        by: 'cloud-build',
-        ref: buildId,
-      });
-    }
-
-    return reply.send({ ok: true, slug, version, ...(buildId ? { buildId } : {}) });
+    return reply.send({ ok: true, slug, version: start.version, ...(start.buildId ? { buildId: start.buildId } : {}) });
   });
 
   // The notification sweep (docs/notifications-plan.md N1): the closed-tab backstop
