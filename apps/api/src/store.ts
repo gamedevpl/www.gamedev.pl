@@ -79,6 +79,15 @@ export interface SubmissionRecord {
    */
   slug?: string;
   /**
+   * The most recent candidate version this job delivered to the games store.
+   *
+   * Kept on the record rather than discovered by listing the bucket, because the
+   * preview needs it on every poll and a list-per-poll would be the same mistake the
+   * GitHub-derived status was. It is also what makes the preview possible at all now
+   * that a build has no pull request to read from.
+   */
+  deliveredVersion?: string;
+  /**
    * When we first observed the game published. Together with createdAt it is the
    * only record of how long a build actually took, which is what lets the status
    * page answer "how long will this take?" with a real number instead of a shrug.
@@ -814,6 +823,8 @@ export interface Store {
   allocateJobId(): Promise<number>;
   /** Records the game directory a submission is building, once it is known. */
   setSubmissionSlug(issueNumber: number, slug: string): Promise<void>;
+  /** Records the candidate version a delivery just stored, for the preview to read. */
+  setSubmissionDeliveredVersion(issueNumber: number, version: string): Promise<void>;
   /** Stamps the moment a submission was first seen published (for build-time stats). */
   setSubmissionPublishedAt(issueNumber: number, at: string): Promise<void>;
   /** Marks a submission abandoned by its creator. */
@@ -1324,6 +1335,11 @@ export class InMemoryStore implements Store {
   async setSubmissionSlug(issueNumber: number, slug: string): Promise<void> {
     const sub = this.submissions.get(issueNumber);
     if (sub) this.submissions.set(issueNumber, { ...sub, slug });
+  }
+
+  async setSubmissionDeliveredVersion(issueNumber: number, version: string): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (sub) this.submissions.set(issueNumber, { ...sub, deliveredVersion: version });
   }
 
   async getSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {
@@ -2212,6 +2228,14 @@ export class FirestoreStore implements Store {
 
   async setSubmissionSlug(issueNumber: number, slug: string): Promise<void> {
     await this.db.collection('submissions').doc(String(issueNumber)).set({ slug }, { merge: true });
+  }
+
+  async setSubmissionDeliveredVersion(issueNumber: number, version: string): Promise<void> {
+    // Last write wins on purpose: the newest delivery is the one worth previewing.
+    await this.db
+      .collection('submissions')
+      .doc(String(issueNumber))
+      .set({ deliveredVersion: version }, { merge: true });
   }
 
   async setSubmissionPublishedAt(issueNumber: number, at: string): Promise<void> {

@@ -9,6 +9,7 @@ import { InMemoryStore, type Store } from './store.js';
 import { CREATOR_FEEDBACK_MARKER } from './submissions.js';
 import { mintToken } from './submission-token.js';
 import type { AgentBackend, BuildBrief } from './agent-backend.js';
+import type { GamesStore } from './games-store.js';
 import { JOB_ID_FLOOR } from './store.js';
 import { NoopTranslator, type Translator } from './translate.js';
 
@@ -117,6 +118,7 @@ async function createApp(params: {
   contentChecker?: ContentChecker;
   maxCachedDraftPreviews?: number;
   agentBackend?: AgentBackend;
+  agentChannel?: { gamesStore?: GamesStore };
 }): Promise<{ app: FastifyInstance; store: Store; authHeaders: Record<string, string> }> {
   const store = params.store ?? new InMemoryStore();
   await store.upsertUser({ uid: 'g:test-user' });
@@ -137,6 +139,7 @@ async function createApp(params: {
       creationLimitsTtlMs: params.creationLimitsTtlMs,
       translator: params.translator ?? new NoopTranslator(),
       maxCachedDraftPreviews: params.maxCachedDraftPreviews,
+      ...(params.agentChannel ? { agentChannel: params.agentChannel } : {}),
     },
   });
   return { app, store, authHeaders: getAuthHeaders('g:test-user') };
@@ -1140,6 +1143,163 @@ describe('submission preview route', () => {
     expect(body.html).toContain("default-src 'none'");
     expect(getGameSources).toHaveBeenCalledWith('copilot/foo', 'foo');
 
+    await app.close();
+  });
+
+  it('previews a native job from its delivered version, with no pull request to read', async () => {
+    // The regression this exists for: preview used to resolve through findLinkedPR, and
+    // native jobs open no PR — so every creator watched an hour of build activity behind
+    // "this game isn't available yet".
+    const store = new InMemoryStore();
+    const jobId = 1_000_042;
+    await store.upsertUser({ uid: 'g:test-user' });
+    await store.createSubmission(jobId, 'g:test-user', 'TV Tycoon');
+    await store.setSubmissionSlug(jobId, 'tv-tycoon');
+    await store.setSubmissionDeliveredVersion(jobId, 'v20260730T132921286Z-1592fc');
+
+    // The gate's bundle, not the raw sources: game.ts is TypeScript importing GameKit
+    // modules, so inlining it would serve a page that loads and does nothing.
+    const gamesStore = {
+      getDerivedArtifact: async (_s: string, _v: string, name: string) =>
+        name === 'bundle.html' ? Buffer.from('<!doctype html><title>TV Tycoon</title><canvas></canvas>') : null,
+    } as unknown as GamesStore;
+
+    const { githubClient, findLinkedPR } = createGithubClientStub({});
+    const { app, authHeaders } = await createApp({
+      store,
+      githubClient,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(jobId, secret)}/preview`,
+      headers: authHeaders,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ slug: 'tv-tycoon', title: 'TV Tycoon' });
+    // And it never asked GitHub, which is the point: the delivered candidate is the
+    // same tree the gate checks, so the creator plays exactly what gets judged.
+    expect(findLinkedPR).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('does not report a broken preview as one that has not started', async () => {
+    // A delivered job whose sources will not read is a failure, not a state. Saying
+    // "not yet" to a creator whose game was delivered an hour ago sends them back to
+    // waiting for something that is never coming, and hides the fault from us too.
+    const store = new InMemoryStore();
+    const jobId = 1_000_044;
+    await store.upsertUser({ uid: 'g:test-user' });
+    await store.createSubmission(jobId, 'g:test-user', 'Broken');
+    await store.setSubmissionSlug(jobId, 'broken-game');
+    await store.setSubmissionDeliveredVersion(jobId, 'v1');
+
+    const gamesStore = {
+      getDerivedArtifact: async () => {
+        throw new Error('games store read of bundle.html failed: 503');
+      },
+    } as unknown as GamesStore;
+
+    const { app, authHeaders } = await createApp({
+      store,
+      githubClient: createGithubClientStub({}).githubClient,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(jobId, secret)}/preview`,
+      headers: authHeaders,
+    });
+
+    expect(res.statusCode).toBe(502);
+    await app.close();
+  });
+
+  it('waits rather than guessing when the gate has not bundled a delivery yet', async () => {
+    // Delivered but not yet gated is a real intermediate state, and the honest answer is
+    // "nothing to play". Assembling something from the raw sources instead would serve a
+    // page that loads and is dead — worse than saying nothing is ready, because it reads
+    // as the creator's game being broken.
+    const store = new InMemoryStore();
+    const jobId = 1_000_045;
+    await store.upsertUser({ uid: 'g:test-user' });
+    await store.createSubmission(jobId, 'g:test-user', 'Not gated yet');
+    await store.setSubmissionSlug(jobId, 'ungated-game');
+    await store.setSubmissionDeliveredVersion(jobId, 'v1');
+
+    const gamesStore = { getDerivedArtifact: async () => null } as unknown as GamesStore;
+
+    const { app, authHeaders } = await createApp({
+      store,
+      githubClient: createGithubClientStub({}).githubClient,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(jobId, secret)}/preview`,
+      headers: authHeaders,
+    });
+
+    expect(res.statusCode).toBe(409);
+    await app.close();
+  });
+
+  it('says a deployment cannot preview at all rather than implying it might later', async () => {
+    // No games store means no delivery can ever land and no PR to fall back to, so a
+    // native job here is permanently unpreviewable. 409 would promise a creator
+    // something that is never coming — the same lie as reporting a failure as pending,
+    // told to whoever is running the deployment instead.
+    const store = new InMemoryStore();
+    const jobId = 1_000_046;
+    await store.upsertUser({ uid: 'g:test-user' });
+    await store.createSubmission(jobId, 'g:test-user', 'No store here');
+
+    const { app, authHeaders } = await createApp({
+      store,
+      githubClient: createGithubClientStub({}).githubClient,
+      submissionTokenSecret: secret,
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(jobId, secret)}/preview`,
+      headers: authHeaders,
+    });
+
+    expect(res.statusCode).toBe(503);
+    await app.close();
+  });
+
+  it('tells a native job with nothing delivered yet that there is nothing to play', async () => {
+    // Honest rather than a 502: before the first delivery there genuinely is no game.
+    // The store is configured here — that is what makes this "not yet" rather than
+    // "never", and the difference is the point.
+    const store = new InMemoryStore();
+    const jobId = 1_000_043;
+    await store.upsertUser({ uid: 'g:test-user' });
+    await store.createSubmission(jobId, 'g:test-user', 'Not yet');
+    const { app, authHeaders } = await createApp({
+      store,
+      githubClient: createGithubClientStub({}).githubClient,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore: { getDerivedArtifact: async () => null } as unknown as GamesStore },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(jobId, secret)}/preview`,
+      headers: authHeaders,
+    });
+
+    expect(res.statusCode).toBe(409);
     await app.close();
   });
 

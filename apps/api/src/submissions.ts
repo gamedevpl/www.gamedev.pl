@@ -768,7 +768,12 @@ export async function registerSubmissionRoutes(
   const draftPreviewTtlMs = 5 * 60_000;
   const maxCachedDraftPreviews = options.maxCachedDraftPreviews ?? 50;
   type DraftPreviewValue = { slug: string; title: string; html: string };
-  type CachedDraftPreview = { value: DraftPreviewValue; headSha: string; expiresAt: number };
+  /**
+   * `revision` rather than `headSha`: a preview now comes either from a PR branch (a
+   * commit sha) or from a delivered candidate (a games-store version id). Naming the
+   * field after one of its two sources made every log line about the other one wrong.
+   */
+  type CachedDraftPreview = { value: DraftPreviewValue; revision: string; expiresAt: number };
   const draftPreviewCache = new Map<number, CachedDraftPreview>();
   const draftPreviewRefreshes = new Map<string, Promise<DraftPreviewValue>>();
 
@@ -1867,10 +1872,63 @@ export async function registerSubmissionRoutes(
   );
 
   /**
-   * Assembles the in-progress game on a submission's open PR branch and sends it.
-   * Shared by the token route (the creator's own preview) and the slug route (a
-   * read-only share link) so both resolve the exact same document.
+   * Serves the preview for a job that has no pull request.
+   *
+   * Every native job is one of these, so without it a creator watches an hour of build
+   * activity behind "this game isn't available yet" — the preview's source of truth
+   * disappeared with the PR, and nothing replaced it.
+   *
+   * It serves the **gate's own bundle**, not the delivered sources. That is not a
+   * shortcut, it is the only correct option: a game is not three files. `game.ts` is
+   * TypeScript that imports the GameKit modules its `GAME.json` declares, and the PR
+   * path assembles a playable document by reading those modules, inlining audio and
+   * music assets, and transpiling the whole thing. Inlining raw `game.ts` into a script
+   * tag would produce a page that loads and is dead on arrival — strictly worse than
+   * saying nothing is ready, because it looks like the creator's game is broken.
+   *
+   * The bundle is also the artifact that will actually ship, with serve-time policy
+   * already applied by the side that owns it, so the creator plays the exact document a
+   * player would. It exists once the gate has run.
+   *
+   * Returns null for exactly one reason: **there is nothing to serve yet** — no
+   * delivery, or a delivery the gate has not bundled. Anything else throws, because a
+   * broken preview and an unstarted one are different facts, and a creator told "not
+   * yet" about a failure will wait for something that is not coming.
    */
+  async function replyWithStoredDraft(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    record: SubmissionRecord,
+  ): Promise<FastifyReply | null> {
+    const gamesStore = options.agentChannel?.gamesStore;
+    const { slug, deliveredVersion } = record;
+    if (!gamesStore || !slug || !deliveredVersion) return null;
+
+    const cached = draftPreviewCache.get(record.issueNumber);
+    if (cached && cached.revision === deliveredVersion && cached.expiresAt > now()) {
+      return reply.send(cached.value);
+    }
+
+    const bundle = await gamesStore.getDerivedArtifact(slug, deliveredVersion, 'bundle.html');
+    // Absent rather than broken: the gate has not finished, or it went red and produced
+    // nothing. Both are "not ready", and the channel's own pushed previews cover the
+    // window. A store that *errors* throws out of here instead, and is reported as the
+    // failure it is.
+    if (bundle === null) return null;
+
+    const value: DraftPreviewValue = { slug, title: record.title || slug, html: bundle.toString('utf8') };
+    rememberDraftPreview(record.issueNumber, {
+      value,
+      revision: deliveredVersion,
+      expiresAt: now() + draftPreviewTtlMs,
+    });
+    request.log.info(
+      { issueNumber: record.issueNumber, slug, version: deliveredVersion },
+      'served gate-built preview for a delivered version',
+    );
+    return reply.send(value);
+  }
+
   async function replyWithDraft(
     request: FastifyRequest,
     reply: FastifyReply,
@@ -1879,9 +1937,57 @@ export async function registerSubmissionRoutes(
     const serveLastKnown = (reason: string, err?: unknown): FastifyReply | null => {
       const lastKnown = draftPreviewCache.get(issueNumber);
       if (!lastKnown) return null;
-      request.log.warn({ err, issueNumber, headSha: lastKnown.headSha }, reason);
+      request.log.warn({ err, issueNumber, revision: lastKnown.revision }, reason);
       return reply.send(lastKnown.value);
     };
+
+    // A native job has no PR to resolve, so this is the whole path for it rather than a
+    // fallback. Tried first for legacy jobs too: once a job has delivered, the stored
+    // candidate is fresher and cheaper than a GitHub round-trip to its branch.
+    //
+    // Guarded on the games store rather than read unconditionally: this endpoint is
+    // polled for the whole length of a build, and without a store the record could not
+    // change the answer — so fetching it would be a Firestore read per poll, per
+    // watcher, bought with nothing.
+    const native = isNativeJobId(issueNumber);
+    const gamesStore = options.agentChannel?.gamesStore;
+    const record = gamesStore ? await store?.getSubmission(issueNumber) : null;
+    if (record) {
+      try {
+        const stored = await replyWithStoredDraft(request, reply, record);
+        if (stored) return stored;
+      } catch (error) {
+        // No hygiene-error branch here on purpose. This path serves the gate's own
+        // bundle byte-for-byte and never assembles anything, so EmptyProjectError and
+        // friends cannot arise — and catching them would only mislabel a store read
+        // failure as "this game could not be previewed", which is a claim about the
+        // game rather than about us.
+        const stale = serveLastKnown('stored draft read failed; serving last known draft', error);
+        if (stale) return stale;
+        // A native job has no second source, so this is the end of the line and it is a
+        // failure, not a state. Answering 409 here would tell a creator whose game was
+        // delivered an hour ago that it has not been — and they would keep waiting.
+        // A legacy job falls through to its PR branch, which is a real alternative.
+        if (native) {
+          request.log.error({ err: error, issueNumber }, 'stored draft preview failed');
+          return reply.status(502).send({ error: 'failed to load preview' });
+        }
+        request.log.warn({ err: error, issueNumber }, 'stored draft unavailable; falling back to the PR branch');
+      }
+    }
+    if (native) {
+      const stale = serveLastKnown('no delivery yet for native job; serving last known draft');
+      if (stale) return stale;
+      // Without a store this deployment can never preview a native job — there is no PR
+      // to fall back to and nowhere for a delivery to land. 409 would say "not yet"
+      // about something that is never coming, which is the same lie as reporting a
+      // failure as a pending state, just told to an operator instead of a creator.
+      if (!gamesStore) {
+        request.log.error({ issueNumber }, 'preview requested for a native job with no games store configured');
+        return reply.status(503).send({ error: 'previews are not configured on this deployment' });
+      }
+      return reply.status(409).send({ error: 'no preview available for this submission yet' });
+    }
 
     let linkedPr: LinkedPullRequest | null;
     try {
@@ -1907,7 +2013,7 @@ export async function registerSubmissionRoutes(
     // branch name when fixtures (or a sparse GraphQL payload) omit the SHA.
     const headSha = linkedPr.headRefOid ?? headRefName;
     const cached = draftPreviewCache.get(issueNumber);
-    if (cached && cached.headSha === headSha && cached.expiresAt > now()) {
+    if (cached && cached.revision === headSha && cached.expiresAt > now()) {
       return reply.send(cached.value);
     }
 
@@ -1944,7 +2050,7 @@ export async function registerSubmissionRoutes(
       if (!inFlight) draftPreviewRefreshes.set(refreshKey, refresh);
 
       const value = await refresh;
-      rememberDraftPreview(issueNumber, { value, headSha, expiresAt: now() + draftPreviewTtlMs });
+      rememberDraftPreview(issueNumber, { value, revision: headSha, expiresAt: now() + draftPreviewTtlMs });
       return reply.send(value);
     } catch (error) {
       if (
