@@ -23,6 +23,12 @@ ENV VITE_GOOGLE_OAUTH_CLIENT_ID=$VITE_GOOGLE_OAUTH_CLIENT_ID
 # Developer portal, and an empty value simply hides the button (see AppleSignInButton).
 ARG VITE_APPLE_SERVICES_ID=
 ENV VITE_APPLE_SERVICES_ID=$VITE_APPLE_SERVICES_ID
+# The party relay's URL. This one is load-bearing rather than cosmetic: once the relay is
+# split out, the app origin stops serving /api/mp/ws, so a bundle built without this value
+# resolves the socket to its own origin and every lobby 404s. Empty is correct only while
+# the socket is still served in-process. See apps/web/src/mp/protocol.ts.
+ARG VITE_MP_RELAY_URL=
+ENV VITE_MP_RELAY_URL=$VITE_MP_RELAY_URL
 
 COPY . .
 # --ignore-scripts: skip the repo's `prepare`/husky hook (dev-only) during image builds.
