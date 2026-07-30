@@ -4,6 +4,7 @@ import type { ContentChecker } from './moderation.js';
 import type { PublishedSlugGate } from './published-slugs.js';
 import { sanitizeCreatorText } from './submission-status.js';
 import type { Store } from './store.js';
+import { logModerationRejection } from './moderation-metrics.js';
 
 /**
  * Written player feedback (docs/improvement-loop-plan.md, signal source #1) — free
@@ -154,6 +155,11 @@ export async function registerPlayerFeedbackRoutes(
       const fieldsToModerate = sanitized === body.data.text ? [body.data.text] : [body.data.text, sanitized];
       const moderation = await contentChecker.checkFields(fieldsToModerate);
       if (!moderation.allowed) {
+        logModerationRejection(request.log, {
+          surface: 'player_feedback',
+          uid: request.user?.uid,
+          category: moderation.category,
+        });
         return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
       }
 

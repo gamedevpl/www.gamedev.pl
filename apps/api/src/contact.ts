@@ -4,6 +4,7 @@ import { renderContactEmail } from './email-templates.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
 import { moderateFields } from './moderation.js';
 import { sanitizeCreatorText } from './submission-status.js';
+import { logModerationRejection } from './moderation-metrics.js';
 
 /**
  * Public contact form → transactional email to the published operator address
@@ -58,10 +59,7 @@ function isRateLimited(
   return false;
 }
 
-export async function registerContactRoutes(
-  app: FastifyInstance,
-  options: ContactRoutesOptions = {},
-): Promise<void> {
+export async function registerContactRoutes(app: FastifyInstance, options: ContactRoutesOptions = {}): Promise<void> {
   const mailer = options.mailer ?? createMailerFromEnv();
   const contactTo = options.contactTo?.trim() || DEFAULT_CONTACT_TO;
   const now = options.now ?? Date.now;
@@ -95,14 +93,20 @@ export async function registerContactRoutes(
       // feedback): raw still carries markdown link targets for the URL-count check;
       // sanitized is what the outbound mail actually contains, and stripping
       // emphasis can reveal a blocked term the raw form hid (`sh*it` → `shit`).
-      const nameFields =
-        sanitizedName === parsed.data.name ? [sanitizedName] : [parsed.data.name, sanitizedName];
+      const nameFields = sanitizedName === parsed.data.name ? [sanitizedName] : [parsed.data.name, sanitizedName];
       const messageFields =
-        sanitizedMessage === parsed.data.message
-          ? [sanitizedMessage]
-          : [parsed.data.message, sanitizedMessage];
+        sanitizedMessage === parsed.data.message ? [sanitizedMessage] : [parsed.data.message, sanitizedMessage];
       const moderation = moderateFields([...nameFields, ...messageFields], { allowPii: true });
       if (!moderation.allowed) {
+        // No uid: the contact form is deliberately outside the beta wall, so most writers
+        // have no session. Recorded as `anonymous` rather than skipped — a rejection here is
+        // exactly as interesting as one from a signed-in creator, and arguably more, since
+        // this is the only moderated surface an unauthenticated stranger can reach.
+        logModerationRejection(request.log, {
+          surface: 'contact',
+          uid: request.user?.uid,
+          category: moderation.category,
+        });
         return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
       }
 

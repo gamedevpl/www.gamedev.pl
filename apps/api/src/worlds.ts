@@ -10,6 +10,7 @@ import {
   type WorldSchema,
 } from './world-schema.js';
 import type { WorldSchemaSource } from './world-source.js';
+import { logModerationRejection } from './moderation-metrics.js';
 
 /**
  * Shared asynchronous worlds (docs/persistent-world-plan.md, phase P2).
@@ -155,6 +156,11 @@ export async function registerWorldRoutes(app: FastifyInstance, options: WorldRo
     if (validated.texts.length > 0) {
       const verdict = await contentChecker.checkFields(validated.texts);
       if (!verdict.allowed) {
+        logModerationRejection(request.log, {
+          surface: 'world_text',
+          uid: request.user?.uid,
+          category: verdict.category,
+        });
         return reply.status(422).send({ error: 'that text was rejected', category: verdict.category });
       }
     }

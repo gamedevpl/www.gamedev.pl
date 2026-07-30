@@ -44,6 +44,7 @@ import { createCatalogGenreSourceFromEnv } from './catalog-genre-source.js';
 import { peekQuota } from './quota-gate.js';
 import { registerRateLimit } from './rate-limit.js';
 import { isKnownSpaShellPath, looksLikeStaticAsset } from './spa-paths.js';
+import { logModerationRejection } from './moderation-metrics.js';
 
 const GenerateRequestSchema = z.object({
   prompt: z.string().trim().min(1, 'prompt is required').max(500, 'prompt is too long'),
@@ -478,6 +479,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       // 3. Content moderation, before any quota is spent (docs/content-safety-plan.md Layer 1 & 1b)
       const moderation = await contentChecker.check(parsedRequest.data.prompt);
       if (!moderation.allowed) {
+        logModerationRejection(request.log, {
+          surface: 'mock_prompt',
+          uid: request.user?.uid,
+          category: moderation.category,
+        });
         return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
       }
 

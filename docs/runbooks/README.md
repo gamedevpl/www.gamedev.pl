@@ -19,6 +19,7 @@ hour, possibly on a phone.
 | [`rollback-deploy.md`](./rollback-deploy.md)     | A deploy broke production                                                                           |
 | [`restore-firestore.md`](./restore-firestore.md) | Data was lost, corrupted, or wrongly deleted                                                        |
 | [`rotate-secrets.md`](./rotate-secrets.md)       | Routine rotation, an expiring PAT, or a suspected leak. The expiry ledger itself is in the ops repo |
+| [`moderation-burst.md`](./moderation-burst.md)   | Alert A14 fired, or a player reported a published game                                              |
 
 Planned, not yet written: `event-mode.md` (pre-warm before a meetup or launch spike) and
 `launch-day.md` (the spike procedure). Both are Gate O2/O3 items.
@@ -36,6 +37,7 @@ Provisioned by [`infra/setup-monitoring.sh`](../../infra/setup-monitoring.sh).
 | A5  | (billing budget, created by hand)               | Billing budget at 50 / 90 / 100%                                         | Cost review — see the ops repo's readiness plan  |
 | A6  | `A6 zone admission failing`                     | The zone host could not start a zone (log-based, rate-limited to hourly) | [`zones-down-triage.md`](./zones-down-triage.md) |
 | A7  | `A7 world service 5xx rate elevated`            | `gamedev-world` 5xx sustained over 10 min                                | [`zones-down-triage.md`](./zones-down-triage.md) |
+| A14 | `A14 moderation rejection burst`                | >60 moderation rejections in 10 min on `gamedev-app` (log-based)         | [`moderation-burst.md`](./moderation-burst.md)   |
 
 **A1 and A2 name the service; the rest do not.** A1/A2 exist once per Cloud Run service
 answering requests (`gamedev-app`, and the party relay when it takes traffic), so the
@@ -70,6 +72,17 @@ Two consequences worth knowing before you trust either:
   every morning; with runs 12h apart, 23h30m of silence takes two consecutive failures.
   `setup-monitoring.sh` and `setup-backups.sh` are coupled through this — reverting the
   export to daily makes A4 fire after a single miss.
+
+**A14 is deliberately loose, and its interesting case is the inverse of its name.** The
+threshold sits far above organic traffic because rejections are a working system, not a
+fault — an alert on the deny-list succeeding is an alert the operator learns to delete. What
+makes it worth an email is the _shape_ of a burst: a few uids across many categories is
+somebody probing the walls and can wait until morning, while **many uids in one category is
+the deny-list refusing legitimate creators**, which is a user-facing outage that presents as
+"the site is broken" and never as an error. The runbook leads with that distinction. The
+rejected text is never logged (the category is what makes a rejection actionable; the wording
+would put user-authored abuse material into Cloud Logging with no erasure path), so the
+diagnosis is uid and category concentration, not reading submissions.
 
 **A6 has no uptime check behind it, on purpose.** Probing a scale-to-zero service every
 five minutes keeps an instance warm around the clock and turns `$0` at rest into roughly

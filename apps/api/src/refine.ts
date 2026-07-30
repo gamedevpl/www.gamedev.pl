@@ -6,6 +6,7 @@ import { checkUserAccess } from './auth.js';
 import { createVertexClient, type VertexGenerationConfig } from './genai.js';
 import type { ContentChecker } from './moderation.js';
 import type { Store } from './store.js';
+import { logModerationRejection } from './moderation-metrics.js';
 
 export interface RefineOption {
   label: string;
@@ -297,6 +298,11 @@ export async function registerRefineRoute(app: FastifyInstance, options: RefineR
     // 2. Content moderation (422 on reject, spends no quota / vertex calls)
     const moderation = await contentChecker.checkFields([parseResult.data.title, parseResult.data.concept]);
     if (!moderation.allowed) {
+      logModerationRejection(request.log, {
+        surface: 'refine',
+        uid: request.user?.uid,
+        category: moderation.category,
+      });
       return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
     }
 
