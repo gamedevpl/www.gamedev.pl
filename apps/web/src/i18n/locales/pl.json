@@ -46,7 +46,9 @@
     "navArcade": "Arcade",
     "navStudio": "Studio",
     "navFeed": "Strumień Agentów",
-    "activeBuilds": "w trakcie: {{count}}"
+    "activeBuilds": "w trakcie: {{count}}",
+    "upHome": "Wróć do strony głównej",
+    "upStudio": "Wróć do Studio"
   },
   "hero": {
     "mainTitle": "Zamień dowolny pomysł w grywalną grę",

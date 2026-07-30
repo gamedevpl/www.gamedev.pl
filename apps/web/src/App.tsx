@@ -14,6 +14,7 @@ import { CreatorQA, type QAQuestion } from './CreatorQA.js';
 import {
   canonicalPlayPath,
   NAVIGATE_EVENT,
+  navUpTarget,
   parsePathRoute,
   statusPath,
   playPath,
@@ -517,6 +518,15 @@ export function App() {
     setRoute(readLocationRoute());
   }, []);
 
+  // Header Up chevron — Android-style parent path, never history.back(). Hidden
+  // while a game theater covers the viewport (Close owns escape there).
+  const headerUp = useMemo(() => {
+    if (stageContent) return null;
+    const target = navUpTarget(route);
+    if (!target) return null;
+    return { path: target.path, ariaLabel: t(`header.${target.labelKey}`) };
+  }, [route, stageContent, t]);
+
   function handlePlayGame(game: CatalogEntry) {
     // Published games are permalinked: drive play through the URL so a refresh or
     // a shared link reopens the same game. The route→stage effect opens the stage.
@@ -561,6 +571,8 @@ export function App() {
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
+          upTarget={headerUp}
+          onUp={navigate}
         />
         <main className="content">
           <LegalPage doc={route.doc} onBack={() => navigate('/')} />
@@ -579,6 +591,8 @@ export function App() {
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
+          upTarget={headerUp}
+          onUp={navigate}
         />
         <main className="content">
           <ContactPage onBack={() => navigate('/')} />
@@ -598,6 +612,8 @@ export function App() {
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
+          upTarget={headerUp}
+          onUp={navigate}
         />
         <main className="content">
           <NotFoundPage onHome={() => navigate('/')} />
@@ -624,6 +640,8 @@ export function App() {
         onNavigate={handleNavigateSection}
         onHome={() => navigate('/')}
         onStudio={() => navigate(studioPath())}
+        upTarget={headerUp}
+        onUp={navigate}
       />
 
       {/* Standalone PWA has no browser pull-to-refresh; this restores it on home only,

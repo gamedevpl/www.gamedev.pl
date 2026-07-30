@@ -5,6 +5,7 @@ import {
   joinPath,
   legalAnchor,
   legalPath,
+  navUpTarget,
   parsePathRoute,
   playPath,
   statusPath,
@@ -175,5 +176,37 @@ describe('path builders', () => {
     const [path, fragment] = legalPath('terms', 'reklamacje').split('#');
     expect(parsePathRoute(path!, `#${fragment}`)).toEqual({ view: 'legal', doc: 'terms' });
     expect(legalAnchor(`#${fragment}`)).toBe('reklamacje');
+  });
+});
+
+describe('navUpTarget', () => {
+  it('hides Up on home, join, play, and studio playtest', () => {
+    expect(navUpTarget({ view: 'home' })).toBeNull();
+    expect(navUpTarget({ view: 'join', code: 'ABC123', token: 'tok' })).toBeNull();
+    expect(navUpTarget({ view: 'play', slug: 'sky-dodge' })).toBeNull();
+    expect(navUpTarget({ view: 'studio', token: 'tok', tab: 'playtest' })).toBeNull();
+  });
+
+  it('walks studio tab → game → shelf → home', () => {
+    expect(navUpTarget({ view: 'studio', token: 'tok', tab: 'build' })).toEqual({
+      path: '/studio/tok',
+      labelKey: 'upStudio',
+    });
+    expect(navUpTarget({ view: 'studio', token: 'tok' })).toEqual({
+      path: '/studio',
+      labelKey: 'upStudio',
+    });
+    expect(navUpTarget({ view: 'studio' })).toEqual({
+      path: '/',
+      labelKey: 'upHome',
+    });
+  });
+
+  it('sends browsable non-studio surfaces home', () => {
+    expect(navUpTarget({ view: 'health' })).toEqual({ path: '/', labelKey: 'upHome' });
+    expect(navUpTarget({ view: 'legal', doc: 'privacy' })).toEqual({ path: '/', labelKey: 'upHome' });
+    expect(navUpTarget({ view: 'contact' })).toEqual({ path: '/', labelKey: 'upHome' });
+    expect(navUpTarget({ view: 'draft', slug: 'space-runner' })).toEqual({ path: '/', labelKey: 'upHome' });
+    expect(navUpTarget({ view: 'notFound' })).toEqual({ path: '/', labelKey: 'upHome' });
   });
 });
