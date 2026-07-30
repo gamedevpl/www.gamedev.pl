@@ -171,11 +171,51 @@ describe('GameTheater how-to-play', () => {
 
     // The panel portals to the body, not into the theater's own subtree.
     expect(document.querySelector('.howto-card')).not.toBeNull();
-    expect([...document.querySelectorAll('.howto-list li')].map((li) => li.textContent)).toEqual([
-      'Left/Right to move',
-      'Space to fire',
-      'M to mute',
+    expect(
+      [...document.querySelectorAll('.howto-row')].map((row) => [
+        row.querySelector('dt')?.textContent,
+        row.querySelector('dd')?.textContent,
+      ]),
+    ).toEqual([
+      ['Left/Right', 'move'],
+      ['Space', 'fire'],
+      ['M', 'mute'],
     ]);
+  });
+
+  it('puts focus on the card when opened from the More menu, not on the exit button behind it', async () => {
+    // The phone path: the bar trigger is display:none there, so the menu row is the only
+    // way in. Opening the menu changes `moreOpen`, which used to re-run the theater's
+    // focus effect and pull focus back onto Exit — with the modal card on screen, Enter
+    // then left the game.
+    await draw({ controls: CONTROLS });
+    await click(container.querySelector('.theater-more-btn'));
+    const menuItem = [...container.querySelectorAll('.theater-more-panel .theater-menu-item')].find((el) =>
+      el.textContent?.includes('How to play'),
+    );
+    expect(menuItem).toBeTruthy();
+
+    await click(menuItem ?? null);
+
+    expect(document.querySelector('.howto-card')).not.toBeNull();
+    expect(document.activeElement).toBe(document.querySelector('.howto-close'));
+    expect(container.querySelector('.theater-more.is-open')).toBeNull();
+  });
+
+  it('closes the card when the game goes fullscreen, since the bar holding both triggers unmounts', async () => {
+    await draw({ controls: CONTROLS });
+    await click(container.querySelector('.howto-btn'));
+    expect(document.querySelector('.howto-card')).not.toBeNull();
+
+    const stage = container.querySelector('.stage') as HTMLElement;
+    Object.defineProperty(document, 'fullscreenElement', { value: stage, configurable: true });
+    await act(async () => {
+      document.dispatchEvent(new Event('fullscreenchange'));
+    });
+
+    expect(container.querySelector('.game-theater-bar')).toBeNull();
+    expect(document.querySelector('.howto-card')).toBeNull();
+    Object.defineProperty(document, 'fullscreenElement', { value: null, configurable: true });
   });
 
   it('Escape closes the panel first and only exits the game on a second press', async () => {

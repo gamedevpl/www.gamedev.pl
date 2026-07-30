@@ -3477,22 +3477,34 @@ body.player-open {
 }
 
 .howto-card {
-  position: relative;
+  display: flex;
+  flex-direction: column;
   width: min(30rem, 100%);
   max-height: calc(100dvh - 32px);
-  overflow-y: auto;
-  padding: 20px 22px;
+  padding: 18px 20px;
   background: var(--panel);
   border: 1px solid var(--panel-border);
   border-radius: 12px;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
   text-align: left;
+  /* Matches the player underneath: a long press on the card must not raise the iOS
+     selection loupe and Copy / Look Up callout over a running game. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* The head stays put while the rows scroll — the close button used to be absolutely
+   positioned inside the scroll box and slid out of reach on a long controls list. */
+.howto-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex: 0 0 auto;
 }
 
 .howto-close {
-  position: absolute;
-  top: 12px;
-  right: 12px;
   display: flex;
   padding: 6px;
   background: none;
@@ -3511,37 +3523,62 @@ body.player-open {
   align-items: center;
   gap: 8px;
   margin: 0;
-  padding-right: 28px;
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   color: var(--turquoise);
 }
 
 .howto-game {
-  margin: 4px 0 14px;
+  margin: 2px 0 0;
   color: var(--muted);
   font-size: 0.85rem;
 }
 
-.howto-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
+/* Key on the left, what it does on the right — the two-column reading answers "which
+   key does what" at a glance, which a sentence per row does not. */
+.howto-keys {
   display: grid;
-  gap: 8px;
+  grid-template-columns: auto 1fr;
+  gap: 6px 14px;
+  margin: 14px 0 0;
+  overflow-y: auto;
+  flex: 1 1 auto;
 }
 
-.howto-list li {
-  padding: 8px 12px;
-  background: var(--panel-card);
-  border-radius: 8px;
-  font-size: 0.9rem;
+.howto-row {
+  display: contents;
+}
+
+.howto-keys dt {
+  font-weight: 700;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.howto-keys dd {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
   line-height: 1.35;
 }
 
+/* A clause with no "X to Y" shape keeps its own line rather than being guessed apart. */
+.howto-row.is-wide dd {
+  grid-column: 1 / -1;
+}
+
 .howto-note {
-  margin: 14px 0 0;
+  margin: 12px 0 0;
   color: var(--muted);
   font-size: 0.8rem;
+  flex: 0 0 auto;
+}
+
+.howto-dismiss {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  opacity: 0.75;
+  flex: 0 0 auto;
 }
 
 .modal-backdrop {

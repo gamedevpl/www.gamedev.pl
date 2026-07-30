@@ -154,7 +154,8 @@
       "error": "We couldn't send that right now. Please try again in a moment."
     },
     "howToPlay": "How to play",
-    "howToPlayClose": "Close"
+    "howToPlayClose": "Close",
+    "howToPlayDismiss": "Click or tap anywhere outside to close"
   },
   "catalog": {
     "title": "Games",

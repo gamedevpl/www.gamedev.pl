@@ -138,17 +138,28 @@ export function GameTheater({
   const dismissMore = useCallback(() => setMoreOpen(false), []);
 
   // Escape while the How-to-play card is up must close the card, not throw the player
-  // out of the game. Read through a ref so this callback keeps a stable identity —
-  // rebuilding it would re-run the mount-only focus effect below on every open.
+  // out of the game. Overlay state is read through refs so these callbacks keep a
+  // stable identity and the listener below does not need re-binding on every toggle.
   const howToOpenRef = useRef(howToOpen);
   howToOpenRef.current = howToOpen;
+  const moreOpenRef = useRef(moreOpen);
+  moreOpenRef.current = moreOpen;
+
+  // Closing hands focus to the game, not back to the trigger. In a player the next key
+  // press is meant for the game: leaving focus on the button turns the next Space into
+  // "reopen the card" instead of "fire".
+  const closeHowTo = useCallback(() => {
+    setHowToOpen(false);
+    frameRef.current?.contentWindow?.focus();
+  }, []);
+
   const escapeOrExit = useCallback(() => {
     if (howToOpenRef.current) {
-      setHowToOpen(false);
+      closeHowTo();
       return;
     }
     requestExit();
-  }, [requestExit]);
+  }, [requestExit, closeHowTo]);
 
   // Escape is handled twice on purpose: the window listener below covers the app's
   // own chrome, and this covers the game iframe, which holds focus while playing
@@ -213,7 +224,12 @@ export function GameTheater({
   }, []);
 
   useEffect(() => {
-    if (fullscreen) setMoreOpen(false);
+    if (!fullscreen) return;
+    setMoreOpen(false);
+    // The bar is unmounted while fullscreen, and it holds both of the card's triggers.
+    // A card left open there cannot be reopened from anywhere, and reappears unbidden
+    // when fullscreen ends.
+    setHowToOpen(false);
   }, [fullscreen]);
 
   const toggleFullscreen = useCallback(() => {
@@ -230,21 +246,26 @@ export function GameTheater({
   // The theater takes over the whole viewport, so keyboard focus has to come with
   // it — otherwise focus is left behind on the page underneath, and Escape (the
   // reflex for "get me out of here") does nothing. Focus returns on unmount.
+  //
+  // Mount-only, and separate from the Escape listener below on purpose: this effect
+  // used to carry `moreOpen` in its deps, so opening an overlay re-ran it and the
+  // `exitRef.focus()` here landed *after* the overlay's own focus call (child effects
+  // run before parent effects) — the card opened with focus on the exit button.
   useEffect(() => {
     const previouslyFocused = document.activeElement as HTMLElement | null;
     exitRef.current?.focus();
+    return () => previouslyFocused?.focus?.();
+  }, []);
 
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         // Innermost surface first: the card, then the menu, then leaving the game.
-        // The card's state is read through a ref rather than added to this effect's
-        // deps, because every re-run of this effect hands focus to the exit button —
-        // which would pull it straight back off the card that just opened.
         if (howToOpenRef.current) {
-          setHowToOpen(false);
+          closeHowTo();
           return;
         }
-        if (moreOpen) {
+        if (moreOpenRef.current) {
           setMoreOpen(false);
           return;
         }
@@ -252,12 +273,8 @@ export function GameTheater({
       }
     };
     window.addEventListener('keydown', onKeyDown);
-
-    return () => {
-      window.removeEventListener('keydown', onKeyDown);
-      previouslyFocused?.focus?.();
-    };
-  }, [requestExit, moreOpen]);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [requestExit, closeHowTo]);
 
   // Close the overflow menu on an outside tap — phones have no hover to dismiss it.
   // Same-document chrome uses pointerdown here. Taps on the sandboxed game are
@@ -435,7 +452,7 @@ export function GameTheater({
         controls={controls ?? ''}
         gameTitle={displayTitle}
         keyboardOnly={touch === 'none'}
-        onClose={() => setHowToOpen(false)}
+        onClose={closeHowTo}
       />
     </section>
   );

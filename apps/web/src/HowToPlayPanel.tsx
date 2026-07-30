@@ -15,6 +15,8 @@ type HowToPlayPanelProps = {
   onClose: () => void;
 };
 
+const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
 /**
  * The player's "How to play" card.
  *
@@ -25,16 +27,39 @@ type HowToPlayPanelProps = {
  */
 export function HowToPlayPanel({ open, controls, gameTitle, keyboardOnly = false, onClose }: HowToPlayPanelProps) {
   const { t } = useTranslation();
+  const cardRef = useRef<HTMLDivElement | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
 
-  // Take focus while open and hand it back on close, the same contract GameTheater
-  // keeps for the theater itself — otherwise focus is stranded on a hidden trigger
-  // (the bar and the More menu each render one, and CSS hides whichever does not fit).
+  // Take focus while open. Focus is NOT restored here: the caller hands it back to the
+  // game, because returning it to the trigger leaves the next Space press hitting a
+  // button instead of firing in the game.
   useEffect(() => {
     if (!open) return;
-    const previouslyFocused = document.activeElement as HTMLElement | null;
     closeRef.current?.focus();
-    return () => previouslyFocused?.focus?.();
+  }, [open]);
+
+  // `aria-modal` tells a screen reader the rest of the page is inert; it does nothing to
+  // Tab. Without this, tabbing walks out of the card and into the page chrome behind a
+  // game that is still running, with no way to see where focus went.
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab' || !cardRef.current) return;
+      const stops = [...cardRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)];
+      if (stops.length === 0) return;
+      const first = stops[0]!;
+      const last = stops[stops.length - 1]!;
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || !cardRef.current.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
   }, [open]);
 
   if (!open) return null;
@@ -52,27 +77,38 @@ export function HowToPlayPanel({ open, controls, gameTitle, keyboardOnly = false
         role="dialog"
         aria-modal="true"
         aria-labelledby="howto-title"
+        ref={cardRef}
         onClick={(event) => event.stopPropagation()}
       >
-        <button
-          type="button"
-          className="howto-close"
-          onClick={onClose}
-          ref={closeRef}
-          aria-label={t('player.howToPlayClose')}
-        >
-          <PixelIcon name="close" size={14} />
-        </button>
-        <h2 className="howto-title" id="howto-title">
-          <PixelIcon name="gamepad" size={16} /> {t('player.howToPlay')}
-        </h2>
-        <p className="howto-game">{gameTitle}</p>
-        <ul className="howto-list">
-          {rows.map((row) => (
-            <li key={row}>{row}</li>
+        <div className="howto-head">
+          <div>
+            <h2 className="howto-title" id="howto-title">
+              <PixelIcon name="gamepad" size={16} /> {t('player.howToPlay')}
+            </h2>
+            <p className="howto-game">{gameTitle}</p>
+          </div>
+          <button
+            type="button"
+            className="howto-close"
+            onClick={onClose}
+            ref={closeRef}
+            aria-label={t('player.howToPlayClose')}
+          >
+            <PixelIcon name="close" size={14} />
+          </button>
+        </div>
+        <dl className="howto-keys">
+          {rows.map((row, index) => (
+            // Keyed by index on purpose: a controls string may repeat a clause, and two
+            // long clauses can truncate to the same text, so the row text is not unique.
+            <div className={row.keys ? 'howto-row' : 'howto-row is-wide'} key={index}>
+              {row.keys ? <dt>{row.keys}</dt> : null}
+              <dd>{row.action}</dd>
+            </div>
           ))}
-        </ul>
+        </dl>
         {keyboardOnly ? <p className="howto-note">{t('catalog.keyboardOnlyTooltip')}</p> : null}
+        <p className="howto-dismiss">{t('player.howToPlayDismiss')}</p>
       </div>
     </div>,
     document.body,

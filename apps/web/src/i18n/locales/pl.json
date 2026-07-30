@@ -154,7 +154,8 @@
       "error": "Nie udało się teraz tego wysłać. Spróbuj ponownie za chwilę."
     },
     "howToPlay": "Jak grać",
-    "howToPlayClose": "Zamknij"
+    "howToPlayClose": "Zamknij",
+    "howToPlayDismiss": "Kliknij lub dotknij obok, aby zamknąć"
   },
   "catalog": {
     "title": "Gry",
