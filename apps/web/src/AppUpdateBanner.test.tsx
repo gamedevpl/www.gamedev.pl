@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppUpdateBanner } from './AppUpdateBanner.js';
 import i18n from './i18n/index.js';
+import { clearPendingShellUpdate } from './shellUpdate.js';
 
 let container: HTMLDivElement;
 let root: Root;
@@ -25,6 +26,7 @@ function postFromWorker(data: unknown) {
 beforeEach(async () => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   await i18n.changeLanguage('en');
+  clearPendingShellUpdate();
 
   serviceWorker = new EventTarget();
   Object.defineProperty(navigator, 'serviceWorker', { value: serviceWorker, configurable: true });
@@ -40,6 +42,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await act(async () => root.unmount());
   document.body.innerHTML = '';
+  clearPendingShellUpdate();
   Reflect.deleteProperty(navigator, 'serviceWorker');
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -97,6 +100,18 @@ describe('AppUpdateBanner', () => {
     });
 
     expect(banner()).toBeNull();
+  });
+
+  it('appears on mount when an earlier boot listener already parked the update', async () => {
+    await act(async () => root.unmount());
+    sessionStorage.setItem('gamedev_shell_update_pending', 'parked-rev');
+
+    root = createRoot(container);
+    await act(async () => {
+      root.render(createElement(AppUpdateBanner));
+    });
+
+    expect(banner()).not.toBeNull();
   });
 
   it('renders nothing where there is no service worker at all', async () => {
