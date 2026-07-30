@@ -40,6 +40,10 @@ describe('isKnownSpaShellPath', () => {
     '/studio/tok-abc',
     '/studio/tok-abc/build',
     '/studio/tok-abc/playtest',
+    '/admin',
+    '/admin/queue',
+    '/admin/telemetry',
+    '/admin/tokens',
     '/join/K7M3QP',
   ])('treats %s as a known shell path (HTTP 200)', (path) => {
     expect(isKnownSpaShellPath(path)).toBe(true);
@@ -54,6 +58,8 @@ describe('isKnownSpaShellPath', () => {
     '/draft/',
     '/draft/..%2Fadmin',
     '/health/brick-storm',
+    '/admin/nope',
+    '/admin/queue/extra',
     '/studio/tok-abc/nope',
     '/studio/tok-abc/feedback',
     '/studio/tok-abc/build/extra',

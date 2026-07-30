@@ -10,6 +10,20 @@ export function isStudioTab(value: string): value is StudioTab {
   return STUDIO_TABS.has(value as StudioTab);
 }
 
+/**
+ * Operator console sections, in the order they are offered.
+ *
+ * `queue` leads because it is the only one with something to do in it; the rest are
+ * things to look at. In the URL so a refresh, a bookmark, or the link in an alert
+ * notification lands on the section it meant rather than on whichever one is first.
+ */
+export const ADMIN_SECTIONS = ['queue', 'telemetry', 'limits', 'tokens', 'suggestions'] as const;
+export type AdminSection = (typeof ADMIN_SECTIONS)[number];
+
+export function isAdminSection(value: string): value is AdminSection {
+  return (ADMIN_SECTIONS as readonly string[]).includes(value);
+}
+
 export type AppRoute =
   | { view: 'home' }
   // A published game being played. The slug is a stable permalink, so refreshing
@@ -25,10 +39,11 @@ export type AppRoute =
   // token rides in the fragment so it never hits access logs or Referer
   // (see docs/path-routing-plan.md § Join, docs/multiplayer-plan.md §4.3).
   | { view: 'join'; code: string; token: string }
-  // The operator telemetry view. Unlisted rather than secret: reaching the route
-  // renders nothing unless the API recognises the caller as an admin, and the API
-  // answers 404 to everyone else.
-  | { view: 'health' }
+  // The operator console. Unlisted rather than secret: reaching the route renders
+  // nothing unless the API recognises the caller as an admin, and the API answers 404
+  // to everyone else. `/health` still resolves here (telemetry) — it was the whole
+  // surface before there was a console, and links to it are in people's bookmarks.
+  | { view: 'admin'; section: AdminSection }
   // Creator control panel: own games, draft build (ex-status), playtest, improve.
   // `/status/:token` is accepted as an alias and resolves here too.
   // Optional `tab` deep-links into a work surface (`/studio/:token/build`).
@@ -98,8 +113,24 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
     }
   }
 
+  // The console's old address, kept working: it is what the operator has bookmarked.
   if (normalizedPath === '/health') {
-    return { view: 'health' };
+    return { view: 'admin', section: 'telemetry' };
+  }
+
+  if (normalizedPath === '/admin') {
+    return { view: 'admin', section: 'queue' };
+  }
+
+  const adminMatch = normalizedPath.match(/^\/admin\/([^/]+)$/);
+  if (adminMatch?.[1]) {
+    const section = decodeURIComponent(adminMatch[1]);
+    // An unknown section is a 404 rather than a silent fall back to the queue — same
+    // rule as the studio tabs, and for the same reason: a typo should be visible.
+    if (isAdminSection(section)) {
+      return { view: 'admin', section };
+    }
+    return { view: 'notFound' };
   }
 
   if (normalizedPath === '/studio') {
@@ -200,12 +231,17 @@ export function navUpTarget(route: AppRoute): NavUpTarget | null {
         return { path: studioPath(), labelKey: 'upStudio' };
       }
       return { path: '/', labelKey: 'upHome' };
-    case 'health':
+    case 'admin':
     case 'legal':
     case 'contact':
     case 'notFound':
       return { path: '/', labelKey: 'upHome' };
   }
+}
+
+/** Path for an operator console section. Used by the tabs and by alert deep links. */
+export function adminPath(section: AdminSection = 'queue'): string {
+  return `/admin/${section}`;
 }
 
 /** QR / share URL path+fragment for a multiplayer lobby guest. */

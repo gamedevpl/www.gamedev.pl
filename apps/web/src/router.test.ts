@@ -69,9 +69,14 @@ describe('parsePathRoute', () => {
     expect(parsePathRoute('/join/K7M3QP/abc-DEF_123')).toEqual({ view: 'notFound' });
   });
 
-  it('parses the unlisted health route', () => {
-    expect(parsePathRoute('/health')).toEqual({ view: 'health' });
-    // Trailing segments are not the health view.
+  it('parses the unlisted operator console, and keeps its old address working', () => {
+    expect(parsePathRoute('/admin')).toEqual({ view: 'admin', section: 'queue' });
+    expect(parsePathRoute('/admin/telemetry')).toEqual({ view: 'admin', section: 'telemetry' });
+    // `/health` was the whole operator page before the console existed, and is what is
+    // in the operator's bookmarks — it resolves to the section it used to be.
+    expect(parsePathRoute('/health')).toEqual({ view: 'admin', section: 'telemetry' });
+    // A section that does not exist is a typo, and says so.
+    expect(parsePathRoute('/admin/nope')).toEqual({ view: 'notFound' });
     expect(parsePathRoute('/health/brick-storm')).toEqual({ view: 'notFound' });
   });
 
@@ -206,7 +211,7 @@ describe('navUpTarget', () => {
   });
 
   it('sends browsable non-studio surfaces home', () => {
-    expect(navUpTarget({ view: 'health' })).toEqual({ path: '/', labelKey: 'upHome' });
+    expect(navUpTarget({ view: 'admin', section: 'queue' })).toEqual({ path: '/', labelKey: 'upHome' });
     expect(navUpTarget({ view: 'legal', doc: 'privacy' })).toEqual({ path: '/', labelKey: 'upHome' });
     expect(navUpTarget({ view: 'contact' })).toEqual({ path: '/', labelKey: 'upHome' });
     expect(navUpTarget({ view: 'notFound' })).toEqual({ path: '/', labelKey: 'upHome' });

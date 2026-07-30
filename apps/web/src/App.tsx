@@ -8,10 +8,11 @@ import { HeroPromptSection } from './HeroPromptSection.js';
 import { ArcadeCatalog } from './ArcadeCatalog.js';
 import { CreatorStudioView } from './CreatorStudioView.js';
 import { DraftView } from './DraftView.js';
-import { GameHealthView } from './GameHealthView.js';
+import { AdminConsole } from './AdminConsole.js';
 import { PixelIcon } from './PixelIcon.js';
 import { CreatorQA, type QAQuestion } from './CreatorQA.js';
 import {
+  adminPath,
   canonicalPlayPath,
   NAVIGATE_EVENT,
   navUpTarget,
@@ -572,6 +573,7 @@ export function App() {
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
+          onAdmin={() => navigate(adminPath())}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -592,6 +594,7 @@ export function App() {
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
+          onAdmin={() => navigate(adminPath())}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -613,6 +616,7 @@ export function App() {
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
+          onAdmin={() => navigate(adminPath())}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -641,6 +645,7 @@ export function App() {
         onNavigate={handleNavigateSection}
         onHome={() => navigate('/')}
         onStudio={() => navigate(studioPath())}
+        onAdmin={() => navigate(adminPath())}
         upTarget={headerUp}
         onUp={navigate}
       />
@@ -650,8 +655,8 @@ export function App() {
       <PullToRefresh enabled={route.view === 'home' && !stageContent} onRefresh={handlePullToRefresh} />
 
       <main className="content">
-        {route.view === 'health' ? (
-          <GameHealthView />
+        {route.view === 'admin' ? (
+          <AdminConsole section={route.section} onNavigate={navigate} />
         ) : route.view === 'studio' ? (
           <CreatorStudioView
             selectedToken={route.token}

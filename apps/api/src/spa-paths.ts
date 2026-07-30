@@ -16,6 +16,10 @@ const STATUS_PATTERN = /^\/status\/([^/]+)$/;
 const JOIN_PATTERN = /^\/join\/([A-Z0-9]{6})$/;
 /** `/studio`, `/studio/:token`, `/studio/:token/:tab` — keep aligned with router.ts. */
 const STUDIO_PATTERN = /^\/studio(?:\/[^/]+(?:\/(?:overview|build|playtest|stats|improve))?)?$/;
+// The operator console. Its sections are listed rather than matched loosely, so the
+// shell and the client's router agree about what is a real page and what is a typo —
+// the same contract the studio tabs above keep.
+const ADMIN_PATTERN = /^\/admin(?:\/(?:queue|telemetry|limits|tokens|suggestions))?$/;
 /** Last path segment looks like a file (`sw.js`, `icon.png`, `foo.woff2`). */
 const STATIC_ASSET_PATTERN = /\/[^/]+\.[a-zA-Z0-9]+$/;
 
@@ -51,6 +55,7 @@ export function isKnownSpaShellPath(urlOrPath: string): boolean {
   }
 
   if (STUDIO_PATTERN.test(pathname)) return true;
+  if (ADMIN_PATTERN.test(pathname)) return true;
 
   const statusMatch = pathname.match(STATUS_PATTERN);
   if (statusMatch?.[1]) return true;
