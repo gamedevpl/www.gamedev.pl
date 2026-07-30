@@ -418,6 +418,16 @@ jobs:
         if: ${{ vars.MP_RELAY_URL != '' }}
         run: |
           RELAY_SERVICE="${{ vars.MP_RELAY_SERVICE || 'gamedev-mp-relay' }}"
+          # The same guard deploy-relay.sh carries, for a worse blast radius. A
+          # mis-set (or copy-pasted) MP_RELAY_SERVICE naming the app service would push
+          # this image straight onto live production, bypassing the candidate revision,
+          # the smoke tests and the browser gate that every other path goes through —
+          # and it would do so from a step whose name says "relay".
+          if [ "$RELAY_SERVICE" = "$SERVICE" ]; then
+            echo "Error: vars.MP_RELAY_SERVICE is '${RELAY_SERVICE}', which is the app service."
+            echo "That would deploy this image to production without the smoke or browser gate."
+            exit 1
+          fi
           echo "Updating ${RELAY_SERVICE} to ${IMAGE}"
           gcloud run services update "$RELAY_SERVICE" \
             --region "$REGION" \

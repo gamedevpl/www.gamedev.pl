@@ -37,21 +37,45 @@ const workflow = readFileSync(resolve(repoRoot, '.github/workflows/deploy.yml'),
  * group that follows and a run of blank lines explodes the search. These assertions are
  * really about *order* (guard, then raise, then else, then pin), and order is `indexOf`.
  */
-const positions = (source: string, guard: string) => {
-  const guardAt = source.indexOf(guard);
-  const elseAt = source.indexOf('else', guardAt);
+const positions = (source: string, guard: string, raise: string) => {
+  // Anchor on the RAISE, then look backwards for its guard — not the other way round.
+  //
+  // Searching forwards from the guard was wrong twice over. First, `indexOf(needle, -1)`
+  // searches from 0, so a deleted guard would still find some unrelated `else` and some
+  // unrelated `MAX_INSTANCES=1` further down the file and pass. Second, and worse in
+  // practice: `MP_RELAY_URL` is guarded *twice* in deploy-api.sh — once to thread the
+  // variable into the env map, once for the ceiling — so `indexOf(guard)` matched the env
+  // block and the assertions then passed on offsets that had nothing to do with the
+  // ceiling at all. Deleting the ceiling's own guard did not fail the test.
+  //
+  // Anchoring on the raise removes both: there is exactly one, and its guard is whatever
+  // immediately precedes it.
+  const raiseAt = source.indexOf(raise);
+  if (raiseAt < 0) return { guardAt: -1, raiseAt: -1, elseAt: -1, pinAt: -1 };
+
+  const guardAt = source.lastIndexOf(guard, raiseAt);
+  // The raise must be inside the guard's own then-branch, not merely somewhere after a
+  // guard. An `else` or `fi` in between means the branch already closed and this raise
+  // belongs to something else — which is how an unrelated earlier occurrence of the guard
+  // string (deploy-api.sh has one, for threading the env var) would otherwise satisfy this.
+  const between = guardAt < 0 ? 'fi' : source.slice(guardAt + guard.length, raiseAt);
+  if (guardAt < 0 || /\b(else|fi)\b/.test(between)) {
+    return { guardAt: -1, raiseAt, elseAt: -1, pinAt: -1 };
+  }
+
+  const elseAt = source.indexOf('else', raiseAt);
   return {
     guardAt,
-    raiseAt: source.indexOf('MAX_INSTANCES=', guardAt),
+    raiseAt,
     elseAt,
-    pinAt: source.indexOf('MAX_INSTANCES=1', elseAt),
+    pinAt: elseAt < 0 ? -1 : source.indexOf('MAX_INSTANCES=1', elseAt),
   };
 };
 
 describe('app service instance ceiling', () => {
   const GUARDED = [
-    [deployApi, 'if [ -n "$MP_RELAY_URL" ]; then'],
-    [workflow, 'if [ -n "$MP_RELAY_URL_VAL" ]; then'],
+    [deployApi, 'if [ -n "$MP_RELAY_URL" ]; then', 'MAX_INSTANCES="${MAX_INSTANCES:-4}"'],
+    [workflow, 'if [ -n "$MP_RELAY_URL_VAL" ]; then', 'MAX_INSTANCES=4'],
   ] as const;
 
   it('is a variable in both deploy paths, not a literal', () => {
@@ -67,8 +91,11 @@ describe('app service instance ceiling', () => {
   it('is pinned to one instance whenever the relay is not split out', () => {
     // The `else` branch is the whole guard: unset relay URL means rooms are still local,
     // and there is exactly one safe ceiling for that.
-    for (const [source, guard] of GUARDED) {
-      const { elseAt, pinAt } = positions(source, guard);
+    for (const [source, guard, raise] of GUARDED) {
+      const { guardAt, elseAt, pinAt } = positions(source, guard, raise);
+      // Assert the guard was found first. Without this the test can only ever say
+      // "some else precedes some MAX_INSTANCES=1", which is true of many files.
+      expect(guardAt).toBeGreaterThan(-1);
       expect(elseAt).toBeGreaterThan(-1);
       expect(pinAt).toBeGreaterThan(elseAt);
     }
@@ -78,8 +105,8 @@ describe('app service instance ceiling', () => {
     // Both files must decide the ceiling from the relay variable and nothing else. Checking
     // that the raise sits between the guard and its `else` is what stops the two drifting
     // apart into "raised, and separately, hopefully, forwarded".
-    for (const [source, guard] of GUARDED) {
-      const { guardAt, raiseAt, elseAt } = positions(source, guard);
+    for (const [source, guard, raise] of GUARDED) {
+      const { guardAt, raiseAt, elseAt } = positions(source, guard, raise);
       expect(guardAt).toBeGreaterThan(-1);
       expect(raiseAt).toBeGreaterThan(guardAt);
       expect(raiseAt).toBeLessThan(elseAt);
@@ -201,6 +228,15 @@ describe('deploy workflow relay step', () => {
     // as a second copy of the app with an open create route.
     expect(workflow).toContain('gcloud run services update "$RELAY_SERVICE"');
     expect(workflow).not.toMatch(/RELAY_SERVICE"[\s\S]{0,400}--set-env-vars/);
+  });
+
+  it('refuses to update the app service, same as the script', () => {
+    // deploy-relay.sh already refuses SERVICE == APP_SERVICE; the workflow had no
+    // equivalent, and here the blast radius is larger — a mis-set MP_RELAY_SERVICE would
+    // push the image onto live production from a step called "relay", skipping the
+    // candidate revision, the smoke tests and the browser gate.
+    expect(workflow).toMatch(/if \[ "\$RELAY_SERVICE" = "\$SERVICE" \]/);
+    expect(workflow).toContain('which is the app service');
   });
 
   it('fails the deploy when the configured URL and the real one disagree', () => {
