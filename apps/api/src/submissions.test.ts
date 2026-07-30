@@ -307,8 +307,10 @@ describe('global creation cap and pause switch', () => {
 
   it('refuses at the shared daily ceiling and leaves the creator’s own allowance unspent', async () => {
     const stub = createGithubClientStub({});
+    const { backend, briefs } = createBackendStub();
     const { app, store, authHeaders } = await createApp({
       githubClient: stub.githubClient,
+      agentBackend: backend,
       submissionTokenSecret: secret,
       dailySubmissionQuota: 5,
       globalDailySubmissionCap: 2,
@@ -326,16 +328,20 @@ describe('global creation cap and pause switch', () => {
 
     const dateStr = new Date().toISOString().slice(0, 10);
     expect((await store.getUsage('g:test-user', dateStr)).submissions).toBe(2);
-    // And nothing was filed, so the refusal cost an agent run as well as a quota slot.
-    expect(stub.createIssue).toHaveBeenCalledTimes(2);
+    // And only two builds were dispatched, so the refusal cost an agent run as well as a
+    // quota slot. This is the assertion the cap exists for: the ceiling is about spend,
+    // and an agent run is what the platform actually pays for.
+    expect(briefs).toHaveLength(2);
 
     await app.close();
   });
 
   it('blocks every creation while paused, before spending anything', async () => {
     const stub = createGithubClientStub({});
+    const { backend, briefs } = createBackendStub();
     const { app, store, authHeaders } = await createApp({
       githubClient: stub.githubClient,
+      agentBackend: backend,
       submissionTokenSecret: secret,
       creationLimitsTtlMs: 0,
     });
@@ -347,7 +353,7 @@ describe('global creation cap and pause switch', () => {
 
     const dateStr = new Date().toISOString().slice(0, 10);
     expect((await store.getUsage('g:test-user', dateStr)).submissions).toBe(0);
-    expect(stub.createIssue).not.toHaveBeenCalled();
+    expect(briefs).toEqual([]);
 
     await app.close();
   });
