@@ -614,6 +614,9 @@
     "dismiss": "Not now",
     "updateTitle": "A new version of Gamedev.pl is ready.",
     "updateAction": "Reload",
-    "updateDismiss": "Dismiss"
+    "updateDismiss": "Dismiss",
+    "pullHint": "Pull to refresh",
+    "pullRelease": "Release to refresh",
+    "pullRefreshing": "Refreshing…"
   }
 }

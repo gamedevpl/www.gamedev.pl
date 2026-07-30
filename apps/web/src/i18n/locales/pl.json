@@ -614,6 +614,9 @@
     "dismiss": "Nie teraz",
     "updateTitle": "Nowa wersja Gamedev.pl jest gotowa.",
     "updateAction": "Odśwież",
-    "updateDismiss": "Zamknij"
+    "updateDismiss": "Zamknij",
+    "pullHint": "Pociągnij, aby odświeżyć",
+    "pullRelease": "Puść, aby odświeżyć",
+    "pullRefreshing": "Odświeżanie…"
   }
 }

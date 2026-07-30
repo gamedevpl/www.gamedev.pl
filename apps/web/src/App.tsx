@@ -25,6 +25,7 @@ import { ContactPage } from './ContactPage.js';
 import { NotFoundPage } from './NotFoundPage.js';
 import { AppUpdateBanner } from './AppUpdateBanner.js';
 import { InstallPrompt } from './InstallPrompt.js';
+import { PullToRefresh } from './PullToRefresh.js';
 import { SiteFooter } from './SiteFooter.js';
 import { resolveDocumentTitle } from './pageTitle.js';
 import { useDocumentTitle } from './useDocumentTitle.js';
@@ -255,7 +256,10 @@ export function App() {
     if (route.view !== 'home') return;
 
     let cancelled = false;
-    setCatalogStatus('loading');
+    // Soft refreshes (Retry, pull-to-refresh) keep the last-good grid on screen —
+    // flipping to `loading` would blank the arcade for every pull. First load and
+    // recovering from an error still show the busy mascot.
+    setCatalogStatus((prev) => (prev === 'ready' ? 'ready' : 'loading'));
 
     void fetchCatalog()
       .then((entries) => {
@@ -266,9 +270,11 @@ export function App() {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        setCatalogEntries([]);
+        // Keep whatever was on screen if a soft refresh fails — a transient 502
+        // should not erase a catalog the visitor was already browsing.
+        setCatalogEntries((prev) => (prev.length > 0 ? prev : []));
         setCatalogError(err instanceof Error ? err.message : null);
-        setCatalogStatus('error');
+        setCatalogStatus((prev) => (prev === 'ready' ? 'ready' : 'error'));
       });
 
     return () => {
@@ -278,6 +284,21 @@ export function App() {
 
   const handleRetryCatalog = useCallback(() => {
     setCatalogReloadKey((n) => n + 1);
+  }, []);
+
+  // Soft-refresh the home surfaces the installed PWA cannot reach with the browser's
+  // own pull-to-refresh (standalone display mode has no chrome gesture). Bumping the
+  // same keys Retry / post-play already use keeps recommendations and "My games" in
+  // sync with the catalog list.
+  const handlePullToRefresh = useCallback(async () => {
+    setCatalogReloadKey((n) => n + 1);
+    setRecommendationsRefreshKey((n) => n + 1);
+    setMyGamesRefreshKey((n) => n + 1);
+    // Give the catalog effect a beat to settle before the indicator dismisses. The
+    // fetch itself is raced by the effect; we only need the gesture to feel finished.
+    await new Promise<void>((resolve) => {
+      window.setTimeout(resolve, 450);
+    });
   }, []);
 
   // Bring the clarifying-questions panel into view when the refiner returns some.
@@ -598,6 +619,10 @@ export function App() {
         onHome={() => navigate('/')}
         onStudio={() => navigate(studioPath())}
       />
+
+      {/* Standalone PWA has no browser pull-to-refresh; this restores it on home only,
+          and stays inert while a game covers the viewport (player-open). */}
+      <PullToRefresh enabled={route.view === 'home' && !stageContent} onRefresh={handlePullToRefresh} />
 
       <main className="content">
         {route.view === 'health' ? (

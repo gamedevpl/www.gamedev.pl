@@ -7061,3 +7061,67 @@ body.player-open {
    at 360px wide while the Google widget stayed at its fixed 240 — a visible mismatch in
    exactly the viewport most creators use. Google's widget does not shrink, so neither
    does this one; whatever the narrow-width behaviour is, the two share it. */
+
+/* Pull-to-refresh — restored for the installed PWA (and tabs without a native gesture).
+   Sits under the sticky header; height tracks the rubber-banded pull. Hidden while idle. */
+.pull-to-refresh {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  overflow: hidden;
+  pointer-events: none;
+  color: var(--muted);
+  transition: height 0.12s ease-out;
+}
+
+.pull-to-refresh--busy {
+  transition: none;
+}
+
+.pull-to-refresh__inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px 12px;
+}
+
+.pull-to-refresh__spinner {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid rgba(148, 163, 184, 0.25);
+  border-top-color: var(--turquoise);
+  transform: rotate(0deg);
+  transition: transform 0.12s linear;
+}
+
+.pull-to-refresh--ready .pull-to-refresh__spinner,
+.pull-to-refresh--busy .pull-to-refresh__spinner {
+  border-top-color: var(--turquoise);
+}
+
+.pull-to-refresh--busy .pull-to-refresh__spinner {
+  animation: pull-to-refresh-spin 0.75s linear infinite;
+}
+
+.pull-to-refresh__label {
+  font-size: 0.85rem;
+  letter-spacing: 0.01em;
+}
+
+@keyframes pull-to-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pull-to-refresh {
+    transition: none;
+  }
+
+  .pull-to-refresh--busy .pull-to-refresh__spinner {
+    animation: none;
+  }
+}
