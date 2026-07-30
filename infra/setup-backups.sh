@@ -54,12 +54,12 @@ EXPORT_RETENTION_DAYS="${EXPORT_RETENTION_DAYS:-30}"
 EXPORT_SA_NAME="${EXPORT_SA_NAME:-firestore-export}"
 EXPORT_SA="${EXPORT_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 
-echo "==> 1/6 Enabling required APIs"
+echo "==> 1/7 Enabling required APIs"
 gcloud services enable firestore.googleapis.com storage.googleapis.com \
   cloudscheduler.googleapis.com \
   --project "$PROJECT_ID"
 
-echo "==> 2/6 Enabling point-in-time recovery (7-day window, fixed by Firestore)"
+echo "==> 2/7 Enabling point-in-time recovery (7-day window, fixed by Firestore)"
 # PITR is a database-level flag, not a per-collection one, so this covers every
 # collection including ones added later. Enabling it on a database that already has it
 # is a no-op that still exits 0.
@@ -70,7 +70,43 @@ gcloud firestore databases update \
   >/dev/null
 echo "    PITR enabled."
 
-echo "==> 3/6 Ensuring the backup bucket gs://${BACKUP_BUCKET} exists"
+echo "==> 3/7 Ensuring Firestore's own scheduled backups"
+# Native backup schedules, alongside the GCS exports rather than instead of them.
+#
+# They cover the failure the exports kept missing: a *scheduled* export has to be
+# handed a fresh output prefix every run, and the first version of this script gave it a
+# fixed one — so exactly one export ever succeeded and every later run failed 400. A
+# native schedule has no prefix to get wrong. It is Google's supported path, it is one
+# call, and there is nothing between it and the data to break.
+#
+# It does NOT replace the exports, because it shares a failure domain with the database:
+# delete the database (or lose the project) and its backups go with it. That is the
+# scenario the GCS copies exist for, and why this script keeps doing both.
+if gcloud firestore backups schedules list --database='(default)' --project "$PROJECT_ID" \
+     --format='value(name)' | grep -q .; then
+  echo "    Backup schedule(s) already exist."
+else
+  gcloud firestore backups schedules create \
+    --database='(default)' \
+    --project "$PROJECT_ID" \
+    --recurrence=daily \
+    --retention=7d \
+    >/dev/null
+  echo "    Created a daily schedule (7-day retention)."
+  # A weekly one as well: the daily schedule's ceiling is a week, so without this the
+  # oldest recoverable state is always seven days back — no help for corruption noticed
+  # late, which is the case the retention window exists for.
+  gcloud firestore backups schedules create \
+    --database='(default)' \
+    --project "$PROJECT_ID" \
+    --recurrence=weekly \
+    --day-of-week=SUN \
+    --retention=14w \
+    >/dev/null
+  echo "    Created a weekly schedule (14-week retention)."
+fi
+
+echo "==> 4/7 Ensuring the backup bucket gs://${BACKUP_BUCKET} exists"
 if gcloud storage buckets describe "gs://${BACKUP_BUCKET}" --project "$PROJECT_ID" >/dev/null 2>&1; then
   echo "    Bucket already exists."
 else
@@ -107,7 +143,7 @@ gcloud storage buckets update "gs://${BACKUP_BUCKET}" \
 rm -f "$LIFECYCLE_FILE"
 echo "    ${EXPORT_RETENTION_DAYS}-day lifecycle applied."
 
-echo "==> 4/6 Ensuring the export service account exists"
+echo "==> 5/7 Ensuring the export service account exists"
 if gcloud iam service-accounts describe "$EXPORT_SA" --project "$PROJECT_ID" >/dev/null 2>&1; then
   echo "    Service account already exists."
 else
@@ -145,7 +181,7 @@ grant_with_retry() {
   "$@" >/dev/null
 }
 
-echo "==> 5/6 Granting the export SA exactly what it needs"
+echo "==> 6/7 Granting the export SA exactly what it needs"
 # datastore.importExportAdmin can start an export but cannot read document contents,
 # and objectCreator can write new objects but cannot read or delete existing ones. So a
 # compromise of this identity cannot exfiltrate the database and cannot destroy older
@@ -160,14 +196,27 @@ grant_with_retry gcloud storage buckets add-iam-policy-binding "gs://${BACKUP_BU
   --project="$PROJECT_ID"
 echo "    importExportAdmin + objectCreator granted (no read, no delete)."
 
-echo "==> 6/6 Ensuring the daily export job"
+echo "==> 7/7 Ensuring the daily export job"
 # Scheduler calls the Firestore REST API directly with an OAuth token rather than going
 # through a Cloud Function: fewer moving parts, nothing to deploy, and no second
 # codebase that can rot.
 #
-# The prefix is fixed and Firestore creates a timestamped folder beneath it per run
-# (Scheduler has no date templating of its own), so runs never overwrite each other and
-# the lifecycle rule ages whole exports out together.
+# ⚠️ KNOWN BROKEN, and the comment that used to sit here is why. It claimed "the prefix is
+# fixed and Firestore creates a timestamped folder beneath it per run, so runs never
+# overwrite each other". Firestore does no such thing: it writes straight into the prefix
+# given. So the first export succeeded, wrote `exports/exports.overall_export_metadata`,
+# and every run since has been rejected with 400 INVALID_ARGUMENT — a backup that ran once
+# and then failed forever, which is precisely the silent-decay case this file exists to
+# prevent. Confirmed against this project: one SUCCESSFUL export operation at the fixed
+# prefix, then 400s at 15:17 and 15:30 on 2026-07-30.
+#
+# Scheduler has no date templating, so the prefix has to be computed by something. The fix
+# is a small OIDC-authenticated endpoint on the app that mints `exports/<timestamp>` and
+# calls the export API — same shape as the notify/scorecard sweeps. Until that ships and
+# this job is repointed at it, **pause this job**: two failures a day teach an operator to
+# ignore A3, which costs more than the export it is failing to take.
+#   gcloud scheduler jobs pause firestore-daily-export --location ${FIRESTORE_REGION} --project ${PROJECT_ID}
+# The native schedules from step 3 cover the routine case in the meantime.
 EXPORT_URI="https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default):exportDocuments"
 EXPORT_BODY='{"outputUriPrefix":"gs://'"${BACKUP_BUCKET}"'/exports"}'
 
@@ -200,12 +249,20 @@ else
 fi
 
 echo ""
-echo "==> Done. PITR (7 days) + daily export to gs://${BACKUP_BUCKET} (${EXPORT_RETENTION_DAYS}-day retention)."
+echo "==> Done. Three layers, and they fail in different ways on purpose:"
+echo "      PITR              rewinds the live database, 7-day window"
+echo "      Native schedules  daily (7d) + weekly (14w), inside Firestore"
+echo "      GCS exports       ${EXPORT_RETENTION_DAYS}-day retention, different failure domain"
 echo ""
-echo "    Verify now, rather than trusting this output:"
-echo "      gcloud scheduler jobs run firestore-daily-export --location ${FIRESTORE_REGION} --project ${PROJECT_ID}"
-echo "      # wait a minute or two, then:"
-echo "      gcloud storage ls gs://${BACKUP_BUCKET}/exports/"
+echo "    ⚠️  The GCS export job is currently BROKEN — it exports to a fixed prefix and"
+echo "    Firestore rejects every run after the first. Pause it until the endpoint that"
+echo "    computes a per-run prefix ships, so it stops generating alerts you must ignore:"
+echo "      gcloud scheduler jobs pause firestore-daily-export --location ${FIRESTORE_REGION} --project ${PROJECT_ID}"
+echo ""
+echo "    Verify the native schedules now, rather than trusting this output:"
+echo "      gcloud firestore backups schedules list --database='"'"'(default)'"'"' --project ${PROJECT_ID}"
+echo "      # and, once a backup has been taken (up to 24h):"
+echo "      gcloud firestore backups list --location ${FIRESTORE_REGION} --project ${PROJECT_ID}"
 echo ""
 echo "    A backup nobody has restored is a hypothesis. Run the drill in"
 echo "    docs/runbooks/restore-firestore.md once, and record the date there."
