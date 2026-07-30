@@ -97,7 +97,9 @@ function createBackendStub() {
     },
     resume: async (brief) => {
       briefs.push(brief);
-      return { ref: 'task-2', workspace: 'copilot/x' };
+      // A different branch than dispatch's, because a revision round is a fresh
+      // workspace now: the game comes back from the store, not from the old branch.
+      return { ref: 'task-2', workspace: 'copilot/y' };
     },
     observe: async () => null,
     cancel: async () => ({ enforced: false }),
@@ -806,6 +808,41 @@ describe('submission routes', () => {
     // Learning the branch is not another agent session, and counting it as one would
     // inflate the per-build cost figures the ref list exists to support.
     expect(dispatch?.refs).toEqual(['task-1']);
+
+    await app.close();
+  });
+
+  it('deletes the spent workspace once a new round has one of its own', async () => {
+    // Branches are per-round and disposable: the game lives in the store, so a branch
+    // that has been superseded is litter in a repository people also read.
+    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { backend } = createBackendStub();
+    const cleanup = vi.fn(async () => {});
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: { ...backend, cleanup },
+      submissionTokenSecret: secret,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setDispatchWorkspace(job.issueNumber, 'copilot/old');
+
+    await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Make the parcels bigger and the asteroids slower.' },
+    });
+
+    // The stub's resume reports a different branch, which is the point: the old one is
+    // spent the moment the new round has its own.
+    expect(cleanup).toHaveBeenCalledWith(expect.objectContaining({ workspace: 'copilot/old' }));
 
     await app.close();
   });

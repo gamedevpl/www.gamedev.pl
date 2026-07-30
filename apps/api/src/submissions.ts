@@ -480,6 +480,13 @@ export async function registerSubmissionRoutes(
         ref: result.ref,
         workspace: result.workspace,
       });
+      // The previous workspace is spent the moment a new round has one of its own: the
+      // round that follows restores the game from the store rather than from a branch.
+      // Deleted after the dispatch succeeds, never before — a round that failed to
+      // start is a round whose old branch is still the most recent thing we have.
+      if (previous?.workspace && previous.workspace !== result.workspace) {
+        await releaseWorkspace(input.issueNumber, previous.workspace, input.log);
+      }
       const transition = record?.state
         ? planObservedStatusTransition(record.state, 'building', new Date(now()).toISOString(), 'creator')
         : null;
@@ -488,6 +495,26 @@ export async function registerSubmissionRoutes(
       // The creator's request is already queued on the build channel, so a failed
       // resume costs the round its head start, not the request itself.
       input.log.error({ err: error, issueNumber: input.issueNumber }, 'agent resume failed');
+    }
+  }
+
+  /**
+   * Drops a workspace the job is finished with.
+   *
+   * Best effort on purpose: the branch holds nothing authoritative — the game is in the
+   * store — so failing to delete it leaves litter, and treating litter as an error would
+   * fail a round that otherwise worked. Logged so the litter is countable.
+   */
+  async function releaseWorkspace(
+    issueNumber: number,
+    workspace: string,
+    log: { error: (context: object, message: string) => void },
+  ): Promise<void> {
+    if (!agentBackend?.cleanup) return;
+    try {
+      await agentBackend.cleanup({ ref: '', workspace });
+    } catch (error) {
+      log.error({ err: error, issueNumber, workspace }, 'could not delete a spent build workspace');
     }
   }
 
@@ -1384,11 +1411,10 @@ export async function registerSubmissionRoutes(
       }
 
       if (isNativeJobId(issueNumber)) {
-        // Nothing to close: there is no issue, and any pull request is workspace
-        // scaffolding the adapter tidies up. Cancellation is asked of the backend and
-        // its honesty is respected — Copilot has no cancel endpoint, so a live session
-        // keeps running and the guarantee we actually give the creator is that the job
-        // is terminal and whatever arrives afterwards is discarded.
+        // Nothing to close: there is no issue and no pull request. Cancellation is asked
+        // of the backend and its honesty is respected — Copilot has no cancel endpoint,
+        // so a live session keeps running and the guarantee we actually give the creator
+        // is that the job is terminal and whatever arrives afterwards is discarded.
         const ref = record.dispatch?.refs.at(-1);
         if (agentBackend && ref) {
           try {
@@ -1403,6 +1429,12 @@ export async function registerSubmissionRoutes(
           by: 'creator',
           reason: 'abandoned',
         });
+        // The job is terminal, so its workspace has no next round to serve. Deleted
+        // after the transition is recorded: a build nobody will ever resume must not
+        // keep a branch alive on the strength of a delete that might fail.
+        if (record.dispatch?.workspace) {
+          await releaseWorkspace(issueNumber, record.dispatch.workspace, request.log);
+        }
       } else {
         try {
           const linkedPr = await githubClient.findLinkedPR(issueNumber);

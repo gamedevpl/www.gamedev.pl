@@ -22,6 +22,7 @@ function stubGitHub(overrides: Partial<GitHubClient> = {}): GitHubClient {
     closeIssue: async () => {},
     closePullRequest: async () => {},
     ensureOpenPullRequest: async () => ({ number: 1 }),
+    deleteBranch: async () => {},
     getGameSources: async (): Promise<GameSources | null> => null,
     getGameMedia: async () => null,
     getCatalog: async (): Promise<CatalogGameEntry[]> => [],
