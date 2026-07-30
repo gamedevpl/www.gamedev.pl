@@ -128,6 +128,7 @@
         var boot = document.getElementById('boot');
         var btn = document.getElementById('boot-recover-btn');
         var text = document.getElementById('boot-recover-text');
+        var timer = null;
         if (!boot || !btn) return;
         if ((navigator.language || '').toLowerCase().indexOf('pl') === 0 && text) {
           text.textContent = 'Nadal się wczytuje — stuknij, aby odświeżyć.';
@@ -136,13 +137,32 @@
         btn.addEventListener('click', function () {
           location.reload();
         });
-        window.setTimeout(function () {
-          if (!boot.isConnected) return;
-          boot.classList.add('is-stuck');
-          boot.removeAttribute('aria-hidden');
-        }, 8000);
+        // One auto-reload if the module graph never replaces #root — covers the
+        // stuck-white case where hashed JS 404s and there is no React to recover.
+        // Guarded so a permanently broken shell does not loop forever.
+        try {
+          if (!sessionStorage.getItem('gamedev_boot_autoreload')) {
+            timer = window.setTimeout(function () {
+              if (!boot.isConnected) return;
+              sessionStorage.setItem('gamedev_boot_autoreload', '1');
+              location.reload();
+            }, 4000);
+          } else {
+            timer = window.setTimeout(function () {
+              if (!boot.isConnected) return;
+              boot.classList.add('is-stuck');
+              boot.removeAttribute('aria-hidden');
+            }, 2500);
+          }
+        } catch (e) {
+          timer = window.setTimeout(function () {
+            if (!boot.isConnected) return;
+            boot.classList.add('is-stuck');
+            boot.removeAttribute('aria-hidden');
+          }, 8000);
+        }
         window.__gamedevBooted = function () {
-          /* main.tsx calls this; the timeout becomes a no-op once #root is replaced */
+          if (timer) window.clearTimeout(timer);
         };
       })();
     </script>

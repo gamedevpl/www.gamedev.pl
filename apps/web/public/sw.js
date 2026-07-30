@@ -68,7 +68,14 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
       const names = await caches.keys();
-      const stale = names.filter((name) => name !== CACHE);
+      // Keep the previous shell cache until clients have moved on. Deleting it
+      // immediately under a page that still has the old index.html (clients.claim
+      // mid-session, or a cold open racing an update) is the stuck-white path:
+      // HTML references hashed assets that are gone from Cache Storage and from
+      // the origin. One prior revision is enough for that race to heal.
+      const priorShell = names.filter((name) => name.startsWith(CACHE_PREFIX) && name !== CACHE).sort();
+      const keepPrior = priorShell.slice(-1);
+      const stale = names.filter((name) => name !== CACHE && !keepPrior.includes(name));
       await Promise.all(stale.map((name) => caches.delete(name)));
       await self.clients.claim();
 
@@ -76,7 +83,7 @@ self.addEventListener('activate', (event) => {
       // the upgrade from the old offline-only worker, whose cache used a different name —
       // has nothing to announce, and offering someone a reload of the page they just
       // opened is a bug that looks like a feature.
-      if (stale.some((name) => name.startsWith(CACHE_PREFIX))) {
+      if (priorShell.length > 0) {
         const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
         for (const client of clients) {
           client.postMessage({ type: 'shell-updated', revision: BUILD.revision });
@@ -139,11 +146,24 @@ self.addEventListener('fetch', (event) => {
   // is exact by construction and there is nothing to revalidate.
   if (hasPrecache && BUILD.shell.includes(url.pathname)) {
     event.respondWith(precachedOrNetwork(request, url.pathname));
+    return;
+  }
+
+  // A page still holding a prior index.html may ask for hashes that are not in
+  // this BUILD.shell. Serve them from the kept prior cache when possible; otherwise
+  // heal — returning a raw 404 here is the permanent white screen.
+  if (url.pathname.startsWith('/assets/')) {
+    event.respondWith(legacyAssetOrHeal(request, url.pathname));
   }
 });
 
 /**
- * Every navigation is answered with the precached shell, whatever the path.
+ * Every navigation is answered with the precached shell, whatever the path —
+ * but only when that shell can still boot. iOS Cache Storage is free to evict
+ * the large hashed JS while leaving the small index.html; serving that HTML is
+ * a permanent white screen. Integrity-check the JS/CSS entries before answering
+ * from cache; if any are gone, fall through to the network (and drop the holey
+ * cache so the next install can refill it).
  *
  * The app routes on `location.pathname` after boot, so deep links still land where they
  * should. The one thing this gives up is the server's 200-vs-404 distinction for unknown
@@ -152,21 +172,40 @@ self.addEventListener('fetch', (event) => {
  * tools, which never run a service worker, so the trade buys a sub-second cold start for
  * real visitors at no cost to the audience the status code was written for.
  */
+async function shellIntact(cacheName) {
+  const critical = BUILD.shell.filter((url) => /\.(js|css)$/.test(url));
+  if (critical.length === 0) return true;
+  const hits = await Promise.all(critical.map((url) => caches.match(url, { cacheName })));
+  return hits.every(Boolean);
+}
+
 async function navigationResponse(request) {
   if (hasPrecache) {
-    const shell = await caches.match(SHELL_URL, { cacheName: CACHE });
-    // `redirected` is belt and braces on top of `putDocument`: answering a navigation
-    // with a redirected response throws, and a throw here is a browser error page in
-    // place of the whole app. Falling through to the network is always survivable;
-    // this is not, so it is checked at both ends.
-    if (shell && !shell.redirected) return shell;
+    const intact = await shellIntact(CACHE);
+    if (intact) {
+      const shell = await caches.match(SHELL_URL, { cacheName: CACHE });
+      // `redirected` is belt and braces on top of `putDocument`: answering a navigation
+      // with a redirected response throws, and a throw here is a browser error page in
+      // place of the whole app. Falling through to the network is always survivable;
+      // this is not, so it is checked at both ends.
+      if (shell && !shell.redirected) return shell;
+    } else {
+      // Holey shell: do not keep serving HTML that cannot boot.
+      await caches.delete(CACHE);
+    }
   }
 
   try {
     return await fetch(request);
   } catch {
-    const offline = await caches.match(OFFLINE_URL, { cacheName: CACHE });
-    return offline && !offline.redirected ? offline : Response.error();
+    // Prefer any surviving prior shell's offline page over Response.error().
+    const names = await caches.keys();
+    const candidates = [CACHE, ...names.filter((name) => name.startsWith(CACHE_PREFIX))];
+    for (const name of candidates) {
+      const offline = await caches.match(OFFLINE_URL, { cacheName: name });
+      if (offline && !offline.redirected) return offline;
+    }
+    return Response.error();
   }
 }
 
@@ -174,26 +213,76 @@ async function precachedOrNetwork(request, pathname) {
   const cached = await caches.match(pathname, { cacheName: CACHE });
   if (cached) return cached;
 
+  // Also try the kept prior revision — covers the activate race where claim
+  // already flipped the controller but the page still asks for old hashes.
+  const names = await caches.keys();
+  const prior = names
+    .filter((name) => name.startsWith(CACHE_PREFIX) && name !== CACHE)
+    .sort()
+    .slice(-1);
+  for (const name of prior) {
+    const hit = await caches.match(pathname, { cacheName: name });
+    if (hit) return hit;
+  }
+
   // Cache miss on a hashed shell file: usually a deploy race or iOS Cache Storage
   // eviction. Fetching from the network is fine when the file still exists; a 404
-  // is the white-screen case (HTML without its JS). Ask open pages to reload once
-  // onto whatever worker/update is available rather than sit on an empty #root.
+  // is the white-screen case (HTML without its JS). Reload clients via the SW
+  // itself — postMessage is useless when the page JS never loaded.
   try {
     const response = await fetch(request);
     if (!response.ok) {
-      void suggestReloadAfterShellMiss();
+      void healBrokenShell();
     }
     return response;
   } catch (error) {
-    void suggestReloadAfterShellMiss();
+    void healBrokenShell();
     throw error;
   }
 }
 
-async function suggestReloadAfterShellMiss() {
+let healingShell = false;
+
+async function healBrokenShell() {
+  // One heal per activation window — a page asking for several missing hashes
+  // must not chain navigates.
+  if (healingShell) return;
+  healingShell = true;
+  await caches.delete(CACHE);
   const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
   for (const client of clients) {
+    // WindowClient.navigate forces a fresh navigation without needing page JS.
+    if (typeof client.navigate === 'function') {
+      try {
+        await client.navigate(client.url || '/');
+        continue;
+      } catch {
+        /* fall through to postMessage for browsers without navigate */
+      }
+    }
     client.postMessage({ type: 'shell-asset-miss', revision: BUILD.revision });
+  }
+}
+
+async function legacyAssetOrHeal(request, pathname) {
+  const names = await caches.keys();
+  const shellCaches = names
+    .filter((name) => name.startsWith(CACHE_PREFIX))
+    .sort()
+    .reverse();
+  for (const name of shellCaches) {
+    const hit = await caches.match(pathname, { cacheName: name });
+    if (hit) return hit;
+  }
+  try {
+    const response = await fetch(request);
+    if (!response.ok) {
+      void healBrokenShell();
+    }
+    return response;
+  } catch (error) {
+    void healBrokenShell();
+    throw error;
   }
 }
 

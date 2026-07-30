@@ -19,5 +19,6 @@ describe('index.html boot paint', () => {
     expect(indexHtml).toMatch(/boot-recover-btn/);
     expect(indexHtml).toMatch(/__gamedevBooted/);
     expect(indexHtml).toMatch(/location\.reload\(\)/);
+    expect(indexHtml).toMatch(/gamedev_boot_autoreload/);
   });
 });
