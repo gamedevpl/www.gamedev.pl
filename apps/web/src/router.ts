@@ -181,12 +181,12 @@ export type NavUpTarget = {
 
 export function navUpTarget(route: AppRoute): NavUpTarget | null {
   switch (route.view) {
-    case 'home':
-    case 'join':
-    case 'play':
     // Draft opens GameTheater inside DraftView without App `stageContent`, so the
     // header would otherwise keep an Up control behind the aria-modal. Close /
     // the error-page home link own escape here, same as `/play`.
+    case 'home':
+    case 'join':
+    case 'play':
     case 'draft':
       return null;
     case 'studio':
