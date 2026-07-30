@@ -55,6 +55,7 @@ import {
 } from './submission-status.js';
 import { InvalidTokenError, mintToken, verifyToken } from './submission-token.js';
 import { createTranslatorFromEnv, normalizeLocale, type Translator } from './translate.js';
+import { logModerationRejection } from './moderation-metrics.js';
 
 const CreateSubmissionRequestSchema = z.object({
   title: z.string().trim().min(3, 'title must be at least 3 characters').max(80, 'title must be at most 80 characters'),
@@ -1089,6 +1090,11 @@ export async function registerSubmissionRoutes(
     // 4. Content moderation, before any quota is spent (docs/content-safety-plan.md Layer 1 & 1b)
     const moderation = await contentChecker.checkFields([parsed.data.title, parsed.data.concept]);
     if (!moderation.allowed) {
+      logModerationRejection(request.log, {
+        surface: 'submission',
+        uid: request.user?.uid,
+        category: moderation.category,
+      });
       return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
     }
 
@@ -1550,6 +1556,11 @@ export async function registerSubmissionRoutes(
       // 1. Content moderation before spending any quota / GitHub write.
       const moderation = await contentChecker.checkFields([parsed.data.feedback]);
       if (!moderation.allowed) {
+        logModerationRejection(request.log, {
+          surface: 'creator_feedback',
+          uid: request.user?.uid,
+          category: moderation.category,
+        });
         return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
       }
 
@@ -1727,6 +1738,11 @@ export async function registerSubmissionRoutes(
 
       const moderation = await contentChecker.checkFields([parsed.data.feedback]);
       if (!moderation.allowed) {
+        logModerationRejection(request.log, {
+          surface: 'creator_feedback',
+          uid: request.user?.uid,
+          category: moderation.category,
+        });
         return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
       }
 

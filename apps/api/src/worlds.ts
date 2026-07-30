@@ -10,6 +10,7 @@ import {
   type WorldSchema,
 } from './world-schema.js';
 import type { WorldSchemaSource } from './world-source.js';
+import { logModerationRejection } from './moderation-metrics.js';
 
 /**
  * Shared asynchronous worlds (docs/persistent-world-plan.md, phase P2).
@@ -155,7 +156,17 @@ export async function registerWorldRoutes(app: FastifyInstance, options: WorldRo
     if (validated.texts.length > 0) {
       const verdict = await contentChecker.checkFields(validated.texts);
       if (!verdict.allowed) {
-        return reply.status(422).send({ error: 'that text was rejected', category: verdict.category });
+        logModerationRejection(request.log, {
+          surface: 'world_text',
+          uid: request.user?.uid,
+          category: verdict.category,
+        });
+        // `?? 'other'` for the same reason the log line normalizes: `category` is optional
+        // on the verdict, and JSON drops an undefined value rather than sending null — so a
+        // checker that refused without classifying would produce a 422 with no category at
+        // all, and the client's `errors.contentRejected.<category>` lookup would resolve to
+        // nothing. Every other moderated route already normalized here; this one did not.
+        return reply.status(422).send({ error: 'that text was rejected', category: verdict.category ?? 'other' });
       }
     }
 

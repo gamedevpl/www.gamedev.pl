@@ -1,6 +1,9 @@
 # Content safety: layered safeguards for prompts and generated games
 
-> Status: 🚧 **Layer 1 is live; the later layers are still design** (verified 2026-07-26).
+> Status: 🚧 **Layers 1, 1b, 4 and 5 are live and observed; slice 2 is done** (2026-07-30).
+> Rejections are now counted and alertable — until then every layer here had been built and
+> then never watched, so a deny-list that had stopped being called would have looked
+> identical to one finding nothing. See Rollout at the foot of this file.
 > Submitted specs are moderated before an agent ever sees them:
 > [`createDefaultContentChecker`](../apps/api/src/moderation.ts) returns the Vertex-backed
 > checker whenever `NODE_ENV=production`, so moderation is on in prod by construction rather
@@ -89,9 +92,13 @@ and to the prompt in `POST /api/generate-game`, BEFORE quota is consumed:
 
 ## Layer 5 — Post-publication
 
-- **Report mechanism** (later, when public): a "report this game" button on the
-  play page → creates an issue in the games repo with slug + reporter uid; owner
-  unpublishes by reverting the merge (catalog updates within its 60s TTL).
+- **Report mechanism ✅ live**, though not in the shape this bullet proposed — see the
+  Rollout note on slice 2 for why an issue was the wrong medium. It is a DSA art. 16
+  `mailto:` on the play page ([`ReportGameButton.tsx`](../apps/web/src/ReportGameButton.tsx)),
+  pre-filled with what a notice must contain to oblige us to act. Handling a report is
+  [`moderation-burst.md`](./runbooks/moderation-burst.md) Part 2; unpublishing is still a
+  merge plus a green bake, and **verifying the bake is the step that actually removes the
+  game** — published play is served from the snapshot, so a merge alone leaves it playable.
 - **Kill switch that already exists**: removing the game dir from `main` (or
   flipping SPEC status) drops it from the catalog server-side within 60s.
 
@@ -132,5 +139,34 @@ classifier quality ever needs it.
    validate.mjs extension; L2 instruction hardening. All verifiable offline.
 2. **Slice 1b (with slice 1 or immediately after)**: Vertex checker behind the seam
    (Layer 1b above) + `setup-gcp.sh` provisioning.
-3. **Slice 2 (with public launch)**: report button (L5), moderation metrics in logs
-   (count by category/uid) so the owner sees attempted abuse.
+3. **Slice 2 ✅ done (2026-07-30)**, and it turned out both halves were nearly there:
+   - **Report button (L5) — already shipped**, and not as this plan imagined it. It is a
+     DSA art. 16 `mailto:` pre-filled with the four things a notice must contain
+     ([`ReportGameButton.tsx`](../apps/web/src/ReportGameButton.tsx)), rather than the
+     games-repo issue sketched in Layer 5 above. Filing an issue was the wrong medium
+     twice over: publication authority is moving into a registry we own (so a takedown
+     becomes a flag flip, not a revert), and a legal notice needs a reply to the reporter,
+     which an issue does not give. **The remaining gap is deliberate**: art. 16 wants a
+     confirmation of receipt and art. 17 a statement of reasons, neither of which a mailto
+     can send. The in-product form that fixes both is Phase 2 of the legal-compliance plan
+     in the private ops repo, sequenced _after_ counsel's review, because that copy is
+     legally operative text rather than UI wording. Building it first would mean writing it
+     twice.
+   - **Moderation metrics — built.** Every rejection now emits one structured line from
+     [`moderation-metrics.ts`](../apps/api/src/moderation-metrics.ts), carrying surface,
+     category and uid, and never the rejected text. A log-based metric backs alert **A14**
+     ([`moderation-burst.md`](./runbooks/moderation-burst.md)).
+
+   Two decisions inside the metrics worth not relitigating. **The text is not logged**: it is
+   the abusive content itself, and writing it into Cloud Logging would give user-authored
+   abuse material a second home with its own retention and no erasure path, in service of a
+   feature whose purpose is keeping it out. The category is what makes a rejection
+   actionable; the wording never was. **The uid is logged**, because concentration is the
+   signal — one rejection is someone phrasing badly, twelve from one uid in a minute is
+   somebody finding the wall, and a bare count cannot tell those apart.
+
+   The alert's interesting case is the inverse of its name. A burst from few uids means the
+   deny-list is _working_ and can wait; **many uids in one category means it is rejecting
+   legitimate creators**, which is a user-facing outage that presents as "the site is
+   broken" and never as an error. A14's threshold is set well above organic traffic for the
+   same reason: an alert on the feature succeeding is one the operator learns to delete.

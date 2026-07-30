@@ -295,6 +295,23 @@ ensure_log_metric firestore_export_succeeded \
   'Successful attempts of the daily Firestore export job. Backs alert A4.' \
   'resource.type="cloud_scheduler_job" AND resource.labels.job_id="firestore-daily-export" AND jsonPayload."@type"="type.googleapis.com/google.cloud.scheduler.logging.AttemptFinished" AND httpRequest.status=200'
 
+# Moderation rejections (docs/content-safety-plan.md slice 2). Every content-safety layer was
+# built and then never observed: a rejection returned a 422 and evaporated, so nobody could
+# tell a deny-list that was working from one that had stopped being called.
+#
+# Scoped to the app service, not the project. The relay and the zone host run the same image
+# and moderate nothing, but a project-wide filter would include them by default — and a
+# filter whose scope is wider than its meaning is how a metric quietly starts counting
+# something else.
+#
+# The message string is the contract with apps/api/src/moderation-metrics.ts, asserted from
+# both sides by moderation-metrics.test.ts. A filter that matches nothing yields a metric
+# that is always zero, which reads exactly like "no abuse" — the one wrong answer this whole
+# metric exists to avoid giving.
+ensure_log_metric moderation_rejections \
+  'Content rejected by moderation, any surface. Backs alert A14.' \
+  "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${PRIMARY_SERVICE}\" AND jsonPayload.msg=\"moderation rejected\""
+
 # A3 — a scheduled job is failing. notify-sweep already runs every 2 minutes against auth,
 # Firestore and the app in one request, which makes it a synthetic monitor we are getting
 # for free; all that was missing was anyone listening. Its failure is also a real
@@ -454,6 +471,57 @@ cat > "${POLICY_DIR}/a7.json" <<EOF
 }
 EOF
 
+# A14 — somebody is probing the content walls.
+#
+# The threshold is set for a burst, not a baseline. Rejections are a normal part of a working
+# system: a creator phrases something clumsily, the deny-list catches it, they rephrase. An
+# alert on any rejection would be an alert on the feature succeeding, and would train the
+# operator to delete these emails — which is how the previous alert catalog became worthless.
+#
+# What is not normal is volume. Sixty rejections in ten minutes is nobody's afternoon; it is
+# one person walking a list, or an automated attempt. The number is deliberately far above
+# organic traffic rather than tuned to it: at this scale a tight threshold would fire on a
+# single frustrated creator, and the cost of missing the first ten minutes of a probe is
+# nothing compared to the cost of an alert nobody reads.
+#
+# The service is named here as well as on the metric, which looks redundant and is not: the
+# two can drift. A metric is editable in the Console, and the next person to widen its filter
+# — chasing a log line the relay or the zone host emits, say — would silently turn this into
+# a project-wide alert without touching this file. A2 and A7 already carry the same
+# constraint on their own metrics for the same reason. Belt and braces cost one clause.
+#
+# The uid is on every log entry but is not a label here. Concentration is a *diagnosis* step,
+# not a threshold: "is this one uid or forty" is the first question after the email arrives,
+# and it is one Logs Explorer query (printed at the end of this script) rather than a metric
+# label whose cardinality would grow with the user base.
+cat > "${POLICY_DIR}/a14.json" <<EOF
+{
+  "displayName": "A14 moderation rejection burst",
+  "combiner": "OR",
+  "conditions": [{
+    "displayName": "many rejections in a short window",
+    "conditionThreshold": {
+      "filter": "metric.type=\"logging.googleapis.com/user/moderation_rejections\" AND resource.type=\"cloud_run_revision\" AND resource.label.\"service_name\"=\"${PRIMARY_SERVICE}\"",
+      "aggregations": [{
+        "alignmentPeriod": "600s",
+        "perSeriesAligner": "ALIGN_SUM",
+        "crossSeriesReducer": "REDUCE_SUM"
+      }],
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 60,
+      "duration": "0s",
+      "trigger": { "count": 1 }
+    }
+  }],
+  "notificationChannels": ["${CHANNEL_NAME}"],
+  "alertStrategy": { "autoClose": "86400s" },
+  "documentation": {
+    "content": "Content moderation is rejecting far more than organic traffic explains — someone is probing the walls, or a checker regression is rejecting valid input. Both matter and they look identical from here, so check which: Logs Explorer, jsonPayload.msg=\"moderation rejected\", group by jsonPayload.moderation.uid and .category. One uid across many categories is a person testing limits; many uids in one category is a false-positive regression in the deny-list. Triage: docs/runbooks/moderation-burst.md",
+    "mimeType": "text/markdown"
+  }
+}
+EOF
+
 fi
 
 for FILE in "${POLICY_DIR}"/*.json; do
@@ -547,3 +615,15 @@ echo "        'resource.labels.service_name=\"${WORLD_SERVICE}\" AND jsonPayload
 echo "        --project ${PROJECT_ID} --limit 5 --freshness 30d"
 echo "      # No rows and no known incident is inconclusive; drop the jsonPayload.msg"
 echo "      # clause and look at how a real log line from that service is shaped."
+echo ""
+echo "    A14 (moderation) is the same shape and worth the same check — and unlike A6 you"
+echo "    can generate a matching entry on demand: submit a spec that trips the deny-list"
+echo "    and expect a 422, then look for it."
+echo "      gcloud logging read \\"
+echo "        'resource.labels.service_name=\"${PRIMARY_SERVICE}\" AND jsonPayload.msg=\"moderation rejected\"' \\"
+echo "        --project ${PROJECT_ID} --limit 20 --freshness 7d"
+echo ""
+echo "    That same query is the standing answer to 'is anyone probing us'. Group by"
+echo "    jsonPayload.moderation.uid and .category: one uid across many categories is a"
+echo "    person testing the walls; many uids in one category is the deny-list rejecting"
+echo "    something legitimate, which is the more expensive of the two to leave alone."
