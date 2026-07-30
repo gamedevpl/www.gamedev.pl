@@ -258,5 +258,23 @@ done
 # games — versioned history is the rollback path and the creator's own record of work.
 echo "    IAM applied (deployer: admin, Cloud Run: read+create). No lifecycle: these are originals."
 
+# The runtime starts the gate itself when a game is delivered (gate-trigger.ts). Without
+# this a candidate is stored and never verified, so it can never publish and the upload
+# path ends in a queue nobody drains.
+#
+# builds.editor rather than a narrower role because submitting a build is what it does;
+# there is no "submit only" role. serviceAccountUser is the second half: Cloud Build runs
+# as a service account, and starting a build means acting as one.
+echo "==> Letting the runtime start gate builds"
+for role in roles/cloudbuild.builds.editor roles/iam.serviceAccountUser; do
+  gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="serviceAccount:${RUN_SA}" \
+    --role="$role" \
+    --condition=None \
+    >/dev/null
+done
+gcloud services enable cloudbuild.googleapis.com --project="$PROJECT_ID" >/dev/null
+echo "    Cloud Run may submit gate builds."
+
 echo ""
 echo "==> Done. Firestore database, snapshot bucket, IAM roles (datastore.user, aiplatform.user), session-secret, telemetry TTL, and the scorecards read index configured for project ${PROJECT_ID}."

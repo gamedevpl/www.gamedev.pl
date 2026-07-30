@@ -168,6 +168,11 @@ if [ -n "${GAMES_SNAPSHOT_BUCKET:-}" ]; then
 fi
 if [ -n "${GAMES_STORE_BUCKET:-}" ]; then
   ENV_VARS="${ENV_VARS}|GAMES_STORE_BUCKET=${GAMES_STORE_BUCKET}"
+  # Which project runs the gate when a game is delivered (gate-trigger.ts). Set
+  # explicitly because Cloud Run does not populate GOOGLE_CLOUD_PROJECT the way App
+  # Engine did, and an unset project means the gate silently never starts — deliveries
+  # would pile up stored and unverified with nothing in the logs saying why.
+  ENV_VARS="${ENV_VARS}|GATE_BUILD_PROJECT=${PROJECT_ID}"
 fi
 if [ -n "${CANONICAL_HOST:-}" ]; then
   ENV_VARS="${ENV_VARS}|CANONICAL_HOST=${CANONICAL_HOST}"

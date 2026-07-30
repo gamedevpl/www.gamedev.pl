@@ -1,0 +1,173 @@
+// Starts the gate when a game is delivered.
+//
+// This is the link that makes upload delivery actually work. Sources arriving over the
+// build channel are stored as an immutable candidate version and are, at that moment,
+// unverified — and a version nobody checks is a version nobody can publish. Something
+// has to notice the delivery and run the gate against it. This is that something.
+//
+// It submits a build to Cloud Build directly rather than firing a preconfigured trigger.
+// A trigger would be a second place the gate is defined — its steps in
+// `cloudbuild-gate.yaml`, its wiring in a console someone clicked once — and the two
+// would drift the first time a step changed. Submitting the build inline keeps the whole
+// definition in this repository, reviewable in a diff, and means standing up a new
+// environment needs no manual console step at all.
+//
+// Deliberately best effort: a gate that cannot start must not fail the delivery. The
+// sources are already stored, the agent has finished its work, and answering it with an
+// error would make it upload everything again — storing a duplicate version of a game
+// that was received perfectly well. An unstarted gate leaves a candidate sitting
+// unverified, which is the safe direction: it cannot publish, and it can be re-run.
+// It is logged loudly because "quietly never verified" is the failure worth catching.
+
+import { GoogleAuth } from 'google-auth-library';
+
+export interface GateTriggerOptions {
+  /** GCP project that runs the gate builds. */
+  project: string;
+  /** The games store bucket the gate reads the candidate from. */
+  bucket: string;
+  /** Platform repo clone URL — the gate runner itself lives there. */
+  platformRepo?: string;
+  /** Ref of the platform repo to run the gate from. */
+  platformRef?: string;
+  /** Games repo the harness is cloned from. */
+  gamesRepo?: string;
+  /** Secret Manager resource holding a contents:read PAT on the games repo. */
+  gamesTokenSecret?: string;
+  fetchImpl?: typeof fetch;
+  getAccessToken?: () => Promise<string>;
+}
+
+export interface GateTriggerInput {
+  slug: string;
+  version: string;
+}
+
+const DEFAULTS = {
+  platformRepo: 'https://github.com/gamedevpl/www.gamedev.pl.git',
+  platformRef: 'master',
+  gamesRepo: 'gamedevpl/www.gamedev.pl-games',
+  gamesTokenSecret: 'github-token',
+};
+
+/**
+ * The build the gate runs in.
+ *
+ * Kept in step with `infra/cloudbuild-gate.yaml`, which stays as the hand-runnable
+ * version for when someone needs to check one candidate without going through delivery.
+ * The reasoning behind the machine type, the timeout and the choice of credential is
+ * documented there and applies identically here.
+ */
+function buildSpec(
+  options: Required<Omit<GateTriggerOptions, 'fetchImpl' | 'getAccessToken'>>,
+  input: GateTriggerInput,
+) {
+  return {
+    steps: [
+      {
+        id: 'checkout-platform',
+        name: 'gcr.io/cloud-builders/git',
+        args: ['clone', '--depth', '1', '--branch', options.platformRef, options.platformRepo, '/workspace/platform'],
+      },
+      {
+        id: 'run-gate',
+        name: 'node:22',
+        entrypoint: 'bash',
+        secretEnv: ['GAMES_REPO_TOKEN'],
+        env: [`GAMES_STORE_BUCKET=${options.bucket}`, `GAMES_REPO=${options.gamesRepo}`, 'PUPPETEER_SKIP_DOWNLOAD=1'],
+        args: [
+          '-c',
+          [
+            'set -euo pipefail',
+            'apt-get update -qq',
+            'apt-get install -y -qq --no-install-recommends ffmpeg chromium git ca-certificates',
+            'cd /workspace/platform',
+            'npm ci --no-audit --no-fund',
+            // Single-quoted so a slug or version can never break out of the command.
+            // Both are already validated upstream — the slug against SLUG_PATTERN, the
+            // version because we generated it — and this is the belt to that braces.
+            `npm run gate:run -w @gamedevpl/api -- --slug '${input.slug}' --version '${input.version}'`,
+          ].join('\n'),
+        ],
+      },
+    ],
+    availableSecrets: {
+      secretManager: [
+        {
+          versionName: `projects/${options.project}/secrets/${options.gamesTokenSecret}/versions/latest`,
+          env: 'GAMES_REPO_TOKEN',
+        },
+      ],
+    },
+    options: { logging: 'CLOUD_LOGGING_ONLY', machineType: 'E2_HIGHCPU_8' },
+    timeout: '3600s',
+    // Searchable in the Cloud Build history: "show me every gate run for this game".
+    tags: ['gate', `slug-${input.slug}`],
+  };
+}
+
+/**
+ * Builds the delivery hook. Returns null when the environment has no gate project
+ * configured, so local development and tests get delivery without a build backend
+ * rather than an error they cannot act on.
+ */
+export function createCloudBuildGateTrigger(
+  options: GateTriggerOptions | null,
+  log?: { error: (details: unknown, message: string) => void; info: (details: unknown, message: string) => void },
+): ((input: GateTriggerInput) => Promise<void>) | undefined {
+  if (!options?.project || !options.bucket) return undefined;
+
+  const resolved = {
+    project: options.project,
+    bucket: options.bucket,
+    platformRepo: options.platformRepo ?? DEFAULTS.platformRepo,
+    platformRef: options.platformRef ?? DEFAULTS.platformRef,
+    gamesRepo: options.gamesRepo ?? DEFAULTS.gamesRepo,
+    gamesTokenSecret: options.gamesTokenSecret ?? DEFAULTS.gamesTokenSecret,
+  };
+
+  const fetchImpl = options.fetchImpl ?? fetch;
+  let auth: GoogleAuth | null = null;
+  const getAccessToken =
+    options.getAccessToken ??
+    (async () => {
+      auth ??= new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
+      const token = await auth.getAccessToken();
+      if (!token) throw new Error('could not obtain a Google access token to start the gate');
+      return token;
+    });
+
+  return async (input: GateTriggerInput) => {
+    try {
+      const response = await fetchImpl(`https://cloudbuild.googleapis.com/v1/projects/${resolved.project}/builds`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${await getAccessToken()}`, 'content-type': 'application/json' },
+        body: JSON.stringify(buildSpec(resolved, input)),
+      });
+      if (!response.ok) {
+        throw new Error(
+          `cloud build refused the gate run: ${response.status} ${await response.text().catch(() => '')}`,
+        );
+      }
+      log?.info({ slug: input.slug, version: input.version }, 'gate started');
+    } catch (error) {
+      // Loud, because the consequence is silent: the candidate is stored, the agent
+      // thinks it is done, and nothing will ever verify it unless someone notices this.
+      log?.error({ err: error, slug: input.slug, version: input.version }, 'could not start the gate for a delivery');
+    }
+  };
+}
+
+/** Reads the gate configuration from the environment. */
+export function gateTriggerOptionsFromEnv(): GateTriggerOptions | null {
+  const project = process.env.GATE_BUILD_PROJECT?.trim() || process.env.GOOGLE_CLOUD_PROJECT?.trim();
+  const bucket = process.env.GAMES_STORE_BUCKET?.trim();
+  if (!project || !bucket) return null;
+  return {
+    project,
+    bucket,
+    ...(process.env.GATE_PLATFORM_REPO?.trim() ? { platformRepo: process.env.GATE_PLATFORM_REPO.trim() } : {}),
+    ...(process.env.GATE_PLATFORM_REF?.trim() ? { platformRef: process.env.GATE_PLATFORM_REF.trim() } : {}),
+    ...(process.env.GAMES_REPO?.trim() ? { gamesRepo: process.env.GAMES_REPO.trim() } : {}),
+  };
+}
