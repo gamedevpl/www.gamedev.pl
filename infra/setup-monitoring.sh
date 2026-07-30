@@ -24,6 +24,25 @@
 # Idempotent: policies are matched by display name and updated rather than duplicated.
 set -euo pipefail
 
+# gcloud asks for confirmation on stderr — including "you do not have this command group
+# installed, continue?" for alpha/beta. A script that redirects stderr then waits on stdin
+# forever, showing nothing: this script hung on step 2 for exactly that reason. Prompts off
+# means every gcloud call below either works or fails, and never waits.
+export CLOUDSDK_CORE_DISABLE_PROMPTS=1
+
+# Neither command group used here is GA — notification channels live in `gcloud beta`,
+# alert policies in `gcloud alpha`. Probe both up front so a missing component is one clear
+# line in the first second rather than a mystery several steps in. Probing beats parsing
+# `gcloud components list`, which is disabled entirely on package-manager installs.
+for GROUP in alpha beta; do
+  if ! gcloud "$GROUP" monitoring --help >/dev/null 2>&1; then
+    echo "Error: the gcloud '${GROUP}' component is required but not available." >&2
+    echo "  gcloud components install alpha beta" >&2
+    echo "If gcloud came from apt/yum, install its matching -alpha and -beta packages." >&2
+    exit 1
+  fi
+done
+
 PROJECT_ID="${PROJECT_ID:-gamedevpl}"
 REGION="${REGION:-europe-west1}"
 SERVICE="${SERVICE:-gamedev-app}"
@@ -39,7 +58,7 @@ echo "==> 2/4 Ensuring the email notification channel"
 CHANNEL_NAME="$(gcloud beta monitoring channels list \
   --project "$PROJECT_ID" \
   --filter="type=email AND labels.email_address=${ALERT_EMAIL}" \
-  --format='value(name)' 2>/dev/null | head -n 1)"
+  --format='value(name)' | head -n 1)"
 if [ -z "$CHANNEL_NAME" ]; then
   CHANNEL_NAME="$(gcloud beta monitoring channels create \
     --project "$PROJECT_ID" \
@@ -60,7 +79,7 @@ echo "==> 3/4 Ensuring the uptime check on https://${HOST}/api/health"
 UPTIME_NAME="$(gcloud monitoring uptime list-configs \
   --project "$PROJECT_ID" \
   --filter="displayName='gamedev-app health'" \
-  --format='value(name)' 2>/dev/null | head -n 1)"
+  --format='value(name)' | head -n 1)"
 if [ -z "$UPTIME_NAME" ]; then
   gcloud monitoring uptime create 'gamedev-app health' \
     --project "$PROJECT_ID" \
@@ -294,7 +313,7 @@ for FILE in "${POLICY_DIR}"/*.json; do
   EXISTING="$(gcloud alpha monitoring policies list \
     --project "$PROJECT_ID" \
     --filter="displayName='${DISPLAY}'" \
-    --format='value(name)' 2>/dev/null | head -n 1)"
+    --format='value(name)' | head -n 1)"
   # update replaces the policy definition wholesale, so every field the policy needs has
   # to be in the file — including notificationChannels. Omitting it there would leave the
   # policies present and visibly "enabled" while silently emailing nobody, which is the
