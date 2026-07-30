@@ -673,6 +673,182 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  it('echoes the creator’s revisions back from the store, without the playtest context', async () => {
+    // A native job has no PR conversation to re-read a revision from, so the store copy
+    // is the durable record. The page used to show a sent revision from its own local
+    // state only — one reload and the creator's request looked like it never happened.
+    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { backend } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.issueNumber, secret);
+
+    await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/feedback`,
+      headers: authHeaders,
+      payload: {
+        feedback: 'Make the parcels bigger and the asteroids slower.',
+        context: { instrumentation: { playSeconds: 30 } },
+      },
+    });
+
+    const status = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+
+    expect(status.statusCode).toBe(200);
+    const revisions = status.json().progress?.revisions;
+    expect(revisions).toHaveLength(1);
+    // The creator's words only: the instrumentation block stapled on for the agent is
+    // not something they wrote, so it must not be echoed back as if they did.
+    expect(revisions[0].text).toBe('Make the parcels bigger and the asteroids slower.');
+    expect(revisions[0].createdAt).toBeTruthy();
+
+    await app.close();
+  });
+
+  it('asks the backend about a quiet job and names the dead session instead of spinning forever', async () => {
+    // A session that crashes, times out, or is killed for quota reports nothing on the
+    // build channel — the channel only ever carries good news. Without this, the page
+    // says "building" until the end of time and the creator has nothing to act on.
+    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { backend } = createBackendStub();
+    const observe = vi.fn(async (_ref: string, opts: { hasCandidate: boolean }) => ({
+      state: 'failed' as const,
+      hasCandidate: opts.hasCandidate,
+    }));
+    const clock = { t: Date.now() };
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: { ...backend, observe },
+      submissionTokenSecret: secret,
+      now: () => clock.t,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.issueNumber, secret);
+
+    // Fresh dispatch: still within the quiet window, so no observation happens.
+    const early = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    expect(early.statusCode).toBe(200);
+    expect(observe).not.toHaveBeenCalled();
+
+    // Three minutes of silence is past the window (and past the status cache).
+    clock.t += 3 * 60 * 1000;
+    const status = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+
+    expect(status.statusCode).toBe(200);
+    expect(observe).toHaveBeenCalledWith('task-1', { hasCandidate: false });
+    // `failed` projects onto `needs_changes`, and `failure` names what happened —
+    // without it the page reads "waiting for your input" about a session that died.
+    expect(status.json().status).toBe('needs_changes');
+    expect(status.json().failure).toEqual({ reason: 'task_failed' });
+    expect((await store.getSubmission(job.issueNumber))?.state).toBe('failed');
+
+    await app.close();
+  });
+
+  it('learns the branch a dispatch is working on, so a revision resumes it', async () => {
+    // The task API answers `startTask` before the agent has a branch, so this is the
+    // only moment it can be learned. Without it `resume` degrades to a fresh dispatch
+    // on a new branch and the creator's game silently starts again from nothing.
+    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { backend } = createBackendStub();
+    const observe = vi.fn(async () => ({
+      state: 'in_progress' as const,
+      hasCandidate: false,
+      workspace: 'copilot/tv-tycoon',
+    }));
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: { ...backend, observe },
+      submissionTokenSecret: secret,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    expect((await store.getSubmission(job.issueNumber))?.dispatch?.workspace).toBe('copilot/x');
+
+    // A job whose branch is unknown is asked about on the very next poll, however
+    // recently it spoke: without the branch a revision cannot resume the work at all.
+    await store.setDispatchWorkspace(job.issueNumber, '');
+    const status = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}`,
+      headers: authHeaders,
+    });
+
+    expect(status.statusCode).toBe(200);
+    expect(observe).toHaveBeenCalled();
+    const dispatch = (await store.getSubmission(job.issueNumber))?.dispatch;
+    expect(dispatch?.workspace).toBe('copilot/tv-tycoon');
+    // Learning the branch is not another agent session, and counting it as one would
+    // inflate the per-build cost figures the ref list exists to support.
+    expect(dispatch?.refs).toEqual(['task-1']);
+
+    await app.close();
+  });
+
+  it('starts another round when the creator sends feedback after a failed one', async () => {
+    // Retry is not a separate feature: feedback after a dead round *is* the retry.
+    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { backend, briefs } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'failed',
+      at: new Date().toISOString(),
+      by: 'reconciler',
+      reason: 'task_failed',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Please pick this up again and finish the delivery.' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(briefs.at(-1)?.feedback).toContain('pick this up again');
+    // The dead round must not orphan the job: the retry moves it back to building.
+    expect((await store.getSubmission(job.issueNumber))?.state).toBe('building');
+
+    await app.close();
+  });
+
   it('abandons a native job without closing anything on GitHub', async () => {
     const { githubClient, closeIssue, closePullRequest } = createGithubClientStub({ issueNumber: 77 });
     const { backend } = createBackendStub();

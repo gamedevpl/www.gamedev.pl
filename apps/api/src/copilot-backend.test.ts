@@ -60,9 +60,23 @@ describe('buildPrompt', () => {
 
   it('frames a revision round as continuing, not starting over', () => {
     const prompt = buildPrompt({ ...BRIEF, feedback: 'make the bubbles bigger' });
-    expect(prompt).toContain('Continue your existing work');
+    expect(prompt).toContain('revise it, do not rebuild it');
     expect(prompt).toContain('make the bubbles bigger');
     expect(prompt).not.toContain('Build a new browser game');
+  });
+
+  it('tells a revision round to fetch what the creator actually played', () => {
+    // "Continue your existing work on this branch" is what this used to say, and it was
+    // a promise the system could not keep: a session can start on a fresh branch with
+    // none of the earlier work in it. Restoring from the store is what makes the
+    // instruction true, so the game gets revised rather than silently replaced.
+    const prompt = buildPrompt({ ...BRIEF, feedback: 'make the bubbles bigger' });
+    expect(prompt).toContain('npm run restore -- comet-courier');
+    expect(prompt).toContain('This checkout may not contain it');
+  });
+
+  it('does not send a first build looking for a delivery that cannot exist', () => {
+    expect(buildPrompt(BRIEF)).not.toContain('npm run restore');
   });
 
   it('truncates an oversized spec rather than sending it whole', () => {
@@ -160,6 +174,20 @@ describe('observe and cancel', () => {
     expect(await backend.observe('task-1', { hasCandidate: false })).toEqual({
       state: 'in_progress',
       hasCandidate: false,
+    });
+  });
+
+  it('reports the branch, because this is the only place it can be learned', async () => {
+    // `startTask` answers before the agent has created a branch, so a dispatch that
+    // never comes back and asks never learns where its own work lives — and a revision
+    // round then cannot resume it, only start somewhere else from nothing.
+    const { client } = stubTasks(task({ state: 'in_progress', branch: { headRef: 'copilot/tv-tycoon' } }));
+    const backend = createCopilotBackend({ tasks: client, github: { ensureOpenPullRequest: vi.fn() } });
+
+    expect(await backend.observe('task-1', { hasCandidate: false })).toEqual({
+      state: 'in_progress',
+      hasCandidate: false,
+      workspace: 'copilot/tv-tycoon',
     });
   });
 

@@ -808,6 +808,14 @@ export interface Store {
   /** Appends a dispatch ref, recording which backend is building this job and where. */
   recordDispatch(issueNumber: number, dispatch: { backend: string; ref: string; workspace?: string }): Promise<void>;
   /**
+   * Records where a dispatched job's work actually lives, once the backend can say.
+   *
+   * Deliberately not `recordDispatch`: that appends a session ref, and the ref list is
+   * how many agent sessions a build has cost. Learning the branch is not another
+   * session, and counting it as one would inflate every per-build cost figure.
+   */
+  setDispatchWorkspace(issueNumber: number, workspace: string): Promise<void>;
+  /**
    * Allocates a job id of our own.
    *
    * Job identity used to be a GitHub issue number, which meant creating a work item in
@@ -892,6 +900,13 @@ export interface Store {
   appendCreatorMessage(issueNumber: number, text: string): Promise<CreatorMessage>;
   /** Undelivered creator messages, oldest first — the agent's inbox. */
   listPendingCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]>;
+  /**
+   * Every creator message on a build, delivered or not, oldest first. The status page
+   * reads this to echo the creator's own revision history back to them: on jobs without
+   * a pull request there is no comment thread to re-read it from, so the store copy is
+   * the only durable record of what they asked for.
+   */
+  listCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]>;
   /** Marks messages collected, so the agent is not handed the same request twice. */
   markCreatorMessagesDelivered(issueNumber: number, ids: string[]): Promise<void>;
   /**
@@ -1312,6 +1327,12 @@ export class InMemoryStore implements Store {
     });
   }
 
+  async setDispatchWorkspace(issueNumber: number, workspace: string): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub?.dispatch) return;
+    this.submissions.set(issueNumber, { ...sub, dispatch: { ...sub.dispatch, workspace } });
+  }
+
   async getPublication(slug: string): Promise<PublicationRecord | null> {
     const record = this.publications.get(slug);
     return record ? { ...record } : null;
@@ -1490,6 +1511,16 @@ export class InMemoryStore implements Store {
       .filter((message) => !message.deliveredAt)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
       .slice(0, opts?.limit ?? 10)
+      .map((message) => ({ ...message }));
+  }
+
+  async listCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
+    // No id tie-break: the array is already in append order, and a stable sort on
+    // createdAt alone preserves it for same-millisecond messages — a random-UUID
+    // tie-break would shuffle exactly those.
+    return [...(this.creatorMessages.get(issueNumber) ?? [])]
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .slice(-(opts?.limit ?? 20))
       .map((message) => ({ ...message }));
   }
 
@@ -2191,6 +2222,20 @@ export class FirestoreStore implements Store {
     });
   }
 
+  async setDispatchWorkspace(issueNumber: number, workspace: string): Promise<void> {
+    const ref = this.db.collection('submissions').doc(String(issueNumber));
+    // Transactional like recordDispatch, and for the same reason: this runs from a
+    // status poll that can race a dispatch, and a merge computed from a stale read
+    // would drop whichever landed first.
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return;
+      const existing = (snap.data() as SubmissionRecord).dispatch;
+      if (!existing) return;
+      tx.set(ref, { dispatch: { ...existing, workspace } }, { merge: true });
+    });
+  }
+
   async getPublication(slug: string): Promise<PublicationRecord | null> {
     const snap = await this.db.collection('games').doc(slug).get();
     const publication = (snap.data() as { publication?: PublicationRecord } | undefined)?.publication;
@@ -2417,6 +2462,16 @@ export class FirestoreStore implements Store {
       .map((doc) => doc.data() as CreatorMessage)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
       .slice(0, opts?.limit ?? 10);
+  }
+
+  async listCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
+    // Newest-`limit` kept by slicing from the end after an oldest-first sort, matching
+    // the in-memory store; the per-build message count is small enough to read whole.
+    const snap = await this.messagesCollection(issueNumber).get();
+    return snap.docs
+      .map((doc) => doc.data() as CreatorMessage)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
+      .slice(-(opts?.limit ?? 20));
   }
 
   async markCreatorMessagesDelivered(issueNumber: number, ids: string[]): Promise<void> {

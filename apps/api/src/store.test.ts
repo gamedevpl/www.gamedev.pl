@@ -307,3 +307,27 @@ describe('publication registry', () => {
     ]);
   });
 });
+
+describe('creator message history', () => {
+  it('lists every message oldest-first, delivered or not', async () => {
+    // The agent's inbox (listPendingCreatorMessages) forgets a message once it is
+    // delivered; the status page must not — it echoes the creator's own revision
+    // history, and a request the agent already collected is still one they made.
+    const store = new InMemoryStore();
+    const first = await store.appendCreatorMessage(9, 'make the ship faster');
+    await store.appendCreatorMessage(9, 'add a pause button');
+    await store.markCreatorMessagesDelivered(9, [first.id]);
+
+    expect((await store.listPendingCreatorMessages(9)).map((m) => m.text)).toEqual(['add a pause button']);
+    expect((await store.listCreatorMessages(9)).map((m) => m.text)).toEqual([
+      'make the ship faster',
+      'add a pause button',
+    ]);
+  });
+
+  it('keeps the newest messages when over the limit', async () => {
+    const store = new InMemoryStore();
+    for (let i = 0; i < 5; i++) await store.appendCreatorMessage(9, `request ${i}`);
+    expect((await store.listCreatorMessages(9, { limit: 2 })).map((m) => m.text)).toEqual(['request 3', 'request 4']);
+  });
+});

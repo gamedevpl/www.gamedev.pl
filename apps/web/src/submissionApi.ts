@@ -25,9 +25,10 @@ export type BuildProgress = {
    */
   note?: string;
   /**
-   * The creator's own change requests on this build, oldest→newest. Read back off
-   * the PR so the status page can show a creator what they already asked for.
-   * Optional: an older API deploy doesn't send it.
+   * The creator's own change requests on this build, oldest→newest — read back off
+   * the PR conversation or the store, whichever this build uses, so the page can
+   * show a creator what they already asked for. Optional: an older API deploy
+   * doesn't send it.
    */
   revisions?: Array<{ text: string; createdAt: string }>;
 };
@@ -89,6 +90,18 @@ export type SubmissionStatus = {
    * some moment, before any commit. Build the URL with {@link buildPlayableUrl}.
    */
   playable?: BuildPlayableItem[];
+  /**
+   * Why the build looks stuck, when it does. Closed vocabulary; the page renders its
+   * own translated copy per value. Absent means progressing normally.
+   */
+  stall?: 'awaiting_input' | 'not_dispatched' | 'quiet' | 'gate_not_started';
+  /**
+   * The last build round ended in an error rather than a delivery. `reason` is a
+   * machine-readable cause (`task_failed`, `task_timed_out`, …) — render translated
+   * copy keyed on it, never the string itself. Sending feedback starts a new round,
+   * so the message to pair with this is "retry", not "give up".
+   */
+  failure?: { reason: string };
 };
 
 export type BuildPlayableItem = {

@@ -41,12 +41,27 @@ describe('job state projection', () => {
 });
 
 describe('transition rules', () => {
-  it('never lets a terminal job move again', () => {
-    for (const state of JOB_STATES.filter(isTerminal)) {
+  it('never lets a finished job move again', () => {
+    // `failed` is the exception: terminal to the reconciler (isTerminal guards it),
+    // but a creator's feedback can start another round — tested below.
+    for (const state of JOB_STATES.filter(isTerminal).filter((s) => s !== 'failed')) {
       for (const target of JOB_STATES) {
         expect(canTransition(state, target)).toBe(false);
       }
     }
+  });
+
+  it('lets feedback after a dead round start another, without reopening it to observations', () => {
+    // A dead round must not orphan the job — feedback after a failure *is* the retry.
+    expect(canTransition('failed', 'building')).toBe(true);
+    expect(canTransition('failed', 'queued')).toBe(true);
+    expect(canTransition('failed', 'dispatched')).toBe(true);
+    // But never forward past the retry: a failure cannot shortcut into review.
+    expect(canTransition('failed', 'ready_for_review')).toBe(false);
+    expect(canTransition('failed', 'published')).toBe(false);
+    // And a late observation of the dead session still moves nothing.
+    expect(reconcileAgentObservation('failed', { state: 'failed', hasCandidate: false })).toBeNull();
+    expect(reconcileAgentObservation('failed', { state: 'in_progress', hasCandidate: false })).toBeNull();
   });
 
   it('lets a failed bake fall back rather than stranding the job', () => {

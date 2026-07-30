@@ -53,9 +53,32 @@ export function buildPrompt(brief: BuildBrief): string {
   const slug = brief.slug ?? '(the slug named in your first progress report)';
   const lines = [
     brief.feedback
-      ? `The creator played the draft of \`${slug}\` and asked for changes. Continue your existing work on this branch.`
+      ? `The creator played the draft of \`${slug}\` and asked for changes. Continue that game — revise it, do not rebuild it.`
       : `Build a new browser game in \`games/${slug}/\`.`,
     '',
+    // The branch is not the source of truth and must not be treated as one: a session
+    // can start on a fresh branch with none of the earlier work in it, and an agent
+    // that "continues" from an empty directory silently delivers a different game than
+    // the one the creator gave feedback on. The store has every delivery, exactly.
+    ...(brief.feedback
+      ? [
+          '## Before you change anything',
+          '',
+          'Fetch the version the creator actually played. This checkout may not contain it —',
+          'the game lives in the site’s store, not in a branch:',
+          '',
+          '```bash',
+          `export GAMEDEVPL_API=${brief.apiBaseUrl}`,
+          `export GAMEDEVPL_BUILD_TOKEN=${brief.channelToken}`,
+          `npm run restore -- ${slug}`,
+          '```',
+          '',
+          'It writes back the exact files that were delivered. Read them, then make the',
+          'creator’s changes on top of them. If it reports nothing delivered yet, the earlier',
+          'round never finished and you are starting the game rather than revising it.',
+          '',
+        ]
+      : []),
     '## Scope — this is enforced, not advisory',
     '',
     `- You may create and edit files under \`games/${slug}/\` only.`,
@@ -179,7 +202,12 @@ export function createCopilotBackend(options: CopilotBackendOptions): AgentBacke
 
     async observe(ref: string, { hasCandidate }): Promise<AgentObservation | null> {
       const task = await options.tasks.getTask(ref);
-      return task ? { state: task.state, hasCandidate } : null;
+      if (!task) return null;
+      // The branch is reported here and nowhere else: `startTask` answers before the
+      // agent has created one, so a dispatch that does not come back and ask never
+      // learns where its own work lives.
+      const workspace = resolveTaskBranch(task);
+      return { state: task.state, hasCandidate, ...(workspace ? { workspace } : {}) };
     },
 
     async cancel(): Promise<{ enforced: boolean }> {

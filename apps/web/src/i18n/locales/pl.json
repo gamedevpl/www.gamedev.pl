@@ -436,6 +436,18 @@
     "shareCopy": "Kopiuj",
     "shareCopied": "Skopiowano!",
     "checksFailed": "Automatyczne testy tej wersji nie przechodzą. Agent zwykle to zauważa i poprawia — nie musisz nic robić.",
+    "failure": {
+      "task_failed": "Agent budujący niespodziewanie przerwał pracę. Twoja gra i dotychczasowe postępy są bezpieczne — wyślij poniżej uwagi, aby rozpocząć kolejną rundę.",
+      "task_timed_out": "Budowanie nie zdążyło się skończyć w wyznaczonym czasie. Postępy są bezpieczne — wyślij poniżej uwagi, aby rozpocząć kolejną rundę.",
+      "task_completed_without_delivery": "Agent zakończył pracę, ale nie dostarczył gry. Wyślij poniżej uwagi, aby rozpocząć kolejną rundę.",
+      "generic": "Ta runda budowania zakończyła się błędem. Postępy są bezpieczne — wyślij poniżej uwagi, aby rozpocząć kolejną rundę."
+    },
+    "stall": {
+      "awaiting_input": "Agent czeka na Twoją odpowiedź — napisz poniżej, aby budowa ruszyła dalej.",
+      "not_dispatched": "Budowa nie została jeszcze podjęta przez agenta. Trwa to dłużej niż zwykle — sprawdzamy to.",
+      "quiet": "Agent od dłuższej chwili nie daje znaku życia. Może wciąż pracuje — możesz też wysłać poniżej uwagi, aby rozpocząć kolejną rundę.",
+      "gate_not_started": "Gra została dostarczona, ale weryfikacja jeszcze się nie rozpoczęła. To po naszej stronie — nie musisz nic robić."
+    },
     "tryAgain": "Spróbuj z tym pomysłem jeszcze raz",
     "abandon": {
       "start": "Zatrzymaj tę grę",

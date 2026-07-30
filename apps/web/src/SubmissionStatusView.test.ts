@@ -750,6 +750,85 @@ describe('SubmissionStatusView expectations & failures', () => {
       root.unmount();
     });
   });
+
+  it('names a dead build round and points at feedback as the retry', async () => {
+    // `failed` arrives projected as `needs_changes`; without the failure banner the
+    // page reads "waiting for your input" about a session that died.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'needs_changes',
+      failure: { reason: 'task_failed' },
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'failed-token' }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.status-warning')?.textContent).toContain('stopped unexpectedly');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('falls back to the generic failure copy for a reason it has never heard of', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'needs_changes',
+      failure: { reason: 'some_future_reason' },
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'future-failure-token' }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.status-warning')?.textContent).toContain('ended with an error');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('shows the stall banner the API has been sending all along', async () => {
+    // The API computed `stall` for months; the page never rendered it. A build that
+    // has gone quiet now says so instead of leaving silence to speak for it.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      stall: 'quiet',
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'stalled-token' }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.status-warning')?.textContent).toContain('quiet for a while');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });
 
 describe('SubmissionStatusView stop & retry', () => {
