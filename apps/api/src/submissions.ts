@@ -186,7 +186,10 @@ export interface SubmissionRoutesOptions {
   /** Localizes the agent's English build log; defaults to createTranslatorFromEnv(). */
   translator?: Translator;
   /** Caps and seams for the agent build channel; see registerAgentChannelRoutes. */
-  agentChannel?: Pick<AgentChannelOptions, 'maxEventsPerBuild' | 'maxEventsPerWindow'>;
+  agentChannel?: Pick<
+    AgentChannelOptions,
+    'maxEventsPerBuild' | 'maxEventsPerWindow' | 'gamesStore' | 'maxSubmitsPerWindow' | 'onSourcesDelivered'
+  >;
   /**
    * Pre-assembled published games. Defaults to the bucket in
    * GAMES_SNAPSHOT_BUCKET, or null when unset. Always a fast path in front of

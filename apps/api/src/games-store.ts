@@ -1,0 +1,336 @@
+// The games store: Cloud Storage as the system of record for creator game content.
+//
+// Today the games repo is that record, and git is the medium — which is why ~200 MB of
+// its history is regenerable PNG and MP4, why a takedown is not complete until a merge
+// and a green bake, and why publication means "somebody merged something". None of those
+// are properties anyone chose; they are properties of storing content in a repository.
+//
+// Here a game is a sequence of immutable versions:
+//
+//   games/<slug>/versions/<version>/manifest.json   provenance: job, engine ref, gate
+//   games/<slug>/versions/<version>/source/<path>   SPEC.md, GAME.json, game.ts, …
+//   games/<slug>/versions/<version>/media/<file>    produced by our gate, never uploaded
+//   games/<slug>/versions/<version>/bundle.html     produced by our gate, never uploaded
+//
+// Publication is a *registry* fact rather than a storage fact — which object exists says
+// nothing about what is live. That split is deliberate: it is what makes a takedown a
+// flag flip plus a re-bake instead of a revert-and-wait, and what stops a stray object
+// resurrecting a withdrawn game.
+
+import { GoogleAuth } from 'google-auth-library';
+
+/**
+ * Files an agent is allowed to deliver, and nothing else.
+ *
+ * This list is the delivery contract, and it is enforced server-side rather than trusted
+ * to the agent's instructions. It is what makes "GameKit and other games are read-only"
+ * structurally true instead of merely requested: there is no path an upload can name that
+ * reaches `shared/`, `tools/`, or another game's directory, so a prompt-injected or
+ * simply confused agent cannot widen its own scope.
+ */
+export const ALLOWED_SOURCE_FILES = [
+  'SPEC.md',
+  'GAME.json',
+  'CAPTURE.json',
+  'ACCEPTANCE.json',
+  'index.html',
+  'game.ts',
+  'style.css',
+  'sim.ts',
+] as const;
+
+/**
+ * Additional source files a game may carry beyond the fixed set — its own modules only.
+ * Kept narrow on purpose: relative imports inside the game directory are the one thing
+ * games legitimately add, and everything else is a smell.
+ */
+const EXTRA_SOURCE_PATTERN = /^[a-z0-9][a-z0-9/-]{0,60}\.ts$/;
+
+/**
+ * First path segments a game may not use.
+ *
+ * Note these are *not* what confines an upload — that is structural and comes from two
+ * other facts: every stored path is prefixed with the version's own `source/`, so no
+ * upload can name an object outside the game it belongs to, and `..` is rejected by shape
+ * below. A file called `shared/x.ts` would therefore land harmlessly inside the game's
+ * own tree.
+ *
+ * They are rejected anyway because a game directory containing `shared/` or `tools/`
+ * reads as though it were editing the harness, and a boundary is only useful if a human
+ * reviewing a diff can see it holding. Costing an agent one clear error message is a
+ * better trade than a directory listing nobody can interpret at a glance.
+ */
+const RESERVED_SEGMENTS = new Set(['shared', 'tools', 'games', 'node_modules', 'dist', 'references', 'templates']);
+
+/** Mirrors the games repo's own slug rule, so a name valid here is valid there. */
+const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
+
+/**
+ * Total bytes one upload may carry. Comfortably above a real game's sources (the largest
+ * in the catalog is a few hundred KB of TypeScript) and far below anything that would
+ * make a rogue upload interesting as a storage attack.
+ */
+export const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
+export const MAX_UPLOAD_FILES = 64;
+
+export interface SourceFile {
+  path: string;
+  content: string;
+}
+
+export class InvalidUploadError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidUploadError';
+  }
+}
+
+/**
+ * Validates an upload against the delivery contract.
+ *
+ * Returns the files to store; throws {@link InvalidUploadError} with a message meant for
+ * the agent, since the agent is the only one who can fix it and a vague rejection costs a
+ * whole session.
+ */
+export function validateSourceUpload(files: SourceFile[]): SourceFile[] {
+  if (files.length === 0) throw new InvalidUploadError('no files in upload');
+  if (files.length > MAX_UPLOAD_FILES) {
+    throw new InvalidUploadError(`too many files: ${files.length} > ${MAX_UPLOAD_FILES}`);
+  }
+
+  const seen = new Set<string>();
+  let total = 0;
+
+  for (const file of files) {
+    const path = file.path.trim();
+
+    // Traversal is checked before anything else and rejected by shape, not by
+    // normalization: `..` never appears in a legitimate game file, so there is no reason
+    // to be clever about resolving it.
+    if (path.includes('..') || path.startsWith('/') || path.includes('\\') || path.includes('\0')) {
+      throw new InvalidUploadError(`illegal path: ${file.path}`);
+    }
+    if (seen.has(path)) throw new InvalidUploadError(`duplicate path: ${path}`);
+
+    if (path.startsWith('.') || RESERVED_SEGMENTS.has(path.split('/')[0])) {
+      throw new InvalidUploadError(
+        `path not deliverable: ${path}. \`${path.split('/')[0]}\` belongs to the harness — ` +
+          'GameKit, the tooling and other games are read-only context.',
+      );
+    }
+
+    const allowed =
+      (ALLOWED_SOURCE_FILES as readonly string[]).includes(path) ||
+      (EXTRA_SOURCE_PATTERN.test(path) && !path.includes('//'));
+    if (!allowed) {
+      throw new InvalidUploadError(
+        `path not deliverable: ${path}. Deliver only your own game's files ` +
+          `(${ALLOWED_SOURCE_FILES.join(', ')}, or your own .ts modules).`,
+      );
+    }
+
+    total += Buffer.byteLength(file.content, 'utf8');
+    if (total > MAX_UPLOAD_BYTES) throw new InvalidUploadError(`upload too large: over ${MAX_UPLOAD_BYTES} bytes`);
+
+    seen.add(path);
+  }
+
+  if (!seen.has('SPEC.md')) throw new InvalidUploadError('SPEC.md is required — it is the spec of record for the game');
+  if (!seen.has('index.html') || !seen.has('game.ts')) {
+    throw new InvalidUploadError('index.html and game.ts are required — a game must be playable');
+  }
+
+  return files.map((file) => ({ path: file.path.trim(), content: file.content }));
+}
+
+/** Provenance for one stored version. Answers "where did this come from?" years later. */
+export interface VersionManifest {
+  slug: string;
+  version: string;
+  createdAt: string;
+  /** The job that produced it. */
+  issueNumber: number;
+  /** Which backend and model built it — unattributable cost is how budgets get lost. */
+  backend?: string;
+  model?: string;
+  /**
+   * The engine commit this version was built and validated against.
+   *
+   * Pinned rather than floating: a game that passed the gate did so against a specific
+   * GameKit, and "it worked when we accepted it" has to remain checkable after the engine
+   * moves on.
+   */
+  engineRef?: string;
+  /** Verdict of our own gate. A version without a green one is never publishable. */
+  gate?: { green: boolean; ranAt: string; report?: string };
+  sourceFiles: string[];
+}
+
+export type PublicationState = 'published' | 'archived' | 'disabled';
+
+/**
+ * What is live, decided here rather than by what exists in the bucket.
+ *
+ * Keeping publication out of storage is what makes withdrawal fast and total: a takedown
+ * flips this and re-bakes, with no merge, no revert, and no possibility that an object
+ * left behind somewhere quietly keeps serving.
+ */
+export interface PublicationRecord {
+  slug: string;
+  state: PublicationState;
+  currentVersion: string;
+  publishedAt: string;
+  takedownAt?: string;
+  takedownReason?: string;
+}
+
+export interface GamesStore {
+  /** Writes a candidate version's sources. Returns the version id assigned. */
+  putCandidateSources(input: {
+    slug: string;
+    issueNumber: number;
+    files: SourceFile[];
+    backend?: string;
+    model?: string;
+    engineRef?: string;
+  }): Promise<{ version: string; manifest: VersionManifest }>;
+  getManifest(slug: string, version: string): Promise<VersionManifest | null>;
+  getSourceFile(slug: string, version: string, path: string): Promise<string | null>;
+  /** Records our gate's verdict against a version. Only a green one may publish. */
+  putGateResult(slug: string, version: string, result: { green: boolean; report?: string }): Promise<void>;
+  /** Stores an artifact the gate produced — bundle or media. Agents never write these. */
+  putDerivedArtifact(slug: string, version: string, name: string, body: Buffer, contentType: string): Promise<void>;
+  getDerivedArtifact(slug: string, version: string, name: string): Promise<Buffer | null>;
+}
+
+export interface GcsGamesStoreOptions {
+  bucket: string;
+  fetchImpl?: typeof fetch;
+  now?: () => number;
+  getAccessToken?: () => Promise<string>;
+  /** Injectable so version ids are deterministic under test. */
+  versionId?: (at: Date) => string;
+}
+
+/**
+ * Version ids are timestamps, not counters.
+ *
+ * A counter needs a read-modify-write against a shared value, which is a race between
+ * concurrent builds of the same game and a lock nobody wants to own. A timestamp sorts
+ * the same way, needs no coordination, and reads correctly in a bucket listing.
+ */
+export function defaultVersionId(at: Date): string {
+  return `v${at
+    .toISOString()
+    .replace(/[-:]/g, '')
+    .replace(/\.\d+Z$/, 'Z')}`;
+}
+
+function assertSlug(slug: string): void {
+  if (!SLUG_PATTERN.test(slug)) throw new InvalidUploadError(`invalid slug: ${slug}`);
+}
+
+export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
+  const { bucket } = options;
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const now = options.now ?? Date.now;
+  const versionId = options.versionId ?? defaultVersionId;
+
+  let auth: GoogleAuth | null = null;
+  const getAccessToken =
+    options.getAccessToken ??
+    (async () => {
+      auth ??= new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/devstorage.read_write'] });
+      const token = await auth.getAccessToken();
+      if (!token) throw new Error('could not obtain a Google access token for the games store');
+      return token;
+    });
+
+  async function readObject(name: string): Promise<Buffer | null> {
+    const url = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(name)}?alt=media`;
+    const response = await fetchImpl(url, { headers: { authorization: `Bearer ${await getAccessToken()}` } });
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error(`games store read of ${name} failed: ${response.status}`);
+    return Buffer.from(await response.arrayBuffer());
+  }
+
+  async function writeObject(name: string, body: Buffer, contentType: string): Promise<void> {
+    const url =
+      `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(bucket)}/o` +
+      `?uploadType=media&name=${encodeURIComponent(name)}`;
+    const response = await fetchImpl(url, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${await getAccessToken()}`,
+        'content-type': contentType,
+        // Versions are immutable, so their objects are safe to cache indefinitely —
+        // which is what lets a CDN sit in front of this later without a redesign.
+        'cache-control': 'public, max-age=31536000, immutable',
+      },
+      body: new Uint8Array(body),
+    });
+    if (!response.ok) throw new Error(`games store write of ${name} failed: ${response.status}`);
+  }
+
+  const versionPrefix = (slug: string, version: string) => `games/${slug}/versions/${version}`;
+
+  return {
+    async putCandidateSources(input) {
+      assertSlug(input.slug);
+      const files = validateSourceUpload(input.files);
+      const at = new Date(now());
+      const version = versionId(at);
+      const prefix = versionPrefix(input.slug, version);
+
+      await Promise.all(
+        files.map((file) =>
+          writeObject(`${prefix}/source/${file.path}`, Buffer.from(file.content, 'utf8'), 'text/plain; charset=utf-8'),
+        ),
+      );
+
+      const manifest: VersionManifest = {
+        slug: input.slug,
+        version,
+        createdAt: at.toISOString(),
+        issueNumber: input.issueNumber,
+        backend: input.backend,
+        model: input.model,
+        engineRef: input.engineRef,
+        sourceFiles: files.map((file) => file.path),
+      };
+      // Written last: a manifest is what makes a version real, so a run that dies
+      // mid-upload leaves orphaned objects rather than a version claiming files that
+      // were never stored.
+      await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
+
+      return { version, manifest };
+    },
+
+    async getManifest(slug, version) {
+      const body = await readObject(`${versionPrefix(slug, version)}/manifest.json`);
+      return body ? (JSON.parse(body.toString('utf8')) as VersionManifest) : null;
+    },
+
+    async getSourceFile(slug, version, path) {
+      const body = await readObject(`${versionPrefix(slug, version)}/source/${path}`);
+      return body ? body.toString('utf8') : null;
+    },
+
+    async putGateResult(slug, version, result) {
+      const prefix = versionPrefix(slug, version);
+      const existing = await readObject(`${prefix}/manifest.json`);
+      if (!existing) throw new Error(`no manifest for ${slug}@${version}`);
+      const manifest = JSON.parse(existing.toString('utf8')) as VersionManifest;
+      manifest.gate = { green: result.green, ranAt: new Date(now()).toISOString(), report: result.report };
+      await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
+    },
+
+    async putDerivedArtifact(slug, version, name, body, contentType) {
+      await writeObject(`${versionPrefix(slug, version)}/${name}`, body, contentType);
+    },
+
+    async getDerivedArtifact(slug, version, name) {
+      return readObject(`${versionPrefix(slug, version)}/${name}`);
+    },
+  };
+}

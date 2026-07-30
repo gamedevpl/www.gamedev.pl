@@ -4,6 +4,7 @@ import { mintAgentToken } from './agent-token.js';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
+import type { GamesStore } from './games-store.js';
 import { InMemoryStore } from './store.js';
 import { mintToken } from './submission-token.js';
 import { NoopTranslator } from './translate.js';
@@ -20,6 +21,7 @@ function stubGitHub(overrides: Partial<GitHubClient> = {}): GitHubClient {
     updateIssueBody: async () => {},
     closeIssue: async () => {},
     closePullRequest: async () => {},
+    ensureOpenPullRequest: async () => ({ number: 1 }),
     getGameSources: async (): Promise<GameSources | null> => null,
     getGameMedia: async () => null,
     getCatalog: async (): Promise<CatalogGameEntry[]> => [],
@@ -30,7 +32,15 @@ function stubGitHub(overrides: Partial<GitHubClient> = {}): GitHubClient {
 
 const sessionSecret = 'dev-session-secret-change-me';
 
-async function createApp(store: InMemoryStore, agentChannel?: { maxEventsPerWindow?: number }) {
+async function createApp(
+  store: InMemoryStore,
+  agentChannel?: {
+    maxEventsPerWindow?: number;
+    gamesStore?: GamesStore;
+    maxSubmitsPerWindow?: number;
+    onSourcesDelivered?: (input: { issueNumber: number; slug: string; version: string }) => void;
+  },
+) {
   await store.upsertUser({ uid: 'g:owner' });
   return await buildApp({
     store,
@@ -519,5 +529,177 @@ describe('agent build channel', () => {
 
     expect(response.json()).toMatchObject({ accepted: false, rejected: 'stopped' });
     expect(await store.countBuildPreviews(ISSUE)).toBe(0);
+  });
+
+  /**
+   * Delivery: the verb that replaces "open a pull request and wait for a merge".
+   *
+   * The interesting cases are all about not trusting the upload — the agent is working
+   * from creator-authored text, so the request is treated as a claim to be checked rather
+   * than an instruction to be carried out.
+   */
+  describe('POST /api/agent/build/sources', () => {
+    const MINIMAL = [
+      { path: 'SPEC.md', content: '---\ntitle: A game\n---\n' },
+      { path: 'index.html', content: '<!doctype html>' },
+      { path: 'game.ts', content: 'export {};' },
+    ];
+
+    function stubGamesStore() {
+      const stored: Array<{ slug: string; issueNumber: number; files: unknown[] }> = [];
+      const gamesStore = {
+        putCandidateSources: async (input: { slug: string; issueNumber: number; files: unknown[] }) => {
+          stored.push(input);
+          const { validateSourceUpload } = await import('./games-store.js');
+          validateSourceUpload(input.files as Array<{ path: string; content: string }>);
+          return { version: 'v1', manifest: {} as never };
+        },
+        getManifest: async () => null,
+        getSourceFile: async () => null,
+        putGateResult: async () => {},
+        putDerivedArtifact: async () => {},
+        getDerivedArtifact: async () => null,
+      } as unknown as GamesStore;
+      return { gamesStore, stored };
+    }
+
+    it('stores a delivered game as a candidate version', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore, stored } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources',
+        headers: agentHeaders(),
+        payload: { slug: 'comet-courier', files: MINIMAL },
+      });
+
+      expect(response.json()).toMatchObject({ accepted: true, delivery: { slug: 'comet-courier', version: 'v1' } });
+      expect(stored[0]).toMatchObject({ slug: 'comet-courier', issueNumber: ISSUE });
+    });
+
+    it('refuses a delivery aimed at a different game than the job owns', async () => {
+      // The token is minted per job. An agent that has been associated with one game must
+      // not be able to write into another game's history by asking to.
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      await store.setSubmissionSlug(ISSUE, 'comet-courier');
+      const { gamesStore, stored } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources',
+        headers: agentHeaders(),
+        payload: { slug: 'someone-elses-game', files: MINIMAL },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(stored).toHaveLength(0);
+    });
+
+    it('explains a rejected path instead of failing opaquely', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources',
+        headers: agentHeaders(),
+        payload: { slug: 'g', files: [...MINIMAL, { path: 'shared/modules/core.ts', content: 'x' }] },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toMatch(/belongs to the harness/);
+    });
+
+    it('requires a credential like every other channel verb', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources',
+        payload: { slug: 'g', files: MINIMAL },
+      });
+
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('stops accepting deliveries once the creator has stopped the build', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      await store.setSubmissionAbandoned(ISSUE, new Date().toISOString());
+      const { gamesStore, stored } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources',
+        headers: agentHeaders(),
+        payload: { slug: 'g', files: MINIMAL },
+      });
+
+      expect(response.json()).toMatchObject({ accepted: false, rejected: 'stopped' });
+      expect(stored).toHaveLength(0);
+    });
+
+    it('says so plainly when delivery is not configured', async () => {
+      // Local development has no bucket. Reporting unavailability beats accepting work
+      // and silently dropping it.
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      app = await createApp(store);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources',
+        headers: agentHeaders(),
+        payload: { slug: 'g', files: MINIMAL },
+      });
+
+      expect(response.statusCode).toBe(503);
+    });
+
+    it('notifies the job so the gate can pick the candidate up', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore } = stubGamesStore();
+      const delivered: Array<{ slug: string; version: string }> = [];
+      app = await createApp(store, { gamesStore });
+      // Re-create with the hook wired, since createApp builds options once.
+      await app.close();
+      app = await buildApp({
+        store,
+        sessionSecret,
+        submissionRoutes: {
+          githubClient: stubGitHub(),
+          githubToken: 'gh-token',
+          submissionTokenSecret: secret,
+          translator: new NoopTranslator(),
+          agentChannel: {
+            gamesStore,
+            onSourcesDelivered: ({ slug, version }) => {
+              delivered.push({ slug, version });
+            },
+          },
+        },
+      });
+
+      await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources',
+        headers: agentHeaders(),
+        payload: { slug: 'comet-courier', files: MINIMAL },
+      });
+
+      expect(delivered).toEqual([{ slug: 'comet-courier', version: 'v1' }]);
+    });
   });
 });
