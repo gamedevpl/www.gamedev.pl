@@ -58,16 +58,24 @@ do not add text logging in the middle of an incident.
 
 ### 2a. If it is a probe (few uids)
 
-Nothing is getting through — the layers did their job. Options, cheapest first:
+Nothing is getting through — the layers did their job. Options, cheapest first.
+
+**Block the account.** `tier: 'blocked'` is enforced everywhere that spends quota
+(submissions, refine, feedback, worlds, saves) and takes effect on the account's next
+request, with no redeploy. Note honestly that **no tool writes it** — there is no admin route
+and no script, so today this is a manual edit:
 
 ```bash
-# Block the account. Takes effect on their next request; no redeploy.
-# tier=blocked is enforced across submissions, feedback, worlds and saves.
+# Find them, then set tier by hand in the Console (Firestore → users → <uid>).
+gcloud firestore documents describe "users/<uid>" --database='(default)' --project gamedevpl
 ```
 
-Blocking is an admin action on the user's record (`accessTokens` / user tier — see
-[`rotate-secrets.md`](./rotate-secrets.md) for the shape of admin access). If the volume is
-also costing money, the global circuit-breaker is the bigger hammer and stops **everyone**:
+That gap is worth knowing before an incident rather than during one: if you need to block
+someone at 2am you will be clicking through the Console, so do not plan around a CLI that
+does not exist.
+
+If the volume is also costing money, the global circuit-breaker is the bigger hammer and
+stops **everyone**:
 
 ```bash
 curl -X POST https://www.gamedev.pl/api/admin/creation-limits \
