@@ -144,6 +144,15 @@ describe('the worker source this module rewrites', () => {
     expect(SW_SOURCE).toContain('!shell.redirected');
   });
 
+  it('refuses to serve a holey shell that would white-screen the installed app', () => {
+    // iOS can evict the hashed JS while leaving index.html. Cache-first navigation
+    // without this check is a permanent empty #root.
+    expect(SW_SOURCE).toContain('async function shellIntact(cacheName)');
+    expect(SW_SOURCE).toContain('await caches.delete(CACHE)');
+    expect(SW_SOURCE).toContain('client.navigate');
+    expect(SW_SOURCE).toContain('legacyAssetOrHeal');
+  });
+
   it('ships inert, so a dev worker caches no live module', () => {
     // The checked-in manifest must stay empty: `hasPrecache` is false for an empty
     // shell, which is what keeps HMR working and stops a dev worker from pinning

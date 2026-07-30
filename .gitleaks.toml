@@ -16,6 +16,8 @@ paths = [
   # "wrong prefix" fixture (still in git history / open PR branches; CI
   # fetch-depth: 0 scans every ref). Not a real secret.
   '''apps/api/src/access-token\.test\.ts''',
+  # Opaque hex ids in the access-tokens panel tests — tokenId fixtures, not keys.
+  '''apps/web/src/AccessTokensPanel\.test\.tsx''',
   # 2015-era CSS with a base64-embedded webfont (git history only) — older
   # gitleaks rules misread the font bytes as an AWS access token.
   '''app/css/fontello-embedded\.css''',
