@@ -46,6 +46,10 @@
       "build_stalled": {
         "title": "A build has stopped moving",
         "body": "“{{title}}” has gone quiet ({{detail}})."
+      },
+      "feedback_undelivered": {
+        "title": "A change request is not reaching the agent",
+        "body": "“{{title}}” has a change request nobody has collected."
       }
     }
   },

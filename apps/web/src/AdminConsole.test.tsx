@@ -22,6 +22,7 @@ vi.mock('./adminApi.js', () => mocked);
 // one is on screen, not what it renders.
 vi.mock('./AdminJobsPanel.js', () => ({ AdminJobsPanel: () => createElement('p', null, 'queue-panel') }));
 vi.mock('./GameHealthView.js', () => ({ GameHealthView: () => createElement('p', null, 'telemetry-panel') }));
+vi.mock('./CostsPanel.js', () => ({ CostsPanel: () => createElement('p', null, 'costs-panel') }));
 vi.mock('./CreationLimitsPanel.js', () => ({ CreationLimitsPanel: () => createElement('p', null, 'limits-panel') }));
 vi.mock('./AccessTokensPanel.js', () => ({ AccessTokensPanel: () => createElement('p', null, 'tokens-panel') }));
 vi.mock('./SuggestionsPanel.js', () => ({ SuggestionsPanel: () => createElement('p', null, 'suggestions-panel') }));
@@ -63,6 +64,17 @@ describe('AdminConsole', () => {
     expect(container.textContent).toContain('limits-panel');
     expect(container.textContent).not.toContain('queue-panel');
     expect(container.querySelector('.admin-tab.is-active')?.textContent).toBe('Limits');
+
+    await act(async () => root.unmount());
+  });
+
+  it('routes to the cost section, which nothing linked to before', async () => {
+    mocked.fetchAdminSummary.mockResolvedValue(summary());
+
+    const { container, root } = await render('costs');
+
+    expect(container.textContent).toContain('costs-panel');
+    expect(container.querySelector('.admin-tab.is-active')?.textContent).toBe('Cost');
 
     await act(async () => root.unmount());
   });

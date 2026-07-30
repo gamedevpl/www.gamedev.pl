@@ -128,10 +128,22 @@ function buildSpec(
  * configured, so local development and tests get delivery without a build backend
  * rather than an error they cannot act on.
  */
+/**
+ * What starting a gate produced, for the caller that books what it cost.
+ *
+ * `buildId` is Cloud Build's own id for the run. It was previously read off the response
+ * and dropped, which meant a line on the GCP bill could never be traced back to the game
+ * that caused it — the one join a cost report actually needs. Absent when the gate did
+ * not start, which is the same thing as "this cost nothing".
+ */
+export interface GateTriggerResult {
+  buildId?: string;
+}
+
 export function createCloudBuildGateTrigger(
   options: GateTriggerOptions | null,
   log?: { error: (details: unknown, message: string) => void; info: (details: unknown, message: string) => void },
-): ((input: GateTriggerInput) => Promise<void>) | undefined {
+): ((input: GateTriggerInput) => Promise<GateTriggerResult>) | undefined {
   if (!options?.project || !options.bucket) return undefined;
 
   const resolved = {
@@ -154,7 +166,7 @@ export function createCloudBuildGateTrigger(
       return token;
     });
 
-  return async (input: GateTriggerInput) => {
+  return async (input: GateTriggerInput): Promise<GateTriggerResult> => {
     try {
       const response = await fetchImpl(`https://cloudbuild.googleapis.com/v1/projects/${resolved.project}/builds`, {
         method: 'POST',
@@ -166,11 +178,20 @@ export function createCloudBuildGateTrigger(
           `cloud build refused the gate run: ${response.status} ${await response.text().catch(() => '')}`,
         );
       }
-      log?.info({ slug: input.slug, version: input.version }, 'gate started');
+      // The create call answers with a long-running operation whose metadata carries the
+      // build. Parsed defensively: a shape we did not expect costs us the id, not the
+      // gate run — the build is already queued by the time this is read.
+      const buildId = await response
+        .json()
+        .then((body: unknown) => (body as { metadata?: { build?: { id?: string } } })?.metadata?.build?.id)
+        .catch(() => undefined);
+      log?.info({ slug: input.slug, version: input.version, buildId }, 'gate started');
+      return buildId ? { buildId } : {};
     } catch (error) {
       // Loud, because the consequence is silent: the candidate is stored, the agent
       // thinks it is done, and nothing will ever verify it unless someone notices this.
       log?.error({ err: error, slug: input.slug, version: input.version }, 'could not start the gate for a delivery');
+      return {};
     }
   };
 }

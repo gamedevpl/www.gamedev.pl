@@ -35,7 +35,7 @@ import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo
 import { createMailerFromEnv, type Mailer } from './mailer.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { emitOperatorAlert, notifyOnTransition, type EmitDeps } from './notify.js';
-import { detectOperatorAlerts } from './operator-alerts.js';
+import { detectOperatorAlerts, FEEDBACK_STALL_MS } from './operator-alerts.js';
 import { peekQuota } from './quota-gate.js';
 import {
   isNativeJobId,
@@ -105,15 +105,6 @@ const FeedbackRequestSchema = z.object({
     })
     .optional(),
 });
-
-/**
- * How long a creator's change request may sit uncollected before the notify sweep
- * calls it a stall. Generous on purpose: the relay fires in seconds, but the agent
- * it wakes only acks its inbox once it has a session running, and a queue behind a
- * busy repo can legitimately take a while. An hour is far past that and far short
- * of the creator giving up.
- */
-const CREATOR_FEEDBACK_STALL_MS = 60 * 60 * 1000;
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const MAX_CREATOR_SHOT_BYTES = 300 * 1024;
@@ -419,6 +410,40 @@ export async function registerSubmissionRoutes(
    * succeeds and the label workflow remains the path that starts it. A creator must never
    * lose a submission to orchestration that is not wired up yet.
    */
+  /**
+   * Books one agent session against a job.
+   *
+   * A session is the billed unit on the Copilot backend — one premium request each,
+   * charged when the session starts and regardless of what it produces. That last part
+   * is why this is recorded here rather than on delivery: a round that fails, stalls, or
+   * finishes without uploading cost exactly as much as one that shipped a game, and a
+   * ledger that only counted successes would report the cost of building games as a
+   * fraction of what it is.
+   *
+   * Never throws. A ledger is worth having, and it is not worth dropping a build for.
+   */
+  async function recordSessionCost(
+    issueNumber: number,
+    ref: string,
+    log: { error: (context: object, message: string) => void },
+  ): Promise<void> {
+    if (!store || !agentBackend) return;
+    try {
+      await store.recordJobCost(issueNumber, {
+        kind: 'agent_session',
+        at: new Date(now()).toISOString(),
+        by: agentBackend.name,
+        ref,
+        // One premium request per session. Tokens are not exposed by this backend at
+        // all, so recording a zero would be an invented measurement rather than a
+        // missing one — the field is simply absent until something can fill it.
+        credits: 1,
+      });
+    } catch (error) {
+      log.error({ err: error, issueNumber }, 'could not record the cost of an agent session');
+    }
+  }
+
   async function dispatchBuild(input: {
     issueNumber: number;
     spec: string;
@@ -441,6 +466,7 @@ export async function registerSubmissionRoutes(
         ref: result.ref,
         workspace: result.workspace,
       });
+      await recordSessionCost(input.issueNumber, result.ref, input.log);
       await store?.recordJobTransition(input.issueNumber, {
         to: 'dispatched',
         at: new Date(now()).toISOString(),
@@ -497,6 +523,7 @@ export async function registerSubmissionRoutes(
         ref: result.ref,
         workspace: result.workspace,
       });
+      await recordSessionCost(input.issueNumber, result.ref, input.log);
       // The previous workspace is spent the moment a new round has one of its own: the
       // round that follows restores the game from the store rather than from a branch.
       // Deleted after the dispatch succeeds, never before — a round that failed to
@@ -2092,6 +2119,9 @@ export async function registerSubmissionRoutes(
       const active = await store.listActiveSubmissions();
       let emitted = 0;
       const stalledIssues: number[] = [];
+      // When each job's oldest uncollected change request arrived, collected as the
+      // loop goes so the alert pass below can see it without reading anything twice.
+      const pendingFeedback = new Map<number, string>();
       for (const record of active) {
         try {
           // Relay-stall detection. A creator's change request goes out two ways
@@ -2107,8 +2137,11 @@ export async function registerSubmissionRoutes(
           const oldest = pending[0];
           // Checked before the GitHub read below so a transient API failure cannot be
           // what hides a stall — this half needs no network.
-          if (oldest && now() - Date.parse(oldest.createdAt) > CREATOR_FEEDBACK_STALL_MS) {
-            stalledIssues.push(record.issueNumber);
+          if (oldest) {
+            pendingFeedback.set(record.issueNumber, oldest.createdAt);
+            if (now() - Date.parse(oldest.createdAt) > FEEDBACK_STALL_MS) {
+              stalledIssues.push(record.issueNumber);
+            }
           }
 
           const status = await deriveSubmissionStatus(githubClient, record.issueNumber);
@@ -2135,7 +2168,7 @@ export async function registerSubmissionRoutes(
       // of jobs that could be in trouble, so it is the one place all three kinds are
       // observable. Idempotent per job and kind, so re-running it does not re-notify.
       let alerted = 0;
-      const alerts = detectOperatorAlerts(active, now());
+      const alerts = detectOperatorAlerts(active, now(), pendingFeedback);
       if (adminUids && adminUids.size > 0) {
         for (const alert of alerts) {
           try {

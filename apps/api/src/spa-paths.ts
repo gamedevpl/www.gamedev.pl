@@ -19,7 +19,7 @@ const STUDIO_PATTERN = /^\/studio(?:\/[^/]+(?:\/(?:overview|build|playtest|stats
 // The operator console. Its sections are listed rather than matched loosely, so the
 // shell and the client's router agree about what is a real page and what is a typo —
 // the same contract the studio tabs above keep.
-const ADMIN_PATTERN = /^\/admin(?:\/(?:queue|telemetry|limits|tokens|suggestions))?$/;
+const ADMIN_PATTERN = /^\/admin(?:\/(?:queue|costs|telemetry|limits|tokens|suggestions))?$/;
 /** Last path segment looks like a file (`sw.js`, `icon.png`, `foo.woff2`). */
 const STATIC_ASSET_PATTERN = /\/[^/]+\.[a-zA-Z0-9]+$/;
 

@@ -46,6 +46,10 @@
       "build_stalled": {
         "title": "Build stanął w miejscu",
         "body": "„{{title}}” milczy ({{detail}})."
+      },
+      "feedback_undelivered": {
+        "title": "Prośba o zmianę nie dociera do agenta",
+        "body": "„{{title}}” ma prośbę o zmianę, której nikt nie odebrał."
       }
     }
   },

@@ -304,3 +304,37 @@ describe('operator alerts on the notify sweep', () => {
     await app.close();
   });
 });
+
+describe('undelivered feedback reaches the operator, not just the log', () => {
+  it('emits an alert for a change request no agent collected', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    await store.createSubmission(42, 'g:creator', 'Sky Dodge');
+    await store.appendCreatorMessage(42, 'make the ship slower');
+    const app = await buildApp({
+      store,
+      sessionSecret: 'dev-session-secret-change-me',
+      adminUids: 'g:boss',
+      submissionRoutes: {
+        githubToken: 'token',
+        submissionTokenSecret: secret,
+        gamesRepo: 'gamedevpl/www.gamedev.pl-games',
+        githubClient: buildingGithubClient(),
+        internalAuthVerifier: acceptAll,
+        // An hour past the threshold, so the message is stale without waiting for one.
+        now: () => Date.now() + 2 * HOUR_MS,
+      },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/internal/notify-sweep',
+      headers: { authorization: 'Bearer scheduler-token' },
+    });
+
+    expect(res.json()).toMatchObject({ stalled: 1, alerts: 1, alerted: 1 });
+    const [notification] = await store.listNotifications('g:boss');
+    expect(notification.type).toBe('operator.feedback_undelivered');
+    await app.close();
+  });
+});

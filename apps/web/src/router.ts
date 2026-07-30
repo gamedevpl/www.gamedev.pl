@@ -17,7 +17,7 @@ export function isStudioTab(value: string): value is StudioTab {
  * things to look at. In the URL so a refresh, a bookmark, or the link in an alert
  * notification lands on the section it meant rather than on whichever one is first.
  */
-export const ADMIN_SECTIONS = ['queue', 'telemetry', 'limits', 'tokens', 'suggestions'] as const;
+export const ADMIN_SECTIONS = ['queue', 'costs', 'telemetry', 'limits', 'tokens', 'suggestions'] as const;
 export type AdminSection = (typeof ADMIN_SECTIONS)[number];
 
 export function isAdminSection(value: string): value is AdminSection {

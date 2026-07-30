@@ -19,7 +19,17 @@ export type OperatorAlertKind =
   /** The round ended with nothing delivered, or the agent gave up. */
   | 'build_failed'
   /** Still open, but nothing has moved for longer than the job's state tolerates. */
-  | 'build_stalled';
+  | 'build_stalled'
+  /**
+   * A creator's change request that no agent has collected.
+   *
+   * Its own kind rather than a flavour of stall, because it is a failure of a
+   * different thing: the request reached us, and the relay that turns it into
+   * something an agent wakes for did not fire. Nothing errors when that breaks — the
+   * comment lands, no session starts, and the creator waits on an answer that is not
+   * coming. This is the only symptom.
+   */
+  | 'feedback_undelivered';
 
 export interface OperatorAlert {
   /**
@@ -48,17 +58,56 @@ export interface OperatorAlert {
  */
 export const FAILED_ALERT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
+/**
+ * How long a creator's change request may sit uncollected before it is a stall.
+ *
+ * Generous on purpose: the relay fires in seconds, but the agent it wakes only acks its
+ * inbox once it has a session running, and a queue behind a busy repo can legitimately
+ * take a while. An hour is far past that and far short of the creator giving up.
+ */
+export const FEEDBACK_STALL_MS = 60 * 60 * 1000;
+
 /** Oldest first within a kind: the thing that has been waiting longest is the thing to do. */
 const KIND_ORDER: Record<OperatorAlertKind, number> = {
   review_ready: 0,
-  build_stalled: 1,
-  build_failed: 2,
+  feedback_undelivered: 1,
+  build_stalled: 2,
+  build_failed: 3,
 };
 
-function alertFor(record: SubmissionRecord, now: number): OperatorAlert | null {
+/**
+ * When the oldest uncollected change request for a job arrived, per job.
+ *
+ * Passed in rather than read here because it is a separate query per job and this module
+ * does no I/O. A caller that cannot afford the reads passes nothing and gets the other
+ * three kinds, which is a smaller answer but never a wrong one.
+ */
+export type PendingFeedbackAges = ReadonlyMap<number, string>;
+
+function alertFor(record: SubmissionRecord, now: number, pendingFeedback?: PendingFeedbackAges): OperatorAlert | null {
   if (record.abandonedAt) return null;
 
   const state = resolveJobState(record);
+
+  // Checked before the job's own state, and deliberately — twice over. A job can look
+  // perfectly healthy, building and reporting progress, while the request the creator is
+  // waiting on never reached it; that is the case this kind exists for. And it is the one
+  // alert that needs no state at all, so a record whose state cannot be resolved — a
+  // legacy one, or one whose first derivation has not been written back yet — still
+  // reports it rather than being skipped as unreadable.
+  const pendingSince = pendingFeedback?.get(record.issueNumber);
+  if (pendingSince && (!state || !isTerminal(state)) && now - Date.parse(pendingSince) > FEEDBACK_STALL_MS) {
+    return {
+      id: `op-${record.issueNumber}-feedback_undelivered`,
+      kind: 'feedback_undelivered',
+      issueNumber: record.issueNumber,
+      title: record.title,
+      ownerUid: record.ownerUid,
+      ...(record.slug ? { slug: record.slug } : {}),
+      since: pendingSince,
+    };
+  }
+
   if (!state) return null;
 
   const since = record.stateSince ?? record.createdAt;
@@ -100,9 +149,13 @@ function alertFor(record: SubmissionRecord, now: number): OperatorAlert | null {
  * Pure and clock-injected like the rest of job-state, so the console and the sweep can
  * be tested against the same fixtures and the same instant.
  */
-export function detectOperatorAlerts(records: SubmissionRecord[], now: number): OperatorAlert[] {
+export function detectOperatorAlerts(
+  records: SubmissionRecord[],
+  now: number,
+  pendingFeedback?: PendingFeedbackAges,
+): OperatorAlert[] {
   return records
-    .map((record) => alertFor(record, now))
+    .map((record) => alertFor(record, now, pendingFeedback))
     .filter((alert): alert is OperatorAlert => alert !== null)
     .sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || Date.parse(a.since) - Date.parse(b.since));
 }

@@ -42,6 +42,7 @@ describe('isKnownSpaShellPath', () => {
     '/studio/tok-abc/playtest',
     '/admin',
     '/admin/queue',
+    '/admin/costs',
     '/admin/telemetry',
     '/admin/tokens',
     '/join/K7M3QP',

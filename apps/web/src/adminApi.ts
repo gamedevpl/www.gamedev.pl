@@ -7,7 +7,7 @@
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
-export type OperatorAlertKind = 'review_ready' | 'build_failed' | 'build_stalled';
+export type OperatorAlertKind = 'review_ready' | 'build_failed' | 'build_stalled' | 'feedback_undelivered';
 
 export interface OperatorAlert {
   id: string;
@@ -98,6 +98,45 @@ export async function fetchSuggestions(): Promise<SuggestionsResponse | null> {
   if (res.status === 404 || res.status === 401) return null;
   if (!res.ok) throw new Error(`suggestions failed (${res.status})`);
   return (await res.json()) as SuggestionsResponse;
+}
+
+export interface JobCostSummary {
+  issueNumber: number;
+  title: string;
+  slug?: string;
+  state?: string;
+  sessions: number;
+  credits: number;
+  gateRuns: number;
+  tokens?: { input: number; output: number };
+  usd?: number;
+  elapsedMs: number;
+  published: boolean;
+  createdAt: string;
+}
+
+export interface CostReport {
+  jobs: JobCostSummary[];
+  totals: {
+    jobs: number;
+    sessions: number;
+    credits: number;
+    gateRuns: number;
+    published: number;
+    tokens?: { input: number; output: number };
+    usd?: number;
+  };
+  creditsPerPublishedGame: number | null;
+  medianTimeToPublishMs: number | null;
+  creditsOnUnpublished: number;
+  unmeasuredJobs: number;
+}
+
+export async function fetchCostReport(): Promise<CostReport | null> {
+  const res = await fetch(`${API_BASE}/api/admin/costs`, { credentials: 'include' });
+  if (res.status === 404 || res.status === 401) return null;
+  if (!res.ok) throw new Error(`cost report failed (${res.status})`);
+  return (await res.json()) as CostReport;
 }
 
 export interface AccessToken {

@@ -2902,3 +2902,67 @@ describe('a session that finishes without delivering', () => {
     await app.close();
   });
 });
+
+/**
+ * The cost ledger. The unit here is a session, because that is the unit the backend
+ * bills — see `JobCostEntry`.
+ */
+describe('what a build costs', () => {
+  const body = { title: 'Game idea', concept: 'A concept long enough to pass validation rules.' };
+
+  it('books a session the moment one is started', async () => {
+    const stub = createGithubClientStub({});
+    const { backend } = createBackendStub();
+    const { app, store, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    const created = await app.inject({ method: 'POST', url: '/api/submissions', headers: authHeaders, payload: body });
+    expect(created.statusCode).toBe(200);
+
+    const [record] = await store.listSubmissionsByOwner('g:test-user');
+    expect(record?.costs).toEqual([
+      {
+        kind: 'agent_session',
+        at: expect.any(String),
+        by: 'stub',
+        ref: 'task-1',
+        credits: 1,
+      },
+    ]);
+
+    await app.close();
+  });
+
+  it('books every round, including the ones that produced nothing', async () => {
+    // The whole point of recording at dispatch: a revision round costs a premium request
+    // whether or not it delivers, and a ledger written on success would price a game at
+    // whatever its last attempt cost.
+    const stub = createGithubClientStub({});
+    const { backend } = createBackendStub();
+    const { app, store, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    const created = await app.inject({ method: 'POST', url: '/api/submissions', headers: authHeaders, payload: body });
+    const { token } = created.json() as { token: string };
+
+    const feedback = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Make the ship a little slower, it is hard to control.' },
+    });
+    expect(feedback.statusCode).toBe(200);
+
+    const [record] = await store.listSubmissionsByOwner('g:test-user');
+    expect(record?.costs?.map((entry) => entry.ref)).toEqual(['task-1', 'task-2']);
+    expect(record?.costs?.every((entry) => entry.credits === 1)).toBe(true);
+
+    await app.close();
+  });
+});

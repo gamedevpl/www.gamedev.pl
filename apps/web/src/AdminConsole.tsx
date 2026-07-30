@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AccessTokensPanel } from './AccessTokensPanel.js';
 import { AdminJobsPanel } from './AdminJobsPanel.js';
+import { CostsPanel } from './CostsPanel.js';
 import { CreationLimitsPanel } from './CreationLimitsPanel.js';
 import { GameHealthView } from './GameHealthView.js';
 import { SuggestionsPanel } from './SuggestionsPanel.js';
@@ -22,6 +23,7 @@ import { ADMIN_SECTIONS, adminPath, type AdminSection } from './router.js';
 
 const SECTION_LABELS: Record<AdminSection, string> = {
   queue: 'Queue',
+  costs: 'Cost',
   telemetry: 'Telemetry',
   limits: 'Limits',
   tokens: 'Tokens',
@@ -32,6 +34,9 @@ const ALERT_COPY: Record<OperatorAlert['kind'], string> = {
   review_ready: 'waiting to be published',
   build_failed: 'failed',
   build_stalled: 'stopped moving',
+  // Names the suspect, because this one is never about the game: the request landed
+  // and the relay that wakes an agent for it did not fire.
+  feedback_undelivered: 'change request never collected — check the relay',
 };
 
 /** Rough age, in the same vocabulary the queue uses. */
@@ -139,6 +144,7 @@ export function AdminConsole({ section, onNavigate }: { section: AdminSection; o
       {summary && <AlertBanner alerts={summary.alerts} />}
 
       {section === 'queue' && <AdminJobsPanel />}
+      {section === 'costs' && <CostsPanel />}
       {section === 'telemetry' && <GameHealthView />}
       {section === 'limits' && <CreationLimitsPanel onChanged={() => void load()} />}
       {section === 'tokens' && <AccessTokensPanel />}

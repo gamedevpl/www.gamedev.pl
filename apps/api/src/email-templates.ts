@@ -315,6 +315,11 @@ const operatorCopy: Record<OperatorNotificationType, { subject: string; lead: st
     lead: 'has not moved for longer than its state allows.',
     cta: 'Open the queue',
   },
+  'operator.feedback_undelivered': {
+    subject: 'A change request is not reaching the agent',
+    lead: 'has a creator’s change request that no agent has collected — the relay may be down.',
+    cta: 'Open the queue',
+  },
 };
 
 export function operatorPushContent(type: OperatorNotificationType, title: string): { title: string; body: string } {
