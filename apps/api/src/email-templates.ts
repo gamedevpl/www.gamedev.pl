@@ -152,7 +152,7 @@ const notificationCopy: Record<
       cta: 'Improve it',
     },
     pl: {
-      subject: 'Twoja gra przydałaby się odświeżyć',
+      subject: 'Twojej grze przydałoby się odświeżenie',
       lead: 'nie przechodzi już naszych testów na najnowszym silniku. Nadal działa — ale krótka runda ulepszeń przywróci ją do formy.',
       cta: 'Ulepsz ją',
     },

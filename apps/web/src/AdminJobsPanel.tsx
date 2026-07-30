@@ -87,7 +87,12 @@ function healthLabel(game: PublishedGame, now: number): string {
     const minutes = Math.max(0, Math.floor((now - Date.parse(check.requestedAt)) / 60_000));
     return `checking… (${minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h`} ago)`;
   }
-  return check.green ? `healthy (${check.verdictAt.slice(0, 10)})` : `FAILING (${check.verdictAt.slice(0, 10)})`;
+  // Explicit on both branches: `green` is optional on the record, and a resolved check
+  // that somehow lacks it must read as "unreadable", not as failing — the loud label
+  // has to agree with the row highlight, which only fires on `green === false`.
+  if (check.green === true) return `healthy (${check.verdictAt.slice(0, 10)})`;
+  if (check.green === false) return `FAILING (${check.verdictAt.slice(0, 10)})`;
+  return `verdict unreadable (${check.verdictAt.slice(0, 10)})`;
 }
 
 function PublishedRow({ game, onChanged }: { game: PublishedGame; onChanged: () => void }) {

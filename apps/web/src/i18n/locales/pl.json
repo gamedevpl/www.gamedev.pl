@@ -24,7 +24,7 @@
         "body": "„{{title}}” wymaga poprawek."
       },
       "game_health": {
-        "title": "Twoja gra przydałaby się odświeżyć",
+        "title": "Twojej grze przydałoby się odświeżenie",
         "body": "„{{title}}” nie przechodzi już naszych testów na najnowszym silniku. Nadal działa — runda ulepszeń przywróci ją do formy."
       }
     },
