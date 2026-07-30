@@ -18,9 +18,12 @@ import type { AgentBackend } from './agent-backend.js';
 import {
   canTransition,
   detectStall,
+  isTerminal,
   planObservedStatusTransition,
   reconcileAgentObservation,
+  resolveJobState,
   toSubmissionStatus,
+  type JobState,
   type JobTransition,
 } from './job-state.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo.js';
@@ -28,6 +31,7 @@ import { createMailerFromEnv, type Mailer } from './mailer.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { emitOperatorAlert, notifyOnTransition, type EmitDeps } from './notify.js';
 import { detectOperatorAlerts, FEEDBACK_STALL_MS } from './operator-alerts.js';
+import { isAdminSession } from './admin.js';
 import { peekQuota } from './quota-gate.js';
 import { type BuildPreviewSummary, type BuildShotSummary, type Store, type SubmissionRecord } from './store.js';
 import {
@@ -515,6 +519,13 @@ export async function registerSubmissionRoutes(
     log: { error: (context: object, message: string) => void };
     /** Set when this round exists only because the last one never uploaded. */
     undelivered?: boolean;
+    /**
+     * Who asked for this round and why, when it was not the creator. The transition an
+     * operator's retry writes has to say so — a history reading `derived_from_github`
+     * for a round a person explicitly started would be the history lying about the one
+     * fact an audit of that job would want.
+     */
+    transition?: { by: JobTransition['by']; reason: string };
   }): Promise<void> {
     if (!agentBackend || !submissionTokenSecret || !store) return;
     const record = await store.getSubmission(input.issueNumber);
@@ -556,9 +567,19 @@ export async function registerSubmissionRoutes(
         await releaseWorkspace(input.issueNumber, previous.workspace, input.log);
       }
       const transition = record?.state
-        ? planObservedStatusTransition(record.state, 'building', new Date(now()).toISOString(), 'creator')
+        ? planObservedStatusTransition(
+            record.state,
+            'building',
+            new Date(now()).toISOString(),
+            input.transition?.by ?? 'creator',
+          )
         : null;
-      if (transition) await store.recordJobTransition(input.issueNumber, transition);
+      if (transition) {
+        await store.recordJobTransition(input.issueNumber, {
+          ...transition,
+          ...(input.transition ? { reason: input.transition.reason } : {}),
+        });
+      }
     } catch (error) {
       // The creator's request is already queued on the build channel, so a failed
       // resume costs the round its head start, not the request itself.
@@ -1878,6 +1899,139 @@ export async function registerSubmissionRoutes(
       return reply.send({ ok: true, jobId: started.jobId, slug: record.slug, ...(shotId ? { shotId } : {}) });
     },
   );
+
+  /**
+   * The operator's two verbs on a build beyond publish: stop it, and run it again.
+   *
+   * Registered here rather than in job-admin-routes because they are made of this
+   * module's machinery — the dispatcher, the channel token mint, the cost ledger — and
+   * the queue module deliberately owns none of that. Same admission rule as every other
+   * operator surface: a non-operator gets 404, not 403.
+   */
+  app.post<{ Params: { issueNumber: string } }>('/api/admin/jobs/:issueNumber/cancel', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });
+    if (!store) return reply.status(503).send({ error: 'store_unavailable' });
+    const issueNumber = Number(request.params.issueNumber);
+    if (!Number.isInteger(issueNumber)) return reply.status(400).send({ error: 'invalid_job' });
+
+    const record = await store.getSubmission(issueNumber);
+    if (!record) return reply.status(404).send({ error: 'not_found' });
+
+    const state = resolveJobState(record);
+    if (state && isTerminal(state)) return reply.status(409).send({ error: 'already_finished', state });
+    // The transition table forbids exactly one non-terminal exit to canceled: a bake in
+    // flight. Killing a job mid-publish could leave a publication pointing at a version
+    // whose job says it never happened — let it land or fail, then act on that.
+    if (state && !canTransition(state, 'canceled')) return reply.status(409).send({ error: 'mid_publish', state });
+
+    const at = new Date(now()).toISOString();
+    // A record the job model never adopted has no state to transition from; recording
+    // the cancel adopts it directly as canceled, which is the fact the operator just
+    // established about it.
+    await store.recordJobTransition(issueNumber, { to: 'canceled', at, by: 'operator', reason: 'operator_canceled' });
+
+    // Best effort, and honest about what it did. The Copilot backend has no kill switch —
+    // cancellation there is the job being terminal: the channel's control block now says
+    // stop, a live session reads it on its next report, and anything it sends anyway is
+    // rejected. `stopEnforced: false` is the console's cue to say "told to stop" rather
+    // than "stopped".
+    let stopEnforced = false;
+    const refs = record.dispatch?.refs;
+    if (agentBackend && refs?.length) {
+      try {
+        stopEnforced = (await agentBackend.cancel(refs[refs.length - 1])).enforced;
+      } catch (cancelError) {
+        request.log.error({ err: cancelError, issueNumber }, 'agent cancel failed; job is canceled regardless');
+      }
+    }
+
+    return reply.send({ ok: true, state: 'canceled', stopEnforced });
+  });
+
+  /**
+   * What the operator's retry tells the agent. Deliberately thin: the channel already
+   * carries the substantive brief — the gate verdict with its report, pending creator
+   * messages, the must-deliver reminder — on every call, derived from what we stored.
+   * Repeating any of it here would be a second copy that drifts.
+   */
+  const OPERATOR_RETRY_BRIEF =
+    'The operator restarted this build after it stopped making progress. Read the gate verdict and any ' +
+    'pending creator messages on the build channel, fix what ended the last round, and deliver again.';
+
+  /** States a retry makes sense from. */
+  const OPERATOR_RETRY_STATES: ReadonlySet<JobState> = new Set<JobState>([
+    // The round is dead and feedback-as-retry is the creator's move; this is the
+    // operator making it for them.
+    'failed',
+    'needs_changes',
+    // Not dead, just stuck — a quiet session or a wedged dispatch. A retry supersedes
+    // the old session with a fresh one on the same job.
+    'building',
+    'dispatched',
+  ]);
+
+  app.post<{ Params: { issueNumber: string } }>('/api/admin/jobs/:issueNumber/retry', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });
+    if (!store) return reply.status(503).send({ error: 'store_unavailable' });
+    if (!agentBackend || !submissionTokenSecret) {
+      return reply.status(503).send({ error: 'agent_backend_unavailable' });
+    }
+    const issueNumber = Number(request.params.issueNumber);
+    if (!Number.isInteger(issueNumber)) return reply.status(400).send({ error: 'invalid_job' });
+
+    const record = await store.getSubmission(issueNumber);
+    if (!record) return reply.status(404).send({ error: 'not_found' });
+
+    const state = resolveJobState(record);
+    if (!state || !OPERATOR_RETRY_STATES.has(state)) {
+      return reply.status(409).send({ error: 'not_retryable', ...(state ? { state } : {}) });
+    }
+    // Nothing delivered and nothing dispatched: there is no branch to recover, no stored
+    // version to restore, and the spec is not on the record — a round started from here
+    // would brief the agent with nothing. `queued` jobs land here, which is deliberate:
+    // their fix is dispatch coming back, not an empty session.
+    const undelivered = !record.deliveredVersion;
+    if (undelivered && !record.dispatch?.refs?.length) {
+      return reply.status(409).send({ error: 'never_dispatched' });
+    }
+
+    const refsBefore = record.dispatch?.refs?.length ?? 0;
+    await resumeBuild({
+      issueNumber,
+      feedback: undelivered ? '' : OPERATOR_RETRY_BRIEF,
+      locale: record.locale ?? 'en',
+      log: request.log,
+      // An undelivered job's work only exists on its branch; the flag is what stops the
+      // resume path deleting it and what hands the new session the old workspace.
+      ...(undelivered ? { undelivered: true } : {}),
+      transition: { by: 'operator', reason: 'operator_retry' },
+    });
+
+    // `resumeBuild` reports dispatch failure by logging, not throwing — right for the
+    // feedback route, where the request is queued on the channel either way, but an
+    // operator clicking retry needs the truth now. A new session always appends a ref,
+    // so no new ref means no new session.
+    const after = await store.getSubmission(issueNumber);
+    if ((after?.dispatch?.refs?.length ?? 0) <= refsBefore) {
+      return reply.status(502).send({ error: 'dispatch_failed' });
+    }
+
+    // A same-state retry (kicking a quiet build) records no transition on the resume
+    // path — building to building is not a move the table knows — so without this the
+    // retry would be invisible in the job's own history. The quiet-stall flag may keep
+    // showing until the new session first reports, which is accurate: it hasn't yet.
+    if (state === 'building') {
+      await store.recordJobTransition(issueNumber, {
+        to: 'building',
+        at: new Date(now()).toISOString(),
+        by: 'operator',
+        reason: 'operator_retry',
+      });
+    }
+
+    // One credit: the retry is an agent session like any other, booked by resumeBuild.
+    return reply.send({ ok: true, state: 'building', creditsSpent: 1 });
+  });
 
   // The notification sweep (docs/notifications-plan.md N1): the closed-tab backstop
   // for the opportunistic poll-path detection above. Cloud Scheduler POSTs here with

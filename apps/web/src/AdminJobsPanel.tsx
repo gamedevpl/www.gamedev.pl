@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  cancelJob,
   fetchJobQueue,
   publishJob,
+  retryJob,
+  type CancelRefusal,
   type JobQueueEntry,
   type JobQueueResponse,
   type PublishRefusal,
+  type RetryRefusal,
 } from './adminJobsApi.js';
 
 /**
@@ -37,6 +41,28 @@ const STALL_COPY: Record<NonNullable<JobQueueEntry['stall']>, string> = {
   gate_not_started: 'delivered, gate never started',
 };
 
+const CANCEL_COPY: Record<CancelRefusal, string> = {
+  already_finished: 'already finished — the queue is behind, refresh',
+  mid_publish: 'mid-publish — let the bake land or fail, then act on that',
+  store_unavailable: 'the store is not configured on this deployment',
+  unknown: 'refused, and the reason was not one this console knows',
+};
+
+const RETRY_COPY: Record<RetryRefusal, string> = {
+  not_retryable: 'nothing to retry from this state',
+  never_dispatched: 'never reached an agent, so there is nothing to resume — cancel it instead',
+  dispatch_failed: 'the agent backend refused to start a session — check it, then try again',
+  agent_backend_unavailable: 'no agent backend is configured on this deployment',
+  store_unavailable: 'the store is not configured on this deployment',
+  unknown: 'refused, and the reason was not one this console knows',
+};
+
+/** Where a retry makes sense: the round is dead, or alive and visibly stuck. */
+function retryable(job: JobQueueEntry): boolean {
+  if (job.state === 'failed' || job.state === 'needs_changes') return true;
+  return (job.state === 'building' || job.state === 'dispatched') && job.stall !== null;
+}
+
 /** Short, sortable duration: an operator reads "2h 5m", not 7_500_000. */
 function duration(ms: number | undefined): string {
   if (ms === undefined || !Number.isFinite(ms)) return '—';
@@ -48,8 +74,11 @@ function duration(ms: number | undefined): string {
 }
 
 function JobRow({ job, onPublished }: { job: JobQueueEntry; onPublished: () => void }) {
-  const [publishing, setPublishing] = useState(false);
+  const [busy, setBusy] = useState<'publish' | 'cancel' | 'retry' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  // Cancel is irreversible — canceled has no exit in the state machine — so it takes two
+  // clicks: the first arms, the second fires. Anything else on the row disarms it.
+  const [cancelArmed, setCancelArmed] = useState(false);
 
   // Only a gate-green build can publish, and `ready_for_review` is precisely the state
   // that means so. Offering the button earlier would be offering an action the API will
@@ -57,8 +86,9 @@ function JobRow({ job, onPublished }: { job: JobQueueEntry; onPublished: () => v
   const publishable = job.state === 'ready_for_review';
 
   const onPublish = useCallback(async () => {
-    setPublishing(true);
+    setBusy('publish');
     setMessage(null);
+    setCancelArmed(false);
     try {
       const result = await publishJob(job.issueNumber);
       if ('refused' in result) {
@@ -70,7 +100,52 @@ function JobRow({ job, onPublished }: { job: JobQueueEntry; onPublished: () => v
     } catch {
       setMessage('could not reach the API');
     } finally {
-      setPublishing(false);
+      setBusy(null);
+    }
+  }, [job.issueNumber, onPublished]);
+
+  const onCancel = useCallback(async () => {
+    if (!cancelArmed) {
+      setCancelArmed(true);
+      return;
+    }
+    setBusy('cancel');
+    setMessage(null);
+    setCancelArmed(false);
+    try {
+      const result = await cancelJob(job.issueNumber);
+      if ('refused' in result) {
+        setMessage(CANCEL_COPY[result.refused]);
+      } else {
+        // "Told to stop", not "stopped": the Copilot backend has no kill switch, so a
+        // live session winds down when it next reads the channel. Saying more than
+        // that would be promising something we cannot do.
+        setMessage(result.stopEnforced ? 'canceled and stopped' : 'canceled — the session stops at its next report');
+        onPublished();
+      }
+    } catch {
+      setMessage('could not reach the API');
+    } finally {
+      setBusy(null);
+    }
+  }, [cancelArmed, job.issueNumber, onPublished]);
+
+  const onRetry = useCallback(async () => {
+    setBusy('retry');
+    setMessage(null);
+    setCancelArmed(false);
+    try {
+      const result = await retryJob(job.issueNumber);
+      if ('refused' in result) {
+        setMessage(RETRY_COPY[result.refused]);
+      } else {
+        setMessage(`new session started (${result.creditsSpent} credit${result.creditsSpent === 1 ? '' : 's'})`);
+        onPublished();
+      }
+    } catch {
+      setMessage('could not reach the API');
+    } finally {
+      setBusy(null);
     }
   }, [job.issueNumber, onPublished]);
 
@@ -96,11 +171,30 @@ function JobRow({ job, onPublished }: { job: JobQueueEntry; onPublished: () => v
       <td>{duration(job.timeInStateMs)}</td>
       <td>{duration(job.ageMs)}</td>
       <td>
-        {publishable ? (
-          <button className="admin-job-publish" onClick={onPublish} disabled={publishing}>
-            {publishing ? 'Publishing…' : 'Publish'}
-          </button>
-        ) : null}
+        <div className="admin-job-actions">
+          {publishable ? (
+            <button className="admin-job-publish" onClick={onPublish} disabled={busy !== null}>
+              {busy === 'publish' ? 'Publishing…' : 'Publish'}
+            </button>
+          ) : null}
+          {retryable(job) ? (
+            // Offered where a round is dead or visibly stuck — not on every healthy
+            // build, where the button would be an invitation to spend a credit on
+            // nothing. One credit per click, and the copy says so afterwards.
+            <button className="admin-job-publish" onClick={onRetry} disabled={busy !== null}>
+              {busy === 'retry' ? 'Retrying…' : 'Retry'}
+            </button>
+          ) : null}
+          {job.state !== 'publishing' ? (
+            <button
+              className={cancelArmed ? 'admin-job-cancel is-armed' : 'admin-job-cancel'}
+              onClick={onCancel}
+              disabled={busy !== null}
+            >
+              {busy === 'cancel' ? 'Canceling…' : cancelArmed ? 'Sure? This is final' : 'Cancel'}
+            </button>
+          ) : null}
+        </div>
         {message ? <div className="admin-job-message">{message}</div> : null}
       </td>
     </tr>

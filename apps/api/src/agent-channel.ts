@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { InvalidAgentTokenError, readBearerToken, verifyAgentToken } from './agent-token.js';
 import { InvalidUploadError, type GamesStore } from './games-store.js';
-import { canTransition } from './job-state.js';
+import { canTransition, resolveJobState } from './job-state.js';
 import { type CreatorMessage, type Store, type SubmissionRecord } from './store.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from './submission-status.js';
 
@@ -281,9 +281,16 @@ export async function registerAgentChannelRoutes(
     return { issueNumber, record };
   }
 
-  function stopReason(record: SubmissionRecord): 'abandoned' | 'published' | null {
+  function stopReason(record: SubmissionRecord): 'abandoned' | 'published' | 'canceled' | null {
     if (record.abandonedAt) return 'abandoned';
     if (record.publishedAt) return 'published';
+    // The operator's cancel. This check is what makes cancellation *mean* something on
+    // the Copilot backend: its tasks API has no cancel endpoint, so the whole mechanism
+    // is the job being terminal here — a live session reads `control.stop` on its next
+    // report and winds down, and anything it sends anyway is rejected below. Before this
+    // line, `copilot-backend.cancel` described that behaviour without anything
+    // implementing it.
+    if (resolveJobState(record) === 'canceled') return 'canceled';
     return null;
   }
 

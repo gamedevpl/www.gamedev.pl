@@ -83,3 +83,59 @@ export async function publishJob(issueNumber: number): Promise<PublishResult | {
   const refusal = known.find((code) => code === body.error) ?? 'unknown';
   return { refused: refusal };
 }
+
+export interface CancelResult {
+  ok: true;
+  state: 'canceled';
+  /**
+   * Whether the agent session was actually killed, or only told to stop. The Copilot
+   * backend has no kill switch — false there is the honest answer, and the panel says
+   * "told to stop" rather than "stopped" because of it.
+   */
+  stopEnforced: boolean;
+}
+
+export type CancelRefusal = 'already_finished' | 'mid_publish' | 'store_unavailable' | 'unknown';
+
+export async function cancelJob(issueNumber: number): Promise<CancelResult | { refused: CancelRefusal }> {
+  const response = await fetch(`/api/admin/jobs/${issueNumber}/cancel`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (response.ok) return (await response.json()) as CancelResult;
+  const body = (await response.json().catch(() => ({}))) as { error?: string };
+  const known: CancelRefusal[] = ['already_finished', 'mid_publish', 'store_unavailable'];
+  return { refused: known.find((code) => code === body.error) ?? 'unknown' };
+}
+
+export interface RetryResult {
+  ok: true;
+  state: 'building';
+  /** A retry is a real agent session; the ledger books it whether or not it delivers. */
+  creditsSpent: number;
+}
+
+export type RetryRefusal =
+  | 'not_retryable'
+  | 'never_dispatched'
+  | 'dispatch_failed'
+  | 'agent_backend_unavailable'
+  | 'store_unavailable'
+  | 'unknown';
+
+export async function retryJob(issueNumber: number): Promise<RetryResult | { refused: RetryRefusal }> {
+  const response = await fetch(`/api/admin/jobs/${issueNumber}/retry`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (response.ok) return (await response.json()) as RetryResult;
+  const body = (await response.json().catch(() => ({}))) as { error?: string };
+  const known: RetryRefusal[] = [
+    'not_retryable',
+    'never_dispatched',
+    'dispatch_failed',
+    'agent_backend_unavailable',
+    'store_unavailable',
+  ];
+  return { refused: known.find((code) => code === body.error) ?? 'unknown' };
+}

@@ -7234,6 +7234,37 @@ body.player-open {
   cursor: default;
 }
 
+.admin-job-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+/* Same shape as the publish button; the colour only arrives once it is armed, because
+   the danger is in the second click, not the first. */
+.admin-job-cancel {
+  cursor: pointer;
+  padding: 0.3rem 0.7rem;
+  font: inherit;
+  font-size: 0.8rem;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
+  background: transparent;
+  color: inherit;
+  opacity: 0.8;
+}
+
+.admin-job-cancel.is-armed {
+  border-color: var(--danger, #c0392b);
+  color: var(--danger, #c0392b);
+  opacity: 1;
+}
+
+.admin-job-cancel:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .admin-job-message {
   margin-top: 0.35rem;
   font-size: 0.78rem;

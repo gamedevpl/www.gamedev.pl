@@ -239,6 +239,36 @@ describe('agent build channel', () => {
     expect(await store.listBuildEvents(ISSUE)).toHaveLength(0);
   });
 
+  it('tells an agent to stop when the operator canceled the job', async () => {
+    // This is the whole mechanism behind `agentBackend.cancel` on the Copilot backend:
+    // there is no kill endpoint, so cancellation is the job being terminal here — the
+    // live session learns on its next report, and its writes stop landing.
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    await store.recordJobTransition(ISSUE, {
+      to: 'canceled',
+      at: new Date().toISOString(),
+      by: 'operator',
+      reason: 'operator_canceled',
+    });
+    app = await createApp(store);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/progress',
+      headers: agentHeaders(),
+      payload: { text: 'Still building away.' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      accepted: false,
+      rejected: 'stopped',
+      control: { stop: true, reason: 'canceled' },
+    });
+    expect(await store.listBuildEvents(ISSUE)).toHaveLength(0);
+  });
+
   it('rejects a missing, malformed, or wrongly scoped token', async () => {
     const store = new InMemoryStore();
     await seedSubmission(store);
