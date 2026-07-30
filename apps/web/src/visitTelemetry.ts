@@ -41,6 +41,12 @@ export type VisitEvent =
   | { type: 'route_viewed'; route: VisitRouteKind }
   /** A published game began playing. Intentionally carries no slug. */
   | { type: 'play_started' }
+  /**
+   * The player opened the "How to play" card. No slug, for the same reason
+   * `play_started` carries none: the visit stream must stay unjoinable with the play
+   * stream. What this answers is how often players need the controls spelled out.
+   */
+  | { type: 'how_to_play_opened' }
   /** A step of the creation funnel was reached. Carries no prompt text, ever. */
   | { type: 'create_step'; step: CreateStep }
   /** A step of the closed-beta waitlist funnel. Carries no identity, ever. */

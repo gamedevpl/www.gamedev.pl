@@ -477,7 +477,7 @@ export interface TelemetryEvent {
 export interface VisitEvent {
   /** Per-tab uuid from `sessionStorage`. Dies with the tab; never a uid. */
   visitId: string;
-  type: 'visit_started' | 'route_viewed' | 'play_started' | 'create_step' | 'waitlist_step';
+  type: 'visit_started' | 'route_viewed' | 'play_started' | 'how_to_play_opened' | 'create_step' | 'waitlist_step';
   /** Server-anchored instant, derived like `TelemetryEvent.at`. */
   at: string;
   /** Milliseconds from visit start — the trustworthy measure of within-visit timing. */

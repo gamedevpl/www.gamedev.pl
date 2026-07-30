@@ -58,7 +58,7 @@ afterEach(() => {
   container.remove();
 });
 
-async function draw() {
+async function draw(props: { controls?: string; onExit?: () => void } = {}) {
   root = createRoot(container);
   await act(async () => {
     root!.render(
@@ -67,12 +67,25 @@ async function draw() {
         badge={{ icon: 'sparkle', label: 'AI' }}
         source={{ slug: 'brick-storm' }}
         reportSlug="brick-storm"
-        onExit={() => undefined}
+        onExit={props.onExit ?? (() => undefined)}
+        controls={props.controls}
       />,
     );
   });
   await act(async () => {
     await Promise.resolve();
+  });
+}
+
+async function click(element: Element | null) {
+  await act(async () => {
+    element?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+}
+
+async function pressEscape() {
+  await act(async () => {
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
   });
 }
 
@@ -129,5 +142,72 @@ describe('GameTheater more menu', () => {
     const widths = [...icons].map((icon) => icon.getAttribute('width'));
     expect(new Set(widths).size).toBe(1);
     expect(widths[0]).toBe('13');
+  });
+});
+
+describe('GameTheater how-to-play', () => {
+  const CONTROLS = 'Left/Right to move; Space to fire; M to mute';
+
+  it('offers no how-to-play control for a game with no controls in the catalog', async () => {
+    // Generated and draft games have no catalog entry, so the prop is absent entirely.
+    await draw();
+    expect(container.querySelector('.howto-btn')).toBeNull();
+
+    act(() => {
+      root?.unmount();
+    });
+    root = null;
+    // A deep link that rendered before the catalog landed carries an empty string.
+    await draw({ controls: '' });
+    expect(container.querySelector('.howto-btn')).toBeNull();
+  });
+
+  it('opens the panel from the bar control', async () => {
+    await draw({ controls: CONTROLS });
+    const trigger = container.querySelector('.howto-btn');
+    expect(trigger).not.toBeNull();
+
+    await click(trigger);
+
+    // The panel portals to the body, not into the theater's own subtree.
+    expect(document.querySelector('.howto-card')).not.toBeNull();
+    expect([...document.querySelectorAll('.howto-list li')].map((li) => li.textContent)).toEqual([
+      'Left/Right to move',
+      'Space to fire',
+      'M to mute',
+    ]);
+  });
+
+  it('Escape closes the panel first and only exits the game on a second press', async () => {
+    const onExit = vi.fn();
+    await draw({ controls: CONTROLS, onExit });
+    await click(container.querySelector('.howto-btn'));
+    expect(document.querySelector('.howto-card')).not.toBeNull();
+
+    await pressEscape();
+    expect(document.querySelector('.howto-card')).toBeNull();
+    expect(onExit).not.toHaveBeenCalled();
+
+    await pressEscape();
+    expect(onExit).toHaveBeenCalledTimes(1);
+  });
+
+  it('an Escape relayed from inside the sandboxed game also closes the panel first', async () => {
+    const onExit = vi.fn();
+    await draw({ controls: CONTROLS, onExit });
+    await click(container.querySelector('.howto-btn'));
+
+    await act(async () => {
+      // Opaque-origin frames post with origin "null"; the bridge relays the key here.
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { source: 'gdpl-player', type: 'key', key: 'Escape' },
+          origin: 'null',
+        }),
+      );
+    });
+
+    expect(document.querySelector('.howto-card')).toBeNull();
+    expect(onExit).not.toHaveBeenCalled();
   });
 });

@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { isPlatformAuthor } from './catalog.js';
+import { isPlatformAuthor, type CatalogTouch } from './catalog.js';
 import { GameFrame } from './GameFrame.js';
+import { HowToPlayPanel } from './HowToPlayPanel.js';
 import { PublishedGameFrame } from './PublishedGameFrame.js';
 import { PixelIcon, type PixelIconName } from './PixelIcon.js';
+import { parseControls } from './howToPlay.js';
 import { PlayerFeedbackWidget } from './PlayerFeedbackWidget.js';
 import { ReportGameButton } from './ReportGameButton.js';
 import { ShareGameButton } from './ShareGameButton.js';
 import { VoteWidget } from './VoteWidget.js';
 import { useGamePlayer } from './gamePlayer.js';
+import { recordVisitEvent } from './visitTelemetry.js';
 import { useGameSaveBridge } from './gameSave.js';
 import { usePresenceBridge } from './presence.js';
 import { useWorldBridge } from './world.js';
@@ -42,6 +45,15 @@ type GameTheaterProps = {
    * platform sentinel read as the site itself; anything else is shown as a byline.
    */
   submittedBy?: string | null;
+  /**
+   * The game's `controls` line from the catalog, which turns on the "How to play"
+   * control. Absent for generated and draft games: they have no catalog entry, and the
+   * frame is sandboxed without `allow-same-origin`, so there is nowhere else to read a
+   * control list from. The control simply does not render for them.
+   */
+  controls?: string;
+  /** Catalog touch support; `none` adds the keyboard-only line to the panel. */
+  touch?: CatalogTouch | null;
 };
 
 /**
@@ -84,6 +96,8 @@ export function GameTheater({
   orientation = 'any',
   reportSlug,
   submittedBy = null,
+  controls,
+  touch = null,
 }: GameTheaterProps) {
   const { t } = useTranslation();
   const frameRef = useRef<HTMLIFrameElement | null>(null);
@@ -91,6 +105,13 @@ export function GameTheater({
   const stageRef = useRef<HTMLElement | null>(null);
   const moreRef = useRef<HTMLDivElement | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [howToOpen, setHowToOpen] = useState(false);
+
+  // A deep-linked /play/<slug> renders before the catalog lands, with a placeholder
+  // entry whose `controls` is empty; the real string arrives on a later render. Deriving
+  // this every render (rather than memoizing the first value) is what lets the control
+  // appear when it does.
+  const hasControls = parseControls(controls ?? '').length > 0;
 
   // Playing is the one thing you do here without touching the screen for minutes at
   // a time, which is exactly when a phone dims and sleeps. Hold the screen awake.
@@ -115,10 +136,24 @@ export function GameTheater({
   // relays pointerdown so overlays like More can dismiss without covering the
   // playfield (which would steal that first tap from the game).
   const dismissMore = useCallback(() => setMoreOpen(false), []);
+
+  // Escape while the How-to-play card is up must close the card, not throw the player
+  // out of the game. Read through a ref so this callback keeps a stable identity —
+  // rebuilding it would re-run the mount-only focus effect below on every open.
+  const howToOpenRef = useRef(howToOpen);
+  howToOpenRef.current = howToOpen;
+  const escapeOrExit = useCallback(() => {
+    if (howToOpenRef.current) {
+      setHowToOpen(false);
+      return;
+    }
+    requestExit();
+  }, [requestExit]);
+
   // Escape is handled twice on purpose: the window listener below covers the app's
   // own chrome, and this covers the game iframe, which holds focus while playing
   // and swallows its own key events.
-  const player = useGamePlayer(frameRef, true, requestExit, dismissMore);
+  const player = useGamePlayer(frameRef, true, escapeOrExit, dismissMore);
 
   // Durable progress for games that ask for it (docs/persistent-world-plan.md P1).
   // Keyed on `reportSlug` — the *published* slug — for the same reason the vote and
@@ -201,6 +236,14 @@ export function GameTheater({
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        // Innermost surface first: the card, then the menu, then leaving the game.
+        // The card's state is read through a ref rather than added to this effect's
+        // deps, because every re-run of this effect hands focus to the exit button —
+        // which would pull it straight back off the card that just opened.
+        if (howToOpenRef.current) {
+          setHowToOpen(false);
+          return;
+        }
         if (moreOpen) {
           setMoreOpen(false);
           return;
@@ -253,6 +296,28 @@ export function GameTheater({
     </button>
   );
 
+  // The one thing a player needs before the first key press, and the game's own copy of
+  // it is hidden inside the frame by HIDE_CHROME. Reuses `theater-menu-item` in the
+  // overflow menu so the four hand-enumerated selector lists in styles.css keep working.
+  const howToPlayControl = (className: string) =>
+    hasControls ? (
+      <button
+        type="button"
+        className={className}
+        onClick={() => {
+          setMoreOpen(false);
+          setHowToOpen(true);
+          recordVisitEvent({ type: 'how_to_play_opened' });
+        }}
+        aria-haspopup="dialog"
+        aria-expanded={howToOpen}
+        aria-label={t('player.howToPlay')}
+      >
+        <PixelIcon name="gamepad" size={13} />
+        <span className="btn-label">{t('player.howToPlay')}</span>
+      </button>
+    ) : null;
+
   const fullscreenControl = (className: string) =>
     canFullscreen ? (
       <button
@@ -293,6 +358,7 @@ export function GameTheater({
             {/* Thumbs are first-class: the one signal people expect without hunting. */}
             {reportSlug ? <VoteWidget slug={reportSlug} /> : null}
             {/* Desktop: sound + fullscreen sit on the bar. Phone: they move into More. */}
+            {howToPlayControl('secondary-btn howto-btn theater-desktop-chrome')}
             {soundControl('secondary-btn sound-btn theater-desktop-chrome')}
             {fullscreenControl('secondary-btn fullscreen-btn theater-desktop-chrome')}
             {showMoreMenu && (
@@ -310,6 +376,7 @@ export function GameTheater({
                   <PixelIcon name="menu" size={14} />
                 </button>
                 <div className="theater-more-panel" role="menu">
+                  {howToPlayControl('theater-menu-item theater-mobile-chrome')}
                   {soundControl('theater-menu-item theater-mobile-chrome')}
                   {fullscreenControl('theater-menu-item theater-mobile-chrome')}
                   {reportSlug && (
@@ -363,6 +430,13 @@ export function GameTheater({
           <PixelIcon name="close" size={16} />
         </button>
       ) : null}
+      <HowToPlayPanel
+        open={howToOpen}
+        controls={controls ?? ''}
+        gameTitle={displayTitle}
+        keyboardOnly={touch === 'none'}
+        onClose={() => setHowToOpen(false)}
+      />
     </section>
   );
 }

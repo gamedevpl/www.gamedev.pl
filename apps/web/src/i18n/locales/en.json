@@ -152,7 +152,9 @@
       "sent": "Thanks — your feedback was received.",
       "quota": "You've sent a lot of feedback today — please try again tomorrow.",
       "error": "We couldn't send that right now. Please try again in a moment."
-    }
+    },
+    "howToPlay": "How to play",
+    "howToPlayClose": "Close"
   },
   "catalog": {
     "title": "Games",

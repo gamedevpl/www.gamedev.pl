@@ -152,7 +152,9 @@
       "sent": "Dzięki — otrzymaliśmy Twoją opinię.",
       "quota": "Wysłałeś dziś dużo opinii — spróbuj ponownie jutro.",
       "error": "Nie udało się teraz tego wysłać. Spróbuj ponownie za chwilę."
-    }
+    },
+    "howToPlay": "Jak grać",
+    "howToPlayClose": "Zamknij"
   },
   "catalog": {
     "title": "Gry",

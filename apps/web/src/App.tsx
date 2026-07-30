@@ -930,6 +930,8 @@ export function App() {
                 orientation={stageContent.game.orientation}
                 reportSlug={stageContent.game.slug}
                 submittedBy={stageContent.game.submittedBy}
+                controls={stageContent.game.controls}
+                touch={stageContent.game.touch}
               />
             )}
 
