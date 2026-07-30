@@ -72,6 +72,12 @@ submissions/{issueNumber}
 
 usage/{uid}/counters/{yyyy-mm-dd}
   submissions: n, previews: n, mocks: n   # transactional increments; quota reads hit this doc only
+
+globalUsage/{yyyy-mm-dd}
+  submissions: n                          # everyone together, for the global cap below
+
+opsConfig/creationLimits                  # the circuit-breaker; operator-written, no deploy
+  paused: bool, globalDailySubmissionCap: n | null, updatedAt, updatedBy
 ```
 
 No events collection (rethink #3). Google `sub` is stable for the life of the account.
@@ -148,6 +154,52 @@ the coarse outer layer (and is the only limiter on `/api/auth/*`).
 - **M2 — Read-side decision + UX.** (IN PROGRESS — quota UX & public read decision implemented) Owner decided public catalog/play reads; quota-exceeded and blocked UX; status links stay shareable read-only.
 - **M3 — Retire Basic-Auth.** (NOT STARTED — awaiting owner authorization) Delete `site-basic-auth` + hook; smoke tests flip to session-only checks. Google sign-in is the single auth boundary.
 - **M4 — Visibility + reach.** Admin usage view (allowlisted uids) / BigQuery log sink; optionally add GitHub as a second provider for power-creators.
+
+## The global cap and pause switch (built 2026-07-30)
+
+Per-user quotas bound what **one** creator costs. Nothing bounded what everyone costs
+together, so total spend was bounded only by the invite count — which is not a control,
+it is an accident of how many invitations have gone out. And there was no way to stop
+creation at all short of editing an environment variable and redeploying, which
+mid-incident also drops every party room in flight.
+
+Two controls now sit beside the per-user quota, both in
+[`creation-limits.ts`](../apps/api/src/creation-limits.ts):
+
+| Control                    | Effect                                                                                |
+| -------------------------- | ------------------------------------------------------------------------------------- |
+| `paused`                   | `POST /api/submissions` refuses with `creation_paused`                                |
+| `globalDailySubmissionCap` | at most N submissions per UTC day across every account, then `creation_over_capacity` |
+
+Both live in the `opsConfig/creationLimits` document rather than in the environment,
+**because a breaker is only worth having if pulling it is cheaper than the incident.**
+Readers cache for 60s, so a change reaches every instance within about a minute and costs
+one document read per instance per minute in between. `GLOBAL_DAILY_SUBMISSION_CAP` sets
+the fallback ceiling that applies when the document sets none — a real number (default 50),
+never infinity, so an unwritten or unreadable document still has a ceiling.
+
+Operating it (admin session required; `ADMIN_UIDS`):
+
+```bash
+curl -s -b cookies.txt https://www.gamedev.pl/api/admin/creation-limits          # what is in force + today's spend
+curl -s -b cookies.txt -X POST -H 'content-type: application/json' \
+  -d '{"paused":true}' https://www.gamedev.pl/api/admin/creation-limits          # stop creation
+  # …and '{"paused":false}' to resume, '{"globalDailySubmissionCap":25}' to retune.
+```
+
+Three deliberate choices worth knowing:
+
+- **Refusals cost the creator nothing.** The gate runs after moderation but before the
+  per-user quota is spent and before any GitHub write, so a creator turned away by a
+  site-wide limit still has their whole daily allowance — which is what the message they
+  see says, in both languages.
+- **`bot:` accounts bypass it entirely** — not paused, not capped, not counted. Pausing
+  creation is an incident response, and the deploy pipeline's own smoke checks run as
+  `bot:` accounts; a tripped cap that reddened the deploy gate would remove the ability to
+  ship a fix at exactly the wrong moment. They remain standard-tier for the _per-user_
+  quota, and the namespace cannot be self-assigned (see `docs/agent-access-tokens.md`).
+- **`trusted` accounts do not bypass it.** They skip the per-user quota, which makes them
+  precisely the accounts a global spend ceiling exists to bound.
 
 ## Adjacent safeguards (unchanged from v1, still required)
 

@@ -10,8 +10,10 @@ import {
 import { routeAll, type Suggestion } from './suggestions.js';
 import { summarizeVisitFunnel, type VisitFunnel } from './visit-funnel.js';
 import { summarizeCreatorMetrics, type CreatorMetrics } from './creator-metrics.js';
+import { DEFAULT_CREATION_LIMITS_TTL_MS, resolveDefaultGlobalDailyCap } from './creation-limits.js';
 import {
   BOT_UID_PREFIX,
+  type CreationLimits,
   type Scorecard,
   type Store,
   type TelemetryEvent,
@@ -60,7 +62,41 @@ export interface AdminRoutesOptions {
   /** Uids permitted to read. Empty means the routes exist but admit nobody. */
   adminUids?: Set<string>;
   now?: () => number;
+  /** Mirrors the submission routes' fallback ceiling, for the breaker view below. */
+  globalDailySubmissionCap?: number;
+  /** How long submission routes cache the breaker config — reported as the flip delay. */
+  creationLimitsTtlMs?: number;
 }
+
+/**
+ * The creation circuit-breaker as an operator sees it: what is stored, what is actually
+ * in force, and how much of today's shared allowance is gone.
+ *
+ * This exists because the breaker is only worth having if pulling it is fast. Editing a
+ * Firestore document in the console works and needs no deploy, but under incident
+ * conditions it is a lot of clicks to get a boolean wrong in, and it shows the operator
+ * nothing about whether the cap is anywhere near tripping.
+ */
+export interface CreationLimitsResponse {
+  /** Null when nothing has ever been written — the defaults below are what is in force. */
+  stored: CreationLimits | null;
+  effective: { paused: boolean; globalDailySubmissionCap: number };
+  today: { dateStr: string; submissions: number };
+  /** Upper bound, in ms, on how long a change takes to reach every instance. */
+  propagationMs: number;
+}
+
+const CreationLimitsPatchSchema = z
+  .object({
+    paused: z.boolean().optional(),
+    // null clears the stored ceiling and hands the decision back to the deployed
+    // default, which is a different intent from setting a number.
+    globalDailySubmissionCap: z.number().int().min(0).max(100_000).nullable().optional(),
+  })
+  .refine(
+    (patch) => patch.paused !== undefined || patch.globalDailySubmissionCap !== undefined,
+    'nothing to change: send paused and/or globalDailySubmissionCap',
+  );
 
 export interface HealthResponse {
   /**
@@ -141,6 +177,58 @@ const REQUEST_BUDGET: PartitionScanBudget = { perDay: MAX_EVENTS_PER_DAY, total:
 export async function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOptions): Promise<void> {
   const { store, adminUids } = options;
   const now = options.now ?? Date.now;
+  const defaultGlobalCap = resolveDefaultGlobalDailyCap(options.globalDailySubmissionCap);
+  const creationLimitsTtlMs = options.creationLimitsTtlMs ?? DEFAULT_CREATION_LIMITS_TTL_MS;
+
+  /** Reads the stored breaker plus today's spend, uncached — an operator wants truth. */
+  async function readCreationLimits(): Promise<CreationLimitsResponse> {
+    const dateStr = new Date(now()).toISOString().slice(0, 10);
+    const [stored, submissions] = await Promise.all([
+      store.getCreationLimits(),
+      store.getGlobalSubmissionCount(dateStr),
+    ]);
+    return {
+      stored,
+      effective: {
+        paused: stored?.paused === true,
+        globalDailySubmissionCap: stored?.globalDailySubmissionCap ?? defaultGlobalCap,
+      },
+      today: { dateStr, submissions },
+      propagationMs: creationLimitsTtlMs,
+    };
+  }
+
+  app.get('/api/admin/creation-limits', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) {
+      return reply.status(404).send({ error: 'not found' });
+    }
+    return reply.status(200).send(await readCreationLimits());
+  });
+
+  /**
+   * Pulls (or resets) the breaker. Session-only like every operator write, so a leaked
+   * access token cannot pause the product.
+   *
+   * The change lands in Firestore rather than in the environment, so it needs no new
+   * revision — which is the entire point: a redeploy mid-incident would drop every party
+   * room in flight. Instances converge within `propagationMs`.
+   */
+  app.post('/api/admin/creation-limits', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) {
+      return reply.status(404).send({ error: 'not found' });
+    }
+
+    const parsed = CreationLimitsPatchSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
+    }
+
+    await store.setCreationLimits(parsed.data, request.user!.uid);
+    // Log it: a pause left on by accident is the failure mode here, and the record of
+    // who set it and when is what makes that legible later.
+    app.log.warn({ patch: parsed.data, by: request.user!.uid }, 'creation limits changed by operator');
+    return reply.status(200).send(await readCreationLimits());
+  });
 
   app.get('/api/admin/telemetry/health', async (request, reply) => {
     // 404 rather than 403 for a signed-in non-admin: the existence of an operator

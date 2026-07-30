@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { InMemoryStore, type Scorecard, type TelemetryEvent, type VisitEvent } from './store.js';
-import type { HealthResponse, ScorecardsResponse, VisitsResponse } from './admin.js';
+import type { CreationLimitsResponse, HealthResponse, ScorecardsResponse, VisitsResponse } from './admin.js';
 import { runScorecardSweep } from './scorecard.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
@@ -426,6 +426,112 @@ describe('GET /api/admin/suggestions', () => {
     // The game's own error text reaches the operator, under the name that says so.
     expect(body.suggestions[0].untrustedContext.errorSamples[0].message).toContain('TypeError');
     expect(body.computedFrom).toBe('2026-07-28T03:00:00.000Z');
+    await app.close();
+  });
+});
+
+/**
+ * The operator's half of the creation breaker. Session-only, like every operator write —
+ * a leaked access token must not be able to pause the product.
+ */
+describe('/api/admin/creation-limits', () => {
+  let store: InMemoryStore;
+
+  beforeEach(async () => {
+    store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    await store.upsertUser({ uid: 'g:player' });
+  });
+
+  it('reports what is in force before anything has been set', async () => {
+    const app = await appWith(store);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/admin/creation-limits',
+      headers: authHeaders('g:boss'),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as CreationLimitsResponse;
+    // Nothing stored is the normal state, and it must read as "the deployed default is
+    // in force", never as "there is no ceiling".
+    expect(body.stored).toBeNull();
+    expect(body.effective.paused).toBe(false);
+    expect(body.effective.globalDailySubmissionCap).toBeGreaterThan(0);
+    expect(body.today).toMatchObject({ dateStr: today, submissions: 0 });
+    await app.close();
+  });
+
+  it('pauses creation and records who did it', async () => {
+    const app = await appWith(store);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/admin/creation-limits',
+      headers: authHeaders('g:boss'),
+      payload: { paused: true, globalDailySubmissionCap: 25 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as CreationLimitsResponse;
+    expect(body.effective).toEqual({ paused: true, globalDailySubmissionCap: 25 });
+    // A pause left on by accident is this feature's own failure mode, so the record of
+    // who set it is part of the deliverable.
+    expect(body.stored).toMatchObject({ paused: true, updatedBy: 'g:boss' });
+    expect(await store.getCreationLimits()).toMatchObject({ paused: true, globalDailySubmissionCap: 25 });
+    await app.close();
+  });
+
+  it('takes a partial change without clearing the other field', async () => {
+    await store.setCreationLimits({ paused: true, globalDailySubmissionCap: 25 }, 'g:boss');
+    const app = await appWith(store);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/admin/creation-limits',
+      headers: authHeaders('g:boss'),
+      payload: { paused: false },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as CreationLimitsResponse).effective).toEqual({
+      paused: false,
+      globalDailySubmissionCap: 25,
+    });
+    await app.close();
+  });
+
+  it('rejects an empty patch rather than pretending to change something', async () => {
+    const app = await appWith(store);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/admin/creation-limits',
+      headers: authHeaders('g:boss'),
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('is invisible to everyone else, read and write alike', async () => {
+    const app = await appWith(store);
+
+    for (const headers of [authHeaders('g:player'), {}]) {
+      const read = await app.inject({ method: 'GET', url: '/api/admin/creation-limits', headers });
+      expect(read.statusCode).toBe(404);
+      const write = await app.inject({
+        method: 'POST',
+        url: '/api/admin/creation-limits',
+        headers,
+        payload: { paused: true },
+      });
+      expect(write.statusCode).toBe(404);
+    }
+    // The refusals are refusals, not silent no-ops.
+    expect(await store.getCreationLimits()).toBeNull();
     await app.close();
   });
 });

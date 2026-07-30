@@ -485,3 +485,61 @@ describe('the fake itself', () => {
     ).rejects.toThrow(/Cannot use "undefined" as a Firestore value/);
   });
 });
+
+/**
+ * The creation breaker's two documents. Worth Firestore-shaped coverage for the reason at
+ * the top of this file: the in-memory store accepts anything, and these are written by an
+ * operator under incident conditions — the worst time to discover a rejected write.
+ */
+describe('FirestoreStore creation limits', () => {
+  it('writes the breaker with no undefined fields, cap included', async () => {
+    const { db, docs, key } = fakeFirestore();
+    const store = new FirestoreStore(db);
+
+    const limits = await store.setCreationLimits({ paused: true, globalDailySubmissionCap: 25 }, 'g:boss');
+
+    expect(limits).toMatchObject({ paused: true, globalDailySubmissionCap: 25, updatedBy: 'g:boss' });
+    expect(docs.get(key('opsConfig', 'creationLimits'))).toMatchObject({ paused: true, globalDailySubmissionCap: 25 });
+  });
+
+  it('stores a cleared cap as null rather than as an absent field', async () => {
+    const { db, docs, key } = fakeFirestore();
+    const store = new FirestoreStore(db);
+
+    // Firestore refuses `undefined`, and "no stored ceiling" has to survive the round
+    // trip as an explicit null or the reader cannot tell it from a missing document.
+    await store.setCreationLimits({ paused: false, globalDailySubmissionCap: null }, 'g:boss');
+
+    expect(docs.get(key('opsConfig', 'creationLimits'))!.globalDailySubmissionCap).toBeNull();
+    expect(await store.getCreationLimits()).toMatchObject({ paused: false, globalDailySubmissionCap: null });
+  });
+
+  it('merges a partial change rather than dropping the other field', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+
+    await store.setCreationLimits({ paused: true, globalDailySubmissionCap: 25 }, 'g:boss');
+    await store.setCreationLimits({ paused: false }, 'g:boss');
+
+    expect(await store.getCreationLimits()).toMatchObject({ paused: false, globalDailySubmissionCap: 25 });
+  });
+
+  it('answers null before anyone has set a breaker', async () => {
+    const { db } = fakeFirestore();
+    expect(await new FirestoreStore(db).getCreationLimits()).toBeNull();
+  });
+
+  it('counts the day’s submissions globally and stops at the cap', async () => {
+    const { db, docs, key } = fakeFirestore();
+    const store = new FirestoreStore(db);
+
+    expect(await store.checkAndIncrementGlobalSubmissions('2026-07-30', 2)).toEqual({ allowed: true, current: 1 });
+    expect(await store.checkAndIncrementGlobalSubmissions('2026-07-30', 2)).toEqual({ allowed: true, current: 2 });
+    expect(await store.checkAndIncrementGlobalSubmissions('2026-07-30', 2)).toEqual({ allowed: false, current: 2 });
+
+    expect(await store.getGlobalSubmissionCount('2026-07-30')).toBe(2);
+    // One document per UTC day, so yesterday's spend can never refuse today's request.
+    expect(await store.getGlobalSubmissionCount('2026-07-29')).toBe(0);
+    expect(docs.get(key('globalUsage', '2026-07-30'))).toMatchObject({ submissions: 2 });
+  });
+});

@@ -90,6 +90,8 @@ async function createApp(params: {
   store?: Store;
   dailySubmissionQuota?: number;
   dailyFeedbackQuota?: number;
+  globalDailySubmissionCap?: number;
+  creationLimitsTtlMs?: number;
   translator?: Translator;
   contentChecker?: ContentChecker;
   maxCachedDraftPreviews?: number;
@@ -108,6 +110,8 @@ async function createApp(params: {
       now: params.now,
       dailySubmissionQuota: params.dailySubmissionQuota,
       dailyFeedbackQuota: params.dailyFeedbackQuota,
+      globalDailySubmissionCap: params.globalDailySubmissionCap,
+      creationLimitsTtlMs: params.creationLimitsTtlMs,
       translator: params.translator ?? new NoopTranslator(),
       maxCachedDraftPreviews: params.maxCachedDraftPreviews,
     },
@@ -262,6 +266,128 @@ describe('submission routes authentication & quota', () => {
 
     expect(res.statusCode).toBe(403);
     expect(res.json()).toEqual({ error: 'account is blocked' });
+
+    await app.close();
+  });
+});
+
+/**
+ * The cost circuit-breaker (readiness item 6). Per-user quotas bound one creator; these
+ * bound everyone at once, and can be pulled without a redeploy.
+ */
+describe('global creation cap and pause switch', () => {
+  const body = { title: 'Game idea', concept: 'A concept long enough to pass validation rules.' };
+
+  async function submit(app: FastifyInstance, headers: Record<string, string>, title = body.title) {
+    return app.inject({ method: 'POST', url: '/api/submissions', headers, payload: { ...body, title } });
+  }
+
+  it('refuses at the shared daily ceiling and leaves the creator’s own allowance unspent', async () => {
+    const stub = createGithubClientStub({});
+    const { app, store, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      submissionTokenSecret: secret,
+      dailySubmissionQuota: 5,
+      globalDailySubmissionCap: 2,
+      creationLimitsTtlMs: 0,
+    });
+
+    expect((await submit(app, authHeaders, 'One')).statusCode).toBe(200);
+    expect((await submit(app, authHeaders, 'Two')).statusCode).toBe(200);
+
+    const refused = await submit(app, authHeaders, 'Three');
+    expect(refused.statusCode).toBe(429);
+    // A distinct code, because the creator's own allowance is intact and a message
+    // implying otherwise is one they can check against the counter on the hero.
+    expect(refused.json()).toEqual({ error: 'creation_over_capacity' });
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    expect((await store.getUsage('g:test-user', dateStr)).submissions).toBe(2);
+    // And nothing was filed, so the refusal cost an agent run as well as a quota slot.
+    expect(stub.createIssue).toHaveBeenCalledTimes(2);
+
+    await app.close();
+  });
+
+  it('blocks every creation while paused, before spending anything', async () => {
+    const stub = createGithubClientStub({});
+    const { app, store, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      submissionTokenSecret: secret,
+      creationLimitsTtlMs: 0,
+    });
+    await store.setCreationLimits({ paused: true }, 'g:admin');
+
+    const refused = await submit(app, authHeaders);
+    expect(refused.statusCode).toBe(429);
+    expect(refused.json()).toEqual({ error: 'creation_paused' });
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    expect((await store.getUsage('g:test-user', dateStr)).submissions).toBe(0);
+    expect(stub.createIssue).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('leaves per-user quota behaviour exactly as it was', async () => {
+    const stub = createGithubClientStub({});
+    const { app, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      submissionTokenSecret: secret,
+      dailySubmissionQuota: 1,
+      globalDailySubmissionCap: 100,
+      creationLimitsTtlMs: 0,
+    });
+
+    expect((await submit(app, authHeaders, 'One')).statusCode).toBe(200);
+    const exceeded = await submit(app, authHeaders, 'Two');
+    expect(exceeded.statusCode).toBe(429);
+    // The global gate must not shadow the per-user one, or the honest message would be
+    // the wrong one: this creator really has used their allowance.
+    expect(exceeded.json()).toEqual({ error: 'daily submission quota exceeded' });
+
+    await app.close();
+  });
+
+  it('takes effect on a running app, with no restart and no redeploy', async () => {
+    const stub = createGithubClientStub({});
+    let clock = Date.UTC(2026, 6, 30, 12, 0, 0);
+    const { app, store, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      submissionTokenSecret: secret,
+      now: () => clock,
+      creationLimitsTtlMs: 60_000,
+    });
+
+    expect((await submit(app, authHeaders, 'Before')).statusCode).toBe(200);
+
+    // The whole reason the config is a Firestore document rather than an env var: an
+    // env change needs a new revision, and a redeploy mid-incident drops every party
+    // room in flight.
+    await store.setCreationLimits({ paused: true }, 'g:admin');
+    clock += 61_000;
+
+    const refused = await submit(app, authHeaders, 'After');
+    expect(refused.statusCode).toBe(429);
+    expect(refused.json()).toEqual({ error: 'creation_paused' });
+
+    await app.close();
+  });
+
+  it('lets bot: accounts through a closed breaker, so a pause cannot redden the deploy gate', async () => {
+    const stub = createGithubClientStub({});
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'bot:ci' });
+    await store.setCreationLimits({ paused: true, globalDailySubmissionCap: 0 }, 'g:admin');
+    const { app } = await createApp({
+      githubClient: stub.githubClient,
+      submissionTokenSecret: secret,
+      store,
+      creationLimitsTtlMs: 0,
+    });
+
+    const res = await submit(app, getAuthHeaders('bot:ci'));
+    expect(res.statusCode).toBe(200);
 
     await app.close();
   });
