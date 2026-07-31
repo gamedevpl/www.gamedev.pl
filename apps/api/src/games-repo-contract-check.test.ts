@@ -100,7 +100,7 @@ describe('runGamesRepoContractCheck', () => {
   it('reports drift when a local-only module is not in the declared-ahead list', async () => {
     // If games-repo drops a module that was never declared website-ahead, the
     // check must report drift rather than silently passing. (Codex review — PR #379.)
-    const remoteWithout = GAME_KIT_MODULES.filter((name) => name !== 'voice');
+    const remoteWithout = GAME_KIT_MODULES.filter((name) => name !== 'collision');
     const assembleWithout = `
       const GAME_KIT_MODULES = [${remoteWithout.map((name) => `'${name}'`).join(', ')}];
       const catalog = readMusicCatalog();
@@ -115,7 +115,7 @@ describe('runGamesRepoContractCheck', () => {
     const outcome = await runGamesRepoContractCheck({ ...BASE, fetchImpl });
     expect(outcome.kind).toBe('drift');
     expect(outcome.kind === 'drift' && outcome.reason).toContain('Undeclared website-ahead modules');
-    expect(outcome.kind === 'drift' && outcome.reason).toContain('voice');
+    expect(outcome.kind === 'drift' && outcome.reason).toContain('collision');
   });
 
   it('skips without a token so forks and fresh clones stay green', async () => {
