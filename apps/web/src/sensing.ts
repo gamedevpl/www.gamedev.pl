@@ -32,8 +32,37 @@ import { tiltFromOrientation } from './useDeviceTilt.js';
 const RELAY_MS = 50;
 /** Movement below this since the last relayed frame is hand tremor, not intent. */
 const RELAY_THRESHOLD = 0.01;
+/**
+ * A held, unmoving stick is re-sent this often. The movement gate above would otherwise
+ * suppress a steady turn forever, and the game module reads a relay silent for ~1.2s as
+ * stopped — a player holding a turn would drift back to neutral mid-corner.
+ */
+const HEARTBEAT_MS = 400;
 /** Readings smaller than this read as level, matching the game module's own deadzone. */
 const DEADZONE = 0.06;
+
+/**
+ * The angle the viewport is rotated from the device's natural orientation. Raw
+ * beta/gamma are device-frame; a landscape game steered in device axes gets its x and y
+ * swapped, so the relayed vector is rotated into screen space before it leaves.
+ */
+function screenAngle(): number {
+  try {
+    const orientation = typeof screen !== 'undefined' ? screen.orientation : undefined;
+    if (orientation && typeof orientation.angle === 'number') return orientation.angle;
+    const legacy = Number((window as unknown as { orientation?: unknown }).orientation);
+    return Number.isFinite(legacy) ? legacy : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function rotateIntoScreen(tilt: { x: number; y: number }, angle: number): { x: number; y: number } {
+  if (angle === 90) return { x: tilt.y, y: -tilt.x };
+  if (angle === -90 || angle === 270) return { x: -tilt.y, y: tilt.x };
+  if (angle === 180) return { x: -tilt.x, y: -tilt.y };
+  return tilt;
+}
 
 type OrientationConstructor = typeof DeviceOrientationEvent & {
   requestPermission?: () => Promise<PermissionState | 'granted' | 'denied'>;
@@ -157,14 +186,20 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
       // frames on resume would replay a pocketed phone's wobble into the round.
       if (document.visibilityState === 'hidden') return;
 
-      const tilt = tiltFromOrientation(event, baseline.current);
+      // Delta in device axes, then rotated into the axes the player is looking at —
+      // a landscape game must read "tilt right" as screen-right, not device-right.
+      const tilt = rotateIntoScreen(tiltFromOrientation(event, baseline.current), screenAngle());
       const x = Math.abs(tilt.x) < DEADZONE ? 0 : tilt.x;
       const y = Math.abs(tilt.y) < DEADZONE ? 0 : tilt.y;
 
       const now = performance.now();
       const previous = lastSent.current;
       if (now - previous.at < RELAY_MS) return;
-      if (Math.abs(x - previous.x) < RELAY_THRESHOLD && Math.abs(y - previous.y) < RELAY_THRESHOLD) return;
+      const moved = Math.abs(x - previous.x) >= RELAY_THRESHOLD || Math.abs(y - previous.y) >= RELAY_THRESHOLD;
+      // A steady nonzero stick heartbeats through the movement gate: the game reads a
+      // silent relay as stopped, and a held turn must stay held.
+      const held = x !== 0 || y !== 0;
+      if (!moved && !(held && now - previous.at >= HEARTBEAT_MS)) return;
       lastSent.current = { x, y, at: now };
       if (!announcedActive.current) {
         announcedActive.current = true;
@@ -174,9 +209,17 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
       postToGame({ t: 'sensing:tilt', x, y });
     };
 
+    // Turning the phone over to the other orientation changes both the axis mapping
+    // and the comfortable grip; re-baseline so "level" is re-learned in the new hold.
+    const onOrientationChange = () => {
+      baseline.current = null;
+    };
+
     window.addEventListener('deviceorientation', onOrientation);
+    window.addEventListener('orientationchange', onOrientationChange);
     return () => {
       window.removeEventListener('deviceorientation', onOrientation);
+      window.removeEventListener('orientationchange', onOrientationChange);
       baseline.current = null;
       lastSent.current = { x: 0, y: 0, at: 0 };
       if (announcedActive.current) {

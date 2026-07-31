@@ -154,6 +154,53 @@ describe('useSensingBridge', () => {
     expect(tiltFrames()[0]).toMatchObject({ x: 0.5, y: 1 });
   });
 
+  it('re-sends a held, unmoving stick before the game-side decay window', () => {
+    vi.stubGlobal('DeviceOrientationEvent', function DeviceOrientationEvent() {});
+    let now = 1000;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    const { fromGame } = mount();
+    fromGame({ t: 'sensing:hello', features: ['tilt'] });
+    toGame.length = 0;
+
+    act(() => window.dispatchEvent(orientation(40, 0)));
+    now = 1100;
+    act(() => window.dispatchEvent(orientation(40, 14)));
+    expect(tiltFrames()).toHaveLength(1);
+
+    // Same reading 100ms later: inside the heartbeat window, correctly suppressed.
+    now = 1200;
+    act(() => window.dispatchEvent(orientation(40, 14)));
+    expect(tiltFrames()).toHaveLength(1);
+
+    // Still holding the same turn past the heartbeat: must be re-sent, or the game's
+    // ~1.2s staleness decay would read a steady hand as letting go.
+    now = 1600;
+    act(() => window.dispatchEvent(orientation(40, 14)));
+    expect(tiltFrames()).toHaveLength(2);
+    expect(tiltFrames()[1]).toMatchObject({ x: 0.5, y: 0 });
+
+    // A level stick does not heartbeat — there is nothing to keep alive.
+    now = 1700;
+    act(() => window.dispatchEvent(orientation(40, 0)));
+    expect(tiltFrames()).toHaveLength(3);
+    now = 2300;
+    act(() => window.dispatchEvent(orientation(40, 0)));
+    expect(tiltFrames()).toHaveLength(3);
+  });
+
+  it('rotates the stick into the current screen orientation', () => {
+    vi.stubGlobal('DeviceOrientationEvent', function DeviceOrientationEvent() {});
+    vi.stubGlobal('screen', { orientation: { angle: 90 } });
+    const { fromGame } = mount();
+    fromGame({ t: 'sensing:hello', features: ['tilt'] });
+    toGame.length = 0;
+
+    act(() => window.dispatchEvent(orientation(40, 0)));
+    // Device-frame delta (x: 0.5, y: 1); at 90° the screen sees x from device y.
+    act(() => window.dispatchEvent(orientation(80, 14)));
+    expect(tiltFrames()[0]).toMatchObject({ x: 1, y: -0.5 });
+  });
+
   it('reads a wobble inside the deadzone as level', () => {
     vi.stubGlobal('DeviceOrientationEvent', function DeviceOrientationEvent() {});
     const { fromGame } = mount();
