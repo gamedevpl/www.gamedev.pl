@@ -34,6 +34,11 @@ export interface GateTriggerOptions {
   gamesRepo?: string;
   /** Secret Manager resource holding a contents:read PAT on the games repo. */
   gamesTokenSecret?: string;
+  /**
+   * Email of the least-privilege SA the build runs as (store write + github-token).
+   * Defaults to `gate-runner@${project}.iam.gserviceaccount.com`.
+   */
+  serviceAccountEmail?: string;
   fetchImpl?: typeof fetch;
   getAccessToken?: () => Promise<string>;
 }
@@ -56,6 +61,11 @@ const DEFAULTS = {
   gamesTokenSecret: 'github-token',
 };
 
+/** Hard caps — keep identical to `infra/cloudbuild-gate.yaml`. */
+const GATE_MACHINE_TYPE = 'E2_HIGHCPU_8';
+const GATE_DISK_SIZE_GB = 50;
+const GATE_TIMEOUT = '1800s';
+
 /**
  * The build the gate runs in.
  *
@@ -63,6 +73,10 @@ const DEFAULTS = {
  * version for when someone needs to check one candidate without going through delivery.
  * The reasoning behind the machine type, the timeout and the choice of credential is
  * documented there and applies identically here.
+ *
+ * Hostile-input invariant: submitted sources must never reshape this CONFIG. Slug and
+ * version are data for CLI args only; step images, SA, secrets, and caps stay pinned.
+ * See `infra/gate-hardening.md`.
  */
 function buildSpec(
   options: Required<Omit<GateTriggerOptions, 'fetchImpl' | 'getAccessToken'>>,
@@ -125,8 +139,14 @@ function buildSpec(
         },
       ],
     },
-    options: { logging: 'CLOUD_LOGGING_ONLY', machineType: 'E2_HIGHCPU_8' },
-    timeout: '3600s',
+    // Least-privilege identity — not the project default Cloud Build SA.
+    serviceAccount: `projects/${options.project}/serviceAccounts/${options.serviceAccountEmail}`,
+    options: {
+      logging: 'CLOUD_LOGGING_ONLY',
+      machineType: GATE_MACHINE_TYPE,
+      diskSizeGb: GATE_DISK_SIZE_GB,
+    },
+    timeout: GATE_TIMEOUT,
     // Searchable in the Cloud Build history: "show me every gate run for this game" —
     // and health runs carry their own tag so a fleet re-check reads as one, not as a
     // wave of failing acceptance gates.
@@ -164,6 +184,7 @@ export function createCloudBuildGateTrigger(
     platformRef: options.platformRef ?? DEFAULTS.platformRef,
     gamesRepo: options.gamesRepo ?? DEFAULTS.gamesRepo,
     gamesTokenSecret: options.gamesTokenSecret ?? DEFAULTS.gamesTokenSecret,
+    serviceAccountEmail: options.serviceAccountEmail ?? `gate-runner@${options.project}.iam.gserviceaccount.com`,
   };
 
   const fetchImpl = options.fetchImpl ?? fetch;
@@ -218,5 +239,8 @@ export function gateTriggerOptionsFromEnv(): GateTriggerOptions | null {
     ...(process.env.GATE_PLATFORM_REPO?.trim() ? { platformRepo: process.env.GATE_PLATFORM_REPO.trim() } : {}),
     ...(process.env.GATE_PLATFORM_REF?.trim() ? { platformRef: process.env.GATE_PLATFORM_REF.trim() } : {}),
     ...(process.env.GAMES_REPO?.trim() ? { gamesRepo: process.env.GAMES_REPO.trim() } : {}),
+    ...(process.env.GATE_SERVICE_ACCOUNT?.trim()
+      ? { serviceAccountEmail: process.env.GATE_SERVICE_ACCOUNT.trim() }
+      : {}),
   };
 }
