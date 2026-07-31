@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
-import { isPlayTimeAccruing, TelemetrySession } from './telemetry.js';
+import { isPlayTimeAccruing, TelemetrySession, type TelemetryEvent } from './telemetry.js';
 import { readReportedControls, type ReportedControls } from './howToPlay.js';
 import { recordVisitEvent } from './visitTelemetry.js';
 
@@ -400,11 +400,47 @@ export function withGameLocale(html: string, lang: string | undefined | null): s
  * makes "is this a real play of a real game" a structural fact instead of a condition
  * someone has to remember to write.
  */
+/**
+ * The open play session, for shell code that observes something the game cannot report.
+ *
+ * Zones are the case this exists for: whether an open became a *shared* world is known
+ * to the shell (it owns the socket) and must not be reported by the game (a frame that
+ * could claim `joined` could claim to be multiplayer while sitting alone). Everything a
+ * game may say still arrives over postMessage and is validated there; this is the other
+ * direction and is deliberately not reachable from inside the frame.
+ *
+ * Null between opens, so a stray late call records nothing rather than attaching to
+ * whatever game is open next.
+ */
+let openSession: TelemetrySession | null = null;
+
+/**
+ * Take a recorder bound to the session open *now*, for shell code whose callbacks may
+ * outlive it.
+ *
+ * Binding rather than looking the session up per call is the whole point. A WebSocket
+ * frame can arrive after the bridge has torn down — `close()` closes the socket
+ * asynchronously and the message handler does not check for disposal — so a recorder
+ * that dereferenced a module global at callback time would attribute a late snapshot
+ * from one game to whichever game opened next, marking a session `joined` that never
+ * connected. A bound recorder cannot: once its session closes, `record` refuses, and the
+ * stale event lands nowhere instead of on somebody else's row.
+ *
+ * Returns a no-op when nothing is open, which is the honest outcome — a zone whose
+ * `admitted` was never recorded contributes no denominator and so no ratio either.
+ */
+export function bindPlayRecorder(): (event: TelemetryEvent) => void {
+  const session = openSession;
+  if (!session) return () => {};
+  return (event) => void session.record(event);
+}
+
 export function useGameTelemetry(slug: string, enabled: boolean, slots?: number) {
   useEffect(() => {
     if (!enabled) return;
 
     const session = new TelemetrySession(slug, crypto.randomUUID());
+    openSession = session;
     session.record({ type: 'game_opened', ...(slots === undefined ? {} : { slots }) });
     // The same moment, counted in the visit stream — deliberately without the slug, so
     // depth ("did this sitting play a second game") is answerable while "which games did
@@ -491,6 +527,7 @@ export function useGameTelemetry(slug: string, enabled: boolean, slots?: number)
       document.removeEventListener('visibilitychange', onHide);
       session.record({ type: 'game_closed' });
       session.close();
+      if (openSession === session) openSession = null;
     };
   }, [slug, enabled, slots]);
 }

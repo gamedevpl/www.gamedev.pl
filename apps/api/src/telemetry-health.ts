@@ -98,6 +98,24 @@ export interface GameHealth {
    * `sessionsWithEnding / sessions` — how often opening the game turns into finishing a
    * round of it. The counterpart to `bounces` at the other end of the session.
    */
+  /** Sessions issued a seat in a shared world (P3 zones). Zero for a game without one. */
+  zoneAdmitted: number;
+  /**
+   * Of those, how many had a world actually arrive.
+   *
+   * Counted only within admitted sessions, so this can never exceed {@link zoneAdmitted}
+   * however batches were lost on the way here.
+   */
+  zoneJoined: number;
+  /**
+   * `zoneJoined / zoneAdmitted`, or null when this game never asked for a zone.
+   *
+   * The one number that makes the silent fallback visible. A shell that cannot reach the
+   * host drops the player into solo play without saying so — correct for the player,
+   * indistinguishable from success to everyone else — so anything below 1 here is people
+   * who were promised company and played alone.
+   */
+  zoneJoinRate: number | null;
   finishRate: number;
   /**
    * `won / (won + lost)`, or null when no round was decided.
@@ -143,6 +161,10 @@ interface SessionState {
   lastAtMs: number;
   /** Did any round in this session reach a conclusion? */
   reachedEnd: boolean;
+  /** Was a seat issued for a shared world this session? */
+  zoneAdmitted: boolean;
+  /** Did one actually arrive? */
+  zoneJoined: boolean;
   /** Highest score this session reported; null when it never scored. */
   bestScore: number | null;
   /** Landmarks this session reached, deduplicated — a replay is not extra reach. */
@@ -224,6 +246,8 @@ export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
         lastOffsetMs: undefined,
         lastAtMs: Date.parse(ordered[0].at),
         reachedEnd: false,
+        zoneAdmitted: false,
+        zoneJoined: false,
         bestScore: null,
         labels: new Set(),
         gfxBackend: null,
@@ -266,6 +290,11 @@ export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
           // it covers, and a slept machine breaks the interval. An ending is a discrete
           // thing the player did: waking a laptop does not fabricate one, and discarding
           // a real win because the tab was backgrounded first would just lose data.
+          case 'zone_link': {
+            if (event.step === 'admitted') state.zoneAdmitted = true;
+            else if (event.step === 'joined') state.zoneJoined = true;
+            break;
+          }
           case 'end': {
             const outcome = event.outcome;
             if (outcome !== 'won' && outcome !== 'lost' && outcome !== 'quit') break;
@@ -311,6 +340,19 @@ export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
     const playPerSession = sessionStates.map((state) => state.playSeconds);
     const bestScores = sessionStates.map((state) => state.bestScore).filter((score): score is number => score !== null);
     const sessionsWithEnding = sessionStates.filter((state) => state.reachedEnd).length;
+    const zoneAdmitted = sessionStates.filter((state) => state.zoneAdmitted).length;
+    // Both rungs, not `joined` alone. Telemetry is best-effort and batched, so a session
+    // can land its `joined` while the request carrying its `admitted` was dropped — and
+    // counting the two independently would then put a session in the numerator that is
+    // missing from the denominator, producing a join rate above 100%. A ratio that can
+    // exceed its own maximum discredits the column it sits in more thoroughly than the
+    // gap it was reporting.
+    //
+    // A session missing its `admitted` is therefore dropped from both sides rather than
+    // guessed at: it is one more "no evidence", which this file already renders as
+    // absence. The residual bias runs the safe way — a lost `joined` batch reads as a
+    // fallback, so the number understates success rather than inventing it.
+    const zoneJoined = sessionStates.filter((state) => state.zoneAdmitted && state.zoneJoined).length;
     const decided = outcomes.won + outcomes.lost;
     const gfxBackends = { canvas2d: 0, webgl: 0, webgl3d: 0 };
     for (const state of sessionStates) {
@@ -336,6 +378,12 @@ export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
       resumeTicksIgnored,
       outcomes,
       sessionsWithEnding,
+      zoneAdmitted,
+      zoneJoined,
+      // Null, not zero, when this game never asked for a zone — the same rule the rest of
+      // this file follows and the operator page renders as an em dash. A game with no
+      // zone and a zone that never connects must not read the same.
+      zoneJoinRate: zoneAdmitted === 0 ? null : zoneJoined / zoneAdmitted,
       finishRate: sessions.size === 0 ? 0 : sessionsWithEnding / sessions.size,
       winRate: decided === 0 ? null : outcomes.won / decided,
       medianBestScore: median(bestScores),

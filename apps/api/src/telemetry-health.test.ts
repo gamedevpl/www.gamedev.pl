@@ -427,3 +427,56 @@ describe('recentPartitions', () => {
     expect(recentPartitions(0, now)).toEqual(['2026-07-25']);
   });
 });
+
+describe('zone join rate', () => {
+  const BASE = '2026-07-30T12:00:00.000Z';
+
+  it('counts a seat that never became a world', () => {
+    // The failure with no symptom: the shell falls back to solo play in silence, so a
+    // dead host and a healthy one look identical to a player and to every other column
+    // on this row. This ratio is the only place the difference shows up.
+    const rows = summarizeGameHealth([
+      ...session('ember-watch', 'a', BASE, [
+        { type: 'game_opened', msSinceOpen: 0 },
+        { type: 'zone_link', step: 'admitted', msSinceOpen: 200 },
+        { type: 'zone_link', step: 'joined', msSinceOpen: 900 },
+      ]),
+      ...session('ember-watch', 'b', BASE, [
+        { type: 'game_opened', msSinceOpen: 0 },
+        { type: 'zone_link', step: 'admitted', msSinceOpen: 200 },
+      ]),
+    ]);
+
+    expect(rows[0]).toMatchObject({ zoneAdmitted: 2, zoneJoined: 1, zoneJoinRate: 0.5 });
+  });
+
+  it('reports no evidence rather than zero for a game with no zone', () => {
+    // Absence of evidence renders as absence — the same rule finishRate follows. A game
+    // that never asked for a zone must not read like one whose zone is broken.
+    const rows = summarizeGameHealth(session('paddle-duel', 'a', BASE, [{ type: 'game_opened', msSinceOpen: 0 }]));
+    expect(rows[0].zoneJoinRate).toBeNull();
+    expect(rows[0].zoneAdmitted).toBe(0);
+  });
+
+  it('cannot report more joins than seats, whatever the network lost', () => {
+    // Telemetry is best-effort and batched: a session can land `joined` while the request
+    // carrying its `admitted` was dropped. Counted independently that session would be in
+    // the numerator and missing from the denominator, and the column would show a join
+    // rate above 100% — a ratio exceeding its own maximum discredits the metric more than
+    // the gap it exists to report.
+    const rows = summarizeGameHealth([
+      ...session('ember-watch', 'a', BASE, [
+        { type: 'game_opened', msSinceOpen: 0 },
+        { type: 'zone_link', step: 'admitted', msSinceOpen: 200 },
+        { type: 'zone_link', step: 'joined', msSinceOpen: 900 },
+      ]),
+      // The `admitted` for this one never arrived.
+      ...session('ember-watch', 'b', BASE, [
+        { type: 'game_opened', msSinceOpen: 0 },
+        { type: 'zone_link', step: 'joined', msSinceOpen: 900 },
+      ]),
+    ]);
+
+    expect(rows[0]).toMatchObject({ zoneAdmitted: 1, zoneJoined: 1, zoneJoinRate: 1 });
+  });
+});

@@ -414,7 +414,16 @@ export interface UsageCounters {
  * answer "how did this game do" and cannot answer "what did this person play".
  */
 export type TelemetryEventType =
-  'game_opened' | 'play_time' | 'game_closed' | 'error' | 'alive' | 'progress' | 'score' | 'end';
+  | 'game_opened'
+  | 'play_time'
+  | 'game_closed'
+  | 'error'
+  | 'alive'
+  | 'progress'
+  | 'score'
+  | 'end'
+  /** How far an open got towards a shared P3 zone; `step` carries the rung. */
+  | 'zone_link';
 
 export interface TelemetryEvent {
   /**
@@ -458,6 +467,8 @@ export interface TelemetryEvent {
   value?: number;
   /** `end`: how the session finished. */
   outcome?: 'won' | 'lost' | 'quit';
+  /** `zone_link`: how far this open got towards a shared world. */
+  step?: 'admitted' | 'joined' | 'lost';
   /**
    * `progress` / `end`: optional render backend from the game snapshot (B18).
    * Fixed vocabulary only — never free text.
