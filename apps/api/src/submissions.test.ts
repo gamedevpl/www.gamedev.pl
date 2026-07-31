@@ -2874,6 +2874,9 @@ describe('operator cancel and retry', () => {
 
     const record = await store.getSubmission(job.issueNumber);
     expect(record?.state).toBe('canceled');
+    // Shelf filters on `abandonedAt`. Without it, an operator reject left the game
+    // on the creator's studio with Playtest still offered.
+    expect(record?.abandonedAt).toBeTruthy();
     const last = record?.transitions?.at(-1);
     expect(last).toMatchObject({ to: 'canceled', by: 'operator', reason: 'operator_canceled' });
 

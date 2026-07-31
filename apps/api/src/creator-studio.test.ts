@@ -78,6 +78,38 @@ describe('GET /api/me/studio', () => {
     expect(res.statusCode).toBe(401);
     await app.close();
   });
+
+  it('hides abandoned and operator-canceled games from the shelf', async () => {
+    await store.createSubmission(10, 'g:creator', 'Keep me');
+    await store.createSubmission(11, 'g:creator', 'Creator stopped');
+    await store.setSubmissionAbandoned(11, `${today}T12:00:00.000Z`);
+    await store.createSubmission(12, 'g:creator', 'Operator rejected');
+    // Pre-fix shape: cancel wrote state but not abandonedAt — still must not shelf.
+    await store.recordJobTransition(12, {
+      to: 'canceled',
+      at: `${today}T12:00:00.000Z`,
+      by: 'operator',
+      reason: 'operator_canceled',
+    });
+
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      submissionRoutes: { submissionTokenSecret },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/me/studio',
+      headers: authHeaders('g:creator'),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const games = (res.json() as { games: CreatorStudioGame[] }).games;
+    expect(games.map((game) => game.title)).toEqual(['Keep me']);
+
+    await app.close();
+  });
 });
 
 describe('GET /api/me/studio/health', () => {
@@ -240,13 +272,16 @@ describe('GET /api/me/studio/scorecards', () => {
     // Asserted as an exact key set rather than by searching the serialized body: themes are
     // player-written text, so a player who writes "too many sessions" would otherwise fail
     // this test against a route that is behaving perfectly.
-    await store.putScorecard('sky-dodge', card('sky-dodge', {
-      untrusted: {
-        errorSamples: [],
-        progressLabels: [],
-        feedbackThemes: [{ theme: 'too many sessions before the finishRate improves', count: 3 }],
-      },
-    }));
+    await store.putScorecard(
+      'sky-dodge',
+      card('sky-dodge', {
+        untrusted: {
+          errorSamples: [],
+          progressLabels: [],
+          feedbackThemes: [{ theme: 'too many sessions before the finishRate improves', count: 3 }],
+        },
+      }),
+    );
 
     const body = (await get()).json() as CreatorScorecardsResponse;
 
