@@ -155,9 +155,10 @@
     },
     "howToPlay": "Jak grać",
     "howToPlayClose": "Zamknij instrukcję gry {{game}}",
-    "howToPlayDismiss": "Kliknij lub dotknij obok, aby zamknąć",
+    "howToPlayDismiss": "Naciśnij Escape lub kliknij obok, aby zamknąć",
     "howToPlayTouch": "Dotyk",
-    "howToPlayTouchPad": "Pad ekranowy na ekranach dotykowych"
+    "howToPlayTouchPad": "Pad ekranowy na ekranach dotykowych",
+    "howToPlayOther": "Sterowanie"
   },
   "catalog": {
     "title": "Gry",

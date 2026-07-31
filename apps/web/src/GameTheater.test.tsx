@@ -183,6 +183,17 @@ describe('GameTheater how-to-play', () => {
     ]);
   });
 
+  it('renders both copies of the control, the bar one and the menu one', async () => {
+    // Which one is visible is CSS's job (the bar copy sheds at 900px, earlier than sound
+    // and fullscreen, because otherwise the actions row grows until the vote widget
+    // overlaps the game title). Both must exist so neither breakpoint leaves it
+    // unreachable — jsdom applies no media queries, so this asserts presence, not layout.
+    await draw({ controls: CONTROLS });
+    expect(container.querySelector('.howto-bar')).not.toBeNull();
+    await click(container.querySelector('.theater-more-btn'));
+    expect(container.querySelector('.theater-more-panel .howto-menu')).not.toBeNull();
+  });
+
   it('puts focus on the card when opened from the More menu, not on the exit button behind it', async () => {
     // The phone path: the bar trigger is display:none there, so the menu row is the only
     // way in. Opening the menu changes `moreOpen`, which used to re-run the theater's
@@ -190,9 +201,7 @@ describe('GameTheater how-to-play', () => {
     // then left the game.
     await draw({ controls: CONTROLS });
     await click(container.querySelector('.theater-more-btn'));
-    const menuItem = [...container.querySelectorAll('.theater-more-panel .theater-menu-item')].find((el) =>
-      el.textContent?.includes('How to play'),
-    );
+    const menuItem = container.querySelector('.theater-more-panel .howto-menu');
     expect(menuItem).toBeTruthy();
 
     await click(menuItem ?? null);

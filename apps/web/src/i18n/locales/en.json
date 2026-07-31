@@ -155,9 +155,10 @@
     },
     "howToPlay": "How to play",
     "howToPlayClose": "Close how to play for {{game}}",
-    "howToPlayDismiss": "Click or tap anywhere outside to close",
+    "howToPlayDismiss": "Press Escape, or click or tap anywhere outside, to close",
     "howToPlayTouch": "Touch",
-    "howToPlayTouchPad": "On-screen pad on touch screens"
+    "howToPlayTouchPad": "On-screen pad on touch screens",
+    "howToPlayOther": "Control"
   },
   "catalog": {
     "title": "Games",

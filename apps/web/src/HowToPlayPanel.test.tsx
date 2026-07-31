@@ -66,10 +66,16 @@ describe('HowToPlayPanel', () => {
   });
 
   it('gives a clause it cannot split a full-width row instead of guessing', async () => {
-    await draw({ controls: 'Press A, S, D, F, or Space in sync with scrolling rhythm note prompts' });
+    // beat-teacher, verbatim: the semicolons keep the comma-listed keys in one clause,
+    // and that clause has no key/action shape to split on.
+    await draw({
+      controls: 'Press A, S, D, F, or Space in sync with scrolling rhythm note prompts; M to mute',
+    });
     const row = document.querySelector('.howto-row');
     expect(row?.classList.contains('is-wide')).toBe(true);
-    expect(row?.querySelector('dt')).toBeNull();
+    // Still a well-formed dl group: the term is present for assistive tech and hidden by CSS.
+    expect(row?.querySelector('dt')?.textContent).toBe('Control');
+    expect(row?.querySelector('dd')?.textContent).toContain('Press A, S, D, F');
   });
 
   it('is a labelled modal dialog', async () => {
@@ -82,7 +88,7 @@ describe('HowToPlayPanel', () => {
     // The game is named in the close button rather than shown as a subtitle: the theater
     // bar behind the card already carries the title.
     expect(document.querySelector('.howto-close')?.getAttribute('aria-label')).toContain('Apex Sprint');
-    expect(document.querySelector('.howto-dismiss')?.textContent).toContain('close');
+    expect(document.querySelector('.howto-dismiss')?.textContent).toContain('Escape');
   });
 
   it('renders nothing when closed, and nothing when the game has no controls', async () => {
@@ -138,6 +144,31 @@ describe('HowToPlayPanel', () => {
     });
     expect(back.defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(close);
+
+    outside.remove();
+  });
+
+  it('pulls focus back even when it is outside the card, in both directions', async () => {
+    // Clicking the card's own non-focusable text (a dt, the title) leaves activeElement
+    // on body. A Tab from there must not walk into the chrome behind the running game.
+    await draw();
+    const close = document.querySelector('.howto-close') as HTMLButtonElement;
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+
+    for (const shiftKey of [false, true]) {
+      close.blur();
+      expect(document.activeElement).toBe(document.body);
+
+      const event = new KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true });
+      await act(async () => {
+        window.dispatchEvent(event);
+      });
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(close);
+      expect(document.activeElement).not.toBe(outside);
+    }
 
     outside.remove();
   });

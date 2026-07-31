@@ -375,7 +375,7 @@ export function GameTheater({
             {/* Thumbs are first-class: the one signal people expect without hunting. */}
             {reportSlug ? <VoteWidget slug={reportSlug} /> : null}
             {/* Desktop: sound + fullscreen sit on the bar. Phone: they move into More. */}
-            {howToPlayControl('secondary-btn howto-btn theater-desktop-chrome')}
+            {howToPlayControl('secondary-btn howto-btn howto-bar')}
             {soundControl('secondary-btn sound-btn theater-desktop-chrome')}
             {fullscreenControl('secondary-btn fullscreen-btn theater-desktop-chrome')}
             {showMoreMenu && (
@@ -393,7 +393,7 @@ export function GameTheater({
                   <PixelIcon name="menu" size={14} />
                 </button>
                 <div className="theater-more-panel" role="menu">
-                  {howToPlayControl('theater-menu-item theater-mobile-chrome')}
+                  {howToPlayControl('theater-menu-item howto-menu')}
                   {soundControl('theater-menu-item theater-mobile-chrome')}
                   {fullscreenControl('theater-menu-item theater-mobile-chrome')}
                   {reportSlug && (

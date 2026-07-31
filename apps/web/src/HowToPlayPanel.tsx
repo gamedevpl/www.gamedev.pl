@@ -59,10 +59,15 @@ export function HowToPlayPanel({ open, controls, gameTitle, touch = null, onClos
       const first = stops[0]!;
       const last = stops[stops.length - 1]!;
       const active = document.activeElement;
-      if (event.shiftKey && (active === first || !cardRef.current.contains(active))) {
+      // The "outside the card" case has to be handled in both directions. Clicking the
+      // card's own non-focusable text (a `dt`, the title) leaves `activeElement` on
+      // `body`, and a forward Tab from there used to match neither branch and walk into
+      // the chrome behind a running game.
+      const outside = !cardRef.current.contains(active);
+      if (event.shiftKey && (active === first || outside)) {
         event.preventDefault();
         last.focus();
-      } else if (!event.shiftKey && active === last) {
+      } else if (!event.shiftKey && (active === last || outside)) {
         event.preventDefault();
         first.focus();
       }
@@ -108,7 +113,10 @@ export function HowToPlayPanel({ open, controls, gameTitle, touch = null, onClos
             // Keyed by index on purpose: a controls string may repeat a clause, and two
             // long clauses can truncate to the same text, so the row text is not unique.
             <div className={row.keys ? 'howto-row' : 'howto-row is-wide'} key={index}>
-              {row.keys ? <dt>{row.keys}</dt> : null}
+              {/* A clause with no key/action shape still gets a term, hidden visually but
+                  read aloud: a `dl` group that is a definition with nothing being defined
+                  is invalid, and a screen reader announces it orphaned. */}
+              <dt>{row.keys || t('player.howToPlayOther')}</dt>
               <dd>{row.action}</dd>
             </div>
           ))}

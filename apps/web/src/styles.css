@@ -3460,7 +3460,22 @@ body.player-open {
   opacity: 1;
 }
 
-/* AUTH MODAL */
+/* This control sheds to the More menu earlier than sound and fullscreen do (900px, not
+   768px). Measured at 800px: with it on the bar, the actions row grows until the vote
+   widget overlaps the game title, because the meta column does not shrink. Below the
+   breakpoint the bar copy is hidden and the menu copy takes over; above it, the reverse. */
+@media (max-width: 900px) {
+  .game-theater-actions .howto-bar {
+    display: none !important;
+  }
+}
+
+@media (min-width: 901px) {
+  .game-theater-actions .theater-more-panel .howto-menu {
+    display: none !important;
+  }
+}
+
 /* HOW TO PLAY
    The player's controls card. Portalled to the body, so it sits above the theater bar
    (which carries a backdrop-filter and would otherwise become its containing block) and
@@ -3560,6 +3575,18 @@ body.player-open {
 }
 
 /* A clause with no "X to Y" shape keeps its own line rather than being guessed apart. */
+.howto-row.is-wide dt {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .howto-row.is-wide dd {
   grid-column: 1 / -1;
 }
@@ -3579,6 +3606,7 @@ body.player-open {
   flex: 0 0 auto;
 }
 
+/* AUTH MODAL */
 .modal-backdrop {
   position: fixed;
   top: 0;
