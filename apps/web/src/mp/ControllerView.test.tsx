@@ -4,17 +4,24 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ControllerView } from './ControllerView.js';
+import type { RoomStatus } from './roomClient.js';
+import type { ServerFrame } from './protocol.js';
+
+type RoomClientOpts = {
+  onStatus?: (status: RoomStatus, reason?: string) => void;
+  onFrame?: (frame: ServerFrame) => void;
+};
 
 // Mock RoomClient
 const mockSendInput = vi.fn();
 const mockConnect = vi.fn();
 const mockClose = vi.fn();
-let lastOnStatus: ((status: string, reason?: string) => void) | undefined;
-let lastOnFrame: ((frame: any) => void) | undefined;
+let lastOnStatus: ((status: RoomStatus, reason?: string) => void) | undefined;
+let lastOnFrame: ((frame: ServerFrame) => void) | undefined;
 
 vi.mock('./roomClient.js', () => {
   return {
-    RoomClient: vi.fn().mockImplementation((opts: any) => {
+    RoomClient: vi.fn().mockImplementation((opts: RoomClientOpts) => {
       lastOnStatus = opts.onStatus;
       lastOnFrame = opts.onFrame;
       return {
@@ -25,6 +32,22 @@ vi.mock('./roomClient.js', () => {
     }),
   };
 });
+
+type MockSpeechEvent = {
+  results: Array<Array<{ transcript: string }>>;
+};
+
+interface MockSpeechRecognitionInstance {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onstart: (() => void) | null;
+  onresult: ((event: MockSpeechEvent) => void) | null;
+  onerror: ((event: { error: string }) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+}
 
 describe('ControllerView Voice Cleanup', () => {
   let container: HTMLDivElement;
@@ -52,28 +75,27 @@ describe('ControllerView Voice Cleanup', () => {
   });
 
   it('stops voice recognition and releases pulsed keys when room is closed', async () => {
-    let mockStop = vi.fn();
-    let mockStart = vi.fn();
-    let createdRecognition: any = null;
+    const mockStop = vi.fn();
+    const mockStart = vi.fn();
 
-    class MockSpeechRecognition {
-      continuous = false;
-      interimResults = false;
-      lang = 'en-US';
-      onstart: (() => void) | null = null;
-      onresult: ((event: any) => void) | null = null;
-      onerror: ((event: any) => void) | null = null;
-      onend: (() => void) | null = null;
-      constructor() {
-        createdRecognition = this;
-      }
-      start = mockStart.mockImplementation(() => {
-        if (this.onstart) this.onstart();
-      });
-      stop = mockStop;
-    }
+    const mockRecognition: MockSpeechRecognitionInstance = {
+      continuous: false,
+      interimResults: false,
+      lang: 'en-US',
+      onstart: null,
+      onresult: null,
+      onerror: null,
+      onend: null,
+      start: mockStart.mockImplementation(() => {
+        if (mockRecognition.onstart) mockRecognition.onstart();
+      }),
+      stop: mockStop,
+    };
 
-    (window as any).SpeechRecognition = MockSpeechRecognition;
+    const MockSpeechConstructor = vi.fn().mockImplementation(() => mockRecognition);
+
+    (window as unknown as { SpeechRecognition: typeof MockSpeechConstructor }).SpeechRecognition =
+      MockSpeechConstructor;
 
     act(() => {
       root.render(createElement(ControllerView, { code: 'TESTROOM', token: 'TOKEN123' }));
@@ -103,7 +125,7 @@ describe('ControllerView Voice Cleanup', () => {
 
     // Trigger voice recognition result -> pulseKey('up')
     act(() => {
-      createdRecognition.onresult({
+      mockRecognition.onresult?.({
         results: [[{ transcript: 'up' }]],
       });
     });
