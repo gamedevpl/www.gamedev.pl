@@ -946,6 +946,15 @@ function FeedbackPanel({
     : building
       ? 'statusView.feedback.titleBuilding'
       : 'statusView.feedback.title';
+  // The composer gets its own, much shorter version of the same three hints. The
+  // paragraph reads fine above a page; as placeholder text on a phone it ran to four
+  // lines and the box clipped the last of them mid-word — worse in Polish, where the
+  // same sentence is longer. The placeholder now says where the message goes and stops.
+  const composerHintKey = published
+    ? 'statusView.feedback.composerHintPublished'
+    : building
+      ? 'statusView.feedback.composerHintBuilding'
+      : 'statusView.feedback.composerHint';
 
   // Compact is the thread's composer: a field and a send, the way a reply box looks
   // everywhere else. The heading and the standing hint paragraph were page furniture —
@@ -964,7 +973,7 @@ function FeedbackPanel({
             autoGrow();
             if (state === 'sent') setState('idle');
           }}
-          placeholder={t(hintKey)}
+          placeholder={t(composerHintKey)}
           aria-label={t(titleKey)}
           rows={2}
           maxLength={2000}

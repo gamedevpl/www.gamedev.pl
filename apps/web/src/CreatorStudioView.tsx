@@ -487,7 +487,10 @@ export function CreatorStudioView({
                   </span>
                   <span className="studio-game-switcher-title">{activeGame.title}</span>
                   {activeGame.slug ? <code className="studio-slug">{activeGame.slug}</code> : null}
-                  <PixelIcon name="expand" size={12} />
+                  {/* Not `expand`: once a phone puts this button and the Details button on
+                      one row, the same icon appeared twice on that row meaning two
+                      different things. A folder is the other games. */}
+                  <PixelIcon name="folder" size={12} />
                 </button>
                 <div className="studio-detail-title-row">
                   <div className="studio-detail-title-block">
@@ -501,12 +504,12 @@ export function CreatorStudioView({
                   <div className="studio-head-actions">
                     {/* Playtest is the next action after a build — same weight as Send
                         feedback, not a peer of the Details toggle beside it. */}
-                    <button
-                      type="button"
-                      className="studio-head-action is-primary"
-                      onClick={() => openTab('playtest')}
-                    >
-                      <PixelIcon name="play" size={12} /> {t('studioPanel.tabs.playtest')}
+                    {/* Labels are wrapped rather than left as bare text so a phone can
+                        hide the word and keep the icon — and hide it the way that leaves
+                        the button still named for a screen reader, not display: none. */}
+                    <button type="button" className="studio-head-action is-primary" onClick={() => openTab('playtest')}>
+                      <PixelIcon name="play" size={12} />{' '}
+                      <span className="studio-head-action-label">{t('studioPanel.tabs.playtest')}</span>
                     </button>
                     <button
                       type="button"
@@ -514,7 +517,8 @@ export function CreatorStudioView({
                       aria-pressed={tab === 'details'}
                       onClick={() => openTab(tab === 'details' ? 'thread' : 'details')}
                     >
-                      <PixelIcon name="expand" size={12} /> {t('studioPanel.tabs.details')}
+                      <PixelIcon name="expand" size={12} />{' '}
+                      <span className="studio-head-action-label">{t('studioPanel.tabs.details')}</span>
                     </button>
                   </div>
                 </div>
