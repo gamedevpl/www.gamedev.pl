@@ -21,7 +21,7 @@ describe('Sandbox Invariant Security Guard', () => {
     const iframe = container.querySelector('iframe');
     expect(iframe).not.toBeNull();
     expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts allow-pointer-lock');
-    expect(iframe?.getAttribute('allow')).toBe('microphone');
+    expect(iframe?.hasAttribute('allow')).toBe(false);
 
     act(() => {
       root.unmount();

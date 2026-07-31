@@ -73,7 +73,7 @@ export function ControllerView({ code, token }: ControllerViewProps) {
   const heldRef = useRef<Set<InputKey>>(new Set());
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const voiceWantedRef = useRef(false);
-  const pulseTimersRef = useRef<number[]>([]);
+  const pulseTimersRef = useRef<Array<{ timer: number; key: InputKey }>>([]);
 
   useEffect(() => {
     if (!joined) return;
@@ -128,8 +128,11 @@ export function ControllerView({ code, token }: ControllerViewProps) {
   const pulseKey = useCallback(
     (key: InputKey) => {
       press(key, 1);
-      const timer = window.setTimeout(() => press(key, 0), 140);
-      pulseTimersRef.current.push(timer);
+      const timer = window.setTimeout(() => {
+        press(key, 0);
+        pulseTimersRef.current = pulseTimersRef.current.filter((t) => t.timer !== timer);
+      }, 140);
+      pulseTimersRef.current.push({ timer, key });
     },
     [press],
   );
@@ -144,9 +147,12 @@ export function ControllerView({ code, token }: ControllerViewProps) {
       /* ignore */
     }
     recognitionRef.current = null;
-    for (const timer of pulseTimersRef.current) window.clearTimeout(timer);
+    for (const pending of pulseTimersRef.current) {
+      window.clearTimeout(pending.timer);
+      press(pending.key, 0);
+    }
     pulseTimersRef.current = [];
-  }, []);
+  }, [press]);
 
   const startVoice = useCallback(() => {
     setVoiceNotice(null);
@@ -216,6 +222,12 @@ export function ControllerView({ code, token }: ControllerViewProps) {
   useEffect(() => {
     return () => stopVoice();
   }, [stopVoice]);
+
+  useEffect(() => {
+    if (closedReason || status === 'closed') {
+      stopVoice();
+    }
+  }, [closedReason, status, stopVoice]);
 
   if (closedReason) {
     return (
