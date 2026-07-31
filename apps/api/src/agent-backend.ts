@@ -47,6 +47,31 @@ export interface BuildBrief {
    * was never uploaded is not in the store, and that branch is the only copy of it.
    */
   previousWorkspace?: string;
+  /**
+   * A generated first draft of the game the workspace should already contain.
+   *
+   * Round 0, written by a model instead of by the agent (see `game-seed.ts`). It travels
+   * on the brief rather than inside one backend because *what a draft contains* is a
+   * product decision every backend wants the benefit of, while *how a workspace receives
+   * it* is exactly the vendor detail this seam exists to hide — a branch for Copilot, a
+   * seeded directory for a runtime we operate.
+   *
+   * Always optional: a backend that cannot seed ignores it and builds from nothing, which
+   * is the behaviour every build had before seeding existed.
+   */
+  seed?: SeedFiles;
+}
+
+/** The subset of a seed draft a backend needs to place it. */
+export interface SeedFiles {
+  /** The game directory the files belong in. */
+  slug: string;
+  /** Paths relative to `games/<slug>/`, already validated against the game shape. */
+  files: { path: string; content: string }[];
+  /** Published games the draft was modelled on, for the agent's own orientation. */
+  references: string[];
+  /** The generator's hand-off note to the agent, when it wrote one. */
+  notes?: string;
 }
 
 /** What a backend hands back after starting work, recorded on the job. */
@@ -59,6 +84,16 @@ export interface DispatchResult {
    * requested branch is not always the one used.
    */
   workspace?: string;
+  /**
+   * A second, disposable workspace holding the generated draft this build started from.
+   *
+   * Tracked separately from `workspace` because it has a different owner and a different
+   * end: the agent's workspace is where the work happens, while this one existed only so
+   * the work could begin somewhere. Recorded so it is released with the job rather than
+   * left behind — a seeded build that leaked one branch per attempt would litter the
+   * games repo faster than the builds themselves do.
+   */
+  seedWorkspace?: string;
 }
 
 export interface AgentBackend {

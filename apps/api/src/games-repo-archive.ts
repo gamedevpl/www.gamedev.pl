@@ -38,6 +38,15 @@ export interface GamesRepoArchive extends RepoFileSource {
   fileCount: number;
   /** Their total size, for the bake's log line. */
   byteCount: number;
+  /**
+   * Every retained path, in archive order.
+   *
+   * `RepoFileSource` can read a path but not discover one, which is enough for the bake
+   * (it knows every file it wants from the catalog) and not enough for a caller that has
+   * to enumerate a directory — the seed context needs a game's modules without knowing
+   * their names. Listing is free here because the archive is already fully in memory.
+   */
+  listPaths(): string[];
 }
 
 /** Sources, media, and the committed catalog — everything the bake reads. */
@@ -105,6 +114,9 @@ export async function fetchGamesRepoArchive(options: FetchGamesRepoArchiveOption
   return {
     fileCount: files.size,
     byteCount,
+    listPaths(): string[] {
+      return [...files.keys()];
+    },
     async readText(path: string, requestedRef: string): Promise<string | null> {
       assertRef(requestedRef);
       const bytes = files.get(path);

@@ -186,7 +186,20 @@ export interface SubmissionRecord {
    * on the old one, so a job that has been revised twice has three refs sharing one
    * workspace. The newest is the one to observe.
    */
-  dispatch?: { backend: string; refs: string[]; workspace?: string };
+  dispatch?: {
+    backend: string;
+    refs: string[];
+    workspace?: string;
+    /**
+     * The disposable branch a seeded build started from, when it was seeded at all.
+     *
+     * Recorded so the branch is released with the job. Its presence is also the honest
+     * record of *which* builds got a generated round 0 — seeding fails open, so a job
+     * without this field is one that built from nothing, and any comparison of seeded
+     * against unseeded builds has to read it rather than assume the flag was on.
+     */
+    seedWorkspace?: string;
+  };
   /**
    * What this job has cost, one entry per thing that was billed.
    *
@@ -208,7 +221,7 @@ export interface SubmissionRecord {
  * (docs: architecture B), so that arriving is a writer, not a migration.
  */
 export interface JobCostEntry {
-  kind: 'agent_session' | 'gate_run';
+  kind: 'agent_session' | 'gate_run' | 'seed';
   at: string;
   /** Who charged for it: `copilot`, `cloud-build`. */
   by: string;
@@ -216,7 +229,13 @@ export interface JobCostEntry {
   ref?: string;
   /** Premium requests. One per agent session, which is how Copilot bills. */
   credits?: number;
-  /** Model tokens, when a backend reports them. Nothing does today. */
+  /**
+   * Model tokens, when the thing that spent them reports them.
+   *
+   * The `seed` kind is the first writer: a direct Vertex call bills per token and the
+   * SDK hands the count back, so a seeded job carries a real measurement rather than the
+   * absence Copilot's opaque premium requests leave behind.
+   */
   tokens?: { input: number; output: number };
   /** Money, when a service reports it directly rather than in its own unit. */
   usd?: number;
@@ -962,7 +981,10 @@ export interface Store {
   /** Records the agent backend's last reported state, for stall detection. */
   setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void>;
   /** Appends a dispatch ref, recording which backend is building this job and where. */
-  recordDispatch(issueNumber: number, dispatch: { backend: string; ref: string; workspace?: string }): Promise<void>;
+  recordDispatch(
+    issueNumber: number,
+    dispatch: { backend: string; ref: string; workspace?: string; seedWorkspace?: string },
+  ): Promise<void>;
   /**
    * Appends one billed thing to a job's ledger. Best-effort by contract: a cost that
    * fails to record must never fail the work it was recording, because the alternative
@@ -977,6 +999,14 @@ export interface Store {
    * session, and counting it as one would inflate every per-build cost figure.
    */
   setDispatchWorkspace(issueNumber: number, workspace: string): Promise<void>;
+  /**
+   * Forgets a released seed branch, so nothing tries to delete it twice.
+   *
+   * The record is what a later release path reads, so leaving a deleted branch on it
+   * would have the job asking GitHub to delete the same ref on every poll — a 404 loop
+   * against the one credential that also dispatches.
+   */
+  clearDispatchSeedWorkspace(issueNumber: number): Promise<void>;
   /**
    * Allocates a job id of our own.
    *
@@ -1564,7 +1594,7 @@ export class InMemoryStore implements Store {
 
   async recordDispatch(
     issueNumber: number,
-    dispatch: { backend: string; ref: string; workspace?: string },
+    dispatch: { backend: string; ref: string; workspace?: string; seedWorkspace?: string },
   ): Promise<void> {
     const sub = this.submissions.get(issueNumber);
     if (!sub) return;
@@ -1575,8 +1605,17 @@ export class InMemoryStore implements Store {
         backend: dispatch.backend,
         refs: [...(existing?.refs ?? []), dispatch.ref],
         workspace: dispatch.workspace ?? existing?.workspace,
+        seedWorkspace: dispatch.seedWorkspace ?? existing?.seedWorkspace,
       },
     });
+  }
+
+  async clearDispatchSeedWorkspace(issueNumber: number): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub?.dispatch) return;
+    const dispatch = { ...sub.dispatch };
+    delete dispatch.seedWorkspace;
+    this.submissions.set(issueNumber, { ...sub, dispatch });
   }
 
   async recordJobCost(issueNumber: number, entry: JobCostEntry): Promise<void> {
@@ -2310,15 +2349,17 @@ export class InMemoryStore implements Store {
     limit?: number;
   }): Promise<SuggestionRecord[]> {
     const wanted = opts?.status ? new Set(opts.status) : null;
-    return [...this.suggestions.values()]
-      .filter((record) => (wanted ? wanted.has(record.status) : true))
-      .filter((record) => (opts?.ownerUid ? record.ownerUid === opts.ownerUid : true))
-      .map((record) => structuredClone(record))
-      .sort(compareSuggestions)
-      // No limit means every match, matching Firestore's paged read. Defaulting to a
-      // number here would make the in-memory store agree with production only while the
-      // collection stayed small — the divergence that hides until it matters.
-      .slice(0, opts?.limit ?? Number.MAX_SAFE_INTEGER);
+    return (
+      [...this.suggestions.values()]
+        .filter((record) => (wanted ? wanted.has(record.status) : true))
+        .filter((record) => (opts?.ownerUid ? record.ownerUid === opts.ownerUid : true))
+        .map((record) => structuredClone(record))
+        .sort(compareSuggestions)
+        // No limit means every match, matching Firestore's paged read. Defaulting to a
+        // number here would make the in-memory store agree with production only while the
+        // collection stayed small — the divergence that hides until it matters.
+        .slice(0, opts?.limit ?? Number.MAX_SAFE_INTEGER)
+    );
   }
 
   async listGameSlugs(): Promise<string[]> {
@@ -2542,7 +2583,7 @@ export class FirestoreStore implements Store {
 
   async recordDispatch(
     issueNumber: number,
-    dispatch: { backend: string; ref: string; workspace?: string },
+    dispatch: { backend: string; ref: string; workspace?: string; seedWorkspace?: string },
   ): Promise<void> {
     const ref = this.db.collection('submissions').doc(String(issueNumber));
     // Transactional for the same reason transitions are: a dispatch and a reconciler
@@ -2560,6 +2601,9 @@ export class FirestoreStore implements Store {
             refs: [...(existing?.refs ?? []), dispatch.ref],
             ...((dispatch.workspace ?? existing?.workspace)
               ? { workspace: dispatch.workspace ?? existing?.workspace }
+              : {}),
+            ...((dispatch.seedWorkspace ?? existing?.seedWorkspace)
+              ? { seedWorkspace: dispatch.seedWorkspace ?? existing?.seedWorkspace }
               : {}),
           },
         },
@@ -2592,6 +2636,22 @@ export class FirestoreStore implements Store {
       const existing = (snap.data() as SubmissionRecord).dispatch;
       if (!existing) return;
       tx.set(ref, { dispatch: { ...existing, workspace } }, { merge: true });
+    });
+  }
+
+  async clearDispatchSeedWorkspace(issueNumber: number): Promise<void> {
+    const ref = this.db.collection('submissions').doc(String(issueNumber));
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return;
+      const existing = (snap.data() as SubmissionRecord).dispatch;
+      if (!existing?.seedWorkspace) return;
+      // Rewritten whole rather than merged with a delete sentinel: `dispatch` is a small
+      // object already read inside this transaction, so replacing it is both simpler and
+      // safe from the partial-merge surprise a field delete would risk.
+      const dispatch = { ...existing };
+      delete dispatch.seedWorkspace;
+      tx.set(ref, { dispatch }, { merge: true });
     });
   }
 
@@ -3639,7 +3699,6 @@ export class FirestoreStore implements Store {
       .get();
     return snap.docs.map((doc) => doc.data() as Scorecard).sort(compareScorecards);
   }
-
 
   async listGameSlugs(): Promise<string[]> {
     // `listDocuments()` rather than `get()`: it lists references without reading

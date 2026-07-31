@@ -365,6 +365,28 @@ export interface GitHubClient {
    */
   deleteBranch(ref: string): Promise<void>;
   /**
+   * Creates a branch off `baseRef` carrying `files`, in one commit.
+   *
+   * The only write into the games repo that is not a person or a coding agent, and it
+   * exists for exactly one caller: a seeded build, whose round 0 has to be *in* the
+   * workspace before the agent starts. Copilot's dispatch takes a branch to start from,
+   * so putting the seed on a branch is how a generated draft becomes a starting point
+   * rather than a suggestion the agent may or may not read.
+   *
+   * One commit, via the git data API, rather than a file-at-a-time contents write: three
+   * requests regardless of how many files a draft has, and the branch never exists in a
+   * half-written state that a dispatch could race.
+   *
+   * The caller owns the branch's lifetime and deletes it (`deleteBranch`) — nothing here
+   * is merged, ever, and the games repo is not where the game ends up.
+   */
+  createBranchWithFiles(input: {
+    branch: string;
+    baseRef: string;
+    message: string;
+    files: { path: string; content: string }[];
+  }): Promise<{ branch: string; sha: string }>;
+  /**
    * Reads a game's source files from a branch (typically an unmerged PR head).
    * Returns null if the game directory or a required file is missing on that ref.
    */
@@ -726,6 +748,48 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       await requestJson(`https://api.github.com/repos/${repo}/git/refs/heads/${encodeURIComponent(ref)}`, {
         method: 'DELETE',
       });
+    },
+
+    async createBranchWithFiles(input) {
+      // Resolve through the commits endpoint like getRefSha does: it accepts a branch, a
+      // tag or a sha alike, so a pinned harness ref works whichever kind it is.
+      const base = await requestJson<{ sha?: string; commit?: { tree?: { sha?: string } } }>(
+        `https://api.github.com/repos/${repo}/commits/${encodeURIComponent(input.baseRef)}`,
+      );
+      const baseSha = base.sha;
+      const baseTreeSha = base.commit?.tree?.sha;
+      if (!baseSha || !baseTreeSha) {
+        throw new Error(`cannot resolve base ref "${input.baseRef}"`);
+      }
+
+      // Inline `content` rather than pre-creating a blob per file: the tree API accepts
+      // the bytes directly, so a ten-file draft is one request instead of eleven.
+      const tree = await requestJson<{ sha?: string }>(`https://api.github.com/repos/${repo}/git/trees`, {
+        method: 'POST',
+        body: JSON.stringify({
+          base_tree: baseTreeSha,
+          tree: input.files.map((file) => ({
+            path: file.path,
+            mode: '100644',
+            type: 'blob',
+            content: file.content,
+          })),
+        }),
+      });
+      if (!tree.sha) throw new Error('git tree creation returned no sha');
+
+      const commit = await requestJson<{ sha?: string }>(`https://api.github.com/repos/${repo}/git/commits`, {
+        method: 'POST',
+        body: JSON.stringify({ message: input.message, tree: tree.sha, parents: [baseSha] }),
+      });
+      if (!commit.sha) throw new Error('git commit creation returned no sha');
+
+      await requestJson(`https://api.github.com/repos/${repo}/git/refs`, {
+        method: 'POST',
+        body: JSON.stringify({ ref: `refs/heads/${input.branch}`, sha: commit.sha }),
+      });
+
+      return { branch: input.branch, sha: commit.sha };
     },
 
     async closeIssue(issueNumber) {

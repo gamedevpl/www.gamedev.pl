@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import { registerAccessTokenRoutes } from './access-token-routes.js';
 import { registerJobAdminRoutes } from './job-admin-routes.js';
-import { createAgentBackendFromEnv } from './agent-backend-env.js';
+import { createAgentBackendFromEnv, createGameSeederFromEnv } from './agent-backend-env.js';
 import { createGcsGamesStore } from './games-store.js';
 import { createCloudBuildGateTrigger, gateTriggerOptionsFromEnv } from './gate-trigger.js';
 import { registerAdminRoutes } from './admin.js';
@@ -211,6 +211,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // drift here is an alert nobody receives.
     adminUids,
     agentBackend: options.submissionRoutes?.agentBackend ?? createAgentBackendFromEnv(app.log),
+    gameSeeder: options.submissionRoutes?.gameSeeder ?? createGameSeederFromEnv(app.log),
     agentChannel: {
       ...options.submissionRoutes?.agentChannel,
       // Without a bucket the delivery verb answers 503 rather than accepting an agent's
