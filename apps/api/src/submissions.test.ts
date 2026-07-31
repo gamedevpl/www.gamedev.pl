@@ -3011,3 +3011,99 @@ describe('operator health re-gate', () => {
     await app.close();
   });
 });
+
+describe('operator slug backfill', () => {
+  const bossHeaders = () => getAuthHeaders('g:boss');
+
+  /** An app with an operator, plus whatever slug-less records a test asks for. */
+  async function appWithLegacyRecords(titles: string[]) {
+    const { app, store } = await createApp({ adminUids: 'g:boss' });
+    await store.upsertUser({ uid: 'g:boss' });
+    // createSubmission is what the flow used to do on its own: a record, no slug. It is
+    // the exact shape of every game that predates minting at submission.
+    let issueNumber = 500;
+    for (const title of titles) await store.createSubmission(issueNumber++, 'g:test-user', title);
+    return { app, store };
+  }
+
+  it('answers 404 to a non-operator, the same as every operator surface', async () => {
+    const { app } = await appWithLegacyRecords(['Space Miner']);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/slug-backfill',
+      headers: getAuthHeaders('g:someone-else'),
+    });
+
+    expect(response.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('gives every slug-less game an address derived from its title', async () => {
+    const { app, store } = await appWithLegacyRecords(['Space Miner', 'Łódź Nights']);
+
+    const response = await app.inject({ method: 'POST', url: '/api/admin/slug-backfill', headers: bossHeaders() });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ ok: true, dryRun: false, scanned: 2, named: 2, failed: 0 });
+    expect((await store.getSubmission(500))?.slug).toBe('space-miner');
+    // The Polish letter survives: NFD alone would drop it and leave 'dz-nights'.
+    expect((await store.getSubmission(501))?.slug).toBe('lodz-nights');
+
+    await app.close();
+  });
+
+  it('reports what it would do without writing anything, when asked to rehearse', async () => {
+    const { app, store } = await appWithLegacyRecords(['Space Miner']);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/slug-backfill?dryRun=1',
+      headers: bossHeaders(),
+    });
+
+    expect(response.json()).toMatchObject({ dryRun: true, scanned: 1, named: 1 });
+    expect(response.json().games).toEqual([{ issueNumber: 500, title: 'Space Miner', slug: 'space-miner' }]);
+    expect((await store.getSubmission(500))?.slug).toBeUndefined();
+
+    await app.close();
+  });
+
+  it('does not promise one name to two games, even in a rehearsal that writes nothing', async () => {
+    const { app } = await appWithLegacyRecords(['Space Miner', 'Space Miner']);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/slug-backfill?dryRun=1',
+      headers: bossHeaders(),
+    });
+
+    // Without an in-run ledger both would be told 'space-miner', and the rehearsal would
+    // be reporting an outcome the real run could not produce.
+    expect(response.json().games.map((game: { slug: string }) => game.slug)).toEqual(['space-miner', 'space-miner-2']);
+
+    await app.close();
+  });
+
+  it('leaves abandoned builds alone rather than reserving names for them', async () => {
+    const { app, store } = await appWithLegacyRecords(['Space Miner']);
+    await store.setSubmissionAbandoned(500, new Date().toISOString());
+
+    const response = await app.inject({ method: 'POST', url: '/api/admin/slug-backfill', headers: bossHeaders() });
+
+    expect(response.json()).toMatchObject({ scanned: 0, named: 0 });
+    expect((await store.getSubmission(500))?.slug).toBeUndefined();
+
+    await app.close();
+  });
+
+  it('finds nothing to do on a second run', async () => {
+    const { app } = await appWithLegacyRecords(['Space Miner']);
+
+    await app.inject({ method: 'POST', url: '/api/admin/slug-backfill', headers: bossHeaders() });
+    const second = await app.inject({ method: 'POST', url: '/api/admin/slug-backfill', headers: bossHeaders() });
+
+    expect(second.json()).toMatchObject({ scanned: 0, named: 0, failed: 0 });
+    await app.close();
+  });
+});

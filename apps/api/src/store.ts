@@ -73,9 +73,14 @@ export interface SubmissionRecord {
   createdAt: string;
   title: string;
   /**
-   * Game directory on the agent's branch, learned the first time a status poll sees
-   * one. It is what makes an in-progress game addressable by slug (like a published
-   * game) instead of only by its capability-granting status token.
+   * The game's permanent address: its directory on the agent's branch, its `/play/`
+   * link, and how the studio names it instead of the capability-granting status token.
+   *
+   * Minted from the confirmed title when the submission is created, so a game has this
+   * before any agent has seen it. Optional only for records that predate that, and for
+   * the crash window between writing a record and setting its slug — both of which the
+   * operator backfill exists to clear. Treat a missing slug as a straggler to be fixed,
+   * not a state to design around.
    */
   slug?: string;
   /**
@@ -1135,6 +1140,19 @@ export interface Store {
    */
   listActiveSubmissions(): Promise<SubmissionRecord[]>;
   /**
+   * Submissions a creator can still see that have no slug — the backfill's work list.
+   *
+   * Every submission has been given a slug at creation since the studio started
+   * addressing games by name, so this is legacy records plus anything that crashed in
+   * the window between the record being written and its slug being set. Oldest first,
+   * so a bounded run works through the backlog in a stable order.
+   *
+   * Abandoned builds are left out deliberately. The shelf hides them, so they are never
+   * addressed by anyone, and minting names for them would reserve every one against the
+   * games that might want it later.
+   */
+  listSubmissionsMissingSlug(): Promise<SubmissionRecord[]>;
+  /**
    * Every submission a creator owns, newest first. Backs the "my games" rail, so a
    * creator finds their work-in-progress without having saved the tracking link
    * (and on a device that never had it in localStorage).
@@ -1893,6 +1911,13 @@ export class InMemoryStore implements Store {
       .map((s) => ({ ...s }));
   }
 
+  async listSubmissionsMissingSlug(): Promise<SubmissionRecord[]> {
+    return Array.from(this.submissions.values())
+      .filter((s) => !s.slug && !s.abandonedAt)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map((s) => ({ ...s }));
+  }
+
   async listSubmissionsByOwner(ownerUid: string, opts?: { limit?: number }): Promise<SubmissionRecord[]> {
     return Array.from(this.submissions.values())
       .filter((s) => s.ownerUid === ownerUid)
@@ -2334,15 +2359,17 @@ export class InMemoryStore implements Store {
     limit?: number;
   }): Promise<SuggestionRecord[]> {
     const wanted = opts?.status ? new Set(opts.status) : null;
-    return [...this.suggestions.values()]
-      .filter((record) => (wanted ? wanted.has(record.status) : true))
-      .filter((record) => (opts?.ownerUid ? record.ownerUid === opts.ownerUid : true))
-      .map((record) => structuredClone(record))
-      .sort(compareSuggestions)
-      // No limit means every match, matching Firestore's paged read. Defaulting to a
-      // number here would make the in-memory store agree with production only while the
-      // collection stayed small — the divergence that hides until it matters.
-      .slice(0, opts?.limit ?? Number.MAX_SAFE_INTEGER);
+    return (
+      [...this.suggestions.values()]
+        .filter((record) => (wanted ? wanted.has(record.status) : true))
+        .filter((record) => (opts?.ownerUid ? record.ownerUid === opts.ownerUid : true))
+        .map((record) => structuredClone(record))
+        .sort(compareSuggestions)
+        // No limit means every match, matching Firestore's paged read. Defaulting to a
+        // number here would make the in-memory store agree with production only while the
+        // collection stayed small — the divergence that hides until it matters.
+        .slice(0, opts?.limit ?? Number.MAX_SAFE_INTEGER)
+    );
   }
 
   async listGameSlugs(): Promise<string[]> {
@@ -3003,6 +3030,18 @@ export class FirestoreStore implements Store {
       .filter(
         (s) => !s.abandonedAt && s.lastNotifiedStatus !== 'published' && s.lastNotifiedStatus !== 'needs_changes',
       );
+  }
+
+  async listSubmissionsMissingSlug(): Promise<SubmissionRecord[]> {
+    // Firestore cannot ask for documents where a field is absent, so this is the same
+    // full scan and client-side filter as listActiveSubmissions above, for the same
+    // reason: the collection is small and the alternative is a sentinel field written
+    // to every record just so this one query can exist.
+    const snap = await this.db.collection('submissions').get();
+    return snap.docs
+      .map((d) => d.data() as SubmissionRecord)
+      .filter((s) => !s.slug && !s.abandonedAt)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
 
   async listSubmissionsByOwner(ownerUid: string, opts?: { limit?: number }): Promise<SubmissionRecord[]> {
@@ -3672,7 +3711,6 @@ export class FirestoreStore implements Store {
       .get();
     return snap.docs.map((doc) => doc.data() as Scorecard).sort(compareScorecards);
   }
-
 
   async listGameSlugs(): Promise<string[]> {
     // `listDocuments()` rather than `get()`: it lists references without reading
