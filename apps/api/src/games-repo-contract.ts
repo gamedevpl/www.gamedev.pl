@@ -57,9 +57,18 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
  * music, touch hint, progress, universal input, pointer poll, draw surface,
  * pointer release, host pause, mascot draw, headroom, gfx3d, look, spatial, …). Together with
  * {@link GAME_BUDGET_BYTES} this must equal games-repo `MAX_BUNDLE_BYTES`
- * (449_687, matching games-repo `shared/assemble-contract.json` `maxProjectBytes`). Not a round KiB.
+ * (473_687, matching games-repo `shared/assemble-contract.json` `maxProjectBytes`). Not a round KiB.
  *
- * Last moved for voice Layer 0: +8_000 named `voice` reserve, 441_687 → 449_687.
+ * Last moved by games-repo convergence Pass #10 (carjack-city open-world promotion):
+ * +15_000 (`world`) and +9_000 (`gameplay`) named reserves, 449_687 → 473_687. Both
+ * modules shipped tiny and charged to the author budget; Pass #10 grew them into real
+ * capability layers (grids/spiral search/loop paths/2D camera; arcade vehicle physics/
+ * combo/ticker — measured 13_263 and 7_371 transpiled), and the first game to select
+ * them, carjack-city, was also the tightest bundle in the catalog. This side is
+ * deliberately ahead of games-repo `main` on the `voice` module, which the raise
+ * carries forward untouched. Same opt-in-reserve argument as `zone`.
+ *
+ * Before that, voice Layer 0: +8_000 named `voice` reserve, 441_687 → 449_687.
  *
  * Before that, games-repo #163: +12_000 for a named `zone` reserve, 429_687 → 441_687.
  * The module shipped charged to the author budget, on the reasoning that it is small and
@@ -100,7 +109,7 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
  * Before that, games-repo #102: +679 (`mascotDraw`) and +75_237 (`headroom`) — 30% of
  * the 250_790 ceiling — plus earlier host-pause / touch steer raises.
  */
-export const GAMEKIT_PLATFORM_BYTES = 244_887;
+export const GAMEKIT_PLATFORM_BYTES = 268_887;
 
 /** Combined html+js+css size cap — must match games-repo `MAX_BUNDLE_BYTES`. */
 export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;

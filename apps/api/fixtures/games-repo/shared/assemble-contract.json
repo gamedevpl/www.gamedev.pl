@@ -40,9 +40,11 @@
     "lookControls": 4683,
     "spatialAudio": 2977,
     "zone": 12000,
-    "voice": 8000
+    "voice": 8000,
+    "world": 15000,
+    "gameplay": 9000
   },
-  "maxProjectBytes": 449687,
+  "maxProjectBytes": 473687,
   "audio": {
     "musicField": "string",
     "musicCatalogRequiredKeys": ["version", "tracks"],
