@@ -499,7 +499,13 @@ export function CreatorStudioView({
                       when the game was made. These open things beside it and leave it
                       where it is. */}
                   <div className="studio-head-actions">
-                    <button type="button" className="studio-head-action" onClick={() => openTab('playtest')}>
+                    {/* Playtest is the next action after a build — same weight as Send
+                        feedback, not a peer of the Details toggle beside it. */}
+                    <button
+                      type="button"
+                      className="studio-head-action is-primary"
+                      onClick={() => openTab('playtest')}
+                    >
                       <PixelIcon name="play" size={12} /> {t('studioPanel.tabs.playtest')}
                     </button>
                     <button

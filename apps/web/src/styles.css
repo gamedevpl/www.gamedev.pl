@@ -4056,7 +4056,9 @@ body.player-open {
   transition:
     color 0.15s,
     border-color 0.15s,
-    background 0.15s;
+    background 0.15s,
+    filter 0.15s,
+    box-shadow 0.15s;
 }
 
 .studio-head-action:hover {
@@ -4068,6 +4070,21 @@ body.player-open {
   color: var(--turquoise);
   border-color: rgba(0, 228, 172, 0.4);
   background: rgba(0, 228, 172, 0.1);
+}
+
+/* Solid turquoise CTA — Playtest must read louder than the outlined Details toggle. */
+.studio-head-action.is-primary {
+  background: var(--turquoise);
+  border-color: var(--turquoise);
+  color: #08241d;
+  font-weight: 700;
+}
+
+.studio-head-action.is-primary:hover {
+  color: #08241d;
+  border-color: var(--turquoise);
+  filter: brightness(1.1);
+  box-shadow: 0 0 16px var(--turquoise-glow);
 }
 
 /* A shelf row is a title. The state that matters at a glance rides on a dot. */
