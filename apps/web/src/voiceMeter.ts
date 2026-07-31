@@ -15,7 +15,7 @@ import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
 
 export type VoiceMeterShellStatus = 'unsupported' | 'idle' | 'pending' | 'live' | 'denied';
 
-export type VoiceMeterGameMessage = { t: 'voice:hello' } | { t: 'voice:start' } | { t: 'voice:stop' };
+export type VoiceMeterGameMessage = { t: 'voice:hello' } | { t: 'voice:stop' };
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -24,7 +24,9 @@ function isObject(value: unknown): value is Record<string, unknown> {
 /** Narrows one message out of the game frame. Returns null for anything else. */
 export function parseVoiceMeterMessage(raw: unknown): VoiceMeterGameMessage | null {
   if (!isObject(raw) || raw.ns !== BRIDGE_NAMESPACE || raw.v !== PROTOCOL_VERSION) return null;
-  if (raw.t === 'voice:hello' || raw.t === 'voice:start' || raw.t === 'voice:stop') {
+  // `voice:start` is deliberately rejected: sticky mic permission would let untrusted
+  // iframe code open capture without a theater Mic gesture (Codex P1 on #406).
+  if (raw.t === 'voice:hello' || raw.t === 'voice:stop') {
     return { t: raw.t };
   }
   return null;
@@ -196,13 +198,6 @@ export function useVoiceMeterBridge(frameRef: MutableRefObject<HTMLIFrameElement
 
       if (!availableRef.current) return;
 
-      if (message.t === 'voice:start') {
-        // Games may ask, but sticky permission is the only case that works without a
-        // fresh top-level gesture. Harmless no-op when the browser still needs a tap.
-        startMic();
-        return;
-      }
-
       if (message.t === 'voice:stop') {
         stopMic();
       }
@@ -223,7 +218,7 @@ export function useVoiceMeterBridge(frameRef: MutableRefObject<HTMLIFrameElement
       availableRef.current = false;
       teardown();
     };
-  }, [frameRef, publishStatus, startMic, stopMic, teardown]);
+  }, [frameRef, publishStatus, stopMic, teardown]);
 
   return {
     /** True once a game with createVoiceMeter has said hello. */

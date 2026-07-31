@@ -332,12 +332,14 @@ export function GameTheater({
     };
   }, [moreOpen]);
 
-  // The menu also has to exist wherever a control has shed into it. How-to-play sheds at
-  // 900px while sound and fullscreen shed at 768px, so between those widths a game with
-  // no `reportSlug` (a draft, a generated game — no catalog entry, but the game document
-  // still reports its own controls) would have had the bar copy hidden by CSS and no menu
-  // to fall back to, and the control would have vanished entirely.
-  const showMoreMenu = Boolean(reportSlug) || isNarrow || (hasControls && isMidWidth);
+  // The menu also has to exist wherever a control has shed into it. How-to-play and Mic
+  // shed at 900px while sound and fullscreen shed at 768px, so between those widths a
+  // game with no `reportSlug` (a draft, a generated game — no catalog entry, but the
+  // game document still reports its own controls) — or a shout game that only needs Mic
+  // — would have had the bar copy hidden by CSS and no menu to fall back to, and the
+  // control would have vanished entirely.
+  const showMoreMenu =
+    Boolean(reportSlug) || isNarrow || (hasControls && isMidWidth) || (voiceMeter.available && isMidWidth);
 
   const soundControl = (className: string) => (
     <button
@@ -457,7 +459,9 @@ export function GameTheater({
             {/* Desktop: sound + fullscreen sit on the bar. Phone: they move into More. */}
             {howToPlayControl('secondary-btn howto-btn howto-bar')}
             {soundControl('secondary-btn sound-btn theater-desktop-chrome')}
-            {micControl('secondary-btn mic-btn theater-desktop-chrome')}
+            {/* Mic sheds at 900px with How-to-play (not 768px with sound) — Polish
+                "Mikrofon: …" labels otherwise clip the title at mid widths. */}
+            {micControl('secondary-btn mic-btn mic-bar')}
             {fullscreenControl('secondary-btn fullscreen-btn theater-desktop-chrome')}
             {showMoreMenu && (
               <div className={`theater-more${moreOpen ? ' is-open' : ''}`} ref={moreRef}>
@@ -475,8 +479,8 @@ export function GameTheater({
                 </button>
                 <div className="theater-more-panel" role="menu">
                   {howToPlayControl('theater-menu-item howto-menu')}
+                  {micControl('theater-menu-item mic-menu')}
                   {soundControl('theater-menu-item theater-mobile-chrome')}
-                  {micControl('theater-menu-item theater-mobile-chrome')}
                   {fullscreenControl('theater-menu-item theater-mobile-chrome')}
                   {reportSlug && (
                     <>

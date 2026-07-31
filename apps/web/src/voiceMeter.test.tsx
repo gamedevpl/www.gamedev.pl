@@ -11,10 +11,13 @@ function frame(payload: Record<string, unknown>) {
 }
 
 describe('parseVoiceMeterMessage', () => {
-  it('accepts hello / start / stop from the game', () => {
+  it('accepts hello / stop from the game', () => {
     expect(parseVoiceMeterMessage(frame({ t: 'voice:hello' }))).toEqual({ t: 'voice:hello' });
-    expect(parseVoiceMeterMessage(frame({ t: 'voice:start' }))).toEqual({ t: 'voice:start' });
     expect(parseVoiceMeterMessage(frame({ t: 'voice:stop' }))).toEqual({ t: 'voice:stop' });
+  });
+
+  it('rejects voice:start so sticky permission cannot skip the theater Mic gesture', () => {
+    expect(parseVoiceMeterMessage(frame({ t: 'voice:start' }))).toBeNull();
   });
 
   it('drops foreign namespaces, versions, and unknown types', () => {
@@ -141,6 +144,21 @@ describe('useVoiceMeterBridge', () => {
 
     expect(latest?.status).toBe('live');
     expect(toGame.some((m) => m.t === 'voice:state' && m.status === 'live')).toBe(true);
+  });
+
+  it('ignores a game voice:start message (shell Mic gesture only)', async () => {
+    const { fromGame } = mount();
+    act(() => fromGame({ t: 'voice:hello' }));
+    toGame.length = 0;
+
+    await act(async () => {
+      fromGame({ t: 'voice:start' });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(latest?.status).toBe('idle');
+    expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled();
   });
 
   it('stops a pending or live mic when the document is hidden', async () => {
