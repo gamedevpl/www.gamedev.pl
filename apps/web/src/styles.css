@@ -3516,6 +3516,16 @@ body.player-open {
   margin-top: 16px;
 }
 
+/* GIS paints asynchronously into this node. Without a reserved slot the Apple button
+   below starts at the top of the stack and jumps down when the iframe arrives — and
+   jumped again whenever a parent re-render used to wipe and re-render the widget. */
+.google-sign-in-container {
+  width: 240px;
+  height: 40px;
+  /* GIS's iframe is display:inline-block; keep the slot from collapsing while empty. */
+  line-height: 0;
+}
+
 .auth-error-banner {
   background: rgba(255, 107, 107, 0.15);
   border: 1px solid var(--error);
