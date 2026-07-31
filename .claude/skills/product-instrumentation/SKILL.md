@@ -202,6 +202,35 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
     visit stream without joining to play events.
 - **Build economics are duration-only** — submission→publish timestamps and build events
   exist; revision-cycle counts are derivable; keep it that way as builds evolve.
+- ~~Shared zones were unmeasured~~ — **closed 2026-07-31**: `zone_link`
+  (`admitted` → `joined` → `lost`) on the play stream, aggregated as `zoneJoinRate` and
+  rendered as the Shared column beside Finished. It exists because the shell falls back
+  to solo play _in silence_ when it cannot reach the host — correct for the player, and
+  the reason a dead zone host and a healthy one are indistinguishable from outside. Three
+  rules came out of it, and they generalise to any signal the shell reports _about_ a
+  game rather than _from_ one:
+  - **The rung is the evidence, not the attempt.** `joined` fires on the arrival of a
+    snapshot, never on the socket opening. A connection that upgrades and is then closed
+    is exactly how the host failed on its first day; pinning the rung to the socket would
+    have had the metric reporting health throughout the outage.
+  - **A shell-owned signal needs its own channel _and_ its own budget.** `gamePlayer.ts`
+    does not accept these types over postMessage, so a game cannot claim to be shared
+    while sitting alone — but until they also had a session cap of their own, a frame
+    could flood past the shared 400-event ceiling and force its own zone to render `—`.
+    Separating the channel stops a game lying; separating the budget stops it silencing.
+  - **A ratio must not be able to exceed its own maximum.** Both rungs travel in
+    best-effort batches, so a session can land `joined` while the request carrying
+    `admitted` was lost. Count the numerator only inside the denominator's set; a session
+    missing its `admitted` is one more "no evidence", and the residual bias then
+    understates success rather than inventing it.
+- **A game with no rounds cannot report a score** — `score` is emitted only from the
+  transition into a terminal snapshot state (games-repo `shared/modules/core.ts`), so
+  ember-watch reports none since it became a continuous world (games-repo #163), and
+  `finishRate` / `winRate` / `medianBestScore` read `—` for it permanently. Half of that
+  is right: a world with no endings has no finish rate. The other half is a real loss —
+  saves are a meaningful score there, they just have no round boundary to be reported at.
+  Closing it means deciding what `score` means for a game that never ends, which is a
+  platform question rather than one game's, so it is named here rather than special-cased.
 
 ## Definition of done for instrumentation
 

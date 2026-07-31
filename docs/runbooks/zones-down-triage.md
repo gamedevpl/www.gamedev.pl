@@ -106,6 +106,20 @@ removed it deliberately, an app deploy wiped it — `--set-env-vars` replaces th
 Both deploy paths thread it through, so this should not happen; if it did, that is the
 bug, not the host.
 
+## Open: one failure nobody has explained
+
+**2026-07-29 22:11 UTC, revision `gamedev-world-00004-kq8`.** A single join was refused
+on a healthy host — the first thing A6 ever caught, hours after it was armed. The cause
+is unknown and now unknowable: `ZoneAdmissionError` carried only the wire reason at the
+time, so the error that `join` actually threw was discarded before it reached the log.
+That is fixed (the wrapper keeps its `cause`), which means the _next_ one will say.
+
+Keep it in mind if a `zone_unavailable` appears without an obvious cause. A single failed
+join is not necessarily a defect — a transient games-repo fetch or Firestore read would
+do it, and recovering on the next attempt is the design working — but one has happened,
+it was never explained, and a second of the same shape should not be waved through as
+"probably that transient thing again".
+
 ## What this runbook does not cover
 
 Zone _state_ problems — a world that loads but is wrong, stuck, or unplayable. That is a
