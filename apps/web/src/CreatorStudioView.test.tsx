@@ -345,6 +345,28 @@ describe('CreatorStudioView', () => {
     root.unmount();
   });
 
+  it('does not offer to stop a build that already needs changes', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue([
+      {
+        token: 'token-stopped',
+        title: 'Street Heist',
+        createdAt: '2026-07-30T09:00:00.000Z',
+        lastKnownStatus: 'needs_changes',
+        slug: 'street-heist',
+      },
+    ] satisfies StudioGame[]);
+
+    const { container, root } = await renderStudio({ selectedGame: 'street-heist', selectedTab: 'details' });
+
+    expect(container.querySelector('.status-abandon')).toBeNull();
+    expect(container.querySelector('.studio-share-toggle')).not.toBeNull();
+
+    root.unmount();
+  });
+
   it('puts the switch back when the change did not take', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');

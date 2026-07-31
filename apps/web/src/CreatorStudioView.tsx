@@ -878,7 +878,7 @@ function DetailsPanel({
         <button type="button" className="secondary-btn" onClick={onOpenPlaytest}>
           <PixelIcon name="play" size={12} /> {t('studioPanel.overview.playtest')}
         </button>
-        {!published && game.lastKnownStatus !== 'abandoned' ? (
+        {game.lastKnownStatus && STUDIO_LIVE_STATUSES.has(game.lastKnownStatus) ? (
           <button
             type="button"
             className={`status-abandon${abandonArmed ? ' is-danger' : ''}`}
