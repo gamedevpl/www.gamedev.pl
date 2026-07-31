@@ -97,6 +97,20 @@ describe('InMemoryStore', () => {
     expect(await repairStore.bumpRoundGeneration(5)).toBe(2);
   });
 
+  it('ensureRoundGeneration initializes a legacy job without bumping an existing one', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(6, 'g:123', 'Legacy');
+    const map = (store as unknown as { submissions: Map<number, import('./store.js').SubmissionRecord> }).submissions;
+    map.set(6, { ...(await store.getSubmission(6))!, roundGeneration: undefined });
+
+    expect(await store.ensureRoundGeneration(6)).toBe(1);
+    expect((await store.getSubmission(6))?.roundGeneration).toBe(1);
+    // Idempotent: a job already on generation 3 stays there.
+    await store.bumpRoundGeneration(6);
+    await store.bumpRoundGeneration(6);
+    expect(await store.ensureRoundGeneration(6)).toBe(3);
+  });
+
   it('reports a missing submission rather than inventing one', async () => {
     const store = new InMemoryStore();
     expect(await store.recordJobTransition(404, { to: 'queued', at: '2026-07-30T10:00:00Z', by: 'system' })).toBe(

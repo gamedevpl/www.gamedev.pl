@@ -1034,6 +1034,14 @@ export interface Store {
    * generation. Returns the new value, or null when the job is gone.
    */
   bumpRoundGeneration(issueNumber: number): Promise<number | null>;
+  /**
+   * Returns the job's active generation, initializing it to `1` when absent.
+   *
+   * Used when minting a round-scoped channel token for a legacy job that has never
+   * closed a round under the new model: the mint must write the field it claims, or
+   * validation rejects the brand-new key (`active === undefined`).
+   */
+  ensureRoundGeneration(issueNumber: number): Promise<number | null>;
   /** Records the agent backend's last reported state, for stall detection. */
   setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void>;
   /** Appends a dispatch ref, recording which backend is building this job and where. */
@@ -1683,6 +1691,14 @@ export class InMemoryStore implements Store {
     const roundGeneration = nextRoundGeneration(sub.roundGeneration);
     this.submissions.set(issueNumber, { ...sub, roundGeneration });
     return roundGeneration;
+  }
+
+  async ensureRoundGeneration(issueNumber: number): Promise<number | null> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub) return null;
+    if (sub.roundGeneration !== undefined) return sub.roundGeneration;
+    this.submissions.set(issueNumber, { ...sub, roundGeneration: 1 });
+    return 1;
   }
 
   async setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void> {
@@ -2712,6 +2728,18 @@ export class FirestoreStore implements Store {
       const roundGeneration = nextRoundGeneration(current.roundGeneration);
       tx.set(ref, { roundGeneration }, { merge: true });
       return roundGeneration;
+    });
+  }
+
+  async ensureRoundGeneration(issueNumber: number): Promise<number | null> {
+    const ref = this.db.collection('submissions').doc(String(issueNumber));
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return null;
+      const current = snap.data() as SubmissionRecord;
+      if (current.roundGeneration !== undefined) return current.roundGeneration;
+      tx.set(ref, { roundGeneration: 1 }, { merge: true });
+      return 1;
     });
   }
 

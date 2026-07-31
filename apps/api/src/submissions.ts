@@ -666,10 +666,10 @@ export async function registerSubmissionRoutes(
             ...(draft.notes ? { notes: draft.notes } : {}),
           }
         : undefined;
-      // New jobs carry generation 1 from createSubmission; a missing record (or a
-      // legacy one that somehow reaches first dispatch without the field) still mints
-      // the round-scoped shape rather than the legacy jobId-only token.
-      const roundGeneration = (await store?.getSubmission(input.issueNumber))?.roundGeneration ?? 1;
+      // Persist generation before minting. New jobs already carry `1` from
+      // createSubmission; a legacy job without the field must be initialized here so
+      // the round-scoped token we hand the agent validates against the record.
+      const roundGeneration = (await store?.ensureRoundGeneration(input.issueNumber)) ?? 1;
       const result = await agentBackend.dispatch({
         issueNumber: input.issueNumber,
         ...(input.slug ? { slug: input.slug } : {}),
@@ -768,11 +768,11 @@ export async function registerSubmissionRoutes(
     try {
       // A new round closes the previous one's token. Bump *before* minting so the brief
       // carries the generation that is now active. An undelivered nudge is the same
-      // round continuing — the agent never uploaded, so its token must keep working.
-      let roundGeneration = record?.roundGeneration ?? 1;
-      if (!input.undelivered) {
-        roundGeneration = (await store.bumpRoundGeneration(input.issueNumber)) ?? roundGeneration + 1;
-      }
+      // round continuing — the agent never uploaded, so its token must keep working —
+      // but a legacy job still needs the field written so the reminted key validates.
+      const roundGeneration = input.undelivered
+        ? ((await store.ensureRoundGeneration(input.issueNumber)) ?? 1)
+        : ((await store.bumpRoundGeneration(input.issueNumber)) ?? (record?.roundGeneration ?? 0) + 1);
       const brief = {
         issueNumber: input.issueNumber,
         slug: record?.slug,
