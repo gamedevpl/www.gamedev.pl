@@ -306,13 +306,16 @@ export function digestPushContent(locale: Locale, params: DigestEmailParams): { 
 // also the way to stop being the person these are about.
 
 export interface OperatorEmailParams {
-  /** Sanitized game title. */
+  /** Sanitized game title, or a waitlist applicant's display label. */
   title: string;
-  issueNumber: number;
+  /** Present for job alerts; absent for waitlist joins (no issue). */
+  issueNumber?: number;
   /** Absolute URL to the console. */
   actionUrl: string;
   /** Machine-readable extra, e.g. which kind of stall. Rendered verbatim, so keep it ours. */
   detail?: string;
+  /** Waitlist joins: the applicant's email when the token carried a verified one. */
+  email?: string;
 }
 
 const operatorCopy: Record<OperatorNotificationType, { subject: string; lead: string; cta: string }> = {
@@ -341,6 +344,11 @@ const operatorCopy: Record<OperatorNotificationType, { subject: string; lead: st
     lead: 'no longer passes the check on the current engine. It still serves — the creator has been nudged to refresh it.',
     cta: 'Open the queue',
   },
+  'operator.waitlist_joined': {
+    subject: 'Someone joined the beta waitlist',
+    lead: 'asked to join the closed beta.',
+    cta: 'Open telemetry',
+  },
 };
 
 export function operatorPushContent(type: OperatorNotificationType, title: string): { title: string; body: string } {
@@ -356,18 +364,21 @@ export function operatorNotificationMessage(
   const copy = operatorCopy[type];
   const actionUrl = escapeHtml(params.actionUrl);
   const detail = params.detail ? ` (${params.detail})` : '';
+  const emailLine = params.email;
+  const jobLine = params.issueNumber !== undefined ? `Job #${params.issueNumber}` : undefined;
 
   const text = [
     `“${params.title}” ${copy.lead}${detail}`,
-    '',
-    `Job #${params.issueNumber}`,
+    ...(emailLine ? ['', emailLine] : []),
+    ...(jobLine ? ['', jobLine] : []),
     '',
     `${copy.cta}: ${params.actionUrl}`,
   ].join('\n');
 
   const html = [
     `<p>“${escapeHtml(params.title)}” ${escapeHtml(copy.lead)}${escapeHtml(detail)}</p>`,
-    `<p style="color:#888;font-size:12px">Job #${params.issueNumber}</p>`,
+    ...(emailLine ? [`<p style="color:#888;font-size:12px">${escapeHtml(emailLine)}</p>`] : []),
+    ...(jobLine ? [`<p style="color:#888;font-size:12px">${escapeHtml(jobLine)}</p>`] : []),
     `<p><a href="${actionUrl}">${escapeHtml(copy.cta)}</a></p>`,
   ].join('\n');
 

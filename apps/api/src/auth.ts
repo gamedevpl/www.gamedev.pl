@@ -8,6 +8,9 @@ import { isAdmin, isAdminSession } from './admin.js';
 import { resolveAppleAccount } from './apple-account.js';
 import { createAppleAuthVerifierFromEnv, parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { readBearerToken } from './bearer.js';
+import { createMailerFromEnv } from './mailer.js';
+import { emitWaitlistJoined } from './notify.js';
+import { createPusherFromEnv } from './pusher.js';
 import { withActiveDay, type Store, type User } from './store.js';
 
 export const SESSION_COOKIE_NAME = 'gamedev_session';
@@ -645,6 +648,28 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
           name,
           locale: parseResult.data.locale,
         });
+
+        // Operators need to know a person is waiting — otherwise the waitlist is a
+        // Firestore collection nobody opens. Best-effort: a notification failure must
+        // not turn a successful join into a 500. Idempotent per applicant uid.
+        const adminUids = options.adminUids;
+        if (adminUids && adminUids.size > 0) {
+          const title = (name && name.trim()) || email || 'Someone';
+          try {
+            await emitWaitlistJoined(
+              {
+                store,
+                mailer: process.env.RESEND_API_KEY ? createMailerFromEnv() : undefined,
+                pusher: createPusherFromEnv(),
+                adminUids,
+                logError: (err, msg) => request.log.error({ err }, msg),
+              },
+              { uid, title, ...(email ? { email } : {}) },
+            );
+          } catch (err) {
+            request.log.error({ err }, 'waitlist operator notify failed');
+          }
+        }
 
         return { status: 'ok', waitlistStatus: entry.status };
       } catch (err) {

@@ -95,6 +95,7 @@ and **delivery** (in-app, push, email).
 | `game.updated`              | players following the game | new merge touches a game's directory            | M3             |
 | `catalog.new_game`          | opted-in players           | new slug appears in catalog                     | M3             |
 | `quota.reset` / system      | any                        | server-side                                     | later, if ever |
+| `operator.waitlist_joined`  | operators (`ADMIN_UIDS`)   | `POST /api/waitlist` creates a new applicant    | closed beta    |
 
 `submission.queued` and `in_review` are deliberately **not** notified — the creator just
 performed the action or is mid-flow; notifying every micro-transition trains people to

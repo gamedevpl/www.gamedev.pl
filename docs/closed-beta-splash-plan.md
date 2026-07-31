@@ -51,6 +51,9 @@ explicit click.
 - **Telemetry:** `waitlist_step` on the visit stream (`cta_clicked` → `joined`),
   aggregated in `summarizeVisitFunnel` and rendered as a Waitlist block on the
   operator telemetry panel beside Creating.
+- **Operator notify:** each new applicant fans out `operator.waitlist_joined` to
+  every `ADMIN_UIDS` account (in-app bell + email + push, same posture as queue
+  alerts — no unsubscribe). Idempotent per uid. Deep link: `/admin/telemetry`.
 ## Store
 
 `Store` interface gains `upsertWaitlistEntry(entry)` (+ `InMemoryStore` and

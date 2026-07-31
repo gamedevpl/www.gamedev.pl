@@ -58,6 +58,10 @@
       "game_unhealthy": {
         "title": "Opublikowana gra nie przeszła kontroli",
         "body": "„{{title}}” nie przechodzi już testów na aktualnym silniku. Twórca dostał zachętę do odświeżenia."
+      },
+      "waitlist_joined": {
+        "title": "Ktoś dołączył do listy oczekujących",
+        "body": "„{{title}}” chce dołączyć do zamkniętej bety."
       }
     }
   },
