@@ -5,9 +5,11 @@ import {
   fromSubmissionStatus,
   isTerminal,
   JOB_STATES,
+  nextRoundGeneration,
   planObservedStatusTransition,
   reconcileAgentObservation,
   toSubmissionStatus,
+  transitionClosesRound,
   type JobState,
 } from './job-state.js';
 
@@ -37,6 +39,29 @@ describe('job state projection', () => {
     expect(toSubmissionStatus('abandoned')).toBe('abandoned');
     // Lossy on purpose: the public vocabulary has no terminal failure yet.
     expect(toSubmissionStatus('failed')).toBe('needs_changes');
+  });
+});
+
+describe('round-closing transitions', () => {
+  it('bumps generation on every closing outcome', () => {
+    expect(transitionClosesRound({ to: 'ready_for_review', at: 't', by: 'gate', reason: 'gate_green' })).toBe(true);
+    expect(transitionClosesRound({ to: 'needs_changes', at: 't', by: 'operator', reason: 'rejected' })).toBe(true);
+    expect(transitionClosesRound({ to: 'canceled', at: 't', by: 'creator', reason: 'abandoned' })).toBe(true);
+    expect(transitionClosesRound({ to: 'canceled', at: 't', by: 'operator', reason: 'operator_canceled' })).toBe(true);
+    expect(transitionClosesRound({ to: 'abandoned', at: 't', by: 'system', reason: 'no_connect' })).toBe(true);
+    expect(transitionClosesRound({ to: 'failed', at: 't', by: 'reconciler', reason: 'task_failed' })).toBe(true);
+  });
+
+  it('keeps the round open after a red gate so the session can repair', () => {
+    expect(transitionClosesRound({ to: 'needs_changes', at: 't', by: 'gate', reason: 'gate_red' })).toBe(false);
+    expect(transitionClosesRound({ to: 'submitted', at: 't', by: 'agent', reason: 'sources_delivered' })).toBe(false);
+    expect(transitionClosesRound({ to: 'building', at: 't', by: 'operator', reason: 'operator_retry' })).toBe(false);
+  });
+
+  it('initializes legacy jobs at 1 and increments thereafter', () => {
+    expect(nextRoundGeneration(undefined)).toBe(1);
+    expect(nextRoundGeneration(1)).toBe(2);
+    expect(nextRoundGeneration(7)).toBe(8);
   });
 });
 

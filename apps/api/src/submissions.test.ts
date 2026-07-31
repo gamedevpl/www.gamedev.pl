@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mintAgentToken } from './agent-token.js';
+import { verifyAgentToken } from './agent-token.js';
 import { buildApp } from './app.js';
 import type { GameSeeder, SeedDraft } from './game-seed.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
@@ -551,7 +551,12 @@ describe('submission routes', () => {
     expect(briefs[0].spec).toContain('This is a sufficiently long concept with markup and details.');
     expect(briefs[0].spec).not.toContain('<script>');
     expect(briefs[0].spec).not.toContain('<i>');
-    expect(briefs[0].channelToken).toBe(mintAgentToken(jobs[0].issueNumber, secret));
+    // Round-scoped: same job + generation. `exp` is wall-clock, so compare claims
+    // rather than the opaque string (a second boundary would flake an equality check).
+    expect(verifyAgentToken(briefs[0].channelToken, secret)).toMatchObject({
+      jobId: jobs[0].issueNumber,
+      roundGeneration: jobs[0].roundGeneration ?? 1,
+    });
   });
   it('gives two games of the same name addresses of their own', async () => {
     const { githubClient } = createGithubClientStub({ issueNumber: 93 });

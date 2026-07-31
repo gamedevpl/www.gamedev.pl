@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { InvalidAgentTokenError, readBearerToken, verifyAgentToken } from './agent-token.js';
+import { assertAgentTokenActive, InvalidAgentTokenError, readBearerToken, verifyAgentToken } from './agent-token.js';
 import { InvalidUploadError, type GamesStore } from './games-store.js';
 import { parseSpecTitle } from './github-client.js';
 import { canTransition, resolveJobState } from './job-state.js';
@@ -268,21 +268,37 @@ export async function registerAgentChannelRoutes(
       return null;
     }
 
-    let issueNumber: number;
+    let claims;
     try {
-      issueNumber = verifyAgentToken(token, agentTokenSecret);
+      claims = verifyAgentToken(token, agentTokenSecret);
     } catch (error) {
       if (error instanceof InvalidAgentTokenError) {
-        reply.status(401).send({ error: 'invalid build token' });
+        reply.status(401).send({ error: error.message || 'invalid build token' });
         return null;
       }
       throw error;
     }
 
+    const issueNumber = claims.jobId;
     const record = await store.getSubmission(issueNumber);
     if (!record) {
       reply.status(404).send({ error: 'unknown build' });
       return null;
+    }
+
+    try {
+      assertAgentTokenActive(claims, record, now());
+    } catch (error) {
+      if (!(error instanceof InvalidAgentTokenError)) throw error;
+      // Closing a round bumps the generation so the capability dies — but a connected
+      // agent still has to hear `control.stop` once. A cryptographically valid token
+      // for this job is enough to learn the job is over; every write path below still
+      // refuses on `stopReason`. An expired or stale key on a live round keeps the
+      // fresh-prompt answer.
+      if (!stopReason(record)) {
+        reply.status(401).send({ error: error.message || 'invalid build token' });
+        return null;
+      }
     }
 
     return { issueNumber, record };

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
-import { mintAgentToken } from './agent-token.js';
+import { mintAgentToken, mintLegacyAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-token.js';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
@@ -65,8 +65,10 @@ async function seedSubmission(store: InMemoryStore, issueNumber = ISSUE) {
   await store.setSubmissionLocale(issueNumber, 'pl');
 }
 
-function agentHeaders(issueNumber = ISSUE) {
-  return { authorization: `Bearer ${mintAgentToken(issueNumber, secret)}` };
+function agentHeaders(issueNumber = ISSUE, roundGeneration = 1) {
+  return {
+    authorization: `Bearer ${mintAgentToken(issueNumber, secret, { roundGeneration })}`,
+  };
 }
 
 describe('agent build channel', () => {
@@ -295,6 +297,72 @@ describe('agent build channel', () => {
       payload,
     });
     expect(wrongScope.statusCode).toBe(401);
+  });
+
+  it('rejects a stale-generation or expired token with the fresh-prompt reason', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    app = await createApp(store);
+
+    const stale = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/progress',
+      headers: agentHeaders(ISSUE, 99),
+      payload: { text: 'hello' },
+    });
+    expect(stale.statusCode).toBe(401);
+    expect(stale.json().error).toBe(STALE_AGENT_TOKEN_REASON);
+
+    const expired = mintAgentToken(ISSUE, secret, {
+      roundGeneration: 1,
+      now: Date.now() - 20 * 24 * 60 * 60 * 1000,
+      ttlDays: 14,
+    });
+    const expiredRes = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/progress',
+      headers: { authorization: `Bearer ${expired}` },
+      payload: { text: 'hello' },
+    });
+    expect(expiredRes.statusCode).toBe(401);
+    expect(expiredRes.json().error).toBe(STALE_AGENT_TOKEN_REASON);
+  });
+
+  it('still accepts a legacy token on a job that has never closed a round under the new model', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    // Simulate a pre-migration record: strip the generation new creates stamp.
+    const legacy = await store.getSubmission(ISSUE);
+    const submissions = (store as unknown as { submissions: Map<number, import('./store.js').SubmissionRecord> })
+      .submissions;
+    submissions.set(ISSUE, { ...legacy!, roundGeneration: undefined });
+
+    app = await createApp(store);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/progress',
+      headers: { authorization: `Bearer ${mintLegacyAgentToken(ISSUE, secret)}` },
+      payload: { kind: 'step', step: 'mechanics', text: 'Still the same round.' },
+    });
+    expect(response.statusCode).toBe(200);
+
+    // Closing the round initializes generation; the legacy token must not revive.
+    await store.recordJobTransition(ISSUE, {
+      to: 'ready_for_review',
+      at: '2026-07-31T12:00:00.000Z',
+      by: 'gate',
+      reason: 'gate_green',
+    });
+    expect((await store.getSubmission(ISSUE))?.roundGeneration).toBe(1);
+
+    const afterClose = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/progress',
+      headers: { authorization: `Bearer ${mintLegacyAgentToken(ISSUE, secret)}` },
+      payload: { text: 'too late' },
+    });
+    expect(afterClose.statusCode).toBe(401);
+    expect(afterClose.json().error).toBe(STALE_AGENT_TOKEN_REASON);
   });
 
   it('refuses a token for a build that does not exist', async () => {

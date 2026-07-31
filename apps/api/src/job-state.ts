@@ -116,6 +116,49 @@ export function canTransition(from: JobState, to: JobState): boolean {
 }
 
 /**
+ * Whether committing this transition ends the current build round — and must therefore
+ * bump the job's `roundGeneration` so the round's channel token dies.
+ *
+ * Closing events written through `recordJobTransition`:
+ * - delivery accepted (`ready_for_review`, typically `gate_green`)
+ * - round rejected into `needs_changes`, except `gate_red` — a red gate keeps the round
+ *   open so the live session can repair and re-deliver without a new token
+ * - creator/operator cancel or abandon
+ * - agent failure (`failed`) — terminal for the round
+ *
+ * Starting another round (creator feedback, operator retry) bumps in `resumeBuild`
+ * *before* the new token is minted, so the mint and the bump cannot race. That path
+ * is not classified here — a `building` → `building` `operator_retry` transition must
+ * not bump again after the mint.
+ */
+export function transitionClosesRound(transition: JobTransition): boolean {
+  switch (transition.to) {
+    case 'ready_for_review':
+      return true;
+    case 'canceled':
+    case 'abandoned':
+    case 'failed':
+      return true;
+    case 'needs_changes':
+      // Same-session repair after a red gate still holds the current token.
+      return transition.reason !== 'gate_red';
+    default:
+      return false;
+  }
+}
+
+/**
+ * Next channel-token generation after a round-closing transition.
+ *
+ * Legacy jobs have no field yet: the first close initializes it to `1`, which is what
+ * makes every subsequent round generation-scoped and stops old copied tokens. Jobs
+ * created with a generation already set simply increment.
+ */
+export function nextRoundGeneration(current: number | undefined): number {
+  return current === undefined ? 1 : current + 1;
+}
+
+/**
  * Why a job moved. Written onto every transition so the history explains itself — the
  * difference between "the build took 40 minutes" and "the build took 40 minutes because
  * it was re-dispatched twice after gate failures".
