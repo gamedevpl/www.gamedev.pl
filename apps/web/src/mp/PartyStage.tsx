@@ -148,7 +148,9 @@ export function PartyStage({ game, session, onExit }: PartyStageProps) {
       <div className="party-qr-block">
         <QrCode value={url} label={t('party.qrLabel', { code: session.code })} />
         <p className="party-code">{session.code}</p>
-        <p className="party-url">{url.replace(/^https?:\/\//, '')}</p>
+        <a className="party-url" href={url} target="_blank" rel="noopener noreferrer">
+          {url.replace(/^https?:\/\//, '')}
+        </a>
       </div>
 
       <div className="party-lobby-side">

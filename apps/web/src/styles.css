@@ -4658,11 +4658,18 @@ body.player-open {
 }
 
 .party-url {
+  display: inline-block;
   margin: 0;
   color: var(--muted);
   font-size: 0.85rem;
   word-break: break-all;
   max-width: 34ch;
+}
+
+.party-url:hover,
+.party-url:focus-visible {
+  color: var(--turquoise);
+  text-decoration: underline;
 }
 
 .party-lobby-side {

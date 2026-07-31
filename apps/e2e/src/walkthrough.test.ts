@@ -172,9 +172,12 @@ describe.skipIf(!prereq.ok)('signed-in walkthrough', () => {
     // The join credential rides in the fragment so it stays out of access logs and
     // Referer headers (docs/multiplayer-plan.md §4.3) — a join URL that put the token
     // in the path would leak it, so assert the shape, not just that a link exists.
-    // `.party-url` renders it scheme-less, hence the optional host prefix.
-    const joinUrl = await page.locator('.party-url').innerText();
+    // `.party-url` is a real <a> (clickable / copy-link); label stays scheme-less.
+    const partyUrl = page.locator('a.party-url');
+    const joinUrl = await partyUrl.innerText();
     expect(joinUrl).toMatch(/\/join\/[A-Z0-9]{6}#[A-Za-z0-9_-]+$/);
+    const href = await partyUrl.getAttribute('href');
+    expect(href).toMatch(/^https?:\/\/.+\/join\/[A-Z0-9]{6}#[A-Za-z0-9_-]+$/);
     expect(await page.locator('.party-code').innerText()).toMatch(/^[A-Z0-9]{6}$/);
 
     watcher.drain();
