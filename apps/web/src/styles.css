@@ -4277,9 +4277,9 @@ body.player-open {
    covers both. */
 .status-composer.is-compact {
   margin: 0;
-  padding: 7px 8px 8px 10px;
+  padding: 5px 5px 5px 12px;
   border: 1px solid var(--panel-border);
-  border-radius: 14px;
+  border-radius: 18px;
   background: var(--panel-card);
   transition:
     border-color 0.2s,
@@ -4291,20 +4291,34 @@ body.player-open {
   box-shadow: 0 0 0 3px rgba(0, 228, 172, 0.08);
 }
 
+/* Field and send share a line. `flex-end` rather than `center` so the button stays at
+   the bottom edge as the box grows into a paragraph, where the caret is — centred, it
+   drifts into the middle of a message. */
+.status-composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
 .status-composer.is-compact .status-feedback-input {
-  width: 100%;
+  flex: 1;
+  /* A flex item will not shrink below its content without this, and a long unbroken word
+     is enough to push the send button off the edge of a phone. */
+  min-width: 0;
   border: 0;
   border-radius: 0;
   background: none;
-  padding: 4px 2px;
+  padding: 7px 0;
   /* The box grows with the text instead (see autoGrow). A drag handle sitting in the
      middle of the composer's right edge, now that the border belongs to the box rather
      than the field, looked like something had gone wrong. */
   resize: none;
   overflow-y: auto;
-  /* The placeholder says where the message will land, which is two lines of text on a
-     phone; at two rows it was cut off mid-sentence. */
-  min-height: 5.25rem;
+  line-height: 1.4;
+  /* One line at rest. It was five rems back when the placeholder ran to four lines; the
+     placeholder is one line now, so an empty box the height of a paragraph is just a
+     paragraph of the thread that nobody can read. */
+  min-height: 2.4rem;
 }
 
 .status-composer.is-compact .status-feedback-input:focus {
@@ -4313,24 +4327,42 @@ body.player-open {
   box-shadow: none;
 }
 
+/* A round tap target the size of the line beside it, holding an arrow instead of a verb.
+   The verb is what forced the button onto its own row: "Wyślij uwagi" is half the width
+   of a phone, and a label that long beside the field would have left the field narrower
+   than the message going into it. */
+.status-composer.is-compact .status-composer-send {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+}
+
+/* Square again where every button gets a 44px floor for fingers — with a fixed width and
+   a floored height it would have come out an oval. */
+@media (max-width: 768px) {
+  .status-composer.is-compact .status-composer-send {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* Present only when there is an error or a receipt to show — see the composer's markup.
+   A row that is always in the DOM is a row the resting composer pays for. */
 .status-composer.is-compact .status-feedback-actions {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   gap: 10px;
-  margin-top: 2px;
-}
-
-/* Sized down to sit inside the composer rather than under it. */
-.status-composer.is-compact .status-feedback-actions .primary-btn {
-  padding: 7px 15px;
-  font-size: 0.84rem;
-  border-radius: 9px;
+  margin: 2px 4px 3px 0;
+  font-size: 0.82rem;
 }
 
 .status-composer.is-compact .status-feedback-actions .error {
   margin: 0;
-  margin-right: auto;
 }
 
 /* On a narrow screen the thread does not get a scroller of its own.
@@ -4537,13 +4569,6 @@ body.player-open {
     flex: none;
     margin: 0 12px max(12px, env(safe-area-inset-bottom, 0px));
     animation: none;
-  }
-
-  /* The tall empty box existed to fit a placeholder that ran to four lines. The
-     placeholder is one line now, so the box can start at the size of a reply and grow
-     into the message — which is a third of a phone screen handed back to the thread. */
-  .app:has(.studio-layout.is-game-open) .status-composer.is-compact .status-feedback-input {
-    min-height: 2.75rem;
   }
 
   /* Undoes the one-scroller compromise above. That rule existed because the transcript's

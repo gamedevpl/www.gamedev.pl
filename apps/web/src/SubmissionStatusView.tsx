@@ -964,35 +964,50 @@ function FeedbackPanel({
   if (compact) {
     return (
       <div className="status-feedback status-composer is-compact">
-        <textarea
-          ref={inputRef}
-          className="status-feedback-input"
-          value={text}
-          onChange={(event) => {
-            setText(event.target.value);
-            autoGrow();
-            if (state === 'sent') setState('idle');
-          }}
-          placeholder={t(composerHintKey)}
-          aria-label={t(titleKey)}
-          rows={2}
-          maxLength={2000}
-        />
-        <div className="status-feedback-actions">
-          {error ? <p className="error">{error}</p> : null}
-          {state === 'sent' && !error ? (
-            <span className="status-feedback-sent">
-              <PixelIcon name="check" size={13} /> {t('statusView.feedback.sent')}
-            </span>
-          ) : null}
+        {/* Field and send on one line. The button used to sit on a row of its own below
+            the box, which cost a phone screen an entire line to say what an arrow beside
+            the text says — and put the thing you tap furthest from the thing you typed.
+            Icon-only, so it stays a button rather than becoming a second column: the word
+            is longer in Polish than in English and would have set the width. */}
+        <div className="status-composer-row">
+          <textarea
+            ref={inputRef}
+            className="status-feedback-input"
+            value={text}
+            onChange={(event) => {
+              setText(event.target.value);
+              autoGrow();
+              if (state === 'sent') setState('idle');
+            }}
+            placeholder={t(composerHintKey)}
+            aria-label={t(titleKey)}
+            rows={1}
+            maxLength={2000}
+          />
           <button
-            className="primary-btn"
+            type="button"
+            className="primary-btn status-composer-send"
             onClick={() => void send()}
             disabled={state === 'sending' || trimmed.length < 10}
+            aria-label={state === 'sending' ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
+            title={state === 'sending' ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
           >
-            {state === 'sending' ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
+            <PixelIcon name="arrowRight" size={13} />
           </button>
         </div>
+        {/* Only on screen when there is something to report. An always-rendered row is
+            what made the composer two rows tall in its resting state. */}
+        {error || state === 'sent' ? (
+          <div className="status-feedback-actions">
+            {error ? (
+              <p className="error">{error}</p>
+            ) : (
+              <span className="status-feedback-sent">
+                <PixelIcon name="check" size={13} /> {t('statusView.feedback.sent')}
+              </span>
+            )}
+          </div>
+        ) : null}
       </div>
     );
   }
