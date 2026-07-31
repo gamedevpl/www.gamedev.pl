@@ -40,6 +40,7 @@ describe('catalog helpers', () => {
         multiplayer: null,
         saves: null,
         world: null,
+        sensing: null,
         orientation: 'any',
         touch: null,
         submittedBy: null,

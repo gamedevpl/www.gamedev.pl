@@ -22,6 +22,7 @@ function entry(partial: Partial<CatalogEntry> & Pick<CatalogEntry, 'slug' | 'tit
     multiplayer: null,
     saves: null,
     world: null,
+    sensing: null,
     orientation: 'any',
     touch: null,
     submittedBy: null,
@@ -48,11 +49,7 @@ describe('sortCatalogEntries', () => {
   });
 
   it('sorts alphabetically by title', () => {
-    expect(sortCatalogEntries(catalog, 'alpha', emptySignals).map((e) => e.slug)).toEqual([
-      'alpha',
-      'mid',
-      'zeta',
-    ]);
+    expect(sortCatalogEntries(catalog, 'alpha', emptySignals).map((e) => e.slug)).toEqual(['alpha', 'mid', 'zeta']);
   });
 
   it('sorts by most played sessions', () => {
@@ -63,11 +60,7 @@ describe('sortCatalogEntries', () => {
         ['zeta', 10],
       ]),
     };
-    expect(sortCatalogEntries(catalog, 'most_played', signals).map((e) => e.slug)).toEqual([
-      'mid',
-      'zeta',
-      'alpha',
-    ]);
+    expect(sortCatalogEntries(catalog, 'most_played', signals).map((e) => e.slug)).toEqual(['mid', 'zeta', 'alpha']);
   });
 
   it('sorts by recommended slug order', () => {
@@ -75,11 +68,7 @@ describe('sortCatalogEntries', () => {
       ...emptySignals,
       recommended: ['mid', 'alpha'],
     };
-    expect(sortCatalogEntries(catalog, 'recommended', signals).map((e) => e.slug)).toEqual([
-      'mid',
-      'alpha',
-      'zeta',
-    ]);
+    expect(sortCatalogEntries(catalog, 'recommended', signals).map((e) => e.slug)).toEqual(['mid', 'alpha', 'zeta']);
   });
 
   it('sorts by newest slug order', () => {
@@ -87,11 +76,7 @@ describe('sortCatalogEntries', () => {
       ...emptySignals,
       newest: ['zeta', 'alpha', 'mid'],
     };
-    expect(sortCatalogEntries(catalog, 'newest', signals).map((e) => e.slug)).toEqual([
-      'zeta',
-      'alpha',
-      'mid',
-    ]);
+    expect(sortCatalogEntries(catalog, 'newest', signals).map((e) => e.slug)).toEqual(['zeta', 'alpha', 'mid']);
   });
 
   it('sorts last played from affinity then local recent', () => {
@@ -101,11 +86,7 @@ describe('sortCatalogEntries', () => {
       ...emptySignals,
       affinityLastPlayed: new Map([['mid', '2026-07-29T12:00:00.000Z']]),
     };
-    expect(sortCatalogEntries(catalog, 'last_played', signals).map((e) => e.slug)).toEqual([
-      'mid',
-      'zeta',
-      'alpha',
-    ]);
+    expect(sortCatalogEntries(catalog, 'last_played', signals).map((e) => e.slug)).toEqual(['mid', 'zeta', 'alpha']);
   });
 });
 
@@ -152,18 +133,15 @@ describe('catalog filters', () => {
 
   it('applies not_played without hiding the creator’s other games when off', () => {
     rememberRecentPlay('mid');
-    expect(applyCatalogFilters(catalog, new Set(), new Map()).map((e) => e.slug)).toEqual([
-      'zeta',
-      'alpha',
-      'mid',
-    ]);
+    expect(applyCatalogFilters(catalog, new Set(), new Map()).map((e) => e.slug)).toEqual(['zeta', 'alpha', 'mid']);
   });
 
   it('keeps only the creator’s published games for your_games', () => {
     const mine = new Set(['alpha', 'mid']);
-    expect(
-      applyCatalogFilters(catalog, new Set(['your_games']), new Map(), mine).map((e) => e.slug),
-    ).toEqual(['alpha', 'mid']);
+    expect(applyCatalogFilters(catalog, new Set(['your_games']), new Map(), mine).map((e) => e.slug)).toEqual([
+      'alpha',
+      'mid',
+    ]);
   });
 
   it('combines your_games and not_played', () => {

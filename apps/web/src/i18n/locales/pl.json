@@ -186,6 +186,8 @@
     "remix": "Zremiksuj",
     "platformAuthor": "gamedev.pl",
     "worldBadge": "Wspólny świat",
+    "tiltBadge": "Przechył",
+    "tiltTooltip": "Na telefonie tą grą można też sterować, przechylając urządzenie",
     "savesBadge": "Zapisuje postępy",
     "sortLabel": "Sortuj gry",
     "toolbarLabel": "Filtry i sortowanie katalogu",
@@ -728,6 +730,11 @@
       "unreachable": "Utracono połączenie z pokojem.",
       "rate_limited": "Zbyt wiele sygnałów — połączenie zamknięte."
     }
+  },
+  "sensing": {
+    "enable": "Włącz przechył",
+    "enableAria": "Włącz sterowanie przechyłem — zezwól na dostęp do czujnika ruchu",
+    "explain": "Tą grą można sterować, przechylając telefon. Odczyty czujnika pozostają w przeglądarce i nigdzie nie są wysyłane."
   },
   "pageTitle": {
     "home": "Gamedev.pl — Opisz grę, zagraj w nią",

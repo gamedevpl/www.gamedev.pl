@@ -20,6 +20,7 @@
     "presence",
     "mascot",
     "zone",
+    "sensing",
     "voice"
   ],
   "authorBudgetBytes": 204800,
@@ -40,11 +41,12 @@
     "lookControls": 4683,
     "spatialAudio": 2977,
     "zone": 12000,
+    "sensing": 6500,
     "voice": 8000,
     "world": 15000,
     "gameplay": 9000
   },
-  "maxProjectBytes": 473687,
+  "maxProjectBytes": 480187,
   "audio": {
     "musicField": "string",
     "musicCatalogRequiredKeys": ["version", "tracks"],

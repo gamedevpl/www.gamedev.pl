@@ -222,6 +222,13 @@ export interface CatalogGameEntry {
    */
   world: CatalogGameWorld | null;
   /**
+   * `tilt` when the game reads the device's motion as a stick (`sensing: tilt` in
+   * SPEC.md frontmatter), null otherwise. Advisory metadata for the catalog UI: the
+   * sense relay is actually gated by the running game saying hello over the bridge
+   * (apps/web/src/sensing.ts), not by this field.
+   */
+  sensing: CatalogGameSensing | null;
+  /**
    * The orientation the game was designed for, from `orientation:` in SPEC.md
    * frontmatter. Design intent nothing in the source can reveal, so unlike touch
    * support it is authored rather than derived. Defaults to 'any'; the player
@@ -256,6 +263,7 @@ export interface CatalogGameMultiplayer {
 
 export type CatalogGameSaves = 'player';
 export type CatalogGameWorld = 'shared';
+export type CatalogGameSensing = 'tilt';
 
 /**
  * `player` is the only mode that exists. Anything else — a typo, a value from a newer
@@ -268,6 +276,10 @@ function parseSaves(value: unknown): CatalogGameSaves | null {
 
 function parseWorld(value: unknown): CatalogGameWorld | null {
   return value === 'shared' ? 'shared' : null;
+}
+
+function parseSensing(value: unknown): CatalogGameSensing | null {
+  return value === 'tilt' ? 'tilt' : null;
 }
 
 /** Platform ceiling on player slots — mirrors SLOT_COLORS in mp.ts. */
@@ -1372,6 +1384,7 @@ function parseCommittedCatalog(raw: string): CatalogGameEntry[] | null {
       multiplayer: parseCommittedMultiplayer(candidate.multiplayer),
       saves: parseSaves(candidate.saves),
       world: parseWorld(candidate.world),
+      sensing: parseSensing(candidate.sensing),
       orientation: GAME_ORIENTATIONS.has(orientationRaw as CatalogGameOrientation)
         ? (orientationRaw as CatalogGameOrientation)
         : 'any',
@@ -1507,6 +1520,7 @@ export function catalogEntryFromSpec(
     multiplayer: parseMultiplayer(frontmatter),
     saves: parseSaves(frontmatter.saves),
     world: parseWorld(frontmatter.world),
+    sensing: parseSensing(frontmatter.sensing),
     orientation: parseOrientation(frontmatter),
     submittedBy: parseSubmittedBy(frontmatter.submitted_by),
   };

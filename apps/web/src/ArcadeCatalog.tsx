@@ -287,6 +287,14 @@ function CatalogCard({
                 <PixelIcon name="star" size={12} /> {t('catalog.worldBadge')}
               </span>
             )}
+            {/* Advisory, like saves: says the game answers tilt where the device offers
+                it, while the keyboard stays the whole game everywhere else. Reuses the
+                party pill style — it is the same "how you can drive this" family. */}
+            {entry.sensing === 'tilt' && (
+              <span className="card-party-badge" title={t('catalog.tiltTooltip')}>
+                <PixelIcon name="phone" size={12} /> {t('catalog.tiltBadge')}
+              </span>
+            )}
           </h3>
           <p className="card-author">
             {t('player.byAuthor', {

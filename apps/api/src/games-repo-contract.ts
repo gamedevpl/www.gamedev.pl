@@ -43,6 +43,12 @@ export const GAME_KIT_MODULES = [
   // it has a reserve of its own rather than coming out of the author budget — see the
   // note on GAMEKIT_PLATFORM_BYTES for what changed that.
   'zone',
+  // Device tilt as a normalized stick (games-repo docs/camera-ar-platform.md Phase 0).
+  // Opt-in with a small reserve; the shell half is apps/web/src/sensing.ts. Ordered
+  // before `voice` deliberately: sensing merges into games-repo first (appended after
+  // `zone` there), so this order lets voice land as a clean append rather than a
+  // reorder the contract check would refuse.
+  'sensing',
   // Voice loudness meter (games-repo voice-on-phones Layer 0). Opt-in reserve like zone.
   'voice',
 ] as const;
@@ -57,9 +63,15 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
  * music, touch hint, progress, universal input, pointer poll, draw surface,
  * pointer release, host pause, mascot draw, headroom, gfx3d, look, spatial, …). Together with
  * {@link GAME_BUDGET_BYTES} this must equal games-repo `MAX_BUNDLE_BYTES`
- * (473_687, matching games-repo `shared/assemble-contract.json` `maxProjectBytes`). Not a round KiB.
+ * (480_187, matching games-repo `shared/assemble-contract.json` `maxProjectBytes`). Not a round KiB.
  *
- * Last moved by games-repo convergence Pass #10 (carjack-city open-world promotion):
+ * Last moved by the sensing capability (games-repo camera-ar-platform Phase 0): +6_500
+ * for a named `sensing` reserve (measured 5_132 transpiled), 473_687 → 480_187. Opt-in
+ * like `zone`, and since games-repo #282 the reserve is belt-and-braces: Check 4 bills
+ * each author for measured author bytes, so a game that skips sensing cannot spend its
+ * reserve either way.
+ *
+ * Before that, games-repo convergence Pass #10 (carjack-city open-world promotion):
  * +15_000 (`world`) and +9_000 (`gameplay`) named reserves, 449_687 → 473_687. Both
  * modules shipped tiny and charged to the author budget; Pass #10 grew them into real
  * capability layers (grids/spiral search/loop paths/2D camera; arcade vehicle physics/
@@ -109,7 +121,7 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
  * Before that, games-repo #102: +679 (`mascotDraw`) and +75_237 (`headroom`) — 30% of
  * the 250_790 ceiling — plus earlier host-pause / touch steer raises.
  */
-export const GAMEKIT_PLATFORM_BYTES = 268_887;
+export const GAMEKIT_PLATFORM_BYTES = 275_387;
 
 /** Combined html+js+css size cap — must match games-repo `MAX_BUNDLE_BYTES`. */
 export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;

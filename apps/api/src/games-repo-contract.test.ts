@@ -13,7 +13,7 @@ import { MAX_PROJECT_BYTES as ASSEMBLE_MAX } from './assemble.js';
 
 describe('games-repo-contract (website half)', () => {
   it('keeps the serve budget at the Check 4 total (games-repo MAX_BUNDLE_BYTES)', () => {
-    expect(MAX_PROJECT_BYTES).toBe(473_687);
+    expect(MAX_PROJECT_BYTES).toBe(480_187);
     expect(GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES).toBe(MAX_PROJECT_BYTES);
     // assemble.ts must re-export the same number — a second literal would drift.
     expect(ASSEMBLE_MAX).toBe(MAX_PROJECT_BYTES);
@@ -57,6 +57,7 @@ describe('games-repo-contract (website half)', () => {
       'presence',
       'mascot',
       'zone',
+      'sensing',
       'voice',
     ]);
   });
@@ -73,7 +74,8 @@ describe('games-repo source extractors', () => {
       // Canonical order
       export const GAME_KIT_MODULES = [
         'input', 'motion', 'collision', 'world', 'ai', 'gameplay',
-        'drawing', 'actors', 'gfx', 'gfx3d', 'effects', 'audio', 'party', 'save', 'commons', 'presence', 'mascot', 'zone', 'voice',
+        'drawing', 'actors', 'gfx', 'gfx3d', 'effects', 'audio', 'party', 'save', 'commons', 'presence', 'mascot', 'zone',
+        'sensing', 'voice',
       ] as const;
     `;
     expect(extractGameKitModules(source)).toEqual([...GAME_KIT_MODULES]);
@@ -106,6 +108,7 @@ describe('games-repo source extractors', () => {
       const GAMEKIT_VOICE_BYTES = 8_000;
       const GAMEKIT_WORLD_BYTES = 15_000;
       const GAMEKIT_GAMEPLAY_BYTES = 9_000;
+      const GAMEKIT_SENSING_BYTES = 6_500;
       const MAX_BUNDLE_BYTES =
         GAME_BUDGET_BYTES +
         GAMEKIT_TOUCH_BYTES +
@@ -126,7 +129,8 @@ describe('games-repo source extractors', () => {
         GAMEKIT_ZONE_BYTES +
         GAMEKIT_VOICE_BYTES +
         GAMEKIT_WORLD_BYTES +
-        GAMEKIT_GAMEPLAY_BYTES;
+        GAMEKIT_GAMEPLAY_BYTES +
+        GAMEKIT_SENSING_BYTES;
     `;
     expect(extractMaxBundleBytes(source)).toBe(MAX_PROJECT_BYTES);
   });

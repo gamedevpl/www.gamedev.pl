@@ -14,6 +14,7 @@ import { useGamePlayer } from './gamePlayer.js';
 import { recordVisitEvent } from './visitTelemetry.js';
 import { useGameSaveBridge } from './gameSave.js';
 import { usePresenceBridge } from './presence.js';
+import { useSensingBridge } from './sensing.js';
 import { useWorldBridge } from './world.js';
 import { useZoneBridge } from './zone.js';
 import { useScreenWakeLock } from './useScreenWakeLock.js';
@@ -197,6 +198,12 @@ export function GameTheater({
   // a draft's sim is rebuilt commit by commit — a client predicting with rules the
   // arbiter no longer has is a desync on the first tick.
   useZoneBridge(frameRef, reportSlug);
+
+  // Device tilt for games that ask for it (games-repo camera-ar-platform Phase 0). Not
+  // keyed on a slug: it touches no API and reads nothing durable — the shell relays
+  // orientation readings into the frame, and the readings never leave the browser. On
+  // iOS the sensor needs a real gesture on our own chrome, hence the bar control below.
+  const sensing = useSensingBridge(frameRef);
 
   // The game reports its own (localized) title over the bridge. Prefer it: on a
   // direct `/play/<slug>` link there's no catalog entry to take a title from, so
@@ -400,6 +407,21 @@ export function GameTheater({
           <div className="game-theater-actions">
             {/* Thumbs are first-class: the one signal people expect without hunting. */}
             {reportSlug ? <VoteWidget slug={reportSlug} /> : null}
+            {/* iOS only: motion needs a permission that must be requested from a real
+                gesture on the shell's own chrome. Disappears once granted; on Android
+                and desktop it never appears at all. */}
+            {sensing.engaged && sensing.supported && sensing.needsPermission && (
+              <button
+                type="button"
+                className="secondary-btn tilt-btn"
+                onClick={sensing.request}
+                title={t('sensing.explain')}
+                aria-label={t('sensing.enableAria')}
+              >
+                <PixelIcon name="phone" size={13} />
+                <span className="btn-label">{t('sensing.enable')}</span>
+              </button>
+            )}
             {/* Desktop: sound + fullscreen sit on the bar. Phone: they move into More. */}
             {howToPlayControl('secondary-btn howto-btn howto-bar')}
             {soundControl('secondary-btn sound-btn theater-desktop-chrome')}
