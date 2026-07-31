@@ -107,6 +107,10 @@ export function GameTheater({
   const moreRef = useRef<HTMLDivElement | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
+  // Per theater mount, not per visit: opening once in game A and once in game B is not
+  // a "card did not answer" signal. The theater remounts when the slug changes (`key`),
+  // so this resets with each published play without needing a game identity on the wire.
+  const howToOpenedOnceRef = useRef(false);
 
   // Playing is the one thing you do here without touching the screen for minutes at
   // a time, which is exactly when a phone dims and sleeps. Hold the screen awake.
@@ -349,7 +353,7 @@ export function GameTheater({
   // The one thing a player needs before the first key press, and the game's own copy of
   // it is hidden inside the frame by HIDE_CHROME. Reuses `theater-menu-item` in the
   // overflow menu so the four hand-enumerated selector lists in styles.css keep working.
-  const howToPlayControl = (className: string) =>
+  const howToPlayControl = (className: string, via: 'bar' | 'more') =>
     hasControls ? (
       <button
         type="button"
@@ -357,7 +361,17 @@ export function GameTheater({
         onClick={() => {
           setMoreOpen(false);
           setHowToOpen(true);
-          recordVisitEvent({ type: 'how_to_play_opened' });
+          // Same population as `play_started`: published games only. Drafts and
+          // generated playtests must not inflate the open-rate numerator against a
+          // denominator that only counts real catalog plays.
+          if (!reportSlug) return;
+          const reopen = howToOpenedOnceRef.current;
+          howToOpenedOnceRef.current = true;
+          recordVisitEvent({
+            type: 'how_to_play_opened',
+            via,
+            ...(reopen ? { reopen: true as const } : {}),
+          });
         }}
         aria-haspopup="dialog"
         aria-expanded={howToOpen}
@@ -423,7 +437,7 @@ export function GameTheater({
               </button>
             )}
             {/* Desktop: sound + fullscreen sit on the bar. Phone: they move into More. */}
-            {howToPlayControl('secondary-btn howto-btn howto-bar')}
+            {howToPlayControl('secondary-btn howto-btn howto-bar', 'bar')}
             {soundControl('secondary-btn sound-btn theater-desktop-chrome')}
             {fullscreenControl('secondary-btn fullscreen-btn theater-desktop-chrome')}
             {showMoreMenu && (
@@ -441,7 +455,7 @@ export function GameTheater({
                   <PixelIcon name="menu" size={14} />
                 </button>
                 <div className="theater-more-panel" role="menu">
-                  {howToPlayControl('theater-menu-item howto-menu')}
+                  {howToPlayControl('theater-menu-item howto-menu', 'more')}
                   {soundControl('theater-menu-item theater-mobile-chrome')}
                   {fullscreenControl('theater-menu-item theater-mobile-chrome')}
                   {reportSlug && (

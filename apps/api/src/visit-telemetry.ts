@@ -59,6 +59,12 @@ const CreateStepSchema = z.enum([
  */
 const WaitlistStepSchema = z.enum(['cta_clicked', 'joined']);
 /**
+ * Which chrome surface opened How to play. Optional so a tab still running the previous
+ * client can record the open without `via` — the aggregate treats missing as unknown
+ * rather than dropping the event. Closed enum: the value reaches a grouping key.
+ */
+const HowToPlayViaSchema = z.enum(['bar', 'more']);
+/**
  * Acquisition strings are re-validated here rather than trusted from the client. The
  * browser filters them for cleanliness; this filters them because a value that reaches a
  * grouping key must not be able to carry punctuation, markup, or an address.
@@ -88,7 +94,13 @@ const EventSchema = z.discriminatedUnion('type', [
   }),
   z.object({ type: z.literal('route_viewed'), route: RouteKindSchema, ...offsetField }),
   z.object({ type: z.literal('play_started'), ...offsetField }),
-  z.object({ type: z.literal('how_to_play_opened'), ...offsetField }),
+  z.object({
+    type: z.literal('how_to_play_opened'),
+    via: HowToPlayViaSchema.optional(),
+    /** True only — a client that sends `false` is treated the same as omitting it. */
+    reopen: z.literal(true).optional(),
+    ...offsetField,
+  }),
   z.object({ type: z.literal('create_step'), step: CreateStepSchema, ...offsetField }),
   z.object({ type: z.literal('waitlist_step'), step: WaitlistStepSchema, ...offsetField }),
 ]);
@@ -184,7 +196,12 @@ export async function registerVisitTelemetryRoutes(
         case 'waitlist_step':
           return { ...base, type: event.type, step: event.step };
         case 'how_to_play_opened':
-          return { ...base, type: event.type };
+          return {
+            ...base,
+            type: event.type,
+            ...(event.via === undefined ? {} : { via: event.via }),
+            ...(event.reopen === true ? { reopen: true } : {}),
+          };
         default:
           return { ...base, type: 'play_started' };
       }

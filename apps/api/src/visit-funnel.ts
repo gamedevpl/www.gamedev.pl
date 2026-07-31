@@ -67,7 +67,50 @@ export interface VisitFunnel {
    * present — including zeroes. Same posture as `creating`.
    */
   waitlist: Array<{ step: WaitlistStep; visits: number }>;
+  /**
+   * How to play card usage — the numbers that decide whether a richer per-game format
+   * is worth building (github.com/gamedevpl/www.gamedev.pl/issues/395).
+   *
+   * Opens stay as raw counts so a second open in one visit stays visible; `visits` is
+   * the distinct-visit denominator the open-rate question needs. Deep-link vs arcade is
+   * `byEntry` (visit landing), not a field on the open event — the streams stay
+   * unjoinable and the entry is already on `visit_started`.
+   */
+  howToPlay: HowToPlayFunnel;
 }
+
+export interface HowToPlayFunnel {
+  /**
+   * Total `how_to_play_opened` events among visits that also played — the same
+   * population as `visitsWithPlay`, so the open rate cannot exceed 100%.
+   */
+  opens: number;
+  /** Distinct playing visits that opened the card at least once. */
+  visits: number;
+  /**
+   * Playing visits that reopened the *same* theater card (`reopen: true`). Not
+   * "opened twice in the visit" — opening once per game in a multi-game sitting is
+   * not this signal.
+   */
+  repeatVisits: number;
+  /**
+   * Opens and distinct visits by chrome surface. Always both `bar` and `more`, zeroes
+   * included, so a missing surface reads as zero rather than "nothing to see".
+   * Events recorded before `via` existed fall into `unknown`.
+   */
+  via: Array<{ via: HowToPlayVia | 'unknown'; opens: number; visits: number }>;
+  /**
+   * Per visit landing: how many playing visits, how many of those opened, and opens.
+   * `play` is a shared-link / deep-link arrival; `home` is the arcade path. Every
+   * entry with a playing visit appears (zero opens included) so rates are readable.
+   * Busiest by playing visits first.
+   */
+  byEntry: Array<{ entry: string; playingVisits: number; visits: number; opens: number }>;
+}
+
+export const HOW_TO_PLAY_VIAS = ['bar', 'more'] as const;
+
+export type HowToPlayVia = (typeof HOW_TO_PLAY_VIAS)[number];
 
 /** Step order is the funnel's meaning, so it is declared once and reused. */
 export const CREATE_STEPS = [
@@ -99,6 +142,12 @@ interface VisitRollup {
   plays: number;
   /** Offset of the first play within the visit, or undefined if it never played. */
   firstPlayMs?: number;
+  /** How many times this visit opened How to play. */
+  howToPlayOpens: number;
+  /** Surfaces that opened it — for the via visit counts (a visit can use both). */
+  howToPlayVias: Set<string>;
+  /** True when any open carried `reopen: true` — same-card reopen, not multi-game. */
+  howToPlayReopened: boolean;
 }
 
 function median(values: number[]): number {
@@ -124,6 +173,9 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       plays: 0,
       steps: new Set<string>(),
       waitlistSteps: new Set<string>(),
+      howToPlayOpens: 0,
+      howToPlayVias: new Set<string>(),
+      howToPlayReopened: false,
     };
 
     if (event.type === 'visit_started') {
@@ -146,6 +198,13 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       if (rollup.firstPlayMs === undefined || event.msSinceStart < rollup.firstPlayMs) {
         rollup.firstPlayMs = event.msSinceStart;
       }
+    } else if (event.type === 'how_to_play_opened') {
+      // Every open counts — unlike create/waitlist steps. Same-card reopens are
+      // flagged on the event (`reopen`); visit-wide open count alone is not that
+      // signal (two games opened once each would look like a repeat).
+      rollup.howToPlayOpens += 1;
+      rollup.howToPlayVias.add(event.via ?? 'unknown');
+      if (event.reopen === true) rollup.howToPlayReopened = true;
     }
     // `route_viewed` needs no rollup of its own yet: it exists so a future
     // step-by-step funnel can be built without another schema change.
@@ -204,6 +263,65 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
     }
   });
 
+  // Numerator and denominator share one population: visits that recorded a published
+  // play. Opens from drafts / generated games / failed loads (no `play_started`) stay
+  // out so the rate cannot read as "1 of 0" or above 100%.
+  const openedHowTo = playing.filter((rollup) => rollup.howToPlayOpens > 0);
+  const playingVisitIds = new Set(
+    Array.from(visits.entries())
+      .filter(([, rollup]) => rollup.plays > 0)
+      .map(([visitId]) => visitId),
+  );
+  const viaVisits = new Map<string, number>();
+  for (const via of HOW_TO_PLAY_VIAS) viaVisits.set(via, 0);
+  let howToOpens = 0;
+  for (const rollup of openedHowTo) {
+    howToOpens += rollup.howToPlayOpens;
+    for (const via of rollup.howToPlayVias) {
+      viaVisits.set(via, (viaVisits.get(via) ?? 0) + 1);
+    }
+  }
+
+  // Opens-per-via are counted from events, not from visit rollups: a visit that opened
+  // from the bar twice and from More once must not put three opens into both buckets.
+  // Visit counts above already use the Set of vias the visit touched.
+  const viaOpens = new Map<string, number>();
+  for (const via of HOW_TO_PLAY_VIAS) viaOpens.set(via, 0);
+  for (const event of events) {
+    if (event.type !== 'how_to_play_opened') continue;
+    if (!playingVisitIds.has(event.visitId)) continue;
+    const via = event.via ?? 'unknown';
+    viaOpens.set(via, (viaOpens.get(via) ?? 0) + 1);
+  }
+
+  const viaRows: Array<{ via: HowToPlayVia | 'unknown'; opens: number; visits: number }> = [
+    ...HOW_TO_PLAY_VIAS.map((via) => ({
+      via,
+      opens: viaOpens.get(via) ?? 0,
+      visits: viaVisits.get(via) ?? 0,
+    })),
+  ];
+  const unknownOpens = viaOpens.get('unknown') ?? 0;
+  const unknownVisits = viaVisits.get('unknown') ?? 0;
+  if (unknownOpens > 0 || unknownVisits > 0) {
+    viaRows.push({ via: 'unknown', opens: unknownOpens, visits: unknownVisits });
+  }
+
+  // Every entry that has a playing visit appears, including zero openers — otherwise
+  // 10 of 1,000 home players and 5 of 10 deep-link players both render as raw counts
+  // with no denominator and look like "home wins".
+  const byHowToEntry = new Map<string, { playingVisits: number; visits: number; opens: number }>();
+  for (const rollup of playing) {
+    const entryKey = rollup.entry ?? 'unknown';
+    const entry = byHowToEntry.get(entryKey) ?? { playingVisits: 0, visits: 0, opens: 0 };
+    entry.playingVisits += 1;
+    if (rollup.howToPlayOpens > 0) {
+      entry.visits += 1;
+      entry.opens += rollup.howToPlayOpens;
+    }
+    byHowToEntry.set(entryKey, entry);
+  }
+
   return {
     visits: rollups.length,
     bounces: rollups.length - playing.length,
@@ -227,5 +345,14 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       step,
       visits: rollups.filter((rollup) => rollup.waitlistSteps.has(step)).length,
     })),
+    howToPlay: {
+      opens: howToOpens,
+      visits: openedHowTo.length,
+      repeatVisits: openedHowTo.filter((rollup) => rollup.howToPlayReopened).length,
+      via: viaRows,
+      byEntry: Array.from(byHowToEntry, ([entry, value]) => ({ entry, ...value })).sort(
+        (a, b) => b.playingVisits - a.playingVisits || b.visits - a.visits || a.entry.localeCompare(b.entry),
+      ),
+    },
   };
 }
