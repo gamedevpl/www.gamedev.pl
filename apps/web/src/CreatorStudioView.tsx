@@ -573,6 +573,14 @@ export function CreatorStudioView({
                         </button>
                       </div>
                       <DetailsPanel
+                        // Keyed on the game, so switching to another one gives a fresh
+                        // panel rather than reusing this one's state. Without it every
+                        // `useState(game.…)` initialiser inside keeps the previous game's
+                        // value — the share switch reading the wrong game's setting, and,
+                        // worse, an armed Stop-build carrying across to a game the creator
+                        // never armed it on. Reachable by any move between two `/details`
+                        // URLs, browser Back included.
+                        key={activeGame.token}
                         game={activeGame}
                         health={selectedHealth}
                         days={days}

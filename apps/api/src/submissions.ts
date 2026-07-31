@@ -458,17 +458,16 @@ export async function registerSubmissionRoutes(
 
   async function dispatchBuild(input: {
     issueNumber: number;
-    /** The game directory the agent is to build into. Assigned before dispatch. */
-    slug?: string;
     spec: string;
     locale: string;
     log: { error: (context: object, message: string) => void };
     /**
-     * The existing game this job improves, when it is not building a new one.
+     * The game this job is for: the directory a new build is told to build into, and —
+     * set together with `feedback` — the existing game an improvement continues rather
+     * than rebuilds, which is what makes `buildPrompt` restore its delivered sources.
      *
-     * Set together with `feedback` — that pair is what makes `buildPrompt` say "continue
-     * that game, revise it, do not rebuild it" and restore the delivered sources from the
-     * games store, instead of telling the agent to build something from nothing.
+     * A new build now carries it from the moment it is created, so the brief names a real
+     * path instead of "(the slug named in your first progress report)".
      */
     slug?: string;
     /** What to change about the existing game. Untrusted text: data, never instructions. */

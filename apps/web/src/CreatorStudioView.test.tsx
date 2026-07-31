@@ -71,7 +71,15 @@ async function renderStudio(props: Partial<Parameters<typeof CreatorStudioView>[
     await fetchStudioScorecards.mock.results[0]?.value;
     await fetchStudioSuggestions.mock.results[0]?.value;
   });
-  return { container, root, onNavigate };
+  const rerender = async (next: Partial<Parameters<typeof CreatorStudioView>[0]>) => {
+    await act(async () => {
+      root.render(createElement(CreatorStudioView, { onNavigate, onPlay: vi.fn(), ...props, ...next }));
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+  };
+  return { container, root, onNavigate, rerender };
 }
 
 describe('CreatorStudioView', () => {
@@ -334,6 +342,45 @@ describe('CreatorStudioView', () => {
     expect(document.body.style.overflow).not.toBe('hidden');
 
     Object.defineProperty(window, 'innerWidth', { value: width, configurable: true });
+    root.unmount();
+  });
+
+  it('does not carry one game’s details state onto another', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue([
+      {
+        token: 'token-shared',
+        title: 'TV Tycoon',
+        createdAt: '2026-07-30T09:00:00.000Z',
+        lastKnownStatus: 'building',
+        slug: 'tv-tycoon',
+        draftShared: true,
+      },
+      {
+        token: 'token-private',
+        title: 'Space Miner',
+        createdAt: '2026-07-30T09:30:00.000Z',
+        lastKnownStatus: 'building',
+        slug: 'space-miner',
+      },
+    ] satisfies StudioGame[]);
+
+    // Two `/details` URLs in a row — a browser Back, or a link. The panel stays mounted
+    // across that, so anything it seeded from the first game would still be on screen.
+    const { container, root, rerender } = await renderStudio({
+      selectedGame: 'tv-tycoon',
+      selectedTab: 'details',
+    });
+    expect(container.querySelector('.studio-share-toggle')?.getAttribute('aria-checked')).toBe('true');
+
+    await rerender({ selectedGame: 'space-miner', selectedTab: 'details' });
+
+    // The second game has never been shared, and the switch must say so.
+    expect(container.querySelector('.studio-share-toggle')?.getAttribute('aria-checked')).toBe('false');
+    expect(setDraftShared).not.toHaveBeenCalled();
+
     root.unmount();
   });
 
