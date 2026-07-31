@@ -348,8 +348,10 @@ describe('global creation cap and pause switch', () => {
     expect((await store.getUsage('g:test-user', dateStr)).submissions).toBe(2);
     // And only two builds were dispatched, so the refusal cost an agent run as well as a
     // quota slot. This is the assertion the cap exists for: the ceiling is about spend,
-    // and an agent run is what the platform actually pays for.
-    expect(briefs).toHaveLength(2);
+    // and an agent run is what the platform actually pays for. Awaited because dispatch
+    // is off the response path — a refused submission returns before an accepted one
+    // has finished dispatching.
+    await vi.waitFor(() => expect(briefs).toHaveLength(2));
 
     await app.close();
   });
@@ -3066,6 +3068,9 @@ describe('seeded dispatch', () => {
     });
 
     expect(response.statusCode).toBe(200);
+    // Dispatch is off the response path, so this is awaited rather than assumed: the
+    // submit returns as soon as the job exists, and seeding runs behind it.
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
     // The submission minted and confirmed this address before dispatch; the seeder
     // writes into it rather than deciding a second one.
     expect(seeded).toEqual(['comet-courier']);
@@ -3097,7 +3102,7 @@ describe('seeded dispatch', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(briefs).toHaveLength(1);
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
     expect(briefs[0].seed).toBeUndefined();
     // The job keeps the slug the submission gave it — seeding declining changes nothing
     // about the game's address — and nothing is billed for a seed that never happened.
@@ -3160,6 +3165,7 @@ describe('seeded dispatch', () => {
     });
 
     expect(response.statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
     // Deliberately off the submit response path, so the preview lands moments later.
     const previews = await vi.waitFor(async () => {
       const listed = await store.listBuildPreviews(briefs[0].issueNumber);
@@ -3210,12 +3216,75 @@ describe('seeded dispatch', () => {
     });
 
     expect(response.statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
     // A draft that does not bundle is still dispatched (the agent will fix it) — the
     // only thing withheld is showing it to the creator.
     expect(briefs[0].seed).toBeDefined();
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(await store.listBuildPreviews(briefs[0].issueNumber)).toEqual([]);
     expect(stub.githubClient.getGameSources).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('stops generating drafts after one cannot be staged', async () => {
+    // The money bug this exists for: a mis-scoped dispatch credential fails only after
+    // the draft has been generated, so without a circuit breaker every submission pays
+    // ~2 minutes and tens of thousands of tokens for a draft discarded a second later.
+    const stub = createGithubClientStub({});
+    const briefs: BuildBrief[] = [];
+    const backend: AgentBackend = {
+      name: 'stub',
+      dispatch: async (brief) => {
+        briefs.push(brief);
+        // Seed accepted, no workspace back — exactly what a 403 on the branch write
+        // looks like from here.
+        return { ref: 'task-1', workspace: 'copilot/x' };
+      },
+      resume: async () => ({ ref: 'task-2' }),
+      observe: async () => null,
+      cancel: async () => ({ enforced: false }),
+    };
+    let seedCalls = 0;
+    const { app, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      gameSeeder: {
+        seed: async ({ slug }) => {
+          seedCalls++;
+          return {
+            slug,
+            files: [{ path: 'game.ts', content: 'export {};\n' }],
+            references: ['apex-sprint'],
+            usage: { inputTokens: 30_000, outputTokens: 9_000, model: 'gemini-3.6-flash' },
+            elapsedMs: 156_000,
+            compiles: false,
+            repaired: true,
+          };
+        },
+      },
+    });
+
+    const submit = (title: string) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/submissions',
+        headers: authHeaders,
+        payload: { title, concept: 'A game where you deliver parcels between comets, dodging debris.' },
+      });
+
+    expect((await submit('First Game')).statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
+    expect(briefs[0].seed).toBeDefined();
+
+    expect((await submit('Second Game')).statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(2));
+
+    // The second build still dispatches — seeding is an optimization, and muting it
+    // must never cost a creator their game — it just does not pay for another draft.
+    expect(briefs[1].seed).toBeUndefined();
+    expect(seedCalls).toBe(1);
 
     await app.close();
   });
@@ -3270,17 +3339,27 @@ describe('seeded dispatch', () => {
     });
     const { token } = created.json() as { token: string };
 
+    // Dispatch is backgrounded, so the seed branch is only on the record once it has
+    // landed. Abandoning before that would test nothing — there would be no branch to
+    // release — so the wait is on the state this test is about, not on a timer.
+    await vi.waitFor(async () => {
+      const pending = await store.getSubmission(briefs[0]?.issueNumber ?? -1);
+      expect(pending?.dispatch?.seedWorkspace).toBe('seed/job-9');
+    });
+
     const abandoned = await app.inject({
       method: 'POST',
       url: `/api/submissions/${token}/abandon`,
       headers: authHeaders,
     });
 
+    // The abandon route awaits both releases, so `cleaned` is complete here — asserting
+    // the exact set rather than waiting for one entry, which would pass just as happily
+    // if the branch were released twice.
     expect(abandoned.statusCode).toBe(200);
-    // Both branches released once...
-    expect(cleaned).toContain('seed/job-9');
-    expect(cleaned.filter((branch) => branch === 'seed/job-9')).toHaveLength(1);
-    // ...and the name is off the record, so a second abandon cannot ask again.
+    expect(cleaned).toEqual(['copilot/x', 'seed/job-9']);
+
+    // And the name is off the record, so a second abandon cannot ask again.
     const record = await store.getSubmission(briefs[0].issueNumber);
     expect(record?.dispatch?.seedWorkspace).toBeUndefined();
     expect(record?.dispatch?.workspace).toBe('copilot/x');

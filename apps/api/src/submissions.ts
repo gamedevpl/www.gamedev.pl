@@ -370,6 +370,21 @@ export async function registerSubmissionRoutes(
   const internalAuthVerifier = options.internalAuthVerifier ?? createInternalAuthVerifierFromEnv();
   const agentBackend = options.agentBackend;
   const gameSeeder = options.gameSeeder;
+  /**
+   * When to stop generating seeds nobody can place.
+   *
+   * A backend that cannot stage a draft — a mis-scoped dispatch credential is the way
+   * this happens, and did — fails *after* the draft has been generated, because that is
+   * the first moment there is anything to write. Without this, every submission pays a
+   * couple of minutes and tens of thousands of tokens for a draft that is discarded a
+   * second later, and the only symptom is a warning line nobody is reading.
+   *
+   * So a staging failure mutes seeding for a while rather than forever: long enough that
+   * a broken credential costs one seed instead of one per submission, short enough that
+   * a transient failure heals without a deploy.
+   */
+  const SEED_STAGING_COOLDOWN_MS = 10 * 60_000;
+  let seedStagingMutedUntil = 0;
 
   // Shared deps for notification emission (in-app + best-effort email). The mailer
   // degrades to a no-op without RESEND_API_KEY, and email is skipped entirely
@@ -508,6 +523,13 @@ export async function registerSubmissionRoutes(
     log: { error: (context: object, message: string) => void };
   }): Promise<SeedDraft | undefined> {
     if (!gameSeeder || !store) return undefined;
+    if (now() < seedStagingMutedUntil) {
+      input.log.error(
+        { issueNumber: input.issueNumber },
+        'skipping the seed: a recent draft could not be staged, so generating another would be wasted',
+      );
+      return undefined;
+    }
     try {
       const record = await store.getSubmission(input.issueNumber);
       if (!record) return undefined;
@@ -620,6 +642,17 @@ export async function registerSubmissionRoutes(
         ...(input.feedback ? { feedback: input.feedback } : {}),
         ...(seed ? { seed } : {}),
       });
+      // A seed that went in without a workspace coming back is a backend that could not
+      // place it. Inferred rather than reported because it is true of every backend: the
+      // seam promises a `seedWorkspace` when a seed was staged, so its absence is the
+      // signal, whatever the reason underneath.
+      if (seed && !result.seedWorkspace) {
+        seedStagingMutedUntil = now() + SEED_STAGING_COOLDOWN_MS;
+        input.log.error(
+          { issueNumber: input.issueNumber, mutedForMs: SEED_STAGING_COOLDOWN_MS },
+          'the generated seed could not be staged; pausing seeding rather than generating drafts nobody can place',
+        );
+      }
       await store?.recordDispatch(input.issueNumber, {
         backend: agentBackend.name,
         ref: result.ref,
@@ -1650,7 +1683,24 @@ export async function registerSubmissionRoutes(
         reason: 'submitted',
       });
 
-      await dispatchBuild({
+      // Deliberately not awaited. The job exists, is slugged, and is `queued` by now —
+      // everything the creator's status page needs — and dispatch is minutes of work
+      // that used to happen while they watched a "Submitting…" button: an agent-tasks
+      // round trip, and since seeding, a model writing a first draft of the game
+      // (~1 minute, or ~2 with a repair round). Holding the response for that made a
+      // submission look hung and put it within reach of a request timeout, which would
+      // have shown an error for a build that was in fact starting normally.
+      //
+      // Nothing is lost by letting go: a job whose dispatch has not landed yet is
+      // exactly the `queued` state the reconciler already reports as `not_dispatched`
+      // once it has waited long enough, and dispatchBuild swallows its own failures for
+      // that reason. The catch here is belt-and-braces against an unhandled rejection.
+      //
+      // The logger is lifted out first: a closure over `request` would hold the whole
+      // Fastify request — headers, body, reply — alive for as long as dispatch runs,
+      // which since seeding is minutes rather than milliseconds, on every submission.
+      const dispatchLog = request.log;
+      void dispatchBuild({
         issueNumber: jobId,
         // The agent is told where to build rather than left to name the place itself.
         // Its brief previously read "games/(the slug named in your first progress
@@ -1658,7 +1708,9 @@ export async function registerSubmissionRoutes(
         slug,
         spec: issueBody,
         locale: creatorLocale,
-        log: request.log,
+        log: dispatchLog,
+      }).catch((error: unknown) => {
+        dispatchLog.error({ err: error, issueNumber: jobId }, 'background dispatch failed');
       });
 
       const token = mintToken(jobId, submissionTokenSecret);
