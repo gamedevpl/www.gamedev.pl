@@ -102,6 +102,8 @@ export function App() {
   // during which nothing has been submitted yet, so the UI must not claim otherwise.
   const [submissionStatus, setSubmissionStatus] = useState<'idle' | 'refining' | 'loading'>('idle');
   const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const submissionStatusRef = useRef(submissionStatus);
+  submissionStatusRef.current = submissionStatus;
 
   // Clarifying-questions gate: a submission runs the spec refiner first, and when
   // it returns questions the creator must answer them before generation proceeds.
@@ -348,7 +350,7 @@ export function App() {
     const targetLocale = i18n.resolvedLanguage ?? i18n.language;
     if (qaLocale === targetLocale) return;
     // A real submit is in flight — don't yank the questions out from under it.
-    if (submissionStatus === 'loading') return;
+    if (submissionStatusRef.current === 'loading') return;
     if (qaRelocalizingRef.current) return;
 
     let cancelled = false;
@@ -360,19 +362,44 @@ export function App() {
       try {
         const refined = await refineSpec({ concept, locale: targetLocale });
         if (cancelled) return;
+        // A real submit started while refine was in flight — drop the relocalization.
+        if (submissionStatusRef.current === 'loading') return;
+
         const questions = refined.questions;
+        // Fail-open: when Vertex times out or errors, it returns empty questions.
+        // Keep the existing questions and parked session instead of wiping them into a name-only panel.
+        if (questions.length === 0) return;
+
         // Prefer the live parked spec so a title edit mid-flight is not overwritten.
         const liveSpec = pendingSpecRef.current;
         if (!liveSpec) return;
+
+        // Preserve user-entered custom answers across questions matching by ID or index.
+        const oldCustom = latestAnswersRef.current.custom ?? {};
+        const oldQuestions = qaQuestions;
+        const preservedCustom: Record<string, string> = {};
+
+        questions.forEach((newQ, idx) => {
+          const customById = oldCustom[newQ.id];
+          const oldQ = oldQuestions[idx];
+          const customByIndex = oldQ ? oldCustom[oldQ.id] : undefined;
+          const val = customById || customByIndex;
+          if (val && val.trim()) {
+            preservedCustom[newQ.id] = val;
+          }
+        });
+
+        const newAnswers: PendingQaAnswers = { selected: {}, custom: preservedCustom };
+
         setQaQuestions(questions);
         setQaLocale(targetLocale);
-        latestAnswersRef.current = { selected: {}, custom: {} };
+        latestAnswersRef.current = newAnswers;
         // Drop restored answers so a remounted panel doesn't revive English selections.
         if (restoredQa.current) {
           restoredQa.current = {
             ...restoredQa.current,
             questions,
-            answers: { selected: {}, custom: {} },
+            answers: newAnswers,
             locale: targetLocale,
             savedAt: Date.now(),
           };
@@ -380,7 +407,7 @@ export function App() {
         savePendingQa({
           spec: liveSpec,
           questions,
-          answers: { selected: {}, custom: {} },
+          answers: newAnswers,
           locale: targetLocale,
         });
         setQaFormKey((key) => key + 1);
@@ -388,7 +415,9 @@ export function App() {
         // Keep the previous questions rather than blanking the panel on a blip.
       } finally {
         qaRelocalizingRef.current = false;
-        if (!cancelled) setSubmissionStatus('idle');
+        if (!cancelled && submissionStatusRef.current === 'refining') {
+          setSubmissionStatus('idle');
+        }
       }
     }
 
@@ -851,9 +880,9 @@ export function App() {
                   onSubmitWithConcept={handleQaComplete}
                   onTitleChange={handleQaTitleChange}
                   onCancel={handleQaCancel}
-                  submitting={submissionStatus === 'loading'}
+                  submitting={submissionStatus === 'loading' || submissionStatus === 'refining'}
                   error={submissionError}
-                  initialAnswers={qaFormKey === 0 ? restoredQa.current?.answers : undefined}
+                  initialAnswers={latestAnswersRef.current}
                   onAnswersChange={handleQaAnswersChange}
                 />
               </div>

@@ -203,6 +203,7 @@ export function CreatorQA({
                       // every chip identically whether or not it was chosen.
                       aria-pressed={isSelected}
                       className={`qa-chip ${isSelected ? 'qa-chip--selected' : ''}`}
+                      disabled={submitting}
                       onClick={() => handleSelectOption(q, opt.label)}
                     >
                       <span className="qa-chip__label">{opt.label}</span>
@@ -222,6 +223,7 @@ export function CreatorQA({
                     // not names — without this the field is announced unlabelled.
                     aria-label={`${q.question} — ${t('qa.otherPlaceholder')}`}
                     value={custom}
+                    disabled={submitting}
                     onChange={(e) => handleCustomTextChange(q.id, e.target.value)}
                   />
                 </div>

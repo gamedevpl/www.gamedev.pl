@@ -80,7 +80,7 @@ function mockApi(
     if (url.includes('/api/submissions/mine')) return new Response(JSON.stringify({ submissions: [] }));
     if (url.endsWith('/api/submissions/refine')) {
       const body = JSON.parse(String(init?.body ?? '{}')) as { concept: string; locale?: string };
-      options.onRefine?.(body);
+      await options.onRefine?.(body);
       if (options.gate) await options.gate;
       if (options.refineFails) return new Response(JSON.stringify({ error: 'boom' }), { status: 500 });
       const locale = body.locale ?? 'en';
@@ -327,6 +327,128 @@ describe('the QA gate in App', () => {
     expect(container.querySelector('.qa-chip')?.getAttribute('aria-pressed')).toBe('false');
     expect(JSON.parse(localStorage.getItem('gamedev_pending_qa')!).locale).toBe('pl');
 
+    await act(async () => root.unmount());
+  });
+
+  it('disables QA controls while relocalizing during a language switch', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    const gate = deferred<void>();
+    let refineCalls = 0;
+    mockApi({
+      onRefine: async () => {
+        refineCalls += 1;
+        if (refineCalls === 2) await gate.promise;
+      },
+      questionsByLocale: {
+        en: QUESTIONS,
+        pl: [
+          {
+            id: 'visual_style',
+            question: 'Jaki styl wizualny?',
+            options: [{ label: 'Pixel art' }],
+            allowFreeText: true,
+          },
+        ],
+      },
+    });
+
+    const { container, root } = await renderApp();
+    await submitIdea(container);
+
+    const createBtn = container.querySelector<HTMLButtonElement>('.qa-container .btn-create-now')!;
+    const chipBtn = container.querySelector<HTMLButtonElement>('.qa-chip')!;
+    expect(createBtn).not.toBeNull();
+    expect(createBtn.disabled).toBe(false);
+    expect(chipBtn.disabled).toBe(false);
+
+    // Switch language to trigger relocalization (which is the 2nd refine call, paused on `gate.promise`)
+    await act(async () => {
+      await i18n.changeLanguage('pl');
+      await flushEffects();
+    });
+
+    // While relocalization is in flight, controls in CreatorQA must be disabled
+    expect(container.querySelector<HTMLButtonElement>('.qa-container .btn-create-now')?.disabled).toBe(true);
+    expect(container.querySelector<HTMLButtonElement>('.qa-chip')?.disabled).toBe(true);
+
+    // Resolve relocalization call
+    await act(async () => {
+      gate.resolve();
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(container.querySelector<HTMLButtonElement>('.btn-create-now')?.disabled).toBe(false);
+    expect(container.querySelector<HTMLButtonElement>('.qa-chip')?.disabled).toBe(false);
+    await act(async () => root.unmount());
+  });
+
+  it('preserves existing questions when relocalization returns an empty fail-open response', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    mockApi({
+      questionsByLocale: {
+        en: QUESTIONS,
+        pl: [], // Model returns empty array on fail-open/timeout
+      },
+    });
+
+    const { container, root } = await renderApp();
+    await submitIdea(container);
+
+    expect(container.querySelectorAll('.qa-card')).toHaveLength(2);
+
+    await act(async () => {
+      await i18n.changeLanguage('pl');
+      await flushEffects();
+      await flushEffects();
+    });
+
+    // The 2 English questions must be retained, not erased into a name-only panel
+    expect(container.querySelectorAll('.qa-card')).toHaveLength(2);
+    expect(container.querySelector('.qa-card__question')?.textContent).toContain('What visual style');
+    await act(async () => root.unmount());
+  });
+
+  it('preserves user-entered custom text when switching UI language', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    mockApi({
+      questionsByLocale: {
+        en: QUESTIONS,
+        pl: [
+          {
+            id: 'visual_style',
+            question: 'Jaki styl wizualny pasuje najlepiej?',
+            options: [{ label: 'Pixel art' }, { label: 'Low-poly 3D' }],
+            allowFreeText: true,
+          },
+        ],
+      },
+    });
+
+    const { container, root } = await renderApp();
+    await submitIdea(container);
+
+    const customInput = container.querySelector<HTMLInputElement>('.qa-custom-input input')!;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      setter?.call(customInput, 'with Amiga palette');
+      customInput.dispatchEvent(new Event('input', { bubbles: true }));
+      await flushEffects();
+    });
+
+    expect(customInput.value).toBe('with Amiga palette');
+
+    await act(async () => {
+      await i18n.changeLanguage('pl');
+      await flushEffects();
+      await flushEffects();
+    });
+
+    const plCustomInput = container.querySelector<HTMLInputElement>('.qa-custom-input input');
+    expect(plCustomInput?.value).toBe('with Amiga palette');
     await act(async () => root.unmount());
   });
 });
