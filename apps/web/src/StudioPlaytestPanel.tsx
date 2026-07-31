@@ -51,6 +51,8 @@ type StudioPlaytestPanelProps = {
   published: boolean;
   /** Leave theater — typically returns to Overview so Studio chrome is usable again. */
   onExit: () => void;
+  /** True when the game switcher picker overlay is open above the playtest surface. */
+  pickerOpen?: boolean;
 };
 
 /**
@@ -102,7 +104,7 @@ function toContext(
   };
 }
 
-export function StudioPlaytestPanel({ game, published, onExit }: StudioPlaytestPanelProps) {
+export function StudioPlaytestPanel({ game, published, onExit, pickerOpen }: StudioPlaytestPanelProps) {
   const { t } = useTranslation();
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const exitRef = useRef<HTMLButtonElement | null>(null);
@@ -121,8 +123,9 @@ export function StudioPlaytestPanel({ game, published, onExit }: StudioPlaytestP
   const onExitRef = useRef(onExit);
   onExitRef.current = onExit;
   const requestExit = useCallback(() => {
+    if (pickerOpen) return;
     onExitRef.current();
-  }, []);
+  }, [pickerOpen]);
   // Escape inside the sandboxed game never reaches the parent — the bridge relays it.
   useGamePlayer(frameRef, active, requestExit);
 
@@ -167,11 +170,11 @@ export function StudioPlaytestPanel({ game, published, onExit }: StudioPlaytestP
   // theater never mounts and the Close control used to be missing entirely.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') requestExit();
+      if (event.key === 'Escape' && !pickerOpen) requestExit();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [requestExit]);
+  }, [requestExit, pickerOpen]);
 
   // Scroll lock + focus handoff while the theater owns the viewport.
   useEffect(() => {

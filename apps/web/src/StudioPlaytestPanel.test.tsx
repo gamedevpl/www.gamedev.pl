@@ -135,4 +135,29 @@ describe('StudioPlaytestPanel theater', () => {
 
     root.unmount();
   });
+
+  it('does not exit on Escape when pickerOpen is true', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const onExit = vi.fn();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(StudioPlaytestPanel, { game, published: true, onExit, pickerOpen: true }));
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    expect(onExit).not.toHaveBeenCalled();
+
+    root.unmount();
+  });
 });

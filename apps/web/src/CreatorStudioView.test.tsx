@@ -166,6 +166,34 @@ describe('CreatorStudioView', () => {
     root.unmount();
   });
 
+  it('closes picker on Escape while in playtest tab without exiting playtest', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue(manyGames(6));
+
+    const { container, root } = await renderStudio({ selectedGame: 'game-2', selectedTab: 'playtest' });
+
+    const switcher = container.querySelector('.studio-game-switcher');
+    expect(switcher).toBeTruthy();
+
+    await act(async () => {
+      switcher!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.querySelector('.studio-picker')).toBeTruthy();
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+
+    expect(container.querySelector('.studio-picker')).toBeFalsy();
+    expect(container.querySelector('.studio-panel')?.classList.contains('is-playtesting')).toBe(true);
+
+    root.unmount();
+    authUser = null;
+  });
+
   it('enters focus mode once the shelf has many games selected', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');

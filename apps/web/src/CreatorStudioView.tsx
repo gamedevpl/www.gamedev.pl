@@ -559,6 +559,7 @@ export function CreatorStudioView({
                     game={activeGame}
                     published={isStudioGamePublished(activeGame)}
                     onExit={() => openTab('thread')}
+                    pickerOpen={pickerOpen}
                   />
                 ) : null}
 
