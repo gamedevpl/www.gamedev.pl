@@ -3469,20 +3469,23 @@ body.player-open {
   opacity: 1;
 }
 
-/* This control sheds to the More menu earlier than sound and fullscreen do (900px, not
-   768px). Measured at 800px: with it on the bar, the actions row grows until the vote
-   widget overlaps the game title, because the meta column does not shrink. Below the
-   breakpoint the bar copy is hidden and the menu copy takes over; above it, the reverse.
-   The second query starts at 900.02px (not 901px) so fractional widths between 900 and
-   901 — ordinary at non-integer zoom / HiDPI — do not leave both copies visible. */
+/* How-to-play and Mic shed to the More menu earlier than sound and fullscreen do
+   (900px, not 768px). Measured at 800px: with them on the bar, the actions row grows
+   until the vote widget overlaps the game title, because the meta column does not
+   shrink — Mic's Polish labels make that worse. Below the breakpoint the bar copy is
+   hidden and the menu copy takes over; above it, the reverse. The second query starts
+   at 900.02px (not 901px) so fractional widths between 900 and 901 — ordinary at
+   non-integer zoom / HiDPI — do not leave both copies visible. */
 @media (max-width: 900px) {
-  .game-theater-actions .howto-bar {
+  .game-theater-actions .howto-bar,
+  .game-theater-actions .mic-bar {
     display: none !important;
   }
 }
 
 @media (min-width: 900.02px) {
-  .game-theater-actions .theater-more-panel .howto-menu {
+  .game-theater-actions .theater-more-panel .howto-menu,
+  .game-theater-actions .theater-more-panel .mic-menu {
     display: none !important;
   }
 }

@@ -15,6 +15,7 @@ import { recordVisitEvent } from './visitTelemetry.js';
 import { useGameSaveBridge } from './gameSave.js';
 import { usePresenceBridge } from './presence.js';
 import { useSensingBridge } from './sensing.js';
+import { useVoiceMeterBridge } from './voiceMeter.js';
 import { useWorldBridge } from './world.js';
 import { useZoneBridge } from './zone.js';
 import { useScreenWakeLock } from './useScreenWakeLock.js';
@@ -203,6 +204,11 @@ export function GameTheater({
   // arbiter no longer has is a desync on the first tick.
   useZoneBridge(frameRef, reportSlug);
 
+  // Loudness mic for shout games (voice-on-phones Layer 0). Opaque sandboxed iframes
+  // cannot call getUserMedia; the theater header owns the gesture and relays levels.
+  // Quiet until createVoiceMeter posts voice:hello.
+  const voiceMeter = useVoiceMeterBridge(frameRef);
+
   // Device tilt for games that ask for it (games-repo camera-ar-platform Phase 0). Not
   // keyed on a slug: it touches no API and reads nothing durable — the shell relays
   // orientation readings into the frame, and the readings never leave the browser. On
@@ -330,12 +336,14 @@ export function GameTheater({
     };
   }, [moreOpen]);
 
-  // The menu also has to exist wherever a control has shed into it. How-to-play sheds at
-  // 900px while sound and fullscreen shed at 768px, so between those widths a game with
-  // no `reportSlug` (a draft, a generated game — no catalog entry, but the game document
-  // still reports its own controls) would have had the bar copy hidden by CSS and no menu
-  // to fall back to, and the control would have vanished entirely.
-  const showMoreMenu = Boolean(reportSlug) || isNarrow || (hasControls && isMidWidth);
+  // The menu also has to exist wherever a control has shed into it. How-to-play and Mic
+  // shed at 900px while sound and fullscreen shed at 768px, so between those widths a
+  // game with no `reportSlug` (a draft, a generated game — no catalog entry, but the
+  // game document still reports its own controls) — or a shout game that only needs Mic
+  // — would have had the bar copy hidden by CSS and no menu to fall back to, and the
+  // control would have vanished entirely.
+  const showMoreMenu =
+    Boolean(reportSlug) || isNarrow || (hasControls && isMidWidth) || (voiceMeter.available && isMidWidth);
 
   const soundControl = (className: string) => (
     <button
@@ -349,6 +357,32 @@ export function GameTheater({
       <span className="btn-label">{player.muted ? t('player.soundOff') : t('player.soundOn')}</span>
     </button>
   );
+
+  const micLabel =
+    voiceMeter.status === 'pending'
+      ? t('player.micPending')
+      : voiceMeter.status === 'denied'
+        ? t('player.micDenied')
+        : voiceMeter.status === 'unsupported'
+          ? t('player.micUnsupported')
+          : voiceMeter.live
+            ? t('player.micOn')
+            : t('player.micOff');
+
+  const micControl = (className: string) =>
+    voiceMeter.available ? (
+      <button
+        type="button"
+        className={className}
+        onClick={voiceMeter.toggle}
+        aria-pressed={voiceMeter.live}
+        aria-label={micLabel}
+        disabled={voiceMeter.status === 'unsupported' || voiceMeter.status === 'pending'}
+      >
+        <PixelIcon name="mic" size={13} />
+        <span className="btn-label">{micLabel}</span>
+      </button>
+    ) : null;
 
   // The one thing a player needs before the first key press, and the game's own copy of
   // it is hidden inside the frame by HIDE_CHROME. Reuses `theater-menu-item` in the
@@ -439,6 +473,9 @@ export function GameTheater({
             {/* Desktop: sound + fullscreen sit on the bar. Phone: they move into More. */}
             {howToPlayControl('secondary-btn howto-btn howto-bar', 'bar')}
             {soundControl('secondary-btn sound-btn theater-desktop-chrome')}
+            {/* Mic sheds at 900px with How-to-play (not 768px with sound) — Polish
+                "Mikrofon: …" labels otherwise clip the title at mid widths. */}
+            {micControl('secondary-btn mic-btn mic-bar')}
             {fullscreenControl('secondary-btn fullscreen-btn theater-desktop-chrome')}
             {showMoreMenu && (
               <div className={`theater-more${moreOpen ? ' is-open' : ''}`} ref={moreRef}>
@@ -456,6 +493,7 @@ export function GameTheater({
                 </button>
                 <div className="theater-more-panel" role="menu">
                   {howToPlayControl('theater-menu-item howto-menu', 'more')}
+                  {micControl('theater-menu-item mic-menu')}
                   {soundControl('theater-menu-item theater-mobile-chrome')}
                   {fullscreenControl('theater-menu-item theater-mobile-chrome')}
                   {reportSlug && (

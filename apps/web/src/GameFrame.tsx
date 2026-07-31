@@ -29,6 +29,10 @@ type GameFrameProps = GameFrameSource & {
  * so opt-in GameKit `motion` (phone tilt) can receive DeviceOrientation /
  * DeviceMotion inside the opaque-origin frame. Sensors stay optional for every
  * game; keyboard / pad remain enough to finish.
+ *
+ * Microphone loudness for shout games is owned by the theater shell
+ * (`useVoiceMeterBridge`). Opaque-origin documents cannot call `getUserMedia`
+ * without `allow-same-origin`, which we never grant.
  */
 export function GameFrame(props: GameFrameProps) {
   const localRef = useRef<HTMLIFrameElement>(null);

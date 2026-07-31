@@ -127,6 +127,11 @@
   "player": {
     "soundOn": "Sound: On",
     "soundOff": "Sound: Off",
+    "micOn": "Mic: On",
+    "micOff": "Mic: Off",
+    "micPending": "Mic: …",
+    "micDenied": "Mic: Denied",
+    "micUnsupported": "Mic: N/A",
     "fullscreen": "Fullscreen",
     "exitFullscreen": "Exit Fullscreen",
     "rotateLandscape": "Turn your phone sideways to play",
