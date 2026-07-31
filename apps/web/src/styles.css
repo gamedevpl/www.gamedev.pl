@@ -3518,12 +3518,20 @@ body.player-open {
 
 /* GIS paints asynchronously into this node. Without a reserved slot the Apple button
    below starts at the top of the stack and jumps down when the iframe arrives — and
-   jumped again whenever a parent re-render used to wipe and re-render the widget. */
+   jumped again whenever a parent re-render used to wipe and re-render the widget.
+   `color-scheme: light` is required even with theme:filled_black: the page sets
+   color-scheme:dark (meta + html), and GIS's iframe inherits it as a white frame
+   around the button — the flash that shoved Apple on the beta splash. */
 .google-sign-in-container {
   width: 240px;
   height: 40px;
+  /* Match filled_black so an empty/loading slot is not a white flash on dark UI. */
+  background: #131314;
+  border-radius: 4px;
+  overflow: hidden;
   /* GIS's iframe is display:inline-block; keep the slot from collapsing while empty. */
   line-height: 0;
+  color-scheme: light;
 }
 
 .auth-error-banner {
