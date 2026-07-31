@@ -457,4 +457,26 @@ describe('zone join rate', () => {
     expect(rows[0].zoneJoinRate).toBeNull();
     expect(rows[0].zoneAdmitted).toBe(0);
   });
+
+  it('cannot report more joins than seats, whatever the network lost', () => {
+    // Telemetry is best-effort and batched: a session can land `joined` while the request
+    // carrying its `admitted` was dropped. Counted independently that session would be in
+    // the numerator and missing from the denominator, and the column would show a join
+    // rate above 100% — a ratio exceeding its own maximum discredits the metric more than
+    // the gap it exists to report.
+    const rows = summarizeGameHealth([
+      ...session('ember-watch', 'a', BASE, [
+        { type: 'game_opened', msSinceOpen: 0 },
+        { type: 'zone_link', step: 'admitted', msSinceOpen: 200 },
+        { type: 'zone_link', step: 'joined', msSinceOpen: 900 },
+      ]),
+      // The `admitted` for this one never arrived.
+      ...session('ember-watch', 'b', BASE, [
+        { type: 'game_opened', msSinceOpen: 0 },
+        { type: 'zone_link', step: 'joined', msSinceOpen: 900 },
+      ]),
+    ]);
+
+    expect(rows[0]).toMatchObject({ zoneAdmitted: 1, zoneJoined: 1, zoneJoinRate: 1 });
+  });
 });

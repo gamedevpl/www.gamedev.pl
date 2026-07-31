@@ -100,7 +100,12 @@ export interface GameHealth {
    */
   /** Sessions issued a seat in a shared world (P3 zones). Zero for a game without one. */
   zoneAdmitted: number;
-  /** Of those, how many had a world actually arrive. */
+  /**
+   * Of those, how many had a world actually arrive.
+   *
+   * Counted only within admitted sessions, so this can never exceed {@link zoneAdmitted}
+   * however batches were lost on the way here.
+   */
   zoneJoined: number;
   /**
    * `zoneJoined / zoneAdmitted`, or null when this game never asked for a zone.
@@ -336,7 +341,18 @@ export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
     const bestScores = sessionStates.map((state) => state.bestScore).filter((score): score is number => score !== null);
     const sessionsWithEnding = sessionStates.filter((state) => state.reachedEnd).length;
     const zoneAdmitted = sessionStates.filter((state) => state.zoneAdmitted).length;
-    const zoneJoined = sessionStates.filter((state) => state.zoneJoined).length;
+    // Both rungs, not `joined` alone. Telemetry is best-effort and batched, so a session
+    // can land its `joined` while the request carrying its `admitted` was dropped — and
+    // counting the two independently would then put a session in the numerator that is
+    // missing from the denominator, producing a join rate above 100%. A ratio that can
+    // exceed its own maximum discredits the column it sits in more thoroughly than the
+    // gap it was reporting.
+    //
+    // A session missing its `admitted` is therefore dropped from both sides rather than
+    // guessed at: it is one more "no evidence", which this file already renders as
+    // absence. The residual bias runs the safe way — a lost `joined` batch reads as a
+    // fallback, so the number understates success rather than inventing it.
+    const zoneJoined = sessionStates.filter((state) => state.zoneAdmitted && state.zoneJoined).length;
     const decided = outcomes.won + outcomes.lost;
     const gfxBackends = { canvas2d: 0, webgl: 0, webgl3d: 0 };
     for (const state of sessionStates) {
