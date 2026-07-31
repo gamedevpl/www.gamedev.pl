@@ -115,6 +115,20 @@ export function describeQuota(response: Response): string | null {
   return `rate limit ${remaining ?? '?'}/${limit ?? '?'} remaining${resetAt ? `, resets ${resetAt}` : ''}`;
 }
 
+/**
+ * True when every `remote` module appears in `local` in the same relative order.
+ * `local` may insert extra names (website-first GameKit module adds).
+ */
+export function isGameKitModuleSubsequence(remote: readonly string[], local: readonly string[]): boolean {
+  let localIndex = 0;
+  for (const name of remote) {
+    const found = local.indexOf(name, localIndex);
+    if (found === -1) return false;
+    localIndex = found + 1;
+  }
+  return true;
+}
+
 export async function runGamesRepoContractCheck(options: ContractCheckOptions): Promise<ContractCheckOutcome> {
   const { repo, ref, token } = options;
   const fetchImpl = options.fetchImpl ?? fetch;
@@ -200,15 +214,28 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
 
   const remoteModules = extractGameKitModules(assembleSource);
   const localModules = [...GAME_KIT_MODULES];
-  if (remoteModules.join(',') !== localModules.join(',')) {
+  // Website-first module adds are intentional (same rule as budget raises): the serve
+  // half may know about a module the published games tip has not selected yet. Fail
+  // only when games-repo ships a module (or reorders shared ones) this side does not
+  // recognize — that would 502 every game that asks for it.
+  if (!isGameKitModuleSubsequence(remoteModules, localModules)) {
     return {
       kind: 'drift',
       reason:
         `GAME_KIT_MODULES mismatch.\n  games-repo: ${remoteModules.join(', ')}\n` +
-        `  website:    ${localModules.join(', ')}`,
+        `  website:    ${localModules.join(', ')}\n` +
+        `  Every games-repo module must appear on the website in the same relative order ` +
+        `(website may list extra modules ahead of the games tip — merge website first).`,
     };
   }
-  log(`  ✓ GAME_KIT_MODULES (${remoteModules.length} modules)`);
+  if (remoteModules.join(',') !== localModules.join(',')) {
+    log(
+      `  ✓ GAME_KIT_MODULES (games ${remoteModules.length}, website ${localModules.length}; ` +
+        `website-ahead extras allowed)`,
+    );
+  } else {
+    log(`  ✓ GAME_KIT_MODULES (${remoteModules.length} modules)`);
+  }
 
   const remoteBudget = extractMaxBundleBytes(validateSource);
   if (remoteBudget !== MAX_PROJECT_BYTES) {

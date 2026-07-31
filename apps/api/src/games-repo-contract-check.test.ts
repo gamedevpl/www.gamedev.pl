@@ -69,6 +69,25 @@ describe('runGamesRepoContractCheck', () => {
     expect(outcome.kind === 'drift' && outcome.reason).toContain('GAME_KIT_MODULES mismatch');
   });
 
+  it('allows the website to list modules the games tip has not shipped yet', async () => {
+    // Website-first add: GAME_KIT_MODULES here already includes `motion`, but main's
+    // assemble.ts still lists the pre-motion order. That window must stay green so the
+    // iframe / contract PR can land before the games-repo half.
+    const withoutAheadExtras = GAME_KIT_MODULES.filter((name) => name !== 'motion');
+    const olderAssemble = `
+      const GAME_KIT_MODULES = [${withoutAheadExtras.map((name) => `'${name}'`).join(', ')}];
+      const catalog = readMusicCatalog();
+      const track = catalog.tracks[name];
+      out += 'window.__GAME_AUDIO_MUSIC__ = ' + JSON.stringify(name);
+    `;
+    const { fetchImpl } = createFetch({
+      'tools/lib/assemble.ts': [ok(olderAssemble)],
+      'tools/validate.ts': [ok(VALIDATE_SOURCE)],
+    });
+
+    await expect(runGamesRepoContractCheck({ ...BASE, fetchImpl })).resolves.toEqual({ kind: 'ok' });
+  });
+
   it('skips without a token so forks and fresh clones stay green', async () => {
     const outcome = await runGamesRepoContractCheck({
       ...BASE,
