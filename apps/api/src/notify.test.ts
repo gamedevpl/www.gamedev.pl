@@ -6,6 +6,7 @@ import {
   emitDigestNotification,
   emitOperatorAlert,
   emitSubmissionNotification,
+  emitWaitlistJoined,
   notifyOnTransition,
   statusToEvent,
   type EmitDeps,
@@ -533,5 +534,65 @@ describe('emitOperatorAlert', () => {
 
     expect(created).toBe(1);
     expect(await store.listNotifications('g:boss')).toHaveLength(1);
+  });
+});
+
+describe('emitWaitlistJoined', () => {
+  let store: InMemoryStore;
+  let mailer: ConsoleMailer;
+
+  const deps = () => ({
+    store,
+    mailer,
+    appBaseUrl: 'https://www.gamedev.pl',
+    adminUids: ['g:boss'],
+  });
+
+  beforeEach(async () => {
+    store = new InMemoryStore();
+    mailer = new ConsoleMailer(() => {});
+    await store.upsertUser({ uid: 'g:boss', email: 'boss@example.com' });
+  });
+
+  it('notifies every operator and links them to telemetry', async () => {
+    await store.upsertUser({ uid: 'g:second', email: 'second@example.com' });
+
+    const { created } = await emitWaitlistJoined(
+      { ...deps(), adminUids: ['g:boss', 'g:second'] },
+      { uid: 'g:waiter', title: 'Waiter', email: 'waiter@example.com' },
+    );
+
+    expect(created).toBe(2);
+    const [notification] = await store.listNotifications('g:boss');
+    expect(notification).toMatchObject({
+      id: 'op-waitlist-g:waiter',
+      type: 'operator.waitlist_joined',
+      titleKey: 'notifications.operator.waitlist_joined.title',
+      link: '/admin/telemetry',
+      params: { title: 'Waiter', email: 'waiter@example.com' },
+    });
+    expect(mailer.sent).toHaveLength(2);
+    expect(mailer.sent[0].subject).toContain('waitlist');
+    expect(mailer.sent[0].text).toContain('waiter@example.com');
+    expect(mailer.sent[0].text).toContain('/admin/telemetry');
+    expect(mailer.sent[0].text).not.toContain('Job #');
+  });
+
+  it('says nothing the second time the same applicant joins', async () => {
+    await emitWaitlistJoined(deps(), { uid: 'g:waiter', title: 'Waiter' });
+    const second = await emitWaitlistJoined(deps(), { uid: 'g:waiter', title: 'Waiter' });
+
+    expect(second.created).toBe(0);
+    expect(mailer.sent).toHaveLength(1);
+    expect(await store.listNotifications('g:boss')).toHaveLength(1);
+  });
+
+  it('reaches an operator who unsubscribed from creator mail', async () => {
+    await store.setEmailUnsubscribed('g:boss', new Date().toISOString());
+
+    await emitWaitlistJoined(deps(), { uid: 'g:waiter', title: 'Waiter', email: 'waiter@example.com' });
+
+    expect(mailer.sent).toHaveLength(1);
+    expect(mailer.sent[0].headers?.['List-Unsubscribe']).toBeUndefined();
   });
 });

@@ -14,6 +14,7 @@ import {
   submissionNotificationMessage,
   submissionPushContent,
   type DigestEmailParams,
+  type OperatorEmailParams,
 } from './email-templates.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
 import type { OperatorAlert } from './operator-alerts.js';
@@ -247,7 +248,59 @@ export async function emitOperatorAlert(
     });
     if (!result.created) continue;
     created += 1;
-    await sendOperatorEmail(deps, uid, alert, type);
+    await sendOperatorEmail(deps, uid, alert.id, type, {
+      title: alert.title,
+      issueNumber: alert.issueNumber,
+      actionUrl: absoluteAppUrl(
+        deps.appBaseUrl ?? process.env.APP_BASE_URL?.trim() ?? 'https://www.gamedev.pl',
+        OPERATOR_ALERT_LINK,
+      ),
+      ...(alert.stall ? { detail: alert.stall } : {}),
+    });
+    await maybePush(deps, uid, result.notification);
+  }
+
+  return { created };
+}
+
+/**
+ * Tell every operator someone asked to join the closed beta.
+ *
+ * Same fan-out as `emitOperatorAlert` (in-app + email + push, no unsubscribe), but not
+ * shaped like a job: there is no issue number, and the deep link is the telemetry panel
+ * where the waitlist funnel lives rather than the build queue. Idempotent per applicant
+ * uid (`op-waitlist-{uid}`), so a visitor who clicks Join twice is one notification.
+ */
+export async function emitWaitlistJoined(
+  deps: EmitDeps & { adminUids: Iterable<string> },
+  event: { uid: string; title: string; email?: string },
+): Promise<{ created: number }> {
+  const createdAt = deps.now ? new Date(deps.now()).toISOString() : new Date().toISOString();
+  const type: OperatorNotificationType = 'operator.waitlist_joined';
+  const id = `op-waitlist-${event.uid}`;
+  const appBaseUrl = deps.appBaseUrl ?? process.env.APP_BASE_URL?.trim() ?? 'https://www.gamedev.pl';
+  let created = 0;
+
+  for (const uid of deps.adminUids) {
+    const result = await deps.store.createNotification(uid, {
+      id,
+      type,
+      createdAt,
+      titleKey: `notifications.${type}.title`,
+      bodyKey: `notifications.${type}.body`,
+      params: {
+        title: event.title,
+        ...(event.email ? { email: event.email } : {}),
+      },
+      link: WAITLIST_ALERT_LINK,
+    });
+    if (!result.created) continue;
+    created += 1;
+    await sendOperatorEmail(deps, uid, id, type, {
+      title: event.title,
+      actionUrl: absoluteAppUrl(appBaseUrl, WAITLIST_ALERT_LINK),
+      ...(event.email ? { email: event.email } : {}),
+    });
     await maybePush(deps, uid, result.notification);
   }
 
@@ -257,12 +310,16 @@ export async function emitOperatorAlert(
 /** Where an operator notification lands: the queue, which is where the action is. */
 const OPERATOR_ALERT_LINK = '/admin/queue';
 
-/** Best-effort, like every other send here: a failed alert email must not fail the sweep. */
+/** Waitlist joins land on telemetry — that is where the waitlist funnel is measured. */
+const WAITLIST_ALERT_LINK = '/admin/telemetry';
+
+/** Best-effort, like every other send here: a failed alert email must not fail the caller. */
 async function sendOperatorEmail(
   deps: EmitDeps,
   uid: string,
-  alert: OperatorAlert,
+  notificationId: string,
   type: OperatorNotificationType,
+  params: OperatorEmailParams,
 ): Promise<void> {
   const mailer = deps.mailer ?? (process.env.RESEND_API_KEY ? createMailerFromEnv() : undefined);
   if (!mailer) return;
@@ -270,16 +327,8 @@ async function sendOperatorEmail(
   try {
     const user = await deps.store.getUser(uid);
     if (!user?.email) return;
-    const appBaseUrl = deps.appBaseUrl ?? process.env.APP_BASE_URL?.trim() ?? 'https://www.gamedev.pl';
-    await mailer.send(
-      operatorNotificationMessage(user.email, type, {
-        title: alert.title,
-        issueNumber: alert.issueNumber,
-        actionUrl: absoluteAppUrl(appBaseUrl, OPERATOR_ALERT_LINK),
-        ...(alert.stall ? { detail: alert.stall } : {}),
-      }),
-    );
-    await deps.store.markNotificationEmailed(uid, alert.id);
+    await mailer.send(operatorNotificationMessage(user.email, type, params));
+    await deps.store.markNotificationEmailed(uid, notificationId);
   } catch (err) {
     deps.logError?.(err, 'operator alert email send failed');
   }

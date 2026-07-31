@@ -248,6 +248,7 @@ describe('POST /api/waitlist', () => {
       string,
       { sub: string; email?: string; emailVerified?: boolean; name?: string; picture?: string }
     > = {},
+    adminUids?: Set<string>,
   ) => {
     const store = new InMemoryStore();
     const verifier = new MockGoogleVerifier(mockUsers);
@@ -257,6 +258,7 @@ describe('POST /api/waitlist', () => {
       store,
       sessionSecret: 'test-secret-key',
       googleAuthVerifier: verifier,
+      ...(adminUids ? { adminUids } : {}),
     });
 
     return { app, store };
@@ -287,6 +289,54 @@ describe('POST /api/waitlist', () => {
 
     // Never wrote a users/ doc — the caller was never signed in.
     expect(await store.getUser('g:20001')).toBeNull();
+  });
+
+  it('notifies operators when someone joins, once per applicant', async () => {
+    const { app, store } = await setupTestServer(
+      {
+        'rejected-token': { sub: '20010', email: 'newbie@example.com', emailVerified: true, name: 'Newbie' },
+      },
+      new Set(['g:boss']),
+    );
+    await store.upsertUser({ uid: 'g:boss', email: 'boss@example.com', tier: 'trusted' });
+
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/waitlist',
+      payload: { idToken: 'rejected-token' },
+    });
+    expect(first.statusCode).toBe(200);
+
+    const notes = await store.listNotifications('g:boss');
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toMatchObject({
+      id: 'op-waitlist-g:20010',
+      type: 'operator.waitlist_joined',
+      link: '/admin/telemetry',
+      params: { title: 'Newbie', email: 'newbie@example.com' },
+    });
+
+    const second = await app.inject({
+      method: 'POST',
+      url: '/api/waitlist',
+      payload: { idToken: 'rejected-token' },
+    });
+    expect(second.statusCode).toBe(200);
+    expect(await store.listNotifications('g:boss')).toHaveLength(1);
+  });
+
+  it('still joins when no operators are configured', async () => {
+    const { app, store } = await setupTestServer({
+      'rejected-token': { sub: '20011', email: 'solo@example.com', emailVerified: true },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/waitlist',
+      payload: { idToken: 'rejected-token' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(store.waitlistEntries()).toHaveLength(1);
   });
 
   it('is idempotent — joining twice keeps a single entry and only bumps requestedAt', async () => {

@@ -560,7 +560,12 @@ export type NotificationType =
   | 'operator.build_stalled'
   | 'operator.feedback_undelivered'
   /** A health re-gate came back red: a live game no longer passes on the current engine. */
-  | 'operator.game_unhealthy';
+  | 'operator.game_unhealthy'
+  /**
+   * Someone asked to join the closed beta. Not a job alert — there is no issue number —
+   * but it is still an operator action: approve (or not) via the waitlist tooling.
+   */
+  | 'operator.waitlist_joined';
 
 /**
  * The types that are about one submission, and so can render "«game title» happened".
