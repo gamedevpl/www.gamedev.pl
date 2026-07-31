@@ -370,6 +370,21 @@ export async function registerSubmissionRoutes(
   const internalAuthVerifier = options.internalAuthVerifier ?? createInternalAuthVerifierFromEnv();
   const agentBackend = options.agentBackend;
   const gameSeeder = options.gameSeeder;
+  /**
+   * When to stop generating seeds nobody can place.
+   *
+   * A backend that cannot stage a draft — a mis-scoped dispatch credential is the way
+   * this happens, and did — fails *after* the draft has been generated, because that is
+   * the first moment there is anything to write. Without this, every submission pays a
+   * couple of minutes and tens of thousands of tokens for a draft that is discarded a
+   * second later, and the only symptom is a warning line nobody is reading.
+   *
+   * So a staging failure mutes seeding for a while rather than forever: long enough that
+   * a broken credential costs one seed instead of one per submission, short enough that
+   * a transient failure heals without a deploy.
+   */
+  const SEED_STAGING_COOLDOWN_MS = 10 * 60_000;
+  let seedStagingMutedUntil = 0;
 
   // Shared deps for notification emission (in-app + best-effort email). The mailer
   // degrades to a no-op without RESEND_API_KEY, and email is skipped entirely
@@ -508,6 +523,13 @@ export async function registerSubmissionRoutes(
     log: { error: (context: object, message: string) => void };
   }): Promise<SeedDraft | undefined> {
     if (!gameSeeder || !store) return undefined;
+    if (now() < seedStagingMutedUntil) {
+      input.log.error(
+        { issueNumber: input.issueNumber },
+        'skipping the seed: a recent draft could not be staged, so generating another would be wasted',
+      );
+      return undefined;
+    }
     try {
       const record = await store.getSubmission(input.issueNumber);
       if (!record) return undefined;
@@ -620,6 +642,17 @@ export async function registerSubmissionRoutes(
         ...(input.feedback ? { feedback: input.feedback } : {}),
         ...(seed ? { seed } : {}),
       });
+      // A seed that went in without a workspace coming back is a backend that could not
+      // place it. Inferred rather than reported because it is true of every backend: the
+      // seam promises a `seedWorkspace` when a seed was staged, so its absence is the
+      // signal, whatever the reason underneath.
+      if (seed && !result.seedWorkspace) {
+        seedStagingMutedUntil = now() + SEED_STAGING_COOLDOWN_MS;
+        input.log.error(
+          { issueNumber: input.issueNumber, mutedForMs: SEED_STAGING_COOLDOWN_MS },
+          'the generated seed could not be staged; pausing seeding rather than generating drafts nobody can place',
+        );
+      }
       await store?.recordDispatch(input.issueNumber, {
         backend: agentBackend.name,
         ref: result.ref,

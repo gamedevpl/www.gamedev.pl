@@ -3227,6 +3227,68 @@ describe('seeded dispatch', () => {
     await app.close();
   });
 
+  it('stops generating drafts after one cannot be staged', async () => {
+    // The money bug this exists for: a mis-scoped dispatch credential fails only after
+    // the draft has been generated, so without a circuit breaker every submission pays
+    // ~2 minutes and tens of thousands of tokens for a draft discarded a second later.
+    const stub = createGithubClientStub({});
+    const briefs: BuildBrief[] = [];
+    const backend: AgentBackend = {
+      name: 'stub',
+      dispatch: async (brief) => {
+        briefs.push(brief);
+        // Seed accepted, no workspace back — exactly what a 403 on the branch write
+        // looks like from here.
+        return { ref: 'task-1', workspace: 'copilot/x' };
+      },
+      resume: async () => ({ ref: 'task-2' }),
+      observe: async () => null,
+      cancel: async () => ({ enforced: false }),
+    };
+    let seedCalls = 0;
+    const { app, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      gameSeeder: {
+        seed: async ({ slug }) => {
+          seedCalls++;
+          return {
+            slug,
+            files: [{ path: 'game.ts', content: 'export {};\n' }],
+            references: ['apex-sprint'],
+            usage: { inputTokens: 30_000, outputTokens: 9_000, model: 'gemini-3.6-flash' },
+            elapsedMs: 156_000,
+            compiles: false,
+            repaired: true,
+          };
+        },
+      },
+    });
+
+    const submit = (title: string) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/submissions',
+        headers: authHeaders,
+        payload: { title, concept: 'A game where you deliver parcels between comets, dodging debris.' },
+      });
+
+    expect((await submit('First Game')).statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
+    expect(briefs[0].seed).toBeDefined();
+
+    expect((await submit('Second Game')).statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(2));
+
+    // The second build still dispatches — seeding is an optimization, and muting it
+    // must never cost a creator their game — it just does not pay for another draft.
+    expect(briefs[1].seed).toBeUndefined();
+    expect(seedCalls).toBe(1);
+
+    await app.close();
+  });
+
   it('records the seed workspace so the branch is released with the job', async () => {
     const { InMemoryStore } = await import('./store.js');
     const store = new InMemoryStore();
