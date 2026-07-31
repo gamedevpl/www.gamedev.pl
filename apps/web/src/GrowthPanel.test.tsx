@@ -3,7 +3,8 @@
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
-import { GrowthPanel, computeGrowthReading } from './GrowthPanel.js';
+import { GrowthPanel } from './GrowthPanel.js';
+import { computeGrowthReading } from './growthReading.js';
 import type { CreatorsResponse, HealthResponse, VisitsResponse } from './healthApi.js';
 
 /**
