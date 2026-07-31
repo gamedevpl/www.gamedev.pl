@@ -73,6 +73,20 @@ Forcing a state that needs an event you cannot trigger (an install prompt, a wai
 worker) is legitimate: inject an element with the same class and measure against it. That is
 what the CSS contract actually promises.
 
+### Do not write the same shell twice
+
+The follow-up to that bug reintroduced it. The phone rules were correct and a second block
+was written for desktop, re-deriving the same shell from scratch — and it left out the two
+rules that only matter in states you cannot see: the transcript's own scroller, and the
+bottom bars joining the column. Both blocks were "checked"; both checks were of the state
+that was on screen.
+
+When one shape holds across widths, write it **once, outside every media query**, and let the
+media blocks carry only what genuinely differs. A rule that must never be forgotten cannot
+live in a place where it has to be remembered twice. The same applies to the test: a guard
+pinned to a single viewport stops guarding the moment the layout gains a second one, so cover
+each band the CSS assembles differently — see `apps/e2e/src/studio-shell.test.ts`.
+
 ## Current architecture
 
 Production games will live in a **dedicated games repo maintained by coding agents**; this app
