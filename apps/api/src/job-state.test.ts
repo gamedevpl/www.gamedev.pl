@@ -8,6 +8,7 @@ import {
   nextRoundGeneration,
   planObservedStatusTransition,
   reconcileAgentObservation,
+  shouldAutoAbandonSelfRound,
   toSubmissionStatus,
   transitionClosesRound,
   type JobState,
@@ -280,5 +281,70 @@ describe('detectStall', () => {
   it('says nothing about finished jobs', () => {
     expect(detectStall({ state: 'published', stateSince: ago(10 * HOUR), now: NOW })).toBeNull();
     expect(detectStall({ state: 'failed', stateSince: ago(10 * HOUR), now: NOW })).toBeNull();
+  });
+
+  it('exposes no_agent_yet for self rounds before the first channel signal', () => {
+    expect(
+      detectStall({
+        state: 'dispatched',
+        stateSince: ago(HOUR),
+        builder: 'self',
+        now: NOW,
+      }),
+    ).toBe('no_agent_yet');
+    // Once the agent has spoken, ordinary quiet detection applies.
+    expect(
+      detectStall({
+        state: 'building',
+        stateSince: ago(HOUR),
+        lastAgentSignalAt: ago(HOUR),
+        builder: 'self',
+        now: NOW,
+      }),
+    ).toBe('quiet');
+    // Platform rounds keep the old not_dispatched / quiet vocabulary.
+    expect(detectStall({ state: 'dispatched', stateSince: ago(HOUR), builder: 'platform', now: NOW })).toBe(
+      'not_dispatched',
+    );
+  });
+});
+
+describe('shouldAutoAbandonSelfRound', () => {
+  const DAY = 24 * HOUR;
+
+  it('abandons only self rounds that never connected past the window', () => {
+    expect(
+      shouldAutoAbandonSelfRound({
+        builder: 'self',
+        roundOpenedAt: ago(15 * DAY),
+        now: NOW,
+        connectDays: 14,
+      }),
+    ).toBe(true);
+    expect(
+      shouldAutoAbandonSelfRound({
+        builder: 'self',
+        roundOpenedAt: ago(2 * DAY),
+        now: NOW,
+        connectDays: 14,
+      }),
+    ).toBe(false);
+    expect(
+      shouldAutoAbandonSelfRound({
+        builder: 'self',
+        lastAgentSignalAt: ago(15 * DAY),
+        roundOpenedAt: ago(15 * DAY),
+        now: NOW,
+        connectDays: 14,
+      }),
+    ).toBe(false);
+    expect(
+      shouldAutoAbandonSelfRound({
+        builder: 'platform',
+        roundOpenedAt: ago(15 * DAY),
+        now: NOW,
+        connectDays: 14,
+      }),
+    ).toBe(false);
   });
 });

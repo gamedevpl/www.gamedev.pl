@@ -1,0 +1,513 @@
+import type { FastifyInstance } from 'fastify';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { AgentBackend, BuildBrief, SeedFiles } from './agent-backend.js';
+import { mintAgentToken } from './agent-token.js';
+import { buildApp } from './app.js';
+import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
+import type { GamesStore } from './games-store.js';
+import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
+import { InMemoryStore } from './store.js';
+import { mintToken } from './submission-token.js';
+import { NoopTranslator } from './translate.js';
+
+const secret = 'self-build-test-secret';
+const sessionSecret = 'dev-session-secret-change-me';
+const CONCEPT = 'A squad tactics game about clearing rooms with careful timing and cover.';
+
+function stubGitHub(): GitHubClient {
+  return {
+    createIssue: async () => ({ number: 1 }),
+    getIssueState: async () => ({ state: 'open' as const }),
+    findLinkedPR: async (): Promise<LinkedPullRequest | null> => null,
+    createIssueComment: async () => ({ id: 1 }),
+    updateIssueBody: async () => {},
+    closeIssue: async () => {},
+    closePullRequest: async () => {},
+    ensureOpenPullRequest: async () => ({ number: 1 }),
+    deleteBranch: async () => {},
+    getGameSources: async (): Promise<GameSources | null> => null,
+    getGameMedia: async () => null,
+    getCatalog: async (): Promise<CatalogGameEntry[]> => [],
+    getProgressNotes: async () => null,
+  };
+}
+
+function platformStub() {
+  const briefs: BuildBrief[] = [];
+  const backend: AgentBackend = {
+    name: 'copilot',
+    dispatch: async (brief) => {
+      briefs.push(brief);
+      return { ref: `copilot-${briefs.length}`, workspace: `copilot/branch-${briefs.length}` };
+    },
+    resume: async (brief) => {
+      briefs.push(brief);
+      return { ref: `copilot-r-${briefs.length}`, workspace: `copilot/branch-r-${briefs.length}` };
+    },
+    observe: async () => null,
+    cancel: async () => ({ enforced: false }),
+  };
+  return { backend, briefs };
+}
+
+const MINIMAL_FILES = [
+  { path: 'SPEC.md', content: '---\ntitle: Self Built\n---\n' },
+  { path: 'index.html', content: '<!doctype html>' },
+  { path: 'game.ts', content: 'export {};' },
+  { path: 'TRACE.json', content: '{"samples":[]}' },
+  { path: 'PLAYTEST.json', content: '{"expectProgress":["round-start"]}' },
+];
+
+function stubGamesStore() {
+  const stored: Array<{ slug: string; issueNumber: number; backend?: string; files: unknown[] }> = [];
+  const versions = new Map<string, { files: typeof MINIMAL_FILES; backend?: string }>();
+  const gamesStore = {
+    putCandidateSources: async (input: {
+      slug: string;
+      issueNumber: number;
+      files: typeof MINIMAL_FILES;
+      backend?: string;
+    }) => {
+      stored.push(input);
+      const version = `v${stored.length}`;
+      versions.set(`${input.slug}:${version}`, { files: input.files, backend: input.backend });
+      return {
+        version,
+        manifest: {
+          slug: input.slug,
+          version,
+          createdAt: new Date().toISOString(),
+          issueNumber: input.issueNumber,
+          backend: input.backend,
+          sourceFiles: input.files.map((f) => f.path),
+        },
+      };
+    },
+    getManifest: async (slug: string, version: string) => {
+      const hit = versions.get(`${slug}:${version}`);
+      if (!hit) return null;
+      return {
+        slug,
+        version,
+        createdAt: new Date().toISOString(),
+        issueNumber: 0,
+        backend: hit.backend,
+        sourceFiles: hit.files.map((f) => f.path),
+      };
+    },
+    getSourceFile: async (slug: string, version: string, path: string) => {
+      const hit = versions.get(`${slug}:${version}`);
+      return hit?.files.find((f) => f.path === path)?.content ?? null;
+    },
+    putGateResult: async () => {},
+    putHealthResult: async () => {},
+    putDerivedArtifact: async () => {},
+    getDerivedArtifact: async () => null,
+  } as unknown as GamesStore;
+  return { gamesStore, stored };
+}
+
+async function createApp(options: {
+  platform?: AgentBackend;
+  gameSeeder?: {
+    seed: (input: { slug: string; title: string; spec: string }) => Promise<
+      SeedFiles & {
+        compiles: boolean;
+        usage: { model: string; inputTokens: number; outputTokens: number };
+        elapsedMs: number;
+      }
+    >;
+  };
+  gamesStore?: GamesStore;
+  now?: () => number;
+  internalAuthVerifier?: { verify: (header: string | undefined) => Promise<boolean> };
+}) {
+  const store = new InMemoryStore();
+  await store.upsertUser({ uid: 'g:creator', email: 'c@example.com', betaStatus: 'approved' });
+  const app = await buildApp({
+    store,
+    sessionSecret,
+    submissionRoutes: {
+      githubClient: stubGitHub(),
+      githubToken: 'gh',
+      submissionTokenSecret: secret,
+      translator: new NoopTranslator(),
+      now: options.now,
+      internalAuthVerifier: options.internalAuthVerifier,
+      ...(options.platform ? { agentBackend: options.platform } : {}),
+      ...(options.gameSeeder ? { gameSeeder: options.gameSeeder } : {}),
+      ...(options.gamesStore ? { agentChannel: { gamesStore: options.gamesStore } } : {}),
+    },
+  });
+  return { app, store };
+}
+
+function authHeaders(uid = 'g:creator') {
+  return { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken(uid, sessionSecret)}` };
+}
+
+function agentHeaders(issueNumber: number, roundGeneration = 1) {
+  return {
+    authorization: `Bearer ${mintAgentToken(issueNumber, secret, { roundGeneration })}`,
+  };
+}
+
+describe('self builder (BY-02)', () => {
+  let app: FastifyInstance | null = null;
+
+  afterEach(async () => {
+    await app?.close();
+    app = null;
+    delete process.env.SELF_BUILD_DELIVERY_CAP;
+    delete process.env.SELF_BUILD_CONNECT_DAYS;
+  });
+
+  it('routes self vs platform per round and leaves Copilot path unchanged for platform', async () => {
+    const { backend, briefs } = platformStub();
+    const created = await createApp({ platform: backend });
+    app = created.app;
+    const { store } = created;
+
+    const platformSubmit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'Platform Game', concept: CONCEPT, builder: 'platform' },
+    });
+    expect(platformSubmit.statusCode).toBe(200);
+    // Background dispatch — wait briefly for the voided promise.
+    await vi.waitFor(async () => {
+      const records = await store.listSubmissionsByOwner('g:creator');
+      expect(records[0]?.dispatch?.backend).toBe('copilot');
+    });
+    expect(briefs).toHaveLength(1);
+    expect(briefs[0]?.seed).toBeUndefined();
+
+    const selfSubmit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'Self Game', concept: CONCEPT, builder: 'self' },
+    });
+    expect(selfSubmit.statusCode).toBe(200);
+    await vi.waitFor(async () => {
+      const records = await store.listSubmissionsByOwner('g:creator');
+      const selfJob = records.find((r) => r.title === 'Self Game');
+      expect(selfJob?.builder).toBe('self');
+      expect(selfJob?.defaultBuilder).toBe('self');
+      expect(selfJob?.dispatch?.backend).toBe('self');
+      expect(selfJob?.dispatch?.refs.at(-1)).toMatch(/^self:\d+$/);
+    });
+    // Platform stub was not called again for the self round.
+    expect(briefs).toHaveLength(1);
+  });
+
+  it('stores a generated seed on the job for self rounds (no seed branch)', async () => {
+    const seedFiles: SeedFiles = {
+      slug: 'seeded-self',
+      files: [{ path: 'SPEC.md', content: '# Seed\n' }],
+      references: ['ref-a'],
+    };
+    const gameSeeder = {
+      seed: async () => ({
+        ...seedFiles,
+        compiles: true,
+        elapsedMs: 1,
+        usage: { model: 'test-model', inputTokens: 1, outputTokens: 1 },
+      }),
+    };
+    const created = await createApp({ gameSeeder });
+    app = created.app;
+    const { store } = created;
+
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'Seeded Self', concept: CONCEPT, builder: 'self' },
+    });
+    expect(submit.statusCode).toBe(200);
+
+    await vi.waitFor(async () => {
+      const record = (await store.listSubmissionsByOwner('g:creator'))[0];
+      expect(record?.seed?.files).toEqual(seedFiles.files);
+      expect(record?.dispatch?.seedWorkspace).toBeUndefined();
+      expect(record?.dispatch?.refs?.[0]).toMatch(/^self:/);
+    });
+  });
+
+  it('walks queued→building→submitted on channel signals for a self round', async () => {
+    const { gamesStore, stored } = stubGamesStore();
+    const created = await createApp({ gamesStore });
+    app = created.app;
+    const { store } = created;
+
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'Walk State', concept: CONCEPT, builder: 'self' },
+    });
+    expect(submit.statusCode).toBe(200);
+    const slug = submit.json().slug as string;
+
+    let issueNumber = 0;
+    await vi.waitFor(async () => {
+      const record = (await store.listSubmissionsByOwner('g:creator'))[0];
+      expect(record?.state).toBe('dispatched');
+      issueNumber = record!.issueNumber;
+    });
+
+    const statusWaiting = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(issueNumber, secret)}`,
+    });
+    expect(statusWaiting.json().stall).toBe('no_agent_yet');
+
+    const progress = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/progress',
+      headers: agentHeaders(issueNumber),
+      payload: { text: 'Scaffolding the loop.' },
+    });
+    expect(progress.statusCode).toBe(200);
+    expect((await store.getSubmission(issueNumber))?.state).toBe('building');
+
+    const delivery = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/sources',
+      headers: agentHeaders(issueNumber),
+      payload: { slug, files: MINIMAL_FILES },
+    });
+    expect(delivery.json()).toMatchObject({ accepted: true });
+    expect((await store.getSubmission(issueNumber))?.state).toBe('submitted');
+    expect(stored[0]?.backend).toBe('self');
+  });
+
+  it('enforces SELF_BUILD_DELIVERY_CAP with a machine-readable refusal', async () => {
+    process.env.SELF_BUILD_DELIVERY_CAP = '2';
+    const { gamesStore } = stubGamesStore();
+    const created = await createApp({ gamesStore });
+    app = created.app;
+    const { store } = created;
+
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'Cap Game', concept: CONCEPT, builder: 'self' },
+    });
+    const slug = submit.json().slug as string;
+    let issueNumber = 0;
+    await vi.waitFor(async () => {
+      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
+      expect((await store.getSubmission(issueNumber))?.builder).toBe('self');
+    });
+
+    for (let i = 0; i < 2; i += 1) {
+      const ok = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources',
+        headers: agentHeaders(issueNumber),
+        payload: { slug, files: MINIMAL_FILES },
+      });
+      expect(ok.json().accepted).toBe(true);
+    }
+    const refused = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/sources',
+      headers: agentHeaders(issueNumber),
+      payload: { slug, files: MINIMAL_FILES },
+    });
+    expect(refused.json()).toMatchObject({
+      accepted: false,
+      rejected: 'delivery_cap',
+      reason: 'self_build_delivery_cap',
+      deliveryCap: 2,
+      deliveriesUsed: 2,
+    });
+  });
+
+  it('auto-abandons a self round with no agent connect after SELF_BUILD_CONNECT_DAYS', async () => {
+    process.env.SELF_BUILD_CONNECT_DAYS = '14';
+    const opened = Date.parse('2026-07-01T00:00:00Z');
+    let clock = opened;
+    const created = await createApp({
+      now: () => clock,
+      internalAuthVerifier: { verify: async () => true },
+    });
+    app = created.app;
+    const { store } = created;
+
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'No Connect', concept: CONCEPT, builder: 'self' },
+    });
+    expect(submit.statusCode).toBe(200);
+    let issueNumber = 0;
+    await vi.waitFor(async () => {
+      const record = (await store.listSubmissionsByOwner('g:creator'))[0];
+      expect(record?.state).toBe('dispatched');
+      issueNumber = record!.issueNumber;
+    });
+
+    clock = opened + 15 * 24 * 60 * 60 * 1000;
+    const sweep = await app.inject({
+      method: 'POST',
+      url: '/api/internal/notify-sweep',
+      headers: { authorization: 'Bearer internal' },
+    });
+    expect(sweep.statusCode).toBe(200);
+    const abandoned = await store.getSubmission(issueNumber);
+    expect(abandoned?.state).toBe('abandoned');
+    expect(abandoned?.abandonedAt).toBeTruthy();
+    expect(abandoned?.transitions?.at(-1)?.reason).toBe('no_connect');
+  });
+
+  it('switches builder both directions only at a round boundary', async () => {
+    const { backend, briefs } = platformStub();
+    const { gamesStore } = stubGamesStore();
+    const created = await createApp({ platform: backend, gamesStore });
+    app = created.app;
+    const { store } = created;
+
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'Switch Game', concept: CONCEPT, builder: 'self' },
+    });
+    const slug = submit.json().slug as string;
+    let issueNumber = 0;
+    await vi.waitFor(async () => {
+      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
+    });
+
+    // Mid-round switch refused.
+    const mid = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(issueNumber, secret)}/feedback`,
+      headers: authHeaders(),
+      payload: { feedback: 'Please switch builders now please.', builder: 'platform' },
+    });
+    expect(mid.statusCode).toBe(409);
+    expect(mid.json()).toMatchObject({ error: 'builder_locked', reason: 'active_round', builder: 'self' });
+
+    // Deliver + close the round via gate-green transition so a new round can choose.
+    await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/sources',
+      headers: agentHeaders(issueNumber),
+      payload: { slug, files: MINIMAL_FILES },
+    });
+    await store.recordJobTransition(issueNumber, {
+      to: 'ready_for_review',
+      at: new Date().toISOString(),
+      by: 'gate',
+      reason: 'gate_green',
+    });
+    // ready_for_review closes the round; bounce to needs_changes (reject) to open feedback.
+    await store.recordJobTransition(issueNumber, {
+      to: 'needs_changes',
+      at: new Date().toISOString(),
+      by: 'operator',
+      reason: 'rejected',
+    });
+
+    const switchToPlatform = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(issueNumber, secret)}/feedback`,
+      headers: authHeaders(),
+      payload: {
+        feedback: 'Please have the platform team finish this game carefully.',
+        builder: 'platform',
+      },
+    });
+    expect(switchToPlatform.statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs.length).toBeGreaterThan(0));
+    const afterPlatform = await store.getSubmission(issueNumber);
+    expect(afterPlatform?.builder).toBe('platform');
+    expect(afterPlatform?.defaultBuilder).toBe('platform');
+    expect(afterPlatform?.dispatch?.backend).toBe('copilot');
+    // self→platform carries latest candidate sources as brief.seed.
+    expect(briefs.at(-1)?.seed?.files.some((f) => f.path === 'SPEC.md')).toBe(true);
+
+    await store.recordJobTransition(issueNumber, {
+      to: 'needs_changes',
+      at: new Date().toISOString(),
+      by: 'operator',
+      reason: 'rejected',
+    });
+    const switchToSelf = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(issueNumber, secret)}/feedback`,
+      headers: authHeaders(),
+      payload: {
+        feedback: 'I will finish this myself with my own agent now.',
+        builder: 'self',
+      },
+    });
+    expect(switchToSelf.statusCode).toBe(200);
+    await vi.waitFor(async () => {
+      const record = await store.getSubmission(issueNumber);
+      expect(record?.builder).toBe('self');
+      expect(record?.dispatch?.backend).toBe('self');
+    });
+  });
+
+  it('records builder provenance on delivered versions', async () => {
+    const { gamesStore, stored } = stubGamesStore();
+    const created = await createApp({ gamesStore });
+    app = created.app;
+    const { store } = created;
+
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'Provenance', concept: CONCEPT, builder: 'self' },
+    });
+    const slug = submit.json().slug as string;
+    let issueNumber = 0;
+    await vi.waitFor(async () => {
+      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/sources',
+      headers: agentHeaders(issueNumber),
+      payload: { slug, files: MINIMAL_FILES },
+    });
+    expect(stored[0]?.backend).toBe('self');
+    expect((await store.getSubmission(issueNumber))?.builder).toBe('self');
+  });
+
+  it('preserves strict 401 for stale tokens on terminal self jobs (no stopReason bypass)', async () => {
+    const created = await createApp({});
+    app = created.app;
+    const { store } = created;
+
+    await store.createSubmission(99, 'g:creator', 'Terminal');
+    await store.setRoundBuilder(99, 'self');
+    await store.recordJobTransition(99, {
+      to: 'abandoned',
+      at: new Date().toISOString(),
+      by: 'system',
+      reason: 'no_connect',
+    });
+    await store.setSubmissionAbandoned(99, new Date().toISOString());
+    // Round close bumps generation to 2; mint against the previous one.
+    const stale = mintAgentToken(99, secret, { roundGeneration: 1 });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/progress',
+      headers: { authorization: `Bearer ${stale}` },
+      payload: { text: 'still here' },
+    });
+    expect(response.statusCode).toBe(401);
+    expect(response.json().error).toMatch(/fresh prompt/i);
+  });
+});

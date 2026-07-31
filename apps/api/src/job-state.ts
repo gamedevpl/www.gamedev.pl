@@ -376,7 +376,13 @@ export type JobStall =
   /** A live session that has said nothing for a while. The old heuristic, kept. */
   | 'quiet'
   /** Delivered, but our own gate never picked it up. Our bug, not the agent's. */
-  | 'gate_not_started';
+  | 'gate_not_started'
+  /**
+   * A self-build round waiting for the creator's agent to connect. Distinct from
+   * `not_dispatched` / `quiet`: nothing is wedged — the platform dispatched locally and
+   * is idle on purpose until the first channel signal.
+   */
+  | 'no_agent_yet';
 
 export interface StallThresholds {
   notDispatchedMs: number;
@@ -406,6 +412,11 @@ export interface StallInput {
   agentState?: AgentTaskState;
   now: number;
   thresholds?: StallThresholds;
+  /**
+   * When `'self'`, silence before the first channel signal is `no_agent_yet` rather
+   * than a stall — the platform is waiting on purpose.
+   */
+  builder?: 'platform' | 'self';
 }
 
 /**
@@ -423,6 +434,16 @@ export function detectStall(input: StallInput): JobStall | null {
   // Explicit beats inferred: if the agent says it is waiting for us, there is nothing to
   // deduce from timestamps and no waiting period worth observing.
   if (input.agentState === 'waiting_for_user') return 'awaiting_input';
+
+  // Self rounds before the first channel signal are waiting, not stalled. After the
+  // first signal, ordinary quiet detection applies.
+  if (
+    input.builder === 'self' &&
+    !input.lastAgentSignalAt &&
+    (input.state === 'queued' || input.state === 'dispatched' || input.state === 'building')
+  ) {
+    return 'no_agent_yet';
+  }
 
   const sinceState = input.now - Date.parse(input.stateSince);
   if (!Number.isFinite(sinceState)) return null;
@@ -445,4 +466,27 @@ export function detectStall(input: StallInput): JobStall | null {
   }
 
   return null;
+}
+
+/**
+ * Whether a self round with no agent signal has outlived the connect window and should
+ * be auto-abandoned. Pure: the sweep supplies the clock and the configured window.
+ */
+export function shouldAutoAbandonSelfRound(input: {
+  builder?: 'platform' | 'self';
+  lastAgentSignalAt?: string;
+  abandonedAt?: string;
+  state?: JobState;
+  /** When the current round opened (typically `stateSince` after dispatch). */
+  roundOpenedAt: string;
+  now: number;
+  connectDays: number;
+}): boolean {
+  if (input.builder !== 'self') return false;
+  if (input.lastAgentSignalAt || input.abandonedAt) return false;
+  if (input.state && isTerminal(input.state)) return false;
+  const opened = Date.parse(input.roundOpenedAt);
+  if (!Number.isFinite(opened)) return false;
+  const windowMs = input.connectDays * 24 * 60 * 60 * 1000;
+  return input.now - opened >= windowMs;
 }

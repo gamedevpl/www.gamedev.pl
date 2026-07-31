@@ -1,31 +1,42 @@
-// Builds the coding-agent backend from the environment.
+// Builds the coding-agent backend registry from the environment.
 //
 // Kept apart from app.ts so that "which backend, configured how" is one readable
 // decision rather than a branch buried in server wiring — and so a second backend can be
 // added here without touching the server at all.
 
 import type { AgentBackend } from './agent-backend.js';
+import type { BuilderKind } from './builder.js';
 import { createAgentTasksClient, type AgentTaskModel } from './agent-tasks.js';
 import { createCopilotBackend } from './copilot-backend.js';
 import { VertexGameSeeder, type GameSeeder } from './game-seed.js';
 import { createGitHubClient } from './github-client.js';
 import { createArchiveSeedContextSource } from './seed-context.js';
+import { createSelfBuildBackend, type SelfBuildBackendOptions } from './self-build-backend.js';
 
 interface Logger {
   info: (context: object, message: string) => void;
   warn: (context: object, message: string) => void;
 }
 
+/** Registry keyed by the round's builder. `self` is always present; platform needs creds. */
+export interface AgentBackendRegistry {
+  platform?: AgentBackend;
+  self: AgentBackend;
+}
+
+export function resolveBuilderBackend(registry: AgentBackendRegistry, builder: BuilderKind): AgentBackend | undefined {
+  return builder === 'self' ? registry.self : registry.platform;
+}
+
 /**
- * Returns a backend, or undefined when this environment is not set up to dispatch.
+ * Returns a platform backend, or undefined when this environment is not set up to
+ * dispatch Copilot.
  *
  * Undefined is a supported state, not a failure: local development has no dispatch
- * credential, and an environment can run the whole product without one — submissions
- * still succeed and the games repo's label workflow still starts builds. Refusing to
- * boot without it would make the credential a hard dependency of serving the site,
- * which is the coupling this work exists to remove.
+ * credential, and an environment can run the whole product without one — self builds
+ * still work, and submissions that ask for the platform builder wait in `queued`.
  */
-export function createAgentBackendFromEnv(log?: Logger): AgentBackend | undefined {
+export function createPlatformBackendFromEnv(log?: Logger): AgentBackend | undefined {
   // Deliberately its own credential rather than reusing GITHUB_TOKEN. The agent tasks
   // API needs a user-to-server token (installation tokens are unsupported), and keeping
   // it separate means dispatch and serving fail independently — a dispatch PAT expiring
@@ -52,6 +63,30 @@ export function createAgentBackendFromEnv(log?: Logger): AgentBackend | undefine
     createPullRequest: false,
     ...(log ? { log } : {}),
   });
+}
+
+/**
+ * Builds the registry. Self is always available (no external credential); platform
+ * follows {@link createPlatformBackendFromEnv}.
+ */
+export function createAgentBackendRegistryFromEnv(
+  log?: Logger,
+  selfOptions?: SelfBuildBackendOptions,
+): AgentBackendRegistry {
+  const platform = createPlatformBackendFromEnv(log);
+  const self = createSelfBuildBackend(selfOptions);
+  if (!platform) {
+    log?.info({ backend: 'self' }, 'self-build backend enabled (no platform dispatch credential)');
+  }
+  return { ...(platform ? { platform } : {}), self };
+}
+
+/**
+ * @deprecated Prefer {@link createAgentBackendRegistryFromEnv}. Kept so older call sites
+ * that expect a single backend still resolve the platform adapter.
+ */
+export function createAgentBackendFromEnv(log?: Logger): AgentBackend | undefined {
+  return createPlatformBackendFromEnv(log);
 }
 
 /**

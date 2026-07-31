@@ -22,6 +22,8 @@ import {
 import { startHealthCheck } from './game-health.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
 import type { AgentBackend, SeedFiles } from './agent-backend.js';
+import { resolveBuilderBackend, type AgentBackendRegistry } from './agent-backend-env.js';
+import { isActiveBuildRound, isBuilderKind, selfBuildConnectDays, type BuilderKind } from './builder.js';
 import type { GameSeeder, SeedDraft } from './game-seed.js';
 import {
   canTransition,
@@ -30,10 +32,12 @@ import {
   planObservedStatusTransition,
   reconcileAgentObservation,
   resolveJobState,
+  shouldAutoAbandonSelfRound,
   toSubmissionStatus,
   type JobState,
   type JobTransition,
 } from './job-state.js';
+import { createSelfBuildBackend } from './self-build-backend.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
@@ -68,6 +72,11 @@ const CreateSubmissionRequestSchema = z.object({
   displayName: z.string().trim().max(40, 'display name must be at most 40 characters').optional(),
   /** The language the creator is using, so the agent can report progress in it. */
   locale: z.string().trim().max(10).optional(),
+  /**
+   * Who builds this round. Defaults to `platform`. Studio UI (out of scope here) will
+   * surface the choice; the API accepts it so routing is testable without the card.
+   */
+  builder: z.enum(['platform', 'self']).optional(),
 });
 
 // Re-exported for callers (and tests) that knew it here; it now lives with the status
@@ -108,6 +117,11 @@ const FeedbackRequestSchema = z.object({
     .trim()
     .min(10, 'feedback must be at least 10 characters')
     .max(2000, 'feedback must be at most 2000 characters'),
+  /**
+   * Builder for the *new* round this feedback opens. Refused while the current round
+   * is still active — switching is a round-boundary decision only.
+   */
+  builder: z.enum(['platform', 'self']).optional(),
   /**
    * Optional playtest attachment from Creator Studio: a paused-frame PNG (base64,
    * no data: prefix) plus a small instrumentation digest. Treated as data, never
@@ -239,10 +253,16 @@ export interface SubmissionRoutesOptions {
   translator?: Translator;
   /** Caps and seams for the agent build channel; see registerAgentChannelRoutes. */
   /**
-   * Which coding-agent backend builds submitted games. Absent means dispatch is not
-   * wired in this environment and the games repo's label workflow still starts builds.
+   * Which coding-agent backend builds submitted games. Treated as the `platform` entry
+   * of the registry when {@link agentBackends} is omitted — keeps existing tests and
+   * call sites working unchanged.
    */
   agentBackend?: AgentBackend;
+  /**
+   * Per-builder registry. When set, wins over {@link agentBackend}. `self` is always
+   * filled in (a default self backend) if the caller omits it.
+   */
+  agentBackends?: Partial<AgentBackendRegistry> & { platform?: AgentBackend };
   /**
    * Writes the first draft a new build starts from. Absent means every build starts from
    * an empty directory, which is what they all did before seeding existed.
@@ -403,8 +423,45 @@ export async function registerSubmissionRoutes(
   const improvementRateLimitWindowMs = 60 * 60 * 1000;
   const maxImprovementsPerWindow = 10;
   const internalAuthVerifier = options.internalAuthVerifier ?? createInternalAuthVerifierFromEnv();
-  const agentBackend = options.agentBackend;
   const gameSeeder = options.gameSeeder;
+  const gamesStoreForSeed = options.agentChannel?.gamesStore;
+
+  function buildAgentRegistry(): AgentBackendRegistry {
+    const selfOptions = store
+      ? {
+          persistSeed: async (issueNumber: number, seed: SeedFiles) => {
+            await store.setSubmissionSeed(issueNumber, seed);
+          },
+          readSeed: async (issueNumber: number) => {
+            const record = await store.getSubmission(issueNumber);
+            return record?.seed;
+          },
+          readSignals: async (issueNumber: number) => {
+            const record = await store.getSubmission(issueNumber);
+            if (!record) return null;
+            return {
+              lastAgentSignalAt: record.lastAgentSignalAt,
+              deliveredVersion: record.deliveredVersion,
+            };
+          },
+        }
+      : undefined;
+    // An explicit `agentBackend` (tests, one-off wiring) wins over the env registry's
+    // platform entry — same precedence the single-backend option had before the registry.
+    const self = options.agentBackends?.self ?? createSelfBuildBackend(selfOptions);
+    const platform = options.agentBackend ?? options.agentBackends?.platform;
+    return { ...(platform ? { platform } : {}), self };
+  }
+
+  const agentBackends = buildAgentRegistry();
+
+  function backendFor(builder: BuilderKind | undefined): AgentBackend | undefined {
+    return resolveBuilderBackend(agentBackends, builder ?? 'platform');
+  }
+
+  function builderOf(record: SubmissionRecord | null | undefined): BuilderKind {
+    return record?.builder ?? record?.defaultBuilder ?? 'platform';
+  }
   /**
    * When to stop generating seeds nobody can place.
    *
@@ -494,14 +551,16 @@ export async function registerSubmissionRoutes(
   async function recordSessionCost(
     issueNumber: number,
     ref: string,
+    backend: AgentBackend,
     log: { error: (context: object, message: string) => void },
   ): Promise<void> {
-    if (!store || !agentBackend) return;
+    // Self builds run on the creator's machine — there is no platform agent session to bill.
+    if (!store || backend.name === 'self') return;
     try {
       await store.recordJobCost(issueNumber, {
         kind: 'agent_session',
         at: new Date(now()).toISOString(),
-        by: agentBackend.name,
+        by: backend.name,
         ref,
         // Placeholder: usage is not on the dispatch response. Observation overwrites
         // this with the real `session.usage.amount / 1e9` once the session reports it
@@ -510,6 +569,27 @@ export async function registerSubmissionRoutes(
       });
     } catch (error) {
       log.error({ err: error, issueNumber }, 'could not record the cost of an agent session');
+    }
+  }
+
+  /**
+   * Latest candidate/published sources as a BuildBrief.seed — used when a self→platform
+   * switch hands Copilot the game the creator's agent already delivered.
+   */
+  async function seedFromLatestDelivery(record: SubmissionRecord): Promise<SeedFiles | undefined> {
+    if (!gamesStoreForSeed || !record.slug || !record.deliveredVersion) return undefined;
+    try {
+      const manifest = await gamesStoreForSeed.getManifest(record.slug, record.deliveredVersion);
+      if (!manifest) return undefined;
+      const files: { path: string; content: string }[] = [];
+      for (const path of manifest.sourceFiles) {
+        const content = await gamesStoreForSeed.getSourceFile(record.slug, record.deliveredVersion, path);
+        if (content === null) return undefined;
+        files.push({ path, content });
+      }
+      return { slug: record.slug, files, references: [] };
+    } catch {
+      return undefined;
     }
   }
 
@@ -648,29 +728,41 @@ export async function registerSubmissionRoutes(
     slug?: string;
     /** What to change about the existing game. Untrusted text: data, never instructions. */
     feedback?: string;
+    /** Who builds this round. Defaults to the game's last builder, then `platform`. */
+    builder?: BuilderKind;
   }): Promise<boolean> {
     // Without the signing secret there is no per-job channel credential to give the
     // agent, and an agent that cannot report or deliver is worse than one never started.
-    if (!agentBackend || !submissionTokenSecret) return false;
+    if (!submissionTokenSecret || !store) return false;
+    const existing = await store.getSubmission(input.issueNumber);
+    const builder = input.builder ?? builderOf(existing);
+    const selected = backendFor(builder);
+    if (!selected) return false;
     try {
+      await store.setRoundBuilder(input.issueNumber, builder, { resetRoundBudget: false });
       // Before the brief is built, so the agent is told about a draft only when one is
       // really there — and so the slug it mints is on the record the brief reads from.
       // A seed is written into `games/<slug>/`, so a job without a slug cannot have one.
       // Every new submission has one by now; the guard is for the paths that do not.
-      const draft = input.feedback || !input.slug ? undefined : await seedBuild({ ...input, slug: input.slug });
-      const seed: SeedFiles | undefined = draft
-        ? {
-            slug: draft.slug,
-            files: draft.files,
-            references: draft.references,
-            ...(draft.notes ? { notes: draft.notes } : {}),
-          }
-        : undefined;
+      // Self rounds reuse a seed already on the job (resume of the same round).
+      const storedSeed = builder === 'self' ? existing?.seed : undefined;
+      const draft =
+        storedSeed || input.feedback || !input.slug ? undefined : await seedBuild({ ...input, slug: input.slug });
+      const seed: SeedFiles | undefined = storedSeed
+        ? storedSeed
+        : draft
+          ? {
+              slug: draft.slug,
+              files: draft.files,
+              references: draft.references,
+              ...(draft.notes ? { notes: draft.notes } : {}),
+            }
+          : undefined;
       // Persist generation before minting. New jobs already carry `1` from
       // createSubmission; a legacy job without the field must be initialized here so
       // the round-scoped token we hand the agent validates against the record.
-      const roundGeneration = (await store?.ensureRoundGeneration(input.issueNumber)) ?? 1;
-      const result = await agentBackend.dispatch({
+      const roundGeneration = (await store.ensureRoundGeneration(input.issueNumber)) ?? 1;
+      const result = await selected.dispatch({
         issueNumber: input.issueNumber,
         ...(input.slug ? { slug: input.slug } : {}),
         spec: input.spec,
@@ -684,19 +776,18 @@ export async function registerSubmissionRoutes(
         ...(input.feedback ? { feedback: input.feedback } : {}),
         ...(seed ? { seed } : {}),
       });
-      // A seed that went in without a workspace coming back is a backend that could not
-      // place it. Inferred rather than reported because it is true of every backend: the
-      // seam promises a `seedWorkspace` when a seed was staged, so its absence is the
-      // signal, whatever the reason underneath.
-      if (seed && !result.seedWorkspace) {
+      // A seed that went in without a workspace coming back is a *platform* backend that
+      // could not place it. Self builds store the seed on the job (no branch), so the
+      // absence of seedWorkspace is expected and must not mute the seeder.
+      if (seed && !result.seedWorkspace && builder === 'platform') {
         seedStagingMutedUntil = now() + SEED_STAGING_COOLDOWN_MS;
         input.log.error(
           { issueNumber: input.issueNumber, mutedForMs: SEED_STAGING_COOLDOWN_MS },
           'the generated seed could not be staged; pausing seeding rather than generating drafts nobody can place',
         );
       }
-      await store?.recordDispatch(input.issueNumber, {
-        backend: agentBackend.name,
+      await store.recordDispatch(input.issueNumber, {
+        backend: selected.name,
         ref: result.ref,
         workspace: result.workspace,
         seedWorkspace: result.seedWorkspace,
@@ -717,12 +808,12 @@ export async function registerSubmissionRoutes(
           input.log.error({ err: error, issueNumber: input.issueNumber }, 'seed preview failed');
         });
       }
-      await recordSessionCost(input.issueNumber, result.ref, input.log);
-      await store?.recordJobTransition(input.issueNumber, {
+      await recordSessionCost(input.issueNumber, result.ref, selected, input.log);
+      await store.recordJobTransition(input.issueNumber, {
         to: 'dispatched',
         at: new Date(now()).toISOString(),
         by: 'system',
-        reason: `dispatched_to_${agentBackend.name}`,
+        reason: `dispatched_to_${selected.name}`,
       });
       return true;
     } catch (error) {
@@ -761,10 +852,16 @@ export async function registerSubmissionRoutes(
      * fact an audit of that job would want.
      */
     transition?: { by: JobTransition['by']; reason: string };
+    /** Builder for the new round. Ignored on undelivered nudges (same round). */
+    builder?: BuilderKind;
   }): Promise<ResumeOutcome> {
-    if (!agentBackend || !submissionTokenSecret || !store) return { started: false, reason: 'not_configured' };
+    if (!submissionTokenSecret || !store) return { started: false, reason: 'not_configured' };
     const record = await store.getSubmission(input.issueNumber);
     const previous = record?.dispatch;
+    const previousBuilder = builderOf(record);
+    const builder = input.undelivered ? previousBuilder : (input.builder ?? record?.defaultBuilder ?? previousBuilder);
+    const selected = backendFor(builder);
+    if (!selected) return { started: false, reason: 'not_configured' };
     try {
       // A new round closes the previous one's token. Bump *before* minting so the brief
       // carries the generation that is now active. An undelivered nudge is the same
@@ -773,6 +870,18 @@ export async function registerSubmissionRoutes(
       const roundGeneration = input.undelivered
         ? ((await store.ensureRoundGeneration(input.issueNumber)) ?? 1)
         : ((await store.bumpRoundGeneration(input.issueNumber)) ?? (record?.roundGeneration ?? 0) + 1);
+      if (!input.undelivered) {
+        await store.setRoundBuilder(input.issueNumber, builder, { resetRoundBudget: true });
+      }
+      // self→platform: hand Copilot the latest delivered sources as the brief seed so
+      // the platform round continues the game rather than starting from nothing.
+      const switchSeed =
+        !input.undelivered && previousBuilder === 'self' && builder === 'platform' && record
+          ? await seedFromLatestDelivery(record)
+          : undefined;
+      // After a round bump the stored seed was cleared; only an undelivered nudge
+      // (same round) still has one to reuse. `record` was loaded before the reset.
+      const reusedSelfSeed = input.undelivered && builder === 'self' ? record?.seed : undefined;
       const brief = {
         issueNumber: input.issueNumber,
         slug: record?.slug,
@@ -787,19 +896,24 @@ export async function registerSubmissionRoutes(
         ...(input.undelivered
           ? { undelivered: true, ...(previous?.workspace ? { previousWorkspace: previous.workspace } : {}) }
           : {}),
+        ...(switchSeed ? { seed: switchSeed } : {}),
+        ...(reusedSelfSeed ? { seed: reusedSelfSeed } : {}),
       };
-      const result = previous?.refs.length
-        ? await agentBackend.resume(brief, {
-            ref: previous.refs[previous.refs.length - 1],
-            workspace: previous.workspace,
+      // Resume against the *selected* backend. When the builder changes at a round
+      // boundary the previous ref belongs to a different backend — start fresh.
+      const sameBackend = previous?.backend === selected.name && Boolean(previous?.refs.length);
+      const result = sameBackend
+        ? await selected.resume(brief, {
+            ref: previous!.refs[previous!.refs.length - 1],
+            workspace: previous!.workspace,
           })
-        : await agentBackend.dispatch(brief);
+        : await selected.dispatch(brief);
       await store.recordDispatch(input.issueNumber, {
-        backend: agentBackend.name,
+        backend: selected.name,
         ref: result.ref,
         workspace: result.workspace,
       });
-      await recordSessionCost(input.issueNumber, result.ref, input.log);
+      await recordSessionCost(input.issueNumber, result.ref, selected, input.log);
       // The previous workspace is spent the moment a new round has one of its own: the
       // round that follows restores the game from the store rather than from a branch.
       // Deleted after the dispatch succeeds, never before — a round that failed to
@@ -912,9 +1026,11 @@ export async function registerSubmissionRoutes(
     workspace: string,
     log: { error: (context: object, message: string) => void },
   ): Promise<void> {
-    if (!agentBackend?.cleanup) return;
+    // Workspace cleanup is a platform (Copilot) concern — self rounds have none.
+    const cleanupBackend = agentBackends.platform;
+    if (!cleanupBackend?.cleanup) return;
     try {
-      await agentBackend.cleanup({ ref: '', workspace });
+      await cleanupBackend.cleanup({ ref: '', workspace });
     } catch (error) {
       log.error({ err: error, issueNumber, workspace }, 'could not delete a spent build workspace');
     }
@@ -1413,6 +1529,7 @@ export async function registerSubmissionRoutes(
       lastAgentSignalAt: record.lastAgentSignalAt,
       agentState: record.agentState,
       now: now(),
+      builder: builderOf(record),
     });
     if (stall) status.stall = stall;
     return status;
@@ -1450,7 +1567,9 @@ export async function registerSubmissionRoutes(
    * minute, and the quiet window means a healthy, chatty build never triggers it.
    */
   async function reconcileNativeJob(record: SubmissionRecord): Promise<JobTransition | null> {
-    if (!agentBackend || !store) return null;
+    if (!store) return null;
+    const selected = backendFor(builderOf(record));
+    if (!selected) return null;
     const refs = record.dispatch?.refs;
     if (!refs || refs.length === 0) return null;
     const state = record.state ?? 'queued';
@@ -1472,14 +1591,25 @@ export async function registerSubmissionRoutes(
     // is. Without the branch a revision cannot resume the work — `resume` degrades to
     // a fresh dispatch and the creator's game starts again from nothing — so learning
     // it is not an error path, it is the normal completion of a dispatch.
-    const needsWorkspace = !record.dispatch?.workspace;
+    const needsWorkspace = !record.dispatch?.workspace && selected.name !== 'self';
+    // Self rounds project from channel signals; ask as soon as a signal exists so
+    // queued/dispatched advances to building without waiting out the quiet window.
+    const selfNeedsProjection =
+      selected.name === 'self' && agentActive && Boolean(record.lastAgentSignalAt) && state !== 'building';
     // Cost-only polls skip the quiet window: the session is already done, and waiting
     // would only delay the ledger catching up with the bill.
-    if (!needsWorkspace && agentActive && (!Number.isFinite(silence) || silence < observeQuietMs)) return null;
+    if (
+      !needsWorkspace &&
+      !selfNeedsProjection &&
+      agentActive &&
+      (!Number.isFinite(silence) || silence < observeQuietMs)
+    ) {
+      return null;
+    }
     try {
       // The last ref is the session that owns the job now; earlier ones were
       // superseded by a resume and their fate stopped mattering when it started.
-      const observation = await agentBackend.observe(lastRef, {
+      const observation = await selected.observe(lastRef, {
         hasCandidate: Boolean(record.deliveredVersion),
       });
       if (!observation) return null;
@@ -1766,6 +1896,7 @@ export async function registerSubmissionRoutes(
       // Fastify request — headers, body, reply — alive for as long as dispatch runs,
       // which since seeding is minutes rather than milliseconds, on every submission.
       const dispatchLog = request.log;
+      const builder: BuilderKind = parsed.data.builder ?? 'platform';
       void dispatchBuild({
         issueNumber: jobId,
         // The agent is told where to build rather than left to name the place itself.
@@ -1774,6 +1905,7 @@ export async function registerSubmissionRoutes(
         slug,
         spec: issueBody,
         locale: creatorLocale,
+        builder,
         log: dispatchLog,
       }).catch((error: unknown) => {
         dispatchLog.error({ err: error, issueNumber: jobId }, 'background dispatch failed');
@@ -1945,9 +2077,10 @@ export async function registerSubmissionRoutes(
       // so a live session keeps running and the guarantee we actually give the creator
       // is that the job is terminal and whatever arrives afterwards is discarded.
       const ref = record.dispatch?.refs.at(-1);
-      if (agentBackend && ref) {
+      const cancelBackend = backendFor(builderOf(record));
+      if (cancelBackend && ref) {
         try {
-          await agentBackend.cancel(ref);
+          await cancelBackend.cancel(ref);
         } catch (cancelError) {
           request.log.error({ err: cancelError, issueNumber }, 'agent cancel failed');
         }
@@ -2238,12 +2371,24 @@ export async function registerSubmissionRoutes(
       // prompt on a `npm run restore` that cannot work. The record already knows
       // (`deliveredVersion`); pass that through so `buildPrompt` leads with recovery
       // of the previous branch instead.
+      const requestedBuilder = parsed.data.builder;
+      if (record && requestedBuilder && isActiveBuildRound(record)) {
+        const current = builderOf(record);
+        if (requestedBuilder !== current) {
+          return reply.status(409).send({
+            error: 'builder_locked',
+            reason: 'active_round',
+            builder: current,
+          });
+        }
+      }
       const outcome = await resumeBuild({
         issueNumber,
         feedback: contextBlock ? `${sanitizedFeedback}\n\n${contextBlock}` : sanitizedFeedback,
         locale: creatorLocale,
         log: request.log,
         ...(record?.deliveredVersion ? {} : { undelivered: true }),
+        ...(requestedBuilder && isBuilderKind(requestedBuilder) ? { builder: requestedBuilder } : {}),
       });
 
       // Queue the same request on the build channel, so an agent already mid-session
@@ -2423,9 +2568,10 @@ export async function registerSubmissionRoutes(
     // than "stopped".
     let stopEnforced = false;
     const refs = record.dispatch?.refs;
-    if (agentBackend && refs?.length) {
+    const cancelBackend = backendFor(builderOf(record));
+    if (cancelBackend && refs?.length) {
       try {
-        stopEnforced = (await agentBackend.cancel(refs[refs.length - 1])).enforced;
+        stopEnforced = (await cancelBackend.cancel(refs[refs.length - 1])).enforced;
       } catch (cancelError) {
         request.log.error({ err: cancelError, issueNumber }, 'agent cancel failed; job is canceled regardless');
       }
@@ -2476,7 +2622,7 @@ export async function registerSubmissionRoutes(
   app.post<{ Params: { issueNumber: string } }>('/api/admin/jobs/:issueNumber/retry', async (request, reply) => {
     if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });
     if (!store) return reply.status(503).send({ error: 'store_unavailable' });
-    if (!agentBackend || !submissionTokenSecret) {
+    if (!submissionTokenSecret) {
       return reply.status(503).send({ error: 'agent_backend_unavailable' });
     }
     const issueNumber = Number(request.params.issueNumber);
@@ -2484,6 +2630,9 @@ export async function registerSubmissionRoutes(
 
     const record = await store.getSubmission(issueNumber);
     if (!record) return reply.status(404).send({ error: 'not_found' });
+    if (!backendFor(builderOf(record))) {
+      return reply.status(503).send({ error: 'agent_backend_unavailable' });
+    }
 
     const state = resolveJobState(record);
     if (!state || !OPERATOR_RETRY_STATES.has(state)) {
@@ -2725,6 +2874,42 @@ export async function registerSubmissionRoutes(
       const pendingFeedback = new Map<number, string>();
       for (const record of active) {
         try {
+          // Self rounds with no agent signal ever: auto-abandon after the connect window
+          // so a forgotten kickoff does not leave a live channel capability forever.
+          if (
+            shouldAutoAbandonSelfRound({
+              builder: builderOf(record),
+              lastAgentSignalAt: record.lastAgentSignalAt,
+              abandonedAt: record.abandonedAt,
+              state: record.state,
+              roundOpenedAt: record.stateSince ?? record.createdAt,
+              now: now(),
+              connectDays: selfBuildConnectDays(),
+            })
+          ) {
+            const at = new Date(now()).toISOString();
+            const cancelBackend = backendFor(builderOf(record));
+            const ref = record.dispatch?.refs.at(-1);
+            if (cancelBackend && ref) {
+              try {
+                await cancelBackend.cancel(ref);
+              } catch (cancelError) {
+                request.log.error(
+                  { err: cancelError, issueNumber: record.issueNumber },
+                  'self no-connect cancel failed',
+                );
+              }
+            }
+            await store.recordJobTransition(record.issueNumber, {
+              to: 'abandoned',
+              at,
+              by: 'system',
+              reason: 'no_connect',
+            });
+            await store.setSubmissionAbandoned(record.issueNumber, at);
+            continue;
+          }
+
           // Unread-request detection. A creator's change request is dispatched to the
           // agent and queued here; the queue is what an agent already mid-session
           // drains. If dispatch succeeded but no agent ever collects — a dead session,

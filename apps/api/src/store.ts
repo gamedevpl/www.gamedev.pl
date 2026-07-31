@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { FieldValue, Firestore, type DocumentData } from '@google-cloud/firestore';
 import type { AgentTaskState } from './agent-tasks.js';
+import type { SeedFiles } from './agent-backend.js';
+import type { BuilderKind } from './builder.js';
 import type { PublicationHealthCheck, PublicationRecord } from './games-store.js';
 import { nextRoundGeneration, transitionClosesRound, type JobState, type JobTransition } from './job-state.js';
 import type { BuildEvent, SubmissionStatus } from './submission-status.js';
@@ -238,6 +240,28 @@ export interface SubmissionRecord {
    * the field. New jobs start at `1`.
    */
   roundGeneration?: number;
+  /**
+   * Which builder owns the *current* round: the platform's coding agent, or the
+   * creator's own. Absent on legacy jobs (= platform).
+   */
+  builder?: BuilderKind;
+  /**
+   * Last builder used on this game. The next round defaults to it so switching is an
+   * explicit choice at a round boundary rather than a settings dig.
+   */
+  defaultBuilder?: BuilderKind;
+  /**
+   * Generated round-0 draft stored on the job for a self build.
+   *
+   * Self builds never commit a seed branch — the files live here until an agent (or a
+   * later read endpoint) consumes them. Cleared when a new round opens.
+   */
+  seed?: SeedFiles;
+  /**
+   * How many sources deliveries this round has accepted. Self rounds cap this
+   * (`SELF_BUILD_DELIVERY_CAP`); resets when a new round opens.
+   */
+  roundDeliveryCount?: number;
 }
 
 /**
@@ -1066,6 +1090,15 @@ export interface Store {
   ensureRoundGeneration(issueNumber: number): Promise<number | null>;
   /** Records the agent backend's last reported state, for stall detection. */
   setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void>;
+  /**
+   * Records which builder owns the current round and updates the game's default.
+   * Starting a new round also resets per-round counters (deliveries, stored seed).
+   */
+  setRoundBuilder(issueNumber: number, builder: BuilderKind, options?: { resetRoundBudget?: boolean }): Promise<void>;
+  /** Stores (or clears) the generated seed draft on a self-build job. */
+  setSubmissionSeed(issueNumber: number, seed: SeedFiles | null): Promise<void>;
+  /** Increments and returns the per-round sources-delivery count. */
+  incrementRoundDeliveryCount(issueNumber: number): Promise<number>;
   /** Appends a dispatch ref, recording which backend is building this job and where. */
   recordDispatch(
     issueNumber: number,
@@ -1703,13 +1736,15 @@ export class InMemoryStore implements Store {
     const sub = this.submissions.get(issueNumber);
     if (!sub) return false;
     const closes = transitionClosesRound(transition);
-    this.submissions.set(issueNumber, {
+    const next: SubmissionRecord = {
       ...sub,
       state: transition.to,
       stateSince: transition.at,
       transitions: [...(sub.transitions ?? []), transition].slice(-MAX_JOB_TRANSITIONS),
-      ...(closes ? { roundGeneration: nextRoundGeneration(sub.roundGeneration) } : {}),
-    });
+      ...(closes ? { roundGeneration: nextRoundGeneration(sub.roundGeneration), roundDeliveryCount: 0 } : {}),
+    };
+    if (closes) delete next.seed;
+    this.submissions.set(issueNumber, next);
     return true;
   }
 
@@ -1717,7 +1752,9 @@ export class InMemoryStore implements Store {
     const sub = this.submissions.get(issueNumber);
     if (!sub) return null;
     const roundGeneration = nextRoundGeneration(sub.roundGeneration);
-    this.submissions.set(issueNumber, { ...sub, roundGeneration });
+    const next: SubmissionRecord = { ...sub, roundGeneration, roundDeliveryCount: 0 };
+    delete next.seed;
+    this.submissions.set(issueNumber, next);
     return roundGeneration;
   }
 
@@ -1732,6 +1769,46 @@ export class InMemoryStore implements Store {
   async setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void> {
     const sub = this.submissions.get(issueNumber);
     if (sub) this.submissions.set(issueNumber, { ...sub, agentState });
+  }
+
+  async setRoundBuilder(
+    issueNumber: number,
+    builder: BuilderKind,
+    options?: { resetRoundBudget?: boolean },
+  ): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub) return;
+    const reset = options?.resetRoundBudget ?? false;
+    const next: SubmissionRecord = {
+      ...sub,
+      builder,
+      defaultBuilder: builder,
+    };
+    if (reset) {
+      delete next.seed;
+      next.roundDeliveryCount = 0;
+    }
+    this.submissions.set(issueNumber, next);
+  }
+
+  async setSubmissionSeed(issueNumber: number, seed: SeedFiles | null): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub) return;
+    if (seed) {
+      this.submissions.set(issueNumber, { ...sub, seed });
+      return;
+    }
+    const next = { ...sub };
+    delete next.seed;
+    this.submissions.set(issueNumber, next);
+  }
+
+  async incrementRoundDeliveryCount(issueNumber: number): Promise<number> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub) return 0;
+    const roundDeliveryCount = (sub.roundDeliveryCount ?? 0) + 1;
+    this.submissions.set(issueNumber, { ...sub, roundDeliveryCount });
+    return roundDeliveryCount;
   }
 
   async allocateJobId(): Promise<number> {
@@ -2746,16 +2823,28 @@ export class FirestoreStore implements Store {
       if (!snap.exists) return false;
       const current = snap.data() as SubmissionRecord;
       const closes = transitionClosesRound(transition);
-      tx.set(
-        ref,
-        {
+      if (closes) {
+        const next: SubmissionRecord = {
+          ...current,
           state: transition.to,
           stateSince: transition.at,
           transitions: [...(current.transitions ?? []), transition].slice(-MAX_JOB_TRANSITIONS),
-          ...(closes ? { roundGeneration: nextRoundGeneration(current.roundGeneration) } : {}),
-        },
-        { merge: true },
-      );
+          roundGeneration: nextRoundGeneration(current.roundGeneration),
+          roundDeliveryCount: 0,
+        };
+        delete next.seed;
+        tx.set(ref, next);
+      } else {
+        tx.set(
+          ref,
+          {
+            state: transition.to,
+            stateSince: transition.at,
+            transitions: [...(current.transitions ?? []), transition].slice(-MAX_JOB_TRANSITIONS),
+          },
+          { merge: true },
+        );
+      }
       return true;
     });
   }
@@ -2767,7 +2856,9 @@ export class FirestoreStore implements Store {
       if (!snap.exists) return null;
       const current = snap.data() as SubmissionRecord;
       const roundGeneration = nextRoundGeneration(current.roundGeneration);
-      tx.set(ref, { roundGeneration }, { merge: true });
+      const next: SubmissionRecord = { ...current, roundGeneration, roundDeliveryCount: 0 };
+      delete next.seed;
+      tx.set(ref, next);
       return roundGeneration;
     });
   }
@@ -2786,6 +2877,61 @@ export class FirestoreStore implements Store {
 
   async setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void> {
     await this.db.collection('submissions').doc(String(issueNumber)).set({ agentState }, { merge: true });
+  }
+
+  async setRoundBuilder(
+    issueNumber: number,
+    builder: BuilderKind,
+    options?: { resetRoundBudget?: boolean },
+  ): Promise<void> {
+    const reset = options?.resetRoundBudget ?? false;
+    const ref = this.db.collection('submissions').doc(String(issueNumber));
+    if (!reset) {
+      await ref.set({ builder, defaultBuilder: builder }, { merge: true });
+      return;
+    }
+    // Clearing seed on a new round: merge cannot delete a field, so read-modify-write.
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return;
+      const current = snap.data() as SubmissionRecord;
+      const next: SubmissionRecord = {
+        ...current,
+        builder,
+        defaultBuilder: builder,
+        roundDeliveryCount: 0,
+      };
+      delete next.seed;
+      tx.set(ref, next);
+    });
+  }
+
+  async setSubmissionSeed(issueNumber: number, seed: SeedFiles | null): Promise<void> {
+    const ref = this.db.collection('submissions').doc(String(issueNumber));
+    if (seed) {
+      await ref.set({ seed }, { merge: true });
+      return;
+    }
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return;
+      const current = snap.data() as SubmissionRecord;
+      const next = { ...current };
+      delete next.seed;
+      tx.set(ref, next);
+    });
+  }
+
+  async incrementRoundDeliveryCount(issueNumber: number): Promise<number> {
+    const ref = this.db.collection('submissions').doc(String(issueNumber));
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return 0;
+      const current = snap.data() as SubmissionRecord;
+      const roundDeliveryCount = (current.roundDeliveryCount ?? 0) + 1;
+      tx.set(ref, { roundDeliveryCount }, { merge: true });
+      return roundDeliveryCount;
+    });
   }
 
   async allocateJobId(): Promise<number> {

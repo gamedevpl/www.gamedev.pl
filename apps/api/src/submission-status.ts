@@ -179,7 +179,8 @@ export interface SubmissionStatusResponseBase {
   playable?: BuildPlayableItem[];
   /**
    * Why this build looks stuck, when it does — `awaiting_input`, `not_dispatched`,
-   * `quiet`, or `gate_not_started`. Absent means it is progressing normally.
+   * `quiet`, `gate_not_started`, or `no_agent_yet` (self round waiting to connect).
+   * Absent means it is progressing normally.
    *
    * The creator-experience review's open finding was that we could say "the agent has
    * been quiet" but never "the agent errored", so a stuck build and a slow one read
