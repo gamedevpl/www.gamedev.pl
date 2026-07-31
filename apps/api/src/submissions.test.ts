@@ -8,6 +8,7 @@ import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } f
 import type { ContentChecker } from './moderation.js';
 import { InMemoryStore, type Store } from './store.js';
 import { mintToken } from './submission-token.js';
+import { canTransition } from './job-state.js';
 import type { AgentBackend, BuildBrief } from './agent-backend.js';
 import type { GamesStore } from './games-store.js';
 import { JOB_ID_FLOOR } from './store.js';
@@ -989,6 +990,81 @@ describe('submission routes', () => {
     expect(status.json().phase).toBe('ready_for_review');
     // And the warning the creator was staring at is gone with the state that caused it.
     expect(status.json().stall).toBeUndefined();
+
+    await app.close();
+  });
+
+  // The other half of the same path, and the one that only became reachable once the
+  // gate verdict could land at all: a red gate does not necessarily end the round. The
+  // session that delivered is usually still alive, and `mustFixGate` tells it to fix the
+  // cause and deliver again with no new dispatch. That repaired upload has to be able to
+  // re-enter `submitted`, or its green verdict sits in a manifest nobody reads and the
+  // creator is asked to start a round the agent already finished.
+  it('reads the verdict on a redelivery the agent made after a gate refusal', async () => {
+    const { githubClient } = createGithubClientStub({ issueNumber: 98 });
+    const { backend } = createBackendStub();
+    const gamesStore = {
+      // Version-aware on purpose: v3 is what the gate refused, v4 is the repair.
+      getManifest: async (_slug: string, version: string) => ({
+        slug: 'space-parcels',
+        version,
+        createdAt: '2026-07-31T10:00:00.000Z',
+        issueNumber: 98,
+        sourceFiles: [],
+        gate:
+          version === 'v3'
+            ? { green: false, ranAt: '2026-07-31T10:30:00.000Z', report: 'trace diff' }
+            : { green: true, ranAt: '2026-07-31T11:15:00.000Z' },
+      }),
+    } as unknown as GamesStore;
+
+    // The status answer is cached for 60s, so the two polls below need to be further
+    // apart than that — otherwise the second reads the first's answer and this proves
+    // nothing about the transition it exists to check.
+    const clock = { t: Date.now() };
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+      now: () => clock.t,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const url = `/api/submissions/${mintToken(job.issueNumber, secret)}`;
+
+    await store.setSubmissionSlug(job.issueNumber, 'space-parcels');
+    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v3');
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'submitted',
+      at: '2026-07-31T10:00:00.000Z',
+      by: 'agent',
+      reason: 'sources_delivered',
+    });
+
+    const refused = await app.inject({ method: 'GET', url, headers: authHeaders });
+    expect(refused.json().phase).toBe('needs_changes');
+
+    // The repair, recorded the way agent-channel records one — which it can only do when
+    // the transition is legal from where the refusal left the job.
+    expect(canTransition('needs_changes', 'submitted')).toBe(true);
+    clock.t += 61_000;
+    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v4');
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'submitted',
+      at: '2026-07-31T11:00:00.000Z',
+      by: 'agent',
+      reason: 'sources_delivered',
+    });
+
+    const repaired = await app.inject({ method: 'GET', url, headers: authHeaders });
+    expect(repaired.json().phase).toBe('ready_for_review');
 
     await app.close();
   });

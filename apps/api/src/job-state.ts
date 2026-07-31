@@ -94,7 +94,15 @@ const ALLOWED_TRANSITIONS: Readonly<Record<JobState, readonly JobState[]>> = {
   // Improvements start a *new* job, so publishing is terminal for this one.
   published: [],
   // Another round: back to the queue, which is what dispatching a follow-up means.
-  needs_changes: ['queued', 'dispatched', 'building', 'canceled', 'abandoned'],
+  //
+  // `submitted` is here because a gate-red round is not always over. The session that
+  // delivered is often still alive, and `mustFixGate` tells it exactly that: fix the
+  // cause and deliver again, in the same session, with no new dispatch. That repaired
+  // upload has to be recordable — agent-channel only writes `submitted` when this allows
+  // it, and reconcileGateVerdict only reads a verdict from `submitted`/`gating`. Without
+  // this, a game the agent had already fixed sat in `needs_changes` with a green verdict
+  // nobody would look at, waiting on a round the creator should never have had to start.
+  needs_changes: ['queued', 'dispatched', 'building', 'submitted', 'canceled', 'abandoned'],
   // Same shape as needs_changes, for the same reason: a dead round must not orphan
   // the job, and feedback after a failure *is* the retry. Still terminal to the
   // reconciler — `isTerminal` guards it, so only a creator or operator moves it.

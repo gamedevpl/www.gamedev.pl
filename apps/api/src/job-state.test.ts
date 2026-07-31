@@ -74,6 +74,17 @@ describe('transition rules', () => {
     expect(canTransition('ready_for_review', 'needs_changes')).toBe(true);
   });
 
+  // A gate-red round is not always over: `mustFixGate` tells the live session to fix the
+  // cause and deliver again without a new dispatch. agent-channel records that upload
+  // only when this holds, so refusing it stranded a game the agent had already repaired.
+  it('lets a session repair a gate-red delivery without another round', () => {
+    expect(canTransition('needs_changes', 'submitted')).toBe(true);
+    // Still no way to skip the verification the redelivery exists to pass.
+    expect(canTransition('needs_changes', 'ready_for_review')).toBe(false);
+    expect(canTransition('needs_changes', 'publishing')).toBe(false);
+    expect(canTransition('needs_changes', 'published')).toBe(false);
+  });
+
   // The gate reports by writing its verdict to the version manifest, which we read on a
   // poll — so a delivered job goes straight from `submitted` to the outcome and is never
   // seen mid-gate. When `gating` was the only exit, that made `submitted` a dead end:
