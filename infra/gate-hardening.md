@@ -19,7 +19,7 @@ is ours; candidate files are **data** materialized into our pinned harness only.
 | Surface                    | Before hardening                                                                                     | Intended after owner applies `setup-gcp.sh` + this config                                                                              |
 | -------------------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | **Service account**        | Unspecified → project Cloud Build / Compute default (often broad: Editor-class or runtime SA powers) | `gate-runner@PROJECT.iam.gserviceaccount.com` only                                                                                     |
-| **SA roles (intended)**    | n/a / ambient                                                                                        | Games-store object admin **on that bucket only**; `secretmanager.secretAccessor` **on `github-token` only**; `roles/logging.logWriter` |
+| **SA roles (intended)**    | n/a / ambient                                                                                        | Games-store `roles/storage.objectAdmin` **on that bucket only** (includes delete — see below); `secretmanager.secretAccessor` **on `github-token` only**; `roles/logging.logWriter` |
 | **Secrets in step env**    | `GAMES_REPO_TOKEN` (`github-token`, contents:read)                                                   | Same sole secret; runner unsets it and scrubs the harness `git` remote **before** `check:game`                                         |
 | **Metadata server**        | GCE metadata credentials for the build SA                                                            | Same mechanism; blast radius limited by the gate SA’s IAM                                                                              |
 | **Network egress**         | Default Cloud Build pool: unrestricted egress                                                        | Still unrestricted until owner adds a private pool / VPC egress policy (below)                                                         |
@@ -45,7 +45,41 @@ ability to start further builds should be granted to `gate-runner`.
 
 - Ephemeral: `/workspace/platform`, harness under `$TMPDIR/gate-harness-*`, apt/npm caches.
 - Durable (via SA): objects under `gs://$GAMES_STORE_BUCKET/…` for the candidate version
-  (manifest gate/health fields, `bundle.html` / `preview.html`, capture media).
+  (manifest gate/health fields, `bundle.html` / `preview.html`, capture media). The SA
+  role that enables those writes is `objectAdmin`, which also permits **delete/overwrite
+  of every object in the bucket** — see “Store IAM: why objectAdmin” below.
+
+
+## Store IAM: why `objectAdmin` (delete on every stored game)
+
+The brief asks for “store write only.” The gate SA is granted
+`roles/storage.objectAdmin` on the games-store bucket instead. That role includes
+**delete** on every object in the bucket — including published games — and it is held by
+the identity that executes hostile candidate code by design. This is not sloppiness: it
+is forced by the current write pattern.
+
+`putGateResult` / `putHealthResult` update each candidate version’s **manifest in place**.
+GCS has no IAM role that permits overwrite-without-delete (a replace is implementationally
+a delete + create of the same name). `roles/storage.objectCreator` + `objectViewer` cannot
+perform that update, so the gate cannot record a verdict without `objectAdmin` (or an
+equally powerful custom role with `storage.objects.delete`).
+
+Accepted residual risk until a compensating control lands: a compromised gate run can
+delete or overwrite any store object the SA can name, not merely “create namespaced
+immutable objects.”
+
+### Compensating controls (owner console — required follow-up)
+
+Add these to the post-merge owner list (not done by merging this PR):
+
+1. **Enable object versioning and/or soft-delete retention** on `GAMES_STORE_BUCKET`, so
+   a hostile (or buggy) gate run’s deletions/overwrites remain recoverable for a defined
+   retention window. Prefer both if cost allows: versioning for overwrite recovery,
+   soft-delete for explicit deletes.
+2. **Longer-term (record, do not block):** route verdict/manifest writes through the API’s
+   own runtime identity (or a narrow “manifest writer” SA the gate calls via an internal
+   endpoint), so the Cloud Build gate SA can drop to `objectCreator` + `objectViewer` and
+   lose bucket-wide delete.
 
 ## What this PR tightens in config
 
@@ -80,6 +114,11 @@ These require project credentials. Re-run or perform after merging:
 5. **Optional: drop project-wide `roles/iam.serviceAccountUser` on the runtime SA** if it
    was granted only so Cloud Build could run as arbitrary SAs — prefer the
    per-SA binding `setup-gcp.sh` adds on `gate-runner` only.
+6. **Bucket versioning / soft-delete on the games store** — compensating control for
+   `gate-runner`’s `objectAdmin` (see “Store IAM: why objectAdmin” above). Enable before
+   or immediately after flipping production builds onto `gate-runner`.
+7. **Optional longer-term:** move manifest/verdict writes off the gate SA so it can drop
+   to `objectCreator`+`objectViewer` (API-mediated writes).
 
 ## Out of scope / unchanged
 

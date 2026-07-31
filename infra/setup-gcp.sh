@@ -273,6 +273,9 @@ else
     --project="$PROJECT_ID"
 fi
 
+# objectAdmin (includes delete) is forced by in-place manifest updates — see
+# infra/gate-hardening.md "Store IAM: why objectAdmin". Compensate with bucket
+# versioning / soft-delete (owner console).
 gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
   --member="serviceAccount:${GATE_SA_EMAIL}" \
   --role="roles/storage.objectAdmin" \
