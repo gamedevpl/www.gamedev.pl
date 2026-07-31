@@ -119,10 +119,10 @@ export type SubmissionStatus = {
    */
   stall?: 'awaiting_input' | 'not_dispatched' | 'quiet' | 'gate_not_started';
   /**
-   * The last build round ended in an error rather than a delivery. `reason` is a
-   * machine-readable cause (`task_failed`, `task_timed_out`, …) — render translated
-   * copy keyed on it, never the string itself. Sending feedback starts a new round,
-   * so the message to pair with this is "retry", not "give up".
+   * Why this build is asking the creator to act. Covers a dead agent round
+   * (`task_failed`, …) and a gate bounce (`gate_red`) — both arrive as public
+   * `needs_changes`. Render translated copy keyed on `reason`, never the string
+   * itself. Sending feedback starts a new round.
    */
   failure?: { reason: string };
 };

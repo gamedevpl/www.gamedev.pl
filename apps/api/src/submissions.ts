@@ -1335,13 +1335,16 @@ export async function registerSubmissionRoutes(
       ...(record.abandonedAt ? {} : { phase: state }),
       ...(record.slug ? { slug: record.slug } : {}),
     };
-    // `failed` projects onto `needs_changes`, which the page renders as "waiting for
-    // your input" — true about what to do next, a lie about what happened. Name the
-    // error, with the transition's own reason, so the creator is asked to retry a
-    // build that died rather than left waiting on one that looks alive.
-    if (state === 'failed' && !record.abandonedAt) {
-      const lastFailure = [...(record.transitions ?? [])].reverse().find((transition) => transition.to === 'failed');
-      status.failure = { reason: lastFailure?.reason ?? 'unknown' };
+    // `failed` and a gate bounce both project onto public `needs_changes`. Without a
+    // reason the Studio page only says the label — creators click the notification,
+    // land on a thread of old planning notes, and never learn *why* the build stopped
+    // or that sending feedback below is what starts the next round. Name the
+    // transition's own cause so the page can render translated copy for it.
+    if ((state === 'failed' || state === 'needs_changes') && !record.abandonedAt) {
+      const lastBounce = [...(record.transitions ?? [])].reverse().find((transition) => transition.to === state);
+      status.failure = {
+        reason: lastBounce?.reason ?? (state === 'failed' ? 'unknown' : 'gate_red'),
+      };
     }
     // Echo the creator's change requests from the store. On jobs without a pull
     // request the store copy is the only durable record — the page used to render

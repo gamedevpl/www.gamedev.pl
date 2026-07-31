@@ -140,7 +140,7 @@ function StatusTimeline({ current }: { current: SubmissionStatus['status'] }) {
 type PendingRevision = { text: string; at: number };
 
 /** Failure reasons with their own copy; anything newer gets the generic sentence. */
-const FAILURE_COPY_KEYS = new Set(['task_failed', 'task_timed_out', 'task_completed_without_delivery']);
+const FAILURE_COPY_KEYS = new Set(['task_failed', 'task_timed_out', 'task_completed_without_delivery', 'gate_red']);
 
 function failureCopyKey(reason: string): string {
   return FAILURE_COPY_KEYS.has(reason) ? reason : 'generic';
@@ -486,11 +486,19 @@ export function SubmissionStatusView({
               <div className="studio-thread-foot">
                 {/* Trouble is said once, immediately above the box the creator would use
                     to do something about it. A dead round outranks a slow one: when both
-                    are set the failure is the explanation and the stall is its symptom. */}
+                    are set the failure is the explanation and the stall is its symptom.
+                    `needs_changes` without a typed failure (legacy GitHub path) still
+                    needs a sentence here — the thread's emptyLabel only shows when there
+                    are no turns, which is exactly when a bounced build still has planning
+                    notes and used to look like nothing was wrong. */}
                 {status.failure ? (
                   <p className="status-warning">
                     <PixelIcon name="signal" size={13} />{' '}
                     {t(`statusView.failure.${failureCopyKey(status.failure.reason)}`)}
+                  </p>
+                ) : status.status === 'needs_changes' ? (
+                  <p className="status-warning">
+                    <PixelIcon name="signal" size={13} /> {t('statusView.states.needs_changes.description')}
                   </p>
                 ) : status.stall ? (
                   <p className="status-warning">

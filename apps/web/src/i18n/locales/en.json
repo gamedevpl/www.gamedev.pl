@@ -513,7 +513,7 @@
       },
       "needs_changes": {
         "label": "Needs a tweak",
-        "description": "This one didn't make it through. Tweak the idea and submit it again."
+        "description": "This build needs another round before it can go live. Send a short note below to continue — even \"please fix the checks\" is enough."
       },
       "abandoned": {
         "label": "Stopped",
@@ -537,6 +537,7 @@
       "task_failed": "The build agent stopped unexpectedly before finishing. Your game and everything built so far are safe — send feedback below to start another round.",
       "task_timed_out": "The build ran out of time before finishing. Your progress is safe — send feedback below to start another round.",
       "task_completed_without_delivery": "The agent finished without delivering the game. Send feedback below to start another round.",
+      "gate_red": "This build didn't pass our automatic checks, so it can't go live yet. Send feedback below to start another round — the agent will see what failed and fix it.",
       "generic": "This build round ended with an error. Your progress is safe — send feedback below to start another round."
     },
     "stall": {

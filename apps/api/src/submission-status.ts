@@ -190,12 +190,13 @@ export interface SubmissionStatusResponseBase {
    */
   stall?: JobStall;
   /**
-   * The build's last round ended in an error rather than a delivery. Set alongside
-   * `status` because the public vocabulary projects `failed` onto `needs_changes` —
-   * without this the page says "waiting for your input" about a session that died,
-   * which reads as the creator's fault instead of ours. `reason` is the transition's
-   * machine-readable cause (`task_failed`, `task_timed_out`, …), a closed vocabulary
-   * like `stall`: the UI renders its own translated copy, not this string.
+   * Why this build is asking the creator to act, when it is. Set alongside `status`
+   * because the public vocabulary projects both `failed` and a gate bounce onto
+   * `needs_changes` — without this the page only shows the label, and a creator who
+   * clicked "needs changes" never learns what happened or that feedback below starts
+   * the next round. `reason` is the transition's machine-readable cause
+   * (`task_failed`, `task_timed_out`, `gate_red`, …), a closed vocabulary like
+   * `stall`: the UI renders its own translated copy, not this string.
    */
   failure?: { reason: string };
 }
