@@ -88,6 +88,16 @@ Never work around this by disabling TLS verification or unsetting `HTTPS_PROXY`.
 [`.claude/skills/browse-live-site/SKILL.md`](../../.claude/skills/browse-live-site/SKILL.md)
 for driving the same setup by hand.
 
+## Studio shell layout gate
+
+`src/studio-shell.test.ts` checks that an open Creator Studio thread owns the window
+(no page scroll, transcript scroller of its own, bottom bars never cover the composer)
+at every CSS band. It **stubs** `/api/me/studio` and the fixture game's status response
+rather than borrowing whatever happens to sit on `bot:e2e`'s shelf: an empty shelf used
+to make all four widths skip while the deploy still went green (#392). The real React
+tree and stylesheet still run; only the JSON is replaced, so the suite stays read-only
+against production.
+
 ## Adding a test
 
 Two rules, both learned the hard way:
