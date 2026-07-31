@@ -65,6 +65,10 @@ describe('zone admission', () => {
     // The host is a place where untrusted game code runs. Handing it durable identity
     // would make the sim isolate a privacy boundary as well as a safety one, and one
     // cage should not have two jobs.
+    //
+    // Assert on the full uid (`g:ada`), not a short substring like `ada`: the ticket's
+    // player tag and HMAC are hex, and hex randomly contains `ada` — that flake failed
+    // CI without any product change.
     const app = await appWith();
     const response = await app.inject({
       method: 'POST',
@@ -72,9 +76,15 @@ describe('zone admission', () => {
       headers: authHeaders('g:ada'),
     });
 
-    const decoded = Buffer.from(response.json().ticket, 'base64url').toString('utf8');
-    expect(decoded).not.toContain('ada');
-    expect(JSON.stringify(response.json())).not.toContain('ada');
+    const body = response.json() as { ticket: string };
+    const claims = verifyZoneTicket(body.ticket, sessionSecret);
+    expect(claims.player).not.toBe('g:ada');
+    expect(claims).not.toHaveProperty('uid');
+    expect(claims).not.toHaveProperty('email');
+
+    const decoded = Buffer.from(body.ticket, 'base64url').toString('utf8');
+    expect(decoded).not.toContain('g:ada');
+    expect(JSON.stringify(body)).not.toContain('g:ada');
     await app.close();
   });
 
