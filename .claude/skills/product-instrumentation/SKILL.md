@@ -128,13 +128,21 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
   `GET /api/admin/telemetry/visits`, rendered by `VisitFunnelPanel` beside game health
   on the operator page. Both admin reads share one partition-scan budget, so the two
   views cannot drift in how they report truncation.
-- ~~Creator funnel starts too late~~ — **closed 2026-07-26**: `create_step` on the visit
+  - ~~Creator funnel starts too late~~ — **closed 2026-07-26**: `create_step` on the visit
   stream records `prompt_started` → `spec_submitted` → `signin_required` → `qa_shown` →
   `submission_created`. Steps dedupe per visit (a rung means "this visit got this far"),
   and the aggregate dedupes again so a replayed flush cannot inflate one. Adding a rung
   means touching the enum in `visitTelemetry.ts`, the zod enum in `visit-telemetry.ts`,
   and `CREATE_STEPS` in `visit-funnel.ts` — the order in `CREATE_STEPS` _is_ the funnel's
-  meaning.
+  meaning. The waitlist funnel (`waitlist_step` / `WAITLIST_STEPS`) follows the same
+  three-place contract beside it.
+- ~~Closed-beta waitlist funnel unmeasured~~ — **closed 2026-07-31**: `waitlist_step` on
+  the visit stream records `cta_clicked` → `joined`. Same three-place enum contract as
+  `create_step` (`visitTelemetry.ts`, `visit-telemetry.ts`, `WAITLIST_STEPS` in
+  `visit-funnel.ts`); rendered as a Waitlist block on `VisitFunnelPanel` beside Creating.
+  The Join CTA is visible before sign-in; the drop between click and join *is* the
+  sign-in wall, so there is no separate `signin_required` rung (that name already means
+  the creation wall).
 - ~~Creator return is under-measured~~ — **closed 2026-07-26**: `User.activeDays` (a
   capped list of `yyyy-mm-dd`, touched once per account per day from the auth hook)
   plus `summarizeCreatorMetrics` behind `GET /api/admin/telemetry/creators`. Use a list

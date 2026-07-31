@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { Firestore, type DocumentData } from '@google-cloud/firestore';
+import { FieldValue, Firestore, type DocumentData } from '@google-cloud/firestore';
 import type { AgentTaskState } from './agent-tasks.js';
 import type { PublicationHealthCheck, PublicationRecord } from './games-store.js';
 import type { JobState, JobTransition } from './job-state.js';
@@ -73,9 +73,14 @@ export interface SubmissionRecord {
   createdAt: string;
   title: string;
   /**
-   * Game directory on the agent's branch, learned the first time a status poll sees
-   * one. It is what makes an in-progress game addressable by slug (like a published
-   * game) instead of only by its capability-granting status token.
+   * The game's permanent address: its directory on the agent's branch, its `/play/`
+   * link, and how the studio names it instead of the capability-granting status token.
+   *
+   * Minted from the confirmed title when the submission is created, so a game has this
+   * before any agent has seen it. Optional only for records that predate that, and for
+   * the crash window between writing a record and setting its slug — both of which the
+   * operator backfill exists to clear. Treat a missing slug as a straggler to be fixed,
+   * not a state to design around.
    */
   slug?: string;
   /**
@@ -108,6 +113,19 @@ export interface SubmissionRecord {
    * GitHub entirely (an abandoned build must not read as "needs a tweak").
    */
   abandonedAt?: string;
+  /**
+   * When the creator turned on the shared link for this game's draft, if they have.
+   *
+   * A game is addressable at `/play/<slug>` from the moment it is submitted, but until
+   * this is set only its creator may open it there. Absent means off, which is the
+   * default: before it existed, any signed-in visitor who knew a slug could read any
+   * unpublished game, which made every in-progress game unlisted rather than private and
+   * gave the person making it no say in the matter.
+   *
+   * A timestamp rather than a flag because "when did this become shareable" is the
+   * question worth being able to answer later; clearing it turns sharing back off.
+   */
+  draftSharedAt?: string;
   /**
    * How many clarifying questions the creator actually answered before this was
    * submitted — 0 when they skipped the QA panel or it had nothing to ask.
@@ -459,7 +477,7 @@ export interface TelemetryEvent {
 export interface VisitEvent {
   /** Per-tab uuid from `sessionStorage`. Dies with the tab; never a uid. */
   visitId: string;
-  type: 'visit_started' | 'route_viewed' | 'play_started' | 'create_step';
+  type: 'visit_started' | 'route_viewed' | 'play_started' | 'create_step' | 'waitlist_step';
   /** Server-anchored instant, derived like `TelemetryEvent.at`. */
   at: string;
   /** Milliseconds from visit start — the trustworthy measure of within-visit timing. */
@@ -468,7 +486,7 @@ export interface VisitEvent {
   entry?: string;
   /** `route_viewed`: the route kind now shown. Never its parameters. */
   route?: string;
-  /** `create_step`: which step of the creation funnel this visit reached. */
+  /** `create_step` / `waitlist_step`: which funnel step this visit reached. */
   step?: string;
   /** `visit_started`: bare hostname of an external referrer. Never a full URL. */
   referrer?: string;
@@ -1035,6 +1053,8 @@ export interface Store {
   setSubmissionPublishedAt(issueNumber: number, at: string): Promise<void>;
   /** Marks a submission abandoned by its creator. */
   setSubmissionAbandoned(issueNumber: number, at: string): Promise<void>;
+  /** Turns the creator's shared draft link on (a timestamp) or off (null). */
+  setDraftShared(issueNumber: number, at: string | null): Promise<void>;
   /**
    * Reads what is currently published for a slug, or null when nothing ever was.
    *
@@ -1153,6 +1173,19 @@ export interface Store {
    * already-notified state (published / needs_changes recorded as last-notified).
    */
   listActiveSubmissions(): Promise<SubmissionRecord[]>;
+  /**
+   * Submissions a creator can still see that have no slug — the backfill's work list.
+   *
+   * Every submission has been given a slug at creation since the studio started
+   * addressing games by name, so this is legacy records plus anything that crashed in
+   * the window between the record being written and its slug being set. Oldest first,
+   * so a bounded run works through the backlog in a stable order.
+   *
+   * Abandoned builds are left out deliberately. The shelf hides them, so they are never
+   * addressed by anyone, and minting names for them would reserve every one against the
+   * games that might want it later.
+   */
+  listSubmissionsMissingSlug(): Promise<SubmissionRecord[]>;
   /**
    * Every submission a creator owns, newest first. Backs the "my games" rail, so a
    * creator finds their work-in-progress without having saved the tracking link
@@ -1709,6 +1742,15 @@ export class InMemoryStore implements Store {
     if (sub) this.submissions.set(issueNumber, { ...sub, abandonedAt: at });
   }
 
+  async setDraftShared(issueNumber: number, at: string | null): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub) return;
+    const next = { ...sub };
+    if (at) next.draftSharedAt = at;
+    else delete next.draftSharedAt;
+    this.submissions.set(issueNumber, next);
+  }
+
   async setSubmissionLocale(issueNumber: number, locale: string): Promise<void> {
     const sub = this.submissions.get(issueNumber);
     if (sub) this.submissions.set(issueNumber, { ...sub, locale });
@@ -1909,6 +1951,13 @@ export class InMemoryStore implements Store {
   async listActiveSubmissions(): Promise<SubmissionRecord[]> {
     return Array.from(this.submissions.values())
       .filter((s) => !s.abandonedAt && s.lastNotifiedStatus !== 'published' && s.lastNotifiedStatus !== 'needs_changes')
+      .map((s) => ({ ...s }));
+  }
+
+  async listSubmissionsMissingSlug(): Promise<SubmissionRecord[]> {
+    return Array.from(this.submissions.values())
+      .filter((s) => !s.slug && !s.abandonedAt)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
       .map((s) => ({ ...s }));
   }
 
@@ -2745,6 +2794,15 @@ export class FirestoreStore implements Store {
     await this.db.collection('submissions').doc(String(issueNumber)).set({ abandonedAt: at }, { merge: true });
   }
 
+  async setDraftShared(issueNumber: number, at: string | null): Promise<void> {
+    // Deleted rather than set false, so "shared" is one shape everywhere: a timestamp
+    // is present or it is not, and no reader has to know about a legacy falsy value.
+    await this.db
+      .collection('submissions')
+      .doc(String(issueNumber))
+      .set({ draftSharedAt: at ?? FieldValue.delete() }, { merge: true });
+  }
+
   async setSubmissionLocale(issueNumber: number, locale: string): Promise<void> {
     await this.db.collection('submissions').doc(String(issueNumber)).set({ locale }, { merge: true });
   }
@@ -3034,6 +3092,18 @@ export class FirestoreStore implements Store {
       .filter(
         (s) => !s.abandonedAt && s.lastNotifiedStatus !== 'published' && s.lastNotifiedStatus !== 'needs_changes',
       );
+  }
+
+  async listSubmissionsMissingSlug(): Promise<SubmissionRecord[]> {
+    // Firestore cannot ask for documents where a field is absent, so this is the same
+    // full scan and client-side filter as listActiveSubmissions above, for the same
+    // reason: the collection is small and the alternative is a sentinel field written
+    // to every record just so this one query can exist.
+    const snap = await this.db.collection('submissions').get();
+    return snap.docs
+      .map((d) => d.data() as SubmissionRecord)
+      .filter((s) => !s.slug && !s.abandonedAt)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
 
   async listSubmissionsByOwner(ownerUid: string, opts?: { limit?: number }): Promise<SubmissionRecord[]> {

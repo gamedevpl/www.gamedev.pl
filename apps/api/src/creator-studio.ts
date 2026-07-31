@@ -40,6 +40,8 @@ export interface CreatorStudioGame {
   lastKnownStatus: string | null;
   slug?: string;
   publishedAt?: string;
+  /** Whether the creator has turned on the shared link for this game's draft. */
+  draftShared?: boolean;
 }
 
 export interface CreatorHealthResponse {
@@ -168,6 +170,7 @@ export async function registerCreatorStudioRoutes(
         lastKnownStatus: record.lastNotifiedStatus ?? null,
         ...(record.slug ? { slug: record.slug } : {}),
         ...(record.publishedAt ? { publishedAt: record.publishedAt } : {}),
+        ...(record.draftSharedAt ? { draftShared: true } : {}),
       }));
 
     return reply.send({ games });

@@ -6,7 +6,6 @@ import {
   isUsableSeed,
   normalizeSeedPath,
   parseSeedResponse,
-  proposeSeedSlug,
   VertexGameSeeder,
   type SeedFile,
 } from './game-seed.js';
@@ -169,36 +168,6 @@ describe('isUsableSeed', () => {
   });
 });
 
-describe('proposeSeedSlug', () => {
-  const free = async () => false;
-
-  it('derives a slug from the title', async () => {
-    expect(await proposeSeedSlug('Cannon Squad', 42, free)).toBe('cannon-squad');
-    expect(await proposeSeedSlug('  Pipe   Pressure!  ', 42, free)).toBe('pipe-pressure');
-  });
-
-  it('folds Polish diacritics rather than dropping the letters', async () => {
-    // Most creators here write Polish; `odzia-komandosw` would be the game's name for
-    // the rest of its life.
-    expect(await proposeSeedSlug('Oddział Komandosów', 42, free)).toBe('oddzial-komandosow');
-    expect(await proposeSeedSlug('Żółw Ninja', 42, free)).toBe('zolw-ninja');
-  });
-
-  it('falls back to the job id when a title has no ASCII in it', async () => {
-    expect(await proposeSeedSlug('日本語のゲーム', 1234, free)).toBe('game-1234');
-    expect(await proposeSeedSlug('', 1234, free)).toBe('game-1234');
-  });
-
-  it('suffixes rather than collides', async () => {
-    const taken = new Set(['tetris', 'tetris-2']);
-    expect(await proposeSeedSlug('Tetris', 7, async (slug) => taken.has(slug))).toBe('tetris-3');
-  });
-
-  it('falls back to the job id when every suffix is taken', async () => {
-    expect(await proposeSeedSlug('Tetris', 7, async () => true)).toBe('tetris-7');
-  });
-});
-
 describe('buildGeneratePrompt', () => {
   it('fences the creator spec and says it is data', () => {
     const prompt = buildGeneratePrompt({
@@ -288,7 +257,7 @@ const GOOD_DRAFT = [
 ].join('\n');
 
 describe('VertexGameSeeder', () => {
-  const request = { jobId: 7, title: 'My Game', spec: 'A game about tanks', isSlugTaken: async () => false };
+  const request = { slug: 'my-game', title: 'My Game', spec: 'A game about tanks' };
 
   it('returns a draft with references, usage summed across both calls, and notes', async () => {
     const seeder = new VertexGameSeeder({
@@ -307,32 +276,6 @@ describe('VertexGameSeeder', () => {
     expect(draft!.notes).toBe('The trace still needs recording.');
     // Both calls are billed to the job, not just the expensive one.
     expect(draft!.usage).toEqual({ inputTokens: 30_400, outputTokens: 8_010, model: 'gemini-3.6-flash' });
-  });
-
-  it('does not mint a slug that a published game already owns', async () => {
-    // The bug this exists for: a creator titling their game "Apex Sprint" would otherwise
-    // be sent to build on top of a published game. Catalog games predate the submission
-    // flow and have no job record, so checking our own jobs alone does not see them.
-    const seededWithCollision = new VertexGameSeeder({
-      context: stubContext(),
-      client: stubClient([{ text: '{"picks":["word-forge"]}' }, { text: draftFor('apex-sprint-2') }]),
-    });
-
-    const draft = await seededWithCollision.seed({ ...request, title: 'Apex Sprint' });
-
-    expect(draft!.slug).toBe('apex-sprint-2');
-    expect(draft!.files.map((file) => file.path)).toEqual(['SPEC.md', 'game.ts', 'game/model.ts']);
-  });
-
-  it('mints the slug from the title, folding diacritics', async () => {
-    const seeder = new VertexGameSeeder({
-      context: stubContext(),
-      client: stubClient([{ text: '{"picks":["apex-sprint"]}' }, { text: draftFor('oddzial-komandosow') }]),
-    });
-
-    const draft = await seeder.seed({ ...request, title: 'Oddział Komandosów' });
-
-    expect(draft!.slug).toBe('oddzial-komandosow');
   });
 
   it('drops hallucinated slugs and keeps the real ones', async () => {

@@ -48,6 +48,7 @@ function game(partial: Partial<GameHealth> & { slug: string }): GameHealth {
 
 const EMPTY_FUNNEL: VisitFunnel = {
   creating: [],
+  waitlist: [],
   visits: 0,
   bounces: 0,
   visitsWithPlay: 0,

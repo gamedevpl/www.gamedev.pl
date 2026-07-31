@@ -169,6 +169,26 @@ describe('POST /api/telemetry/visit', () => {
     expect(bad.statusCode).toBe(400);
   });
 
+  it('records a waitlist step and rejects one outside the enum', async () => {
+    const ok = await post(app, {
+      visitId,
+      flushMsSinceStart: 0,
+      events: [{ type: 'waitlist_step', step: 'cta_clicked', msSinceStart: 0 }],
+    });
+    expect(ok.statusCode).toBe(202);
+    expect((await store.listVisitEvents(today()))[0]).toMatchObject({
+      type: 'waitlist_step',
+      step: 'cta_clicked',
+    });
+
+    const bad = await post(app, {
+      visitId,
+      flushMsSinceStart: 0,
+      events: [{ type: 'waitlist_step', step: 'emailed_us', msSinceStart: 0 }],
+    });
+    expect(bad.statusCode).toBe(400);
+  });
+
   it('rejects an oversized batch', async () => {
     const response = await post(app, {
       visitId,

@@ -5,7 +5,7 @@
 // its own; callers pass an `isSlugPublished` probe.
 
 import type { LinkedPullRequest } from './github-client.js';
-import type { JobStall } from './job-state.js';
+import type { JobStall, JobState } from './job-state.js';
 
 export type SubmissionStatus =
   | 'queued'
@@ -129,6 +129,23 @@ export function parseProgressNote(raw: string | null): string | undefined {
 
 export interface SubmissionStatusResponseBase {
   status: SubmissionStatus;
+  /**
+   * The job's own state, when we own one — a finer reading of the same moment than
+   * `status`, which several distinct situations collapse into.
+   *
+   * `status` exists to place the build on a five-step timeline and cannot grow without
+   * changing what every client draws, so `gating` and `building` arrive as one word and
+   * the page says "writing code" while the checks are what is actually running. Worse at
+   * the other end: `ready_for_review` is a delivered game waiting on us, and it renders
+   * as "automated checks are making sure your game runs clean" for however long the wait
+   * takes — a sentence that is not true when it is read, under a checklist saying every
+   * task is done.
+   *
+   * So the coarse word keeps drawing the timeline, and this one lets the copy underneath
+   * it describe the state the build is actually in. Absent for GitHub-derived
+   * submissions, which have no job state to report; clients fall back to `status`.
+   */
+  phase?: JobState;
   slug?: string;
   /**
    * Present while an unmerged PR is open (building/in_review): the creator can

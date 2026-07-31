@@ -28,6 +28,7 @@ function funnel(overrides: Partial<VisitFunnel> = {}): VisitFunnel {
     referrers: [],
     campaigns: [],
     creating: [],
+    waitlist: [],
     ...overrides,
   };
 }
@@ -144,5 +145,35 @@ describe('VisitFunnelPanel', () => {
     );
     expect(text).toContain('Games per visit');
     expect(text).toContain('median games / playing visit');
+  });
+
+  it('renders the waitlist funnel as a share of clicks, not of all visits', () => {
+    const text = render(
+      response({
+        visits: 10,
+        waitlist: [
+          { step: 'cta_clicked', visits: 4 },
+          { step: 'joined', visits: 2 },
+        ],
+      }),
+    );
+    expect(text).toContain('Waitlist');
+    expect(text).toContain('clicked Join waitlist');
+    expect(text).toContain('joined waitlist');
+    // 2 of 4 clicks joined — 50%, not 20% of all visits.
+    expect(text).toContain('50%');
+  });
+
+  it('says so when nobody touched the waitlist', () => {
+    const text = render(
+      response({
+        visits: 3,
+        waitlist: [
+          { step: 'cta_clicked', visits: 0 },
+          { step: 'joined', visits: 0 },
+        ],
+      }),
+    );
+    expect(text).toContain('Nobody clicked Join waitlist');
   });
 });

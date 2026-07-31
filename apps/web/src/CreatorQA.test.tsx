@@ -43,6 +43,7 @@ describe('CreatorQA', () => {
         createElement(CreatorQA, {
           questions: mockQuestions,
           initialConcept: 'Dodge the falling rocks and survive as long as possible',
+          initialTitle: 'Rock Dodger',
           onSubmitWithConcept: (concept) => {
             submittedConcept = concept;
           },
@@ -93,6 +94,7 @@ describe('CreatorQA', () => {
         createElement(CreatorQA, {
           questions: mockQuestions,
           initialConcept: 'Dodge the falling rocks and survive as long as possible',
+          initialTitle: 'Rock Dodger',
           onSubmitWithConcept: (concept) => {
             submittedConcept = concept;
           },
@@ -156,6 +158,7 @@ describe('CreatorQA', () => {
         createElement(CreatorQA, {
           questions: multiQuestion,
           initialConcept: 'A trading game',
+          initialTitle: 'Rock Dodger',
           onSubmitWithConcept: (concept) => {
             submittedConcept = concept;
           },
@@ -214,6 +217,7 @@ describe('CreatorQA', () => {
         createElement(CreatorQA, {
           questions: mockQuestions,
           initialConcept: 'Dodge the falling rocks and survive as long as possible',
+          initialTitle: 'Rock Dodger',
           onSubmitWithConcept: vi.fn(),
           onCancel: vi.fn(),
           submitting: true,
@@ -255,6 +259,7 @@ describe('CreatorQA', () => {
         createElement(CreatorQA, {
           questions: mockQuestions,
           initialConcept: 'Dodge the falling rocks and survive as long as possible',
+          initialTitle: 'Rock Dodger',
           onSubmitWithConcept: () => {
             submitted = true;
           },
@@ -294,6 +299,7 @@ describe('CreatorQA', () => {
         createElement(CreatorQA, {
           questions: mockQuestions,
           initialConcept: 'Dodge the falling rocks and survive as long as possible',
+          initialTitle: 'Rock Dodger',
           onSubmitWithConcept: (concept) => {
             submittedConcept = concept;
           },
@@ -310,6 +316,130 @@ describe('CreatorQA', () => {
 
     expect(submittedConcept).toBe('Dodge the falling rocks and survive as long as possible');
     expect(submittedConcept).not.toContain('## Creator clarifications');
+
+    await act(async () => root.unmount());
+  });
+
+  it('carries the name the creator settled on, not the one that was suggested', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    let submittedTitle = '';
+    const onTitleChange = vi.fn();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(CreatorQA, {
+          questions: mockQuestions,
+          initialConcept: 'Dodge the falling rocks and survive as long as possible',
+          initialTitle: 'Rock Dodger',
+          onTitleChange,
+          onSubmitWithConcept: (_concept, title) => {
+            submittedTitle = title;
+          },
+        }),
+      );
+      await flushEffects();
+    });
+
+    const name = container.querySelector<HTMLInputElement>('.qa-name-input');
+    expect(name?.value).toBe('Rock Dodger');
+
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      setter?.call(name, '  Boulder Panic  ');
+      name?.dispatchEvent(new Event('input', { bubbles: true }));
+      await flushEffects();
+    });
+
+    // Reported as it is typed, so the caller can park it with the rest of the session.
+    expect(onTitleChange).toHaveBeenLastCalledWith('  Boulder Panic  ');
+
+    await act(async () => {
+      container.querySelector('.btn-create-now')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+
+    expect(submittedTitle).toBe('Boulder Panic');
+
+    await act(async () => root.unmount());
+  });
+
+  it('will not start a build on a name too short to submit', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const onSubmit = vi.fn();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    // The refiner had nothing to suggest and the concept yielded nothing either, so
+    // the box starts empty and the creator has to name the thing themselves.
+    await act(async () => {
+      root.render(
+        createElement(CreatorQA, {
+          questions: [],
+          initialConcept: 'Dodge the falling rocks and survive as long as possible',
+          initialTitle: '',
+          onSubmitWithConcept: onSubmit,
+        }),
+      );
+      await flushEffects();
+    });
+
+    const createBtn = container.querySelector<HTMLButtonElement>('.btn-create-now');
+    expect(createBtn?.disabled).toBe(true);
+
+    await act(async () => {
+      createBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    const name = container.querySelector<HTMLInputElement>('.qa-name-input');
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      setter?.call(name, 'Rock Dodger');
+      name?.dispatchEvent(new Event('input', { bubbles: true }));
+      await flushEffects();
+    });
+
+    expect(container.querySelector<HTMLButtonElement>('.btn-create-now')?.disabled).toBe(false);
+
+    await act(async () => root.unmount());
+  });
+
+  it('is still the naming step when the refiner asked nothing', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(CreatorQA, {
+          questions: [],
+          initialConcept: 'Dodge the falling rocks and survive as long as possible',
+          initialTitle: 'Rock Dodger',
+          onSubmitWithConcept: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    // A heading about clarifying questions, over no questions, is a panel that looks
+    // broken. With nothing to clarify it says what it is actually for.
+    expect(container.querySelector('.qa-title')?.textContent).toContain('Name your game');
+    expect(container.querySelector('.qa-name-input')).not.toBeNull();
+    expect(container.querySelectorAll('.qa-card')).toHaveLength(0);
+    // One button, not two: the second exists to be reachable after a long list.
+    expect(container.querySelectorAll('.btn-create-now')).toHaveLength(1);
 
     await act(async () => root.unmount());
   });

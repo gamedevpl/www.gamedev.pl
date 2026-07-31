@@ -11,6 +11,7 @@ import { DraftView } from './DraftView.js';
 import { AdminConsole } from './AdminConsole.js';
 import { PixelIcon } from './PixelIcon.js';
 import { CreatorQA, type QAQuestion } from './CreatorQA.js';
+import { deriveTitleFromConcept } from './gameTitle.js';
 import {
   adminPath,
   canonicalPath,
@@ -133,9 +134,11 @@ export function App() {
         ? (catalogEntries.find((game) => game.slug === route.slug)?.title ??
           (stageContent?.type === 'catalog' && stageContent.game.slug === route.slug ? stageContent.game.title : null))
         : null;
+    // Matched on either address the URL can carry: a slug now, a capability token on
+    // links minted before games had one.
     const studioTitle =
-      route.view === 'studio' && route.token
-        ? (savedSpecs.find((spec) => spec.token === route.token)?.title ?? null)
+      route.view === 'studio' && route.game
+        ? (savedSpecs.find((spec) => spec.token === route.game || spec.slug === route.game)?.title ?? null)
         : null;
 
     return resolveDocumentTitle(route, {
@@ -314,12 +317,13 @@ export function App() {
     });
   }, []);
 
-  // Bring the clarifying-questions panel into view when the refiner returns some.
+  // Bring the confirm panel into view when it opens. Keyed on the spec rather than on
+  // the questions: the panel now appears for a clean concept too, to be named.
   useEffect(() => {
-    if (qaQuestions.length > 0) {
+    if (pendingSpec) {
       qaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
     }
-  }, [qaQuestions]);
+  }, [pendingSpec]);
 
   // Menu navigation is scroll-to-section, but the sections only exist on the home
   // route — from a status page we have to go home first and scroll once the target
@@ -387,7 +391,7 @@ export function App() {
   // The generation gate: before spending a submission we run the spec refiner. If it
   // returns clarifying questions, generation pauses on the QA panel until they're
   // answered; a clean spec (or a refiner error — fail-open) submits straight through.
-  async function handleSubmitSpec(title: string, concept: string, displayName: string = '') {
+  async function handleSubmitSpec(concept: string, displayName: string = '') {
     if (!user) {
       // The wall between "wrote an idea" and "made an account". Everything before this
       // is anonymous, so this is the only place that drop-off is visible at all.
@@ -396,33 +400,37 @@ export function App() {
       return;
     }
 
-    const trimmedTitle = title.trim();
     const trimmedConcept = concept.trim();
-    if (!trimmedTitle || !trimmedConcept) return;
+    if (!trimmedConcept) return;
 
     setSubmissionStatus('refining');
     setSubmissionError(null);
 
+    let questions: QAQuestion[] = [];
+    let suggestedTitle: string | undefined;
     try {
-      const { questions } = await refineSpec({
-        title: trimmedTitle,
-        concept: trimmedConcept,
-        locale: i18n.language,
-      });
-      if (questions.length > 0) {
-        recordCreateStep('qa_shown');
-        const spec = { title: trimmedTitle, concept: trimmedConcept, displayName: displayName.trim() };
-        setPendingSpec(spec);
-        setQaQuestions(questions);
-        savePendingQa({ spec, questions, answers: { selected: {}, custom: {} } });
-        setSubmissionStatus('idle');
-        return;
-      }
+      const refined = await refineSpec({ concept: trimmedConcept, locale: i18n.language });
+      questions = refined.questions;
+      suggestedTitle = refined.suggestedTitle;
     } catch {
-      // Fail-open: a refiner outage must never block creation — submit as-is.
+      // Fail-open: a refiner outage must never block creation. It does not skip the
+      // naming step either — that would put us back to games named by truncation —
+      // so the confirm panel opens on a title derived from the prompt instead.
     }
 
-    await submitRefinedSpec(trimmedTitle, trimmedConcept, displayName.trim());
+    if (questions.length > 0) recordCreateStep('qa_shown');
+
+    // The confirm step always happens now, questions or not: it is where the game gets
+    // its name, and a build must not start without one the creator has seen.
+    const spec = {
+      title: suggestedTitle ?? deriveTitleFromConcept(trimmedConcept),
+      concept: trimmedConcept,
+      displayName: displayName.trim(),
+    };
+    setPendingSpec(spec);
+    setQaQuestions(questions);
+    savePendingQa({ spec, questions, answers: { selected: {}, custom: {} } });
+    setSubmissionStatus('idle');
   }
 
   // Actually creates the submission (after the QA gate) and jumps to its status page.
@@ -446,6 +454,7 @@ export function App() {
         title,
         concept,
         createdAt: Date.now(),
+        ...(response.slug ? { slug: response.slug } : {}),
       });
       setSavedSpecs(updatedSpecs);
       setMyGamesRefreshKey((key) => key + 1);
@@ -459,7 +468,9 @@ export function App() {
       setPendingSpec(null);
       clearPendingQa();
 
-      navigate(statusPath(response.token));
+      // Straight to the game's own address. Older API builds answer without a slug, in
+      // which case the token still addresses the studio and gets rewritten there.
+      navigate(studioPath(response.slug ?? response.token));
     } catch (err) {
       const message = err instanceof Error ? err.message : t('errors.generic');
       const category = err instanceof Error ? (err as SubmissionApiError).category : undefined;
@@ -472,6 +483,11 @@ export function App() {
         // creator can see their remaining count on the hero to check it.
       } else if (message === 'creation_over_capacity') {
         setSubmissionError(t('errors.creationOverCapacity'));
+        // Two submissions of the same title raced for its address and this one lost
+        // twice. Rare, and recoverable by renaming — which is a thing the creator can
+        // now actually do, because they picked the name in the first place.
+      } else if (message === 'name_unavailable') {
+        setSubmissionError(t('errors.nameUnavailable'));
       } else if (message.includes('quota')) {
         setSubmissionError(t('auth.quotaExceeded'));
       } else if (message.includes('blocked')) {
@@ -487,10 +503,12 @@ export function App() {
   // dropped the creator into blank space for however long the API took to create the
   // issue — they had just clicked a button and the page answered by deleting itself.
   // On failure it stays up with the error, so the answers survive a retry.
-  const handleQaComplete = async (finalConcept: string) => {
+  const handleQaComplete = async (finalConcept: string, title: string) => {
     const spec = pendingSpec;
     if (!spec) return;
-    await submitRefinedSpec(spec.title, finalConcept, spec.displayName);
+    // The name the creator settled on, which is the step that gates the build.
+    recordCreateStep('title_confirmed');
+    await submitRefinedSpec(title, finalConcept, spec.displayName);
   };
 
   const handleQaCancel = () => {
@@ -501,13 +519,32 @@ export function App() {
 
   // Every keystroke and chip lands in storage, so the round survives a reload at any
   // point rather than only between questions.
+  const latestAnswersRef = useRef<PendingQaAnswers>({ selected: {}, custom: {} });
   const handleQaAnswersChange = useCallback(
     (answers: PendingQaAnswers) => {
+      latestAnswersRef.current = answers;
       if (!pendingSpec) return;
       savePendingQa({ spec: pendingSpec, questions: qaQuestions, answers });
     },
     [pendingSpec, qaQuestions],
   );
+
+  // The name is parked with the answers, for the same reason: an edited title is work,
+  // and a reload that kept the answers but silently restored the model's suggestion
+  // would be the one part of the panel that lies about having been saved.
+  const handleQaTitleChange = useCallback(
+    (title: string) => {
+      if (!pendingSpec) return;
+      const spec = { ...pendingSpec, title };
+      setPendingSpec(spec);
+      savePendingQa({ spec, questions: qaQuestions, answers: latestAnswersRef.current });
+    },
+    [pendingSpec, qaQuestions],
+  );
+
+  // Whether this tab has pushed a history entry of its own — i.e. whether going Back
+  // lands somewhere in the app rather than wherever the visitor came from.
+  const pushedHistoryRef = useRef(false);
 
   const navigate = useCallback((path: string, options?: { replace?: boolean }) => {
     // Update the URL (the source of truth) and the route synchronously so
@@ -516,6 +553,7 @@ export function App() {
       window.history.replaceState(null, '', path);
     } else {
       window.history.pushState(null, '', path);
+      pushedHistoryRef.current = true;
     }
     // pushState/replaceState are silent, so announce the navigation for anything
     // living outside this component (see NAVIGATE_EVENT). Dispatched before the
@@ -523,6 +561,23 @@ export function App() {
     window.dispatchEvent(new CustomEvent(NAVIGATE_EVENT, { detail: { path } }));
     setRoute(readLocationRoute());
   }, []);
+
+  /**
+   * Closing a full-viewport overlay that owns the URL — a game, a draft.
+   *
+   * Home was the unconditional answer, and it threw away context every time: a creator
+   * who opened their build from Creator Studio and closed it landed on the catalog,
+   * several clicks from the game they were in the middle of making. Back returns them
+   * to whatever opened the overlay. A cold visit to a shared link has no in-app entry
+   * behind it — Back there would leave the site entirely — so that case still goes home.
+   */
+  const exitOverlay = useCallback(() => {
+    if (pushedHistoryRef.current) {
+      window.history.back();
+      return;
+    }
+    navigate('/');
+  }, [navigate]);
 
   // Header Up chevron — Android-style parent path, never history.back(). Hidden
   // while App owns a theater (`stageContent`) and on routes whose child owns one
@@ -664,7 +719,7 @@ export function App() {
           <AdminConsole section={route.section} onNavigate={navigate} />
         ) : route.view === 'studio' ? (
           <CreatorStudioView
-            selectedToken={route.token}
+            selectedGame={route.game}
             selectedTab={route.tab}
             onNavigate={navigate}
             onPlay={(slug) => navigate(playPath(slug))}
@@ -674,7 +729,7 @@ export function App() {
             }}
           />
         ) : route.view === 'draft' ? (
-          <DraftView slug={route.slug} onExit={() => navigate('/')} onDraftTitle={setDraftTitle} />
+          <DraftView slug={route.slug} onExit={exitOverlay} onDraftTitle={setDraftTitle} />
         ) : (
           <>
             <div id="hero-prompt">
@@ -686,19 +741,23 @@ export function App() {
                 onPlayGame={handlePlayGame}
                 submissionStatus={submissionStatus}
                 submissionError={submissionError}
-                onSubmitSpec={(title, concept) => void handleSubmitSpec(title, concept)}
+                onSubmitSpec={(concept) => void handleSubmitSpec(concept)}
                 mockStatus={mockStatus}
                 mockError={mockError}
                 onGenerateMock={(prompt) => void handleGenerateMock(prompt)}
               />
             </div>
 
-            {qaQuestions.length > 0 && pendingSpec && (
+            {/* Gated on the pending spec alone: the panel is the naming step, which
+                always happens, and the questions are the part that is sometimes empty. */}
+            {pendingSpec && (
               <div ref={qaRef}>
                 <CreatorQA
                   questions={qaQuestions}
                   initialConcept={pendingSpec.concept}
+                  initialTitle={pendingSpec.title}
                   onSubmitWithConcept={handleQaComplete}
+                  onTitleChange={handleQaTitleChange}
                   onCancel={handleQaCancel}
                   submitting={submissionStatus === 'loading'}
                   error={submissionError}
@@ -747,7 +806,7 @@ export function App() {
                 // it short so the title stays the hero of the bar.
                 badge={{ icon: 'sparkle', label: t('ai.generatedShort') }}
                 source={{ slug: stageContent.game.slug }}
-                onExit={() => navigate('/')}
+                onExit={exitOverlay}
                 orientation={stageContent.game.orientation}
                 reportSlug={stageContent.game.slug}
                 submittedBy={stageContent.game.submittedBy}

@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mintAgentToken } from './agent-token.js';
 import { buildApp } from './app.js';
-import { proposeSeedSlug, type GameSeeder, type SeedDraft } from './game-seed.js';
+import type { GameSeeder, SeedDraft } from './game-seed.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
 import type { ContentChecker } from './moderation.js';
@@ -531,18 +531,130 @@ describe('submission routes', () => {
     expect(jobs[0].issueNumber).toBeGreaterThanOrEqual(JOB_ID_FLOOR);
     expect(response.json()).toEqual({
       token: mintToken(jobs[0].issueNumber, secret),
+      // Minted here, from the sanitized title, and returned so the app can open the
+      // studio on a readable address instead of on a capability token.
+      slug: 'my-cool-title',
       statusUrl: `/api/submissions/${response.json().token}`,
     });
+    expect(jobs[0].slug).toBe('my-cool-title');
 
     // Creator text is still sanitized and still fenced as data — it just reaches the
     // agent directly now instead of by way of an issue body.
     expect(briefs).toHaveLength(1);
     expect(briefs[0].spec).toContain('My cool title');
+    // The agent is told where to build. Its brief used to name the game directory as
+    // "(the slug named in your first progress report)", which is a sentence, not a path.
+    expect(briefs[0].slug).toBe('my-cool-title');
     expect(briefs[0].spec).toContain('This is a sufficiently long concept with markup and details.');
     expect(briefs[0].spec).not.toContain('<script>');
     expect(briefs[0].spec).not.toContain('<i>');
     expect(briefs[0].channelToken).toBe(mintAgentToken(jobs[0].issueNumber, secret));
   });
+  it('gives two games of the same name addresses of their own', async () => {
+    const { githubClient } = createGithubClientStub({ issueNumber: 93 });
+    const store = new InMemoryStore();
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
+
+    const submit = () =>
+      app.inject({
+        method: 'POST',
+        url: '/api/submissions',
+        headers: authHeaders,
+        payload: {
+          title: 'Space Miner',
+          concept: 'Dig asteroids for ore and sell it at the station before your fuel runs out.',
+        },
+      });
+
+    const first = await submit();
+    const second = await submit();
+
+    expect(first.json().slug).toBe('space-miner');
+    // Numbered rather than randomised: the second "space miner" being space-miner-2 is
+    // a fact a creator can hold in their head.
+    expect(second.json().slug).toBe('space-miner-2');
+  });
+
+  it('gives the loser of a slug race a different name rather than a shared one', async () => {
+    // Minting reads then writes, so two submissions of one title can both be told a name
+    // is free. Nothing about that shows until much later and then it is severe: both
+    // agents deliver into the same games-store slug, and whichever job loses the by-slug
+    // lookup becomes unplayable to its own creator. The claim is read back, so the loser
+    // finds out while a different name still costs nothing.
+    const { githubClient } = createGithubClientStub({ issueNumber: 94 });
+    const store = new InMemoryStore();
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
+
+    // Somebody else took the name in the window between our probe and our write.
+    const realProbe = store.getSubmissionBySlug.bind(store);
+    let raced = false;
+    store.getSubmissionBySlug = async (slug: string) => {
+      if (slug === 'space-miner' && !raced) {
+        raced = true;
+        return { issueNumber: 999_999, ownerUid: 'g:someone-else', createdAt: '', title: 'Space Miner', slug };
+      }
+      return realProbe(slug);
+    };
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: {
+        title: 'Space Miner',
+        concept: 'Dig asteroids for ore and sell it at the station before your fuel runs out.',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    // A different address, not a shared one — and not a failure either, because the
+    // creator has nothing to fix and nothing has been dispatched yet.
+    expect(res.json().slug).toBe('space-miner-2');
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    expect(job.slug).toBe('space-miner-2');
+
+    await app.close();
+  });
+
+  it('refuses the submission outright when it cannot claim any name', async () => {
+    // Losing twice means something is racing us persistently rather than by coincidence.
+    // Better a creator who is told to rename than a game that cannot be addressed.
+    const { githubClient } = createGithubClientStub({ issueNumber: 95 });
+    const { backend, briefs } = createBackendStub();
+    const store = new InMemoryStore();
+    const { app, authHeaders } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      store,
+    });
+
+    store.getSubmissionBySlug = async (slug: string) => ({
+      issueNumber: 999_999,
+      ownerUid: 'g:someone-else',
+      createdAt: '',
+      title: 'Space Miner',
+      slug,
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: {
+        title: 'Space Miner',
+        concept: 'Dig asteroids for ore and sell it at the station before your fuel runs out.',
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toBe('name_unavailable');
+    // And no agent was sent to build a game that has nowhere to live.
+    expect(briefs).toHaveLength(0);
+
+    await app.close();
+  });
+
   it('records how many QA answers came with the concept', async () => {
     const { githubClient } = createGithubClientStub({ issueNumber: 92 });
     const store = new InMemoryStore();
@@ -779,6 +891,46 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  it('reports the job phase alongside the status, so the page can say which wait this is', async () => {
+    // `toSubmissionStatus` is lossy on purpose — `gating` and `building` arrive as one
+    // word, and `ready_for_review` (delivered, checked, waiting on us) arrives as the
+    // same "in_review" the page described as "checks are running". The finer state rides
+    // along so the sentence under the timeline can be true for hours at a time.
+    const { githubClient } = createGithubClientStub({ issueNumber: 91 });
+    const { backend } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'ready_for_review',
+      at: new Date().toISOString(),
+      by: 'system',
+      reason: 'gate_green',
+    });
+
+    const status = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}`,
+      headers: authHeaders,
+    });
+
+    expect(status.statusCode).toBe(200);
+    expect(status.json().status).toBe('in_review');
+    expect(status.json().phase).toBe('ready_for_review');
+
+    await app.close();
+  });
+
   it('learns the branch a dispatch is working on, so a revision resumes it', async () => {
     // The task API answers `startTask` before the agent has a branch, so this is the
     // only moment it can be learned. Without it `resume` degrades to a fresh dispatch
@@ -995,6 +1147,122 @@ const sampleSources: GameSources = {
   styleCss: 'body { margin: 0; }',
   title: 'Bubble Pop Rush',
 };
+
+describe('playing an unpublished game at its permalink', () => {
+  /**
+   * A game answers at `/play/<slug>` from the moment it is submitted. Who that includes
+   * before it is published is the creator's decision, and off is the default — the whole
+   * point of the switch. These pin both halves, because the failure modes are opposite:
+   * a leak on one side, and a creator locked out of their own game on the other.
+   */
+  async function draftApp() {
+    const store = new InMemoryStore();
+    const jobId = 1_000_077;
+    await store.upsertUser({ uid: 'g:test-user' });
+    await store.upsertUser({ uid: 'g:someone-else' });
+    await store.createSubmission(jobId, 'g:test-user', 'TV Tycoon');
+    await store.setSubmissionSlug(jobId, 'tv-tycoon');
+    await store.setSubmissionDeliveredVersion(jobId, 'v1');
+
+    const gamesStore = {
+      getDerivedArtifact: async (_s: string, _v: string, name: string) =>
+        name === 'bundle.html' ? Buffer.from('<!doctype html><title>TV Tycoon</title><canvas></canvas>') : null,
+    } as unknown as GamesStore;
+
+    // The catalog knows nothing about it: an unpublished game is in no catalog and no
+    // rail, so the link is the only way in — which is what makes one switch enough.
+    const { githubClient } = createGithubClientStub({ catalog: [] });
+    const { app, authHeaders } = await createApp({
+      store,
+      githubClient,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+    });
+    return { app, authHeaders, store, jobId };
+  }
+
+  it('lets the creator play their own game before anyone else can', async () => {
+    const { app, authHeaders } = await draftApp();
+
+    const mine = await app.inject({ method: 'GET', url: '/api/games/tv-tycoon', headers: authHeaders });
+    expect(mine.statusCode).toBe(200);
+    expect(mine.json()).toMatchObject({ slug: 'tv-tycoon', title: 'TV Tycoon' });
+
+    // Sharing is off, so it does not exist for anybody else — including signed-in
+    // visitors, who used to be able to read any draft whose slug they knew.
+    const stranger = await app.inject({
+      method: 'GET',
+      url: '/api/games/tv-tycoon',
+      headers: getAuthHeaders('g:someone-else'),
+    });
+    expect(stranger.statusCode).toBe(404);
+
+    const anonymous = await app.inject({ method: 'GET', url: '/api/games/tv-tycoon' });
+    expect(anonymous.statusCode).toBe(404);
+
+    await app.close();
+  });
+
+  it('opens the same permalink to everyone once the creator shares it, and closes it again', async () => {
+    const { app, authHeaders, jobId } = await draftApp();
+
+    const on = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(jobId, secret)}/share`,
+      headers: authHeaders,
+      payload: { shared: true },
+    });
+    expect(on.statusCode).toBe(200);
+    expect(on.json()).toEqual({ shared: true, slug: 'tv-tycoon' });
+
+    // Anyone with the link, signed in or not: it is the game's ordinary permalink, the
+    // same one it keeps once published, so there is nothing to re-send later.
+    expect((await app.inject({ method: 'GET', url: '/api/games/tv-tycoon' })).statusCode).toBe(200);
+
+    const off = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(jobId, secret)}/share`,
+      headers: authHeaders,
+      payload: { shared: false },
+    });
+    expect(off.statusCode).toBe(200);
+    expect((await app.inject({ method: 'GET', url: '/api/games/tv-tycoon' })).statusCode).toBe(404);
+
+    await app.close();
+  });
+
+  it('will not let a link-holder decide who else can see the game', async () => {
+    // The token is a bearer capability that gets shared around by design. Changing who
+    // may see the game is the creator's alone, checked against the store — the same rule
+    // abandoning follows, and for the same reason.
+    const { app, jobId } = await draftApp();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(jobId, secret)}/share`,
+      headers: getAuthHeaders('g:someone-else'),
+      payload: { shared: true },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect((await app.inject({ method: 'GET', url: '/api/games/tv-tycoon' })).statusCode).toBe(404);
+
+    await app.close();
+  });
+
+  it('stops serving a build its creator abandoned, to them as well', async () => {
+    const { app, authHeaders, store, jobId } = await draftApp();
+    await store.setDraftShared(jobId, new Date().toISOString());
+    await store.setSubmissionAbandoned(jobId, new Date().toISOString());
+
+    expect((await app.inject({ method: 'GET', url: '/api/games/tv-tycoon' })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'GET', url: '/api/games/tv-tycoon', headers: authHeaders })).statusCode).toBe(
+      404,
+    );
+
+    await app.close();
+  });
+});
 
 describe('submission preview route', () => {
   it('returns 503 when submissions are not configured', async () => {
@@ -2758,8 +3026,7 @@ describe('operator health re-gate', () => {
 describe('seeded dispatch', () => {
   function seederStub(draft: Partial<SeedDraft> | null, onSeed?: (slug: string) => void): GameSeeder {
     return {
-      seed: async ({ title, jobId, isSlugTaken }) => {
-        const slug = await proposeSeedSlug(title, jobId, isSlugTaken);
+      seed: async ({ slug }) => {
         onSeed?.(slug);
         if (!draft) return null;
         return {
@@ -2787,7 +3054,7 @@ describe('seeded dispatch', () => {
     return { app, store, response };
   }
 
-  it('mints a slug, seeds into it, and bills the tokens to the job', async () => {
+  it('seeds into the job’s own slug and bills the tokens to it', async () => {
     const stub = createGithubClientStub({});
     const { backend, briefs } = createBackendStub();
     const seeded: string[] = [];
@@ -2799,8 +3066,8 @@ describe('seeded dispatch', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    // The slug has to exist before the agent does: a seed is written into
-    // `games/<slug>/`, so nobody can be waiting for the agent to name the game.
+    // The submission minted and confirmed this address before dispatch; the seeder
+    // writes into it rather than deciding a second one.
     expect(seeded).toEqual(['comet-courier']);
 
     // The job id comes from the brief the backend was handed: the route answers with a
@@ -2832,10 +3099,10 @@ describe('seeded dispatch', () => {
     expect(response.statusCode).toBe(200);
     expect(briefs).toHaveLength(1);
     expect(briefs[0].seed).toBeUndefined();
-    // No slug was minted either: an unseeded build lets the agent name its own game,
-    // exactly as it did before seeding existed.
+    // The job keeps the slug the submission gave it — seeding declining changes nothing
+    // about the game's address — and nothing is billed for a seed that never happened.
     const record = await store.getSubmission(briefs[0].issueNumber);
-    expect(record?.slug).toBeUndefined();
+    expect(record?.slug).toBe('comet-courier');
     expect(record?.costs ?? []).not.toContainEqual(expect.objectContaining({ kind: 'seed' }));
 
     await app.close();
@@ -3018,6 +3285,102 @@ describe('seeded dispatch', () => {
     expect(record?.dispatch?.seedWorkspace).toBeUndefined();
     expect(record?.dispatch?.workspace).toBe('copilot/x');
 
+    await app.close();
+  });
+});
+
+describe('operator slug backfill', () => {
+  const bossHeaders = () => getAuthHeaders('g:boss');
+
+  /** An app with an operator, plus whatever slug-less records a test asks for. */
+  async function appWithLegacyRecords(titles: string[]) {
+    const { app, store } = await createApp({ adminUids: 'g:boss' });
+    await store.upsertUser({ uid: 'g:boss' });
+    // createSubmission is what the flow used to do on its own: a record, no slug. It is
+    // the exact shape of every game that predates minting at submission.
+    let issueNumber = 500;
+    for (const title of titles) await store.createSubmission(issueNumber++, 'g:test-user', title);
+    return { app, store };
+  }
+
+  it('answers 404 to a non-operator, the same as every operator surface', async () => {
+    const { app } = await appWithLegacyRecords(['Space Miner']);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/slug-backfill',
+      headers: getAuthHeaders('g:someone-else'),
+    });
+
+    expect(response.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('gives every slug-less game an address derived from its title', async () => {
+    const { app, store } = await appWithLegacyRecords(['Space Miner', 'Łódź Nights']);
+
+    const response = await app.inject({ method: 'POST', url: '/api/admin/slug-backfill', headers: bossHeaders() });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ ok: true, dryRun: false, scanned: 2, named: 2, failed: 0 });
+    expect((await store.getSubmission(500))?.slug).toBe('space-miner');
+    // The Polish letter survives: NFD alone would drop it and leave 'dz-nights'.
+    expect((await store.getSubmission(501))?.slug).toBe('lodz-nights');
+
+    await app.close();
+  });
+
+  it('reports what it would do without writing anything, when asked to rehearse', async () => {
+    const { app, store } = await appWithLegacyRecords(['Space Miner']);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/slug-backfill?dryRun=1',
+      headers: bossHeaders(),
+    });
+
+    expect(response.json()).toMatchObject({ dryRun: true, scanned: 1, named: 1 });
+    expect(response.json().games).toEqual([{ issueNumber: 500, title: 'Space Miner', slug: 'space-miner' }]);
+    expect((await store.getSubmission(500))?.slug).toBeUndefined();
+
+    await app.close();
+  });
+
+  it('does not promise one name to two games, even in a rehearsal that writes nothing', async () => {
+    const { app } = await appWithLegacyRecords(['Space Miner', 'Space Miner']);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/slug-backfill?dryRun=1',
+      headers: bossHeaders(),
+    });
+
+    // Without an in-run ledger both would be told 'space-miner', and the rehearsal would
+    // be reporting an outcome the real run could not produce.
+    expect(response.json().games.map((game: { slug: string }) => game.slug)).toEqual(['space-miner', 'space-miner-2']);
+
+    await app.close();
+  });
+
+  it('leaves abandoned builds alone rather than reserving names for them', async () => {
+    const { app, store } = await appWithLegacyRecords(['Space Miner']);
+    await store.setSubmissionAbandoned(500, new Date().toISOString());
+
+    const response = await app.inject({ method: 'POST', url: '/api/admin/slug-backfill', headers: bossHeaders() });
+
+    expect(response.json()).toMatchObject({ scanned: 0, named: 0 });
+    expect((await store.getSubmission(500))?.slug).toBeUndefined();
+
+    await app.close();
+  });
+
+  it('finds nothing to do on a second run', async () => {
+    const { app } = await appWithLegacyRecords(['Space Miner']);
+
+    await app.inject({ method: 'POST', url: '/api/admin/slug-backfill', headers: bossHeaders() });
+    const second = await app.inject({ method: 'POST', url: '/api/admin/slug-backfill', headers: bossHeaders() });
+
+    expect(second.json()).toMatchObject({ scanned: 0, named: 0, failed: 0 });
     await app.close();
   });
 });

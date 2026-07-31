@@ -112,23 +112,19 @@ export interface SeedDraft {
 }
 
 export interface SeedRequest {
-  /** The job this draft is for; the last-resort source of a unique slug. */
-  jobId: number;
-  /** Human-readable title, for SPEC.md frontmatter and the slug. */
+  /**
+   * The game directory to write into.
+   *
+   * Given rather than derived: a submission mints and race-confirms its slug before
+   * dispatch (see `mintGameSlug` / `confirmSlugClaim`), so the game already has the
+   * address it will keep for life by the time a seed is generated. The seeder deriving
+   * a second one would be a different answer to a settled question.
+   */
+  slug: string;
+  /** Human-readable title, for SPEC.md frontmatter. */
   title: string;
   /** The creator's moderated spec. Untrusted text: data, never instructions. */
   spec: string;
-  /**
-   * Whether another *job* already claims this slug.
-   *
-   * Only half the question, which is why the seeder asks it rather than being handed a
-   * finished slug: the other half is the catalog, and the seeder is the thing holding
-   * it. Games that predate the submission flow have no job record at all, so a caller
-   * checking only its own store would happily mint `apex-sprint` for a creator who
-   * titled their game "Apex Sprint" — and the agent would be sent to build on top of a
-   * published game.
-   */
-  isSlugTaken(slug: string): Promise<boolean>;
 }
 
 export interface GameSeeder {
@@ -137,54 +133,6 @@ export interface GameSeeder {
 }
 
 const PickSchema = z.object({ picks: z.array(z.string()).optional() });
-
-/** Slugs are ASCII by repository contract, and titles here frequently are not. */
-const TRANSLITERATIONS: Record<string, string> = { ł: 'l', Ł: 'l', ß: 'ss', æ: 'ae', ø: 'o', đ: 'd' };
-
-/**
- * A slug for a seeded build, derived from the creator's title.
- *
- * Unseeded builds let the agent name the game in its first delivery, which is fine when
- * nothing exists before the agent does. A seed has to be written to `games/<slug>/`
- * before dispatch, so the slug has to exist before the agent does — this is where it
- * comes from.
- *
- * Diacritics are folded rather than dropped: most creators here write Polish, and
- * "Oddział Komandosów" turning into `odzia-komandosw` would be a worse name for the rest
- * of the game's life than one round of transliteration is ugly.
- */
-export async function proposeSeedSlug(
-  title: string,
-  jobId: number,
-  isTaken: (slug: string) => Promise<boolean>,
-): Promise<string> {
-  const folded = [...title.trim().toLowerCase()]
-    .map((character) => TRANSLITERATIONS[character] ?? character)
-    .join('')
-    .normalize('NFD')
-    // Strip the combining marks NFD just separated out (ó → o + ́ → o).
-    .replace(/[̀-ͯ]/g, '');
-
-  const base = folded
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    // Long enough to stay recognizable, short enough to read in a URL.
-    .slice(0, 40)
-    .replace(/-+$/g, '');
-
-  // A title with nothing ASCII in it still needs a directory, and the job id is the one
-  // name that is always available and always unique.
-  const candidate = /^[a-z0-9]/.test(base) ? base : `game-${jobId}`;
-
-  if (!(await isTaken(candidate))) return candidate;
-  // Suffix rather than reject: two creators asking for "Tetris" is a normal Tuesday, and
-  // the second one should still get a build.
-  for (let suffix = 2; suffix <= 9; suffix++) {
-    const next = `${candidate}-${suffix}`;
-    if (!(await isTaken(next))) return next;
-  }
-  return `${candidate}-${jobId}`;
-}
 
 /**
  * Strips what a model prepends in practice, so the guard judges the path a file would
@@ -497,14 +445,7 @@ export class VertexGameSeeder implements GameSeeder {
       const context = await this.options.context.load();
       if (!context) return null;
 
-      // Checked against the catalog and the caller's jobs together — either alone lets a
-      // new game be written into a directory that is not free.
-      const slug = await proposeSeedSlug(
-        request.title,
-        request.jobId,
-        async (candidate) => context.hasGame(candidate) || (await request.isSlugTaken(candidate)),
-      );
-
+      const slug = request.slug;
       const spec = request.spec.slice(0, MAX_SPEC_CHARS);
       const { picks, usage: pickUsage } = await this.pickReferences(context, spec);
       // No references means no style guide and no API documentation in context; the draft
@@ -599,7 +540,7 @@ export class VertexGameSeeder implements GameSeeder {
     } catch (error) {
       // Every failure is the same failure from the caller's side: there is no seed, and
       // the build dispatches exactly as it would have before this module existed.
-      this.options.log?.warn({ err: error, jobId: request.jobId }, 'seed generation failed, dispatching unseeded');
+      this.options.log?.warn({ err: error, slug: request.slug }, 'seed generation failed, dispatching unseeded');
       return null;
     }
   }

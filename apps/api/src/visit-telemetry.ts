@@ -50,8 +50,14 @@ const CreateStepSchema = z.enum([
   'spec_submitted',
   'signin_required',
   'qa_shown',
+  'title_confirmed',
   'submission_created',
 ]);
+/**
+ * Closed-beta waitlist funnel. Same closed-enum posture as create steps: the value
+ * reaches a grouping key on an open endpoint.
+ */
+const WaitlistStepSchema = z.enum(['cta_clicked', 'joined']);
 /**
  * Acquisition strings are re-validated here rather than trusted from the client. The
  * browser filters them for cleanliness; this filters them because a value that reaches a
@@ -83,6 +89,7 @@ const EventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('route_viewed'), route: RouteKindSchema, ...offsetField }),
   z.object({ type: z.literal('play_started'), ...offsetField }),
   z.object({ type: z.literal('create_step'), step: CreateStepSchema, ...offsetField }),
+  z.object({ type: z.literal('waitlist_step'), step: WaitlistStepSchema, ...offsetField }),
 ]);
 
 const RequestSchema = z.object({
@@ -173,6 +180,7 @@ export async function registerVisitTelemetryRoutes(
         case 'route_viewed':
           return { ...base, type: event.type, route: event.route };
         case 'create_step':
+        case 'waitlist_step':
           return { ...base, type: event.type, step: event.step };
         default:
           return { ...base, type: 'play_started' };

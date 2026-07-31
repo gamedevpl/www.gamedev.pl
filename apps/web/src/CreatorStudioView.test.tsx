@@ -15,6 +15,7 @@ const approveSuggestion = vi.fn();
 const dismissSuggestion = vi.fn();
 const fetchGameAutonomy = vi.fn();
 const setGameAutonomy = vi.fn();
+const setDraftShared = vi.fn();
 let authUser: { uid: string; name: string } | null = null;
 
 vi.mock('./AuthContext', () => ({
@@ -33,6 +34,7 @@ vi.mock('./studioApi', async () => {
     dismissSuggestion: (...args: unknown[]) => dismissSuggestion(...args),
     fetchGameAutonomy: (...args: unknown[]) => fetchGameAutonomy(...args),
     setGameAutonomy: (...args: unknown[]) => setGameAutonomy(...args),
+    setDraftShared: (...args: unknown[]) => setDraftShared(...args),
     submitImprovement: vi.fn(),
   };
 });
@@ -69,7 +71,15 @@ async function renderStudio(props: Partial<Parameters<typeof CreatorStudioView>[
     await fetchStudioScorecards.mock.results[0]?.value;
     await fetchStudioSuggestions.mock.results[0]?.value;
   });
-  return { container, root, onNavigate };
+  const rerender = async (next: Partial<Parameters<typeof CreatorStudioView>[0]>) => {
+    await act(async () => {
+      root.render(createElement(CreatorStudioView, { onNavigate, onPlay: vi.fn(), ...props, ...next }));
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+  };
+  return { container, root, onNavigate, rerender };
 }
 
 describe('CreatorStudioView', () => {
@@ -87,6 +97,7 @@ describe('CreatorStudioView', () => {
     fetchGameAutonomy.mockReset();
     fetchGameAutonomy.mockRejectedValue(new Error('not owned'));
     setGameAutonomy.mockReset();
+    setDraftShared.mockReset();
   });
 
   afterEach(() => {
@@ -176,39 +187,251 @@ describe('CreatorStudioView', () => {
     fetchStudioGames.mockResolvedValue(manyGames(2));
     window.history.replaceState(null, '', '/studio/token-0');
 
-    const { container, root, onNavigate } = await renderStudio({ selectedToken: 'token-0' });
+    const { container, root, onNavigate } = await renderStudio({ selectedGame: 'token-0' });
 
-    const improveTab = Array.from(container.querySelectorAll('[role="tab"]')).find((button) =>
-      button.textContent?.includes('Improve'),
+    const detailsAction = Array.from(container.querySelectorAll('.studio-head-action')).find((button) =>
+      button.textContent?.includes('Details'),
     );
-    expect(improveTab).toBeTruthy();
+    expect(detailsAction).toBeTruthy();
 
     await act(async () => {
-      improveTab!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      detailsAction!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    expect(onNavigate).toHaveBeenCalledWith('/studio/token-0/improve');
+    expect(onNavigate).toHaveBeenCalledWith('/studio/token-0/details');
+    // Beside the thread, not instead of it: opening the facts about a game must not
+    // take the game off the screen.
+    expect(container.querySelector('.studio-rail')).not.toBeNull();
+    expect(container.querySelector('.studio-build')).not.toBeNull();
 
     root.unmount();
   });
 
-  it('falls back to the default tab when the deep-linked one does not exist for the game', async () => {
+  it('lands an old tab name on the surface that absorbed it, and corrects the URL', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
-    // token-0 is still building, so Stats has nothing to show for it.
     fetchStudioGames.mockResolvedValue(manyGames(2));
+    // The shape of a link from before there were three surfaces. The router resolves
+    // `stats` onto Details; what is asserted here is that the address follows.
     window.history.replaceState(null, '', '/studio/token-0/stats');
 
-    const { container, root, onNavigate } = await renderStudio({ selectedToken: 'token-0', selectedTab: 'stats' });
+    const { container, root, onNavigate } = await renderStudio({ selectedGame: 'token-0', selectedTab: 'details' });
 
-    // Landed on Build, and the URL was corrected in place rather than pushed.
-    const activeTab = container.querySelector('[role="tab"][aria-selected="true"]');
-    expect(activeTab?.textContent).toContain('Build');
-    expect(onNavigate).toHaveBeenCalledWith('/studio/token-0/build', { replace: true });
-    // No tab may exist in the URL that has no button to leave it by.
-    const tabLabels = Array.from(container.querySelectorAll('[role="tab"]')).map((button) => button.textContent);
-    expect(tabLabels.some((label) => label?.includes('Player feedback'))).toBe(false);
+    expect(container.querySelector('.studio-rail')).not.toBeNull();
+    // In place, so the old address does not become a history entry to go Back through.
+    expect(onNavigate).toHaveBeenCalledWith('/studio/token-0/details', { replace: true });
+    // The surface it landed on has a control showing it is open, and one to close it by.
+    const details = Array.from(container.querySelectorAll('.studio-head-action')).find((button) =>
+      button.textContent?.includes('Details'),
+    );
+    expect(details?.getAttribute('aria-pressed')).toBe('true');
+    // And the tab strip is gone for good.
+    expect(container.querySelectorAll('[role="tab"]')).toHaveLength(0);
+
+    root.unmount();
+  });
+
+  it('keeps an unpublished game to its creator until they share it', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    setDraftShared.mockResolvedValue({ shared: true, slug: 'tv-tycoon' });
+    fetchStudioGames.mockResolvedValue([
+      {
+        token: 'token-draft',
+        title: 'TV Tycoon',
+        createdAt: '2026-07-30T09:00:00.000Z',
+        lastKnownStatus: 'building',
+        slug: 'tv-tycoon',
+      },
+    ] satisfies StudioGame[]);
+    window.history.replaceState(null, '', '/studio/tv-tycoon/overview');
+
+    const { container, root } = await renderStudio({ selectedGame: 'tv-tycoon', selectedTab: 'details' });
+
+    const toggle = container.querySelector<HTMLButtonElement>('.studio-share-toggle');
+    expect(toggle?.getAttribute('aria-checked')).toBe('false');
+    // Off means off: no link on screen to copy, because there is nothing that works.
+    expect(container.querySelector('.studio-share .status-share')).toBeNull();
+
+    await act(async () => {
+      toggle!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(setDraftShared).toHaveBeenCalledWith('token-draft', true);
+    expect(container.querySelector('.studio-share-toggle')?.getAttribute('aria-checked')).toBe('true');
+    // The game's ordinary permalink — the same one it keeps once it is published, so
+    // there is nothing to re-send when that happens. Never a separate draft address.
+    expect(container.querySelector('.studio-share .inline-link')?.textContent).toContain('/play/tv-tycoon');
+
+    root.unmount();
+  });
+
+  it('puts the switch back when the change did not take', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    setDraftShared.mockRejectedValue(new Error('nope'));
+    fetchStudioGames.mockResolvedValue([
+      {
+        token: 'token-draft',
+        title: 'TV Tycoon',
+        createdAt: '2026-07-30T09:00:00.000Z',
+        lastKnownStatus: 'building',
+        slug: 'tv-tycoon',
+      },
+    ] satisfies StudioGame[]);
+
+    const { container, root } = await renderStudio({ selectedGame: 'tv-tycoon', selectedTab: 'details' });
+
+    await act(async () => {
+      container.querySelector('.studio-share-toggle')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    // A switch left showing "on" after a failed write is the worst outcome here: the
+    // creator believes they shared a game that nobody else can open.
+    expect(container.querySelector('.studio-share-toggle')?.getAttribute('aria-checked')).toBe('false');
+    expect(container.querySelector('.studio-share .error')).not.toBeNull();
+
+    root.unmount();
+  });
+
+  it('makes the details panel behave like a sheet on a narrow screen', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue(manyGames(2));
+    // jsdom has no matchMedia, which is also the fallback path in real embedded
+    // webviews — the width is what decides when the query is unavailable.
+    const width = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { value: 420, configurable: true });
+
+    const { container, root } = await renderStudio({ selectedGame: 'token-0', selectedTab: 'details' });
+
+    // Over the thread, so: something to tap beside it, and a page that does not scroll
+    // away behind it. Without these it is a fixed panel the page slides underneath.
+    expect(container.querySelector('.studio-rail-backdrop')).not.toBeNull();
+    expect(container.querySelector('.studio-rail')?.getAttribute('aria-modal')).toBe('true');
+    expect(document.body.style.overflow).toBe('hidden');
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    expect(container.querySelector('.studio-rail')).toBeNull();
+    expect(document.body.style.overflow).not.toBe('hidden');
+
+    Object.defineProperty(window, 'innerWidth', { value: width, configurable: true });
+    root.unmount();
+  });
+
+  it('leaves the details panel a plain rail when there is room beside the thread', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue(manyGames(2));
+    const width = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { value: 1440, configurable: true });
+
+    const { container, root } = await renderStudio({ selectedGame: 'token-0', selectedTab: 'details' });
+
+    // Beside the thread it is not modal, and must not lock the page — the reader can
+    // see straight past it to the conversation it is about.
+    expect(container.querySelector('.studio-rail')).not.toBeNull();
+    expect(container.querySelector('.studio-rail-backdrop')).toBeNull();
+    expect(document.body.style.overflow).not.toBe('hidden');
+
+    Object.defineProperty(window, 'innerWidth', { value: width, configurable: true });
+    root.unmount();
+  });
+
+  it('does not carry one game’s details state onto another', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue([
+      {
+        token: 'token-shared',
+        title: 'TV Tycoon',
+        createdAt: '2026-07-30T09:00:00.000Z',
+        lastKnownStatus: 'building',
+        slug: 'tv-tycoon',
+        draftShared: true,
+      },
+      {
+        token: 'token-private',
+        title: 'Space Miner',
+        createdAt: '2026-07-30T09:30:00.000Z',
+        lastKnownStatus: 'building',
+        slug: 'space-miner',
+      },
+    ] satisfies StudioGame[]);
+
+    // Two `/details` URLs in a row — a browser Back, or a link. The panel stays mounted
+    // across that, so anything it seeded from the first game would still be on screen.
+    const { container, root, rerender } = await renderStudio({
+      selectedGame: 'tv-tycoon',
+      selectedTab: 'details',
+    });
+    expect(container.querySelector('.studio-share-toggle')?.getAttribute('aria-checked')).toBe('true');
+
+    await rerender({ selectedGame: 'space-miner', selectedTab: 'details' });
+
+    // The second game has never been shared, and the switch must say so.
+    expect(container.querySelector('.studio-share-toggle')?.getAttribute('aria-checked')).toBe('false');
+    expect(setDraftShared).not.toHaveBeenCalled();
+
+    root.unmount();
+  });
+
+  it('opens a game addressed by its slug', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue(manyGames(3));
+    window.history.replaceState(null, '', '/studio/game-2');
+
+    const { container, root } = await renderStudio({ selectedGame: 'game-2' });
+
+    expect(container.querySelector('.studio-detail-title-block h2')?.textContent).toContain('Game 2');
+
+    root.unmount();
+  });
+
+  it('rewrites an old capability-token link onto the game’s slug', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue(manyGames(3));
+    window.history.replaceState(null, '', '/studio/token-1');
+
+    // The shape of a link from a months-old notification email, minted before games
+    // were given a slug at submission.
+    const { container, root, onNavigate } = await renderStudio({ selectedGame: 'token-1' });
+
+    // It still opens the right game…
+    expect(container.querySelector('.studio-detail-title-block h2')?.textContent).toContain('Game 2');
+    // …and leaves a readable URL behind it, taking the capability out of history. In
+    // place, so the old address does not become an entry to go Back through.
+    expect(onNavigate).toHaveBeenCalledWith('/studio/game-2/thread', { replace: true });
+
+    root.unmount();
+  });
+
+  it('shows nothing for a game the creator does not own', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue(manyGames(3));
+    window.history.replaceState(null, '', '/studio/somebody-elses-game');
+
+    // Slugs are public — they are in every /play/ link — so the guard cannot be that
+    // the address is secret. It is that the shelf holds only this creator's games, and
+    // nothing on this screen is fetched by the URL's value.
+    const { container, root, onNavigate } = await renderStudio({ selectedGame: 'somebody-elses-game' });
+
+    expect(container.querySelector('.studio-detail')).toBeNull();
+    expect(onNavigate).not.toHaveBeenCalled();
 
     root.unmount();
   });
@@ -224,7 +447,7 @@ describe('CreatorStudioView', () => {
 
     // First game is selected in the UI for convenience…
     expect(container.querySelector('.studio-shelf-item.is-active')?.textContent).toContain('Game 1');
-    // …but the address bar stays token-free until an explicit pick.
+    // …but nothing is written to the address bar until an explicit pick.
     expect(onNavigate).not.toHaveBeenCalled();
 
     const second = Array.from(container.querySelectorAll('.studio-shelf-item')).find((item) =>
@@ -234,7 +457,9 @@ describe('CreatorStudioView', () => {
     await act(async () => {
       second!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(onNavigate).toHaveBeenCalledWith('/studio/token-1/overview');
+    // And when it is written, it names the game — not the capability token that used
+    // to sit in the URL bar, in history, and in every screenshot of this screen.
+    expect(onNavigate).toHaveBeenCalledWith('/studio/game-2/thread');
 
     root.unmount();
   });
@@ -290,12 +515,12 @@ describe('CreatorStudioView — what players think', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     const { container, root } = await renderStudio();
-    const statsTab = Array.from(container.querySelectorAll('button')).find((button) =>
-      button.textContent?.trim().startsWith('Stats'),
+    const detailsAction = Array.from(container.querySelectorAll('.studio-head-action')).find((button) =>
+      button.textContent?.includes('Details'),
     );
-    if (statsTab) {
+    if (detailsAction) {
       await act(async () => {
-        statsTab.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        detailsAction.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       });
     }
     return { container, root };
