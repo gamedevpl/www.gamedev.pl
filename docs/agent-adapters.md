@@ -19,6 +19,25 @@ This avoids pretending that different agents share invocation flags, credential 
 execution environments. Those details belong to the operator of each agent, while the
 repository contract stays stable.
 
+## Seeded workspaces
+
+A dispatched build may start with a **generated first draft of the game already in its
+game directory** — written by a model from the creator's spec and a few published games,
+before any agent is started. This is a starting point, not a specification:
+
+- The draft has never been run, typechecked or gated. It is expected to be roughly right
+  about structure and wrong in details.
+- The agent owns the result, not the draft, and is told so: rewrite or delete whatever is
+  wrong. Recorded traces, acceptance criteria and progress landmarks in particular need a
+  game that actually runs, which a generated draft cannot produce.
+- Nothing else changes. The scope rule, the delivery contract, and the gate are identical
+  for a seeded and an unseeded build, and every seeding failure falls back to starting
+  from an empty directory rather than failing the build.
+
+Seeding is a property of the _dispatch_, not of the agent: it is carried on the build
+brief, so any adapter can honour it by placing the files in its workspace, and an adapter
+that ignores it still builds the game.
+
 ## Hosted agents
 
 GitHub Copilot's coding agent works naturally with issue-first game creation: assign a

@@ -10,16 +10,15 @@
 // GameKit, the tooling and published games as context, and the agent's output goes out
 // over the build channel instead of into a commit somebody merges.
 
-import type { AgentBackend, BuildBrief, DispatchResult } from './agent-backend.js';
+import type { AgentBackend, BuildBrief, DispatchResult, SeedFiles } from './agent-backend.js';
 import { resolveTaskBranch, type AgentTaskModel, type AgentTasksClient } from './agent-tasks.js';
 import type { GitHubClient } from './github-client.js';
 import type { AgentObservation } from './job-state.js';
 
 export interface CopilotBackendOptions {
   tasks: AgentTasksClient;
-  /** Only used to open the resumption pull request — see `resume`. */
-  /** Only used to delete a spent workspace — see `cleanup`. */
-  github: Pick<GitHubClient, 'deleteBranch'>;
+  /** Deleting a spent workspace (see `cleanup`) and committing a seed (see `dispatch`). */
+  github: Pick<GitHubClient, 'deleteBranch' | 'createBranchWithFiles'>;
   /** Branch the harness is read from. */
   baseRef?: string;
   /**
@@ -37,9 +36,21 @@ export interface CopilotBackendOptions {
    * see the comment there for why that is not simply left on.
    */
   createPullRequest?: boolean;
+  log?: { warn: (context: object, message: string) => void };
 }
 
 const DEFAULT_MODEL: AgentTaskModel = 'claude-sonnet-4.6';
+
+/**
+ * Where a job's generated round 0 is staged.
+ *
+ * Derived from the job id rather than stored, so the name is knowable from the job alone
+ * — a sweep can find a leaked seed branch without reading a record, and a redispatch
+ * reuses the same name instead of leaving one branch per attempt behind.
+ */
+export function seedBranchName(issueNumber: number): string {
+  return `seed/job-${issueNumber}`;
+}
 
 /**
  * Composes the brief.
@@ -53,11 +64,13 @@ const DEFAULT_MODEL: AgentTaskModel = 'claude-sonnet-4.6';
 export function buildPrompt(brief: BuildBrief): string {
   const slug = brief.slug ?? '(the slug named in your first progress report)';
   const lines = [
-    brief.undelivered
-      ? `Your previous session on \`${slug}\` ended without delivering it. The work may well be finished — that is not the problem. Nothing downstream reads the branch, so a game that was not uploaded does not exist as far as the site or the creator can tell. Check what is there, then deliver it.`
-      : brief.feedback
-        ? `The creator played the draft of \`${slug}\` and asked for changes. Continue that game — revise it, do not rebuild it.`
-        : `Build a new browser game in \`games/${slug}/\`.`,
+    brief.seed
+      ? `Build a new browser game in \`games/${slug}/\`. **A first draft of it is already in your checkout** — see below.`
+      : brief.undelivered
+        ? `Your previous session on \`${slug}\` ended without delivering it. The work may well be finished — that is not the problem. Nothing downstream reads the branch, so a game that was not uploaded does not exist as far as the site or the creator can tell. Check what is there, then deliver it.`
+        : brief.feedback
+          ? `The creator played the draft of \`${slug}\` and asked for changes. Continue that game — revise it, do not rebuild it.`
+          : `Build a new browser game in \`games/${slug}/\`.`,
     '',
     // The branch is not the source of truth and must not be treated as one: a session
     // can start on a fresh branch with none of the earlier work in it, and an agent
@@ -80,6 +93,28 @@ export function buildPrompt(brief: BuildBrief): string {
           '',
           'Check it over — run the game’s checks — and if it is good, deliver it. If that',
           'branch turns out to be empty or broken, build the game as you normally would.',
+          '',
+        ]
+      : []),
+    // The seed is a head start, not an instruction. An agent told to "start from this"
+    // without being told it may rewrite it will defend a bad draft; an agent told the
+    // draft is disposable will still keep what works, which is what actually happened —
+    // 96-99% of seed lines survived across the A/B, and the commits on top were the
+    // things a generated draft cannot get right (the recorded trace, a real acceptance
+    // objective, the progress landmarks that need a running game).
+    ...(brief.seed
+      ? [
+          '## The draft you are starting from',
+          '',
+          `\`games/${slug}/\` already contains a generated first draft, modelled on ${formatReferences(brief.seed.references)}.`,
+          'It has not been run, typechecked or gated — it is a starting point, not a deliverable.',
+          '',
+          '- Read it first, then make it real: it is likely to be close on structure and wrong in details.',
+          '- **You own the result, not the draft.** Rewrite or delete anything that is wrong; keeping a',
+          '  broken line because it was already there is the one failure mode here.',
+          '- The draft has never been played. Expect the recorded trace, the acceptance criteria and the',
+          '  progress landmarks to be missing or wrong — those need a running game, which is your job.',
+          ...(brief.seed.notes ? ['', `Note from the draft’s author: ${brief.seed.notes}`] : []),
           '',
         ]
       : []),
@@ -164,24 +199,88 @@ export function buildPrompt(brief: BuildBrief): string {
   return lines.join('\n');
 }
 
+/** "cannon-fodder-squad and jungle-commando" — for the agent, not for a log line. */
+function formatReferences(references: string[]): string {
+  const quoted = references.map((slug) => `\`${slug}\``);
+  if (quoted.length <= 1) return quoted[0] ?? 'published games in this repository';
+  return `${quoted.slice(0, -1).join(', ')} and ${quoted[quoted.length - 1]}`;
+}
+
 export function createCopilotBackend(options: CopilotBackendOptions): AgentBackend {
   const baseRef = options.baseRef ?? 'main';
   const model = options.model ?? DEFAULT_MODEL;
   const createPullRequest = options.createPullRequest ?? false;
 
+  /**
+   * Puts the draft on a branch, or returns null and lets the build start unseeded.
+   *
+   * The stale-branch delete is what makes a redispatch of the same job work: the name is
+   * derived from the job id, so a second attempt would otherwise collide with the first
+   * attempt's branch and fail on a ref that already exists. Deleting is safe because a
+   * seed branch is never anything but a starting point — no delivery, no review, and no
+   * history anyone reads.
+   */
+  async function stageSeed(issueNumber: number, seed: SeedFiles): Promise<string | null> {
+    const branch = seedBranchName(issueNumber);
+    try {
+      await options.github.deleteBranch(branch).catch(() => undefined);
+      await options.github.createBranchWithFiles({
+        branch,
+        baseRef,
+        message: `Seed round 0 for ${seed.slug} (job ${issueNumber})`,
+        files: seed.files.map((file) => ({ path: `games/${seed.slug}/${file.path}`, content: file.content })),
+      });
+      return branch;
+    } catch (error) {
+      options.log?.warn(
+        { err: error, issueNumber, slug: seed.slug },
+        'could not stage the generated seed, dispatching unseeded',
+      );
+      return null;
+    }
+  }
+
   return {
     name: 'copilot',
 
+    /**
+     * Starts a build, from a generated draft when the brief carries one.
+     *
+     * **The seed is delivered as `base_ref`, not `head_ref`.** The spike that proved
+     * seeding worth doing used `head_ref` — resume the branch the draft is on — and that
+     * is the wrong mechanism here for two reasons the spike could not see. `head_ref` is
+     * silently ignored unless the branch has an open pull request, so it would put a PR
+     * back into a delivery path deliberately built to have none; and it means "continue
+     * this work", which is a claim about a draft that has never been run. `base_ref` is
+     * honoured unconditionally, needs no pull request, and says the true thing: this is
+     * where your workspace starts.
+     *
+     * The seed branch is cut from the harness pin at dispatch, so a seeded workspace is
+     * exactly as current as an unseeded one — the staleness that ruled out branch
+     * resumption for revision rounds (see `resume`) cannot arise here.
+     *
+     * A seed that cannot be staged is not an error: the build dispatches unseeded, which
+     * is what every build did before seeding existed.
+     */
     async dispatch(brief: BuildBrief): Promise<DispatchResult> {
+      const seedBranch = brief.seed ? await stageSeed(brief.issueNumber, brief.seed) : null;
+      // The brief drives the prompt, so a seed that failed to stage must not leave the
+      // agent being told about a draft that is not in its checkout.
+      const effectiveBrief = seedBranch ? brief : { ...brief, seed: undefined };
+
       const task = await options.tasks.startTask({
-        prompt: buildPrompt(brief),
-        baseRef,
+        prompt: buildPrompt(effectiveBrief),
+        baseRef: seedBranch ?? baseRef,
         model,
         createPullRequest,
         customAgent: options.customAgent,
       });
       // A fresh task has no branch yet; the reconciler fills it in on first observation.
-      return { ref: task.id, workspace: resolveTaskBranch(task) ?? undefined };
+      return {
+        ref: task.id,
+        workspace: resolveTaskBranch(task) ?? undefined,
+        ...(seedBranch ? { seedWorkspace: seedBranch } : {}),
+      };
     },
 
     /**

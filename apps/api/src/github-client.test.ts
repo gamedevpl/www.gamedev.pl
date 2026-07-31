@@ -975,3 +975,82 @@ describe('archive-backed file source', () => {
     await expect(client.getGameMedia('main', 'coin-catcher', 'absent.png')).resolves.toBeNull();
   });
 });
+
+describe('createBranchWithFiles', () => {
+  /** Records every write so the git-data sequence can be asserted as a sequence. */
+  function gitDataFetch() {
+    const calls: { url: string; method: string; body: Record<string, unknown> }[] = [];
+    const fetchImpl = vi.fn(async (url: string | URL, init?: RequestInit) => {
+      const href = String(url);
+      const method = init?.method ?? 'GET';
+      const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
+      calls.push({ url: href, method, body });
+
+      if (href.includes('/commits/')) {
+        return new Response(JSON.stringify({ sha: 'base-sha', commit: { tree: { sha: 'base-tree-sha' } } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (href.endsWith('/git/trees')) {
+        return new Response(JSON.stringify({ sha: 'new-tree-sha' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (href.endsWith('/git/commits')) {
+        return new Response(JSON.stringify({ sha: 'new-commit-sha' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({ ref: 'refs/heads/seed/job-42' }), {
+        status: 201,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    return { fetchImpl, calls };
+  }
+
+  it('writes every file in one commit on a new branch', async () => {
+    const { fetchImpl, calls } = gitDataFetch();
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    const result = await client.createBranchWithFiles({
+      branch: 'seed/job-42',
+      baseRef: 'main',
+      message: 'Seed round 0',
+      files: [
+        { path: 'games/x/game.ts', content: 'export {};\n' },
+        { path: 'games/x/game/model.ts', content: 'export const A = 1;\n' },
+      ],
+    });
+
+    expect(result).toEqual({ branch: 'seed/job-42', sha: 'new-commit-sha' });
+    // Four requests regardless of file count: resolve, tree, commit, ref. A
+    // contents-API write would have been one request per file plus the ref.
+    expect(calls).toHaveLength(4);
+
+    const tree = calls[1];
+    expect(tree.url).toContain('/git/trees');
+    expect(tree.body.base_tree).toBe('base-tree-sha');
+    // Content inline rather than a blob per file — that is what keeps this at four.
+    expect(tree.body.tree).toEqual([
+      { path: 'games/x/game.ts', mode: '100644', type: 'blob', content: 'export {};\n' },
+      { path: 'games/x/game/model.ts', mode: '100644', type: 'blob', content: 'export const A = 1;\n' },
+    ]);
+
+    expect(calls[2].body).toEqual({ message: 'Seed round 0', tree: 'new-tree-sha', parents: ['base-sha'] });
+    expect(calls[3].body).toEqual({ ref: 'refs/heads/seed/job-42', sha: 'new-commit-sha' });
+  });
+
+  it('throws rather than branching from nowhere when the base ref does not resolve', async () => {
+    const fetchImpl = vi.fn(async () => new Response('{}', { status: 200 })) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    await expect(
+      client.createBranchWithFiles({ branch: 'seed/job-1', baseRef: 'nope', message: 'x', files: [] }),
+    ).rejects.toThrow(/cannot resolve base ref/);
+  });
+});

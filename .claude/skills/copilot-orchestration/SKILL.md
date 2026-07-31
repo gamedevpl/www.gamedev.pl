@@ -66,6 +66,13 @@ by `state`/`since`/`creator_id`/`is_archived`), `GET .../tasks/{task_id}` (one t
 tokens are not supported.** A server-side orchestrator must therefore hold a human's token —
 there is no way to run this as a pure machine identity.
 
+**The gh CLI works — verified 2026-07-31.** `gh`'s stored credential is an OAuth app
+user-to-server token, and a six-task dispatch (the seed-spike A/B) ran entirely through
+`gh api -H "X-GitHub-Api-Version: 2026-03-10" agents/repos/{o}/{r}/tasks` with no PAT.
+For interactive/local scripting prefer it: auth is handled for you and no token touches a
+shell variable. Pass the POST body with `--input file.json` (not `-f` flags) so
+`create_pull_request` stays a real boolean.
+
 **Licensing.** Available on all *paid* Copilot plans; the agent-tasks API reached Pro/Pro+/Max
 in June 2026. The REST reference still carries a stale line restricting `POST` to
 Business/Enterprise — it is wrong; a personal paid plan works. No Enterprise seat needed.

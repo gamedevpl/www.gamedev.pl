@@ -15,6 +15,18 @@ function task(overrides: Partial<AgentTask> = {}): AgentTask {
   return { id: 'task-1', state: 'queued', sessionCount: 0, sessions: [], ...overrides };
 }
 
+/** The two writes the backend makes into the games repo, both stubbed by default. */
+function stubGithub(
+  overrides: Partial<{ deleteBranch: ReturnType<typeof vi.fn>; createBranchWithFiles: ReturnType<typeof vi.fn> }> = {},
+) {
+  return {
+    deleteBranch: overrides.deleteBranch ?? vi.fn(async () => undefined),
+    createBranchWithFiles:
+      overrides.createBranchWithFiles ??
+      vi.fn(async (input: { branch: string }) => ({ branch: input.branch, sha: 'seed-sha' })),
+  };
+}
+
 function stubTasks(result: AgentTask = task()) {
   const startTask = vi.fn(async (_input: AgentTaskInput) => result);
   const getTask = vi.fn(async () => result);
@@ -90,7 +102,7 @@ describe('dispatch', () => {
     const { client, startTask } = stubTasks();
     const backend = createCopilotBackend({
       tasks: client,
-      github: { deleteBranch: vi.fn() },
+      github: stubGithub(),
       model: 'gpt-5.4',
       customAgent: 'game-builder',
     });
@@ -109,7 +121,7 @@ describe('dispatch', () => {
 
   it('reads the branch back from the task rather than assuming one', async () => {
     const { client } = stubTasks(task({ branch: { headRef: 'copilot/comet-courier' } }));
-    const backend = createCopilotBackend({ tasks: client, github: { deleteBranch: vi.fn() } });
+    const backend = createCopilotBackend({ tasks: client, github: stubGithub() });
 
     expect(await backend.dispatch(BRIEF)).toEqual({ ref: 'task-1', workspace: 'copilot/comet-courier' });
   });
@@ -121,7 +133,7 @@ describe('resume', () => {
     // when the build started — the exact drift the gate exists to catch, self-inflicted
     // and growing with the age of the job. The game comes back from the store instead.
     const { client, startTask } = stubTasks(task({ branch: { headRef: 'copilot/fresh' } }));
-    const backend = createCopilotBackend({ tasks: client, github: { deleteBranch: vi.fn() } });
+    const backend = createCopilotBackend({ tasks: client, github: stubGithub() });
 
     const result = await backend.resume(
       { ...BRIEF, feedback: 'bigger bubbles' },
@@ -139,7 +151,7 @@ describe('resume', () => {
     // path built to have none. Not resuming a branch removes the need entirely.
     const { client } = stubTasks(task({ branch: { headRef: 'copilot/fresh' } }));
     const deleteBranch = vi.fn();
-    const backend = createCopilotBackend({ tasks: client, github: { deleteBranch } });
+    const backend = createCopilotBackend({ tasks: client, github: stubGithub({ deleteBranch }) });
 
     await backend.resume({ ...BRIEF, feedback: 'again' }, { ref: 'task-1', workspace: 'copilot/stale' });
 
@@ -150,7 +162,7 @@ describe('resume', () => {
 
   it('carries the feedback into the new round', async () => {
     const { client, startTask } = stubTasks(task({ branch: { headRef: 'copilot/fresh' } }));
-    const backend = createCopilotBackend({ tasks: client, github: { deleteBranch: vi.fn() } });
+    const backend = createCopilotBackend({ tasks: client, github: stubGithub() });
 
     await backend.resume({ ...BRIEF, feedback: 'bigger bubbles' }, { ref: 'task-1', workspace: 'copilot/stale' });
 
@@ -163,7 +175,7 @@ describe('cleanup', () => {
   it('deletes a spent workspace', async () => {
     const { client } = stubTasks();
     const deleteBranch = vi.fn();
-    const backend = createCopilotBackend({ tasks: client, github: { deleteBranch } });
+    const backend = createCopilotBackend({ tasks: client, github: stubGithub({ deleteBranch }) });
 
     await backend.cleanup?.({ ref: 'task-1', workspace: 'copilot/spent' });
 
@@ -173,7 +185,7 @@ describe('cleanup', () => {
   it('does nothing for a dispatch that never got a branch', async () => {
     const { client } = stubTasks();
     const deleteBranch = vi.fn();
-    const backend = createCopilotBackend({ tasks: client, github: { deleteBranch } });
+    const backend = createCopilotBackend({ tasks: client, github: stubGithub({ deleteBranch }) });
 
     await backend.cleanup?.({ ref: 'task-1' });
 
@@ -184,7 +196,7 @@ describe('cleanup', () => {
 describe('observe and cancel', () => {
   it('normalizes the task state into a backend-neutral observation', async () => {
     const { client } = stubTasks(task({ state: 'in_progress' }));
-    const backend = createCopilotBackend({ tasks: client, github: { deleteBranch: vi.fn() } });
+    const backend = createCopilotBackend({ tasks: client, github: stubGithub() });
 
     expect(await backend.observe('task-1', { hasCandidate: false })).toEqual({
       state: 'in_progress',
@@ -197,7 +209,7 @@ describe('observe and cancel', () => {
     // never comes back and asks never learns where its own work lives — and a revision
     // round then cannot resume it, only start somewhere else from nothing.
     const { client } = stubTasks(task({ state: 'in_progress', branch: { headRef: 'copilot/tv-tycoon' } }));
-    const backend = createCopilotBackend({ tasks: client, github: { deleteBranch: vi.fn() } });
+    const backend = createCopilotBackend({ tasks: client, github: stubGithub() });
 
     expect(await backend.observe('task-1', { hasCandidate: false })).toEqual({
       state: 'in_progress',
@@ -210,7 +222,7 @@ describe('observe and cancel', () => {
     // There is no cancel endpoint. Saying so honestly is what stops the UI promising a
     // creator that a wedged agent has been killed when it has only been ignored.
     const { client } = stubTasks();
-    const backend = createCopilotBackend({ tasks: client, github: { deleteBranch: vi.fn() } });
+    const backend = createCopilotBackend({ tasks: client, github: stubGithub() });
 
     expect(await backend.cancel('task-1')).toEqual({ enforced: false });
   });
@@ -245,6 +257,104 @@ describe('dispatch through the submissions route', () => {
       backend: 'copilot',
       refs: ['task-1', 'task-2'],
       workspace: 'copilot/x',
+      seedWorkspace: undefined,
     });
+  });
+});
+
+const SEED = {
+  slug: 'comet-courier',
+  files: [
+    { path: 'SPEC.md', content: '---\ntitle: Comet Courier\n---\n' },
+    { path: 'game.ts', content: 'export {};\n' },
+    { path: 'game/model.ts', content: 'export const SPEED = 1;\n' },
+  ],
+  references: ['apex-sprint', 'cannon-hills'],
+  notes: 'The trace still needs recording.',
+};
+
+describe('seeded dispatch', () => {
+  it('commits the draft under the game directory and starts the agent from that branch', async () => {
+    const { client, startTask } = stubTasks();
+    const github = stubGithub();
+    const backend = createCopilotBackend({ tasks: client, github, baseRef: 'main' });
+
+    const result = await backend.dispatch({ ...BRIEF, seed: SEED });
+
+    expect(github.createBranchWithFiles).toHaveBeenCalledWith(
+      expect.objectContaining({
+        branch: 'seed/job-42',
+        baseRef: 'main',
+        files: [
+          { path: 'games/comet-courier/SPEC.md', content: '---\ntitle: Comet Courier\n---\n' },
+          { path: 'games/comet-courier/game.ts', content: 'export {};\n' },
+          { path: 'games/comet-courier/game/model.ts', content: 'export const SPEED = 1;\n' },
+        ],
+      }),
+    );
+
+    // base_ref, not head_ref: head_ref is silently ignored without an open pull request,
+    // and a draft that has never run is a starting point rather than work to continue.
+    const input = startTask.mock.calls[0][0];
+    expect(input.baseRef).toBe('seed/job-42');
+    expect(input.headRef).toBeUndefined();
+    expect(input.createPullRequest).toBe(false);
+    expect(result.seedWorkspace).toBe('seed/job-42');
+  });
+
+  it('deletes a stale seed branch first, so redispatching a job works', async () => {
+    const { client } = stubTasks();
+    const github = stubGithub();
+    const backend = createCopilotBackend({ tasks: client, github, baseRef: 'main' });
+
+    await backend.dispatch({ ...BRIEF, seed: SEED });
+
+    expect(github.deleteBranch).toHaveBeenCalledWith('seed/job-42');
+    expect(github.deleteBranch.mock.invocationCallOrder[0]).toBeLessThan(
+      github.createBranchWithFiles.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('tells the agent the draft is disposable, and which games it came from', async () => {
+    const prompt = buildPrompt({ ...BRIEF, seed: SEED });
+
+    expect(prompt).toContain('already contains a generated first draft');
+    expect(prompt).toContain('`apex-sprint` and `cannon-hills`');
+    // The anchoring guard: an agent that defends a bad draft is the failure mode here.
+    expect(prompt).toContain('**You own the result, not the draft.**');
+    expect(prompt).toContain('Rewrite or delete anything that is wrong');
+    expect(prompt).toContain('The trace still needs recording.');
+  });
+
+  it('dispatches unseeded when the draft cannot be staged', async () => {
+    // Fail-open is the whole contract: a seed is an optimization, and a games-repo
+    // hiccup must not cost a creator their build.
+    const { client, startTask } = stubTasks();
+    const github = stubGithub({
+      createBranchWithFiles: vi.fn(async () => {
+        throw new Error('ref already exists');
+      }),
+    });
+    const backend = createCopilotBackend({ tasks: client, github, baseRef: 'main' });
+
+    const result = await backend.dispatch({ ...BRIEF, seed: SEED });
+
+    const input = startTask.mock.calls[0][0];
+    expect(input.baseRef).toBe('main');
+    expect(result.seedWorkspace).toBeUndefined();
+    // And critically: the agent is not told about a draft that is not in its checkout.
+    expect(input.prompt).not.toContain('already contains a generated first draft');
+  });
+
+  it('leaves an unseeded dispatch exactly as it was', async () => {
+    const { client, startTask } = stubTasks();
+    const github = stubGithub();
+    const backend = createCopilotBackend({ tasks: client, github, baseRef: 'main' });
+
+    const result = await backend.dispatch(BRIEF);
+
+    expect(github.createBranchWithFiles).not.toHaveBeenCalled();
+    expect(startTask.mock.calls[0][0].baseRef).toBe('main');
+    expect(result.seedWorkspace).toBeUndefined();
   });
 });

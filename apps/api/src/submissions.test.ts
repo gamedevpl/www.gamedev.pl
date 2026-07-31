@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mintAgentToken } from './agent-token.js';
 import { buildApp } from './app.js';
+import type { GameSeeder, SeedDraft } from './game-seed.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
 import type { ContentChecker } from './moderation.js';
@@ -130,6 +131,7 @@ async function createApp(params: {
     }) => Promise<{ buildId?: string } | void>;
   };
   adminUids?: string;
+  gameSeeder?: GameSeeder;
 }): Promise<{ app: FastifyInstance; store: Store; authHeaders: Record<string, string> }> {
   const store = params.store ?? new InMemoryStore();
   await store.upsertUser({ uid: 'g:test-user' });
@@ -144,6 +146,7 @@ async function createApp(params: {
       gamesRepo: repo,
       githubClient: params.githubClient,
       agentBackend: params.agentBackend,
+      ...(params.gameSeeder ? { gameSeeder: params.gameSeeder } : {}),
       now: params.now,
       dailySubmissionQuota: params.dailySubmissionQuota,
       dailyFeedbackQuota: params.dailyFeedbackQuota,
@@ -3007,6 +3010,280 @@ describe('operator health re-gate', () => {
         healthCheck: expect.objectContaining({ green: false }),
       }),
     ]);
+
+    await app.close();
+  });
+});
+
+/**
+ * Seeding through the whole submission path.
+ *
+ * The unit tests cover what a seed may contain and how a backend places it; these cover
+ * the two things only the route can get wrong — that a seeded build has a slug and a
+ * priced ledger entry before the agent starts, and that none of it can cost a creator
+ * their build when it goes wrong.
+ */
+describe('seeded dispatch', () => {
+  function seederStub(draft: Partial<SeedDraft> | null, onSeed?: (slug: string) => void): GameSeeder {
+    return {
+      seed: async ({ slug }) => {
+        onSeed?.(slug);
+        if (!draft) return null;
+        return {
+          slug,
+          files: [{ path: 'game.ts', content: 'export {};\n' }],
+          references: ['apex-sprint'],
+          usage: { inputTokens: 30_000, outputTokens: 9_000, model: 'gemini-3.6-flash' },
+          elapsedMs: 41_000,
+          compiles: false,
+          repaired: false,
+          ...draft,
+        } as SeedDraft;
+      },
+    };
+  }
+
+  async function submitOne(title: string, params: Parameters<typeof createApp>[0]) {
+    const { app, store, authHeaders } = await createApp(params);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title, concept: 'A game where you deliver parcels between comets, dodging debris.' },
+    });
+    return { app, store, response };
+  }
+
+  it('seeds into the job’s own slug and bills the tokens to it', async () => {
+    const stub = createGithubClientStub({});
+    const { backend, briefs } = createBackendStub();
+    const seeded: string[] = [];
+    const { app, store, response } = await submitOne('Comet Courier', {
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      gameSeeder: seederStub({}, (slug) => seeded.push(slug)),
+    });
+
+    expect(response.statusCode).toBe(200);
+    // The submission minted and confirmed this address before dispatch; the seeder
+    // writes into it rather than deciding a second one.
+    expect(seeded).toEqual(['comet-courier']);
+
+    // The job id comes from the brief the backend was handed: the route answers with a
+    // status token, and the seed is written before either of them exists.
+    const record = await store.getSubmission(briefs[0].issueNumber);
+    expect(record?.slug).toBe('comet-courier');
+    expect(briefs[0].seed?.slug).toBe('comet-courier');
+    expect(briefs[0].slug).toBe('comet-courier');
+
+    // A real token measurement on the ledger — the first thing in it that is not a
+    // premium request with no numbers behind it.
+    const seedCost = record?.costs?.find((entry) => entry.kind === 'seed');
+    expect(seedCost?.tokens).toEqual({ input: 30_000, output: 9_000 });
+    expect(seedCost?.by).toBe('gemini-3.6-flash');
+
+    await app.close();
+  });
+
+  it('dispatches unseeded when the seeder declines, and still builds the game', async () => {
+    const stub = createGithubClientStub({});
+    const { backend, briefs } = createBackendStub();
+    const { app, store, response } = await submitOne('Comet Courier', {
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      gameSeeder: seederStub(null),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(briefs).toHaveLength(1);
+    expect(briefs[0].seed).toBeUndefined();
+    // The job keeps the slug the submission gave it — seeding declining changes nothing
+    // about the game's address — and nothing is billed for a seed that never happened.
+    const record = await store.getSubmission(briefs[0].issueNumber);
+    expect(record?.slug).toBe('comet-courier');
+    expect(record?.costs ?? []).not.toContainEqual(expect.objectContaining({ kind: 'seed' }));
+
+    await app.close();
+  });
+
+  it('still dispatches when the seeder throws', async () => {
+    const stub = createGithubClientStub({});
+    const { backend, briefs } = createBackendStub();
+    const { app, response } = await submitOne('Comet Courier', {
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      gameSeeder: {
+        seed: async () => {
+          throw new Error('vertex is having a day');
+        },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(briefs).toHaveLength(1);
+    expect(briefs[0].seed).toBeUndefined();
+
+    await app.close();
+  });
+
+  it('publishes a round-0 preview when the seed compiles and a seed branch exists', async () => {
+    const stub = createGithubClientStub({
+      gameSources: {
+        indexHtml: '<main id="game"></main>',
+        gameJs: 'console.log("round zero");',
+        styleCss: 'body { background: #000; }',
+        title: 'Comet Courier',
+      },
+    });
+    const briefs: BuildBrief[] = [];
+    const backend: AgentBackend = {
+      name: 'stub',
+      dispatch: async (brief) => {
+        briefs.push(brief);
+        return { ref: 'task-1', workspace: 'copilot/x', seedWorkspace: 'seed/job-9' };
+      },
+      resume: async (brief) => {
+        briefs.push(brief);
+        return { ref: 'task-2' };
+      },
+      observe: async () => null,
+      cancel: async () => ({ enforced: false }),
+    };
+    const { app, store, response } = await submitOne('Comet Courier', {
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      gameSeeder: seederStub({ compiles: true }),
+    });
+
+    expect(response.statusCode).toBe(200);
+    // Deliberately off the submit response path, so the preview lands moments later.
+    const previews = await vi.waitFor(async () => {
+      const listed = await store.listBuildPreviews(briefs[0].issueNumber);
+      expect(listed.length).toBeGreaterThan(0);
+      return listed;
+    });
+
+    expect(previews[0].slug).toBe('comet-courier');
+    expect(previews[0].label).toContain('rough draft');
+    const stored = await store.getBuildPreview(briefs[0].issueNumber, previews[0].id);
+    const html = Buffer.from(stored!.data, 'base64').toString('utf8');
+    // The full serve hygiene, not a weaker preview variant: sandbox CSP and the AI Act
+    // provenance marking both present in what the creator's iframe will run.
+    expect(html).toContain('round zero');
+    expect(html).toContain('Content-Security-Policy');
+    expect(html).toContain('ai-generated');
+    // Assembled from the seed branch — the exact bytes the agent starts from.
+    expect(stub.githubClient.getGameSources).toHaveBeenCalledWith('seed/job-9', 'comet-courier');
+
+    await app.close();
+  });
+
+  it('publishes no preview for a draft that does not compile', async () => {
+    const stub = createGithubClientStub({
+      gameSources: {
+        indexHtml: '<main id="game"></main>',
+        gameJs: 'console.log("round zero");',
+        styleCss: '',
+        title: 'Comet Courier',
+      },
+    });
+    const briefs: BuildBrief[] = [];
+    const backend: AgentBackend = {
+      name: 'stub',
+      dispatch: async (brief) => {
+        briefs.push(brief);
+        return { ref: 'task-1', workspace: 'copilot/x', seedWorkspace: 'seed/job-9' };
+      },
+      resume: async () => ({ ref: 'task-2' }),
+      observe: async () => null,
+      cancel: async () => ({ enforced: false }),
+    };
+    const { app, store, response } = await submitOne('Comet Courier', {
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      gameSeeder: seederStub({ compiles: false }),
+    });
+
+    expect(response.statusCode).toBe(200);
+    // A draft that does not bundle is still dispatched (the agent will fix it) — the
+    // only thing withheld is showing it to the creator.
+    expect(briefs[0].seed).toBeDefined();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(await store.listBuildPreviews(briefs[0].issueNumber)).toEqual([]);
+    expect(stub.githubClient.getGameSources).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('records the seed workspace so the branch is released with the job', async () => {
+    const { InMemoryStore } = await import('./store.js');
+    const store = new InMemoryStore();
+    await store.createSubmission(1, 'g:1', 'A game');
+    await store.recordDispatch(1, {
+      backend: 'copilot',
+      ref: 'task-1',
+      workspace: 'copilot/x',
+      seedWorkspace: 'seed/job-1',
+    });
+
+    expect((await store.getSubmission(1))?.dispatch?.seedWorkspace).toBe('seed/job-1');
+
+    // Cleared once released, so nothing asks GitHub to delete the same ref forever.
+    await store.clearDispatchSeedWorkspace(1);
+    expect((await store.getSubmission(1))?.dispatch?.seedWorkspace).toBeUndefined();
+    expect((await store.getSubmission(1))?.dispatch?.workspace).toBe('copilot/x');
+  });
+
+  it('forgets the seed branch when abandoning, so it is never deleted twice', async () => {
+    const stub = createGithubClientStub({});
+    const cleaned: string[] = [];
+    const briefs: BuildBrief[] = [];
+    const backend: AgentBackend = {
+      name: 'stub',
+      dispatch: async (brief) => {
+        briefs.push(brief);
+        return { ref: 'task-1', workspace: 'copilot/x', seedWorkspace: 'seed/job-9' };
+      },
+      resume: async () => ({ ref: 'task-2' }),
+      observe: async () => null,
+      cancel: async () => ({ enforced: false }),
+      cleanup: async (previous) => {
+        if (previous.workspace) cleaned.push(previous.workspace);
+      },
+    };
+    const { app, store, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      gameSeeder: seederStub({ compiles: false }),
+    });
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'Comet Courier', concept: 'A game where you deliver parcels between comets, dodging debris.' },
+    });
+    const { token } = created.json() as { token: string };
+
+    const abandoned = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/abandon`,
+      headers: authHeaders,
+    });
+
+    expect(abandoned.statusCode).toBe(200);
+    // Both branches released once...
+    expect(cleaned).toContain('seed/job-9');
+    expect(cleaned.filter((branch) => branch === 'seed/job-9')).toHaveLength(1);
+    // ...and the name is off the record, so a second abandon cannot ask again.
+    const record = await store.getSubmission(briefs[0].issueNumber);
+    expect(record?.dispatch?.seedWorkspace).toBeUndefined();
+    expect(record?.dispatch?.workspace).toBe('copilot/x');
 
     await app.close();
   });

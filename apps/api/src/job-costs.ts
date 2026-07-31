@@ -48,6 +48,15 @@ export interface JobCostSummary {
   credits: number;
   /** Gate runs started for this job — one per delivery that reached the verifier. */
   gateRuns: number;
+  /**
+   * Whether this job's agent started from a generated first draft.
+   *
+   * Read from the ledger, not from configuration: seeding fails open, so the flag being
+   * on does not mean a given build got one. This is what lets production traffic keep
+   * answering the question the seed A/B answered on three specs — seeded and unseeded
+   * builds are both in here, labelled, with their sessions and wall-clock beside them.
+   */
+  seeded: boolean;
   /** Present only when some backend actually reported tokens. */
   tokens?: { input: number; output: number };
   /**
@@ -73,6 +82,8 @@ export interface CostTotals {
   credits: number;
   gateRuns: number;
   published: number;
+  /** How many of the jobs above started from a generated draft. */
+  seededJobs: number;
   tokens?: { input: number; output: number };
   usd?: number;
 }
@@ -148,10 +159,12 @@ function summarize(record: SubmissionRecord): JobCostSummary {
     sessions: entries.filter((entry) => entry.kind === 'agent_session').length,
     credits,
     gateRuns: entries.filter((entry) => entry.kind === 'gate_run').length,
-    // Absent rather than zero: nothing reports tokens yet, and a zero would read as a
-    // measurement that came back empty instead of one that was never taken. Money is
-    // absent on the same rule — a missing figure means no priced spending was recorded,
-    // which still includes the case of a job whose only entries are unpriced gate runs.
+    seeded: entries.some((entry) => entry.kind === 'seed'),
+    // Absent rather than zero: a zero would read as a measurement that came back empty
+    // instead of one that was never taken. Seeds report tokens and Copilot sessions do
+    // not, so a seeded job's token count is the seed's alone — real, and not the whole
+    // story. Money is absent on the same rule: a missing figure means no priced spending
+    // was recorded, which still includes a job whose only entries are unpriced gate runs.
     ...(tokens.input + tokens.output > 0 ? { tokens } : {}),
     ...(usd > 0 ? { usd } : {}),
     elapsedMs: Math.max(0, lastActivityAt(record) - Date.parse(record.createdAt)),
@@ -167,6 +180,7 @@ export function buildCostReport(records: SubmissionRecord[]): CostReport {
     jobs: jobs.length,
     sessions: jobs.reduce((sum, job) => sum + job.sessions, 0),
     credits: jobs.reduce((sum, job) => sum + job.credits, 0),
+    seededJobs: jobs.filter((job) => job.seeded).length,
     gateRuns: jobs.reduce((sum, job) => sum + job.gateRuns, 0),
     published: jobs.filter((job) => job.published).length,
   };

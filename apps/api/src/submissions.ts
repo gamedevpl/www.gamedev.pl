@@ -15,7 +15,8 @@ import {
 } from './game-snapshot.js';
 import { startHealthCheck } from './game-health.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
-import type { AgentBackend } from './agent-backend.js';
+import type { AgentBackend, SeedFiles } from './agent-backend.js';
+import type { GameSeeder, SeedDraft } from './game-seed.js';
 import {
   canTransition,
   detectStall,
@@ -207,6 +208,11 @@ export interface SubmissionRoutesOptions {
    * wired in this environment and the games repo's label workflow still starts builds.
    */
   agentBackend?: AgentBackend;
+  /**
+   * Writes the first draft a new build starts from. Absent means every build starts from
+   * an empty directory, which is what they all did before seeding existed.
+   */
+  gameSeeder?: GameSeeder;
   agentChannel?: Pick<
     AgentChannelOptions,
     'maxEventsPerBuild' | 'maxEventsPerWindow' | 'gamesStore' | 'maxSubmitsPerWindow' | 'onSourcesDelivered'
@@ -363,6 +369,7 @@ export async function registerSubmissionRoutes(
   const maxImprovementsPerWindow = 10;
   const internalAuthVerifier = options.internalAuthVerifier ?? createInternalAuthVerifierFromEnv();
   const agentBackend = options.agentBackend;
+  const gameSeeder = options.gameSeeder;
 
   // Shared deps for notification emission (in-app + best-effort email). The mailer
   // degrades to a no-op without RESEND_API_KEY, and email is skipped entirely
@@ -456,6 +463,118 @@ export async function registerSubmissionRoutes(
     }
   }
 
+  /**
+   * Books what a seed cost, in the unit it was actually billed in.
+   *
+   * The first entry in this ledger with real token counts. Copilot bills a premium
+   * request and reports no tokens, so `agent_session` entries can only ever say
+   * "one credit"; a seed is a direct Vertex call, priced per token, and the SDK hands
+   * the count back — so the money question stops being unanswerable for the part of a
+   * build we run ourselves.
+   */
+  async function recordSeedCost(
+    issueNumber: number,
+    draft: SeedDraft,
+    log: { error: (context: object, message: string) => void },
+  ): Promise<void> {
+    if (!store) return;
+    try {
+      await store.recordJobCost(issueNumber, {
+        kind: 'seed',
+        at: new Date(now()).toISOString(),
+        by: draft.usage.model,
+        tokens: { input: draft.usage.inputTokens, output: draft.usage.outputTokens },
+      });
+    } catch (error) {
+      log.error({ err: error, issueNumber }, 'could not record the cost of a seed');
+    }
+  }
+
+  /**
+   * Generates round 0, or returns null and lets the build start from nothing.
+   *
+   * Only for builds that are starting a game. A revision restores the delivered sources
+   * from the store and continues them, so seeding one would mean handing the agent a
+   * freshly invented draft of a game the creator has already played — the opposite of
+   * what they asked for.
+   *
+   * The slug comes from the job, which already has one: a submission mints and
+   * race-confirms its address before dispatch, so there is nothing here to decide.
+   */
+  async function seedBuild(input: {
+    issueNumber: number;
+    slug: string;
+    spec: string;
+    log: { error: (context: object, message: string) => void };
+  }): Promise<SeedDraft | undefined> {
+    if (!gameSeeder || !store) return undefined;
+    try {
+      const record = await store.getSubmission(input.issueNumber);
+      if (!record) return undefined;
+
+      const draft = await gameSeeder.seed({ slug: input.slug, title: record.title, spec: input.spec });
+      if (!draft) return undefined;
+
+      await recordSeedCost(input.issueNumber, draft, input.log);
+      return draft;
+    } catch (error) {
+      // Fail-open is the whole contract: a seed is an optimization, and a build that
+      // cannot get one is a build that starts the way every build used to.
+      input.log.error({ err: error, issueNumber: input.issueNumber }, 'seeding failed, dispatching unseeded');
+      return undefined;
+    }
+  }
+
+  /**
+   * The label is authored in both languages rather than machine translated, like the
+   * status page's own vocabulary: it is one fixed sentence, and a creator's very first
+   * impression of their game should not depend on a translation call succeeding.
+   */
+  const SEED_PREVIEW_LABEL = 'First rough draft \u2014 the agent is improving it';
+  const SEED_PREVIEW_LABEL_PL = 'Pierwszy szkic gry \u2014 agent w\u0142a\u015bnie j\u0105 ulepsza';
+
+  /** Same ceiling as the channel's preview verb: this store record is the same record. */
+  const SEED_PREVIEW_MAX_BYTES = 320 * 1024;
+
+  /**
+   * Assembles the seed branch into a playable preview on the creator's status page.
+   *
+   * Reuses the entire published-game serve path — `getGameSources` bundles the game
+   * against the engine on that ref, `assembleGameHtml` applies the CSP, the AI Act
+   * provenance marking and the credential scan — so the round-0 preview passes exactly
+   * the hygiene a published game does, not a weaker preview-only variant. The result
+   * lands in the same `BuildPreview` slot the agent's own pushes use, so the status
+   * page needs no new rendering: the agent's first real preview simply supersedes this
+   * one on the same rail.
+   */
+  async function publishSeedPreview(input: {
+    issueNumber: number;
+    slug: string;
+    seedRef: string;
+    locale: string;
+  }): Promise<void> {
+    if (!store || !githubClient) return;
+    const sources = await githubClient.getGameSources(input.seedRef, input.slug);
+    if (!sources) return;
+    const html = assembleGameHtml(
+      {
+        title: sources.title ?? input.slug,
+        description: '',
+        html: sources.indexHtml,
+        js: sources.gameJs,
+        css: sources.styleCss,
+      },
+      { restrictNetwork: true },
+    );
+    if (Buffer.byteLength(html, 'utf8') > SEED_PREVIEW_MAX_BYTES) return;
+    await store.appendBuildPreview(input.issueNumber, {
+      data: Buffer.from(html, 'utf8').toString('base64'),
+      slug: input.slug,
+      label: SEED_PREVIEW_LABEL,
+      ...(input.locale.startsWith('pl') ? { labelLocalized: SEED_PREVIEW_LABEL_PL, locale: input.locale } : {}),
+    });
+  }
+
   async function dispatchBuild(input: {
     issueNumber: number;
     spec: string;
@@ -477,6 +596,19 @@ export async function registerSubmissionRoutes(
     // agent, and an agent that cannot report or deliver is worse than one never started.
     if (!agentBackend || !submissionTokenSecret) return false;
     try {
+      // Before the brief is built, so the agent is told about a draft only when one is
+      // really there — and so the slug it mints is on the record the brief reads from.
+      // A seed is written into `games/<slug>/`, so a job without a slug cannot have one.
+      // Every new submission has one by now; the guard is for the paths that do not.
+      const draft = input.feedback || !input.slug ? undefined : await seedBuild({ ...input, slug: input.slug });
+      const seed: SeedFiles | undefined = draft
+        ? {
+            slug: draft.slug,
+            files: draft.files,
+            references: draft.references,
+            ...(draft.notes ? { notes: draft.notes } : {}),
+          }
+        : undefined;
       const result = await agentBackend.dispatch({
         issueNumber: input.issueNumber,
         ...(input.slug ? { slug: input.slug } : {}),
@@ -486,12 +618,30 @@ export async function registerSubmissionRoutes(
         apiBaseUrl: notifyAppBaseUrl,
         ...(input.slug ? { slug: input.slug } : {}),
         ...(input.feedback ? { feedback: input.feedback } : {}),
+        ...(seed ? { seed } : {}),
       });
       await store?.recordDispatch(input.issueNumber, {
         backend: agentBackend.name,
         ref: result.ref,
         workspace: result.workspace,
+        seedWorkspace: result.seedWorkspace,
       });
+      // The round-0 preview: the creator sees a playable rough draft minutes after
+      // submitting instead of waiting out the agent's first push. Off the response path
+      // (nobody's submit should wait on an esbuild pass and a handful of repo reads),
+      // gated on the draft actually bundling, and reading from the seed branch so what
+      // is shown is exactly what the agent starts from. Every failure inside is its own
+      // problem: the build is already dispatched and owes this nothing.
+      if (draft?.compiles && result.seedWorkspace) {
+        void publishSeedPreview({
+          issueNumber: input.issueNumber,
+          slug: draft.slug,
+          seedRef: result.seedWorkspace,
+          locale: input.locale,
+        }).catch((error: unknown) => {
+          input.log.error({ err: error, issueNumber: input.issueNumber }, 'seed preview failed');
+        });
+      }
       await recordSessionCost(input.issueNumber, result.ref, input.log);
       await store?.recordJobTransition(input.issueNumber, {
         to: 'dispatched',
@@ -1246,6 +1396,15 @@ export async function registerSubmissionRoutes(
       if (!observation) return null;
       if (observation.workspace && observation.workspace !== record.dispatch?.workspace) {
         await store.setDispatchWorkspace(record.issueNumber, observation.workspace);
+        // Learning the agent's own branch is proof it has forked, which is the exact
+        // moment the seed branch stops having a reader. Released here rather than at the
+        // end of the job because this is the tightest lifetime that is still safe: a
+        // seed branch deleted any earlier could be deleted out from under a session that
+        // had not started cloning yet.
+        if (record.dispatch?.seedWorkspace && record.dispatch.seedWorkspace !== observation.workspace) {
+          await releaseWorkspace(record.issueNumber, record.dispatch.seedWorkspace, app.log);
+          await store.clearDispatchSeedWorkspace(record.issueNumber);
+        }
       }
       const result = reconcileAgentObservation(state, observation);
       if (!result) return null;
@@ -1686,6 +1845,17 @@ export async function registerSubmissionRoutes(
       // keep a branch alive on the strength of a delete that might fail.
       if (record.dispatch?.workspace) {
         await releaseWorkspace(issueNumber, record.dispatch.workspace, request.log);
+      }
+      // The seed branch outlives the dispatch that used it — the agent forks from it, so
+      // it cannot be deleted the moment the task is created — but it has no reader once
+      // the job is terminal. Released by the same path: deleting a branch is the same
+      // operation whichever branch it is.
+      if (record.dispatch?.seedWorkspace) {
+        await releaseWorkspace(issueNumber, record.dispatch.seedWorkspace, request.log);
+        // Forgotten as well as deleted. Leaving the name on the record would have a
+        // second abandon — or any later cleanup path — asking GitHub to delete a ref
+        // that is already gone, against the one credential that also dispatches.
+        await store.clearDispatchSeedWorkspace(issueNumber);
       }
 
       await store.setSubmissionAbandoned(issueNumber, new Date(now()).toISOString());
