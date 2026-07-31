@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n/index.js';
 import { HowToPlayPanel } from './HowToPlayPanel.js';
+import { parseControls } from './howToPlay.js';
 
 let container: HTMLDivElement;
 let root: Root | null = null;
@@ -30,7 +31,9 @@ async function draw(props: Partial<Parameters<typeof HowToPlayPanel>[0]> = {}) {
   const onClose = vi.fn();
   root = createRoot(container);
   await act(async () => {
-    root!.render(<HowToPlayPanel open controls={CONTROLS} gameTitle="Apex Sprint" onClose={onClose} {...props} />);
+    root!.render(
+      <HowToPlayPanel open rows={parseControls(CONTROLS)} gameTitle="Apex Sprint" onClose={onClose} {...props} />,
+    );
   });
   return { onClose };
 }
@@ -69,7 +72,7 @@ describe('HowToPlayPanel', () => {
     // beat-teacher, verbatim: the semicolons keep the comma-listed keys in one clause,
     // and that clause has no key/action shape to split on.
     await draw({
-      controls: 'Press A, S, D, F, or Space in sync with scrolling rhythm note prompts; M to mute',
+      rows: parseControls('Press A, S, D, F, or Space in sync with scrolling rhythm note prompts; M to mute'),
     });
     const row = document.querySelector('.howto-row');
     expect(row?.classList.contains('is-wide')).toBe(true);
@@ -95,7 +98,7 @@ describe('HowToPlayPanel', () => {
     await draw({ open: false });
     expect(card()).toBeNull();
 
-    await redraw({ controls: '   ' });
+    await redraw({ rows: parseControls('   ') });
     expect(card()).toBeNull();
   });
 
@@ -173,6 +176,14 @@ describe('HowToPlayPanel', () => {
     outside.remove();
   });
 
+  it('states a touch pad the running game mounted, over what the catalog inferred', async () => {
+    // `touch: 'none'` is a build-time classification of the game's source; `padReported`
+    // is GameKit saying it built a pad in the document being played. The second wins.
+    await draw({ touch: 'none', padReported: true });
+    expect(rows().at(-1)).toEqual(['Touch', 'On-screen pad on touch screens']);
+    expect(document.querySelector('.howto-note')).toBeNull();
+  });
+
   it('states touch support from the catalog, and only what the catalog knows', async () => {
     await draw();
     expect(document.querySelector('.howto-note')).toBeNull();
@@ -188,14 +199,14 @@ describe('HowToPlayPanel', () => {
 
   it('renders repeated clauses without a duplicate-key warning', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    await draw({ controls: 'Space to jump; Space to jump' });
+    await draw({ rows: parseControls('Space to jump; Space to jump') });
     expect(rows()).toHaveLength(2);
     expect(consoleError.mock.calls.flat().join(' ')).not.toContain('same key');
     consoleError.mockRestore();
   });
 
   it('renders agent-authored control text as literal text, never as markup', async () => {
-    await draw({ controls: '<img src=x onerror=alert(1)> to jump' });
+    await draw({ rows: parseControls('<img src=x onerror=alert(1)> to jump') });
     expect(document.querySelector('.howto-keys img')).toBeNull();
     expect(rows()).toEqual([['<img src=x onerror=alert(1)>', 'jump']]);
   });

@@ -260,3 +260,70 @@ describe('GameTheater how-to-play', () => {
     expect(onExit).not.toHaveBeenCalled();
   });
 });
+
+describe('GameTheater controls reported by the game', () => {
+  const CATALOG_CONTROLS = 'Left/Right to move; Space to fire; M to mute';
+
+  /** Relay a bridge message the way an opaque-origin frame does. */
+  async function report(payload: Record<string, unknown>) {
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { source: 'gdpl-player', type: 'controls', ...payload },
+          origin: 'null',
+        }),
+      );
+    });
+  }
+
+  it('offers how-to-play on a deep link, where the catalog never arrives', async () => {
+    // The gap this closes: /play/<slug> renders from a placeholder entry whose `controls`
+    // is empty, because the catalog is fetched on the home route only. The game document
+    // is the only source of truth there — and it is always present, because it is the
+    // thing being played.
+    await draw({ controls: '' });
+    expect(container.querySelector('.howto-btn')).toBeNull();
+
+    await report({ rows: [{ keys: 'Z/X', action: 'Rotate' }] });
+
+    const trigger = container.querySelector('.howto-btn');
+    expect(trigger).not.toBeNull();
+    await click(trigger);
+    expect(
+      [...document.querySelectorAll('.howto-row')].map((row) => [
+        row.querySelector('dt')?.textContent,
+        row.querySelector('dd')?.textContent,
+      ]),
+    ).toEqual([['Z/X', 'Rotate']]);
+  });
+
+  it('lets the game overrule the catalog, which is a spec claim about it', async () => {
+    await draw({ controls: CATALOG_CONTROLS });
+    await report({ rows: [{ keys: 'A/D', action: 'Skręt' }] });
+    await click(container.querySelector('.howto-btn'));
+    expect([...document.querySelectorAll('.howto-row dd')].map((cell) => cell.textContent)).toEqual(['Skręt']);
+  });
+
+  it('keeps the catalog rows when a later report says nothing', async () => {
+    // The bridge re-sends after i18n and after GameKit wires input. An empty re-send
+    // must not blank a card that already had content.
+    await draw({ controls: CATALOG_CONTROLS });
+    await report({ rows: [], kit: [], hint: '' });
+    await click(container.querySelector('.howto-btn'));
+    expect(document.querySelectorAll('.howto-row').length).toBe(3);
+  });
+
+  it('ignores a controls report that did not come from this game frame', async () => {
+    await draw({ controls: '' });
+    await act(async () => {
+      // Same shape, wrong origin — another window trying to put text on our card.
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { source: 'gdpl-player', type: 'controls', rows: [{ keys: 'X', action: 'Spoofed' }] },
+          origin: 'https://evil.example',
+        }),
+      );
+    });
+    expect(container.querySelector('.howto-btn')).toBeNull();
+  });
+});

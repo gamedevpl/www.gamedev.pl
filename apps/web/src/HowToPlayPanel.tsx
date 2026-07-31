@@ -3,12 +3,17 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import type { CatalogTouch } from './catalog.js';
 import { PixelIcon } from './PixelIcon.js';
-import { parseControls } from './howToPlay.js';
+import type { ControlRow } from './howToPlay.js';
 
 type HowToPlayPanelProps = {
   open: boolean;
-  /** The game's `controls` string from the catalog. Free text; rendered as text nodes. */
-  controls: string;
+  /**
+   * The rows to show, already resolved from the best available source (see
+   * `resolveControlRows`). Every string in here is agent-authored — from a SPEC, or
+   * reported by the game itself across the sandbox — so all of it renders as JSX text
+   * nodes and none of it ever reaches an HTML sink.
+   */
+  rows: ControlRow[];
   /**
    * Names the game in the close button's accessible label. It is not shown: the theater
    * bar behind the card already carries the title, and repeating it in a card this small
@@ -21,6 +26,12 @@ type HowToPlayPanelProps = {
    * `none` earns the keyboard-only line.
    */
   touch?: CatalogTouch | null;
+  /**
+   * GameKit reported mounting an on-screen d-pad in *this* game document. Believed over
+   * the catalog's `touch` when set, because it is what the running game did rather than
+   * what a build-time classifier inferred about its source.
+   */
+  padReported?: boolean;
   onClose: () => void;
 };
 
@@ -34,7 +45,14 @@ const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabi
  * game's own in-shell controls popup is hidden on purpose by the player bridge
  * (`gamePlayer.ts` HIDE_CHROME) because the theater surfaces this chrome instead.
  */
-export function HowToPlayPanel({ open, controls, gameTitle, touch = null, onClose }: HowToPlayPanelProps) {
+export function HowToPlayPanel({
+  open,
+  rows,
+  gameTitle,
+  touch = null,
+  padReported = false,
+  onClose,
+}: HowToPlayPanelProps) {
   const { t } = useTranslation();
   const cardRef = useRef<HTMLDivElement | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
@@ -77,9 +95,12 @@ export function HowToPlayPanel({ open, controls, gameTitle, touch = null, onClos
   }, [open]);
 
   if (!open) return null;
-
-  const rows = parseControls(controls);
   if (rows.length === 0) return null;
+
+  // The pad is stated when the running game actually mounted one, or when the catalog's
+  // build-time classifier says the game uses GameKit's. `native` and `controllers` games
+  // handle touch their own way and are not described by either line.
+  const showPad = padReported || touch === 'gamekit';
 
   // Portalled to the body: `.game-theater-bar` and `.theater-more-panel` carry a
   // backdrop-filter, which makes an ancestor the containing block for position:fixed
@@ -120,16 +141,18 @@ export function HowToPlayPanel({ open, controls, gameTitle, touch = null, onClos
               <dd>{row.action}</dd>
             </div>
           ))}
-          {/* Stated, not guessed: `touch` is derived from the game's own source by the
-              games-repo build, so a pad promised here is a pad that exists. */}
-          {touch === 'gamekit' ? (
+          {/* Stated, not guessed. Either the running game mounted a pad (GameKit said so
+              over the bridge) or the games-repo build read one out of its source. */}
+          {showPad ? (
             <div className="howto-row">
               <dt>{t('player.howToPlayTouch')}</dt>
               <dd>{t('player.howToPlayTouchPad')}</dd>
             </div>
           ) : null}
         </dl>
-        {touch === 'none' ? <p className="howto-note">{t('catalog.keyboardOnlyTooltip')}</p> : null}
+        {/* Only when nothing contradicts it: a game whose document reported a live pad
+            is playable with a thumb whatever the catalog inferred at build time. */}
+        {touch === 'none' && !padReported ? <p className="howto-note">{t('catalog.keyboardOnlyTooltip')}</p> : null}
         <p className="howto-dismiss">{t('player.howToPlayDismiss')}</p>
       </div>
     </div>,
