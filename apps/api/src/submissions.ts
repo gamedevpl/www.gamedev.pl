@@ -34,6 +34,7 @@ import { emitOperatorAlert, emitSubmissionNotification, notifyOnTransition, type
 import { detectOperatorAlerts, FEEDBACK_STALL_MS } from './operator-alerts.js';
 import { isAdminSession } from './admin.js';
 import { peekQuota } from './quota-gate.js';
+import { mintGameSlug } from './slug.js';
 import { type BuildPreviewSummary, type BuildShotSummary, type Store, type SubmissionRecord } from './store.js';
 import {
   CREATOR_FEEDBACK_MARKER,
@@ -461,11 +462,12 @@ export async function registerSubmissionRoutes(
     locale: string;
     log: { error: (context: object, message: string) => void };
     /**
-     * The existing game this job improves, when it is not building a new one.
+     * The game this job is for: the directory a new build is told to build into, and —
+     * set together with `feedback` — the existing game an improvement continues rather
+     * than rebuilds, which is what makes `buildPrompt` restore its delivered sources.
      *
-     * Set together with `feedback` — that pair is what makes `buildPrompt` say "continue
-     * that game, revise it, do not rebuild it" and restore the delivered sources from the
-     * games store, instead of telling the agent to build something from nothing.
+     * A new build now carries it from the moment it is created, so the brief names a real
+     * path instead of "(the slug named in your first progress report)".
      */
     slug?: string;
     /** What to change about the existing game. Untrusted text: data, never instructions. */
@@ -477,6 +479,7 @@ export async function registerSubmissionRoutes(
     try {
       const result = await agentBackend.dispatch({
         issueNumber: input.issueNumber,
+        ...(input.slug ? { slug: input.slug } : {}),
         spec: input.spec,
         locale: input.locale,
         channelToken: mintAgentToken(input.issueNumber, submissionTokenSecret),
@@ -1043,6 +1046,93 @@ export async function registerSubmissionRoutes(
     return entries.find((entry) => entry.slug === slug && entry.status === 'published') ?? null;
   }
 
+  /**
+   * Reads back a slug this job just wrote, and settles who actually holds it.
+   *
+   * `getSubmissionBySlug` is the same oracle every later lookup uses — the draft route,
+   * the play route, the delivery check — so asking it "who owns this name" is exactly the
+   * question that matters, and it answers deterministically even when two records share
+   * a slug. Whoever it does not name has lost the race and takes a different name; the
+   * winner is undisturbed and never learns any of this happened.
+   *
+   * Returns the slug this job ended up with, or null when even the second attempt lost.
+   */
+  async function confirmSlugClaim(issueNumber: number, slug: string, title: string): Promise<string | null> {
+    if (!store) return slug;
+    const holds = async (candidate: string): Promise<boolean> => {
+      const holder = await store.getSubmissionBySlug(candidate);
+      return holder?.issueNumber === issueNumber;
+    };
+
+    if (await holds(slug)) return slug;
+
+    // Lost. Mint again, this time treating anything we do not ourselves hold as taken,
+    // and write it before re-reading — the second write is what makes the second read
+    // meaningful.
+    const retry = await mintGameSlug(title, async (candidate) => {
+      if (candidate === slug) return true;
+      return isSlugClaimed(candidate, issueNumber);
+    });
+    await store.setSubmissionSlug(issueNumber, retry);
+    return (await holds(retry)) ? retry : null;
+  }
+
+  /**
+   * Whether this request may play the unpublished game at `slug`.
+   *
+   * Two ways in, and no third: you made it, or its creator turned sharing on. There is
+   * no separate draft surface to share — a game keeps one permalink for its whole life
+   * — so this is what stands between "my friend can watch it take shape" and "anyone who
+   * guesses a name can read an unreviewed game".
+   *
+   * Sharing is off until the creator says otherwise. Before this existed, any signed-in
+   * visitor who knew a slug could read any draft, which made every in-progress game
+   * unlisted rather than private and gave its creator no say in it.
+   */
+  async function canPlayDraft(request: FastifyRequest, slug: string): Promise<boolean> {
+    if (!store) return false;
+    const record = await store.getSubmissionBySlug(slug);
+    // An abandoned build is nobody's to play, including its creator's: they stopped it.
+    if (!record || record.abandonedAt) return false;
+    if (record.draftSharedAt) return true;
+    const uid = request.user?.uid;
+    return Boolean(uid && uid === record.ownerUid);
+  }
+
+  /**
+   * Whether anything already answers to this name.
+   *
+   * Three namespaces, because a game can exist in three places and a new build must not
+   * be given an address that already means something else: another submission (building
+   * or built), a game published through the store, and a game published in the games
+   * repo's catalog. `except` lets a job ask about a name it may already hold itself.
+   *
+   * Deliberately forgiving of its own failures. This runs inside submission creation, and
+   * a GitHub outage that made every name look taken would refuse builds the creator has
+   * already paid a quota slot for; a name that is wrongly *available* costs far less than
+   * a submission that will not start, and the delivery path checks again before writing.
+   */
+  async function isSlugClaimed(slug: string, except?: number): Promise<boolean> {
+    if (store) {
+      try {
+        const existing = await store.getSubmissionBySlug(slug);
+        if (existing && existing.issueNumber !== except) return true;
+        const publication = await store.getPublication(slug);
+        if (publication) return true;
+      } catch {
+        // Fall through: see above — an unavailable store must not block creation.
+      }
+    }
+    if (githubClient) {
+      try {
+        if (await isSlugPublished(githubClient, slug)) return true;
+      } catch {
+        // Same reasoning, and this one is the likeliest to fail: it reads GitHub.
+      }
+    }
+    return false;
+  }
+
   // Single source of GitHub-state → status derivation, shared by the on-demand
   // status route and the notification sweep so they never diverge.
   /**
@@ -1057,6 +1147,9 @@ export async function registerSubmissionRoutes(
     const state = record.state ?? 'queued';
     const status: SubmissionStatusResponse = {
       status: record.abandonedAt ? 'abandoned' : toSubmissionStatus(state),
+      // The unprojected state travels alongside the projection: `toSubmissionStatus` is
+      // lossy by design, and the page needs the loss back to describe the wait honestly.
+      ...(record.abandonedAt ? {} : { phase: state }),
       ...(record.slug ? { slug: record.slug } : {}),
     };
     // `failed` projects onto `needs_changes`, which the page renders as "waiting for
@@ -1359,8 +1452,35 @@ export async function registerSubmissionRoutes(
       if (!store) {
         return reply.status(503).send({ error: 'submissions are unavailable' });
       }
+      // The game's address, minted from the title the creator just confirmed and fixed
+      // for the game's whole life. It used to be the agent's to choose and was learned
+      // only on its first delivery, which left every build with a stretch — minutes at
+      // best — where the thing being built had no name a URL could use. That is why the
+      // creator's own studio addressed their game by a capability token.
+      const wanted = await mintGameSlug(sanitizedTitle, (candidate) => isSlugClaimed(candidate));
+
       const jobId = await store.allocateJobId();
       await store.createSubmission(jobId, request.user!.uid, sanitizedTitle);
+      await store.setSubmissionSlug(jobId, wanted);
+
+      // Minting is a read then a write, so two submissions of the same title can both be
+      // told a name is free. Nothing about that is visible until much later and then it
+      // is severe: both agents deliver into one games-store slug, interleaving two
+      // different games' sources under it, and whichever job loses the by-slug lookup
+      // becomes unplayable to its own creator. So the claim is read back and the loser
+      // finds out here — before an agent has been dispatched, before the creator has been
+      // given an address, while a different name still costs nothing.
+      const slug = await confirmSlugClaim(jobId, wanted, sanitizedTitle);
+      if (!slug) {
+        // Both attempts lost, which means something is racing us persistently rather
+        // than by coincidence. Fail loudly instead of building a game that cannot be
+        // addressed: the creator can try again, and their quota is the price of the
+        // agent time this never spent.
+        await store.setSubmissionAbandoned(jobId, new Date(now()).toISOString());
+        request.log.error({ issueNumber: jobId, slug: wanted }, 'could not claim a slug for a new submission');
+        return reply.status(409).send({ error: 'name_unavailable' });
+      }
+
       await store.setSubmissionLocale(jobId, creatorLocale);
       // Raw, not sanitized: the sanitizer strips the '##' that marks the block.
       await store.setSubmissionClarificationCount(jobId, countCreatorClarifications(parsed.data.concept));
@@ -1373,13 +1493,19 @@ export async function registerSubmissionRoutes(
 
       await dispatchBuild({
         issueNumber: jobId,
+        // The agent is told where to build rather than left to name the place itself.
+        // Its brief previously read "games/(the slug named in your first progress
+        // report)/", which is a sentence, not a path.
+        slug,
         spec: issueBody,
         locale: creatorLocale,
         log: request.log,
       });
 
       const token = mintToken(jobId, submissionTokenSecret);
-      return reply.send({ token, statusUrl: `/api/submissions/${token}` });
+      // The slug travels back so the app can go straight to `/studio/<slug>` instead of
+      // putting a capability token in the URL bar and in the creator's history.
+      return reply.send({ token, slug, statusUrl: `/api/submissions/${token}` });
     } catch (error) {
       request.log.error({ err: error }, 'failed to create submission');
       return reply.status(502).send({ error: 'failed to submit game spec' });
@@ -1442,6 +1568,60 @@ export async function registerSubmissionRoutes(
       },
     });
   });
+
+  /**
+   * The creator decides whether anyone else may play their game before it is published.
+   *
+   * There is no separate draft link to hand out: the game answers at `/play/<slug>` for
+   * its whole life, and this decides who that includes. Off by default, and off is
+   * genuinely off — the game is not in the catalog, not in any rail, and 404s for
+   * everyone but its creator, so the link is the only way in and the creator controls
+   * whether it works.
+   *
+   * Ownership is checked against the store rather than against the token, for the same
+   * reason abandoning is: holding a link somebody shared with you must not be enough to
+   * change who else can see the game.
+   */
+  app.post(
+    '/api/submissions/:token/share',
+    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      if (!submissionTokenSecret) {
+        return reply.status(503).send({ error: 'submissions are not configured' });
+      }
+      if (!checkUserAccess(request, reply)) return;
+      if (!store) {
+        return reply.status(503).send({ error: 'submissions are not configured' });
+      }
+
+      const parsedBody = z.object({ shared: z.boolean() }).safeParse(request.body ?? {});
+      if (!parsedBody.success) {
+        return reply.status(400).send({ error: 'shared must be true or false' });
+      }
+
+      const token = z.string().parse((request.params as { token?: string }).token);
+      let issueNumber: number;
+      try {
+        issueNumber = verifyToken(token, submissionTokenSecret);
+      } catch (error) {
+        if (error instanceof InvalidTokenError) {
+          return reply.status(400).send({ error: 'invalid token' });
+        }
+        throw error;
+      }
+
+      const record = await store.getSubmission(issueNumber);
+      if (!record || record.ownerUid !== request.user!.uid) {
+        return reply.status(403).send({ error: 'only the creator can share this game' });
+      }
+      if (!record.slug) {
+        return reply.status(409).send({ error: 'this game has no address yet' });
+      }
+
+      await store.setDraftShared(issueNumber, parsedBody.data.shared ? new Date(now()).toISOString() : null);
+      return reply.send({ shared: parsedBody.data.shared, slug: record.slug });
+    },
+  );
 
   /**
    * The creator gives up on a build. Closes the issue and the agent's open PR, so
@@ -2605,7 +2785,12 @@ export async function registerSubmissionRoutes(
     }
 
     const record = await store.getSubmissionBySlug(parsedParams.data.slug);
-    if (!record) {
+    // Same rule as `/play/<slug>`, which is now where a draft is shared from: the
+    // creator, or anyone at all once they have turned sharing on. This route used to
+    // serve any draft to any signed-in visitor who knew a slug, which made every
+    // in-progress game unlisted rather than private. Kept working because `/draft/`
+    // links exist in the wild; the app emits `/play/` now.
+    if (!record || !(await canPlayDraft(request, parsedParams.data.slug))) {
       return reply.status(404).send({ error: 'draft not found' });
     }
 
@@ -2826,6 +3011,17 @@ export async function registerSubmissionRoutes(
       }
 
       if (!(await isSlugPublished(githubClient, slug))) {
+        // Not published — but a game has this address from the moment it is submitted,
+        // and its creator can play it, as can anyone they have chosen to share the link
+        // with. One permalink for a game's whole life, before and after it goes live.
+        //
+        // Deliberately after both published paths and outside `gameCache`: that cache is
+        // keyed by slug alone and read before any gate, so a draft written into it would
+        // be served to whoever asked next, share toggle or not.
+        if (await canPlayDraft(request, slug)) {
+          const record = await store?.getSubmissionBySlug(slug);
+          if (record) return replyWithDraft(request, reply, record.issueNumber);
+        }
         return reply.status(404).send({ error: 'game not found' });
       }
 

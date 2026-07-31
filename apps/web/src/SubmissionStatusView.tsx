@@ -18,8 +18,9 @@ import {
   type SubmissionPreview,
   type SubmissionStatus,
 } from './submissionApi.js';
-import { draftPath, playPath, statusPath, studioPath } from './router.js';
-import { formatDuration, formatRelativeTime } from './relativeTime.js';
+import { statusPath, studioPath } from './router.js';
+import { formatRelativeTime } from './relativeTime.js';
+import { submitImprovement } from './studioApi.js';
 
 const TERMINAL_STATUSES = new Set<SubmissionStatus['status']>(['published', 'needs_changes', 'abandoned']);
 /** Statuses that halt the linear timeline rather than sitting on a step of it. */
@@ -51,21 +52,51 @@ const STATUS_ICONS: Record<SubmissionStatus['status'], PixelIconName> = {
 const TIMELINE_STEPS: SubmissionStatus['status'][] = ['queued', 'building', 'in_review', 'publishing', 'published'];
 
 /**
- * Ticking "in progress for 2m 14s" readout. The submission time only exists in
- * localStorage (the API doesn't return it), so this is hidden when the link is
- * opened on a device that didn't submit it.
+ * When the build last did something worth seeing, or null before it has.
+ *
+ * Deliberately the *agent's* moments only — its events, its pictures, its playable
+ * builds, its commits — and not the creator's own change requests. A creator who has
+ * just sent a message would otherwise reset the heartbeat with it and be told the
+ * build is fresh, which is the one moment they are actually waiting on a reply.
  */
-function ElapsedTimer({ since, running }: { since: number; running: boolean }) {
-  const { t } = useTranslation();
-  const [now, setNow] = useState(() => Date.now());
+function latestAgentActivityAt(status: SubmissionStatus | null): number | null {
+  if (!status) return null;
+  const times = [
+    ...(status.events ?? []).map((event) => Date.parse(event.createdAt)),
+    ...(status.media ?? []).map((item) => (item.createdAt ? Date.parse(item.createdAt) : Number.NaN)),
+    ...(status.playable ?? []).map((item) => (item.createdAt ? Date.parse(item.createdAt) : Number.NaN)),
+    ...(status.progress?.commits ?? []).map((commit) => Date.parse(commit.committedDate)),
+  ].filter((time) => Number.isFinite(time));
+  return times.length > 0 ? Math.max(...times) : null;
+}
+
+/**
+ * "Live · updated 3 minutes ago" — the build's pulse.
+ *
+ * This replaced a stopwatch counting from submission, which was the page's most
+ * prominent number and its least informative: on a build that had delivered, passed
+ * its checks and been waiting to go live for hours, it read "In progress for 8h 00m"
+ * directly above a checklist saying every task was done. Time since the last sign of
+ * life answers the question the stopwatch was being read for — is this thing moving? —
+ * and keeps answering it correctly once the agent has finished.
+ *
+ * Re-renders on a slow timer because the text is a relative time that goes stale on
+ * its own; the minute granularity is why 30s is often enough and 1s would be waste.
+ */
+function BuildHeartbeat({ at }: { at: number }) {
+  const { t, i18n } = useTranslation();
+  const [, setTick] = useState(0);
 
   useEffect(() => {
-    if (!running) return;
-    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    const id = window.setInterval(() => setTick((n) => n + 1), 30_000);
     return () => window.clearInterval(id);
-  }, [running]);
+  }, []);
 
-  return <span className="status-elapsed">{t('statusView.elapsed', { duration: formatDuration(now - since) })}</span>;
+  return (
+    <span className="status-heartbeat">
+      {t('statusView.updatedAgo', { time: formatRelativeTime(at, i18n.language) })}
+    </span>
+  );
 }
 
 function StatusTimeline({ current }: { current: SubmissionStatus['status'] }) {
@@ -119,10 +150,14 @@ type SubmissionStatusViewProps = {
   token: string;
   submittedTitle?: string;
   submittedConcept?: string;
-  submittedAt?: number;
   trackingUrl?: string;
   /** Sends the creator home with this idea loaded, ready to edit and resubmit. */
   onRetry?: (concept: string) => void;
+  /**
+   * Opens the studio's playtest surface on this game. Present only when this view is
+   * embedded in Creator Studio, which is the only place that surface exists.
+   */
+  onPlaytest?: () => void;
   /**
    * When true, this view is nested inside Creator Studio (the Build tab). The
    * outer studio chrome already names the game — skip the page-level heading /
@@ -135,9 +170,9 @@ export function SubmissionStatusView({
   token,
   submittedTitle,
   submittedConcept,
-  submittedAt,
   trackingUrl,
   onRetry,
+  onPlaytest,
   embedded = false,
 }: SubmissionStatusViewProps) {
   const { t, i18n } = useTranslation();
@@ -250,16 +285,25 @@ export function SubmissionStatusView({
   }, [i18n.language, t, token]);
 
   const publishedGameTitle = submittedTitle ?? status?.slug ?? t('statusView.publishedGameTitle');
+  const heartbeatAt = latestAgentActivityAt(status);
 
-  // The link to hand to someone else. Deliberately *not* the tracking URL: that one
-  // carries the status token, which grants change requests and spends the creator's
-  // quota. A slug link is watch-only, and survives the game being published.
-  const shareUrl = useMemo(() => {
-    const slug = status?.slug ?? status?.preview?.slug;
-    if (!slug) return null;
-    const path = status?.status === 'published' ? playPath(slug) : draftPath(slug);
-    return new URL(path, window.location.href).toString();
-  }, [status?.slug, status?.preview?.slug, status?.status]);
+  /**
+   * What is happening, in the creator's words.
+   *
+   * Only the phases that mean something the coarse status cannot say carry their own
+   * sentence (see `statusView.phases`); everything else falls through to the status
+   * copy rather than being written twice and drifting.
+   */
+  const stateDescription = status
+    ? (status.phase ? t(`statusView.phases.${status.phase}`, { defaultValue: '' }) : '') ||
+      t(`statusView.states.${status.status}.description`)
+    : '';
+
+  // No share link here any more. It used to be shown unconditionally and pointed at
+  // `/draft/<slug>`, which was readable by any signed-in visitor who knew the slug.
+  // Sharing an unpublished game is now the creator's decision, made on one switch in
+  // Creator Studio; advertising a link that 404s until that switch is on would be worse
+  // than not offering one. A published game shares from the theater, as it always has.
 
   // Auto-load the live preview as soon as one is available, and silently refresh it
   // whenever the agent pushes a new commit (headSha changes) — no click required.
@@ -367,10 +411,141 @@ export function SubmissionStatusView({
   // surface; Studio's own playtest already learned inset frames are unplayable on
   // phones, so everything playable here opens the theater.
 
+  const theaters = (
+    <>
+      {playing === 'published' && status?.status === 'published' && status.slug ? (
+        <GameTheater
+          title={publishedGameTitle}
+          badge={{ icon: 'gamepad', label: t('catalog.playingBadge', { defaultValue: 'Playing' }) }}
+          source={{ slug: status.slug }}
+          onExit={closeTheater}
+        />
+      ) : null}
+
+      {playing === 'draft' && launchedHtml != null ? (
+        <GameTheater
+          title={
+            preview ? previewTitle : (submittedTitle ?? latestChannelBuild?.slug ?? t('statusView.previewGameTitle'))
+          }
+          badge={{ icon: 'wrench', label: t('statusView.draftBadge') }}
+          source={{ html: launchedHtml }}
+          onExit={closeTheater}
+        />
+      ) : null}
+    </>
+  );
+
+  /**
+   * Inside Creator Studio this is a thread, not a page.
+   *
+   * The standalone `/status/<token>` view below keeps its page shape — it is a link
+   * somebody was sent, read once, top to bottom. This one is a place the creator comes
+   * back to, so it is built the way every other place you talk to something is: the
+   * conversation scrolls, and the box you answer in does not move.
+   */
+  if (embedded) {
+    const activity = status
+      ? buildActivityFeed(
+          status.progress,
+          status.events ?? [],
+          pendingRevisions,
+          status.media ?? [],
+          t('statusView.gallery.caption'),
+        )
+      : [];
+    const reported = status?.events?.find((event) => event.progress)?.progress;
+    const checklist = status?.progress?.checklist ?? [];
+    const done = reported?.done ?? checklist.filter((item) => item.checked).length;
+    const total = reported?.total ?? checklist.length;
+
+    const playable =
+      status?.status === 'published' && status.slug
+        ? { label: t('statusView.play'), onClick: () => setPlaying('published') }
+        : preview
+          ? { label: t('statusView.playDraft'), onClick: openDraft }
+          : channelHtml
+            ? { label: t('statusView.playDraft'), onClick: openChannel }
+            : undefined;
+
+    return (
+      <>
+        <div className="studio-thread">
+          {loading ? (
+            <p className="catalog-state studio-thread-empty">{t('statusView.loading')}</p>
+          ) : errorMessage ? (
+            <div className="studio-thread-empty">
+              <p className="error">{errorMessage}</p>
+              <p className="status-description">
+                {isInvalidToken ? t('statusView.invalidTokenHelp') : t('statusView.fetchErrorHelp')}
+              </p>
+            </div>
+          ) : status ? (
+            <>
+              <ThreadStream token={token} entries={activity} emptyLabel={stateDescription} />
+
+              <div className="studio-thread-foot">
+                {/* Trouble is said once, immediately above the box the creator would use
+                    to do something about it. A dead round outranks a slow one: when both
+                    are set the failure is the explanation and the stall is its symptom. */}
+                {status.failure ? (
+                  <p className="status-warning">
+                    <PixelIcon name="signal" size={13} />{' '}
+                    {t(`statusView.failure.${failureCopyKey(status.failure.reason)}`)}
+                  </p>
+                ) : status.stall ? (
+                  <p className="status-warning">
+                    <PixelIcon name="signal" size={13} /> {t(`statusView.stall.${status.stall}`)}
+                  </p>
+                ) : status.progress?.checks === 'FAILURE' ? (
+                  <p className="status-warning">
+                    <PixelIcon name="signal" size={13} /> {t('statusView.checksFailed')}
+                  </p>
+                ) : null}
+
+                {previewError && !preview && !channelHtml ? <p className="error">{previewError}</p> : null}
+
+                {TERMINAL_STATUSES.has(status.status) &&
+                status.status !== 'published' &&
+                submittedConcept &&
+                onRetry ? (
+                  <button className="primary-btn status-retry" onClick={() => onRetry(submittedConcept)}>
+                    <PixelIcon name="undo" size={13} /> {t('statusView.tryAgain')}
+                  </button>
+                ) : null}
+
+                <ThreadContextBar
+                  {...(status.slug ? { slug: status.slug } : {})}
+                  phase={t(`statusView.states.${status.status}.label`)}
+                  heartbeatAt={heartbeatAt}
+                  {...(total > 0 ? { progress: { done, total } } : {})}
+                  {...(playable ? { primary: playable } : {})}
+                  {...(onPlaytest && playable
+                    ? { secondary: { label: t('statusView.playtestCta'), onClick: onPlaytest } }
+                    : {})}
+                />
+
+                {status.status !== 'abandoned' ? (
+                  <FeedbackPanel
+                    token={token}
+                    published={status.status === 'published'}
+                    building={!preview && !channelHtml}
+                    compact
+                    onSent={(text) => setPendingRevisions((current) => [...current, { text, at: Date.now() }])}
+                  />
+                ) : null}
+              </div>
+            </>
+          ) : null}
+        </div>
+        {theaters}
+      </>
+    );
+  }
+
   return (
     <>
-      <section className={`panel status-panel${embedded ? ' is-embedded' : ''}`}>
-        {!embedded ? (
+      <section className="panel status-panel">
+        {
           <>
             <div className="status-heading">
               <h2 className="section-title">{submittedTitle ?? t('statusView.title')}</h2>
@@ -378,10 +553,10 @@ export function SubmissionStatusView({
                 <span className="status-live">
                   <span className="live-dot" aria-hidden="true" />
                   {t('statusView.live')}
-                  {submittedAt ? (
+                  {heartbeatAt !== null ? (
                     <>
                       {' · '}
-                      <ElapsedTimer since={submittedAt} running />
+                      <BuildHeartbeat at={heartbeatAt} />
                     </>
                   ) : null}
                 </span>
@@ -395,22 +570,7 @@ export function SubmissionStatusView({
               </a>
             </p>
           </>
-        ) : status && !TERMINAL_STATUSES.has(status.status) ? (
-          <div className="status-heading status-heading-embedded">
-            <span className="status-live">
-              <span className="live-dot" aria-hidden="true" />
-              {t('statusView.live')}
-              {submittedAt ? (
-                <>
-                  {' · '}
-                  <ElapsedTimer since={submittedAt} running />
-                </>
-              ) : null}
-            </span>
-          </div>
-        ) : null}
-        {shareUrl ? <ShareLink url={shareUrl} /> : null}
-
+        }
         {loading ? (
           <p className="catalog-state">{t('statusView.loading')}</p>
         ) : errorMessage ? (
@@ -419,17 +579,15 @@ export function SubmissionStatusView({
             <p className="status-description">
               {isInvalidToken ? t('statusView.invalidTokenHelp') : t('statusView.fetchErrorHelp')}
             </p>
-            {!embedded ? (
-              <a className="inline-link" href="/">
-                {t('statusView.backHome')}
-              </a>
-            ) : null}
+            <a className="inline-link" href="/">
+              {t('statusView.backHome')}
+            </a>
           </>
         ) : status ? (
           <>
             <StatusTimeline current={status.status} />
             <p className="status-description" aria-live="polite">
-              {t(`statusView.states.${status.status}.description`)}
+              {stateDescription}
             </p>
 
             {status.progress?.checks === 'FAILURE' ? (
@@ -481,6 +639,7 @@ export function SubmissionStatusView({
                 subtitle={t('statusView.draftHint')}
                 cta={t('statusView.playDraft')}
                 onPlay={openDraft}
+                {...(onPlaytest ? { secondary: { label: t('statusView.playtestCta'), onClick: onPlaytest } } : {})}
               />
             ) : channelHtml && latestChannelBuild ? (
               <PlayCard
@@ -493,28 +652,12 @@ export function SubmissionStatusView({
                 subtitle={latestChannelBuild.label ?? t('statusView.playableHint')}
                 cta={t('statusView.playDraft')}
                 onPlay={openChannel}
+                {...(onPlaytest ? { secondary: { label: t('statusView.playtestCta'), onClick: onPlaytest } } : {})}
               />
             ) : previewLoading || channelLoading ? (
               <p className="status-preview-pending">
                 <span className="status-preview-spinner" aria-hidden="true" /> {t('statusView.previewLoading')}
               </p>
-            ) : null}
-
-            {/* Order matters: "played it — want changes?" follows straight on from the
-                play card, so the ask lands while the game is still in mind. The build
-                log is reference material and sits underneath.
-
-                This used to wait for a preview, which waits for a pull request — so the
-                first stretch of the build, when redirecting the agent is cheapest and the
-                creator is most likely to spot a misreading of their idea, was the one
-                stretch they could not say anything. The agent picks messages up off the
-                channel on its next report, so a note left now lands in a minute or two. */}
-            {status.status !== 'published' && status.status !== 'abandoned' ? (
-              <FeedbackPanel
-                token={token}
-                building={!preview && !channelHtml}
-                onSent={(text) => setPendingRevisions((current) => [...current, { text, at: Date.now() }])}
-              />
             ) : null}
 
             <BuildProgressPanel
@@ -525,46 +668,39 @@ export function SubmissionStatusView({
               pendingRevisions={pendingRevisions}
             />
 
+            {/* One box, at the bottom, where a conversation keeps its reply — and it is
+                the only one. There used to be three, all of them the same act: steer the
+                build, request a change on the draft, improve the published game. Which
+                one a creator was allowed depended on the game's lifecycle state, so they
+                had to know it to find the right box. The server knows it; the placeholder
+                says where the message lands, and the creator just writes.
+
+                No mode to pick, either: a game is either published or it is not, and
+                there is only ever the current version to work on. */}
+            {status.status !== 'abandoned' ? (
+              <FeedbackPanel
+                token={token}
+                published={status.status === 'published'}
+                building={!preview && !channelHtml}
+                onSent={(text) => setPendingRevisions((current) => [...current, { text, at: Date.now() }])}
+              />
+            ) : null}
+
             {/* Only alarm when nothing is playable. A channel draft can succeed while
                 the PR-branch assemble 502s (GitHub rate limits); showing both a Play
                 card and this error was the Studio bug creators hit mid-build. */}
             {previewError && !preview && !channelHtml ? <p className="error">{previewError}</p> : null}
 
-            {/* Embedded in Creator Studio the panel is a tab, not a page: the header
-                already carries "Back to home", and a second escape hatch a screen
-                below it just reads as two different ways out. Stopping the build has
-                no such duplicate, so it stays either way. */}
-            <div className={`status-footer-actions${embedded ? ' is-embedded' : ''}`}>
-              {!embedded ? (
-                <a className="inline-link" href="/">
-                  {t('statusView.backHome')}
-                </a>
-              ) : null}
+            <div className="status-footer-actions">
+              <a className="inline-link" href="/">
+                {t('statusView.backHome')}
+              </a>
               {!TERMINAL_STATUSES.has(status.status) ? <AbandonControl token={token} /> : null}
             </div>
           </>
         ) : null}
       </section>
-
-      {playing === 'published' && status?.status === 'published' && status.slug ? (
-        <GameTheater
-          title={publishedGameTitle}
-          badge={{ icon: 'gamepad', label: t('catalog.playingBadge', { defaultValue: 'Playing' }) }}
-          source={{ slug: status.slug }}
-          onExit={closeTheater}
-        />
-      ) : null}
-
-      {playing === 'draft' && launchedHtml != null ? (
-        <GameTheater
-          title={
-            preview ? previewTitle : (submittedTitle ?? latestChannelBuild?.slug ?? t('statusView.previewGameTitle'))
-          }
-          badge={{ icon: 'wrench', label: t('statusView.draftBadge') }}
-          source={{ html: launchedHtml }}
-          onExit={closeTheater}
-        />
-      ) : null}
+      {theaters}
     </>
   );
 }
@@ -623,36 +759,6 @@ function AbandonControl({ token }: { token: string }) {
   );
 }
 
-/** Watch-only link to the game, with one-tap copy (the point is to send it to someone). */
-function ShareLink({ url }: { url: string }) {
-  const { t } = useTranslation();
-  const [copied, setCopied] = useState(false);
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // No clipboard permission (or no clipboard API) — the link is right there to
-      // select by hand, so this needs no error state.
-    }
-  };
-
-  return (
-    <p className="status-note status-share">
-      {t('statusView.shareLink')}{' '}
-      <a className="inline-link" href={url}>
-        {url}
-      </a>
-      <button type="button" className="status-share-copy" onClick={() => void copy()}>
-        <PixelIcon name={copied ? 'check' : 'globe'} size={12} />{' '}
-        {copied ? t('statusView.shareCopied') : t('statusView.shareCopy')}
-      </button>
-    </p>
-  );
-}
-
 /**
  * The "your game is playable" call-to-action inside the status panel. Clicking the
  * CTA opens the game in the full-viewport theater — so the status page itself never
@@ -666,6 +772,7 @@ function PlayCard({
   subtitle,
   cta,
   onPlay,
+  secondary,
 }: {
   badge: ReactNode;
   badgeClass?: string;
@@ -673,6 +780,12 @@ function PlayCard({
   subtitle?: string;
   cta: string;
   onPlay: () => void;
+  /**
+   * The other thing to do with a playable build. Playtesting is the studio's own
+   * surface — pause the game, point at what is wrong, send the frame with the note —
+   * and until this button existed the only route to it was noticing a tab.
+   */
+  secondary?: { label: string; onClick: () => void };
 }) {
   return (
     <div className="status-play-card">
@@ -681,9 +794,16 @@ function PlayCard({
         <h3 className="status-play-card-title">{title}</h3>
         {subtitle ? <p className="status-play-card-sub">{subtitle}</p> : null}
       </div>
-      <button className="primary-btn status-play-cta" onClick={onPlay}>
-        <PixelIcon name="play" size={13} /> {cta}
-      </button>
+      <div className="status-play-card-actions">
+        <button className="primary-btn status-play-cta" onClick={onPlay}>
+          <PixelIcon name="play" size={13} /> {cta}
+        </button>
+        {secondary ? (
+          <button className="secondary-btn status-playtest-cta" onClick={secondary.onClick}>
+            <PixelIcon name="wrench" size={13} /> {secondary.label}
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -742,11 +862,17 @@ function ShotLightbox({ token, item, onClose }: { token: string; item: BuildMedi
  */
 function FeedbackPanel({
   token,
+  published,
   building,
+  compact = false,
   onSent,
 }: {
   token: string;
+  /** Routes the message: an improvement on the live game, or a change on the build. */
+  published: boolean;
   building: boolean;
+  /** The thread's reply box rather than a page section — field and send, nothing else. */
+  compact?: boolean;
   onSent: (text: string) => void;
 }) {
   const { t } = useTranslation();
@@ -761,7 +887,10 @@ function FeedbackPanel({
     setState('sending');
     setError(null);
     try {
-      await submitFeedback(token, trimmed);
+      // Same box, same act, different destination — decided here from the state the
+      // server reported rather than by asking the creator which one they meant.
+      if (published) await submitImprovement(token, trimmed);
+      else await submitFeedback(token, trimmed);
       setState('sent');
       setText('');
       // Echo it into the activity feed straight away: the API only sees it once the
@@ -782,14 +911,62 @@ function FeedbackPanel({
     }
   };
 
+  // Three states, one box. The copy is the only thing that changes, and it changes so
+  // the creator can see where their message is about to go without having chosen.
+  const hintKey = published
+    ? 'statusView.feedback.hintPublished'
+    : building
+      ? 'statusView.feedback.hintBuilding'
+      : 'statusView.feedback.hint';
+  const titleKey = published
+    ? 'statusView.feedback.titlePublished'
+    : building
+      ? 'statusView.feedback.titleBuilding'
+      : 'statusView.feedback.title';
+
+  // Compact is the thread's composer: a field and a send, the way a reply box looks
+  // everywhere else. The heading and the standing hint paragraph were page furniture —
+  // fine on a page read once, noise under a conversation you come back to. What the hint
+  // said still matters, so it becomes the placeholder: it is on screen exactly while the
+  // box is empty, which is when "where does this go?" is the open question.
+  if (compact) {
+    return (
+      <div className="status-feedback status-composer is-compact">
+        <textarea
+          className="status-feedback-input"
+          value={text}
+          onChange={(event) => {
+            setText(event.target.value);
+            if (state === 'sent') setState('idle');
+          }}
+          placeholder={t(hintKey)}
+          aria-label={t(titleKey)}
+          rows={2}
+          maxLength={2000}
+        />
+        <div className="status-feedback-actions">
+          {error ? <p className="error">{error}</p> : null}
+          {state === 'sent' && !error ? (
+            <span className="status-feedback-sent">
+              <PixelIcon name="check" size={13} /> {t('statusView.feedback.sent')}
+            </span>
+          ) : null}
+          <button
+            className="primary-btn"
+            onClick={() => void send()}
+            disabled={state === 'sending' || trimmed.length < 10}
+          >
+            {state === 'sending' ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="status-feedback">
-      <h3 className="status-feedback-title">
-        {t(building ? 'statusView.feedback.titleBuilding' : 'statusView.feedback.title')}
-      </h3>
-      <p className="status-feedback-hint">
-        {t(building ? 'statusView.feedback.hintBuilding' : 'statusView.feedback.hint')}
-      </p>
+    <div className="status-feedback status-composer">
+      <h3 className="status-feedback-title">{t(titleKey)}</h3>
+      <p className="status-feedback-hint">{t(hintKey)}</p>
       <textarea
         className="status-feedback-input"
         value={text}
@@ -816,6 +993,153 @@ function FeedbackPanel({
         ) : null}
       </div>
       {error ? <p className="error">{error}</p> : null}
+    </div>
+  );
+}
+
+/**
+ * The thread, in the shape a conversation actually has.
+ *
+ * The build's story used to be a log: a bordered box titled BUILD ACTIVITY, rows of
+ * 12px text behind an icon column, timestamps hard right. Everything in it was true and
+ * none of it read as somebody talking. Here the agent's turns are ordinary prose at full
+ * width with nothing drawn around them, and the creator's are quiet bubbles on the other
+ * side — the asymmetry every chat client uses, and deliberately the way round where the
+ * agent's words are the ones with room to breathe.
+ *
+ * Scrolls in its own pane so the composer beneath it never moves, and sticks to the
+ * bottom as the agent talks — unless the reader has scrolled up, which is them saying
+ * they are reading something and would like it to stay put.
+ */
+function ThreadStream({ token, entries, emptyLabel }: { token: string; entries: ActivityEntry[]; emptyLabel: string }) {
+  const { t, i18n } = useTranslation();
+  const [zoomed, setZoomed] = useState<BuildMediaItem | null>(null);
+  const [broken, setBroken] = useState<string[]>([]);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const stickToBottomRef = useRef(true);
+
+  const onScroll = () => {
+    const pane = scrollRef.current;
+    if (!pane) return;
+    // A small slack, because "at the bottom" is never exact once fonts and images have
+    // settled, and a reader one pixel short of it still means to be following along.
+    stickToBottomRef.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 48;
+  };
+
+  useEffect(() => {
+    const pane = scrollRef.current;
+    if (!pane || !stickToBottomRef.current) return;
+    pane.scrollTop = pane.scrollHeight;
+  }, [entries.length]);
+
+  return (
+    <div className="studio-thread-scroll" ref={scrollRef} onScroll={onScroll}>
+      {entries.length === 0 ? <p className="studio-thread-empty">{emptyLabel}</p> : null}
+      <ol className="studio-thread-turns">
+        {entries.map((entry, index) => {
+          const mine = entry.kind === 'revision';
+          const media = entry.media?.filter((item) => !broken.includes(item.ref)) ?? [];
+          return (
+            <li
+              key={`${entry.kind}-${entry.at}-${index}`}
+              className={`studio-turn${mine ? ' is-mine' : ''}${entry.pending ? ' is-pending' : ''}`}
+            >
+              <div className="studio-turn-body">
+                {/* The step is a closed set, so it is our own translated copy rather than
+                    a machine translation of whatever the agent happened to write. */}
+                {!mine && entry.step ? (
+                  <span className="studio-turn-kicker">{t(`statusView.progress.steps.${entry.step}`)}</span>
+                ) : null}
+                <p className="studio-turn-text">{entry.text}</p>
+                {media.length > 0 ? (
+                  <span className="studio-turn-shots">
+                    {media.map((item) => (
+                      <button
+                        key={item.ref}
+                        type="button"
+                        className="build-activity-shot"
+                        onClick={() => setZoomed(item)}
+                        title={t('statusView.gallery.expand')}
+                      >
+                        <img
+                          src={buildMediaUrl(token, item)}
+                          alt={item.label || t('statusView.gallery.alt')}
+                          loading="lazy"
+                          onError={() => setBroken((refs) => [...refs, item.ref])}
+                        />
+                      </button>
+                    ))}
+                  </span>
+                ) : null}
+              </div>
+              <time className="studio-turn-time" dateTime={new Date(entry.at).toISOString()}>
+                {entry.pending
+                  ? t('statusView.progress.yourRequestSending')
+                  : formatRelativeTime(entry.at, i18n.language)}
+              </time>
+            </li>
+          );
+        })}
+      </ol>
+      {zoomed ? <ShotLightbox token={token} item={zoomed} onClose={() => setZoomed(null)} /> : null}
+    </div>
+  );
+}
+
+/**
+ * The bar between the thread and the composer: where the work is, and the one thing to
+ * do about it.
+ *
+ * Replaces a five-step timeline, a progress bar, a status pill and a sentence — four
+ * things saying where the build was, stacked above the conversation and pushing it down
+ * the page. This says it once, in the place the eye already is because the composer is
+ * directly underneath.
+ */
+function ThreadContextBar({
+  slug,
+  phase,
+  heartbeatAt,
+  progress,
+  primary,
+  secondary,
+}: {
+  slug?: string;
+  phase: string;
+  heartbeatAt: number | null;
+  progress?: { done: number; total: number };
+  primary?: { label: string; onClick: () => void };
+  secondary?: { label: string; onClick: () => void };
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <div className="studio-thread-context">
+      <span className="studio-context-state">
+        {slug ? <code className="studio-slug">{slug}</code> : null}
+        <span className="studio-context-phase">{phase}</span>
+        {heartbeatAt !== null ? (
+          <span className="studio-context-beat">
+            <BuildHeartbeat at={heartbeatAt} />
+          </span>
+        ) : null}
+      </span>
+      <span className="studio-context-actions">
+        {progress && progress.total > 0 ? (
+          <span className="studio-context-progress">
+            {t('statusView.progress.checklistCount', { done: progress.done, total: progress.total })}
+          </span>
+        ) : null}
+        {secondary ? (
+          <button type="button" className="secondary-btn status-playtest-cta" onClick={secondary.onClick}>
+            <PixelIcon name="wrench" size={13} /> {secondary.label}
+          </button>
+        ) : null}
+        {primary ? (
+          <button type="button" className="primary-btn status-play-cta" onClick={primary.onClick}>
+            <PixelIcon name="play" size={13} /> {primary.label}
+          </button>
+        ) : null}
+      </span>
     </div>
   );
 }
@@ -918,8 +1242,12 @@ function buildActivityFeed(
     }
   }
 
-  // Newest first — that's what makes the build feel live.
-  return entries.filter((entry) => Number.isFinite(entry.at)).sort((a, b) => b.at - a.at);
+  // Oldest first, because this is a conversation and that is the order conversations
+  // are read in: the newest thing sits at the bottom, next to the box you reply in.
+  // It used to be newest-first, which put the creator's own last message at the top,
+  // furthest from the composer, and made the thread read backwards once it had more
+  // than a couple of entries in it.
+  return entries.filter((entry) => Number.isFinite(entry.at)).sort((a, b) => a.at - b.at);
 }
 
 function BuildProgressPanel({
@@ -961,7 +1289,7 @@ function BuildProgressPanel({
   // What the agent says it is doing beats what we infer from its checklist — fall
   // back to the first unfinished task only when it has written nothing.
   const currentStep = headline ? undefined : checklist.find((item) => !item.checked);
-  const lastUpdate = activity[0];
+  const lastUpdate = activity[activity.length - 1];
   // A long gap between pushes is normal, but silence with no explanation reads as
   // "it's broken" — say so plainly instead of letting the creator guess.
   const isQuiet = lastUpdate !== undefined && Date.now() - lastUpdate.at > QUIET_BUILD_MS;
@@ -1032,7 +1360,17 @@ function BuildProgressPanel({
             {activity.map((entry, index) => (
               <li
                 key={`${entry.kind}-${entry.at}-${index}`}
-                className={`build-activity-item build-activity-${entry.kind}${index === 0 ? ' build-progress-commit-latest' : ''}`}
+                className={[
+                  'build-activity-item',
+                  `build-activity-${entry.kind}`,
+                  // The creator's own messages sit on the other side of the thread, the
+                  // way they do in any conversation — without it, a request they sent and
+                  // the agent's reply to it are two identical grey rows.
+                  entry.kind === 'revision' ? 'is-mine' : '',
+                  index === activity.length - 1 ? 'build-progress-commit-latest' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
               >
                 <span className="build-activity-icon" aria-hidden="true">
                   <PixelIcon

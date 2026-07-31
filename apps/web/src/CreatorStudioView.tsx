@@ -3,10 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
 import { AuthModal } from './AuthModal.js';
 import type { GameHealth } from './healthApi.js';
-import { PixelIcon, type PixelIconName } from './PixelIcon.js';
+import { PixelIcon } from './PixelIcon.js';
 import { formatRelativeTime } from './relativeTime.js';
-import { studioPath, type StudioTab } from './router.js';
-import { abandonSubmission, submitFeedback, type SubmissionApiError, type SubmissionState } from './submissionApi.js';
+import { playPath, studioPath, type StudioTab } from './router.js';
+import { abandonSubmission } from './submissionApi.js';
 import { StudioPlaytestPanel } from './StudioPlaytestPanel.js';
 import {
   filterStudioGames,
@@ -25,8 +25,7 @@ import {
   fetchStudioSuggestions,
   fetchGameAutonomy,
   setGameAutonomy,
-  submitImprovement,
-  type StudioApiError,
+  setDraftShared,
   type StudioGame,
   type StudioScorecard,
   type StudioSuggestion,
@@ -36,45 +35,46 @@ import {
 /**
  * Creator control panel (docs/improvement-loop-plan.md IL-2 creator surface).
  *
- * One place for the whole creator loop: shelf of owned games, the draft Build
- * (former status / "dev studio" page), playtest-with-pause prompting, play
- * health, and post-publish improve.
+ * One game is one thread, and the thread is the studio.
  *
- * Shelf scales past a handful of games: compact rows, search/filter once the
- * list grows, and on narrow viewports a game switcher (picker sheet) so the
- * work surface is not buried under ten cards.
+ * Making a game here is a conversation with an agent, and this screen used to be five
+ * tabs laid across the top of it — with the same act, "say what to change", living in
+ * three of them, so which box a creator was allowed depended on a lifecycle state they
+ * had to know in order to find it. There are three surfaces now: the thread, the things
+ * beside the thread (facts, sharing, play health, stopping it), and playtest, which
+ * genuinely takes the screen. The composer at the foot of the thread is the only one,
+ * and it always targets the game's current state — published or not, there is only ever
+ * the tip to work on.
  *
- * Selection + active tab live in the URL (`/studio/:token/:tab`) so a refresh
- * or shared link reopens the same work surface.
+ * Shelf scales past a handful of games: compact rows, search/filter once the list grows,
+ * and on narrow viewports a game switcher (picker sheet) so the thread is not buried
+ * under ten cards.
+ *
+ * Selection + surface live in the URL (`/studio/<slug>/<surface>`) so a refresh or a
+ * shared link reopens the same place. The five old tab names still resolve, onto
+ * whichever surface absorbed them.
  */
-
-const STATUS_ICONS: Record<SubmissionState, PixelIconName> = {
-  queued: 'clock',
-  building: 'wrench',
-  in_review: 'eye',
-  publishing: 'rocket',
-  published: 'star',
-  needs_changes: 'pencil',
-  abandoned: 'trash',
-};
 
 const WINDOWS = [1, 7, 30];
 
-/** Tab strip order, and the label each tab carries. */
-const TAB_ORDER: readonly StudioTab[] = ['overview', 'build', 'playtest', 'stats', 'improve'];
-const TAB_LABELS: Record<StudioTab, string> = {
-  overview: 'studioPanel.tabs.overview',
-  build: 'studioPanel.tabs.build',
-  playtest: 'studioPanel.tabs.playtest',
-  stats: 'studioPanel.tabs.stats',
-  improve: 'studioPanel.tabs.improve',
-};
+/**
+ * Where the details panel stops being a rail beside the thread and becomes a sheet over
+ * it. Kept in step with the same breakpoint in styles.css by hand — the two describe one
+ * decision, and a panel that behaves like a sheet while it is drawn as a rail (or the
+ * reverse) locks the page scroll for something the reader can see straight past.
+ */
+const SHEET_MAX_WIDTH = 1099;
+const SHEET_QUERY = `(max-width: ${SHEET_MAX_WIDTH}px)`;
 
 type NavigateOptions = { replace?: boolean };
 
 type CreatorStudioViewProps = {
-  /** Deep-link into a specific game when present. */
-  selectedToken?: string;
+  /**
+   * Deep-link into a specific game when present: its slug, or — for links minted
+   * before games had one — its capability token. Resolved against the creator's own
+   * shelf, so it addresses nothing they do not own.
+   */
+  selectedGame?: string;
   /** Deep-link into a work-surface tab when present. */
   selectedTab?: StudioTab;
   onNavigate: (path: string, options?: NavigateOptions) => void;
@@ -83,25 +83,42 @@ type CreatorStudioViewProps = {
   onRetryConcept?: (concept: string) => void;
 };
 
-function defaultTabFor(game: StudioGame | null): StudioTab {
-  if (!game) return 'overview';
-  return isStudioGamePublished(game) ? 'overview' : 'build';
+/**
+ * The thread, always — for a game being built and for one that is live.
+ *
+ * Both used to land somewhere else: a build opened on its status page, a published game
+ * on a facts panel. But the question a creator arrives with is the same either way —
+ * what has happened, and how do I ask for the next thing — and that is one surface.
+ */
+function defaultTabFor(): StudioTab {
+  return 'thread';
 }
 
 /**
- * Which surfaces exist for this game. Must stay in step with the rendered tab list
- * below: a tab that resolves but has no button and no panel is a blank work surface.
+ * Which surfaces exist for this game. All three, for every game: the thread reads the
+ * build's history and takes the next message whatever state it is in, the details panel
+ * always has facts to show, and playtest always has something to play or a reason it
+ * does not yet.
  */
-function tabAvailable(game: StudioGame, tab: StudioTab): boolean {
-  const published = isStudioGamePublished(game);
-  if (tab === 'build') return !published;
-  if (tab === 'stats') return published;
+function tabAvailable(_game: StudioGame, _tab: StudioTab): boolean {
   return true;
 }
 
 function resolveTab(game: StudioGame, requested?: StudioTab): StudioTab {
   if (requested && tabAvailable(game, requested)) return requested;
-  return defaultTabFor(game);
+  return defaultTabFor();
+}
+
+/**
+ * How this game is addressed in the URL.
+ *
+ * The slug once it has one, which is now from the moment the game was submitted. The
+ * capability token is the fallback for games created before slugs were assigned up
+ * front — and it is a fallback rather than the rule because a token in the URL bar is a
+ * grant sitting in browser history, in screenshots, and in anything the creator pastes.
+ */
+function studioAddress(game: StudioGame): string {
+  return game.slug ?? game.token;
 }
 
 function formatSeconds(seconds: number): string {
@@ -121,7 +138,7 @@ function healthFor(game: StudioGame, rows: GameHealth[]): GameHealth | null {
 }
 
 export function CreatorStudioView({
-  selectedToken,
+  selectedGame,
   selectedTab,
   onNavigate,
   onPlay,
@@ -138,8 +155,10 @@ export function CreatorStudioView({
   const [days, setDays] = useState(7);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<string | null>(selectedToken ?? null);
-  const [tab, setTab] = useState<StudioTab>(selectedTab ?? 'overview');
+  // Internally a game is its token — that is what every API call on this screen takes.
+  // The URL says slug; the shelf is what translates between them.
+  const [selected, setSelected] = useState<string | null>(null);
+  const [tab, setTab] = useState<StudioTab>(selectedTab ?? 'thread');
   const [shelfQuery, setShelfQuery] = useState('');
   const [shelfFilter, setShelfFilter] = useState<StudioShelfFilter>('all');
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -147,9 +166,24 @@ export function CreatorStudioView({
   const pickerSearchId = useId();
   const pickerSearchRef = useRef<HTMLInputElement>(null!);
 
+  // What the URL is asking for, readable from inside the shelf fetch below without
+  // making that fetch re-run every time the address changes. Seeded rather than
+  // assigned in an effect because the case that matters is the first render: a deep
+  // link arrives with the shelf request already in flight.
+  const requestedGameRef = useRef(selectedGame);
   useEffect(() => {
-    if (selectedToken) setSelected(selectedToken);
-  }, [selectedToken]);
+    requestedGameRef.current = selectedGame;
+  }, [selectedGame]);
+
+  // Resolve the URL's game segment against the shelf — by slug, or by capability token
+  // for links minted before games were given slugs at submission. A value matching
+  // neither selects nothing: the shelf holds only this creator's games, so a slug
+  // belonging to someone else is indistinguishable from one that does not exist.
+  useEffect(() => {
+    if (!selectedGame) return;
+    const match = games.find((game) => game.slug === selectedGame || game.token === selectedGame);
+    if (match) setSelected(match.token);
+  }, [selectedGame, games]);
 
   useEffect(() => {
     if (!user) {
@@ -174,6 +208,13 @@ export function CreatorStudioView({
         setLoading(false);
         setSelected((current) => {
           if (current && shelf.some((game) => game.token === current)) return current;
+          // A URL naming a game picks that one, or none at all. Falling through to the
+          // newest would answer "show me this game" with a different game, silently —
+          // and since slugs are public, the request may well be for somebody else's.
+          const requested = requestedGameRef.current;
+          if (requested) {
+            return shelf.find((game) => game.slug === requested || game.token === requested)?.token ?? null;
+          }
           return shelf[0]?.token ?? null;
         });
       })
@@ -216,39 +257,90 @@ export function CreatorStudioView({
     };
   }, [user]);
 
-  const selectedGame = useMemo(() => games.find((game) => game.token === selected) ?? null, [games, selected]);
-  const selectedHealth = selectedGame ? healthFor(selectedGame, healthRows) : null;
-  const selectedScorecard = selectedGame?.slug
-    ? (scorecards.find((card) => card.slug === selectedGame.slug) ?? null)
+  const activeGame = useMemo(() => games.find((game) => game.token === selected) ?? null, [games, selected]);
+  const selectedHealth = activeGame ? healthFor(activeGame, healthRows) : null;
+  const selectedScorecard = activeGame?.slug
+    ? (scorecards.find((card) => card.slug === activeGame.slug) ?? null)
     : null;
   const visibleGames = useMemo(
     () => filterStudioGames(games, { filter: shelfFilter, query: shelfQuery }),
     [games, shelfFilter, shelfQuery],
   );
   const showShelfTools = games.length >= STUDIO_SHELF_TOOLS_AT;
+  // The URL named a game and the shelf does not have it: a typo, a game since abandoned,
+  // or somebody else's slug. Said plainly, because an unexplained shelf looks like the
+  // link worked and the game vanished.
+  const missingGame = Boolean(selectedGame) && !loading && !error && games.length > 0 && !activeGame;
   const buildingCount = useMemo(
     () => games.filter((game) => game.lastKnownStatus && STUDIO_LIVE_STATUSES.has(game.lastKnownStatus)).length,
     [games],
   );
   const liveCount = useMemo(() => games.filter((game) => isStudioGamePublished(game)).length, [games]);
 
-  // Keep the visible tab aligned with the selected game. Only write the
-  // capability token into the URL when the route already carried one (a deep
-  // link, or an earlier explicit pick via selectGame/openTab). Bare `/studio`
-  // keeps shelf selection local so a screenshot or history entry doesn't mint a
-  // token the creator never asked for.
+  // Keep the visible tab aligned with the selected game, and the URL on the game's
+  // current address. Only writes an address when the route already carried one (a deep
+  // link, or an earlier explicit pick via selectGame/openTab); bare `/studio` keeps
+  // shelf selection local so a screenshot or history entry doesn't name a game the
+  // creator never asked to put there.
+  //
+  // This is also where an old `/studio/<token>` link upgrades itself: the address it
+  // rewrites to is the slug, so following a link out of a months-old notification email
+  // leaves a readable URL behind and takes the capability token out of history.
   useEffect(() => {
     if (!selected) return;
     const game = games.find((entry) => entry.token === selected);
     if (!game) return;
     const next = resolveTab(game, selectedTab);
     setTab(next);
-    if (!selectedToken) return;
-    const canonical = studioPath(game.token, next);
+    // The route carried no game, so nothing is written back: this is bare `/studio`,
+    // where the shelf's convenience selection is the view's business and not the URL's.
+    if (!selectedGame) return;
+    const canonical = studioPath(studioAddress(game), next);
     if (window.location.pathname !== canonical) {
       onNavigate(canonical, { replace: true });
     }
-  }, [selected, selectedTab, selectedToken, games, onNavigate]);
+  }, [selected, selectedTab, selectedGame, games, onNavigate]);
+
+  /**
+   * Below the rail breakpoint the details panel is a sheet over the thread, and a sheet
+   * has obligations a side panel does not: the page behind it must not scroll, Escape
+   * must close it, and there must be something to tap beside it to dismiss. The game
+   * picker already does all three; this arrived without any of them.
+   */
+  const detailsOpen = tab === 'details';
+  const [detailsIsSheet, setDetailsIsSheet] = useState(false);
+  useEffect(() => {
+    if (!detailsOpen) {
+      setDetailsIsSheet(false);
+      return;
+    }
+    // Width, not `matchMedia` alone: the query is the precise instrument but it is not
+    // universally present (jsdom has none, and neither do some embedded webviews), and a
+    // panel that throws where it is missing is worse than one measured a cruder way.
+    const query = typeof window.matchMedia === 'function' ? window.matchMedia(SHEET_QUERY) : null;
+    const sync = () => setDetailsIsSheet(query ? query.matches : window.innerWidth <= SHEET_MAX_WIDTH);
+    sync();
+    query?.addEventListener('change', sync);
+    window.addEventListener('resize', sync);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') openTabRef.current('thread');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      query?.removeEventListener('change', sync);
+      window.removeEventListener('resize', sync);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [detailsOpen]);
+
+  useEffect(() => {
+    if (!detailsIsSheet) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [detailsIsSheet]);
 
   useEffect(() => {
     if (!pickerOpen) return;
@@ -268,18 +360,25 @@ export function CreatorStudioView({
 
   function selectGame(token: string) {
     const next = games.find((game) => game.token === token) ?? null;
-    const nextTab = defaultTabFor(next);
+    const nextTab = defaultTabFor();
     setSelected(token);
     setTab(nextTab);
     setPickerOpen(false);
-    onNavigate(studioPath(token, nextTab));
+    if (next) onNavigate(studioPath(studioAddress(next), nextTab));
   }
 
+  // Read by the Escape handler above, which is registered once per open rather than
+  // re-registered on every render that changes what `openTab` closes over.
+  const openTabRef = useRef((next: StudioTab) => {
+    void next;
+  });
+
   function openTab(next: StudioTab) {
-    if (!selectedGame || !tabAvailable(selectedGame, next)) return;
+    if (!activeGame || !tabAvailable(activeGame, next)) return;
     setTab(next);
-    onNavigate(studioPath(selectedGame.token, next));
+    onNavigate(studioPath(studioAddress(activeGame), next));
   }
+  openTabRef.current = openTab;
 
   if (!user) {
     return (
@@ -309,12 +408,8 @@ export function CreatorStudioView({
     />
   );
 
-  // Derived from the same predicate the router uses, so a deep-linked tab can never
-  // resolve to a surface with no button to leave it by.
-  const tabItems = selectedGame ? TAB_ORDER.filter((id) => tabAvailable(selectedGame, id)) : [];
-
   return (
-    <section className={`studio-panel${tab === 'playtest' ? ' is-playtesting' : ''}`}>
+    <section className={`studio-panel${tab === 'playtest' ? ' is-playtesting' : ''}${activeGame ? ' is-focused' : ''}`}>
       <header className="studio-panel-header">
         <div>
           <p className="studio-kicker">{t('studioPanel.kicker')}</p>
@@ -342,10 +437,10 @@ export function CreatorStudioView({
         <div
           className={[
             'studio-layout',
-            selectedGame ? 'is-game-open' : '',
+            activeGame ? 'is-game-open' : '',
             // Once the shelf is no longer a glanceable handful, collapse it after
             // selection so the work surface owns the viewport (desktop + mobile).
-            selectedGame && showShelfTools ? 'is-focus' : '',
+            activeGame && showShelfTools ? 'is-focus' : '',
           ]
             .filter(Boolean)
             .join(' ')}
@@ -355,6 +450,9 @@ export function CreatorStudioView({
               <h2 className="studio-shelf-heading">{t('studioPanel.shelf.heading')}</h2>
               <span className="studio-shelf-count">{t('studioPanel.shelf.count', { count: games.length })}</span>
             </div>
+            <button type="button" className="studio-shelf-new" onClick={() => onNavigate('/')}>
+              <PixelIcon name="sparkle" size={12} /> {t('studioPanel.shelf.newGame')}
+            </button>
             <StudioShelfControls
               searchInputId={shelfSearchId}
               query={shelfQuery}
@@ -369,7 +467,9 @@ export function CreatorStudioView({
             {shelfList}
           </aside>
 
-          {selectedGame ? (
+          {missingGame ? <p className="studio-empty studio-error">{t('studioPanel.gameNotFound')}</p> : null}
+
+          {activeGame ? (
             <div className="studio-detail">
               <div className="studio-detail-head">
                 <button
@@ -385,60 +485,46 @@ export function CreatorStudioView({
                       {t('studioPanel.shelf.count', { count: games.length })}
                     </span>
                   </span>
-                  <span className="studio-game-switcher-title">{selectedGame.title}</span>
-                  {selectedGame.slug ? <code className="studio-slug">{selectedGame.slug}</code> : null}
+                  <span className="studio-game-switcher-title">{activeGame.title}</span>
+                  {activeGame.slug ? <code className="studio-slug">{activeGame.slug}</code> : null}
                   <PixelIcon name="expand" size={12} />
                 </button>
                 <div className="studio-detail-title-row">
                   <div className="studio-detail-title-block">
-                    <h2>{selectedGame.title}</h2>
-                    {selectedGame.slug ? <code className="studio-slug">{selectedGame.slug}</code> : null}
+                    <h2>{activeGame.title}</h2>
+                    {activeGame.slug ? <code className="studio-slug">{activeGame.slug}</code> : null}
                   </div>
-                  <StudioStatusPill game={selectedGame} />
+                  {/* Actions, not tabs. A tab strip across the work surface says the
+                      surfaces are peers; the thread is not a peer of the panel listing
+                      when the game was made. These open things beside it and leave it
+                      where it is. */}
+                  <div className="studio-head-actions">
+                    <button type="button" className="studio-head-action" onClick={() => openTab('playtest')}>
+                      <PixelIcon name="play" size={12} /> {t('studioPanel.tabs.playtest')}
+                    </button>
+                    <button
+                      type="button"
+                      className={`studio-head-action${tab === 'details' ? ' is-active' : ''}`}
+                      aria-pressed={tab === 'details'}
+                      onClick={() => openTab(tab === 'details' ? 'thread' : 'details')}
+                    >
+                      <PixelIcon name="expand" size={12} /> {t('studioPanel.tabs.details')}
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              <div className="studio-tabs" role="tablist" aria-label={t('studioPanel.title')}>
-                {tabItems.map((id) => (
-                  <button
-                    key={id}
-                    type="button"
-                    role="tab"
-                    aria-selected={tab === id}
-                    className={`studio-tab${tab === id ? ' is-active' : ''}`}
-                    onClick={() => openTab(id)}
-                  >
-                    {t(TAB_LABELS[id])}
-                  </button>
-                ))}
-              </div>
-
-              <div className="studio-tab-panel">
-                {tab === 'overview' ? (
-                  <OverviewTab
-                    game={selectedGame}
-                    health={selectedHealth}
-                    onOpenBuild={() => openTab('build')}
-                    onOpenPlaytest={() => openTab('playtest')}
-                    onPlay={() => selectedGame.slug && onPlay(selectedGame.slug)}
-                    onRemoved={(token) => {
-                      setGames((prev) => prev.filter((game) => game.token !== token));
-                      setSelected((current) => (current === token ? null : current));
-                      onNavigate(studioPath());
-                    }}
-                  />
-                ) : null}
-
-                {tab === 'build' && !isStudioGamePublished(selectedGame) ? (
+              {/* The thread stays put. Details opens beside it on a wide screen and over
+                  it on a narrow one; only playtest, which needs the whole viewport to be
+                  a game, replaces it. */}
+              <div className={`studio-workspace${tab === 'details' ? ' is-details-open' : ''}`}>
+                {tab !== 'playtest' ? (
                   <div className="studio-build">
                     <SubmissionStatusView
-                      token={selectedGame.token}
+                      key={activeGame.token}
+                      token={activeGame.token}
                       embedded
-                      // Feeds the live pill's elapsed timer. With the numeric ETA gone, "Live · 12m"
-                      // is the only thing on this tab saying the build is still moving — a bare
-                      // "Live" next to the header's status pill reads like a second, contradictory
-                      // status instead of a heartbeat.
-                      submittedAt={Date.parse(selectedGame.createdAt)}
+                      onPlaytest={() => openTab('playtest')}
                       onRetry={
                         onRetryConcept
                           ? (concept) => {
@@ -453,25 +539,66 @@ export function CreatorStudioView({
 
                 {tab === 'playtest' ? (
                   <StudioPlaytestPanel
-                    game={selectedGame}
-                    published={isStudioGamePublished(selectedGame)}
-                    onExit={() => openTab('overview')}
+                    game={activeGame}
+                    published={isStudioGamePublished(activeGame)}
+                    onExit={() => openTab('thread')}
                   />
                 ) : null}
 
-                {tab === 'stats' ? (
-                  <StatsTab
-                    game={selectedGame}
-                    health={selectedHealth}
-                    days={days}
-                    healthDays={healthDays}
-                    truncated={truncated}
-                    scorecard={selectedScorecard}
-                    onDaysChange={setDays}
-                  />
+                {/* Everything that is about the game rather than said to it: when it was
+                    made, who can play it, how it is doing, and how to stop it. */}
+                {tab === 'details' ? (
+                  <>
+                    {detailsIsSheet ? (
+                      <div
+                        className="modal-backdrop studio-rail-backdrop"
+                        role="presentation"
+                        onClick={() => openTab('thread')}
+                      />
+                    ) : null}
+                    <aside
+                      className="studio-rail"
+                      aria-label={t('studioPanel.tabs.details')}
+                      {...(detailsIsSheet ? { role: 'dialog', 'aria-modal': true } : {})}
+                    >
+                      <div className="studio-rail-head">
+                        <h3>{t('studioPanel.tabs.details')}</h3>
+                        <button
+                          type="button"
+                          className="modal-close-btn"
+                          onClick={() => openTab('thread')}
+                          aria-label={t('studioPanel.shelf.closePicker')}
+                        >
+                          <PixelIcon name="close" size={14} />
+                        </button>
+                      </div>
+                      <DetailsPanel
+                        // Keyed on the game, so switching to another one gives a fresh
+                        // panel rather than reusing this one's state. Without it every
+                        // `useState(game.…)` initialiser inside keeps the previous game's
+                        // value — the share switch reading the wrong game's setting, and,
+                        // worse, an armed Stop-build carrying across to a game the creator
+                        // never armed it on. Reachable by any move between two `/details`
+                        // URLs, browser Back included.
+                        key={activeGame.token}
+                        game={activeGame}
+                        health={selectedHealth}
+                        days={days}
+                        healthDays={healthDays}
+                        truncated={truncated}
+                        scorecard={selectedScorecard}
+                        onDaysChange={setDays}
+                        onOpenPlaytest={() => openTab('playtest')}
+                        onPlay={() => activeGame.slug && onPlay(activeGame.slug)}
+                        onRemoved={(token) => {
+                          setGames((prev) => prev.filter((game) => game.token !== token));
+                          setSelected((current) => (current === token ? null : current));
+                          onNavigate(studioPath());
+                        }}
+                      />
+                    </aside>
+                  </>
                 ) : null}
-
-                {tab === 'improve' ? <ImproveTab game={selectedGame} /> : null}
               </div>
             </div>
           ) : null}
@@ -523,22 +650,6 @@ export function CreatorStudioView({
         </div>
       ) : null}
     </section>
-  );
-}
-
-function StudioStatusPill({ game }: { game: StudioGame }) {
-  const { t } = useTranslation();
-  const published = isStudioGamePublished(game);
-  const statusLabel = game.lastKnownStatus
-    ? t(`statusView.states.${game.lastKnownStatus}.label`)
-    : t('myGames.checking');
-  const live = game.lastKnownStatus ? STUDIO_LIVE_STATUSES.has(game.lastKnownStatus) : false;
-
-  return (
-    <span className={`status-play-badge studio-status-pill${published || live ? ' is-live' : ''}`}>
-      {(published || live) && <span className="live-dot" aria-hidden="true" />}
-      {statusLabel}
-    </span>
   );
 }
 
@@ -641,17 +752,20 @@ function StudioShelfList({
               onClick={() => onSelect(game.token)}
               aria-current={active ? 'true' : undefined}
             >
-              <span className={`studio-shelf-status${building ? ' is-live' : ''}${published ? ' is-published' : ''}`}>
-                {status ? (
-                  <>
-                    <PixelIcon name={STATUS_ICONS[status]} size={11} /> {t(`statusView.states.${status}.label`)}
-                  </>
-                ) : (
-                  t('myGames.checking')
-                )}
-              </span>
+              {/* A dot, not a label. Every row used to carry its status in words and its
+                  age beside it, which made a list of five games a wall of small text with
+                  the titles — the only thing being chosen between — third in the reading
+                  order. The state that matters at a glance is "is this one moving", and a
+                  dot says that without spending a line on it. */}
+              <span
+                className={`studio-shelf-dot${building ? ' is-live' : ''}${published ? ' is-published' : ''}`}
+                aria-hidden="true"
+              />
               <span className="studio-shelf-title">{game.title}</span>
-              <span className="studio-shelf-meta">{formatRelativeTime(Date.parse(game.createdAt), locale)}</span>
+              <span className="studio-sr-only">
+                {status ? t(`statusView.states.${status}.label`) : t('myGames.checking')} ·{' '}
+                {formatRelativeTime(Date.parse(game.createdAt), locale)}
+              </span>
             </button>
           </li>
         );
@@ -660,17 +774,30 @@ function StudioShelfList({
   );
 }
 
-function OverviewTab({
+/**
+ * The things beside the thread: when the game was made, how it is doing, who can play
+ * it, and how to stop it. Everything here is *about* the game; the thread is where it
+ * is talked to.
+ */
+function DetailsPanel({
   game,
   health,
-  onOpenBuild,
+  days,
+  healthDays,
+  truncated,
+  scorecard,
+  onDaysChange,
   onOpenPlaytest,
   onPlay,
   onRemoved,
 }: {
   game: StudioGame;
   health: GameHealth | null;
-  onOpenBuild: () => void;
+  days: number;
+  healthDays: string[];
+  truncated: boolean;
+  scorecard: StudioScorecard | null;
+  onDaysChange: (days: number) => void;
   onOpenPlaytest: () => void;
   onPlay: () => void;
   onRemoved: (token: string) => void;
@@ -722,15 +849,14 @@ function OverviewTab({
       </ul>
 
       <div className="studio-actions">
+        {/* Nothing here to reopen the build with: the thread is on the screen already,
+            beside this panel. Playing a published game is the one action that is not
+            simply "look left". */}
         {published && game.slug ? (
           <button type="button" className="primary-btn" onClick={onPlay}>
             <PixelIcon name="play" size={12} /> {t('myGames.play')}
           </button>
-        ) : (
-          <button type="button" className="primary-btn" onClick={onOpenBuild}>
-            <PixelIcon name="wrench" size={12} /> {t('studioPanel.overview.openBuild')}
-          </button>
-        )}
+        ) : null}
         <button type="button" className="secondary-btn" onClick={onOpenPlaytest}>
           <PixelIcon name="play" size={12} /> {t('studioPanel.overview.playtest')}
         </button>
@@ -745,11 +871,106 @@ function OverviewTab({
           </button>
         ) : null}
       </div>
+
+      {!published && game.slug && game.lastKnownStatus !== 'abandoned' ? <DraftShareControl game={game} /> : null}
+
+      {/* Only once there is play to report on. Before a game is live every one of these
+          numbers is zero, and a wall of zeroes reads as a verdict rather than as
+          "nobody has played it yet, because nobody can". */}
+      {published ? (
+        <StatsSection
+          game={game}
+          health={health}
+          days={days}
+          healthDays={healthDays}
+          truncated={truncated}
+          scorecard={scorecard}
+          onDaysChange={onDaysChange}
+        />
+      ) : null}
     </div>
   );
 }
 
-function StatsTab({
+/**
+ * Whether anyone else can play this game before it is published.
+ *
+ * Off until the creator turns it on, and the game is in no catalog and no rail either
+ * way — the link is the only way in, which is what makes one switch enough. The link
+ * shown is the game's ordinary permalink, the same one it will keep once it is live,
+ * so there is nothing to re-share when that happens.
+ */
+function DraftShareControl({ game }: { game: StudioGame }) {
+  const { t } = useTranslation();
+  const [shared, setShared] = useState(Boolean(game.draftShared));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const url = game.slug ? new URL(playPath(game.slug), window.location.href).toString() : '';
+
+  async function toggle() {
+    const next = !shared;
+    setBusy(true);
+    setError(null);
+    // Optimistic, and reverted on failure: the switch is the whole control, so leaving
+    // it in the old position while the request runs reads as a dead button.
+    setShared(next);
+    try {
+      await setDraftShared(game.token, next);
+    } catch {
+      setShared(!next);
+      setError(t('studioPanel.share.error'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // No clipboard permission or no clipboard API — the link is on screen to select
+      // by hand, so this needs no error state.
+    }
+  }
+
+  return (
+    <div className="studio-share">
+      <div className="studio-share-head">
+        <h3 className="studio-share-title">{t('studioPanel.share.title')}</h3>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={shared}
+          className={`studio-share-toggle${shared ? ' is-on' : ''}`}
+          onClick={() => void toggle()}
+          disabled={busy}
+        >
+          <span className="studio-share-toggle-track" aria-hidden="true" />
+          {shared ? t('studioPanel.share.on') : t('studioPanel.share.off')}
+        </button>
+      </div>
+      <p className="studio-share-hint">{t(shared ? 'studioPanel.share.hintOn' : 'studioPanel.share.hintOff')}</p>
+      {shared ? (
+        <p className="status-note status-share">
+          <a className="inline-link" href={url}>
+            {url}
+          </a>
+          <button type="button" className="status-share-copy" onClick={() => void copy()}>
+            <PixelIcon name={copied ? 'check' : 'globe'} size={12} />{' '}
+            {copied ? t('statusView.shareCopied') : t('statusView.shareCopy')}
+          </button>
+        </p>
+      ) : null}
+      {error ? <p className="error">{error}</p> : null}
+    </div>
+  );
+}
+
+function StatsSection({
   game,
   health,
   days,
@@ -1174,78 +1395,3 @@ const AUTONOMY_CHOICES: Array<[AutonomyMode, string, string]> = [
   ['auto-fix-defects', 'studioPanel.autonomy.autoFixDefects', 'studioPanel.autonomy.autoFixDefectsHint'],
   ['auto-tune', 'studioPanel.autonomy.autoTune', 'studioPanel.autonomy.autoTuneHint'],
 ];
-
-function ImproveTab({ game }: { game: StudioGame }) {
-  const { t } = useTranslation();
-  const published = isStudioGamePublished(game);
-  const [text, setText] = useState('');
-  const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle');
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleSubmit() {
-    const trimmed = text.trim();
-    if (trimmed.length < 10 || state === 'sending') return;
-    setState('sending');
-    setError(null);
-    try {
-      if (published) {
-        await submitImprovement(game.token, trimmed);
-      } else {
-        await submitFeedback(game.token, trimmed);
-      }
-      setText('');
-      setState('sent');
-    } catch (err) {
-      const apiErr = err as StudioApiError | SubmissionApiError;
-      const message = apiErr.message ?? '';
-      if (message.includes('quota')) {
-        setError(t('studioPanel.improve.quota'));
-      } else if (apiErr.status === 429 || message.includes('too many')) {
-        setError(t('studioPanel.improve.rateLimit'));
-      } else if (apiErr.status === 422) {
-        setError(t('studioPanel.improve.rejected'));
-      } else {
-        setError(t('studioPanel.improve.error'));
-      }
-      setState('idle');
-    }
-  }
-
-  return (
-    <div className="status-feedback studio-improve">
-      <h3 className="status-feedback-title">
-        {published ? t('studioPanel.improve.titlePublished') : t('studioPanel.improve.titleDraft')}
-      </h3>
-      <p className="status-feedback-hint">
-        {published ? t('studioPanel.improve.hintPublished') : t('studioPanel.improve.hintDraft')}
-      </p>
-      <textarea
-        className="status-feedback-input"
-        rows={5}
-        value={text}
-        onChange={(event) => {
-          setText(event.target.value);
-          if (state === 'sent') setState('idle');
-        }}
-        placeholder={t('studioPanel.improve.placeholder')}
-        disabled={state === 'sending'}
-      />
-      <div className="status-feedback-actions">
-        <button
-          type="button"
-          className="primary-btn"
-          disabled={text.trim().length < 10 || state === 'sending'}
-          onClick={() => void handleSubmit()}
-        >
-          {state === 'sending' ? t('studioPanel.improve.sending') : t('studioPanel.improve.submit')}
-        </button>
-        {state === 'sent' ? (
-          <span className="status-feedback-sent">
-            <PixelIcon name="check" size={13} /> {t('studioPanel.improve.sent')}
-          </span>
-        ) : null}
-      </div>
-      {error ? <p className="error">{error}</p> : null}
-    </div>
-  );
-}

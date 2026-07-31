@@ -224,10 +224,12 @@
     "loading": "Loading your games…",
     "loadError": "Could not load your studio right now. Try again in a moment.",
     "empty": "You have not commissioned a game yet.",
+    "gameNotFound": "We couldn't find that game on your shelf. It may have been stopped, or the link may belong to someone else.",
     "createFirst": "Create your first game",
     "shelfAria": "Your games",
     "shelf": {
       "heading": "Your games",
+      "newGame": "New game",
       "count": "{{count}} games",
       "searchLabel": "Search your games",
       "searchPlaceholder": "Search by title or slug…",
@@ -243,11 +245,9 @@
       "closePicker": "Close game list"
     },
     "tabs": {
-      "overview": "Overview",
-      "build": "Build",
-      "playtest": "Playtest",
-      "stats": "Stats",
-      "improve": "Improve"
+      "thread": "Thread",
+      "details": "Details",
+      "playtest": "Playtest"
     },
     "overview": {
       "status": "Status",
@@ -259,6 +259,14 @@
       "playtest": "Playtest & prompt",
       "abandon": "Stop build",
       "abandonConfirm": "Confirm stop"
+    },
+    "share": {
+      "title": "Share the draft",
+      "on": "On",
+      "off": "Off",
+      "hintOff": "Only you can play this game right now. Turn this on to give anyone with the link a go — it stays out of the arcade either way.",
+      "hintOn": "Anyone with this link can play the latest build. It's the same link the game keeps once it's published, so there's nothing to re-send.",
+      "error": "We couldn't change that just now. Please try again in a moment."
     },
     "playtest": {
       "hint": "Play the game, pause on a moment worth changing, and send a request with that viewport and live instrumentation attached.",
@@ -375,6 +383,11 @@
   "qa": {
     "title": "Refine Your Game Idea (Optional)",
     "subtitle": "Click any proposed options to clarify your spec, or hit 'Create Now' to submit immediately.",
+    "titleNameOnly": "Name your game",
+    "subtitleNameOnly": "Your idea is clear enough to build. Give it a name and we'll get started.",
+    "nameLabel": "Game name",
+    "namePlaceholder": "e.g. TV Tycoon",
+    "nameHint": "This is what your game will be called everywhere. You can change it now — not later.",
     "createNow": "Create Now",
     "analyzing": "Analyzing your idea…",
     "otherPlaceholder": "Other / Custom answer…",
@@ -440,6 +453,8 @@
       "hint": "Played it and something's off? Tell the agent what to change and it'll revise your game.",
       "titleBuilding": "Want to steer it?",
       "hintBuilding": "It's still being made — you don't have to wait. Say what to change and the agent picks it up on its next update.",
+      "titlePublished": "Ask for a change",
+      "hintPublished": "Your game is live. Describe what to change and an agent picks it up as an improvement to it.",
       "placeholder": "e.g. make the car faster, add a second track, use brighter colours…",
       "submit": "Send feedback",
       "sending": "Sending…",
@@ -479,8 +494,8 @@
         "description": "An agent is coding your game right now. Watch it take shape below — no need to refresh."
       },
       "in_review": {
-        "label": "Play-testing",
-        "description": "Automated checks are making sure your game actually runs clean."
+        "label": "Final check",
+        "description": "Your game is built and has passed its checks. It's waiting for the last look before going live."
       },
       "publishing": {
         "label": "Going live",
@@ -499,7 +514,14 @@
         "description": "You stopped this build. The agent is no longer working on it — start a new idea whenever you like."
       }
     },
-    "elapsed": "In progress for {{duration}}",
+    "phases": {
+      "dispatched": "An agent has picked up your idea and is getting started.",
+      "submitted": "The agent delivered your game. We're checking it over now.",
+      "gating": "Automated checks are making sure your game actually runs clean.",
+      "ready_for_review": "Your game passed every check. It's waiting for the last look before going live."
+    },
+    "updatedAgo": "updated {{time}}",
+    "playtestCta": "Playtest & prompt",
     "live": "Live",
     "shareLink": "Share this game (watch only):",
     "shareCopy": "Copy",
@@ -561,6 +583,7 @@
     "generic": "Something went wrong",
     "creationPaused": "New games are paused for a moment while we look at something on our side. Your daily allowance hasn't been touched — please try again shortly.",
     "creationOverCapacity": "We've hit today's ceiling on new games across the whole site, so we can't start another one right now. Your own allowance is untouched and still there tomorrow.",
+    "nameUnavailable": "That name was taken while we were setting your game up. Give it a different one and try again.",
     "contentRejected": {
       "profanity": "That includes language we can't publish. Please rephrase and try again.",
       "adult": "That describes adult content, which we can't generate. Please rephrase and try again.",

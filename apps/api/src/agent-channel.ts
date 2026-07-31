@@ -642,6 +642,15 @@ export async function registerAgentChannelRoutes(
 
       // The job's own slug wins whenever it has one. A build that has already been
       // associated with a game cannot deliver into a different one, whatever it sends.
+      //
+      // A job now carries its slug from the moment it is created — minted from the
+      // creator's confirmed title and named in the agent's brief — so this check bites
+      // on the *first* delivery rather than only on later ones. That is deliberate and
+      // it is not a tightening for its own sake: the creator has been given
+      // `/studio/<slug>` since they pressed create, and may already have shared a link
+      // to the game, so a delivery that renamed it would break an address that was
+      // handed out in good faith. The error names the slug the agent was briefed with,
+      // which is the one piece of information it needs to deliver again correctly.
       const slug = record.slug ?? parsed.data.slug;
       if (record.slug && record.slug !== parsed.data.slug) {
         return reply.status(409).send({ error: `this build delivers to ${record.slug}, not ${parsed.data.slug}` });

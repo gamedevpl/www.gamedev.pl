@@ -3,6 +3,11 @@ export type SavedSpec = {
   title: string;
   concept?: string;
   createdAt: number;
+  /**
+   * The game's address, known from submission now. Optional because entries saved
+   * before slugs were assigned up front have none, and those still resolve by token.
+   */
+  slug?: string;
 };
 
 const STORAGE_KEY = 'gamedev_saved_specs';

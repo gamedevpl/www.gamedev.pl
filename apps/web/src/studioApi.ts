@@ -10,6 +10,12 @@ export type StudioGame = {
   lastKnownStatus: SubmissionState | null;
   slug?: string;
   publishedAt?: string;
+  /**
+   * Whether anyone holding the link may play this game before it is published. Off
+   * until the creator says otherwise; irrelevant once the game is live, when the
+   * catalog is the answer instead.
+   */
+  draftShared?: boolean;
 };
 
 export type StudioHealthResponse = {
@@ -79,6 +85,26 @@ export async function fetchStudioScorecards(): Promise<StudioScorecard[]> {
   }
   const body = (await response.json()) as { scorecards?: StudioScorecard[] };
   return body.scorecards ?? [];
+}
+
+/**
+ * Turns the shared link for an unpublished game on or off.
+ *
+ * There is no separate draft address to hand out — the game answers at `/play/<slug>`
+ * for its whole life — so this is the switch that decides whether that link works for
+ * anyone but its creator.
+ */
+export async function setDraftShared(token: string, shared: boolean): Promise<{ shared: boolean; slug: string }> {
+  const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/share`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ shared }),
+  });
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+  return (await response.json()) as { shared: boolean; slug: string };
 }
 
 /**

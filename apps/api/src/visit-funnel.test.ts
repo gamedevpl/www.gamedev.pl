@@ -122,6 +122,7 @@ describe('summarizeVisitFunnel', () => {
       { step: 'spec_submitted', visits: 1 },
       { step: 'signin_required', visits: 1 },
       { step: 'qa_shown', visits: 0 },
+      { step: 'title_confirmed', visits: 0 },
       { step: 'submission_created', visits: 0 },
     ]);
   });

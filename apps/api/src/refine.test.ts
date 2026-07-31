@@ -298,4 +298,55 @@ describe('VertexSpecRefiner over a genaicode client', () => {
       expect(await refiner.refine({ title: 'Game', concept: 'Concept' })).toEqual({ questions: [] });
     }
   });
+
+  it('names the game, and asks for the name without being given one', async () => {
+    // The concept arrives with no title now: the creator has not been asked for one,
+    // which is exactly why the model is asked to propose it.
+    let seen: GenerationRequest | undefined;
+    const refiner = new VertexSpecRefiner({
+      client: stubClient(JSON.stringify({ suggestedTitle: 'TV Tycoon', questions: [] }), (req) => (seen = req)),
+    });
+
+    const result = await refiner.refine({ concept: 'Run a television studio and chase ratings' });
+
+    expect(result.suggestedTitle).toBe('TV Tycoon');
+    expect(seen?.prompt[0]?.text).toContain('suggestedTitle');
+    // Nothing pretending to be a working title when there is none.
+    expect(seen?.prompt[0]?.text).not.toContain('working title');
+  });
+
+  it('tidies a title the model wrapped in quotes or ended with a full stop', async () => {
+    const refiner = new VertexSpecRefiner({
+      client: stubClient(JSON.stringify({ suggestedTitle: '  "TV Tycoon."  ', questions: [] })),
+    });
+
+    expect((await refiner.refine({ concept: 'Run a television studio' })).suggestedTitle).toBe('TV Tycoon');
+  });
+
+  it('offers no title rather than one the submission route would reject', async () => {
+    // A suggestion the creator could not submit unedited is worse than none: they
+    // would meet a validation error on a name they never wrote.
+    for (const suggested of ['', 'ab', '   ']) {
+      const refiner = new VertexSpecRefiner({
+        client: stubClient(JSON.stringify({ suggestedTitle: suggested, questions: [] })),
+      });
+      expect((await refiner.refine({ concept: 'Run a television studio' })).suggestedTitle).toBeUndefined();
+    }
+
+    const long = new VertexSpecRefiner({
+      client: stubClient(JSON.stringify({ suggestedTitle: 'A'.repeat(200), questions: [] })),
+    });
+    expect((await long.refine({ concept: 'Run a television studio' })).suggestedTitle).toHaveLength(80);
+  });
+
+  it('passes a working title through when the creator did supply one', async () => {
+    let seen: GenerationRequest | undefined;
+    const refiner = new VertexSpecRefiner({
+      client: stubClient(JSON.stringify({ questions: [] }), (req) => (seen = req)),
+    });
+
+    await refiner.refine({ title: 'Carrot Farm', concept: 'Grow carrots' });
+
+    expect(seen?.prompt[0]?.text).toContain('Carrot Farm');
+  });
 });

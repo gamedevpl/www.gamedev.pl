@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { isSubmittableTitle, MAX_TITLE_LENGTH } from './gameTitle.js';
 import { PixelIcon } from './PixelIcon.js';
 import type { PendingQaAnswers } from './pendingQa.js';
 
@@ -20,7 +21,14 @@ export interface QAQuestion {
 interface CreatorQAProps {
   questions: QAQuestion[];
   initialConcept: string;
-  onSubmitWithConcept: (finalConcept: string) => void;
+  /**
+   * The name to start from — the refiner's proposal, or one derived from the prompt
+   * when it had none. Editable here, and confirming it is what starts the build.
+   */
+  initialTitle: string;
+  onSubmitWithConcept: (finalConcept: string, title: string) => void;
+  /** Fires on every edit so the caller can park the name with the rest of the session. */
+  onTitleChange?: (title: string) => void;
   onCancel?: () => void;
   /** The submission is in flight; the panel stays up rather than vanishing into a gap. */
   submitting?: boolean;
@@ -35,7 +43,9 @@ interface CreatorQAProps {
 export function CreatorQA({
   questions,
   initialConcept,
+  initialTitle,
   onSubmitWithConcept,
+  onTitleChange,
   onCancel,
   submitting = false,
   error = null,
@@ -43,8 +53,10 @@ export function CreatorQA({
   onAnswersChange,
 }: CreatorQAProps) {
   const { t } = useTranslation();
+  const [title, setTitle] = useState(initialTitle);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string[]>>(initialAnswers?.selected ?? {});
   const [customText, setCustomText] = useState<Record<string, string>>(initialAnswers?.custom ?? {});
+  const titleReady = isSubmittableTitle(title);
 
   const report = (selected: Record<string, string[]>, custom: Record<string, string>) => {
     onAnswersChange?.({ selected, custom });
@@ -109,19 +121,52 @@ export function CreatorQA({
     return `${initialConcept.trim()}\n\n## Creator clarifications\n${clarifications.join('\n')}`;
   };
 
+  const handleTitleChange = (next: string) => {
+    setTitle(next);
+    onTitleChange?.(next);
+  };
+
   const handleSubmit = () => {
-    onSubmitWithConcept(buildMergedConcept());
+    if (!titleReady) return;
+    onSubmitWithConcept(buildMergedConcept(), title.trim());
   };
 
   return (
     <div className="qa-container panel">
       <div className="qa-header">
-        <h3 className="qa-title">{t('qa.title')}</h3>
-        <p className="qa-subtitle">{t('qa.subtitle')}</p>
+        {/* Two jobs, two headings: naming the game is the one that always happens, and
+            the questions only exist when the refiner found something underspecified. */}
+        <h3 className="qa-title">{t(questions.length > 0 ? 'qa.title' : 'qa.titleNameOnly')}</h3>
+        <p className="qa-subtitle">{t(questions.length > 0 ? 'qa.subtitle' : 'qa.subtitleNameOnly')}</p>
+      </div>
+
+      {/* The name goes first because it is the prerequisite, not a detail: nothing is
+          built until the creator has confirmed one, which is what stops a game being
+          named after the first 40 characters of the prompt that asked for it. */}
+      <div className="qa-name">
+        <label className="qa-name-label" htmlFor="qa-game-title">
+          {t('qa.nameLabel')}
+        </label>
+        <input
+          id="qa-game-title"
+          type="text"
+          className="input-text qa-name-input"
+          value={title}
+          maxLength={MAX_TITLE_LENGTH}
+          placeholder={t('qa.namePlaceholder')}
+          onChange={(e) => handleTitleChange(e.target.value)}
+          disabled={submitting}
+        />
+        <p className="qa-name-hint">{t('qa.nameHint')}</p>
       </div>
 
       <div className="qa-actions qa-actions--top">
-        <button type="button" className="btn btn-primary btn-create-now" onClick={handleSubmit} disabled={submitting}>
+        <button
+          type="button"
+          className="btn btn-primary btn-create-now"
+          onClick={handleSubmit}
+          disabled={submitting || !titleReady}
+        >
           <PixelIcon name="rocket" size={14} /> {submitting ? t('submit.submitting') : t('qa.createNow')}
         </button>
         {/* This dismisses the panel and drops the pending spec — it does *not* submit.
@@ -195,11 +240,19 @@ export function CreatorQA({
 
       {error && <p className="error qa-error">{error}</p>}
 
-      <div className="qa-actions qa-actions--bottom">
-        <button type="button" className="btn btn-primary btn-create-now" onClick={handleSubmit} disabled={submitting}>
-          <PixelIcon name="rocket" size={14} /> {submitting ? t('submit.submitting') : t('qa.createNow')}
-        </button>
-      </div>
+      {/* Only worth a second button when there is a list to have scrolled past. */}
+      {questions.length > 0 ? (
+        <div className="qa-actions qa-actions--bottom">
+          <button
+            type="button"
+            className="btn btn-primary btn-create-now"
+            onClick={handleSubmit}
+            disabled={submitting || !titleReady}
+          >
+            <PixelIcon name="rocket" size={14} /> {submitting ? t('submit.submitting') : t('qa.createNow')}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

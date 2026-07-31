@@ -224,10 +224,12 @@
     "loading": "Ładujemy Twoje gry…",
     "loadError": "Nie udało się wczytać studia. Spróbuj za chwilę.",
     "empty": "Nie zleciłeś jeszcze żadnej gry.",
+    "gameNotFound": "Nie znaleźliśmy tej gry na Twojej półce. Mogła zostać zatrzymana albo link należy do kogoś innego.",
     "createFirst": "Stwórz pierwszą grę",
     "shelfAria": "Twoje gry",
     "shelf": {
       "heading": "Twoje gry",
+      "newGame": "Nowa gra",
       "count": "{{count}} gier",
       "searchLabel": "Szukaj wśród swoich gier",
       "searchPlaceholder": "Szukaj po tytule lub slugu…",
@@ -243,11 +245,9 @@
       "closePicker": "Zamknij listę gier"
     },
     "tabs": {
-      "overview": "Przegląd",
-      "build": "Build",
-      "playtest": "Playtest",
-      "stats": "Statystyki",
-      "improve": "Ulepsz"
+      "thread": "Wątek",
+      "details": "Szczegóły",
+      "playtest": "Testuj"
     },
     "overview": {
       "status": "Status",
@@ -259,6 +259,14 @@
       "playtest": "Playtest i prompt",
       "abandon": "Zatrzymaj build",
       "abandonConfirm": "Potwierdź zatrzymanie"
+    },
+    "share": {
+      "title": "Udostępnij wersję roboczą",
+      "on": "Wł.",
+      "off": "Wył.",
+      "hintOff": "Na razie tylko Ty możesz zagrać w tę grę. Włącz, aby każdy z linkiem mógł spróbować — i tak nie trafi do arcade.",
+      "hintOn": "Każdy z tym linkiem może zagrać w najnowszą wersję. To ten sam link, który gra zachowa po publikacji, więc nie trzeba wysyłać go ponownie.",
+      "error": "Nie udało się tego teraz zmienić. Spróbuj ponownie za chwilę."
     },
     "playtest": {
       "hint": "Zagraj, wstrzymaj w momencie wartym zmiany i wyślij prośbę z tym widokiem oraz sygnałami z sesji.",
@@ -375,6 +383,11 @@
   "qa": {
     "title": "Doprecyzuj swój pomysł (Opcjonalnie)",
     "subtitle": "Kliknij sugerowane opcje, aby doprecyzować specyfikację, lub naciśnij 'Stwórz teraz', aby natychmiast wysłać.",
+    "titleNameOnly": "Nazwij swoją grę",
+    "subtitleNameOnly": "Twój pomysł jest wystarczająco jasny. Nadaj mu nazwę, a zaczynamy.",
+    "nameLabel": "Nazwa gry",
+    "namePlaceholder": "np. Telewizyjny Potentat",
+    "nameHint": "Tak Twoja gra będzie się nazywać wszędzie. Możesz to zmienić teraz — później już nie.",
     "createNow": "Stwórz teraz",
     "analyzing": "Analizuję Twój pomysł…",
     "otherPlaceholder": "Inna / Własna odpowiedź…",
@@ -440,6 +453,8 @@
       "hint": "Zagrałeś i coś jest nie tak? Napisz agentowi, co zmienić, a poprawi Twoją grę.",
       "titleBuilding": "Chcesz coś podpowiedzieć?",
       "hintBuilding": "Gra wciąż powstaje — nie musisz czekać. Napisz, co zmienić, a agent odbierze wiadomość przy najbliższej aktualizacji.",
+      "titlePublished": "Poproś o zmianę",
+      "hintPublished": "Twoja gra jest opublikowana. Opisz, co zmienić — agent podejmie to jako ulepszenie.",
       "placeholder": "np. przyspiesz samochód, dodaj drugą trasę, użyj jaśniejszych kolorów…",
       "submit": "Wyślij uwagi",
       "sending": "Wysyłanie…",
@@ -479,8 +494,8 @@
         "description": "Agent właśnie pisze Twoją grę. Obserwuj poniżej, jak powstaje — nie musisz odświeżać."
       },
       "in_review": {
-        "label": "Testujemy",
-        "description": "Automatyczne testy sprawdzają, czy gra działa bez zarzutu."
+        "label": "Ostatni sprawdzian",
+        "description": "Twoja gra jest gotowa i przeszła testy. Czeka na ostatnie spojrzenie przed publikacją."
       },
       "publishing": {
         "label": "Publikujemy",
@@ -499,7 +514,14 @@
         "description": "Zatrzymałeś tę grę. Agent już nad nią nie pracuje — możesz zacząć nowy pomysł, kiedy zechcesz."
       }
     },
-    "elapsed": "Trwa od {{duration}}",
+    "phases": {
+      "dispatched": "Agent podjął Twój pomysł i właśnie zaczyna pracę.",
+      "submitted": "Agent dostarczył Twoją grę. Właśnie ją sprawdzamy.",
+      "gating": "Automatyczne testy sprawdzają, czy gra działa bez zarzutu.",
+      "ready_for_review": "Twoja gra przeszła wszystkie testy. Czeka na ostatnie spojrzenie przed publikacją."
+    },
+    "updatedAgo": "aktualizacja {{time}}",
+    "playtestCta": "Zagraj i podpowiedz",
     "live": "Na żywo",
     "shareLink": "Podziel się tą grą (tylko do oglądania):",
     "shareCopy": "Kopiuj",
@@ -561,6 +583,7 @@
     "generic": "Coś poszło nie tak",
     "creationPaused": "Tworzenie nowych gier jest na chwilę wstrzymane — sprawdzamy coś u nas. Twój dzienny limit pozostaje nietknięty, spróbuj ponownie za moment.",
     "creationOverCapacity": "Osiągnęliśmy dzisiejszy limit nowych gier w całym serwisie, więc nie możemy teraz zacząć kolejnej. Twój własny limit jest nietknięty i będzie czekał jutro.",
+    "nameUnavailable": "Ta nazwa została zajęta, gdy przygotowywaliśmy Twoją grę. Nadaj inną i spróbuj ponownie.",
     "contentRejected": {
       "profanity": "To zawiera słownictwo, którego nie możemy opublikować. Popraw treść i spróbuj ponownie.",
       "adult": "To opisuje treści dla dorosłych, których nie możemy wygenerować. Popraw treść i spróbuj ponownie.",

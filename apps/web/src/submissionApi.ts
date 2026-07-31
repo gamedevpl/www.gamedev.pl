@@ -66,8 +66,31 @@ export type BuildEvent = {
   createdAt: string;
 };
 
+/**
+ * The build job's own state, finer than {@link SubmissionState}.
+ *
+ * `status` drives the five-step timeline and cannot grow without changing what the
+ * timeline draws; this says which of the several situations behind one step the build
+ * is actually in, so the sentence under the timeline can be true. Absent on builds we
+ * derive from GitHub rather than run ourselves.
+ */
+export type BuildPhase =
+  | 'queued'
+  | 'dispatched'
+  | 'building'
+  | 'submitted'
+  | 'gating'
+  | 'ready_for_review'
+  | 'publishing'
+  | 'published'
+  | 'needs_changes'
+  | 'failed'
+  | 'canceled'
+  | 'abandoned';
+
 export type SubmissionStatus = {
   status: SubmissionState;
+  phase?: BuildPhase;
   slug?: string;
   /** Present while an unmerged PR is open: the game can be previewed from its branch. */
   preview?: { slug: string };
@@ -183,7 +206,7 @@ export async function submitSpec(input: {
   displayName?: string;
   /** Told to the agent, so it writes its progress updates in this language. */
   locale?: string;
-}): Promise<{ token: string; statusUrl: string }> {
+}): Promise<{ token: string; slug?: string; statusUrl: string }> {
   const response = await fetch(`${API_BASE}/api/submissions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -194,7 +217,9 @@ export async function submitSpec(input: {
     await throwResponseError(response);
   }
 
-  return (await response.json()) as { token: string; statusUrl: string };
+  // `slug` is the game's address, minted server-side from the confirmed title. Optional
+  // only because an older API deploy answers without one.
+  return (await response.json()) as { token: string; slug?: string; statusUrl: string };
 }
 
 /**
@@ -312,7 +337,8 @@ export async function submitFeedback(
   return (await response.json()) as { ok: boolean; target: string; shotId?: string };
 }
 
-export async function refineSpec(input: { title: string; concept: string; locale?: string }): Promise<{
+/** What the pre-submission refiner has to say about a concept. */
+export type RefinedSpec = {
   questions: Array<{
     id: string;
     question: string;
@@ -320,7 +346,21 @@ export async function refineSpec(input: { title: string; concept: string; locale
     allowFreeText?: boolean;
     multiple?: boolean;
   }>;
-}> {
+  /**
+   * A name for the game, proposed from the concept. The creator confirms or replaces
+   * it before anything is built; absent when the model had nothing usable to offer,
+   * which is the caller's cue to fall back to a name derived from the prompt.
+   */
+  suggestedTitle?: string;
+};
+
+/**
+ * Asks the refiner to read a concept: name it, and say what it still needs to know.
+ *
+ * `title` is optional and normally omitted — the creator has not been asked for one at
+ * this point in the flow, which is the whole reason `suggestedTitle` comes back.
+ */
+export async function refineSpec(input: { title?: string; concept: string; locale?: string }): Promise<RefinedSpec> {
   const response = await fetch(`${API_BASE}/api/submissions/refine`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -332,13 +372,5 @@ export async function refineSpec(input: { title: string; concept: string; locale
     await throwResponseError(response);
   }
 
-  return (await response.json()) as {
-    questions: Array<{
-      id: string;
-      question: string;
-      options: Array<{ label: string; detail?: string }>;
-      allowFreeText?: boolean;
-      multiple?: boolean;
-    }>;
-  };
+  return (await response.json()) as RefinedSpec;
 }

@@ -62,6 +62,12 @@ export type CreateStep =
   | 'signin_required'
   /** The QA gate returned clarifying questions instead of building immediately. */
   | 'qa_shown'
+  /**
+   * The creator settled on a name and pressed create. The last step they control, and
+   * the one the build waits on — a drop here is someone who wrote an idea, was shown
+   * what it would be called, and walked away.
+   */
+  | 'title_confirmed'
   /** A submission actually reached the games repo. */
   | 'submission_created';
 
