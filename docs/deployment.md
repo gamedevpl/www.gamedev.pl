@@ -250,6 +250,39 @@ Two things worth knowing before you run it:
   (a dropped connection during the vote walk) can leave feedback deleted and some votes
   still standing — re-run it, the command is idempotent and finishes the job.
 
+## Naming games that predate slugs
+
+A slug is minted at submission now, so this is for records written before that and for
+anything that died between the record and its slug. Those games still work — the studio
+addresses them by status token — but a token in the URL bar is what slugs exist to stop.
+
+There are two ways in, and they run the same code (`runSlugBackfill`): the operator route
+`POST /api/admin/slug-backfill?dryRun=1`, which needs an admin browser session, and the
+CLI, which needs only gcloud credentials for the project:
+
+```bash
+npm run slug:backfill -w @gamedevpl/api -- --dry-run   # report, write nothing
+npm run slug:backfill -w @gamedevpl/api --             # name them
+```
+
+Always rehearse first: a slug is a permanent public address. The dry run prints the exact
+`{issueNumber, title, slug}` it would write, including the collisions it resolves — two
+games called "Space Miner" get `space-miner` and `space-miner-2`, in the same run.
+
+Abandoned builds are skipped on purpose. Their creator stopped them, so they need no
+address, and taking one would only spend a name.
+
+The CLI reads the published catalog from `gs://…-games-snapshots` before it starts, so a
+minted name cannot collide with a published game — the server asks GitHub for the same
+list, but the snapshot is what production actually serves and gcloud can already read it.
+If that read fails the run stops rather than guess; `--skip-catalog` overrides, which is
+only safe when you already know the backlog's titles.
+
+The API is not involved and there is nothing to deploy. Note that
+`POST /api/admin/slug-backfill` is `isAdminSession`-only and answers 404 to a personal
+access token by design (see [agent access tokens](agent-access-tokens.md)) — the CLI is
+the path for when no browser session is available, not a way around that rule.
+
 ## How to deploy manually
 
 [`apps/api/Dockerfile`](../apps/api/Dockerfile) is a multi-stage image built from the repo root

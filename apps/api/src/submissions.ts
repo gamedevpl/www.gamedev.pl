@@ -42,6 +42,7 @@ import { detectOperatorAlerts, FEEDBACK_STALL_MS } from './operator-alerts.js';
 import { isAdminSession } from './admin.js';
 import { peekQuota } from './quota-gate.js';
 import { mintGameSlug } from './slug.js';
+import { runSlugBackfill, settleSlugClaim } from './slug-backfill.js';
 import { type BuildPreviewSummary, type BuildShotSummary, type Store, type SubmissionRecord } from './store.js';
 import {
   CREATOR_FEEDBACK_MARKER,
@@ -1275,32 +1276,13 @@ export async function registerSubmissionRoutes(
   /**
    * Reads back a slug this job just wrote, and settles who actually holds it.
    *
-   * `getSubmissionBySlug` is the same oracle every later lookup uses — the draft route,
-   * the play route, the delivery check — so asking it "who owns this name" is exactly the
-   * question that matters, and it answers deterministically even when two records share
-   * a slug. Whoever it does not name has lost the race and takes a different name; the
-   * winner is undisturbed and never learns any of this happened.
-   *
-   * Returns the slug this job ended up with, or null when even the second attempt lost.
+   * The settling itself is {@link settleSlugClaim}, shared with the backfill CLI; this
+   * binds it to this server's store and its GitHub-aware `isSlugClaimed`.
    */
   async function confirmSlugClaim(issueNumber: number, slug: string, title: string): Promise<string | null> {
+    // No store means nothing can hold a name against us, so the claim stands as written.
     if (!store) return slug;
-    const holds = async (candidate: string): Promise<boolean> => {
-      const holder = await store.getSubmissionBySlug(candidate);
-      return holder?.issueNumber === issueNumber;
-    };
-
-    if (await holds(slug)) return slug;
-
-    // Lost. Mint again, this time treating anything we do not ourselves hold as taken,
-    // and write it before re-reading — the second write is what makes the second read
-    // meaningful.
-    const retry = await mintGameSlug(title, async (candidate) => {
-      if (candidate === slug) return true;
-      return isSlugClaimed(candidate, issueNumber);
-    });
-    await store.setSubmissionSlug(issueNumber, retry);
-    return (await holds(retry)) ? retry : null;
+    return settleSlugClaim(store, issueNumber, slug, title, isSlugClaimed);
   }
 
   /**
@@ -2568,40 +2550,19 @@ export async function registerSubmissionRoutes(
    * Sequential on purpose. Each mint asks the store what is taken, so the previous
    * write has to be visible before the next candidate is judged; running these
    * concurrently would reintroduce the race the claim read-back exists to settle.
+   *
+   * The loop itself lives in `slug-backfill.ts`, shared with the `slug:backfill` CLI —
+   * the operator path for when nobody can reach an admin browser session.
    */
   app.post<{ Querystring: { dryRun?: string } }>('/api/admin/slug-backfill', async (request, reply) => {
     if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });
     if (!store) return reply.status(503).send({ error: 'store_unavailable' });
 
     const dryRun = request.query.dryRun === '1' || request.query.dryRun === 'true';
-    const pending = await store.listSubmissionsMissingSlug();
-
-    // Names handed out earlier in this run. Redundant on the write path, where the store
-    // already knows, and load-bearing on the dry run, where nothing is written and two
-    // games with the same title would otherwise both be promised the same slug.
-    const mintedHere = new Set<string>();
-    const games: Array<{ issueNumber: number; title: string; slug: string | null }> = [];
-
-    for (const record of pending) {
-      const isTaken = async (candidate: string): Promise<boolean> =>
-        mintedHere.has(candidate) || (await isSlugClaimed(candidate, record.issueNumber));
-      const wanted = await mintGameSlug(record.title, isTaken);
-
-      if (dryRun) {
-        mintedHere.add(wanted);
-        games.push({ issueNumber: record.issueNumber, title: record.title, slug: wanted });
-        continue;
-      }
-
-      await store.setSubmissionSlug(record.issueNumber, wanted);
-      // Same read-back as submission creation: the write is a claim, not a grant.
-      const settled = await confirmSlugClaim(record.issueNumber, wanted, record.title);
-      if (settled) mintedHere.add(settled);
-      games.push({ issueNumber: record.issueNumber, title: record.title, slug: settled });
-    }
-
-    const named = games.filter((game) => game.slug !== null).length;
-    const result = { ok: true, dryRun, scanned: pending.length, named, failed: pending.length - named, games };
+    // This route's own settle path, so the retry mint still consults the games-repo
+    // catalog through `isSlugClaimed` as it does everywhere else in the server.
+    const result = await runSlugBackfill({ store, isSlugClaimed, dryRun, confirmSlugClaim });
+    const { named } = result;
     // Logged as well as returned: this changes permanent addresses, and the response
     // goes to one browser tab that may not be open the next time anyone asks what ran.
     request.log.info({ dryRun, scanned: result.scanned, named, failed: result.failed }, 'slug backfill complete');
