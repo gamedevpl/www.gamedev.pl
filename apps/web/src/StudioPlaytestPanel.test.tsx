@@ -42,6 +42,7 @@ const game: StudioGame = {
 describe('StudioPlaytestPanel theater', () => {
   beforeEach(() => {
     document.body.className = '';
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
@@ -89,5 +90,49 @@ describe('StudioPlaytestPanel theater', () => {
 
     root.unmount();
     expect(document.body.classList.contains('player-open')).toBe(false);
+  });
+
+  it('offers a way back to the thread when no playable build exists', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const { getSubmissionPreview } = await import('./submissionApi.js');
+    vi.mocked(getSubmissionPreview).mockRejectedValueOnce(new Error('no preview'));
+
+    const onExit = vi.fn();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const unpublished: StudioGame = { ...game, lastKnownStatus: 'building', slug: undefined, publishedAt: undefined };
+
+    await act(async () => {
+      root.render(createElement(StudioPlaytestPanel, { game: unpublished, published: false, onExit }));
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('.studio-playtest-theater')).toBeNull();
+    expect(container.textContent).toContain('No playable build is ready yet');
+    expect(container.textContent).not.toContain('Build tab');
+
+    const back = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Back to thread'),
+    );
+    expect(back).toBeTruthy();
+
+    await act(async () => {
+      back!.click();
+    });
+    expect(onExit).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    expect(onExit).toHaveBeenCalledTimes(2);
+
+    root.unmount();
   });
 });

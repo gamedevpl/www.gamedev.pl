@@ -278,7 +278,8 @@
     "playtest": {
       "hint": "Zagraj, wstrzymaj w momencie wartym zmiany i wyślij prośbę z tym widokiem oraz sygnałami z sesji.",
       "loading": "Ładujemy grywalny build…",
-      "loadError": "Nie ma jeszcze grywalnego buildu. Sprawdź zakładkę Build i spróbuj, gdy pojawi się podgląd.",
+      "loadError": "Nie ma jeszcze grywalnego buildu. Wróć do wątku i spróbuj, gdy pojawi się podgląd.",
+      "backToThread": "Wróć do wątku",
       "theaterAria": "Playtest · {{title}}",
       "pause": "Wstrzymaj i zanotuj",
       "resume": "Wznów",

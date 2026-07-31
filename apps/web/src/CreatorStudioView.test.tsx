@@ -228,6 +228,34 @@ describe('CreatorStudioView', () => {
     root.unmount();
   });
 
+  it('lets Playtest toggle back to the thread when already open', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue(manyGames(2));
+    window.history.replaceState(null, '', '/studio/token-0/playtest');
+
+    const { container, root, onNavigate } = await renderStudio({
+      selectedGame: 'token-0',
+      selectedTab: 'playtest',
+    });
+
+    const playtest = Array.from(container.querySelectorAll('.studio-head-action')).find((button) =>
+      button.textContent?.includes('Playtest'),
+    );
+    expect(playtest?.getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('.studio-playtest')).not.toBeNull();
+    expect(container.querySelector('.studio-build')).toBeNull();
+
+    await act(async () => {
+      playtest!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(onNavigate).toHaveBeenCalledWith('/studio/token-0/thread');
+
+    root.unmount();
+  });
+
   it('lands an old tab name on the surface that absorbed it, and corrects the URL', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');

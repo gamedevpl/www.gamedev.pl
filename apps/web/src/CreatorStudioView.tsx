@@ -503,11 +503,18 @@ export function CreatorStudioView({
                       where it is. */}
                   <div className="studio-head-actions">
                     {/* Playtest is the next action after a build — same weight as Send
-                        feedback, not a peer of the Details toggle beside it. */}
+                        feedback, not a peer of the Details toggle beside it. When already
+                        open (empty/error keeps chrome visible), clicking again returns to
+                        the thread so creators are never stuck without a Build tab. */}
                     {/* Labels are wrapped rather than left as bare text so a phone can
                         hide the word and keep the icon — and hide it the way that leaves
                         the button still named for a screen reader, not display: none. */}
-                    <button type="button" className="studio-head-action is-primary" onClick={() => openTab('playtest')}>
+                    <button
+                      type="button"
+                      className={`studio-head-action is-primary${tab === 'playtest' ? ' is-active' : ''}`}
+                      aria-pressed={tab === 'playtest'}
+                      onClick={() => openTab(tab === 'playtest' ? 'thread' : 'playtest')}
+                    >
                       <PixelIcon name="play" size={12} />{' '}
                       <span className="studio-head-action-label">{t('studioPanel.tabs.playtest')}</span>
                     </button>

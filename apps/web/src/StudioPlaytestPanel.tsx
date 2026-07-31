@@ -148,7 +148,8 @@ export function StudioPlaytestPanel({ game, published, onExit }: StudioPlaytestP
         if (cancelled) return;
         // Local Studio seed has submissions but no games-repo HTML. Fall back to a
         // tiny canvas toy in Vite so Pause & note can still be exercised offline.
-        if (import.meta.env.DEV) {
+        // Vitest runs with MODE=test — keep the real empty/error surface there.
+        if (import.meta.env.MODE === 'development') {
           setHtml(DEV_PLAYTEST_HTML);
           setLoading(false);
           return;
@@ -162,24 +163,28 @@ export function StudioPlaytestPanel({ game, published, onExit }: StudioPlaytestP
     };
   }, [game.token, game.slug, published, t, clearSnapshot]);
 
-  // Scroll lock + Escape + focus handoff while the theater owns the viewport.
+  // Escape always returns to the thread — including the empty/error state, where the
+  // theater never mounts and the Close control used to be missing entirely.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') requestExit();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [requestExit]);
+
+  // Scroll lock + focus handoff while the theater owns the viewport.
   useEffect(() => {
     if (!html) return;
     const previouslyFocused = document.activeElement as HTMLElement | null;
     document.body.classList.add('player-open');
     exitRef.current?.focus();
 
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') requestExit();
-    };
-    window.addEventListener('keydown', onKeyDown);
-
     return () => {
-      window.removeEventListener('keydown', onKeyDown);
       document.body.classList.remove('player-open');
       previouslyFocused?.focus?.();
     };
-  }, [html, requestExit]);
+  }, [html]);
 
   const attachedPng = snapshot?.pngBase64 ?? null;
   const trimmed = text.trim();
@@ -219,11 +224,16 @@ export function StudioPlaytestPanel({ game, published, onExit }: StudioPlaytestP
   return (
     <div className="studio-playtest">
       {!html ? (
-        <>
+        <div className="studio-playtest-empty">
           <p className="panel-copy studio-playtest-hint">{t('studioPanel.playtest.hint')}</p>
           {loading ? <p className="studio-muted">{t('studioPanel.playtest.loading')}</p> : null}
           {loadError ? <p className="error">{loadError}</p> : null}
-        </>
+          {/* Theater Close only exists once HTML loads; empty/error must still offer a
+              labeled way back to the build thread (Testuj replaces that surface). */}
+          <button type="button" className="secondary-btn" onClick={onExit} ref={exitRef}>
+            <PixelIcon name="close" size={12} /> {t('studioPanel.playtest.backToThread')}
+          </button>
+        </div>
       ) : (
         <div
           className={`studio-playtest-theater${paused ? ' is-paused' : ''}${promptOpen ? ' is-prompting' : ''}`}
