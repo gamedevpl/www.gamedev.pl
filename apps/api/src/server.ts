@@ -15,13 +15,23 @@ async function main() {
   if (process.env.NODE_ENV !== 'production' && process.env.DEV_SEED_STUDIO === '1' && store instanceof InMemoryStore) {
     const uid = 'g:studio-demo';
     await store.upsertUser({ uid, name: 'Studio Demo', email: 'studio-demo@example.com' });
-    await store.createSubmission(101, uid, 'Sky Dodge');
-    await store.setSubmissionSlug(101, 'sky-dodge');
-    await store.setSubmissionPublishedAt(101, new Date(Date.now() - 3 * 86400_000).toISOString());
-    await store.setSubmissionLastStatus(101, 'published');
-    await store.setSubmissionNotifiedStatus(101, 'published');
-    await store.createSubmission(102, uid, 'Arena Tag');
-    await store.setSubmissionSlug(102, 'arena-tag');
+    // Mirror the live shelf that motivated the operator-cancel fix: a rejected
+    // street-heist must not appear beside the creator's other drafts.
+    await store.createSubmission(100, uid, 'Can we make a game like Grand Theft Auto');
+    await store.setSubmissionSlug(100, 'street-heist');
+    await store.recordJobTransition(100, {
+      to: 'canceled',
+      at: new Date(Date.now() - 20 * 3600_000).toISOString(),
+      by: 'operator',
+      reason: 'operator_canceled',
+    });
+    // Pre-fix shape (no abandonedAt) — shelf must still hide it via state === 'canceled'.
+    await store.createSubmission(101, uid, 'Global Thermonuclear Strategy');
+    await store.setSubmissionSlug(101, 'global-thermonuclear');
+    await store.setSubmissionLastStatus(101, 'building');
+    await store.setSubmissionNotifiedStatus(101, 'building');
+    await store.createSubmission(102, uid, 'A game tycoon like where I run a studio');
+    await store.setSubmissionSlug(102, 'studio-tycoon');
     await store.setSubmissionLastStatus(102, 'building');
     await store.setSubmissionNotifiedStatus(102, 'building');
     // Extra shelf rows so local QA can exercise search/filters/mobile switcher at 10+.
@@ -32,13 +42,13 @@ async function main() {
       status: 'published' | 'building' | 'queued' | 'in_review' | 'needs_changes';
       daysAgo: number;
     }> = [
-      { issue: 103, title: 'Neon Drift', slug: 'neon-drift', status: 'published', daysAgo: 8 },
-      { issue: 104, title: 'Puzzle Dock', slug: 'puzzle-dock', status: 'published', daysAgo: 12 },
-      { issue: 105, title: 'Bolt Rush', status: 'queued', daysAgo: 0 },
-      { issue: 106, title: 'Castle Siege', slug: 'castle-siege', status: 'published', daysAgo: 20 },
-      { issue: 107, title: 'Orbit Hop', status: 'in_review', daysAgo: 1 },
-      { issue: 108, title: 'Tide Pool', slug: 'tide-pool', status: 'published', daysAgo: 30 },
-      { issue: 109, title: 'Pixel Ranch', slug: 'pixel-ranch', status: 'published', daysAgo: 40 },
+      { issue: 103, title: 'Sky Dodge', slug: 'sky-dodge', status: 'published', daysAgo: 3 },
+      { issue: 104, title: 'Neon Drift', slug: 'neon-drift', status: 'published', daysAgo: 8 },
+      { issue: 105, title: 'Puzzle Dock', slug: 'puzzle-dock', status: 'published', daysAgo: 12 },
+      { issue: 106, title: 'Bolt Rush', status: 'queued', daysAgo: 0 },
+      { issue: 107, title: 'Castle Siege', slug: 'castle-siege', status: 'published', daysAgo: 20 },
+      { issue: 108, title: 'Orbit Hop', status: 'in_review', daysAgo: 1 },
+      { issue: 109, title: 'Tide Pool', slug: 'tide-pool', status: 'published', daysAgo: 30 },
       { issue: 110, title: 'Ghost Circuit', status: 'needs_changes', daysAgo: 5 },
       { issue: 111, title: 'Forest Dash', slug: 'forest-dash', status: 'published', daysAgo: 55 },
       { issue: 112, title: 'Sumo Mini', slug: 'sumo-mini', status: 'published', daysAgo: 60 },
