@@ -2768,6 +2768,8 @@ describe('seeded dispatch', () => {
           references: ['apex-sprint'],
           usage: { inputTokens: 30_000, outputTokens: 9_000, model: 'gemini-3.6-flash' },
           elapsedMs: 41_000,
+          compiles: false,
+          repaired: false,
           ...draft,
         } as SeedDraft;
       },
@@ -2856,6 +2858,97 @@ describe('seeded dispatch', () => {
     expect(response.statusCode).toBe(200);
     expect(briefs).toHaveLength(1);
     expect(briefs[0].seed).toBeUndefined();
+
+    await app.close();
+  });
+
+  it('publishes a round-0 preview when the seed compiles and a seed branch exists', async () => {
+    const stub = createGithubClientStub({
+      gameSources: {
+        indexHtml: '<main id="game"></main>',
+        gameJs: 'console.log("round zero");',
+        styleCss: 'body { background: #000; }',
+        title: 'Comet Courier',
+      },
+    });
+    const briefs: BuildBrief[] = [];
+    const backend: AgentBackend = {
+      name: 'stub',
+      dispatch: async (brief) => {
+        briefs.push(brief);
+        return { ref: 'task-1', workspace: 'copilot/x', seedWorkspace: 'seed/job-9' };
+      },
+      resume: async (brief) => {
+        briefs.push(brief);
+        return { ref: 'task-2' };
+      },
+      observe: async () => null,
+      cancel: async () => ({ enforced: false }),
+    };
+    const { app, store, response } = await submitOne('Comet Courier', {
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      gameSeeder: seederStub({ compiles: true }),
+    });
+
+    expect(response.statusCode).toBe(200);
+    // Deliberately off the submit response path, so the preview lands moments later.
+    const previews = await vi.waitFor(async () => {
+      const listed = await store.listBuildPreviews(briefs[0].issueNumber);
+      expect(listed.length).toBeGreaterThan(0);
+      return listed;
+    });
+
+    expect(previews[0].slug).toBe('comet-courier');
+    expect(previews[0].label).toContain('rough draft');
+    const stored = await store.getBuildPreview(briefs[0].issueNumber, previews[0].id);
+    const html = Buffer.from(stored!.data, 'base64').toString('utf8');
+    // The full serve hygiene, not a weaker preview variant: sandbox CSP and the AI Act
+    // provenance marking both present in what the creator's iframe will run.
+    expect(html).toContain('round zero');
+    expect(html).toContain('Content-Security-Policy');
+    expect(html).toContain('ai-generated');
+    // Assembled from the seed branch — the exact bytes the agent starts from.
+    expect(stub.githubClient.getGameSources).toHaveBeenCalledWith('seed/job-9', 'comet-courier');
+
+    await app.close();
+  });
+
+  it('publishes no preview for a draft that does not compile', async () => {
+    const stub = createGithubClientStub({
+      gameSources: {
+        indexHtml: '<main id="game"></main>',
+        gameJs: 'console.log("round zero");',
+        styleCss: '',
+        title: 'Comet Courier',
+      },
+    });
+    const briefs: BuildBrief[] = [];
+    const backend: AgentBackend = {
+      name: 'stub',
+      dispatch: async (brief) => {
+        briefs.push(brief);
+        return { ref: 'task-1', workspace: 'copilot/x', seedWorkspace: 'seed/job-9' };
+      },
+      resume: async () => ({ ref: 'task-2' }),
+      observe: async () => null,
+      cancel: async () => ({ enforced: false }),
+    };
+    const { app, store, response } = await submitOne('Comet Courier', {
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      gameSeeder: seederStub({ compiles: false }),
+    });
+
+    expect(response.statusCode).toBe(200);
+    // A draft that does not bundle is still dispatched (the agent will fix it) — the
+    // only thing withheld is showing it to the creator.
+    expect(briefs[0].seed).toBeDefined();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(await store.listBuildPreviews(briefs[0].issueNumber)).toEqual([]);
+    expect(stub.githubClient.getGameSources).not.toHaveBeenCalled();
 
     await app.close();
   });

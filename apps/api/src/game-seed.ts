@@ -32,6 +32,7 @@ import path from 'node:path';
 import { z } from 'zod';
 import type { GenAIClient, GenerationResult } from 'genaicode';
 import { createVertexClient, type VertexGenerationConfig } from './genai.js';
+import { checkSeedBundles, type SeedBundleResult } from './seed-bundle.js';
 import type { SeedContext, SeedContextSource } from './seed-context.js';
 
 /**
@@ -98,6 +99,16 @@ export interface SeedDraft {
   usage: SeedUsage;
   /** Wall-clock, so a slow seed is visible as a number rather than a feeling. */
   elapsedMs: number;
+  /**
+   * Whether the draft's TypeScript bundles, as far as an in-process esbuild pass can
+   * tell (see `seed-bundle.ts`). This is what decides the round-0 preview: a draft that
+   * bundles can be assembled and shown to the creator minutes after submission; one
+   * that does not is still a perfectly good head start for the agent — it just is not
+   * shown to anyone first.
+   */
+  compiles: boolean;
+  /** Whether a repair round ran, so the rate of first-try-correct drafts is measurable. */
+  repaired: boolean;
 }
 
 export interface SeedRequest {
@@ -354,6 +365,32 @@ export function buildGeneratePrompt(input: {
   ].join('\n');
 }
 
+/**
+ * One round of "here is the compiler's objection, fix your draft".
+ *
+ * The whole draft is included and whole corrected files are required back — a diff
+ * format would reintroduce exactly the fragile-payload problem the fence format
+ * removed. Files the model does not return are kept as they are, so the minimal
+ * correct answer is also the cheapest one.
+ */
+export function buildRepairPrompt(input: { slug: string; errors: string[]; files: SeedFile[] }): string {
+  return [
+    'The game draft below fails to compile. Fix it.',
+    '',
+    'Compiler errors:',
+    ...input.errors.map((error) => `- ${error}`),
+    '',
+    'Rules:',
+    '- Return ONLY the files that need to change, each complete — never a fragment or a diff.',
+    '- Files you do not return are kept exactly as they are.',
+    `- Same paths as below (games/${input.slug}/...), same fence format, no commentary.`,
+    '- Fix the errors with the smallest change that is actually correct; do not redesign the game.',
+    '',
+    '=== CURRENT DRAFT ===',
+    ...input.files.map((file) => `--- games/${input.slug}/${file.path} ---\n${file.content}`),
+  ].join('\n');
+}
+
 export interface VertexGameSeederOptions {
   context: SeedContextSource;
   projectId?: string;
@@ -365,6 +402,11 @@ export interface VertexGameSeederOptions {
   log?: { warn: (context: object, message: string) => void; info: (context: object, message: string) => void };
   /** Test seam, mirroring VertexChecker/VertexSpecRefiner: a prebuilt client. */
   client?: GenAIClient;
+  /**
+   * Test seam for the bundle check. Defaults to the real esbuild pass; tests substitute
+   * verdicts so the repair flow is exercised without esbuild's opinion in the loop.
+   */
+  bundleCheck?: (slug: string, files: SeedFile[]) => Promise<SeedBundleResult>;
 }
 
 /**
@@ -469,10 +511,48 @@ export class VertexGameSeeder implements GameSeeder {
 
       const generateUsage = usageOf(result, this.model);
       const parsed = parseSeedResponse(resultTextOf(result));
-      const files = collectSeedFiles(parsed, slug);
+      let files = collectSeedFiles(parsed, slug);
       if (!isUsableSeed(files)) {
         this.options.log?.warn({ slug, files: files.length }, 'seed discarded: draft did not contain a usable game');
         return null;
+      }
+
+      const usage: SeedUsage = {
+        inputTokens: pickUsage.inputTokens + generateUsage.inputTokens,
+        outputTokens: pickUsage.outputTokens + generateUsage.outputTokens,
+        model: generateUsage.model,
+      };
+
+      // One repair round when the draft does not bundle. The distinction funds the
+      // round-0 preview: a bundling draft can be assembled and shown to the creator
+      // within minutes, and roughly a third of first drafts miss by one fixable line.
+      // One round, not a loop — a draft two rounds from compiling is better finished by
+      // the agent, which was going to read it anyway.
+      const bundleCheck = this.options.bundleCheck ?? checkSeedBundles;
+      let verdict = await bundleCheck(slug, files);
+      let repaired = false;
+      if (!verdict.ok) {
+        repaired = true;
+        const repairResult = await this.client('generate')(buildRepairPrompt({ slug, errors: verdict.errors, files }))
+          .maxOutputTokens(65_536)
+          .signal(AbortSignal.timeout(this.generateTimeoutMs))
+          .run();
+        const repairUsage = usageOf(repairResult, this.model);
+        usage.inputTokens += repairUsage.inputTokens;
+        usage.outputTokens += repairUsage.outputTokens;
+
+        // Merge whole corrected files over the draft; untouched files stay. The corrected
+        // files pass the same guard as the originals — a repair is not a wider door.
+        const corrections = collectSeedFiles(parseSeedResponse(resultTextOf(repairResult)), slug);
+        if (corrections.length > 0) {
+          const merged = new Map(files.map((file) => [file.path, file]));
+          for (const correction of corrections) merged.set(correction.path, correction);
+          const candidate = [...merged.values()];
+          // A repair that broke the draft's shape is discarded wholesale — the original
+          // still exists and is still a usable head start for the agent.
+          if (isUsableSeed(candidate)) files = candidate;
+        }
+        verdict = await bundleCheck(slug, files);
       }
 
       const draft: SeedDraft = {
@@ -480,12 +560,10 @@ export class VertexGameSeeder implements GameSeeder {
         files,
         references: picks,
         ...(parsed.notes ? { notes: parsed.notes } : {}),
-        usage: {
-          inputTokens: pickUsage.inputTokens + generateUsage.inputTokens,
-          outputTokens: pickUsage.outputTokens + generateUsage.outputTokens,
-          model: generateUsage.model,
-        },
+        usage,
         elapsedMs: Date.now() - startedAt,
+        compiles: verdict.ok,
+        repaired,
       };
       this.options.log?.info(
         {
@@ -494,6 +572,8 @@ export class VertexGameSeeder implements GameSeeder {
           files: files.length,
           ms: draft.elapsedMs,
           tokens: draft.usage,
+          compiles: draft.compiles,
+          repaired: draft.repaired,
         },
         'seed generated',
       );

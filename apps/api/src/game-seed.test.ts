@@ -262,8 +262,8 @@ const draftFor = (slug: string) =>
     '## Concept',
     'A game.',
     `--- games/${slug}/game.ts ---`,
-    "import { startGame } from './game/runtime.ts';",
-    'startGame();',
+    "import { SPEED } from './game/model.ts';",
+    'console.log(SPEED);',
     `--- games/${slug}/game/model.ts ---`,
     'export const SPEED = 3;',
     '--- NOTES ---',
@@ -279,8 +279,8 @@ const GOOD_DRAFT = [
   '## Concept',
   'A game.',
   '--- games/my-game/game.ts ---',
-  "import { startGame } from './game/runtime.ts';",
-  'startGame();',
+  "import { SPEED } from './game/model.ts';",
+  'console.log(SPEED);',
   '--- games/my-game/game/model.ts ---',
   'export const SPEED = 3;',
   '--- NOTES ---',
@@ -407,6 +407,94 @@ describe('VertexGameSeeder', () => {
     });
 
     expect(await seeder.seed(request)).toBeNull();
+  });
+
+  it('runs one repair round when the draft does not bundle, and merges the fix', async () => {
+    const verdicts = [
+      { ok: false as const, errors: ['/games/my-game/game.ts:1: game module not found: game/render.ts'] },
+      { ok: true as const },
+    ];
+    const seeder = new VertexGameSeeder({
+      context: stubContext(),
+      client: stubClient([
+        { text: '{"picks":["apex-sprint"]}', inputTokens: 400, outputTokens: 10 },
+        { text: GOOD_DRAFT, inputTokens: 30_000, outputTokens: 8_000 },
+        // The repair returns only the file it fixed; everything else must survive.
+        {
+          text: '--- games/my-game/game/model.ts ---\nexport const SPEED = 4;\n',
+          inputTokens: 9_000,
+          outputTokens: 700,
+        },
+      ]),
+      bundleCheck: async () => verdicts.shift()!,
+    });
+
+    const draft = await seeder.seed(request);
+
+    expect(draft!.compiles).toBe(true);
+    expect(draft!.repaired).toBe(true);
+    expect(draft!.files.find((file) => file.path === 'game/model.ts')!.content).toBe('export const SPEED = 4;\n');
+    expect(draft!.files.map((file) => file.path).sort()).toEqual(['SPEC.md', 'game.ts', 'game/model.ts']);
+    // The repair round is billed like the rounds before it.
+    expect(draft!.usage.inputTokens).toBe(400 + 30_000 + 9_000);
+    expect(draft!.usage.outputTokens).toBe(10 + 8_000 + 700);
+  });
+
+  it('keeps the seed with compiles=false when the repair does not take', async () => {
+    // A draft two rounds from compiling is still a head start for the agent — it is
+    // only the creator preview that is withheld. One round, never a loop.
+    let checks = 0;
+    const seeder = new VertexGameSeeder({
+      context: stubContext(),
+      client: stubClient([
+        { text: '{"picks":["apex-sprint"]}' },
+        { text: GOOD_DRAFT },
+        { text: '--- games/my-game/game/model.ts ---\nstill broken\n' },
+      ]),
+      bundleCheck: async () => {
+        checks++;
+        return { ok: false, errors: ['game module not found: game/render.ts'] };
+      },
+    });
+
+    const draft = await seeder.seed(request);
+
+    expect(draft).not.toBeNull();
+    expect(draft!.compiles).toBe(false);
+    expect(draft!.repaired).toBe(true);
+    expect(checks).toBe(2);
+  });
+
+  it('discards a repair that broke the draft shape, keeping the original', async () => {
+    const seeder = new VertexGameSeeder({
+      context: stubContext(),
+      client: stubClient([
+        { text: '{"picks":["apex-sprint"]}' },
+        { text: GOOD_DRAFT },
+        // A "repair" that replaces the entry point with something outside the shape
+        // guard: nothing usable comes back, so the original draft stands.
+        { text: '--- shared/modules/gfx.ts ---\nexport const OWNED = true;\n' },
+      ]),
+      bundleCheck: async () => ({ ok: false, errors: ['x'] }),
+    });
+
+    const draft = await seeder.seed(request);
+
+    expect(draft!.files.find((file) => file.path === 'game.ts')).toBeDefined();
+    expect(draft!.files.some((file) => file.path.includes('shared'))).toBe(false);
+  });
+
+  it('does not run a repair round when the draft already bundles', async () => {
+    const seeder = new VertexGameSeeder({
+      context: stubContext(),
+      client: stubClient([{ text: '{"picks":["apex-sprint"]}' }, { text: GOOD_DRAFT }]),
+    });
+
+    const draft = await seeder.seed(request);
+
+    // The fixtures import only files they contain, so the real esbuild pass agrees.
+    expect(draft!.compiles).toBe(true);
+    expect(draft!.repaired).toBe(false);
   });
 
   it('keeps a draft that tried to write outside the game, minus those files', async () => {

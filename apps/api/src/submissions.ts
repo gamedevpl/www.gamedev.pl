@@ -507,7 +507,7 @@ export async function registerSubmissionRoutes(
     issueNumber: number;
     spec: string;
     log: { error: (context: object, message: string) => void };
-  }): Promise<SeedFiles | undefined> {
+  }): Promise<SeedDraft | undefined> {
     if (!gameSeeder || !store) return undefined;
     try {
       const record = await store.getSubmission(input.issueNumber);
@@ -523,18 +523,63 @@ export async function registerSubmissionRoutes(
 
       await store.setSubmissionSlug(input.issueNumber, draft.slug);
       await recordSeedCost(input.issueNumber, draft, input.log);
-      return {
-        slug: draft.slug,
-        files: draft.files,
-        references: draft.references,
-        ...(draft.notes ? { notes: draft.notes } : {}),
-      };
+      return draft;
     } catch (error) {
       // Fail-open is the whole contract: a seed is an optimization, and a build that
       // cannot get one is a build that starts the way every build used to.
       input.log.error({ err: error, issueNumber: input.issueNumber }, 'seeding failed, dispatching unseeded');
       return undefined;
     }
+  }
+
+  /**
+   * The label is authored in both languages rather than machine translated, like the
+   * status page's own vocabulary: it is one fixed sentence, and a creator's very first
+   * impression of their game should not depend on a translation call succeeding.
+   */
+  const SEED_PREVIEW_LABEL = 'First rough draft \u2014 the agent is improving it';
+  const SEED_PREVIEW_LABEL_PL = 'Pierwszy szkic gry \u2014 agent w\u0142a\u015bnie j\u0105 ulepsza';
+
+  /** Same ceiling as the channel's preview verb: this store record is the same record. */
+  const SEED_PREVIEW_MAX_BYTES = 320 * 1024;
+
+  /**
+   * Assembles the seed branch into a playable preview on the creator's status page.
+   *
+   * Reuses the entire published-game serve path — `getGameSources` bundles the game
+   * against the engine on that ref, `assembleGameHtml` applies the CSP, the AI Act
+   * provenance marking and the credential scan — so the round-0 preview passes exactly
+   * the hygiene a published game does, not a weaker preview-only variant. The result
+   * lands in the same `BuildPreview` slot the agent's own pushes use, so the status
+   * page needs no new rendering: the agent's first real preview simply supersedes this
+   * one on the same rail.
+   */
+  async function publishSeedPreview(input: {
+    issueNumber: number;
+    slug: string;
+    seedRef: string;
+    locale: string;
+  }): Promise<void> {
+    if (!store || !githubClient) return;
+    const sources = await githubClient.getGameSources(input.seedRef, input.slug);
+    if (!sources) return;
+    const html = assembleGameHtml(
+      {
+        title: sources.title ?? input.slug,
+        description: '',
+        html: sources.indexHtml,
+        js: sources.gameJs,
+        css: sources.styleCss,
+      },
+      { restrictNetwork: true },
+    );
+    if (Buffer.byteLength(html, 'utf8') > SEED_PREVIEW_MAX_BYTES) return;
+    await store.appendBuildPreview(input.issueNumber, {
+      data: Buffer.from(html, 'utf8').toString('base64'),
+      slug: input.slug,
+      label: SEED_PREVIEW_LABEL,
+      ...(input.locale.startsWith('pl') ? { labelLocalized: SEED_PREVIEW_LABEL_PL, locale: input.locale } : {}),
+    });
   }
 
   async function dispatchBuild(input: {
@@ -559,7 +604,15 @@ export async function registerSubmissionRoutes(
     try {
       // Before the brief is built, so the agent is told about a draft only when one is
       // really there — and so the slug it mints is on the record the brief reads from.
-      const seed = input.feedback ? undefined : await seedBuild(input);
+      const draft = input.feedback ? undefined : await seedBuild(input);
+      const seed: SeedFiles | undefined = draft
+        ? {
+            slug: draft.slug,
+            files: draft.files,
+            references: draft.references,
+            ...(draft.notes ? { notes: draft.notes } : {}),
+          }
+        : undefined;
       const result = await agentBackend.dispatch({
         issueNumber: input.issueNumber,
         spec: input.spec,
@@ -576,6 +629,22 @@ export async function registerSubmissionRoutes(
         workspace: result.workspace,
         seedWorkspace: result.seedWorkspace,
       });
+      // The round-0 preview: the creator sees a playable rough draft minutes after
+      // submitting instead of waiting out the agent's first push. Off the response path
+      // (nobody's submit should wait on an esbuild pass and a handful of repo reads),
+      // gated on the draft actually bundling, and reading from the seed branch so what
+      // is shown is exactly what the agent starts from. Every failure inside is its own
+      // problem: the build is already dispatched and owes this nothing.
+      if (draft?.compiles && result.seedWorkspace) {
+        void publishSeedPreview({
+          issueNumber: input.issueNumber,
+          slug: draft.slug,
+          seedRef: result.seedWorkspace,
+          locale: input.locale,
+        }).catch((error: unknown) => {
+          input.log.error({ err: error, issueNumber: input.issueNumber }, 'seed preview failed');
+        });
+      }
       await recordSessionCost(input.issueNumber, result.ref, input.log);
       await store?.recordJobTransition(input.issueNumber, {
         to: 'dispatched',
