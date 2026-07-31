@@ -186,6 +186,8 @@
     "remix": "Remix Game",
     "platformAuthor": "gamedev.pl",
     "worldBadge": "Shared world",
+    "tiltBadge": "Tilt",
+    "tiltTooltip": "On a phone this game can also be steered by tilting the device",
     "savesBadge": "Saves progress",
     "sortLabel": "Sort games",
     "toolbarLabel": "Catalog filters and sort",
@@ -724,6 +726,11 @@
       "unreachable": "Lost connection to the lobby.",
       "rate_limited": "Too many inputs — connection closed."
     }
+  },
+  "sensing": {
+    "enable": "Enable tilt",
+    "enableAria": "Enable tilt controls — allow motion sensor access",
+    "explain": "This game can be steered by tilting your phone. Motion readings stay in your browser and are never sent anywhere."
   },
   "pageTitle": {
     "home": "Gamedev.pl — Describe a game, play it",

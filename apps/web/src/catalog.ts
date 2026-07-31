@@ -49,6 +49,12 @@ export interface CatalogEntry {
    * people are here" is why somebody clicks, so it is worth being right about.
    */
   world: 'shared' | null;
+  /**
+   * `tilt` when the game can also be steered by tilting the device. Advisory in the
+   * same way `saves` is: the sense relay is gated by the running game saying hello
+   * over the bridge, never by this field — it exists to badge motion play.
+   */
+  sensing: 'tilt' | null;
   orientation: CatalogOrientation;
   touch: CatalogTouch | null;
   /**
@@ -163,11 +169,15 @@ export async function fetchCatalog(): Promise<CatalogEntry[]> {
     .filter(
       (
         entry,
-      ): entry is Omit<CatalogEntry, 'media' | 'multiplayer' | 'saves' | 'world' | 'orientation' | 'touch'> & {
+      ): entry is Omit<
+        CatalogEntry,
+        'media' | 'multiplayer' | 'saves' | 'world' | 'sensing' | 'orientation' | 'touch'
+      > & {
         media?: unknown;
         multiplayer?: unknown;
         saves?: unknown;
         world?: unknown;
+        sensing?: unknown;
         orientation?: unknown;
         touch?: unknown;
       } =>
@@ -186,6 +196,7 @@ export async function fetchCatalog(): Promise<CatalogEntry[]> {
       multiplayer: parseCatalogMultiplayer((entry as { multiplayer?: unknown }).multiplayer),
       saves: entry.saves === 'player' ? ('player' as const) : null,
       world: entry.world === 'shared' ? ('shared' as const) : null,
+      sensing: entry.sensing === 'tilt' ? ('tilt' as const) : null,
       orientation: parseCatalogOrientation(entry.orientation),
       touch: parseCatalogTouch(entry.touch),
       submittedBy: parseCatalogSubmittedBy(
