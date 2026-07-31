@@ -13,7 +13,7 @@ import { MAX_PROJECT_BYTES as ASSEMBLE_MAX } from './assemble.js';
 
 describe('games-repo-contract (website half)', () => {
   it('keeps the serve budget at the Check 4 total (games-repo MAX_BUNDLE_BYTES)', () => {
-    expect(MAX_PROJECT_BYTES).toBe(441_687);
+    expect(MAX_PROJECT_BYTES).toBe(465_687);
     expect(GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES).toBe(MAX_PROJECT_BYTES);
     // assemble.ts must re-export the same number — a second literal would drift.
     expect(ASSEMBLE_MAX).toBe(MAX_PROJECT_BYTES);
@@ -101,6 +101,8 @@ describe('games-repo source extractors', () => {
       const GAMEKIT_LOOK_CONTROLS_BYTES = 4_683;
       const GAMEKIT_SPATIAL_AUDIO_BYTES = 2_977;
       const GAMEKIT_ZONE_BYTES = 12_000;
+      const GAMEKIT_WORLD_BYTES = 15_000;
+      const GAMEKIT_GAMEPLAY_BYTES = 9_000;
       const MAX_BUNDLE_BYTES =
         GAME_BUDGET_BYTES +
         GAMEKIT_TOUCH_BYTES +
@@ -118,7 +120,9 @@ describe('games-repo source extractors', () => {
         GAMEKIT_GFX3D_BYTES +
         GAMEKIT_LOOK_CONTROLS_BYTES +
         GAMEKIT_SPATIAL_AUDIO_BYTES +
-        GAMEKIT_ZONE_BYTES;
+        GAMEKIT_ZONE_BYTES +
+        GAMEKIT_WORLD_BYTES +
+        GAMEKIT_GAMEPLAY_BYTES;
     `;
     expect(extractMaxBundleBytes(source)).toBe(MAX_PROJECT_BYTES);
   });

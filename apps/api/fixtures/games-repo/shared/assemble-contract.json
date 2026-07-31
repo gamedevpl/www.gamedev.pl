@@ -37,9 +37,11 @@
     "gfx3d": 96000,
     "lookControls": 4683,
     "spatialAudio": 2977,
-    "zone": 12000
+    "zone": 12000,
+    "world": 15000,
+    "gameplay": 9000
   },
-  "maxProjectBytes": 441687,
+  "maxProjectBytes": 465687,
   "audio": {
     "musicField": "string",
     "musicCatalogRequiredKeys": ["version", "tracks"],

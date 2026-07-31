@@ -49,9 +49,17 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
  * music, touch hint, progress, universal input, pointer poll, draw surface,
  * pointer release, host pause, mascot draw, headroom, gfx3d, look, spatial, …). Together with
  * {@link GAME_BUDGET_BYTES} this must equal games-repo `MAX_BUNDLE_BYTES`
- * (441_687, matching games-repo `shared/assemble-contract.json` `maxProjectBytes`). Not a round KiB.
+ * (465_687, matching games-repo `shared/assemble-contract.json` `maxProjectBytes`). Not a round KiB.
  *
- * Last moved by games-repo #163: +12_000 for a named `zone` reserve, 429_687 → 441_687.
+ * Last moved by games-repo convergence Pass #10 (carjack-city open-world promotion):
+ * +15_000 (`world`) and +9_000 (`gameplay`) named reserves, 441_687 → 465_687. Both
+ * modules shipped tiny and charged to the author budget; Pass #10 grew them into real
+ * capability layers (grids/spiral search/loop paths/2D camera; arcade vehicle physics/
+ * combo/ticker — measured 13_263 and 7_371 transpiled), and the first game to select
+ * them, carjack-city, was also the tightest bundle in the catalog (1_472 bytes under
+ * the old ceiling before selecting them). Same opt-in-reserve argument as `zone`.
+ *
+ * Before that, games-repo #163: +12_000 for a named `zone` reserve, 429_687 → 441_687.
  * The module shipped charged to the author budget, on the reasoning that it is small and
  * opt-in the way `save` and `commons` are. biplane-skirmish disproved that on arrival —
  * the first published game to select `zone` landed 20 bytes under the ceiling, which made
@@ -90,7 +98,7 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
  * Before that, games-repo #102: +679 (`mascotDraw`) and +75_237 (`headroom`) — 30% of
  * the 250_790 ceiling — plus earlier host-pause / touch steer raises.
  */
-export const GAMEKIT_PLATFORM_BYTES = 236_887;
+export const GAMEKIT_PLATFORM_BYTES = 260_887;
 
 /** Combined html+js+css size cap — must match games-repo `MAX_BUNDLE_BYTES`. */
 export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
