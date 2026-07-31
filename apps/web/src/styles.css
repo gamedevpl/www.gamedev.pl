@@ -3516,22 +3516,68 @@ body.player-open {
   margin-top: 16px;
 }
 
-/* GIS paints asynchronously into this node. Without a reserved slot the Apple button
-   below starts at the top of the stack and jumps down when the iframe arrives — and
-   jumped again whenever a parent re-render used to wipe and re-render the widget.
-   `color-scheme: light` is required even with theme:filled_black: the page sets
-   color-scheme:dark (meta + html), and GIS's iframe inherits it as a white frame
-   around the button — the flash that shoved Apple on the beta splash. */
-.google-sign-in-container {
+/* Custom Google face + invisible GIS iframe on top.
+   -----------------------------------------------
+   GIS's renderButton iframe inherits the page's color-scheme:dark and paints a white
+   "envelope" around the widget — even with theme:filled_black. That flash shoved the
+   Apple button on the beta splash. We draw our own black face (same size as Apple)
+   and leave the real GIS control opacity:0 on top so clicks still hit Google's iframe
+   (FedCM / ITP require that). */
+.google-sign-in {
+  position: relative;
   width: 240px;
   height: 40px;
-  /* Match filled_black so an empty/loading slot is not a white flash on dark UI. */
-  background: #131314;
+}
+
+.google-sign-in-face {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: 0 12px;
+  border: 1px solid #000;
   border-radius: 4px;
+  background: #000;
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+}
+
+.google-sign-in-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 2px;
+  background: #fff;
+}
+
+.google-sign-in-mark svg {
+  display: block;
+}
+
+.google-sign-in-gis {
+  position: absolute;
+  inset: 0;
   overflow: hidden;
-  /* GIS's iframe is display:inline-block; keep the slot from collapsing while empty. */
-  line-height: 0;
-  color-scheme: light;
+  opacity: 0;
+  /* Keep a hit target even before the iframe paints. */
+  cursor: pointer;
+}
+
+@media (pointer: coarse) {
+  .google-sign-in {
+    height: 44px;
+  }
 }
 
 .auth-error-banner {
