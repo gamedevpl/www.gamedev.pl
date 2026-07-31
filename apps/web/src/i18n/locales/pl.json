@@ -234,7 +234,10 @@
     "shelf": {
       "heading": "Twoje gry",
       "newGame": "Nowa gra",
-      "count": "{{count}} gier",
+      "count_one": "{{count}} gra",
+      "count_few": "{{count}} gry",
+      "count_many": "{{count}} gier",
+      "count_other": "{{count}} gry",
       "searchLabel": "Szukaj wśród swoich gier",
       "searchPlaceholder": "Szukaj po tytule lub slugu…",
       "filterAria": "Filtruj gry",

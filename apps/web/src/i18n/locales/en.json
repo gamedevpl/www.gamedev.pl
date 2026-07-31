@@ -234,7 +234,8 @@
     "shelf": {
       "heading": "Your games",
       "newGame": "New game",
-      "count": "{{count}} games",
+      "count_one": "{{count}} game",
+      "count_other": "{{count}} games",
       "searchLabel": "Search your games",
       "searchPlaceholder": "Search by title or slug…",
       "filterAria": "Filter games",
