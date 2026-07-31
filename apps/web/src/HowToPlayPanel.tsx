@@ -32,6 +32,8 @@ type HowToPlayPanelProps = {
    * what a build-time classifier inferred about its source.
    */
   padReported?: boolean;
+  /** On-screen button names read off the built pad, shown alongside the Touch row. */
+  padButtons?: string[];
   onClose: () => void;
 };
 
@@ -51,6 +53,7 @@ export function HowToPlayPanel({
   gameTitle,
   touch = null,
   padReported = false,
+  padButtons = [],
   onClose,
 }: HowToPlayPanelProps) {
   const { t } = useTranslation();
@@ -146,7 +149,11 @@ export function HowToPlayPanel({
           {showPad ? (
             <div className="howto-row">
               <dt>{t('player.howToPlayTouch')}</dt>
-              <dd>{t('player.howToPlayTouchPad')}</dd>
+              <dd>
+                {padButtons.length > 0
+                  ? `${t('player.howToPlayTouchPad')} — ${padButtons.join(', ')}`
+                  : t('player.howToPlayTouchPad')}
+              </dd>
             </div>
           ) : null}
         </dl>

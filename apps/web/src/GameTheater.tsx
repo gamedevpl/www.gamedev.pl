@@ -475,6 +475,7 @@ export function GameTheater({
         gameTitle={displayTitle}
         touch={touch}
         padReported={player.controls?.pad ?? false}
+        padButtons={player.controls?.padButtons ?? []}
         onClose={closeHowTo}
       />
     </section>

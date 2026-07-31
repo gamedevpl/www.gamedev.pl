@@ -190,3 +190,35 @@ describe('resolveControlRows', () => {
     expect(resolveControlRows(null, '')).toEqual([]);
   });
 });
+
+describe('pad buttons read off the built pad', () => {
+  it('names the Touch row instead of becoming key rows with no keys', () => {
+    // These carry a label but no key, because on a touch device the key behind a button
+    // is not the question. Rendering them as key rows would show a column of blanks.
+    const controls = readReportedControls({
+      rows: [{ keys: 'A/D', action: 'Steer' }],
+      kit: [
+        { keys: '', action: 'Fire', touch: true },
+        { keys: '', action: 'Throttle', touch: true },
+        { keys: '', action: '', pad: 'full' },
+      ],
+    });
+    expect(controls?.padButtons).toEqual(['Fire', 'Throttle']);
+    expect(controls?.pad).toBe(true);
+    expect(resolveControlRows(controls, '')).toEqual([{ keys: 'A/D', action: 'Steer' }]);
+  });
+
+  it('still makes manifest buttons real rows, because those do know their key', () => {
+    const controls = readReportedControls({
+      kit: [{ keys: 'Space', action: 'Fire', touch: true }],
+    });
+    expect(controls?.padButtons).toEqual([]);
+    expect(controls?.kit).toEqual([{ keys: 'Space', action: 'Fire' }]);
+  });
+
+  it('is enough on its own to show the card for a game that reported nothing else', () => {
+    const controls = readReportedControls({ kit: [{ keys: '', action: 'Fire', touch: true }] });
+    expect(controls).not.toBeNull();
+    expect(controls?.padButtons).toEqual(['Fire']);
+  });
+});

@@ -88,6 +88,13 @@ export interface ReportedControls {
   kit: ControlRow[];
   /** Whether GameKit reported mounting an on-screen d-pad. */
   pad: boolean;
+  /**
+   * Names of the on-screen buttons, when they were read off the built pad rather than
+   * out of the manifest. They carry no key, because on the device that has them the key
+   * is not the question — you tap the button — so they name the Touch row instead of
+   * becoming key rows of their own.
+   */
+  padButtons: string[];
   /** The game's one-line `.hint`, used only when nothing structured came back. */
   hint: string;
 }
@@ -132,13 +139,25 @@ export function readReportedControls(data: unknown): ReportedControls | null {
   if (!data || typeof data !== 'object') return null;
   const record = data as Record<string, unknown>;
   const kitRaw = Array.isArray(record.kit) ? (record.kit as Array<Record<string, unknown>>) : [];
+  const usable = kitRaw.filter((entry) => entry && typeof entry === 'object');
   const controls: ReportedControls = {
     rows: cleanRows(record.rows),
-    kit: cleanRows(kitRaw),
-    pad: kitRaw.some((entry) => entry && typeof entry === 'object' && typeof entry.pad === 'string' && entry.pad),
+    // Only entries naming their keys become rows; the rest describe the pad.
+    kit: cleanRows(usable.filter((entry) => typeof entry.keys === 'string' && entry.keys)),
+    pad: usable.some((entry) => typeof entry.pad === 'string' && entry.pad),
+    padButtons: usable
+      .filter((entry) => entry.touch === true && !entry.keys)
+      .map((entry) => cleanField(entry.action, MAX_REPORTED_LENGTH))
+      .filter((label) => label.length > 0)
+      .slice(0, MAX_ROWS),
     hint: cleanField(record.hint, MAX_ROW_LENGTH),
   };
-  const empty = controls.rows.length === 0 && controls.kit.length === 0 && !controls.hint && !controls.pad;
+  const empty =
+    controls.rows.length === 0 &&
+    controls.kit.length === 0 &&
+    controls.padButtons.length === 0 &&
+    !controls.hint &&
+    !controls.pad;
   return empty ? null : controls;
 }
 

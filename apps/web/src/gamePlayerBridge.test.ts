@@ -155,3 +155,57 @@ describe('the bridge control scraper', () => {
     expect(controls?.hint).toBe('');
   });
 });
+
+describe('the bridge pad fallback', () => {
+  /*
+   * The manifest is the better source, but it only exists in a snapshot rebuilt after
+   * the games repo ships `controlsManifest`. Every published game today has a pad in the
+   * DOM instead, so this is what makes touch describable now rather than after a re-bake.
+   */
+  const PAD = `
+    <div class="gamekit-touch">
+      <div class="gamekit-touch-pad"></div>
+      <div class="gamekit-touch-buttons">
+        <div class="gamekit-touch-btn">Fire</div>
+        <div class="gamekit-touch-btn">Throttle</div>
+      </div>
+    </div>`;
+
+  it('reads the built pad when GameKit cannot be asked', async () => {
+    const controls = controlsFrom(await runBridge(PAD));
+    expect(controls?.kit).toEqual([
+      { keys: '', action: 'Fire', touch: true },
+      { keys: '', action: 'Throttle', touch: true },
+      { keys: '', action: '', pad: 'full' },
+    ]);
+  });
+
+  it('prefers the manifest when there is one, since it also knows the keys', async () => {
+    const controls = controlsFrom(
+      await runBridge(PAD, {
+        controlsManifest: () => ({
+          pad: 'full',
+          look: false,
+          steer: 'origin',
+          buttons: [{ keys: [' '], label: 'Fire' }],
+          touch: true,
+        }),
+      }),
+    );
+    expect(controls?.kit).toEqual([
+      { keys: ' ', action: 'Fire', touch: true },
+      { keys: '', action: '', pad: 'full' },
+    ]);
+  });
+
+  it('falls back to the pad when GameKit is present but answers nothing', async () => {
+    // An older snapshot: GameKit is there, `controlsManifest` is not.
+    const controls = controlsFrom(await runBridge(PAD, { wantsTouchControls: () => true }));
+    const kit = (controls?.kit ?? []) as Array<{ action: string }>;
+    expect(kit.some((row) => row.action === 'Fire')).toBe(true);
+  });
+
+  it('reports no pad on a desktop, where GameKit builds none', async () => {
+    expect(controlsFrom(await runBridge('<canvas id="game"></canvas>'))?.kit).toEqual([]);
+  });
+});

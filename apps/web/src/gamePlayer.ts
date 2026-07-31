@@ -76,15 +76,38 @@ const BRIDGE = `(function(){
     var out=[];
     try{
       var kit=window.GameKit;
-      if(!kit||typeof kit.controlsManifest!=='function')return out;
+      if(!kit||typeof kit.controlsManifest!=='function')return padRows();
       var m=kit.controlsManifest();
-      if(!m)return out;
+      if(!m)return padRows();
       var buttons=m.buttons||[];
       for(var i=0;i<buttons.length;i++){
         var keys=(buttons[i].keys||[]).join(' / '),label=String(buttons[i].label||'');
         if(keys&&label)out.push({keys:keys,action:label,touch:true});
       }
       if(m.pad)out.push({keys:'',action:'',pad:String(m.pad)});
+    }catch(err){return padRows();}
+    return out.length>0?out:padRows();
+  }
+  /**
+   * The pad GameKit actually built, read off the page.
+   *
+   * Weaker than the manifest — it names buttons but not the keys behind them, and it
+   * exists only where the pad does (a coarse pointer) — but it needs nothing from the
+   * games repo, so it works on every published snapshot today rather than after a
+   * re-bake. On the devices where it is present, the key behind a button is not the
+   * question anyway: you tap the button.
+   */
+  function padRows(){
+    var out=[],seen={};
+    try{
+      var buttons=document.querySelectorAll('.gamekit-touch-btn');
+      for(var i=0;i<buttons.length;i++){
+        var label=text(buttons[i]);
+        if(!label||seen[label])continue;
+        seen[label]=1;
+        out.push({keys:'',action:label,touch:true});
+      }
+      if(document.querySelector('.gamekit-touch-pad'))out.push({keys:'',action:'',pad:'full'});
     }catch(err){}
     return out;
   }
