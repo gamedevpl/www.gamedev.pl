@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mapTranscriptToKey } from './ControllerView.js';
+import { mapTranscriptToKey } from './voicePhrases.js';
 
 describe('mapTranscriptToKey', () => {
   it('maps English and Polish party phrases', () => {
