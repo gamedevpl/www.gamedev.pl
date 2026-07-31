@@ -43,8 +43,7 @@
   top: calc(100% + 8px);
   right: 0;
   z-index: 1000;
-  width: 320px;
-  max-width: 84vw;
+  width: min(320px, calc(100vw - 24px));
   max-height: 70vh;
   overflow-y: auto;
   background: #14161c;

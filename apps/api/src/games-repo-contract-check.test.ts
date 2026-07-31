@@ -47,7 +47,7 @@ describe('runGamesRepoContractCheck', () => {
     await expect(runGamesRepoContractCheck({ ...BASE, fetchImpl })).resolves.toEqual({ kind: 'ok' });
   });
 
-  it('reports drift when the games-repo budget moved', async () => {
+  it('reports drift when the games-repo budget moved ahead of the website', async () => {
     const { fetchImpl } = createFetch({
       'tools/lib/assemble.ts': [ok(ASSEMBLE_SOURCE)],
       'tools/validate.ts': [ok(`const MAX_BUNDLE_BYTES = ${MAX_PROJECT_BYTES + 679};`)],
@@ -56,6 +56,15 @@ describe('runGamesRepoContractCheck', () => {
     const outcome = await runGamesRepoContractCheck({ ...BASE, fetchImpl });
     expect(outcome.kind).toBe('drift');
     expect(outcome.kind === 'drift' && outcome.reason).toContain('MAX_BUNDLE_BYTES mismatch');
+  });
+
+  it('passes when the website budget is ahead of games-repo main (website-first)', async () => {
+    const { fetchImpl } = createFetch({
+      'tools/lib/assemble.ts': [ok(ASSEMBLE_SOURCE)],
+      'tools/validate.ts': [ok(`const MAX_BUNDLE_BYTES = ${MAX_PROJECT_BYTES - 8_000};`)],
+    });
+
+    await expect(runGamesRepoContractCheck({ ...BASE, fetchImpl })).resolves.toEqual({ kind: 'ok' });
   });
 
   it('reports drift when the module order diverges', async () => {
@@ -67,6 +76,22 @@ describe('runGamesRepoContractCheck', () => {
     const outcome = await runGamesRepoContractCheck({ ...BASE, fetchImpl });
     expect(outcome.kind).toBe('drift');
     expect(outcome.kind === 'drift' && outcome.reason).toContain('GAME_KIT_MODULES mismatch');
+  });
+
+  it('passes when the website lists trailing modules games-repo has not merged yet', async () => {
+    const remoteModules = GAME_KIT_MODULES.slice(0, -1);
+    const remoteAssemble = `
+      const GAME_KIT_MODULES = [${remoteModules.map((name) => `'${name}'`).join(', ')}];
+      const catalog = readMusicCatalog();
+      const track = catalog.tracks[name];
+      out += 'window.__GAME_AUDIO_MUSIC__ = ' + JSON.stringify(name);
+    `;
+    const { fetchImpl } = createFetch({
+      'tools/lib/assemble.ts': [ok(remoteAssemble)],
+      'tools/validate.ts': [ok(VALIDATE_SOURCE)],
+    });
+
+    await expect(runGamesRepoContractCheck({ ...BASE, fetchImpl })).resolves.toEqual({ kind: 'ok' });
   });
 
   it('skips without a token so forks and fresh clones stay green', async () => {

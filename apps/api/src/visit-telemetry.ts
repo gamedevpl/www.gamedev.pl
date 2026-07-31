@@ -88,6 +88,7 @@ const EventSchema = z.discriminatedUnion('type', [
   }),
   z.object({ type: z.literal('route_viewed'), route: RouteKindSchema, ...offsetField }),
   z.object({ type: z.literal('play_started'), ...offsetField }),
+  z.object({ type: z.literal('how_to_play_opened'), ...offsetField }),
   z.object({ type: z.literal('create_step'), step: CreateStepSchema, ...offsetField }),
   z.object({ type: z.literal('waitlist_step'), step: WaitlistStepSchema, ...offsetField }),
 ]);
@@ -182,6 +183,8 @@ export async function registerVisitTelemetryRoutes(
         case 'create_step':
         case 'waitlist_step':
           return { ...base, type: event.type, step: event.step };
+        case 'how_to_play_opened':
+          return { ...base, type: event.type };
         default:
           return { ...base, type: 'play_started' };
       }

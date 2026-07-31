@@ -73,6 +73,34 @@ const CreateSubmissionRequestSchema = z.object({
 // parser, which reads the same marker back off the PR to rebuild the revision history.
 export { CREATOR_FEEDBACK_MARKER };
 
+/**
+ * Why a round did not start, when one did not.
+ *
+ * `no_capacity` is its own answer because it is the one failure that is nothing to do
+ * with this job: the coding-agent account has run out of premium requests, every job on
+ * the site is equally stuck, and retrying is not the fix. Told apart from an ordinary
+ * dispatch fault so the creator can be told the truth ("not now") rather than a guess
+ * ("something went wrong"), and so an operator reading the queue knows to go and look at
+ * billing rather than at the build.
+ */
+export type ResumeFailureReason = 'not_configured' | 'no_capacity' | 'dispatch_failed';
+
+export type ResumeOutcome = { started: true } | { started: false; reason: ResumeFailureReason };
+
+/**
+ * Reads a dispatch failure for the one distinction a caller can act on.
+ *
+ * GitHub answers an exhausted premium-request allowance with 412 and a message saying so;
+ * the status alone is enough, and the message is matched too because a 412 from this API
+ * has meant nothing else and a future one would still be worth reporting as "not now".
+ */
+export function classifyResumeFailure(error: unknown): ResumeFailureReason {
+  const status = (error as { status?: unknown } | null)?.status;
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  if (status === 412 || /premium quota|insufficient .*quota/i.test(message)) return 'no_capacity';
+  return 'dispatch_failed';
+}
+
 const FeedbackRequestSchema = z.object({
   feedback: z
     .string()
@@ -704,6 +732,12 @@ export async function registerSubmissionRoutes(
    * The backend decides what "another round" costs: Copilot needs an open pull request
    * on the branch before it will resume one, which its adapter arranges on demand. That
    * detail stays inside the adapter — here it is simply "continue this job".
+   *
+   * Returns what happened rather than only logging it. A round that never started is
+   * indistinguishable, from the creator's side, from one that started and is thinking —
+   * the thread shows their message either way and the status does not move. Callers get
+   * the outcome so they can say so; `no_capacity` is separated out because it is not a
+   * fault in the job and it will not clear by trying again in a minute.
    */
   async function resumeBuild(input: {
     issueNumber: number;
@@ -719,8 +753,8 @@ export async function registerSubmissionRoutes(
      * fact an audit of that job would want.
      */
     transition?: { by: JobTransition['by']; reason: string };
-  }): Promise<void> {
-    if (!agentBackend || !submissionTokenSecret || !store) return;
+  }): Promise<ResumeOutcome> {
+    if (!agentBackend || !submissionTokenSecret || !store) return { started: false, reason: 'not_configured' };
     const record = await store.getSubmission(input.issueNumber);
     const previous = record?.dispatch;
     try {
@@ -773,10 +807,13 @@ export async function registerSubmissionRoutes(
           ...(input.transition ? { reason: input.transition.reason } : {}),
         });
       }
+      return { started: true };
     } catch (error) {
       // The creator's request is already queued on the build channel, so a failed
       // resume costs the round its head start, not the request itself.
-      input.log.error({ err: error, issueNumber: input.issueNumber }, 'agent resume failed');
+      const reason = classifyResumeFailure(error);
+      input.log.error({ err: error, issueNumber: input.issueNumber, reason }, 'agent resume failed');
+      return { started: false, reason };
     }
   }
 
@@ -2174,7 +2211,7 @@ export async function registerSubmissionRoutes(
       // account is silently ignored. That whole apparatus — the marker, the relay
       // workflow, the licensed PAT — existed only to get a message to an agent through
       // someone else's system, and none of it is needed now that we dispatch directly.
-      await resumeBuild({
+      const outcome = await resumeBuild({
         issueNumber,
         feedback: contextBlock ? `${sanitizedFeedback}\n\n${contextBlock}` : sanitizedFeedback,
         locale: creatorLocale,
@@ -2193,7 +2230,16 @@ export async function registerSubmissionRoutes(
         }
       }
 
-      return reply.send({ ok: true, ...(shotId ? { shotId } : {}) });
+      // Accepted, and honest about what it bought. The message is kept either way — it is
+      // on the record and in the thread, and the next round to start will read it — but a
+      // creator whose round never started must not be shown the same silence as one whose
+      // agent is already working. That silence is what turned an exhausted premium-request
+      // allowance into a game that appeared to be thinking for hours.
+      return reply.send({
+        ok: true,
+        ...(shotId ? { shotId } : {}),
+        ...(outcome.started ? {} : { roundStarted: false, reason: outcome.reason }),
+      });
     },
   );
 
@@ -2408,7 +2454,7 @@ export async function registerSubmissionRoutes(
     }
 
     const refsBefore = record.dispatch?.refs?.length ?? 0;
-    await resumeBuild({
+    const outcome = await resumeBuild({
       issueNumber,
       feedback: undelivered ? '' : OPERATOR_RETRY_BRIEF,
       locale: record.locale ?? 'en',
@@ -2419,10 +2465,16 @@ export async function registerSubmissionRoutes(
       transition: { by: 'operator', reason: 'operator_retry' },
     });
 
-    // `resumeBuild` reports dispatch failure by logging, not throwing — right for the
-    // feedback route, where the request is queued on the channel either way, but an
-    // operator clicking retry needs the truth now. A new session always appends a ref,
-    // so no new ref means no new session.
+    // `resumeBuild` reports dispatch failure by returning it rather than throwing — right
+    // for the feedback route, where the request is queued on the channel either way, but
+    // an operator clicking retry needs the truth now, and needs to be told *which* truth:
+    // an exhausted premium-request allowance is a trip to billing, not a button to press
+    // again. The ref count is still checked behind it, because a resume that reported
+    // success without starting a session would be the same silence one layer down — a new
+    // session always appends a ref.
+    if (!outcome.started) {
+      return reply.status(502).send({ error: outcome.reason });
+    }
     const after = await store.getSubmission(issueNumber);
     if ((after?.dispatch?.refs?.length ?? 0) <= refsBefore) {
       return reply.status(502).send({ error: 'dispatch_failed' });

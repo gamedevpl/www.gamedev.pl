@@ -101,6 +101,8 @@ export function App() {
   // during which nothing has been submitted yet, so the UI must not claim otherwise.
   const [submissionStatus, setSubmissionStatus] = useState<'idle' | 'refining' | 'loading'>('idle');
   const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const submissionStatusRef = useRef(submissionStatus);
+  submissionStatusRef.current = submissionStatus;
 
   // Clarifying-questions gate: a submission runs the spec refiner first, and when
   // it returns questions the creator must answer them before generation proceeds.
@@ -112,7 +114,17 @@ export function App() {
   const [pendingSpec, setPendingSpec] = useState<{ title: string; concept: string; displayName: string } | null>(
     restoredQa.current?.spec ?? null,
   );
+  // Language the parked questions were written in. Empty when an older blob never
+  // recorded one — that mismatch with the live UI language is what triggers a
+  // one-shot re-ask so English chips don't stick under a Polish chrome.
+  const [qaLocale, setQaLocale] = useState<string>(restoredQa.current?.locale ?? '');
+  // Bumped when questions are rewritten for a new language so CreatorQA remounts
+  // with empty answers — English chip labels must not survive as "selected" under
+  // Polish options that no longer match.
+  const [qaFormKey, setQaFormKey] = useState(0);
   const qaRef = useRef<HTMLDivElement | null>(null);
+  // Kept next to the QA state so the language-switch effect can clear it too.
+  const latestAnswersRef = useRef<PendingQaAnswers>(restoredQa.current?.answers ?? { selected: {}, custom: {} });
 
   // Demo generator state
   const [mockStatus, setMockStatus] = useState<'idle' | 'loading' | 'error'>('idle');
@@ -324,6 +336,104 @@ export function App() {
     }
   }, [pendingSpec]);
 
+  // The static chrome follows the language switcher instantly; the AI questions do
+  // not — they were authored in whatever language the refine call used. Re-ask when
+  // the UI language changes mid-round (or a restored session was parked under a
+  // different language) so a Polish UI never keeps showing English chips.
+  const qaRelocalizingRef = useRef(false);
+  const pendingSpecRef = useRef(pendingSpec);
+  pendingSpecRef.current = pendingSpec;
+  useEffect(() => {
+    const parked = pendingSpecRef.current;
+    if (!parked) return;
+    const targetLocale = i18n.resolvedLanguage ?? i18n.language;
+    if (qaLocale === targetLocale) return;
+    // A real submit is in flight — don't yank the questions out from under it.
+    if (submissionStatusRef.current === 'loading') return;
+    if (qaRelocalizingRef.current) return;
+
+    let cancelled = false;
+    qaRelocalizingRef.current = true;
+    setSubmissionStatus('refining');
+    const concept = parked.concept;
+
+    async function relocalizeQa() {
+      try {
+        const refined = await refineSpec({ concept, locale: targetLocale });
+        if (cancelled) return;
+        // A real submit started while refine was in flight — drop the relocalization.
+        if (submissionStatusRef.current === 'loading') return;
+
+        const questions = refined.questions;
+        // Fail-open: when Vertex times out or errors, it returns empty questions.
+        // Keep the existing questions and parked session instead of wiping them into a name-only panel.
+        if (questions.length === 0) return;
+
+        // Prefer the live parked spec so a title edit mid-flight is not overwritten.
+        const liveSpec = pendingSpecRef.current;
+        if (!liveSpec) return;
+
+        // Preserve user-entered custom answers across questions matching by ID or index.
+        const oldCustom = latestAnswersRef.current.custom ?? {};
+        const oldQuestions = qaQuestions;
+        const preservedCustom: Record<string, string> = {};
+
+        questions.forEach((newQ, idx) => {
+          const customById = oldCustom[newQ.id];
+          const oldQ = oldQuestions[idx];
+          const customByIndex = oldQ ? oldCustom[oldQ.id] : undefined;
+          const val = customById || customByIndex;
+          if (val && val.trim()) {
+            preservedCustom[newQ.id] = val;
+          }
+        });
+
+        const newAnswers: PendingQaAnswers = { selected: {}, custom: preservedCustom };
+
+        setQaQuestions(questions);
+        setQaLocale(targetLocale);
+        latestAnswersRef.current = newAnswers;
+        // Drop restored answers so a remounted panel doesn't revive English selections.
+        if (restoredQa.current) {
+          restoredQa.current = {
+            ...restoredQa.current,
+            questions,
+            answers: newAnswers,
+            locale: targetLocale,
+            savedAt: Date.now(),
+          };
+        }
+        savePendingQa({
+          spec: liveSpec,
+          questions,
+          answers: newAnswers,
+          locale: targetLocale,
+        });
+        setQaFormKey((key) => key + 1);
+      } catch {
+        // Keep the previous questions rather than blanking the panel on a blip.
+      } finally {
+        qaRelocalizingRef.current = false;
+        if (!cancelled && submissionStatusRef.current === 'refining') {
+          setSubmissionStatus('idle');
+        }
+      }
+    }
+
+    void relocalizeQa();
+    return () => {
+      cancelled = true;
+      // Strict Mode remounts (and a follow-up language flip) must be allowed to start
+      // a new call; leaving the guard latched would park the panel on "analyzing".
+      qaRelocalizingRef.current = false;
+    };
+    // Depend on the concept, not the whole pendingSpec object: title edits must not
+    // cancel and restart a language switch mid-flight. submissionStatus is read to
+    // skip during submit; listing it would cancel the relocalize when we flip to
+    // 'refining' ourselves.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- see above
+  }, [i18n.language, i18n.resolvedLanguage, pendingSpec?.concept, qaLocale]);
+
   // Menu navigation is scroll-to-section, but the sections only exist on the home
   // route — from a status page we have to go home first and scroll once the target
   // has mounted (the Games gallery may still be loading).
@@ -426,9 +536,13 @@ export function App() {
       concept: trimmedConcept,
       displayName: displayName.trim(),
     };
+    const locale = i18n.resolvedLanguage ?? i18n.language;
     setPendingSpec(spec);
     setQaQuestions(questions);
-    savePendingQa({ spec, questions, answers: { selected: {}, custom: {} } });
+    setQaLocale(locale);
+    latestAnswersRef.current = { selected: {}, custom: {} };
+    savePendingQa({ spec, questions, answers: { selected: {}, custom: {} }, locale });
+    setQaFormKey((key) => key + 1);
     setSubmissionStatus('idle');
   }
 
@@ -465,6 +579,7 @@ export function App() {
       // whole call. A no-op when the spec never went through the gate.
       setQaQuestions([]);
       setPendingSpec(null);
+      setQaLocale('');
       clearPendingQa();
 
       // Straight to the game's own address. Older API builds answer without a slug, in
@@ -513,19 +628,19 @@ export function App() {
   const handleQaCancel = () => {
     setQaQuestions([]);
     setPendingSpec(null);
+    setQaLocale('');
     clearPendingQa();
   };
 
   // Every keystroke and chip lands in storage, so the round survives a reload at any
   // point rather than only between questions.
-  const latestAnswersRef = useRef<PendingQaAnswers>({ selected: {}, custom: {} });
   const handleQaAnswersChange = useCallback(
     (answers: PendingQaAnswers) => {
       latestAnswersRef.current = answers;
       if (!pendingSpec) return;
-      savePendingQa({ spec: pendingSpec, questions: qaQuestions, answers });
+      savePendingQa({ spec: pendingSpec, questions: qaQuestions, answers, locale: qaLocale });
     },
-    [pendingSpec, qaQuestions],
+    [pendingSpec, qaQuestions, qaLocale],
   );
 
   // The name is parked with the answers, for the same reason: an edited title is work,
@@ -536,9 +651,14 @@ export function App() {
       if (!pendingSpec) return;
       const spec = { ...pendingSpec, title };
       setPendingSpec(spec);
-      savePendingQa({ spec, questions: qaQuestions, answers: latestAnswersRef.current });
+      savePendingQa({
+        spec,
+        questions: qaQuestions,
+        answers: latestAnswersRef.current,
+        locale: qaLocale,
+      });
     },
-    [pendingSpec, qaQuestions],
+    [pendingSpec, qaQuestions, qaLocale],
   );
 
   // Whether this tab has pushed a history entry of its own — i.e. whether going Back
@@ -752,15 +872,16 @@ export function App() {
             {pendingSpec && (
               <div ref={qaRef}>
                 <CreatorQA
+                  key={qaFormKey}
                   questions={qaQuestions}
                   initialConcept={pendingSpec.concept}
                   initialTitle={pendingSpec.title}
                   onSubmitWithConcept={handleQaComplete}
                   onTitleChange={handleQaTitleChange}
                   onCancel={handleQaCancel}
-                  submitting={submissionStatus === 'loading'}
+                  submitting={submissionStatus === 'loading' || submissionStatus === 'refining'}
                   error={submissionError}
-                  initialAnswers={restoredQa.current?.answers}
+                  initialAnswers={latestAnswersRef.current}
                   onAnswersChange={handleQaAnswersChange}
                 />
               </div>
@@ -809,6 +930,8 @@ export function App() {
                 orientation={stageContent.game.orientation}
                 reportSlug={stageContent.game.slug}
                 submittedBy={stageContent.game.submittedBy}
+                controls={stageContent.game.controls}
+                touch={stageContent.game.touch}
               />
             )}
 

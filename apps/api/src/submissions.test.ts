@@ -1089,9 +1089,58 @@ describe('submission routes', () => {
     expect(briefs.at(-1)?.feedback).toContain('pick this up again');
     // The dead round must not orphan the job: the retry moves it back to building.
     expect((await store.getSubmission(job.issueNumber))?.state).toBe('building');
+    // Nothing to report when the round did start — the field exists to say otherwise.
+    expect(response.json()).not.toHaveProperty('roundStarted');
 
     await app.close();
   });
+
+  it('says so when the message was kept but no round could start', async () => {
+    // The failure this is written for: GitHub answers an exhausted premium-request
+    // allowance with 412, `resumeBuild` logs it and swallows it, and the creator is left
+    // with a thread showing their message and a game that never moves again. It cost one
+    // real creator three hours of watching a build that was never running.
+    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { backend } = createBackendStub();
+    backend.resume = async () => {
+      throw Object.assign(new Error('agent tasks POST 412: insufficient premium quota to create assignment'), {
+        name: 'AgentTasksError',
+        status: 412,
+      });
+    };
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Please make the asteroids slower and the parcels bigger.' },
+    });
+
+    // Accepted — the note is kept and queued, so it is not the creator's to send again —
+    // but the answer says plainly that nothing is running behind it, and says which kind
+    // of nothing: out of capacity is a billing problem, not a broken game.
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ ok: true, roundStarted: false, reason: 'no_capacity' });
+    expect(await store.listCreatorMessages(job.issueNumber)).not.toHaveLength(0);
+    // And the job must not claim to be building when no session exists.
+    expect((await store.getSubmission(job.issueNumber))?.state).not.toBe('building');
+
+    await app.close();
+  });
+
 
   it('abandons a native job without closing anything on GitHub', async () => {
     const { githubClient, closeIssue, closePullRequest } = createGithubClientStub({ issueNumber: 77 });
@@ -2924,6 +2973,40 @@ describe('operator cancel and retry', () => {
     expect(response.json()).toMatchObject({ error: 'dispatch_failed' });
 
     await second.app.close();
+  });
+
+  it('names an exhausted agent allowance rather than calling it a dispatch failure', async () => {
+    // 412 from the agent-tasks API means the coding-agent account has no premium requests
+    // left. Every job on the site is equally stuck and the button will not fix any of
+    // them, so the operator has to be sent to billing rather than back to the button.
+    const { backend } = createBackendStub();
+    const outOfQuota: AgentBackend = {
+      ...backend,
+      resume: async () => {
+        throw Object.assign(new Error('agent tasks POST 412: insufficient premium quota to create assignment'), {
+          name: 'AgentTasksError',
+          status: 412,
+        });
+      },
+    };
+    const { app, store, job } = await appWithJob({ backend: outOfQuota });
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'failed',
+      at: new Date().toISOString(),
+      by: 'reconciler',
+      reason: 'task_failed',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/admin/jobs/${job.issueNumber}/retry`,
+      headers: bossHeaders(),
+    });
+
+    expect(response.statusCode).toBe(502);
+    expect(response.json()).toMatchObject({ error: 'no_capacity' });
+
+    await app.close();
   });
 });
 

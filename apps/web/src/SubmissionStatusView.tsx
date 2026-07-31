@@ -887,6 +887,12 @@ function FeedbackPanel({
   const [text, setText] = useState('');
   const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [error, setError] = useState<string | null>(null);
+  // Sent, kept, and *not* acted on: the API took the message but no round started behind
+  // it. Its own slot rather than `error`, because nothing failed on the creator's side and
+  // there is nothing for them to redo — the note is safe and will be read by the next
+  // round. Without this the composer says "sent" and the thread then says nothing for
+  // hours, which is exactly how an exhausted agent allowance reads as a hung game.
+  const [notice, setNotice] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const trimmed = text.trim();
@@ -906,11 +912,22 @@ function FeedbackPanel({
     if (trimmed.length < 10) return;
     setState('sending');
     setError(null);
+    setNotice(null);
     try {
       // Same box, same act, different destination — decided here from the state the
       // server reported rather than by asking the creator which one they meant.
-      if (published) await submitImprovement(token, trimmed);
-      else await submitFeedback(token, trimmed);
+      if (published) {
+        await submitImprovement(token, trimmed);
+      } else {
+        const result = await submitFeedback(token, trimmed);
+        if (result.roundStarted === false) {
+          setNotice(
+            result.reason === 'no_capacity'
+              ? t('statusView.feedback.noCapacity')
+              : t('statusView.feedback.notStarted'),
+          );
+        }
+      }
       setState('sent');
       setText('');
       // Back to the CSS height rather than the height the sent message grew it to: an
@@ -980,7 +997,8 @@ function FeedbackPanel({
         />
         <div className="status-feedback-actions">
           {error ? <p className="error">{error}</p> : null}
-          {state === 'sent' && !error ? (
+          {notice && !error ? <p className="status-feedback-notice">{notice}</p> : null}
+          {state === 'sent' && !error && !notice ? (
             <span className="status-feedback-sent">
               <PixelIcon name="check" size={13} /> {t('statusView.feedback.sent')}
             </span>
@@ -1020,13 +1038,14 @@ function FeedbackPanel({
         >
           {state === 'sending' ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
         </button>
-        {state === 'sent' ? (
+        {state === 'sent' && !notice ? (
           <span className="status-feedback-sent">
             <PixelIcon name="check" size={13} /> {t('statusView.feedback.sent')}
           </span>
         ) : null}
       </div>
       {error ? <p className="error">{error}</p> : null}
+      {notice && !error ? <p className="status-feedback-notice">{notice}</p> : null}
     </div>
   );
 }
