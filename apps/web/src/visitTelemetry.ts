@@ -44,9 +44,14 @@ export type VisitEvent =
   /**
    * The player opened the "How to play" card. No slug, for the same reason
    * `play_started` carries none: the visit stream must stay unjoinable with the play
-   * stream. What this answers is how often players need the controls spelled out.
+   * stream. What this answers is how often players need the controls spelled out —
+   * and, with `via`, whether they found the bar control or had to dig into More.
+   *
+   * Every open is recorded (unlike create/waitlist steps): a second open in the same
+   * visit is the signal that the card did not answer the first time. Distinct-visit
+   * rates are derived on the read side.
    */
-  | { type: 'how_to_play_opened' }
+  | { type: 'how_to_play_opened'; via: HowToPlayVia }
   /** A step of the creation funnel was reached. Carries no prompt text, ever. */
   | { type: 'create_step'; step: CreateStep }
   /** A step of the closed-beta waitlist funnel. Carries no identity, ever. */
@@ -92,6 +97,15 @@ export type WaitlistStep =
   | 'cta_clicked'
   /** `POST /api/waitlist` succeeded for this visit. */
   | 'joined';
+
+/**
+ * Which chrome surface opened the How to play card.
+ *
+ * Closed enum: the value reaches a grouping key. `bar` is the theater-bar button;
+ * `more` is the same control after it sheds into the overflow menu on a narrow viewport.
+ * Deep-link vs arcade is *not* here — that is visit `entry`, already on `visit_started`.
+ */
+export type HowToPlayVia = 'bar' | 'more';
 
 const FLUSH_AT = 5;
 const MAX_BATCH = 25;

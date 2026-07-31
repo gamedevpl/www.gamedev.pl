@@ -51,6 +51,14 @@ export async function fetchGameHealth(days: number): Promise<HealthResponse | nu
   return (await res.json()) as HealthResponse;
 }
 
+export interface HowToPlayFunnel {
+  opens: number;
+  visits: number;
+  repeatVisits: number;
+  via: Array<{ via: string; opens: number; visits: number }>;
+  byEntry: Array<{ entry: string; visits: number; opens: number }>;
+}
+
 export interface VisitFunnel {
   visits: number;
   bounces: number;
@@ -68,6 +76,8 @@ export interface VisitFunnel {
   creating: Array<{ step: string; visits: number }>;
   /** Closed-beta waitlist funnel in step order, every step present even at zero. */
   waitlist: Array<{ step: string; visits: number }>;
+  /** How to play card usage — open rate, repeats, and where it was opened. */
+  howToPlay: HowToPlayFunnel;
 }
 
 export interface VisitsResponse {

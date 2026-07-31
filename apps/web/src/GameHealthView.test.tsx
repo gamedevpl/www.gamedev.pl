@@ -60,6 +60,16 @@ const EMPTY_FUNNEL: VisitFunnel = {
   entries: [],
   referrers: [],
   campaigns: [],
+  howToPlay: {
+    opens: 0,
+    visits: 0,
+    repeatVisits: 0,
+    via: [
+      { via: 'bar', opens: 0, visits: 0 },
+      { via: 'more', opens: 0, visits: 0 },
+    ],
+    byEntry: [],
+  },
 };
 
 const EMPTY_CREATORS: CreatorsResponse = {

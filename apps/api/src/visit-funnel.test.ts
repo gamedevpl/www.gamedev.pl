@@ -187,4 +187,66 @@ describe('summarizeVisitFunnel', () => {
     expect(funnel.plays).toBe(1);
     expect(funnel.entries).toEqual([{ entry: 'unknown', visits: 1, plays: 1 }]);
   });
+
+  it('answers how-to-play open rate, repeats, via, and deep-link vs arcade', () => {
+    const opened = (visitId: string, via: string | undefined, msSinceStart: number): VisitEvent => ({
+      visitId,
+      type: 'how_to_play_opened',
+      at: '2026-07-26T10:00:00.000Z',
+      msSinceStart,
+      ...(via === undefined ? {} : { via }),
+    });
+
+    const funnel = summarizeVisitFunnel([
+      // Arcade visit: opened twice from the bar — the "card did not answer" case.
+      started('a', { entry: 'home' }),
+      played('a', 1_000),
+      opened('a', 'bar', 2_000),
+      opened('a', 'bar', 5_000),
+      // Deep-link visit: opened once from More.
+      started('b', { entry: 'play' }),
+      played('b', 500),
+      opened('b', 'more', 800),
+      // Played, never opened — in the open-rate denominator, not the numerator.
+      started('c', { entry: 'home' }),
+      played('c', 1_000),
+      // Legacy open with no via — must still count, under unknown.
+      started('d', { entry: 'home' }),
+      played('d', 1_000),
+      opened('d', undefined, 1_500),
+    ]);
+
+    expect(funnel.howToPlay.opens).toBe(4);
+    expect(funnel.howToPlay.visits).toBe(3);
+    expect(funnel.howToPlay.repeatVisits).toBe(1);
+    expect(funnel.howToPlay.via).toEqual([
+      { via: 'bar', opens: 2, visits: 1 },
+      { via: 'more', opens: 1, visits: 1 },
+      { via: 'unknown', opens: 1, visits: 1 },
+    ]);
+    expect(funnel.howToPlay.byEntry.find((row) => row.entry === 'home')).toEqual({
+      entry: 'home',
+      visits: 2,
+      opens: 3,
+    });
+    expect(funnel.howToPlay.byEntry.find((row) => row.entry === 'play')).toEqual({
+      entry: 'play',
+      visits: 1,
+      opens: 1,
+    });
+  });
+
+  it('emits zeroed how-to-play via rows when nobody opened the card', () => {
+    const funnel = summarizeVisitFunnel([started('a'), played('a', 1_000)]);
+    expect(funnel.howToPlay).toEqual({
+      opens: 0,
+      visits: 0,
+      repeatVisits: 0,
+      via: [
+        { via: 'bar', opens: 0, visits: 0 },
+        { via: 'more', opens: 0, visits: 0 },
+      ],
+      byEntry: [],
+    });
+  });
 });

@@ -342,7 +342,7 @@ export function GameTheater({
   // The one thing a player needs before the first key press, and the game's own copy of
   // it is hidden inside the frame by HIDE_CHROME. Reuses `theater-menu-item` in the
   // overflow menu so the four hand-enumerated selector lists in styles.css keep working.
-  const howToPlayControl = (className: string) =>
+  const howToPlayControl = (className: string, via: 'bar' | 'more') =>
     hasControls ? (
       <button
         type="button"
@@ -350,7 +350,7 @@ export function GameTheater({
         onClick={() => {
           setMoreOpen(false);
           setHowToOpen(true);
-          recordVisitEvent({ type: 'how_to_play_opened' });
+          recordVisitEvent({ type: 'how_to_play_opened', via });
         }}
         aria-haspopup="dialog"
         aria-expanded={howToOpen}
@@ -401,7 +401,7 @@ export function GameTheater({
             {/* Thumbs are first-class: the one signal people expect without hunting. */}
             {reportSlug ? <VoteWidget slug={reportSlug} /> : null}
             {/* Desktop: sound + fullscreen sit on the bar. Phone: they move into More. */}
-            {howToPlayControl('secondary-btn howto-btn howto-bar')}
+            {howToPlayControl('secondary-btn howto-btn howto-bar', 'bar')}
             {soundControl('secondary-btn sound-btn theater-desktop-chrome')}
             {fullscreenControl('secondary-btn fullscreen-btn theater-desktop-chrome')}
             {showMoreMenu && (
@@ -419,7 +419,7 @@ export function GameTheater({
                   <PixelIcon name="menu" size={14} />
                 </button>
                 <div className="theater-more-panel" role="menu">
-                  {howToPlayControl('theater-menu-item howto-menu')}
+                  {howToPlayControl('theater-menu-item howto-menu', 'more')}
                   {soundControl('theater-menu-item theater-mobile-chrome')}
                   {fullscreenControl('theater-menu-item theater-mobile-chrome')}
                   {reportSlug && (

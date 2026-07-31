@@ -71,7 +71,7 @@ describe('POST /api/telemetry/visit', () => {
     expect(events.filter((event) => event.type === 'play_started')).toHaveLength(2);
   });
 
-  it('records how_to_play_opened as itself, and without a game identity', async () => {
+  it('records how_to_play_opened as itself, with via, and without a game identity', async () => {
     // The mapper ends in a `default` branch that relabels anything unmatched as
     // `play_started`, so a member with no case of its own is silently mislabelled
     // rather than rejected — which no schema error would ever reveal.
@@ -80,14 +80,29 @@ describe('POST /api/telemetry/visit', () => {
       flushMsSinceStart: 400,
       events: [
         { type: 'play_started', msSinceStart: 100 },
-        { type: 'how_to_play_opened', slug: 'space-hop', msSinceStart: 400 },
+        { type: 'how_to_play_opened', via: 'bar', slug: 'space-hop', msSinceStart: 400 },
       ],
     });
 
     const events = await store.listVisitEvents(today(), { visitId });
-    expect(events.filter((event) => event.type === 'how_to_play_opened')).toHaveLength(1);
+    const opened = events.filter((event) => event.type === 'how_to_play_opened');
+    expect(opened).toHaveLength(1);
+    expect(opened[0]?.via).toBe('bar');
     expect(events.filter((event) => event.type === 'play_started')).toHaveLength(1);
     expect(JSON.stringify(events)).not.toContain('space-hop');
+  });
+
+  it('accepts a how_to_play_opened without via from a previous client', async () => {
+    await post(app, {
+      visitId,
+      flushMsSinceStart: 200,
+      events: [{ type: 'how_to_play_opened', msSinceStart: 200 }],
+    });
+
+    const events = await store.listVisitEvents(today(), { visitId });
+    expect(events).toHaveLength(1);
+    expect(events[0]?.type).toBe('how_to_play_opened');
+    expect(events[0]).not.toHaveProperty('via');
   });
 
   it('never stores a game identity, even if a client sends one', async () => {

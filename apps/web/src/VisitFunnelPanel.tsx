@@ -30,6 +30,17 @@ const WAITLIST_LABELS: Record<string, string> = {
   joined: 'joined waitlist',
 };
 
+const HOW_TO_VIA_LABELS: Record<string, string> = {
+  bar: 'theater bar',
+  more: 'More menu',
+  unknown: 'unknown (pre-via clients)',
+};
+
+const HOW_TO_ENTRY_LABELS: Record<string, string> = {
+  play: 'deep link (/play)',
+  home: 'arcade (home)',
+};
+
 function bucketLabel(upToSeconds: number | null): string {
   if (upToSeconds === null) return 'slower';
   if (upToSeconds < 60) return `≤ ${upToSeconds}s`;
@@ -216,6 +227,72 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
                 ))}
               </tbody>
             </table>
+          )}
+        </div>
+
+        <div className="funnel-block">
+          <h3>How to play</h3>
+          {funnel.howToPlay.opens === 0 ? (
+            <p className="health-empty">Nobody opened How to play in this window.</p>
+          ) : (
+            <>
+              {/*
+               * Open rate is visits-that-opened / playing visits — not opens / plays.
+               * Opens stay as a separate count so a second open in one visit (the
+               * "card did not answer" signal) stays visible beside the rate.
+               */}
+              <p className="funnel-howto-summary">
+                {percent(funnel.howToPlay.visits, funnel.visitsWithPlay)} of playing visits opened the card (
+                {funnel.howToPlay.visits} of {funnel.visitsWithPlay}). {funnel.howToPlay.opens} opens total;{' '}
+                {percent(funnel.howToPlay.repeatVisits, funnel.howToPlay.visits)} opened again in the same visit.
+              </p>
+              <table className="health-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Opened from</th>
+                    <th scope="col" className="num">
+                      Opens
+                    </th>
+                    <th scope="col" className="num">
+                      Visits
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {funnel.howToPlay.via.map((row) => (
+                    <tr key={row.via}>
+                      <td>{HOW_TO_VIA_LABELS[row.via] ?? row.via}</td>
+                      <td className="num">{row.opens}</td>
+                      <td className="num">{row.visits}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {funnel.howToPlay.byEntry.length > 0 && (
+                <table className="health-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Visit landed on</th>
+                      <th scope="col" className="num">
+                        Visits
+                      </th>
+                      <th scope="col" className="num">
+                        Opens
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {funnel.howToPlay.byEntry.map((row) => (
+                      <tr key={row.entry}>
+                        <td>{HOW_TO_ENTRY_LABELS[row.entry] ?? row.entry}</td>
+                        <td className="num">{row.visits}</td>
+                        <td className="num">{row.opens}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </>
           )}
         </div>
 

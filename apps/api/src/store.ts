@@ -488,6 +488,11 @@ export interface VisitEvent {
   route?: string;
   /** `create_step` / `waitlist_step`: which funnel step this visit reached. */
   step?: string;
+  /**
+   * `how_to_play_opened`: which chrome surface opened the card (`bar` | `more`).
+   * Absent on events recorded before the field existed; never a game identity.
+   */
+  via?: string;
   /** `visit_started`: bare hostname of an external referrer. Never a full URL. */
   referrer?: string;
   utmSource?: string;

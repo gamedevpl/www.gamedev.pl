@@ -29,6 +29,16 @@ function funnel(overrides: Partial<VisitFunnel> = {}): VisitFunnel {
     campaigns: [],
     creating: [],
     waitlist: [],
+    howToPlay: {
+      opens: 0,
+      visits: 0,
+      repeatVisits: 0,
+      via: [
+        { via: 'bar', opens: 0, visits: 0 },
+        { via: 'more', opens: 0, visits: 0 },
+      ],
+      byEntry: [],
+    },
     ...overrides,
   };
 }
@@ -175,5 +185,43 @@ describe('VisitFunnelPanel', () => {
       }),
     );
     expect(text).toContain('Nobody clicked Join waitlist');
+  });
+
+  it('reports how-to-play open rate against playing visits, not against all visits', () => {
+    // 2 of 4 playing visits opened. Dividing by all visits (10) would show 20% and
+    // misread the question the block exists to answer.
+    const text = render(
+      response({
+        visits: 10,
+        visitsWithPlay: 4,
+        plays: 6,
+        howToPlay: {
+          opens: 5,
+          visits: 2,
+          repeatVisits: 1,
+          via: [
+            { via: 'bar', opens: 4, visits: 2 },
+            { via: 'more', opens: 1, visits: 1 },
+          ],
+          byEntry: [
+            { entry: 'home', visits: 1, opens: 3 },
+            { entry: 'play', visits: 1, opens: 2 },
+          ],
+        },
+      }),
+    );
+    expect(text).toContain('How to play');
+    expect(text).toContain('50% of playing visits opened');
+    expect(text).toContain('theater bar');
+    expect(text).toContain('More menu');
+    expect(text).toContain('deep link (/play)');
+    expect(text).toContain('arcade (home)');
+    // 1 of 2 openers opened again — 50%, not 10% of all visits.
+    expect(text).toContain('50% opened again');
+  });
+
+  it('says so when nobody opened How to play', () => {
+    const text = render(response({ visits: 3, visitsWithPlay: 2, plays: 2 }));
+    expect(text).toContain('Nobody opened How to play');
   });
 });
