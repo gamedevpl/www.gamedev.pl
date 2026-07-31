@@ -16,12 +16,18 @@ describe('pendingQa', () => {
   });
 
   it('round-trips a session so a reload resumes where the creator left off', () => {
-    savePendingQa(session);
+    savePendingQa({ ...session, locale: 'pl' });
 
     const restored = loadPendingQa();
     expect(restored?.spec).toEqual(session.spec);
     expect(restored?.questions).toEqual(session.questions);
     expect(restored?.answers).toEqual(session.answers);
+    expect(restored?.locale).toBe('pl');
+  });
+
+  it('tolerates older blobs that never recorded a locale', () => {
+    savePendingQa(session);
+    expect(loadPendingQa()?.locale).toBeUndefined();
   });
 
   it('drops a session older than a day instead of resurrecting a forgotten idea', () => {
