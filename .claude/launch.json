@@ -14,6 +14,12 @@
       "port": 4178
     },
     {
+      "name": "dev-admin",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["-u", "GITHUB_TOKEN", "ADMIN_UIDS=dev:local", "npm", "run", "dev"],
+      "port": 5173
+    },
+    {
       "name": "dev-local-fixtures",
       "runtimeExecutable": "env",
       "runtimeArgs": ["-u", "GITHUB_TOKEN", "npm", "run", "dev"],

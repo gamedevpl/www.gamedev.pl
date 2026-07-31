@@ -12,6 +12,7 @@ import {
 } from './healthApi.js';
 import { VisitFunnelPanel } from './VisitFunnelPanel.js';
 import { CreatorMetricsPanel } from './CreatorMetricsPanel.js';
+import { GrowthPanel } from './GrowthPanel.js';
 import { ScorecardPanel } from './ScorecardPanel.js';
 
 /**
@@ -150,6 +151,13 @@ export function GameHealthView() {
         Promise.all and one error state, so a creators payload of an unexpected shape
         would otherwise blank the game-health table too.
       */}
+      {/* The one business number, above the panels that carry its ingredients. Needs all
+          three reads at once — it is their product — so it simply stays absent when any
+          of them failed to load. */}
+      {state === 'ready' && data && visits && creators?.metrics && (
+        <GrowthPanel health={data} visits={visits} creators={creators} />
+      )}
+
       {state === 'ready' && creators?.metrics && <CreatorMetricsPanel data={creators} />}
 
       {state === 'ready' && visits && <VisitFunnelPanel data={visits} />}
