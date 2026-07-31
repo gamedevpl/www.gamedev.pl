@@ -38,10 +38,19 @@ describe('isKnownSpaShellPath', () => {
     '/status/tok-abc',
     '/studio',
     '/studio/tok-abc',
-    '/studio/tok-abc/build',
+    // The surfaces the studio has now. `/thread` is where every deep link into a game
+    // lands — it was answered with a 404 for as long as it existed, because this list
+    // still described the five tabs it replaced.
     '/studio/tok-abc/thread',
     '/studio/tok-abc/details',
+    '/studio/global-thermonuclear-strategy/thread',
     '/studio/tok-abc/playtest',
+    // The names those absorbed. The client resolves them and rewrites the URL, so they
+    // are real pages and must not be answered as typos.
+    '/studio/tok-abc/build',
+    '/studio/tok-abc/overview',
+    '/studio/tok-abc/stats',
+    '/studio/tok-abc/improve',
     '/admin',
     '/admin/queue',
     '/admin/costs',

@@ -58,7 +58,7 @@ afterEach(() => {
   container.remove();
 });
 
-async function draw() {
+async function draw(props: { controls?: string; onExit?: () => void } = {}) {
   root = createRoot(container);
   await act(async () => {
     root!.render(
@@ -67,12 +67,25 @@ async function draw() {
         badge={{ icon: 'sparkle', label: 'AI' }}
         source={{ slug: 'brick-storm' }}
         reportSlug="brick-storm"
-        onExit={() => undefined}
+        onExit={props.onExit ?? (() => undefined)}
+        controls={props.controls}
       />,
     );
   });
   await act(async () => {
     await Promise.resolve();
+  });
+}
+
+async function click(element: Element | null) {
+  await act(async () => {
+    element?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+}
+
+async function pressEscape() {
+  await act(async () => {
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
   });
 }
 
@@ -129,5 +142,121 @@ describe('GameTheater more menu', () => {
     const widths = [...icons].map((icon) => icon.getAttribute('width'));
     expect(new Set(widths).size).toBe(1);
     expect(widths[0]).toBe('13');
+  });
+});
+
+describe('GameTheater how-to-play', () => {
+  const CONTROLS = 'Left/Right to move; Space to fire; M to mute';
+
+  it('offers no how-to-play control for a game with no controls in the catalog', async () => {
+    // Generated and draft games have no catalog entry, so the prop is absent entirely.
+    await draw();
+    expect(container.querySelector('.howto-btn')).toBeNull();
+
+    act(() => {
+      root?.unmount();
+    });
+    root = null;
+    // A deep link that rendered before the catalog landed carries an empty string.
+    await draw({ controls: '' });
+    expect(container.querySelector('.howto-btn')).toBeNull();
+  });
+
+  it('opens the panel from the bar control', async () => {
+    await draw({ controls: CONTROLS });
+    const trigger = container.querySelector('.howto-btn');
+    expect(trigger).not.toBeNull();
+
+    await click(trigger);
+
+    // The panel portals to the body, not into the theater's own subtree.
+    expect(document.querySelector('.howto-card')).not.toBeNull();
+    expect(
+      [...document.querySelectorAll('.howto-row')].map((row) => [
+        row.querySelector('dt')?.textContent,
+        row.querySelector('dd')?.textContent,
+      ]),
+    ).toEqual([
+      ['Left/Right', 'move'],
+      ['Space', 'fire'],
+      ['M', 'mute'],
+    ]);
+  });
+
+  it('renders both copies of the control, the bar one and the menu one', async () => {
+    // Which one is visible is CSS's job (the bar copy sheds at 900px, earlier than sound
+    // and fullscreen, because otherwise the actions row grows until the vote widget
+    // overlaps the game title). Both must exist so neither breakpoint leaves it
+    // unreachable — jsdom applies no media queries, so this asserts presence, not layout.
+    await draw({ controls: CONTROLS });
+    expect(container.querySelector('.howto-bar')).not.toBeNull();
+    await click(container.querySelector('.theater-more-btn'));
+    expect(container.querySelector('.theater-more-panel .howto-menu')).not.toBeNull();
+  });
+
+  it('puts focus on the card when opened from the More menu, not on the exit button behind it', async () => {
+    // The phone path: the bar trigger is display:none there, so the menu row is the only
+    // way in. Opening the menu changes `moreOpen`, which used to re-run the theater's
+    // focus effect and pull focus back onto Exit — with the modal card on screen, Enter
+    // then left the game.
+    await draw({ controls: CONTROLS });
+    await click(container.querySelector('.theater-more-btn'));
+    const menuItem = container.querySelector('.theater-more-panel .howto-menu');
+    expect(menuItem).toBeTruthy();
+
+    await click(menuItem ?? null);
+
+    expect(document.querySelector('.howto-card')).not.toBeNull();
+    expect(document.activeElement).toBe(document.querySelector('.howto-close'));
+    expect(container.querySelector('.theater-more.is-open')).toBeNull();
+  });
+
+  it('closes the card when the game goes fullscreen, since the bar holding both triggers unmounts', async () => {
+    await draw({ controls: CONTROLS });
+    await click(container.querySelector('.howto-btn'));
+    expect(document.querySelector('.howto-card')).not.toBeNull();
+
+    const stage = container.querySelector('.stage') as HTMLElement;
+    Object.defineProperty(document, 'fullscreenElement', { value: stage, configurable: true });
+    await act(async () => {
+      document.dispatchEvent(new Event('fullscreenchange'));
+    });
+
+    expect(container.querySelector('.game-theater-bar')).toBeNull();
+    expect(document.querySelector('.howto-card')).toBeNull();
+    Object.defineProperty(document, 'fullscreenElement', { value: null, configurable: true });
+  });
+
+  it('Escape closes the panel first and only exits the game on a second press', async () => {
+    const onExit = vi.fn();
+    await draw({ controls: CONTROLS, onExit });
+    await click(container.querySelector('.howto-btn'));
+    expect(document.querySelector('.howto-card')).not.toBeNull();
+
+    await pressEscape();
+    expect(document.querySelector('.howto-card')).toBeNull();
+    expect(onExit).not.toHaveBeenCalled();
+
+    await pressEscape();
+    expect(onExit).toHaveBeenCalledTimes(1);
+  });
+
+  it('an Escape relayed from inside the sandboxed game also closes the panel first', async () => {
+    const onExit = vi.fn();
+    await draw({ controls: CONTROLS, onExit });
+    await click(container.querySelector('.howto-btn'));
+
+    await act(async () => {
+      // Opaque-origin frames post with origin "null"; the bridge relays the key here.
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { source: 'gdpl-player', type: 'key', key: 'Escape' },
+          origin: 'null',
+        }),
+      );
+    });
+
+    expect(document.querySelector('.howto-card')).toBeNull();
+    expect(onExit).not.toHaveBeenCalled();
   });
 });

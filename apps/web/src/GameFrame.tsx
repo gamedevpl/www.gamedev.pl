@@ -24,6 +24,11 @@ type GameFrameProps = GameFrameSource & {
  *
  * `allow-pointer-lock` is additive and does not weaken the opaque-origin
  * boundary: scene3d FPS games may request mouse-look after a user gesture.
+ *
+ * `allow="accelerometer; gyroscope; magnetometer"` delegates Permissions-Policy
+ * so opt-in GameKit `motion` (phone tilt) can receive DeviceOrientation /
+ * DeviceMotion inside the opaque-origin frame. Sensors stay optional for every
+ * game; keyboard / pad remain enough to finish.
  */
 export function GameFrame(props: GameFrameProps) {
   const localRef = useRef<HTMLIFrameElement>(null);
@@ -63,6 +68,7 @@ export function GameFrame(props: GameFrameProps) {
       className="game-frame"
       title={props.title}
       sandbox="allow-scripts allow-pointer-lock"
+      allow="accelerometer; gyroscope; magnetometer"
       src={props.src}
       srcDoc={srcDoc}
       // The load event is the reliable moment to focus: the game's document exists

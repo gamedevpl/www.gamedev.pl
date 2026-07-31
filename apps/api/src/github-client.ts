@@ -520,6 +520,98 @@ function createRequestGate(limit: number) {
   };
 }
 
+/** How much of GitHub's error body is worth keeping. Its messages are one sentence. */
+const MAX_ERROR_BODY_CHARS = 300;
+
+/**
+ * A failed GitHub request, with GitHub's own account of why.
+ *
+ * Every failure here used to read `github request failed with status 403`, and a 403 from
+ * this API is at least three different problems: a permission the token does not have, a
+ * primary rate limit, a secondary rate limit. Telling them apart took an afternoon of
+ * reading Cloud Logging against a disassembled stack trace, for a fact GitHub had put in
+ * the response body all along.
+ *
+ * The token is never part of this — not the value, not the header. What is kept is the
+ * path, GitHub's `message`, the permission the endpoint says it wanted, and the rate-limit
+ * headers, which together answer "whose fault, and will it clear on its own".
+ */
+export class GitHubRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly details: {
+      /** Request path only — no query, no host, and never a credential. */
+      path: string;
+      /** GitHub's own `message` field, when the body carried one. */
+      githubMessage?: string;
+      /** `x-accepted-github-permissions`, e.g. `contents=write` — what the token needed. */
+      acceptedPermissions?: string;
+      rateLimitRemaining?: string;
+      retryAfter?: string;
+    },
+  ) {
+    super(message);
+    this.name = 'GitHubRequestError';
+  }
+}
+
+/**
+ * Builds the error for a failed response, reading its body once.
+ *
+ * A body that cannot be read (already consumed, not JSON, connection cut) costs the
+ * explanation, never the error: the throw still carries the status, which is what the
+ * old message had on its own.
+ */
+async function failureFrom(url: string, response: Response, label: string): Promise<GitHubRequestError> {
+  let githubMessage: string | undefined;
+  try {
+    const text = (await response.text()).slice(0, MAX_ERROR_BODY_CHARS);
+    if (text) {
+      const parsed: unknown = JSON.parse(text);
+      const fromJson = (parsed as { message?: unknown } | null)?.message;
+      githubMessage = typeof fromJson === 'string' ? fromJson : text;
+    }
+  } catch {
+    /* non-JSON or unreadable body — the status still stands on its own */
+  }
+
+  let path = url;
+  try {
+    path = new URL(url).pathname;
+  } catch {
+    /* not absolute; the raw string is still more useful than nothing */
+  }
+
+  const details = {
+    path,
+    ...(githubMessage ? { githubMessage } : {}),
+    ...(response.headers.get('x-accepted-github-permissions')
+      ? { acceptedPermissions: response.headers.get('x-accepted-github-permissions') as string }
+      : {}),
+    ...(response.headers.get('x-ratelimit-remaining')
+      ? { rateLimitRemaining: response.headers.get('x-ratelimit-remaining') as string }
+      : {}),
+    ...(response.headers.get('retry-after') ? { retryAfter: response.headers.get('retry-after') as string } : {}),
+  };
+
+  // Everything goes in the message, not only in `details`: pino's error serializer keeps
+  // `message`, `name` and `stack` and drops the rest, so a field nobody reads is a field
+  // that is not there. The throttle markers are named because they are the difference
+  // between "this will clear by itself" and "someone has to change a permission".
+  const suffix = [
+    githubMessage ? `: ${githubMessage}` : '',
+    details.acceptedPermissions ? ` (needs ${details.acceptedPermissions})` : '',
+    details.rateLimitRemaining === '0' ? ' [rate limit exhausted]' : '',
+    details.retryAfter ? ` [retry-after ${details.retryAfter}]` : '',
+  ].join('');
+  return new GitHubRequestError(
+    `${label} failed with status ${response.status} for ${path}${suffix}`,
+    response.status,
+    details,
+  );
+}
+
 export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
   const { token, repo } = options;
   // Whether this token may read `statusCheckRollup`. Assumed yes, flipped off for the
@@ -565,7 +657,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       return null;
     }
     if (!response.ok) {
-      throw new Error(`github contents request failed with status ${response.status}`);
+      throw await failureFrom(url, response, 'github contents request');
     }
     return response.text();
   }
@@ -582,7 +674,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       return null;
     }
     if (!response.ok) {
-      throw new Error(`github contents request failed with status ${response.status}`);
+      throw await failureFrom(url, response, 'github contents request');
     }
     return new Uint8Array(await response.arrayBuffer());
   }
@@ -604,7 +696,15 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       },
     });
     if (!response.ok) {
-      throw new Error(`github request failed with status ${response.status}`);
+      throw await failureFrom(url, response, 'github request');
+    }
+    // A successful write need not answer with a document. `DELETE /git/refs` returns 204
+    // No Content, and parsing that empty body threw `Unexpected end of JSON input` — so
+    // every branch delete that *worked* was reported to its caller as a failure. The one
+    // caller logs and continues, which is why "could not delete a spent build workspace"
+    // has been appearing above branches that were, in fact, deleted.
+    if (response.status === 204 || response.headers.get('content-length') === '0') {
+      return undefined as T;
     }
     return (await response.json()) as T;
   }

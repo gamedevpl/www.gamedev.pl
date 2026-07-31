@@ -1054,3 +1054,73 @@ describe('createBranchWithFiles', () => {
     ).rejects.toThrow(/cannot resolve base ref/);
   });
 });
+
+/**
+ * A 403 from this API is at least three different problems, and for months every one of
+ * them logged the same eleven words. GitHub says which it is in the response body and in
+ * `x-accepted-github-permissions`; the client used to read neither.
+ */
+describe('failed request reporting', () => {
+  const repo = 'gamedevpl/www.gamedev.pl-games';
+
+  function respondWith(status: number, body: string, headers: Record<string, string> = {}) {
+    return vi.fn(async () => new Response(body, { status, headers })) as unknown as typeof fetch;
+  }
+
+  it('reports the permission a refused write actually wanted', async () => {
+    const fetchImpl = respondWith(403, JSON.stringify({ message: 'Resource not accessible by personal access token' }), {
+      'x-accepted-github-permissions': 'contents=write',
+      // Present and non-zero: this is a permission problem, not a throttle, and the
+      // client must not retry it as one.
+      'x-ratelimit-remaining': '4998',
+    });
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    const error = await client.deleteBranch('copilot/spent').catch((err: unknown) => err);
+
+    expect(error).toBeInstanceOf(Error);
+    const message = (error as Error).message;
+    expect(message).toContain('403');
+    expect(message).toContain('Resource not accessible by personal access token');
+    expect(message).toContain('needs contents=write');
+    // The path names which call it was — the fact that took a disassembled stack trace.
+    expect(message).toContain('/git/refs/heads/');
+    // One attempt: a bare 403 is permanent and retrying it only delays the truth.
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    // Nothing that could carry the credential is anywhere in it.
+    expect(message).not.toContain('test-token');
+  });
+
+  it('marks an exhausted rate limit as the temporary thing it is', async () => {
+    const fetchImpl = respondWith(403, JSON.stringify({ message: 'API rate limit exceeded for user ID 1.' }), {
+      'x-ratelimit-remaining': '0',
+    });
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    const error = await client.deleteBranch('copilot/spent').catch((err: unknown) => err);
+
+    expect((error as Error).message).toContain('rate limit exhausted');
+  });
+
+  it('treats an empty 204 as the success it is', async () => {
+    // `DELETE /git/refs` answers 204 No Content. Parsing that as JSON threw
+    // `Unexpected end of JSON input`, so every branch delete that worked was reported to
+    // its caller as a failure — and the caller logs "could not delete a spent build
+    // workspace" and moves on, above a branch that is in fact gone.
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 204 })) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    await expect(client.deleteBranch('copilot/spent')).resolves.toBeUndefined();
+  });
+
+  it('keeps the status when the body explains nothing', async () => {
+    const fetchImpl = respondWith(500, '<html>upstream is having a day</html>');
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    const error = await client.deleteBranch('copilot/spent').catch((err: unknown) => err);
+
+    // No worse than what it replaced: an unparseable body costs the explanation, not
+    // the error.
+    expect((error as Error).message).toContain('500');
+  });
+});

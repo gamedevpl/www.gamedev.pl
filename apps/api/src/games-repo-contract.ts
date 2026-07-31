@@ -14,13 +14,16 @@
  * the build cap means no assemblable game is refused here. See
  * docs/games-repo-validation-spec.md §2.
  *
- * CI's `contract:games-repo` therefore treats website-ahead (higher budget, trailing
- * new modules) as OK and only fails when this side is *behind* games-repo `main`.
+ * **Adding a GameKit module? Same order.** The live `contract:games-repo` check
+ * allows this side to list modules the published games tip has not shipped yet
+ * (website-ahead extras), and fails only when games-repo introduces a name or
+ * reorders shared modules this side does not recognize.
  */
 
 /** Canonical GameKit module order — must match games-repo `GAME_KIT_MODULES`. */
 export const GAME_KIT_MODULES = [
   'input',
+  'motion',
   'collision',
   'world',
   'ai',

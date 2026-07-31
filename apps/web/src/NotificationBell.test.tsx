@@ -4,6 +4,7 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n/index.js';
+import { notificationPanelShiftX } from './notificationPanelPosition.js';
 
 /**
  * The weekly digest is the only notification nobody asked for on the day it arrives, so
@@ -156,5 +157,19 @@ describe('NotificationBell — weekly digest switch', () => {
     // The digest itself renders — the bell is the surface that shows it regardless.
     expect(container.textContent).toContain('Your games this week');
     root.unmount();
+  });
+});
+
+describe('notificationPanelShiftX', () => {
+  it('shifts a panel right when it overflows the left edge', () => {
+    expect(notificationPanelShiftX({ left: -9, right: 311 }, 375)).toBe(21);
+  });
+
+  it('shifts a panel left when it overflows the right edge', () => {
+    expect(notificationPanelShiftX({ left: 100, right: 420 }, 400)).toBe(-32);
+  });
+
+  it('leaves a panel in place when it fits within the viewport gutters', () => {
+    expect(notificationPanelShiftX({ left: 40, right: 360 }, 400)).toBe(0);
   });
 });

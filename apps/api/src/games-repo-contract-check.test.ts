@@ -78,20 +78,44 @@ describe('runGamesRepoContractCheck', () => {
     expect(outcome.kind === 'drift' && outcome.reason).toContain('GAME_KIT_MODULES mismatch');
   });
 
-  it('passes when the website lists trailing modules games-repo has not merged yet', async () => {
-    const remoteModules = GAME_KIT_MODULES.slice(0, -1);
-    const remoteAssemble = `
-      const GAME_KIT_MODULES = [${remoteModules.map((name) => `'${name}'`).join(', ')}];
+  it('allows the website to list modules the games tip has not shipped yet', async () => {
+    // Website-first add: GAME_KIT_MODULES here already includes `motion`, but main's
+    // assemble.ts still lists the pre-motion order. That window must stay green so the
+    // iframe / contract PR can land before the games-repo half.
+    const withoutAheadExtras = GAME_KIT_MODULES.filter((name) => name !== 'motion');
+    const olderAssemble = `
+      const GAME_KIT_MODULES = [${withoutAheadExtras.map((name) => `'${name}'`).join(', ')}];
       const catalog = readMusicCatalog();
       const track = catalog.tracks[name];
       out += 'window.__GAME_AUDIO_MUSIC__ = ' + JSON.stringify(name);
     `;
     const { fetchImpl } = createFetch({
-      'tools/lib/assemble.ts': [ok(remoteAssemble)],
+      'tools/lib/assemble.ts': [ok(olderAssemble)],
       'tools/validate.ts': [ok(VALIDATE_SOURCE)],
     });
 
     await expect(runGamesRepoContractCheck({ ...BASE, fetchImpl })).resolves.toEqual({ kind: 'ok' });
+  });
+
+  it('reports drift when a local-only module is not in the declared-ahead list', async () => {
+    // If games-repo drops a module that was never declared website-ahead, the
+    // check must report drift rather than silently passing. (Codex review — PR #379.)
+    const remoteWithout = GAME_KIT_MODULES.filter((name) => name !== 'collision');
+    const assembleWithout = `
+      const GAME_KIT_MODULES = [${remoteWithout.map((name) => `'${name}'`).join(', ')}];
+      const catalog = readMusicCatalog();
+      const track = catalog.tracks[name];
+      out += 'window.__GAME_AUDIO_MUSIC__ = ' + JSON.stringify(name);
+    `;
+    const { fetchImpl } = createFetch({
+      'tools/lib/assemble.ts': [ok(assembleWithout)],
+      'tools/validate.ts': [ok(VALIDATE_SOURCE)],
+    });
+
+    const outcome = await runGamesRepoContractCheck({ ...BASE, fetchImpl });
+    expect(outcome.kind).toBe('drift');
+    expect(outcome.kind === 'drift' && outcome.reason).toContain('Undeclared website-ahead modules');
+    expect(outcome.kind === 'drift' && outcome.reason).toContain('collision');
   });
 
   it('skips without a token so forks and fresh clones stay green', async () => {
