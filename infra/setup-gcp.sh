@@ -329,8 +329,8 @@ grant_gate_with_retry() {
 }
 
 # objectAdmin (includes delete) is forced by in-place manifest updates — see
-# infra/gate-hardening.md "Store IAM: why objectAdmin". Compensate with bucket
-# versioning / soft-delete (owner console).
+# infra/gate-hardening.md "Store IAM: why objectAdmin". Compensated above with
+# versioning + soft-delete + noncurrent prune on this bucket.
 grant_gate_with_retry gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
   --member="serviceAccount:${GATE_SA_EMAIL}" \
   --role="roles/storage.objectAdmin" \
