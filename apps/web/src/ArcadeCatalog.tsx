@@ -47,7 +47,8 @@ type ArcadeCatalogProps = {
   recommendationsRefreshKey?: number;
   /** Bump after a new submission so in-progress cards appear immediately. */
   creatorGamesRefreshKey?: number;
-  onOpenStatus?: (token: string) => void;
+  /** Open the studio view for an in-progress build or creator game by address (slug or token). */
+  onOpenStatus?: (address: string) => void;
   onOpenStudio?: () => void;
 };
 

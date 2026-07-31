@@ -4,13 +4,15 @@ import { describe, expect, it } from 'vitest';
 
 const css = readFileSync(fileURLToPath(new URL('./styles.css', import.meta.url)), 'utf8');
 
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function ruleBody(selector: string): string {
-  const marker = `${selector} {`;
-  const start = css.indexOf(marker);
-  expect(start, `no ${selector} rule in styles.css`).toBeGreaterThan(-1);
-  const end = css.indexOf('}', start);
-  expect(end, `${selector} rule is never closed`).toBeGreaterThan(start);
-  return css.slice(start + marker.length, end);
+  const regex = new RegExp(`${escapeRegex(selector)}\\s*\\{([^}]+)\\}`);
+  const match = css.match(regex);
+  expect(match, `no ${selector} rule in styles.css`).not.toBeNull();
+  return match![1]!;
 }
 
 describe('catalog grid next to in-progress cards', () => {
