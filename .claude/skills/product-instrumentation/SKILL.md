@@ -129,20 +129,28 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
   on the operator page. Both admin reads share one partition-scan budget, so the two
   views cannot drift in how they report truncation.
   - ~~Creator funnel starts too late~~ — **closed 2026-07-26**: `create_step` on the visit
-  stream records `prompt_started` → `spec_submitted` → `signin_required` → `qa_shown` →
-  `submission_created`. Steps dedupe per visit (a rung means "this visit got this far"),
-  and the aggregate dedupes again so a replayed flush cannot inflate one. Adding a rung
-  means touching the enum in `visitTelemetry.ts`, the zod enum in `visit-telemetry.ts`,
-  and `CREATE_STEPS` in `visit-funnel.ts` — the order in `CREATE_STEPS` _is_ the funnel's
-  meaning. The waitlist funnel (`waitlist_step` / `WAITLIST_STEPS`) follows the same
-  three-place contract beside it.
+    stream records `prompt_started` → `spec_submitted` → `signin_required` → `qa_shown` →
+    `submission_created`. Steps dedupe per visit (a rung means "this visit got this far"),
+    and the aggregate dedupes again so a replayed flush cannot inflate one. Adding a rung
+    means touching the enum in `visitTelemetry.ts`, the zod enum in `visit-telemetry.ts`,
+    and `CREATE_STEPS` in `visit-funnel.ts` — the order in `CREATE_STEPS` _is_ the funnel's
+    meaning. The waitlist funnel (`waitlist_step` / `WAITLIST_STEPS`) follows the same
+    three-place contract beside it.
 - ~~Closed-beta waitlist funnel unmeasured~~ — **closed 2026-07-31**: `waitlist_step` on
   the visit stream records `cta_clicked` → `joined`. Same three-place enum contract as
   `create_step` (`visitTelemetry.ts`, `visit-telemetry.ts`, `WAITLIST_STEPS` in
   `visit-funnel.ts`); rendered as a Waitlist block on `VisitFunnelPanel` beside Creating.
-  The Join CTA is visible before sign-in; the drop between click and join *is* the
+  The Join CTA is visible before sign-in; the drop between click and join _is_ the
   sign-in wall, so there is no separate `signin_required` rung (that name already means
   the creation wall).
+- ~~How-to-play opens recorded but unreadable~~ — **closed 2026-07-31** for the read
+  path that [#395](https://github.com/gamedevpl/www.gamedev.pl/issues/395) needs:
+  `how_to_play_opened` carries `via: 'bar' | 'more'` and optional `reopen: true` (same
+  theater card opened again — not "opened twice in the visit"), is recorded only for
+  published plays (`reportSlug`, same population as `play_started`), and
+  `summarizeVisitFunnel` exposes `howToPlay` (opens/visits among playing visits, same-
+  card repeat visits, via, byEntry with `playingVisits` denominators). Rendered on
+  `VisitFunnelPanel`. The product decision in #395 still waits on those numbers.
 - ~~Creator return is under-measured~~ — **closed 2026-07-26**: `User.activeDays` (a
   capped list of `yyyy-mm-dd`, touched once per account per day from the auth hook)
   plus `summarizeCreatorMetrics` behind `GET /api/admin/telemetry/creators`. Use a list

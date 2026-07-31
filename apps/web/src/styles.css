@@ -6378,6 +6378,13 @@ body.player-open {
   overflow-x: auto;
 }
 
+.funnel-howto-summary {
+  margin: 0 0 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
 .funnel-block h3 {
   margin: 0 0 0.5rem;
   font-size: 0.9375rem;

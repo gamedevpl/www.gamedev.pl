@@ -187,4 +187,98 @@ describe('summarizeVisitFunnel', () => {
     expect(funnel.plays).toBe(1);
     expect(funnel.entries).toEqual([{ entry: 'unknown', visits: 1, plays: 1 }]);
   });
+
+  it('answers how-to-play open rate, same-card reopens, via, and deep-link vs arcade', () => {
+    const opened = (visitId: string, via: string | undefined, msSinceStart: number, reopen?: true): VisitEvent => ({
+      visitId,
+      type: 'how_to_play_opened',
+      at: '2026-07-26T10:00:00.000Z',
+      msSinceStart,
+      ...(via === undefined ? {} : { via }),
+      ...(reopen === undefined ? {} : { reopen }),
+    });
+
+    const funnel = summarizeVisitFunnel([
+      // Arcade visit: same card opened again — the "card did not answer" case.
+      started('a', { entry: 'home' }),
+      played('a', 1_000),
+      opened('a', 'bar', 2_000),
+      opened('a', 'bar', 5_000, true),
+      // Deep-link visit: opened once from More.
+      started('b', { entry: 'play' }),
+      played('b', 500),
+      opened('b', 'more', 800),
+      // Played, never opened — in the open-rate and byEntry denominators.
+      started('c', { entry: 'home' }),
+      played('c', 1_000),
+      // Legacy open with no via — must still count, under unknown.
+      started('d', { entry: 'home' }),
+      played('d', 1_000),
+      opened('d', undefined, 1_500),
+      // Opened without a published play — excluded from the numerator entirely.
+      started('e', { entry: 'home' }),
+      opened('e', 'bar', 100),
+    ]);
+
+    expect(funnel.howToPlay.opens).toBe(4);
+    expect(funnel.howToPlay.visits).toBe(3);
+    expect(funnel.howToPlay.repeatVisits).toBe(1);
+    expect(funnel.howToPlay.via).toEqual([
+      { via: 'bar', opens: 2, visits: 1 },
+      { via: 'more', opens: 1, visits: 1 },
+      { via: 'unknown', opens: 1, visits: 1 },
+    ]);
+    expect(funnel.howToPlay.byEntry.find((row) => row.entry === 'home')).toEqual({
+      entry: 'home',
+      playingVisits: 3,
+      visits: 2,
+      opens: 3,
+    });
+    expect(funnel.howToPlay.byEntry.find((row) => row.entry === 'play')).toEqual({
+      entry: 'play',
+      playingVisits: 1,
+      visits: 1,
+      opens: 1,
+    });
+  });
+
+  it('does not treat one open per game in a multi-game visit as a same-card reopen', () => {
+    // Two plays, one how-to-play open each, neither flagged reopen — normal arcade depth.
+    const funnel = summarizeVisitFunnel([
+      started('a'),
+      played('a', 1_000),
+      {
+        visitId: 'a',
+        type: 'how_to_play_opened',
+        at: '2026-07-26T10:00:00.000Z',
+        msSinceStart: 1_500,
+        via: 'bar',
+      },
+      played('a', 10_000),
+      {
+        visitId: 'a',
+        type: 'how_to_play_opened',
+        at: '2026-07-26T10:00:00.000Z',
+        msSinceStart: 11_000,
+        via: 'bar',
+      },
+    ]);
+    expect(funnel.howToPlay.opens).toBe(2);
+    expect(funnel.howToPlay.visits).toBe(1);
+    expect(funnel.howToPlay.repeatVisits).toBe(0);
+  });
+
+  it('emits zeroed how-to-play via rows when nobody opened the card', () => {
+    const funnel = summarizeVisitFunnel([started('a'), played('a', 1_000)]);
+    expect(funnel.howToPlay).toEqual({
+      opens: 0,
+      visits: 0,
+      repeatVisits: 0,
+      via: [
+        { via: 'bar', opens: 0, visits: 0 },
+        { via: 'more', opens: 0, visits: 0 },
+      ],
+      byEntry: [{ entry: 'home', playingVisits: 1, visits: 0, opens: 0 }],
+    });
+  });
 });

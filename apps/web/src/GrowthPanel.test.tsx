@@ -63,6 +63,16 @@ function visitsWith({ visitsWithPlay, submitted }: { visitsWithPlay: number; sub
         { step: 'submission_created', visits: submitted },
       ],
       waitlist: [],
+      howToPlay: {
+        opens: 0,
+        visits: 0,
+        repeatVisits: 0,
+        via: [
+          { via: 'bar', opens: 0, visits: 0 },
+          { via: 'more', opens: 0, visits: 0 },
+        ],
+        byEntry: [],
+      },
     },
   };
 }
