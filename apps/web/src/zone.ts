@@ -3,7 +3,7 @@ import { BRIDGE_NAMESPACE } from './mp/protocol.js';
 import { MAX_INPUTS_PER_SECOND, ZONE_PROTOCOL_VERSION, parseZoneBridgeMessage } from './zone/protocol.js';
 import { ZoneClient } from './zone/zoneClient.js';
 import { fetchZoneAdmission } from './zoneApi.js';
-import { recordPlayEvent } from './gamePlayer.js';
+import { bindPlayRecorder } from './gamePlayer.js';
 
 /**
  * The shell half of authoritative real-time zones (docs/persistent-world-plan.md P3).
@@ -49,6 +49,13 @@ export function useZoneBridge(frameRef: MutableRefObject<HTMLIFrameElement | nul
     let sent: number[] = [];
     /** Whether a world ever arrived, which is what separates a fallback from a drop. */
     let joined = false;
+    /**
+     * Bound at admission to the play session that was open then, and used for every rung
+     * after it. The socket outlives this effect: a frame queued before teardown still
+     * reaches `onFrame`, and a recorder that resolved the session per call would record
+     * it against whatever game opened next.
+     */
+    let recordPlayEvent: (event: { type: 'zone_link'; step: 'admitted' | 'joined' | 'lost' }) => void = () => {};
 
     function postToGame(payload: Record<string, unknown>) {
       if (cancelled) return;
@@ -82,6 +89,7 @@ export function useZoneBridge(frameRef: MutableRefObject<HTMLIFrameElement | nul
         // A seat was issued. This is the denominator: every open past this point was
         // *supposed* to end up in a shared world, so anything that does not is a
         // fallback the player was never told about.
+        recordPlayEvent = bindPlayRecorder();
         recordPlayEvent({ type: 'zone_link', step: 'admitted' });
 
         postToGame({

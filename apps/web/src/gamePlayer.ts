@@ -414,9 +414,25 @@ export function withGameLocale(html: string, lang: string | undefined | null): s
  */
 let openSession: TelemetrySession | null = null;
 
-/** Record a shell-observed play event, if a game is open. Best-effort, like every send. */
-export function recordPlayEvent(event: TelemetryEvent): void {
-  openSession?.record(event);
+/**
+ * Take a recorder bound to the session open *now*, for shell code whose callbacks may
+ * outlive it.
+ *
+ * Binding rather than looking the session up per call is the whole point. A WebSocket
+ * frame can arrive after the bridge has torn down — `close()` closes the socket
+ * asynchronously and the message handler does not check for disposal — so a recorder
+ * that dereferenced a module global at callback time would attribute a late snapshot
+ * from one game to whichever game opened next, marking a session `joined` that never
+ * connected. A bound recorder cannot: once its session closes, `record` refuses, and the
+ * stale event lands nowhere instead of on somebody else's row.
+ *
+ * Returns a no-op when nothing is open, which is the honest outcome — a zone whose
+ * `admitted` was never recorded contributes no denominator and so no ratio either.
+ */
+export function bindPlayRecorder(): (event: TelemetryEvent) => void {
+  const session = openSession;
+  if (!session) return () => {};
+  return (event) => void session.record(event);
 }
 
 export function useGameTelemetry(slug: string, enabled: boolean, slots?: number) {

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BRIDGE_NAMESPACE } from './mp/protocol.js';
 import { ZONE_PROTOCOL_VERSION } from './zone/protocol.js';
 import { useZoneBridge } from './zone.js';
+import * as playerModule from './gamePlayer.js';
 
 /**
  * The zone bridge is the third and last of the shell's bridges, and the one where the
@@ -285,5 +286,37 @@ describe('useZoneBridge', () => {
 
     expect(socket.closed).toBe(true);
     expect(socket.framesSent().some((sent) => sent.t === 'bye')).toBe(true);
+  });
+  it('sends a late frame to the session it came from, not the one open now', async () => {
+    // The socket outlives the bridge: close() closes it asynchronously and the message
+    // handler does not check for disposal, so a frame queued before teardown still
+    // arrives. The danger is not that it is recorded — it is *where*. Resolved per call,
+    // it would land on whichever game is open now, marking a session `joined` that never
+    // connected and handing a game a Shared rate it did not earn.
+    //
+    // So the property is that the recorder is bound once, at admission, and never
+    // rebound: the late event goes to the originating session, which by then is closed
+    // and refuses it. Binding identity is what makes that true, so binding identity is
+    // what this asserts.
+    const recorded: Array<{ binding: number; step: string }> = [];
+    let bindings = 0;
+    const bind = vi.spyOn(playerModule, 'bindPlayRecorder').mockImplementation(() => {
+      const binding = bindings++;
+      return (event) => void recorded.push({ binding, step: (event as { step: string }).step });
+    });
+
+    const { socket } = await connected();
+    await waitFor(() => expect(recorded).toEqual([{ binding: 0, step: 'admitted' }]));
+
+    act(() => root!.unmount());
+    root = null;
+    act(() => socket.deliver({ t: 'snap', tick: 0, seed: 1, draws: 0, state: '{}', slot: 0 }));
+
+    // One binding for the whole run, and the straggler carries it.
+    expect(bind).toHaveBeenCalledTimes(1);
+    expect(recorded).toEqual([
+      { binding: 0, step: 'admitted' },
+      { binding: 0, step: 'joined' },
+    ]);
   });
 });
