@@ -391,6 +391,20 @@ export function buildRepairPrompt(input: { slug: string; errors: string[]; files
   ].join('\n');
 }
 
+/**
+ * A tunable that is a real number, or the default.
+ *
+ * `Number('foo')` is NaN, and NaN spends money here rather than failing loudly: a NaN
+ * reference count still runs the (paid) picker before `slice(0, NaN)` throws the result
+ * away, and a NaN timeout is not a long deadline but an immediate abort. Both would read
+ * in production as "seeding mysteriously stopped working", with a bill. A typo in an env
+ * var should fall back to the measured default instead.
+ */
+function positiveNumber(value: string | number | undefined, fallback: number): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 export interface VertexGameSeederOptions {
   context: SeedContextSource;
   projectId?: string;
@@ -427,11 +441,15 @@ export class VertexGameSeeder implements GameSeeder {
   private generateClient?: GenAIClient;
 
   constructor(private readonly options: VertexGameSeederOptions) {
-    this.references = options.references ?? Number(process.env.SEED_REFERENCES ?? DEFAULT_SEED_REFERENCES);
-    this.pickTimeoutMs =
-      options.pickTimeoutMs ?? Number(process.env.SEED_PICK_TIMEOUT_MS ?? DEFAULT_SEED_PICK_TIMEOUT_MS);
-    this.generateTimeoutMs =
-      options.generateTimeoutMs ?? Number(process.env.SEED_GENERATE_TIMEOUT_MS ?? DEFAULT_SEED_GENERATE_TIMEOUT_MS);
+    this.references = positiveNumber(options.references ?? process.env.SEED_REFERENCES, DEFAULT_SEED_REFERENCES);
+    this.pickTimeoutMs = positiveNumber(
+      options.pickTimeoutMs ?? process.env.SEED_PICK_TIMEOUT_MS,
+      DEFAULT_SEED_PICK_TIMEOUT_MS,
+    );
+    this.generateTimeoutMs = positiveNumber(
+      options.generateTimeoutMs ?? process.env.SEED_GENERATE_TIMEOUT_MS,
+      DEFAULT_SEED_GENERATE_TIMEOUT_MS,
+    );
     this.model = options.model ?? process.env.SEED_MODEL?.trim() ?? DEFAULT_SEED_MODEL;
   }
 

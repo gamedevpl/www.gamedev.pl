@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   buildGeneratePrompt,
   collectSeedFiles,
@@ -482,6 +482,50 @@ describe('VertexGameSeeder', () => {
 
     expect(draft!.files.find((file) => file.path === 'game.ts')).toBeDefined();
     expect(draft!.files.some((file) => file.path.includes('shared'))).toBe(false);
+  });
+
+  const ENV_KEYS = ['SEED_REFERENCES', 'SEED_PICK_TIMEOUT_MS', 'SEED_GENERATE_TIMEOUT_MS'] as const;
+  const saved: Record<string, string | undefined> = {};
+
+  beforeEach(() => {
+    for (const key of ENV_KEYS) {
+      saved[key] = process.env[key];
+      delete process.env[key];
+    }
+  });
+
+  afterEach(() => {
+    for (const key of ENV_KEYS) {
+      if (saved[key] === undefined) delete process.env[key];
+      else process.env[key] = saved[key];
+    }
+  });
+
+  it('falls back to the measured default when an env var is not a number', async () => {
+    // NaN here spends money rather than failing loudly: a NaN reference count still runs
+    // the paid picker before slice(0, NaN) discards the result, and a NaN timeout aborts
+    // immediately rather than waiting. A typo must not buy either.
+    process.env.SEED_REFERENCES = 'three';
+    process.env.SEED_GENERATE_TIMEOUT_MS = '';
+    const seeder = new VertexGameSeeder({
+      context: stubContext(),
+      client: stubClient([{ text: '{"picks":["apex-sprint","word-forge"]}' }, { text: GOOD_DRAFT }]),
+    });
+
+    const draft = await seeder.seed(request);
+
+    expect(draft).not.toBeNull();
+    expect(draft!.references).toEqual(['apex-sprint', 'word-forge']);
+  });
+
+  it('honours a valid override', async () => {
+    process.env.SEED_REFERENCES = '1';
+    const seeder = new VertexGameSeeder({
+      context: stubContext(),
+      client: stubClient([{ text: '{"picks":["apex-sprint","word-forge"]}' }, { text: GOOD_DRAFT }]),
+    });
+
+    expect((await seeder.seed(request))!.references).toEqual(['apex-sprint']);
   });
 
   it('does not run a repair round when the draft already bundles', async () => {

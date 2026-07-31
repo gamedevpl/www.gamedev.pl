@@ -1678,6 +1678,10 @@ export async function registerSubmissionRoutes(
       // operation whichever branch it is.
       if (record.dispatch?.seedWorkspace) {
         await releaseWorkspace(issueNumber, record.dispatch.seedWorkspace, request.log);
+        // Forgotten as well as deleted. Leaving the name on the record would have a
+        // second abandon — or any later cleanup path — asking GitHub to delete a ref
+        // that is already gone, against the one credential that also dispatches.
+        await store.clearDispatchSeedWorkspace(issueNumber);
       }
 
       await store.setSubmissionAbandoned(issueNumber, new Date(now()).toISOString());

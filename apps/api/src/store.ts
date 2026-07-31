@@ -223,7 +223,11 @@ export interface SubmissionRecord {
 export interface JobCostEntry {
   kind: 'agent_session' | 'gate_run' | 'seed';
   at: string;
-  /** Who charged for it: `copilot`, `cloud-build`. */
+  /**
+   * Who charged for it: an agent backend (`copilot`), a service (`cloud-build`), or —
+   * for a `seed` entry — the model id that billed the tokens (`gemini-3.6-flash`).
+   * A model id here is a well-formed entry, not corrupt data.
+   */
   by: string;
   /** The vendor's own id, so a line on a bill can be traced back to a job. */
   ref?: string;

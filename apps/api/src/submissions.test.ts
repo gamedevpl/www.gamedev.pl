@@ -2971,4 +2971,53 @@ describe('seeded dispatch', () => {
     expect((await store.getSubmission(1))?.dispatch?.seedWorkspace).toBeUndefined();
     expect((await store.getSubmission(1))?.dispatch?.workspace).toBe('copilot/x');
   });
+
+  it('forgets the seed branch when abandoning, so it is never deleted twice', async () => {
+    const stub = createGithubClientStub({});
+    const cleaned: string[] = [];
+    const briefs: BuildBrief[] = [];
+    const backend: AgentBackend = {
+      name: 'stub',
+      dispatch: async (brief) => {
+        briefs.push(brief);
+        return { ref: 'task-1', workspace: 'copilot/x', seedWorkspace: 'seed/job-9' };
+      },
+      resume: async () => ({ ref: 'task-2' }),
+      observe: async () => null,
+      cancel: async () => ({ enforced: false }),
+      cleanup: async (previous) => {
+        if (previous.workspace) cleaned.push(previous.workspace);
+      },
+    };
+    const { app, store, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      gameSeeder: seederStub({ compiles: false }),
+    });
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'Comet Courier', concept: 'A game where you deliver parcels between comets, dodging debris.' },
+    });
+    const { token } = created.json() as { token: string };
+
+    const abandoned = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/abandon`,
+      headers: authHeaders,
+    });
+
+    expect(abandoned.statusCode).toBe(200);
+    // Both branches released once...
+    expect(cleaned).toContain('seed/job-9');
+    expect(cleaned.filter((branch) => branch === 'seed/job-9')).toHaveLength(1);
+    // ...and the name is off the record, so a second abandon cannot ask again.
+    const record = await store.getSubmission(briefs[0].issueNumber);
+    expect(record?.dispatch?.seedWorkspace).toBeUndefined();
+    expect(record?.dispatch?.workspace).toBe('copilot/x');
+
+    await app.close();
+  });
 });

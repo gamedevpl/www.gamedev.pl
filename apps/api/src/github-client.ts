@@ -373,9 +373,10 @@ export interface GitHubClient {
    * so putting the seed on a branch is how a generated draft becomes a starting point
    * rather than a suggestion the agent may or may not read.
    *
-   * One commit, via the git data API, rather than a file-at-a-time contents write: three
-   * requests regardless of how many files a draft has, and the branch never exists in a
-   * half-written state that a dispatch could race.
+   * One commit, via the git data API, rather than a file-at-a-time contents write: four
+   * requests (resolve base, tree, commit, ref) regardless of how many files a draft has,
+   * because the tree takes file contents inline instead of a blob upload each. The branch
+   * also never exists in a half-written state that a dispatch could race.
    *
    * The caller owns the branch's lifetime and deletes it (`deleteBranch`) — nothing here
    * is merged, ever, and the games repo is not where the game ends up.
