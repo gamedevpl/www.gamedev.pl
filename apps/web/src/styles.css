@@ -4659,6 +4659,144 @@ body.player-open {
   }
 }
 
+/* SKETCH — the same app shell on a desktop, for review before it is kept.
+   The phone got this in #386 and the reasoning does not stop at 800px: the studio is a
+   place you sit in, not a page you read down. On a 1440 window today it is a 1180px card
+   floating in the middle of a document, the composer lands wherever the transcript
+   happens to end, and the thing under a scroll from it is the marketing footer.
+
+   Full bleed here means the shell owns the window — shelf as a rail from the header to
+   the bottom edge, transcript with its own scroller, composer pinned above the bottom of
+   the window — but not that the text stretches to the window's edges. A 2560px monitor
+   would give a 2200px line of prose, so the column stays capped and centred inside the
+   full-width shell; what goes edge to edge is the furniture, not the reading.
+
+   Keyed the same way as the phone rules — on a game being open, not on the route. */
+@media (min-width: 801px) {
+  .app:has(.studio-layout.is-game-open) {
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .app:has(.studio-layout.is-game-open) > .content {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    overflow: hidden;
+    max-width: none;
+    padding: 0;
+  }
+
+  /* Same reason as the phone: legal links do not belong under a live conversation, and
+     here there is no scroll that could reach them anyway. */
+  .app:has(.studio-layout.is-game-open) .site-footer {
+    display: none;
+  }
+
+  /* A kicker, a page title, a strapline and a way home, above a screen whose header
+     already offers the way home. On a page it introduces; in an app it is a lid. */
+  .app:has(.studio-layout.is-game-open) .studio-panel-header {
+    display: none;
+  }
+
+  /* The chain that hands the window's height down to the transcript's scroller. Every
+     wrapper has to give up its height or the scroller at the end has nothing to measure
+     against — the same chain as the phone rules, one link longer for the rail. */
+  .app:has(.studio-layout.is-game-open) .studio-panel {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    max-width: none;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  .app:has(.studio-layout.is-game-open) .studio-layout {
+    flex: 1;
+    min-height: 0;
+    gap: 0;
+    align-items: stretch;
+  }
+
+  /* The shelf stops being a card that sticks and becomes the edge of the window. It
+     already scrolls internally, so it only has to stop capping its own height. */
+  .app:has(.studio-layout.is-game-open) .studio-shelf {
+    position: static;
+    min-height: 0;
+    max-height: none;
+    border: 0;
+    border-right: 1px solid var(--panel-border);
+    border-radius: 0;
+    background: var(--panel);
+    padding: 14px 12px;
+  }
+
+  .app:has(.studio-layout.is-game-open) .studio-detail,
+  .app:has(.studio-layout.is-game-open) .studio-build {
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* Height, but not a new display type: the workspace is the grid that puts the details
+     rail beside the thread at 1100+. Turning it into a flex column here dropped the rail
+     under the transcript, in a chain with no scroller — so it was simply cut off at the
+     bottom edge of the window with no way to reach the rest of it. */
+  .app:has(.studio-layout.is-game-open) .studio-workspace {
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    align-items: stretch;
+  }
+
+  /* The rail is as tall as the window now, and what is in it can be longer than that. */
+  .app:has(.studio-layout.is-game-open) .studio-workspace.is-details-open .studio-rail {
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  /* The card border used to enclose a section of a page. At full height it encloses the
+     window, which is not something that needs a line drawn around it. */
+  .app:has(.studio-layout.is-game-open) .studio-detail {
+    max-width: none;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: none;
+    padding: 16px 24px 0;
+  }
+
+  /* Where full bleed stops. The shell is as wide as the window; the conversation is as
+     wide as a conversation should be, centred in it. */
+  .app:has(.studio-layout.is-game-open) .studio-detail-head,
+  .app:has(.studio-layout.is-game-open) .studio-workspace {
+    width: 100%;
+    max-width: 1080px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .app:has(.studio-layout.is-game-open) .studio-thread {
+    flex: 1;
+    min-height: 0;
+    height: auto;
+  }
+
+  .app:has(.studio-layout.is-game-open) .studio-thread-foot {
+    padding-bottom: 16px;
+  }
+}
+
 /* Naming the game — the step the build waits on, so it leads the panel and is sized
    like a decision rather than like one more field among the clarifying questions. */
 .qa-name {
