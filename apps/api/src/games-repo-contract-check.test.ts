@@ -79,10 +79,9 @@ describe('runGamesRepoContractCheck', () => {
   });
 
   it('allows the website to list modules the games tip has not shipped yet', async () => {
-    // Website-first add: GAME_KIT_MODULES here already includes `motion`, but main's
-    // assemble.ts still lists the pre-motion order. That window must stay green so the
-    // iframe / contract PR can land before the games-repo half.
-    const withoutAheadExtras = GAME_KIT_MODULES.filter((name) => name !== 'motion');
+    // Website-first add: GAME_KIT_MODULES here already includes `voice`, but main's
+    // assemble.ts may still list the pre-voice order. That window must stay green.
+    const withoutAheadExtras = GAME_KIT_MODULES.filter((name) => name !== 'voice');
     const olderAssemble = `
       const GAME_KIT_MODULES = [${withoutAheadExtras.map((name) => `'${name}'`).join(', ')}];
       const catalog = readMusicCatalog();

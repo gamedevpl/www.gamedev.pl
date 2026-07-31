@@ -3,7 +3,6 @@
   "_comment": "Cross-repo serve contract. Website half: www.gamedev.pl apps/api/src/games-repo-contract.ts + CI contract:games-repo (PR #253). Keep GAME_KIT_MODULES as an array literal in tools/lib/assemble.ts for that scraper. maxProjectBytes must equal games Check 4 MAX_BUNDLE_BYTES (currently includes gfx3d reserve, look/spatial, mascotDraw, and a deliberate headroom band).",
   "gameKitModules": [
     "input",
-    "motion",
     "collision",
     "world",
     "ai",
