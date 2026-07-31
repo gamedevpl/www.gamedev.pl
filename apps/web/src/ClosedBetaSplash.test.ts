@@ -65,7 +65,7 @@ describe('ClosedBetaSplash', () => {
     const joinButton = container.querySelector<HTMLButtonElement>('#btn-join-waitlist');
     expect(joinButton).not.toBeNull();
     expect(joinButton?.textContent).toMatch(/waitlist/i);
-    expect(container.querySelector('.google-sign-in-container')).not.toBeNull();
+    expect(container.querySelector('.google-sign-in')).not.toBeNull();
     // Join sits above the sign-in buttons in the DOM.
     const waitlist = container.querySelector('.beta-splash__waitlist');
     const signin = container.querySelector('.beta-splash__signin');

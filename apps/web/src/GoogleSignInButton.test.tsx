@@ -3,11 +3,15 @@
 import { act, createElement, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import i18n from './i18n/index.js';
 
 /**
  * The GIS widget must paint once and stay put. Inline onError from ClosedBetaSplash
  * (and a fresh signInWithGoogleToken from AuthProvider after a rejected One Tap) used
  * to re-run the init effect, wipe the container, and shove the Apple button below it.
+ *
+ * The visible control is our black face; GIS sits opacity:0 on top so the dark-scheme
+ * white iframe envelope never shows.
  */
 
 const auth = vi.hoisted(() => ({
@@ -30,8 +34,9 @@ let gis: GisApi;
 let container: HTMLDivElement;
 let root: Root;
 
-beforeEach(() => {
+beforeEach(async () => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  await i18n.changeLanguage('en');
 
   gis = {
     initialize: vi.fn((config: { callback: (res: { credential: string }) => void }) => {
@@ -68,17 +73,37 @@ afterEach(async () => {
 });
 
 describe('GoogleSignInButton', () => {
-  it('reserves a fixed slot so the Apple button below does not jump before GIS paints', async () => {
+  it('draws a black face and hides the GIS iframe so no white envelope shows', async () => {
     const { GoogleSignInButton } = await import('./GoogleSignInButton.js');
 
     await act(async () => {
       root.render(createElement(GoogleSignInButton));
     });
 
-    const slot = container.querySelector('.google-sign-in-container');
-    expect(slot).not.toBeNull();
-    // Dimensions live in CSS; the class is the contract the stylesheet sizes.
-    expect(slot?.className).toBe('google-sign-in-container');
+    expect(container.querySelector('.google-sign-in')).not.toBeNull();
+    expect(container.querySelector('.google-sign-in-face')).not.toBeNull();
+    expect(container.querySelector('.google-sign-in-gis')).not.toBeNull();
+    expect(container.querySelector('.google-sign-in-face')?.textContent).toMatch(/Sign in with Google/i);
+    expect(container.querySelector('.google-sign-in-mark')).not.toBeNull();
+    expect(gis.renderButton).toHaveBeenCalledWith(
+      expect.any(HTMLElement),
+      expect.objectContaining({ locale: 'en', theme: 'filled_black', width: 240 }),
+    );
+  });
+
+  it('passes a Polish locale to GIS when the UI language is pl', async () => {
+    await i18n.changeLanguage('pl');
+    const { GoogleSignInButton } = await import('./GoogleSignInButton.js');
+
+    await act(async () => {
+      root.render(createElement(GoogleSignInButton));
+    });
+
+    expect(gis.renderButton).toHaveBeenCalledWith(
+      expect.any(HTMLElement),
+      expect.objectContaining({ locale: 'pl' }),
+    );
+    expect(container.querySelector('.google-sign-in-face')?.textContent).toMatch(/Zaloguj się przez Google/i);
   });
 
   it('does not wipe and re-render the GIS button when the parent passes a new onError', async () => {
