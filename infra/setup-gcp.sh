@@ -253,10 +253,37 @@ for role in roles/storage.objectViewer roles/storage.objectCreator; do
     >/dev/null
 done
 
-# Deliberately NO lifecycle rule. The snapshot bucket expires old objects because they
-# are rebuildable; these are the originals. A rule that deleted them would delete the
-# games — versioned history is the rollback path and the creator's own record of work.
-echo "    IAM applied (deployer: admin, Cloud Run: read+create). No lifecycle: these are originals."
+# Live objects are never aged out — these are the originals, not a rebuildable
+# projection. Object versioning + soft-delete are the BY-11 compensating controls
+# for gate-runner's objectAdmin (overwrite/delete recovery); the lifecycle rule
+# only deletes *noncurrent* versions so versioning does not grow unbounded.
+# See infra/gate-hardening.md "Store IAM: why objectAdmin".
+echo "    IAM applied (deployer: admin, Cloud Run: read+create)."
+echo "    Ensuring object versioning, 30d soft-delete, and noncurrent-version prune…"
+gcloud storage buckets update "gs://${STORE_BUCKET}" \
+  --versioning \
+  --soft-delete-duration=30d \
+  --project="$PROJECT_ID" \
+  >/dev/null
+STORE_LIFECYCLE_FILE="$(mktemp)"
+cat > "$STORE_LIFECYCLE_FILE" <<'EOF'
+{
+  "lifecycle": {
+    "rule": [
+      {
+        "action": { "type": "Delete" },
+        "condition": { "isLive": false, "daysSinceNoncurrentTime": 30 }
+      }
+    ]
+  }
+}
+EOF
+gcloud storage buckets update "gs://${STORE_BUCKET}" \
+  --lifecycle-file="$STORE_LIFECYCLE_FILE" \
+  --project="$PROJECT_ID" \
+  >/dev/null
+rm -f "$STORE_LIFECYCLE_FILE"
+echo "    Versioning on; soft-delete 30d; noncurrent versions pruned after 30d."
 
 # Dedicated identity for gate Cloud Build runs (cloudbuild-gate.yaml / gate-trigger.ts).
 # Submitted sources are hostile: the build must not inherit the project default Cloud
