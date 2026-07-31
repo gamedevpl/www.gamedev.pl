@@ -4155,20 +4155,47 @@ body.player-open {
   font-size: 0.82rem;
 }
 
+/* One control, not a field with a button parked under it.
+   The border used to be on the textarea, which left the send button floating in the gap
+   below with nothing tying the two together. Moving it out here makes the box the thing
+   you focus and the button something inside it — and the focus ring, now on the box,
+   covers both. */
 .status-composer.is-compact {
   margin: 0;
-  padding: 0;
-  border: 0;
-  background: none;
+  padding: 7px 8px 8px 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  background: var(--panel-card);
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+
+.status-composer.is-compact:focus-within {
+  border-color: rgba(0, 228, 172, 0.5);
+  box-shadow: 0 0 0 3px rgba(0, 228, 172, 0.08);
 }
 
 .status-composer.is-compact .status-feedback-input {
   width: 100%;
-  border-radius: 12px;
-  resize: vertical;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  padding: 4px 2px;
+  /* The box grows with the text instead (see autoGrow). A drag handle sitting in the
+     middle of the composer's right edge, now that the border belongs to the box rather
+     than the field, looked like something had gone wrong. */
+  resize: none;
+  overflow-y: auto;
   /* The placeholder says where the message will land, which is two lines of text on a
      phone; at two rows it was cut off mid-sentence. */
   min-height: 5.25rem;
+}
+
+.status-composer.is-compact .status-feedback-input:focus {
+  /* The ring belongs to the box now — two of them nested looked like a bug. */
+  outline: none;
+  box-shadow: none;
 }
 
 .status-composer.is-compact .status-feedback-actions {
@@ -4176,7 +4203,14 @@ body.player-open {
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
-  margin-top: 8px;
+  margin-top: 2px;
+}
+
+/* Sized down to sit inside the composer rather than under it. */
+.status-composer.is-compact .status-feedback-actions .primary-btn {
+  padding: 7px 15px;
+  font-size: 0.84rem;
+  border-radius: 9px;
 }
 
 .status-composer.is-compact .status-feedback-actions .error {
@@ -6501,13 +6535,22 @@ body.player-open {
   background: rgba(0, 228, 172, 0.04);
 }
 
-.studio-shelf-item.is-active {
-  border-color: rgba(0, 228, 172, 0.45);
-  box-shadow: 0 0 14px rgba(0, 228, 172, 0.1);
-}
-
 .studio-shelf-item.is-live {
   border-color: rgba(45, 212, 191, 0.35);
+}
+
+/* Deliberately after .is-live, and deliberately more than a border tint.
+   Almost every game in a shelf is building or just built, so a selected state made of
+   the same turquoise border as the status lost to the rule below it and read as "all of
+   these are the same" — which is what the shelf is for denying. The fill and the left
+   marker are what say *here*, and they hold whatever the game's status is. */
+.studio-shelf-item.is-active,
+.studio-shelf-item.is-active:hover {
+  border-color: var(--turquoise);
+  background: rgba(0, 228, 172, 0.12);
+  box-shadow:
+    inset 3px 0 0 var(--turquoise),
+    0 0 14px rgba(0, 228, 172, 0.1);
 }
 
 .studio-shelf-status {

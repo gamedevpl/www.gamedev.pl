@@ -879,8 +879,20 @@ function FeedbackPanel({
   const [text, setText] = useState('');
   const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const trimmed = text.trim();
+
+  // The composer grows with what is typed, which is what replaced the resize grip: once
+  // the send button moved inside the box, a drag handle in the middle of its right edge
+  // read as a rendering fault. Capped, so a long message scrolls instead of pushing the
+  // conversation off the top of the screen.
+  const autoGrow = () => {
+    const input = inputRef.current;
+    if (!input) return;
+    input.style.height = 'auto';
+    input.style.height = `${Math.min(input.scrollHeight, 220)}px`;
+  };
 
   const send = async () => {
     if (trimmed.length < 10) return;
@@ -893,6 +905,9 @@ function FeedbackPanel({
       else await submitFeedback(token, trimmed);
       setState('sent');
       setText('');
+      // Back to the CSS height rather than the height the sent message grew it to: an
+      // empty box the size of the last paragraph is a leftover, not a state.
+      if (inputRef.current) inputRef.current.style.height = '';
       // Echo it into the activity feed straight away: the API only sees it once the
       // comment round-trips through GitHub, which is a poll or two away.
       onSent(trimmed);
@@ -933,10 +948,12 @@ function FeedbackPanel({
     return (
       <div className="status-feedback status-composer is-compact">
         <textarea
+          ref={inputRef}
           className="status-feedback-input"
           value={text}
           onChange={(event) => {
             setText(event.target.value);
+            autoGrow();
             if (state === 'sent') setState('idle');
           }}
           placeholder={t(hintKey)}
