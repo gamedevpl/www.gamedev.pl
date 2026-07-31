@@ -111,7 +111,7 @@ describe('ControllerView Voice Cleanup', () => {
     // Simulate connected welcome
     act(() => {
       lastOnStatus?.('connected');
-      lastOnFrame?.({ t: 'welcome', slot: 1, color: '#00e4ac', phase: 'playing' });
+      lastOnFrame?.({ t: 'welcome', slot: 1, color: '#00e4ac', nick: 'Swift Fox', phase: 'playing' });
     });
 
     // Toggle Voice On
