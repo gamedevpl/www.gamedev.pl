@@ -276,7 +276,8 @@
     "playtest": {
       "hint": "Play the game, pause on a moment worth changing, and send a request with that viewport and live instrumentation attached.",
       "loading": "Loading the playable build…",
-      "loadError": "No playable build is ready yet. Check the Build tab and try again once a preview exists.",
+      "loadError": "No playable build is ready yet. Go back to the thread and try again once a preview appears.",
+      "backToThread": "Back to thread",
       "theaterAria": "Playtest · {{title}}",
       "pause": "Pause & note",
       "resume": "Resume",

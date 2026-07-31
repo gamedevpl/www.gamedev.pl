@@ -7427,6 +7427,17 @@ body.player-open {
   margin: 0 0 0.75rem;
 }
 
+.studio-playtest-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.studio-playtest-empty .secondary-btn {
+  margin-top: 0.5rem;
+}
+
 /* Full-viewport playtest theater — same contract as `.stage.is-playing-full-viewport`.
    An inset card inside Studio chrome leaves a postage-stamp iframe on phones
    (iPhone SE especially); the game must own the screen, with controls as layers. */

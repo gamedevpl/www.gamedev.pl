@@ -15,7 +15,8 @@ const DRAFT_PATTERN = /^\/draft\/([^/]+)$/;
 const STATUS_PATTERN = /^\/status\/([^/]+)$/;
 const JOIN_PATTERN = /^\/join\/([A-Z0-9]{6})$/;
 /** `/studio`, `/studio/:token`, `/studio/:token/:tab` — keep aligned with router.ts. */
-const STUDIO_PATTERN = /^\/studio(?:\/[^/]+(?:\/(?:overview|build|playtest|stats|improve))?)?$/;
+/** Keep aligned with `STUDIO_TAB_ALIASES` in apps/web/src/router.ts. */
+const STUDIO_PATTERN = /^\/studio(?:\/[^/]+(?:\/(?:thread|details|playtest|overview|build|stats|improve))?)?$/;
 // The operator console. Its sections are listed rather than matched loosely, so the
 // shell and the client's router agree about what is a real page and what is a typo —
 // the same contract the studio tabs above keep.

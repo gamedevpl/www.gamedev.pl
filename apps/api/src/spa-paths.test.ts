@@ -39,6 +39,8 @@ describe('isKnownSpaShellPath', () => {
     '/studio',
     '/studio/tok-abc',
     '/studio/tok-abc/build',
+    '/studio/tok-abc/thread',
+    '/studio/tok-abc/details',
     '/studio/tok-abc/playtest',
     '/admin',
     '/admin/queue',
