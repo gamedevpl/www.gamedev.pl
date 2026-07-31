@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
 import {
@@ -12,6 +12,7 @@ import {
   type NotificationType,
 } from './notificationsApi.js';
 import { pushUiState, subscribeToPush, unsubscribeFromPush, type PushUiState } from './pushApi.js';
+import { notificationPanelShiftX } from './notificationPanelPosition.js';
 import './NotificationBell.css';
 
 const POLL_MS = 60_000;
@@ -39,6 +40,7 @@ export function NotificationBell() {
   const [prefsBusy, setPrefsBusy] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
 
   const unread = items.filter((n) => n.readAt === null).length;
 
@@ -163,6 +165,26 @@ export function NotificationBell() {
     };
   }, [open]);
 
+  // The bell sits left of the mobile menu, so a panel anchored to it can extend beyond
+  // the viewport even when the panel itself is narrower than the viewport.
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    if (!open || !panel) return;
+
+    const place = () => {
+      panel.style.transform = '';
+      const shift = notificationPanelShiftX(panel.getBoundingClientRect(), window.innerWidth);
+      panel.style.transform = shift === 0 ? '' : `translateX(${shift}px)`;
+    };
+
+    place();
+    window.addEventListener('resize', place);
+    return () => {
+      window.removeEventListener('resize', place);
+      panel.style.transform = '';
+    };
+  }, [open, items]);
+
   if (!user) return null;
 
   const toggle = () => {
@@ -194,7 +216,7 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div className="notif-panel" role="menu">
+        <div className="notif-panel" role="menu" ref={panelRef}>
           <div className="notif-panel-head">
             <span>{t('notifications.title', { defaultValue: 'Notifications' })}</span>
             {items.length > 0 && (
