@@ -3469,6 +3469,152 @@ body.player-open {
   opacity: 1;
 }
 
+/* This control sheds to the More menu earlier than sound and fullscreen do (900px, not
+   768px). Measured at 800px: with it on the bar, the actions row grows until the vote
+   widget overlaps the game title, because the meta column does not shrink. Below the
+   breakpoint the bar copy is hidden and the menu copy takes over; above it, the reverse. */
+@media (max-width: 900px) {
+  .game-theater-actions .howto-bar {
+    display: none !important;
+  }
+}
+
+@media (min-width: 901px) {
+  .game-theater-actions .theater-more-panel .howto-menu {
+    display: none !important;
+  }
+}
+
+/* HOW TO PLAY
+   The player's controls card. Portalled to the body, so it sits above the theater bar
+   (which carries a backdrop-filter and would otherwise become its containing block) and
+   above the game's own fixed on-screen touch pad. */
+.howto-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 10, 20, 0.78);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 1000;
+}
+
+.howto-card {
+  display: flex;
+  flex-direction: column;
+  width: min(30rem, 100%);
+  max-height: calc(100dvh - 32px);
+  padding: 18px 20px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  text-align: left;
+  /* Matches the player underneath: a long press on the card must not raise the iOS
+     selection loupe and Copy / Look Up callout over a running game. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* The head stays put while the rows scroll — the close button used to be absolutely
+   positioned inside the scroll box and slid out of reach on a long controls list. */
+.howto-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.howto-close {
+  display: flex;
+  padding: 6px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.howto-close:hover,
+.howto-close:focus-visible {
+  color: var(--text);
+}
+
+.howto-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* Key on the left, what it does on the right — the two-column reading answers "which
+   key does what" at a glance, which a sentence per row does not. */
+.howto-keys {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 14px;
+  margin: 14px 0 0;
+  overflow-y: auto;
+  flex: 1 1 auto;
+}
+
+.howto-row {
+  display: contents;
+}
+
+.howto-keys dt {
+  font-weight: 700;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.howto-keys dd {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+/* The action reads as a label ("Steer"), not as the tail of a sentence — but only the
+   first letter, because `capitalize` would also title-case "hard drop". */
+.howto-keys dd::first-letter {
+  text-transform: uppercase;
+}
+
+/* A clause with no "X to Y" shape keeps its own line rather than being guessed apart. */
+.howto-row.is-wide dt {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.howto-row.is-wide dd {
+  grid-column: 1 / -1;
+}
+
+.howto-note {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  flex: 0 0 auto;
+}
+
+.howto-dismiss {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  opacity: 0.75;
+  flex: 0 0 auto;
+}
+
 /* AUTH MODAL */
 .modal-backdrop {
   position: fixed;

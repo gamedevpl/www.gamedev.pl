@@ -152,7 +152,13 @@
       "sent": "Dzięki — otrzymaliśmy Twoją opinię.",
       "quota": "Wysłałeś dziś dużo opinii — spróbuj ponownie jutro.",
       "error": "Nie udało się teraz tego wysłać. Spróbuj ponownie za chwilę."
-    }
+    },
+    "howToPlay": "Jak grać",
+    "howToPlayClose": "Zamknij instrukcję gry {{game}}",
+    "howToPlayDismiss": "Naciśnij Escape lub kliknij obok, aby zamknąć",
+    "howToPlayTouch": "Dotyk",
+    "howToPlayTouchPad": "Pad ekranowy na ekranach dotykowych",
+    "howToPlayOther": "Sterowanie"
   },
   "catalog": {
     "title": "Gry",
