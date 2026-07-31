@@ -13,6 +13,9 @@
  * merged games simply never appear. Website-first cannot do that: a serve cap above
  * the build cap means no assemblable game is refused here. See
  * docs/games-repo-validation-spec.md §2.
+ *
+ * CI's `contract:games-repo` therefore treats website-ahead (higher budget, trailing
+ * new modules) as OK and only fails when this side is *behind* games-repo `main`.
  */
 
 /** Canonical GameKit module order — must match games-repo `GAME_KIT_MODULES`. */

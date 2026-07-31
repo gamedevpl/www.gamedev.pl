@@ -61,6 +61,12 @@ const MAX_BODY_CHARS = 300;
 
 class UnreachableGamesRepoError extends Error {}
 
+/** True when `remote` is an exact prefix of `local` (same order; local may be longer). */
+export function isModulePrefix(remote: string[], local: string[]): boolean {
+  if (remote.length > local.length) return false;
+  return remote.every((name, index) => local[index] === name);
+}
+
 function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -200,18 +206,31 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
 
   const remoteModules = extractGameKitModules(assembleSource);
   const localModules = [...GAME_KIT_MODULES];
-  if (remoteModules.join(',') !== localModules.join(',')) {
+  // Website-first lockstep (docs/games-repo-validation-spec.md §2): this side may
+  // temporarily list modules / a budget ahead of games-repo `main`. Fail only when
+  // we are *behind* — missing a remote module or under the remote ceiling — which
+  // is the direction that 502s published games.
+  if (!isModulePrefix(remoteModules, localModules)) {
     return {
       kind: 'drift',
       reason:
         `GAME_KIT_MODULES mismatch.\n  games-repo: ${remoteModules.join(', ')}\n` +
-        `  website:    ${localModules.join(', ')}`,
+        `  website:    ${localModules.join(', ')}\n` +
+        `  Website may extend the list (website-first), but must keep remote modules ` +
+        `in the same order as a prefix.`,
     };
   }
-  log(`  ✓ GAME_KIT_MODULES (${remoteModules.length} modules)`);
+  if (localModules.length > remoteModules.length) {
+    log(
+      `  ✓ GAME_KIT_MODULES (website ahead: +${localModules.length - remoteModules.length} ` +
+        `pending games-repo merge; remote ${remoteModules.length})`,
+    );
+  } else {
+    log(`  ✓ GAME_KIT_MODULES (${remoteModules.length} modules)`);
+  }
 
   const remoteBudget = extractMaxBundleBytes(validateSource);
-  if (remoteBudget !== MAX_PROJECT_BYTES) {
+  if (remoteBudget > MAX_PROJECT_BYTES) {
     const assignLine =
       validateSource
         .split('\n')
@@ -222,10 +241,15 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
       reason:
         `MAX_BUNDLE_BYTES mismatch: games-repo=${remoteBudget} website MAX_PROJECT_BYTES=${MAX_PROJECT_BYTES}\n` +
         `  games-repo assignment: ${assignLine}\n` +
-        `  Update GAMEKIT_PLATFORM_BYTES / MAX_PROJECT_BYTES in apps/api/src/games-repo-contract.ts to match.`,
+        `  Website is behind the build ceiling — raise GAMEKIT_PLATFORM_BYTES / MAX_PROJECT_BYTES ` +
+        `in apps/api/src/games-repo-contract.ts (website-first).`,
     };
   }
-  log(`  ✓ MAX_BUNDLE_BYTES / MAX_PROJECT_BYTES (${remoteBudget})`);
+  if (MAX_PROJECT_BYTES > remoteBudget) {
+    log(`  ✓ MAX_BUNDLE_BYTES / MAX_PROJECT_BYTES (website ahead: ${MAX_PROJECT_BYTES} > remote ${remoteBudget})`);
+  } else {
+    log(`  ✓ MAX_BUNDLE_BYTES / MAX_PROJECT_BYTES (${remoteBudget})`);
+  }
 
   const music = extractMusicContractSignals(assembleSource);
   if (!music.injectsMusicName || !music.readsTracksKey || !music.readsMusicCatalog) {
