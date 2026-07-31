@@ -58,67 +58,20 @@ export type GameKitModuleName = (typeof GAME_KIT_MODULES)[number];
 export const GAME_BUDGET_BYTES = 200 * 1024;
 
 /**
- * Sum of GameKit platform allowances outside the author budget (touch, restart,
- * music, touch hint, progress, universal input, pointer poll, draw surface,
- * pointer release, host pause, mascot draw, headroom, gfx3d, look, spatial, …). Together with
+ * Platform half of the serve cap — games-repo `GAMEKIT_PLATFORM_BYTES` /
+ * `assemble-contract.json` `platformCeilingBytes`. Together with
  * {@link GAME_BUDGET_BYTES} this must equal games-repo `MAX_BUNDLE_BYTES`
- * (480_187, matching games-repo `shared/assemble-contract.json` `maxProjectBytes`). Not a round KiB.
+ * (480_187, matching `maxProjectBytes`). Not a round KiB.
  *
- * Last moved by the sensing capability (games-repo camera-ar-platform Phase 0): +6_500
- * for a named `sensing` reserve (measured 5_132 transpiled), 473_687 → 480_187. Opt-in
- * like `zone`, and since games-repo #282 the reserve is belt-and-braces: Check 4 bills
- * each author for measured author bytes, so a game that skips sensing cannot spend its
- * reserve either way.
+ * One derived ceiling, not a sum of per-feature constants (games-repo #281). Check 4
+ * over there bills each author for measured `assembled − platformBytes` against the
+ * 200 KiB author budget; this number is serve-compat only so a game that clears that
+ * gate is not refused here. Feature-by-feature archaeology lives in the games repo's
+ * `docs/platform-byte-ledger.md`. Raise this when measurement shows a passing game
+ * would exceed it — do not re-split it into named allowances on this side either.
  *
- * Before that, games-repo convergence Pass #10 (carjack-city open-world promotion):
- * +15_000 (`world`) and +9_000 (`gameplay`) named reserves, 449_687 → 473_687. Both
- * modules shipped tiny and charged to the author budget; Pass #10 grew them into real
- * capability layers (grids/spiral search/loop paths/2D camera; arcade vehicle physics/
- * combo/ticker — measured 13_263 and 7_371 transpiled), and the first game to select
- * them, carjack-city, was also the tightest bundle in the catalog. This side is
- * deliberately ahead of games-repo `main` on the `voice` module, which the raise
- * carries forward untouched. Same opt-in-reserve argument as `zone`.
- *
- * Before that, voice Layer 0: +8_000 named `voice` reserve, 441_687 → 449_687.
- *
- * Before that, games-repo #163: +12_000 for a named `zone` reserve, 429_687 → 441_687.
- * The module shipped charged to the author budget, on the reasoning that it is small and
- * opt-in the way `save` and `commons` are. biplane-skirmish disproved that on arrival —
- * the first published game to select `zone` landed 20 bytes under the ceiling, which made
- * the next byte spent anywhere in the shared kit a break in a live game rather than a cost
- * to the author who spent it. That is the same argument `gfx3d` has a reserve for.
- *
- * Before that, games-repo #124 (Scene3D B11 scene management): `gfx3d`
- * 80_000 → 96_000 (+16_000, 413_687 → 429_687).
- *
- * Before that, games-repo #123 (Scene3D B10 effects): `gfx3d` 56_000 → 80_000
- * (+24_000, 389_687 → 413_687).
- *
- * Before that, games-repo #120 (Scene3D B8/B9): two new named allowances on top
- * of the B7 `gfx3d` 56_000 reserve — +4_683 (`lookControls`) and +2_977
- * (`spatialAudio`), 382_027 → 389_687.
- *
- * Before that, games-repo #117 (Scene3D B7): `gfx3d` 40_000 → 56_000 (+16_000,
- * 366_027 → 382_027) for procedural textures, point lights and bloom.
- *
- * Before that, games-repo #113 (the voxel and third-person pilots): `gfx3d`
- * 32_000 → 40_000 (+8_000, 358_027 → 366_027) for the scene3d template and the
- * chase camera those pilots share. Same opt-in shape as the band below.
- *
- * `presence` (games-repo P2.5) moves none of this. Like every other module it is only
- * inlined when a `GAME.json` asks for it, so it comes out of the 200 KiB author budget
- * rather than the platform allowances here.
- *
- * Before that, games-repo #111 (the `gfx3d` kit): +32_000 (`gfx3d`) for an
- * opt-in Lambert-mesh scene module measured at ~31.5 KiB transpiled. It is only
- * inlined when a `GAME.json` asks for it, so unlike the allowances below it is
- * not bytes every game pays — but the cap is a single number, and a gfx3d game
- * that clears Check 4 over there has to assemble here to be playable at all.
- * That is the same shape as the touch-layer drift that put block-cascade and
- * rooftop-dash live answering 422.
- *
- * Before that, games-repo #102: +679 (`mascotDraw`) and +75_237 (`headroom`) — 30% of
- * the 250_790 ceiling — plus earlier host-pause / touch steer raises.
+ * Last numeric move before the ledger collapse: sensing capability (games-repo
+ * camera-ar-platform Phase 0) +6_500, 473_687 → 480_187 total.
  */
 export const GAMEKIT_PLATFORM_BYTES = 275_387;
 

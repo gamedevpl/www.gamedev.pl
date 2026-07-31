@@ -28,12 +28,16 @@ describe('games-repo-contract (website half)', () => {
       '../fixtures/games-repo/shared/assemble-contract.json',
     );
     const fixture = JSON.parse(await readFile(fixturePath, 'utf8')) as {
+      version: number;
       maxProjectBytes: number;
       gameKitModules: string[];
       authorBudgetBytes: number;
+      platformCeilingBytes: number;
     };
+    expect(fixture.version).toBe(2);
     expect(fixture.maxProjectBytes).toBe(MAX_PROJECT_BYTES);
     expect(fixture.authorBudgetBytes).toBe(GAME_BUDGET_BYTES);
+    expect(fixture.platformCeilingBytes).toBe(GAMEKIT_PLATFORM_BYTES);
     expect(fixture.gameKitModules).toEqual([...GAME_KIT_MODULES]);
   });
 
@@ -80,56 +84,24 @@ describe('games-repo source extractors', () => {
     expect(extractGameKitModules(source)).toEqual([...GAME_KIT_MODULES]);
   });
 
-  it('evaluates MAX_BUNDLE_BYTES across named platform allowances', () => {
-    // Values mirror games-repo validate.ts, allowance for allowance, so the total
-    // is the real MAX_PROJECT_BYTES rather than a made-up sum that happens to land
-    // on it. Two of them are `a + b` sums over there — an allowance that was raised
-    // keeps the original and the raise side by side instead of collapsing to one
-    // opaque number — so the extractor has to evaluate those, not just read literals.
+  it('evaluates MAX_BUNDLE_BYTES from the single platform ceiling', () => {
+    // Games-repo #281 collapsed the per-feature ledger into one GAMEKIT_PLATFORM_BYTES.
+    // The extractor still has to resolve `BUDGET + PLATFORM` (and `a + b` / `a * b`
+    // forms inside those consts), not only bare literals.
+    const source = `
+      const GAME_BUDGET_BYTES = 200 * 1024;
+      const GAMEKIT_PLATFORM_BYTES = 275_387;
+      const MAX_BUNDLE_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
+    `;
+    expect(extractMaxBundleBytes(source)).toBe(MAX_PROJECT_BYTES);
+  });
+
+  it('still evaluates a + b allowance expressions when a tip uses them', () => {
     const source = `
       const GAME_BUDGET_BYTES = 200 * 1024;
       const GAMEKIT_TOUCH_BYTES = 7_501 + 5_560;
-      const GAMEKIT_RESTART_BYTES = 2_477;
-      const GAMEKIT_MUSIC_BYTES = 7_091 + 650;
-      const GAMEKIT_TOUCH_HINT_BYTES = 89;
-      const GAMEKIT_PROGRESS_BYTES = 307;
-      const GAMEKIT_UNIVERSAL_INPUT_BYTES = 3_191;
-      const GAMEKIT_POINTER_POLL_BYTES = 7_083;
-      const GAMEKIT_DRAW_SURFACE_BYTES = 9_459;
-      const GAMEKIT_POINTER_RELEASE_BYTES = 430;
-      const GAMEKIT_HOST_PAUSE_BYTES = 1_473;
-      const GAMEKIT_MASCOT_DRAW_BYTES = 679;
-      const GAMEKIT_HEADROOM_BYTES = 75_237;
-      const GAMEKIT_GFX3D_BYTES = 96_000;
-      const GAMEKIT_LOOK_CONTROLS_BYTES = 4_683;
-      const GAMEKIT_SPATIAL_AUDIO_BYTES = 2_977;
-      const GAMEKIT_ZONE_BYTES = 12_000;
-      const GAMEKIT_VOICE_BYTES = 8_000;
-      const GAMEKIT_WORLD_BYTES = 15_000;
-      const GAMEKIT_GAMEPLAY_BYTES = 9_000;
-      const GAMEKIT_SENSING_BYTES = 6_500;
-      const MAX_BUNDLE_BYTES =
-        GAME_BUDGET_BYTES +
-        GAMEKIT_TOUCH_BYTES +
-        GAMEKIT_RESTART_BYTES +
-        GAMEKIT_MUSIC_BYTES +
-        GAMEKIT_TOUCH_HINT_BYTES +
-        GAMEKIT_PROGRESS_BYTES +
-        GAMEKIT_UNIVERSAL_INPUT_BYTES +
-        GAMEKIT_POINTER_POLL_BYTES +
-        GAMEKIT_DRAW_SURFACE_BYTES +
-        GAMEKIT_POINTER_RELEASE_BYTES +
-        GAMEKIT_HOST_PAUSE_BYTES +
-        GAMEKIT_MASCOT_DRAW_BYTES +
-        GAMEKIT_HEADROOM_BYTES +
-        GAMEKIT_GFX3D_BYTES +
-        GAMEKIT_LOOK_CONTROLS_BYTES +
-        GAMEKIT_SPATIAL_AUDIO_BYTES +
-        GAMEKIT_ZONE_BYTES +
-        GAMEKIT_VOICE_BYTES +
-        GAMEKIT_WORLD_BYTES +
-        GAMEKIT_GAMEPLAY_BYTES +
-        GAMEKIT_SENSING_BYTES;
+      const GAMEKIT_PLATFORM_BYTES = GAMEKIT_TOUCH_BYTES + 262_326;
+      const MAX_BUNDLE_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
     `;
     expect(extractMaxBundleBytes(source)).toBe(MAX_PROJECT_BYTES);
   });

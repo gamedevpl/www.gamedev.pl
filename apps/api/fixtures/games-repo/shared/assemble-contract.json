@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "_comment": "Cross-repo serve contract. Website half: www.gamedev.pl apps/api/src/games-repo-contract.ts + CI contract:games-repo (PR #253). Keep GAME_KIT_MODULES as an array literal in tools/lib/assemble.ts for that scraper. maxProjectBytes must equal games Check 4 MAX_BUNDLE_BYTES (currently includes gfx3d reserve, look/spatial, mascotDraw, and a deliberate headroom band).",
+  "version": 2,
+  "_comment": "Cross-repo serve contract. Website half: www.gamedev.pl apps/api/src/games-repo-contract.ts + CI contract:games-repo (PR #253). Keep GAME_KIT_MODULES as an array literal in tools/lib/assemble.ts for that scraper. maxProjectBytes = authorBudgetBytes + platformCeilingBytes. The author gate is measured (assembled − platformBytes); the ceiling is serve-compat only. Feature-by-feature archaeology: docs/platform-byte-ledger.md in the games repo.",
   "gameKitModules": [
     "input",
     "collision",
@@ -23,28 +23,7 @@
     "voice"
   ],
   "authorBudgetBytes": 204800,
-  "platformAllowancesBytes": {
-    "touch": 13061,
-    "restart": 2477,
-    "music": 7741,
-    "touchHint": 89,
-    "progress": 613,
-    "universalInput": 3191,
-    "pointerPoll": 7083,
-    "drawSurface": 9459,
-    "pointerRelease": 430,
-    "hostPause": 1473,
-    "mascotDraw": 679,
-    "headroom": 74931,
-    "gfx3d": 96000,
-    "lookControls": 4683,
-    "spatialAudio": 2977,
-    "zone": 12000,
-    "sensing": 6500,
-    "voice": 8000,
-    "world": 15000,
-    "gameplay": 9000
-  },
+  "platformCeilingBytes": 275387,
   "maxProjectBytes": 480187,
   "audio": {
     "musicField": "string",

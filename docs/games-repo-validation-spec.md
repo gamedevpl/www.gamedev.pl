@@ -21,15 +21,15 @@ This specification defines the quality gates enforced on incoming pull requests 
 
 ### 2. Game Bundle Size Cap
 
-- Calculate total byte size of all files in the individual game directory.
-- Hard failure if the author's own bytes exceed 204,800 (200 KiB).
-- On top of that sits the GameKit platform allowance — the touch pad, restart button,
-  music glue and friends that every assembled game carries whether it asked or not.
-  Charging those to the author would silently shrink what they may write, so the served
-  cap is author budget + allowances. The live numbers are `GAME_BUDGET_BYTES` and
-  `GAMEKIT_PLATFORM_BYTES` in `apps/api/src/games-repo-contract.ts`, which
-  `apps/api/src/assemble.ts` re-exports as `MAX_PROJECT_BYTES` — do not restate them
-  here, or this page becomes a third copy to keep in lockstep.
+- Hard failure if the author's own bytes exceed 204,800 (200 KiB). Games-repo Check 4
+  measures those as `assembled − platformBytes` (selected GameKit modules, inlined audio,
+  shell CSS) — a platform change cannot break a published game whose author spent nothing.
+- On top of that sits a single serve-compat platform ceiling for the touch pad, restart
+  button, music glue, opt-in reserves, and friends. The served cap is author budget +
+  that ceiling. The live numbers are `GAME_BUDGET_BYTES` and `GAMEKIT_PLATFORM_BYTES` in
+  `apps/api/src/games-repo-contract.ts`, which `apps/api/src/assemble.ts` re-exports as
+  `MAX_PROJECT_BYTES` — do not restate them here, or this page becomes a third copy to
+  keep in lockstep.
 
 #### Raising the cap: merge the website half first
 
