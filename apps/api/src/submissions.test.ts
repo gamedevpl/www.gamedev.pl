@@ -2965,8 +2965,8 @@ describe('games published from the store rather than the repo', () => {
     expect(mp4.headers['content-type']).toMatch(/video\/mp4/);
 
     // Filenames the metadata does not declare stay behind the API boundary.
-    const secret = await app.inject({ method: 'GET', url: '/api/games/comet-courier/media/secret.png' });
-    expect(secret.statusCode).toBe(404);
+    const undeclared = await app.inject({ method: 'GET', url: '/api/games/comet-courier/media/secret.png' });
+    expect(undeclared.statusCode).toBe(404);
 
     await app.close();
   });
