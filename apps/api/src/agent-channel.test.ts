@@ -241,10 +241,9 @@ describe('agent build channel', () => {
     expect(await store.listBuildEvents(ISSUE)).toHaveLength(0);
   });
 
-  it('tells an agent to stop when the operator canceled the job', async () => {
-    // This is the whole mechanism behind `agentBackend.cancel` on the Copilot backend:
-    // there is no kill endpoint, so cancellation is the job being terminal here — the
-    // live session learns on its next report, and its writes stop landing.
+  it('rejects the pre-cancel token after operator cancel bumps the round generation', async () => {
+    // Cancel closes the round (generation bump). The agent's held key is then stale;
+    // the 401 fresh-prompt body is the stop signal — no terminal-job exception.
     const store = new InMemoryStore();
     await seedSubmission(store);
     await store.recordJobTransition(ISSUE, {
@@ -253,21 +252,18 @@ describe('agent build channel', () => {
       by: 'operator',
       reason: 'operator_canceled',
     });
+    expect((await store.getSubmission(ISSUE))?.roundGeneration).toBe(2);
     app = await createApp(store);
 
     const response = await app.inject({
       method: 'POST',
       url: '/api/agent/build/progress',
-      headers: agentHeaders(),
+      headers: agentHeaders(ISSUE, 1),
       payload: { text: 'Still building away.' },
     });
 
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({
-      accepted: false,
-      rejected: 'stopped',
-      control: { stop: true, reason: 'canceled' },
-    });
+    expect(response.statusCode).toBe(401);
+    expect(response.json().error).toBe(STALE_AGENT_TOKEN_REASON);
     expect(await store.listBuildEvents(ISSUE)).toHaveLength(0);
   });
 
@@ -326,6 +322,47 @@ describe('agent build channel', () => {
     });
     expect(expiredRes.statusCode).toBe(401);
     expect(expiredRes.json().error).toBe(STALE_AGENT_TOKEN_REASON);
+  });
+
+  it('rejects stale and expired tokens on terminal jobs with a strict 401 (no stopReason bypass)', async () => {
+    // Regression for the rejected resolveBuild exception: publishedAt is permanent, so
+    // letting a signature-valid stale/expired key through on stopReason would grant
+    // indefinite source/inbox reads and unguarded inbox/ack writes.
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    await store.setSubmissionPublishedAt(ISSUE, '2026-07-31T12:00:00.000Z');
+    // Leave roundGeneration at 1 so a gen-99 key is clearly stale, not merely "closed".
+    app = await createApp(store);
+
+    const staleHeaders = agentHeaders(ISSUE, 99);
+    for (const req of [
+      { method: 'GET' as const, url: '/api/agent/build/sources' },
+      { method: 'GET' as const, url: '/api/agent/build/inbox' },
+      { method: 'POST' as const, url: '/api/agent/build/inbox/ack', payload: { ids: ['m1'] } },
+      { method: 'POST' as const, url: '/api/agent/build/progress', payload: { text: 'hello' } },
+    ]) {
+      const res = await app.inject({
+        method: req.method,
+        url: req.url,
+        headers: staleHeaders,
+        ...(req.payload ? { payload: req.payload } : {}),
+      });
+      expect(res.statusCode, req.url).toBe(401);
+      expect(res.json().error).toBe(STALE_AGENT_TOKEN_REASON);
+    }
+
+    const expired = mintAgentToken(ISSUE, secret, {
+      roundGeneration: 1,
+      now: Date.now() - 20 * 24 * 60 * 60 * 1000,
+      ttlDays: 14,
+    });
+    const expiredSources = await app.inject({
+      method: 'GET',
+      url: '/api/agent/build/sources',
+      headers: { authorization: `Bearer ${expired}` },
+    });
+    expect(expiredSources.statusCode).toBe(401);
+    expect(expiredSources.json().error).toBe(STALE_AGENT_TOKEN_REASON);
   });
 
   it('still accepts a legacy token on a job that has never closed a round under the new model', async () => {

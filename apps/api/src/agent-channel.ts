@@ -290,15 +290,14 @@ export async function registerAgentChannelRoutes(
       assertAgentTokenActive(claims, record, now());
     } catch (error) {
       if (!(error instanceof InvalidAgentTokenError)) throw error;
-      // Closing a round bumps the generation so the capability dies — but a connected
-      // agent still has to hear `control.stop` once. A cryptographically valid token
-      // for this job is enough to learn the job is over; every write path below still
-      // refuses on `stopReason`. An expired or stale key on a live round keeps the
-      // fresh-prompt answer.
-      if (!stopReason(record)) {
-        reply.status(401).send({ error: error.message || 'invalid build token' });
-        return null;
-      }
+      // Stale/expired tokens are a strict 401 in every case — including terminal jobs.
+      // `publishedAt` (and other stop reasons) are permanent; letting a signature-valid
+      // but generation-stale or expired key through would grant indefinite read of
+      // sources/inbox plus unguarded inbox/ack writes. The 401 body already is the
+      // stop signal ("this build is finished — get a fresh prompt…"). Terminal-receipt
+      // reads for a closed round's own gate verdict belong to BY-05/BY-06, not here.
+      reply.status(401).send({ error: error.message || 'invalid build token' });
+      return null;
     }
 
     return { issueNumber, record };
