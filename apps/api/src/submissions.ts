@@ -16,7 +16,7 @@ import {
 import { startHealthCheck } from './game-health.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
 import type { AgentBackend, SeedFiles } from './agent-backend.js';
-import { proposeSeedSlug, type GameSeeder, type SeedDraft } from './game-seed.js';
+import type { GameSeeder, SeedDraft } from './game-seed.js';
 import {
   canTransition,
   detectStall,
@@ -497,10 +497,11 @@ export async function registerSubmissionRoutes(
    * freshly invented draft of a game the creator has already played — the opposite of
    * what they asked for.
    *
-   * The slug is minted here because a seed has to be written somewhere before the agent
-   * exists to choose a name. It is persisted before dispatch for the same reason the
-   * improvement path persists one: the agent is about to be told which directory it owns,
-   * and a job whose record disagrees with the brief has already lost track of its game.
+   * The slug is minted by the seeder — it has to be, because "is this name free" is a
+   * question about the catalog as much as about our own jobs, and the catalog is what the
+   * seeder is holding. It is persisted before dispatch for the same reason the improvement
+   * path persists one: the agent is about to be told which directory it owns, and a job
+   * whose record disagrees with the brief has already lost track of its game.
    */
   async function seedBuild(input: {
     issueNumber: number;
@@ -511,16 +512,16 @@ export async function registerSubmissionRoutes(
     try {
       const record = await store.getSubmission(input.issueNumber);
       if (!record) return undefined;
-      const slug =
-        record.slug ??
-        (await proposeSeedSlug(record.title, input.issueNumber, async (candidate) =>
-          Boolean(await store.getSubmissionBySlug(candidate)),
-        ));
 
-      const draft = await gameSeeder.seed({ slug, title: record.title, spec: input.spec });
+      const draft = await gameSeeder.seed({
+        jobId: input.issueNumber,
+        title: record.title,
+        spec: input.spec,
+        isSlugTaken: async (candidate) => Boolean(await store.getSubmissionBySlug(candidate)),
+      });
       if (!draft) return undefined;
 
-      if (!record.slug) await store.setSubmissionSlug(input.issueNumber, slug);
+      await store.setSubmissionSlug(input.issueNumber, draft.slug);
       await recordSeedCost(input.issueNumber, draft, input.log);
       return {
         slug: draft.slug,

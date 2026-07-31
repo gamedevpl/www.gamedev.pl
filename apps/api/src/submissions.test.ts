@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mintAgentToken } from './agent-token.js';
 import { buildApp } from './app.js';
-import type { GameSeeder, SeedDraft } from './game-seed.js';
+import { proposeSeedSlug, type GameSeeder, type SeedDraft } from './game-seed.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
 import type { ContentChecker } from './moderation.js';
@@ -2758,7 +2758,8 @@ describe('operator health re-gate', () => {
 describe('seeded dispatch', () => {
   function seederStub(draft: Partial<SeedDraft> | null, onSeed?: (slug: string) => void): GameSeeder {
     return {
-      seed: async ({ slug }) => {
+      seed: async ({ title, jobId, isSlugTaken }) => {
+        const slug = await proposeSeedSlug(title, jobId, isSlugTaken);
         onSeed?.(slug);
         if (!draft) return null;
         return {

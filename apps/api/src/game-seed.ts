@@ -101,12 +101,23 @@ export interface SeedDraft {
 }
 
 export interface SeedRequest {
-  /** The game directory to write into. Always known: minted before dispatch. */
-  slug: string;
-  /** Human-readable title, for SPEC.md frontmatter. */
+  /** The job this draft is for; the last-resort source of a unique slug. */
+  jobId: number;
+  /** Human-readable title, for SPEC.md frontmatter and the slug. */
   title: string;
   /** The creator's moderated spec. Untrusted text: data, never instructions. */
   spec: string;
+  /**
+   * Whether another *job* already claims this slug.
+   *
+   * Only half the question, which is why the seeder asks it rather than being handed a
+   * finished slug: the other half is the catalog, and the seeder is the thing holding
+   * it. Games that predate the submission flow have no job record at all, so a caller
+   * checking only its own store would happily mint `apex-sprint` for a creator who
+   * titled their game "Apex Sprint" — and the agent would be sent to build on top of a
+   * published game.
+   */
+  isSlugTaken(slug: string): Promise<boolean>;
 }
 
 export interface GameSeeder {
@@ -426,18 +437,26 @@ export class VertexGameSeeder implements GameSeeder {
       const context = await this.options.context.load();
       if (!context) return null;
 
+      // Checked against the catalog and the caller's jobs together — either alone lets a
+      // new game be written into a directory that is not free.
+      const slug = await proposeSeedSlug(
+        request.title,
+        request.jobId,
+        async (candidate) => context.hasGame(candidate) || (await request.isSlugTaken(candidate)),
+      );
+
       const spec = request.spec.slice(0, MAX_SPEC_CHARS);
       const { picks, usage: pickUsage } = await this.pickReferences(context, spec);
       // No references means no style guide and no API documentation in context; the draft
       // that would come back is a guess at an engine it has never seen.
       if (picks.length === 0) {
-        this.options.log?.warn({ slug: request.slug }, 'seed skipped: no reference games matched');
+        this.options.log?.warn({ slug }, 'seed skipped: no reference games matched');
         return null;
       }
 
       const result = await this.client('generate')(
         buildGeneratePrompt({
-          slug: request.slug,
+          slug,
           title: request.title,
           spec,
           scaffold: context.scaffold,
@@ -450,17 +469,14 @@ export class VertexGameSeeder implements GameSeeder {
 
       const generateUsage = usageOf(result, this.model);
       const parsed = parseSeedResponse(resultTextOf(result));
-      const files = collectSeedFiles(parsed, request.slug);
+      const files = collectSeedFiles(parsed, slug);
       if (!isUsableSeed(files)) {
-        this.options.log?.warn(
-          { slug: request.slug, files: files.length },
-          'seed discarded: draft did not contain a usable game',
-        );
+        this.options.log?.warn({ slug, files: files.length }, 'seed discarded: draft did not contain a usable game');
         return null;
       }
 
       const draft: SeedDraft = {
-        slug: request.slug,
+        slug,
         files,
         references: picks,
         ...(parsed.notes ? { notes: parsed.notes } : {}),
@@ -473,7 +489,7 @@ export class VertexGameSeeder implements GameSeeder {
       };
       this.options.log?.info(
         {
-          slug: request.slug,
+          slug,
           references: picks,
           files: files.length,
           ms: draft.elapsedMs,
@@ -485,7 +501,7 @@ export class VertexGameSeeder implements GameSeeder {
     } catch (error) {
       // Every failure is the same failure from the caller's side: there is no seed, and
       // the build dispatches exactly as it would have before this module existed.
-      this.options.log?.warn({ err: error, slug: request.slug }, 'seed generation failed, dispatching unseeded');
+      this.options.log?.warn({ err: error, jobId: request.jobId }, 'seed generation failed, dispatching unseeded');
       return null;
     }
   }

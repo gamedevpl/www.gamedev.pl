@@ -252,6 +252,24 @@ function stubClient(responses: { text: string; inputTokens?: number; outputToken
   return builder as unknown as ConstructorParameters<typeof VertexGameSeeder>[0]['client'];
 }
 
+const draftFor = (slug: string) =>
+  [
+    `--- games/${slug}/SPEC.md ---`,
+    '---',
+    `title: ${slug}`,
+    `slug: ${slug}`,
+    '---',
+    '## Concept',
+    'A game.',
+    `--- games/${slug}/game.ts ---`,
+    "import { startGame } from './game/runtime.ts';",
+    'startGame();',
+    `--- games/${slug}/game/model.ts ---`,
+    'export const SPEED = 3;',
+    '--- NOTES ---',
+    'The trace still needs recording.',
+  ].join('\n');
+
 const GOOD_DRAFT = [
   '--- games/my-game/SPEC.md ---',
   '---',
@@ -270,7 +288,7 @@ const GOOD_DRAFT = [
 ].join('\n');
 
 describe('VertexGameSeeder', () => {
-  const request = { slug: 'my-game', title: 'My Game', spec: 'A game about tanks' };
+  const request = { jobId: 7, title: 'My Game', spec: 'A game about tanks', isSlugTaken: async () => false };
 
   it('returns a draft with references, usage summed across both calls, and notes', async () => {
     const seeder = new VertexGameSeeder({
@@ -289,6 +307,32 @@ describe('VertexGameSeeder', () => {
     expect(draft!.notes).toBe('The trace still needs recording.');
     // Both calls are billed to the job, not just the expensive one.
     expect(draft!.usage).toEqual({ inputTokens: 30_400, outputTokens: 8_010, model: 'gemini-3.6-flash' });
+  });
+
+  it('does not mint a slug that a published game already owns', async () => {
+    // The bug this exists for: a creator titling their game "Apex Sprint" would otherwise
+    // be sent to build on top of a published game. Catalog games predate the submission
+    // flow and have no job record, so checking our own jobs alone does not see them.
+    const seededWithCollision = new VertexGameSeeder({
+      context: stubContext(),
+      client: stubClient([{ text: '{"picks":["word-forge"]}' }, { text: draftFor('apex-sprint-2') }]),
+    });
+
+    const draft = await seededWithCollision.seed({ ...request, title: 'Apex Sprint' });
+
+    expect(draft!.slug).toBe('apex-sprint-2');
+    expect(draft!.files.map((file) => file.path)).toEqual(['SPEC.md', 'game.ts', 'game/model.ts']);
+  });
+
+  it('mints the slug from the title, folding diacritics', async () => {
+    const seeder = new VertexGameSeeder({
+      context: stubContext(),
+      client: stubClient([{ text: '{"picks":["apex-sprint"]}' }, { text: draftFor('oddzial-komandosow') }]),
+    });
+
+    const draft = await seeder.seed({ ...request, title: 'Oddział Komandosów' });
+
+    expect(draft!.slug).toBe('oddzial-komandosow');
   });
 
   it('drops hallucinated slugs and keeps the real ones', async () => {
@@ -348,6 +392,18 @@ describe('VertexGameSeeder', () => {
     const seeder = new VertexGameSeeder({
       context: stubContext(),
       client: stubClient([{ text: 'I think apex-sprint would be good' }, { text: GOOD_DRAFT }]),
+    });
+
+    expect(await seeder.seed(request)).toBeNull();
+  });
+
+  it('discards a draft that wrote into a different game than the one it was given', async () => {
+    // The containment guard seen from the other side: paths are only stripped of *this*
+    // game's prefix, so a draft labelled with some other slug lands nowhere and the
+    // build starts unseeded rather than writing into a directory it does not own.
+    const seeder = new VertexGameSeeder({
+      context: stubContext(),
+      client: stubClient([{ text: '{"picks":["apex-sprint"]}' }, { text: draftFor('some-other-game') }]),
     });
 
     expect(await seeder.seed(request)).toBeNull();
