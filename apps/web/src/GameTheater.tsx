@@ -220,6 +220,20 @@ export function GameTheater({
     return () => query.removeEventListener('change', update);
   }, []);
 
+  // Where the how-to-play bar copy is hidden but the rest of the chrome is still on the
+  // bar. Tracked in JS for the same reason `isNarrow` is: the menu must not be rendered
+  // empty, so whether it exists is a render decision, not something CSS can make.
+  const [isMidWidth, setIsMidWidth] = useState(false);
+
+  useEffect(() => {
+    if (typeof matchMedia !== 'function') return;
+    const query = matchMedia('(max-width: 900px)');
+    const update = () => setIsMidWidth(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+
   useEffect(() => {
     const onChange = () => setFullscreen(Boolean(document.fullscreenElement));
     document.addEventListener('fullscreenchange', onChange);
@@ -301,7 +315,12 @@ export function GameTheater({
     };
   }, [moreOpen]);
 
-  const showMoreMenu = Boolean(reportSlug) || isNarrow;
+  // The menu also has to exist wherever a control has shed into it. How-to-play sheds at
+  // 900px while sound and fullscreen shed at 768px, so between those widths a game with
+  // no `reportSlug` (a draft, a generated game — no catalog entry, but the game document
+  // still reports its own controls) would have had the bar copy hidden by CSS and no menu
+  // to fall back to, and the control would have vanished entirely.
+  const showMoreMenu = Boolean(reportSlug) || isNarrow || (hasControls && isMidWidth);
 
   const soundControl = (className: string) => (
     <button

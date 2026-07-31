@@ -327,3 +327,75 @@ describe('GameTheater controls reported by the game', () => {
     expect(container.querySelector('.howto-btn')).toBeNull();
   });
 });
+
+describe('GameTheater how-to-play reachability', () => {
+  /**
+   * jsdom implements no matchMedia, so a breakpoint has to be stated to be tested.
+   * `width` here is the viewport the component should believe it is on.
+   */
+  function stubViewport(width: number) {
+    const listeners = new Set<() => void>();
+    (window as unknown as Record<string, unknown>).matchMedia = (query: string) => {
+      const limit = Number(/max-width:\s*(\d+)px/.exec(query)?.[1] ?? 0);
+      return {
+        matches: width <= limit,
+        addEventListener: (_: string, fn: () => void) => listeners.add(fn),
+        removeEventListener: (_: string, fn: () => void) => listeners.delete(fn),
+      };
+    };
+    return () => delete (window as unknown as Record<string, unknown>).matchMedia;
+  }
+
+  async function drawDraft() {
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(
+        <GameTheater
+          title="Draft"
+          badge={{ icon: 'rocket', label: 'AI' }}
+          source={{ html: '<canvas></canvas>' }}
+          onExit={() => undefined}
+        />,
+      );
+    });
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { source: 'gdpl-player', type: 'controls', rows: [{ keys: 'W', action: 'Jump' }] },
+          origin: 'null',
+        }),
+      );
+    });
+  }
+
+  it('renders the More menu for a slug-less game at a width where the bar copy is hidden', async () => {
+    // The bar copy sheds at 900px but the menu only existed below 768px, so between the
+    // two a game with no `reportSlug` — a draft or a generated game, which have no catalog
+    // entry but do report their own controls over the bridge — had the bar copy hidden by
+    // CSS and no menu to fall back to, and the control vanished. Unreachable while the
+    // catalog was the only source; reachable the moment the game itself became one.
+    const restore = stubViewport(820);
+    try {
+      await drawDraft();
+      expect(container.querySelector('.theater-more')).not.toBeNull();
+      const menuItems = [...container.querySelectorAll('.theater-more-panel .theater-menu-item')];
+      expect(menuItems.some((el) => el.textContent?.includes('How to play'))).toBe(true);
+    } finally {
+      restore();
+    }
+  });
+
+  it('does not grow a More menu on a wide screen, where the bar copy is the route', async () => {
+    // The menu must not appear just because a game has controls: on a wide screen the bar
+    // copy is visible, and an otherwise-empty overflow menu is the thing `isNarrow` was
+    // introduced to avoid.
+    const restore = stubViewport(1280);
+    try {
+      await drawDraft();
+      expect(container.querySelector('.howto-btn')).not.toBeNull();
+      expect(container.querySelector('.theater-more')).toBeNull();
+    } finally {
+      restore();
+    }
+  });
+});
