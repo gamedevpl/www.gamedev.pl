@@ -38,6 +38,7 @@ import {
   type JobTransition,
 } from './job-state.js';
 import { createSelfBuildBackend } from './self-build-backend.js';
+import { mintConnectPayload } from './self-build-connect.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
@@ -1977,6 +1978,69 @@ export async function registerSubmissionRoutes(
       },
     });
   });
+
+  /**
+   * Everything a creator needs to connect their own coding agent to a self-build round.
+   *
+   * Creator-session auth, owner only. Valid only while the active round's builder is
+   * `self`. Install snippets configure the MCP URL alone; the round key rides the
+   * kickoff prompt (and regenerating mints a fresh key with a new signed `exp`).
+   * Pending, undelivered creator inbox lines are embedded under "also apply:" so a
+   * re-copy never drops queued feedback. See self-build-connect.ts for the templates.
+   */
+  app.get(
+    '/api/submissions/:id/connect',
+    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      if (!submissionTokenSecret) {
+        return reply.status(503).send({ error: 'submissions are not configured' });
+      }
+      if (!checkUserAccess(request, reply)) return;
+      if (!store) {
+        return reply.status(503).send({ error: 'submissions are not configured' });
+      }
+
+      const id = z.string().parse((request.params as { id?: string }).id);
+      let issueNumber: number;
+      try {
+        issueNumber = verifyToken(id, submissionTokenSecret);
+      } catch (error) {
+        if (error instanceof InvalidTokenError) {
+          return reply.status(400).send({ error: 'invalid submission' });
+        }
+        throw error;
+      }
+
+      const record = await store.getSubmission(issueNumber);
+      // Same shape as share/abandon: missing and not-yours both 403 so existence is not
+      // confirmed to a stranger who holds (or forges) a status link.
+      if (!record || record.ownerUid !== request.user!.uid) {
+        return reply.status(403).send({ error: 'only the creator can connect a build' });
+      }
+
+      const builder = builderOf(record);
+      if (builder !== 'self' || !isActiveBuildRound(record)) {
+        return reply.status(409).send({
+          error: 'connect_unavailable',
+          reason: builder !== 'self' ? 'not_self_round' : 'inactive_round',
+          builder,
+        });
+      }
+
+      const roundGeneration = (await store.ensureRoundGeneration(issueNumber)) ?? 1;
+      const pendingMessages = await store.listPendingCreatorMessages(issueNumber);
+      const payload = mintConnectPayload({
+        jobId: issueNumber,
+        title: record.title,
+        roundGeneration,
+        submissionTokenSecret,
+        appBaseUrl: notifyAppBaseUrl,
+        pendingMessages,
+        now: now(),
+      });
+      return reply.send(payload);
+    },
+  );
 
   /**
    * The creator decides whether anyone else may play their game before it is published.
