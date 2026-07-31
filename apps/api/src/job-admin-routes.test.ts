@@ -207,6 +207,9 @@ describe('POST /api/admin/jobs/:issueNumber/publish', () => {
     expect(record?.state).toBe('published');
     expect(record?.transitions?.map((entry) => entry.to)).toEqual(['publishing', 'published']);
     expect(record?.publishedAt).toBeTruthy();
+    // The creator rail reads `lastStatus`, not `state` — without this a published game
+    // also kept rendering as an in-progress "yours" card.
+    expect(record?.lastStatus).toBe('published');
 
     await app.close();
   });

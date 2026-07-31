@@ -1620,7 +1620,14 @@ function parseCommittedMultiplayer(value: unknown): CatalogGameMultiplayer | nul
   return { mode: 'controllers', minPlayers: multiplayer.minPlayers, maxPlayers: multiplayer.maxPlayers };
 }
 
-function parseGameMedia(metadataJson: string | null): CatalogGameMedia | null {
+/**
+ * Turns a capture harness `media/metadata.json` into the catalog's media shape.
+ *
+ * Exported so the store-publish path can apply the same allowlist the repo path uses
+ * when serving `/api/games/:slug/media/:filename` — a second parser would be a second
+ * answer to "which filenames are public".
+ */
+export function parseGameMedia(metadataJson: string | null): CatalogGameMedia | null {
   if (!metadataJson) {
     return null;
   }

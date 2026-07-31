@@ -2874,12 +2874,26 @@ describe('status route under store pressure', () => {
 });
 
 describe('games published from the store rather than the repo', () => {
+  const MEDIA_METADATA = JSON.stringify({
+    captures: {
+      opening: { file: 'opening.png' },
+      gameplay: { file: 'gameplay.png' },
+    },
+    video: { file: 'gameplay.mp4' },
+  });
+
   /** A store holding one published version: its spec, and the bundle the gate assembled. */
   function publishedGamesStore(bundle = '<!doctype html><meta name="ai-provenance" content="x" />game') {
     return {
       getSourceFile: async (_slug: string, _version: string, path: string) =>
         path === 'SPEC.md' ? '---\ntitle: Comet Courier\ngenre: arcade\n---\n' : null,
-      getDerivedArtifact: async () => Buffer.from(bundle, 'utf8'),
+      getDerivedArtifact: async (_slug: string, _version: string, name: string) => {
+        if (name === 'bundle.html') return Buffer.from(bundle, 'utf8');
+        if (name === 'media/metadata.json') return Buffer.from(MEDIA_METADATA, 'utf8');
+        if (name === 'media/opening.png') return Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+        if (name === 'media/gameplay.mp4') return Buffer.from('fake-mp4');
+        return null;
+      },
       getManifest: async () => null,
       putCandidateSources: async () => ({ version: 'v1', manifest: {} }),
       putGateResult: async () => {},
@@ -2920,8 +2934,39 @@ describe('games published from the store rather than the repo', () => {
     expect(response.statusCode).toBe(200);
     const entry = response.json().find((item: CatalogGameEntry) => item.slug === 'comet-courier');
     // Described by the same parser the repo path uses, so the two cannot disagree about
-    // what a game's genre is.
-    expect(entry).toMatchObject({ title: 'Comet Courier', genre: 'arcade', status: 'published' });
+    // what a game's genre is. Media comes from the gate's derived artifacts — stubbing
+    // the sibling reader used to leave every store card with `media: null`.
+    expect(entry).toMatchObject({
+      title: 'Comet Courier',
+      genre: 'arcade',
+      status: 'published',
+      media: {
+        screenshots: [
+          { name: 'opening', file: 'opening.png' },
+          { name: 'gameplay', file: 'gameplay.png' },
+        ],
+        video: 'gameplay.mp4',
+      },
+    });
+
+    await app.close();
+  });
+
+  it('serves store-published gallery media from the published version’s derived artifacts', async () => {
+    const { app } = await appWithPublication(publishedGamesStore());
+
+    const png = await app.inject({ method: 'GET', url: '/api/games/comet-courier/media/opening.png' });
+    expect(png.statusCode).toBe(200);
+    expect(png.headers['content-type']).toMatch(/image\/png/);
+    expect(png.rawPayload).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+
+    const mp4 = await app.inject({ method: 'GET', url: '/api/games/comet-courier/media/gameplay.mp4' });
+    expect(mp4.statusCode).toBe(200);
+    expect(mp4.headers['content-type']).toMatch(/video\/mp4/);
+
+    // Filenames the metadata does not declare stay behind the API boundary.
+    const secret = await app.inject({ method: 'GET', url: '/api/games/comet-courier/media/secret.png' });
+    expect(secret.statusCode).toBe(404);
 
     await app.close();
   });
