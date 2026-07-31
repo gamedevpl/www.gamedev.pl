@@ -167,7 +167,11 @@ export function GameTheater({
   // is the only source there, while the bridge itself re-reports once GameKit has wired
   // its input. Recomputing is what lets the control appear when either one lands.
   const controlRows = resolveControlRows(player.controls, controls ?? '');
-  const hasControls = controlRows.length > 0;
+  // A pad counts on its own. A generated game on a phone can mount an on-screen pad while
+  // shipping no legend, no hint and no catalog entry — naming its buttons is the whole
+  // answer to "how do I play this", and gating the control on keyboard rows hid it.
+  const hasControls =
+    controlRows.length > 0 || Boolean(player.controls?.pad) || (player.controls?.padButtons.length ?? 0) > 0;
 
   // Durable progress for games that ask for it (docs/persistent-world-plan.md P1).
   // Keyed on `reportSlug` — the *published* slug — for the same reason the vote and

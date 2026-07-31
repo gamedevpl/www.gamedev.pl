@@ -71,6 +71,24 @@ const BRIDGE = `(function(){
     }
     return out;
   }
+  /**
+   * Keycaps, from the names GameKit reads keys by.
+   *
+   * Space arrives as " ", which survives a truthiness check but is whitespace — the host
+   * collapses and trims every reported field, so posting it raw loses the key entirely and
+   * "Space to fire" renders as an actionless row. The rest are lowercase internal names
+   * ("shift", "arrowup") that read as code rather than as something to press.
+   */
+  var KEY_NAMES={' ':'Space',shift:'Shift',control:'Ctrl',alt:'Alt',meta:'Meta',enter:'Enter',
+    escape:'Esc',tab:'Tab',backspace:'Backspace',arrowup:'Up',arrowdown:'Down',
+    arrowleft:'Left',arrowright:'Right'};
+  function keyName(key){
+    var raw=String(key),lower=raw.toLowerCase();
+    // hasOwnProperty, not a bare lookup: these names come from game code, and "constructor"
+    // would otherwise resolve up the prototype chain to a function.
+    if(Object.prototype.hasOwnProperty.call(KEY_NAMES,lower))return KEY_NAMES[lower];
+    return raw.length===1?raw.toUpperCase():raw;
+  }
   /** GameKit's resolved input config — the only source that can name a touch button. */
   function kitRows(){
     var out=[];
@@ -81,7 +99,9 @@ const BRIDGE = `(function(){
       if(!m)return padRows();
       var buttons=m.buttons||[];
       for(var i=0;i<buttons.length;i++){
-        var keys=(buttons[i].keys||[]).join(' / '),label=String(buttons[i].label||'');
+        var names=[],raw=buttons[i].keys||[];
+        for(var k=0;k<raw.length;k++)names.push(keyName(raw[k]));
+        var keys=names.join(' / '),label=String(buttons[i].label||'');
         if(keys&&label)out.push({keys:keys,action:label,touch:true});
       }
       if(m.pad)out.push({keys:'',action:'',pad:String(m.pad)});

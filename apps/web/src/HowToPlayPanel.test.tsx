@@ -94,6 +94,14 @@ describe('HowToPlayPanel', () => {
     expect(document.querySelector('.howto-dismiss')?.textContent).toContain('Escape');
   });
 
+  it('renders a Touch-only card when the pad is all the game reported', async () => {
+    // On a phone this may be the only answer there is, and a card of just this row beats
+    // no control at all.
+    await draw({ rows: [], padReported: true, padButtons: ['Fire', 'Throttle'] });
+    expect(card()).not.toBeNull();
+    expect(rows()).toEqual([['Touch', 'On-screen pad on touch screens — Fire, Throttle']]);
+  });
+
   it('renders nothing when closed, and nothing when the game has no controls', async () => {
     await draw({ open: false });
     expect(card()).toBeNull();

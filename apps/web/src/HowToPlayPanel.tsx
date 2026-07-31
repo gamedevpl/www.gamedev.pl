@@ -98,12 +98,14 @@ export function HowToPlayPanel({
   }, [open]);
 
   if (!open) return null;
-  if (rows.length === 0) return null;
 
   // The pad is stated when the running game actually mounted one, or when the catalog's
   // build-time classifier says the game uses GameKit's. `native` and `controllers` games
   // handle touch their own way and are not described by either line.
-  const showPad = padReported || touch === 'gamekit';
+  const showPad = padReported || padButtons.length > 0 || touch === 'gamekit';
+  // A card of nothing but a Touch row is still an answer — on a phone it may be the only
+  // one there is. A card of nothing at all is not.
+  if (rows.length === 0 && !showPad) return null;
 
   // Portalled to the body: `.game-theater-bar` and `.theater-more-panel` carry a
   // backdrop-filter, which makes an ancestor the containing block for position:fixed

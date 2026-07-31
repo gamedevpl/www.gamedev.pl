@@ -52,8 +52,12 @@ async function runBridge(bodyHtml: string, gameKit?: Record<string, unknown>): P
       });
     },
   });
-  // The bridge posts on DOMContentLoaded (or immediately), and JSDOM queues delivery.
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  // Wait for the report rather than for a duration: a fixed sleep passes alone and flakes
+  // when the suite runs files in parallel. Every path through `sendControls` posts, even
+  // when the document says nothing, so "no message yet" always means "not yet".
+  for (let waited = 0; waited < 2000 && !posted.some((m) => m.type === 'controls'); waited += 5) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
   return posted;
 }
 
@@ -121,10 +125,37 @@ describe('the bridge control scraper', () => {
         }),
       }),
     );
+    // Posted as keycaps, not as GameKit's internal key names: " " is whitespace the host
+    // would collapse to nothing, losing the key and leaving an actionless row.
     expect(controls?.kit).toEqual([
-      { keys: ' ', action: 'Fire', touch: true },
-      { keys: 'shift / x', action: 'Throttle', touch: true },
+      { keys: 'Space', action: 'Fire', touch: true },
+      { keys: 'Shift / X', action: 'Throttle', touch: true },
       { keys: '', action: '', pad: 'full' },
+    ]);
+  });
+
+  it('names arrows and modifiers as keycaps, and does not walk the prototype doing it', async () => {
+    // The lookup is by key name, and key names come from game code — "constructor" must
+    // resolve to itself, not to Object.prototype.constructor.
+    const controls = controlsFrom(
+      await runBridge('<canvas id="game"></canvas>', {
+        controlsManifest: () => ({
+          pad: false,
+          look: false,
+          steer: false,
+          buttons: [
+            { keys: ['arrowup', 'w'], label: 'Climb' },
+            { keys: ['control'], label: 'Cut' },
+            { keys: ['constructor'], label: 'Odd' },
+          ],
+          touch: false,
+        }),
+      }),
+    );
+    expect(controls?.kit).toEqual([
+      { keys: 'Up / W', action: 'Climb', touch: true },
+      { keys: 'Ctrl', action: 'Cut', touch: true },
+      { keys: 'constructor', action: 'Odd', touch: true },
     ]);
   });
 
@@ -202,7 +233,7 @@ describe('the bridge pad fallback', () => {
       }),
     );
     expect(controls?.kit).toEqual([
-      { keys: ' ', action: 'Fire', touch: true },
+      { keys: 'Space', action: 'Fire', touch: true },
       { keys: '', action: '', pad: 'full' },
     ]);
   });

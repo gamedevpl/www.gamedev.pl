@@ -222,3 +222,23 @@ describe('pad buttons read off the built pad', () => {
     expect(controls?.padButtons).toEqual(['Fire']);
   });
 });
+
+describe('a game whose only answer is its pad', () => {
+  it('counts as having controls, so the trigger renders', () => {
+    // A generated game on a phone: it mounts a pad, but ships no legend, no hint and has
+    // no catalog entry. Naming its buttons is the entire answer to "how do I play this".
+    const controls = readReportedControls({
+      rows: [],
+      hint: '',
+      kit: [
+        { keys: '', action: 'Fire', touch: true },
+        { keys: '', action: '', pad: 'full' },
+      ],
+    });
+    expect(controls).not.toBeNull();
+    expect(controls?.pad).toBe(true);
+    expect(controls?.padButtons).toEqual(['Fire']);
+    // No keyboard rows to show — the caller must not read that as "nothing to show".
+    expect(resolveControlRows(controls, '')).toEqual([]);
+  });
+});
