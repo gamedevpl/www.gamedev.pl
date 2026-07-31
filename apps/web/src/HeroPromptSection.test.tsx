@@ -181,4 +181,62 @@ describe('HeroPromptSection', () => {
 
     await act(async () => root.unmount());
   });
+
+  it('shows listening immediately and renders interim speech on iPhone-style recognition', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    class FakeSpeechRecognition {
+      continuous = false;
+      interimResults = false;
+      lang = '';
+      onstart: (() => void) | null = null;
+      onresult: ((event: { results: Array<{ 0: { transcript: string } }> }) => void) | null = null;
+      onerror: ((event: { error: string }) => void) | null = null;
+      onend: (() => void) | null = null;
+      start = vi.fn();
+      stop = vi.fn(() => this.onend?.());
+    }
+
+    const recognition = new FakeSpeechRecognition();
+    Object.defineProperty(window, 'webkitSpeechRecognition', {
+      configurable: true,
+      value: vi.fn(() => recognition),
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: '',
+          catalogEntries: [],
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+          mockStatus: 'idle',
+          mockError: null,
+        }),
+      );
+      await flushEffects();
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.mic-btn')?.click();
+      await flushEffects();
+    });
+    expect(recognition.interimResults).toBe(true);
+    expect(container.querySelector('.mic-notice-text')?.textContent).toContain('Listening');
+    expect(container.querySelector<HTMLButtonElement>('.mic-btn')?.getAttribute('aria-pressed')).toBe('true');
+
+    await act(async () => {
+      recognition.onresult?.({ results: [{ 0: { transcript: 'A flying cat game' } }] });
+      await flushEffects();
+    });
+    expect(container.querySelector<HTMLTextAreaElement>('.big-prompt-input')?.value).toBe('A flying cat game');
+
+    await act(async () => root.unmount());
+    delete (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition;
+  });
 });

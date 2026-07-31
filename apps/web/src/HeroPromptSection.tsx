@@ -83,7 +83,7 @@ interface SpeechRecognitionResult {
 }
 
 interface SpeechRecognitionEvent {
-  results: SpeechRecognitionResult[];
+  results: ArrayLike<SpeechRecognitionResult>;
 }
 
 interface SpeechRecognitionErrorEvent {
@@ -141,6 +141,11 @@ export function HeroPromptSection({
 
   // Web Speech Recognition
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const speechBasePromptRef = useRef('');
+
+  useEffect(() => {
+    return () => recognitionRef.current?.stop();
+  }, []);
 
   const toggleSpeechRecognition = () => {
     setMicNotice(null);
@@ -164,7 +169,9 @@ export function HeroPromptSection({
     try {
       const recognition = new SpeechClass();
       recognition.continuous = false;
-      recognition.interimResults = false;
+      // Safari on iOS can take a while to produce a final result. Showing its interim
+      // transcription makes the control responsive while the person is still speaking.
+      recognition.interimResults = true;
       recognition.lang = window.navigator.language || 'en-US';
 
       recognition.onstart = () => {
@@ -172,14 +179,18 @@ export function HeroPromptSection({
       };
 
       recognition.onresult = (event: SpeechRecognitionEvent) => {
-        const transcript = event.results?.[0]?.[0]?.transcript;
+        const transcript = Array.from(event.results ?? [])
+          .map((result) => result[0]?.transcript ?? '')
+          .join('')
+          .trim();
         if (transcript) {
-          setPromptText((prev) => (prev ? `${prev} ${transcript}` : transcript));
+          recordCreateStep('prompt_started');
+          setPromptText(speechBasePromptRef.current ? `${speechBasePromptRef.current} ${transcript}` : transcript);
         }
-        setIsListening(false);
       };
 
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        recognitionRef.current = null;
         setIsListening(false);
         if (event.error === 'not-allowed') {
           setMicNotice(t('hero.micDenied'));
@@ -189,10 +200,15 @@ export function HeroPromptSection({
       };
 
       recognition.onend = () => {
+        recognitionRef.current = null;
         setIsListening(false);
       };
 
+      speechBasePromptRef.current = promptText.trim();
       recognitionRef.current = recognition;
+      // Do not wait for Safari's onstart callback: it may only arrive after the native
+      // permission sheet closes, which otherwise makes the page appear unresponsive.
+      setIsListening(true);
       recognition.start();
     } catch (err: unknown) {
       setIsListening(false);
@@ -331,7 +347,8 @@ export function HeroPromptSection({
                 className={`prompt-icon-btn mic-btn ${isListening ? 'listening' : ''}`}
                 onClick={toggleSpeechRecognition}
                 title={isListening ? t('hero.micListening') : t('hero.micStart')}
-                aria-label={t('hero.micStart')}
+                aria-label={isListening ? t('hero.micListening') : t('hero.micStart')}
+                aria-pressed={isListening}
               >
                 <PixelIcon name="mic" size={18} />
               </button>
@@ -364,7 +381,11 @@ export function HeroPromptSection({
             </div>
           </div>
 
-          {micNotice && <p className="mic-notice-text">{micNotice}</p>}
+          {(micNotice || isListening) && (
+            <p className="mic-notice-text" role="status" aria-live="polite">
+              {micNotice ?? t('hero.micListening')}
+            </p>
+          )}
 
           {attachments.length > 0 && (
             <div className="attachments-preview-container">
