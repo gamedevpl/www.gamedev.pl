@@ -56,6 +56,18 @@ export const AGENT_TASK_MODELS = [
 ] as const;
 export type AgentTaskModel = (typeof AGENT_TASK_MODELS)[number];
 
+/**
+ * What GitHub billed for one session.
+ *
+ * `amount` is in **nano-credits** (1 credit = 1e9). Divide by 1e9 for credits; a credit
+ * is $0.01 (`USD_PER_CREDIT`). Present once the session has progressed far enough to
+ * report usage — typically final on completion, absent on a freshly queued session.
+ */
+export interface AgentSessionUsage {
+  amount: number;
+  type: string;
+}
+
 /** One agent run within a task. A task accumulates sessions; it does not replace them. */
 export interface AgentSession {
   id: string;
@@ -69,6 +81,18 @@ export interface AgentSession {
   createdAt?: string;
   updatedAt?: string;
   completedAt?: string;
+  /** What was billed. Absent until the session reports it. */
+  usage?: AgentSessionUsage;
+}
+
+/**
+ * Converts a session's nano-credit `usage.amount` into ledger credits.
+ *
+ * Rounded to the cent-of-a-credit so a 403451775000 reading becomes 403.45 rather than
+ * a float that cannot be quoted next to a dollar figure.
+ */
+export function creditsFromUsageAmount(amount: number): number {
+  return Math.round(amount / 1e7) / 100;
 }
 
 export interface AgentTask {
@@ -219,17 +243,24 @@ export function parseAgentTask(raw: Record<string, unknown>): AgentTask {
     name: asString(raw.name),
     htmlUrl: asString(raw.html_url),
     sessionCount: typeof raw.session_count === 'number' ? raw.session_count : rawSessions.length,
-    sessions: rawSessions.map((session) => ({
-      id: String(session.id ?? ''),
-      state: asState(session.state),
-      prompt: asString(session.prompt),
-      baseRef: asString(session.base_ref),
-      headRef: asString(session.head_ref),
-      model: normalizeModel(asString(session.model)),
-      createdAt: asString(session.created_at),
-      updatedAt: asString(session.updated_at),
-      completedAt: asString(session.completed_at),
-    })),
+    sessions: rawSessions.map((session) => {
+      const rawUsage = session.usage as { amount?: unknown; type?: unknown } | undefined;
+      const amount =
+        typeof rawUsage?.amount === 'number' && Number.isFinite(rawUsage.amount) ? rawUsage.amount : undefined;
+      const usageType = asString(rawUsage?.type);
+      return {
+        id: String(session.id ?? ''),
+        state: asState(session.state),
+        prompt: asString(session.prompt),
+        baseRef: asString(session.base_ref),
+        headRef: asString(session.head_ref),
+        model: normalizeModel(asString(session.model)),
+        createdAt: asString(session.created_at),
+        updatedAt: asString(session.updated_at),
+        completedAt: asString(session.completed_at),
+        ...(amount !== undefined && usageType ? { usage: { amount, type: usageType } } : {}),
+      };
+    }),
     branch: branchArtifact
       ? { baseRef: asString(branchArtifact.base_ref), headRef: asString(branchArtifact.head_ref) }
       : undefined,

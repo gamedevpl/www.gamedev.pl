@@ -91,6 +91,23 @@ describe('buildPrompt', () => {
     expect(buildPrompt(BRIEF)).not.toContain('npm run restore');
   });
 
+  it('does not send an undelivered round looking for a store restore that cannot exist', () => {
+    // Creator feedback on a job that never delivered used to take the revision branch
+    // and open with `npm run restore`. The store had nothing; the agent paid for a
+    // full build under a prompt that told it not to rebuild.
+    const prompt = buildPrompt({
+      ...BRIEF,
+      feedback: 'Gdzie moja gra',
+      undelivered: true,
+      previousWorkspace: 'copilot/gamesglobal-thermonuclear-strategy',
+    });
+    expect(prompt).toContain('ended without delivering');
+    expect(prompt).toContain('copilot/gamesglobal-thermonuclear-strategy');
+    expect(prompt).not.toContain('npm run restore');
+    expect(prompt).not.toContain('revise it, do not rebuild it');
+    expect(prompt).toContain('Gdzie moja gra');
+  });
+
   it('truncates an oversized spec rather than sending it whole', () => {
     const prompt = buildPrompt({ ...BRIEF, spec: 'x'.repeat(20_000) });
     expect(prompt.length).toBeLessThan(12_000);
@@ -215,6 +232,28 @@ describe('observe and cancel', () => {
       state: 'in_progress',
       hasCandidate: false,
       workspace: 'copilot/tv-tycoon',
+    });
+  });
+
+  it('surfaces billed credits so the ledger can replace its dispatch placeholder', async () => {
+    const { client } = stubTasks(
+      task({
+        state: 'completed',
+        sessions: [
+          {
+            id: 's1',
+            state: 'completed',
+            usage: { amount: 403451775000, type: 'ai_credits' },
+          },
+        ],
+      }),
+    );
+    const backend = createCopilotBackend({ tasks: client, github: stubGithub() });
+
+    expect(await backend.observe('task-1', { hasCandidate: true })).toEqual({
+      state: 'completed',
+      hasCandidate: true,
+      sessionCredits: 403.45,
     });
   });
 

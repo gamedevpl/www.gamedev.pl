@@ -799,6 +799,76 @@ describe('submission routes', () => {
     expect(response.statusCode).toBe(200);
     expect(createIssueComment).not.toHaveBeenCalled();
     expect(briefs.at(-1)?.feedback).toContain('Make the parcels bigger');
+    // Nothing delivered yet — this is not a revision, however the creator phrased it.
+    expect(briefs.at(-1)?.undelivered).toBe(true);
+
+    await app.close();
+  });
+
+  it('briefs feedback on an undelivered job as recovery, not as a revision', async () => {
+    // Job #1000003: first round died on quota with nothing uploaded; creator feedback
+    // then opened with "revise it, do not rebuild it" and `npm run restore` against an
+    // empty store. The record already knows (`deliveredVersion`); use it.
+    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { backend, briefs } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setDispatchWorkspace(job.issueNumber, 'copilot/partial-work');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Gdzie moja gra — I played nothing yet.' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(briefs.at(-1)?.undelivered).toBe(true);
+    expect(briefs.at(-1)?.previousWorkspace).toBe('copilot/partial-work');
+    expect(briefs.at(-1)?.feedback).toContain('Gdzie moja gra');
+
+    await app.close();
+  });
+
+  it('briefs feedback on a delivered job as a revision that restores from the store', async () => {
+    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { backend, briefs } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v20260731T153306124Z');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Make the parcels bigger and the asteroids slower.' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(briefs.at(-1)?.undelivered).toBeUndefined();
+    expect(briefs.at(-1)?.feedback).toContain('Make the parcels bigger');
 
     await app.close();
   });
@@ -1157,7 +1227,8 @@ describe('submission routes', () => {
 
   it('deletes the spent workspace once a new round has one of its own', async () => {
     // Branches are per-round and disposable: the game lives in the store, so a branch
-    // that has been superseded is litter in a repository people also read.
+    // that has been superseded is litter in a repository people also read. Only applies
+    // when the store actually has the game — an undelivered round keeps its branch.
     const { githubClient } = createGithubClientStub({ issueNumber: 77 });
     const { backend } = createBackendStub();
     const cleanup = vi.fn(async () => {});
@@ -1175,6 +1246,7 @@ describe('submission routes', () => {
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
     await store.setDispatchWorkspace(job.issueNumber, 'copilot/old');
+    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v1');
 
     await app.inject({
       method: 'POST',
@@ -2749,6 +2821,10 @@ describe('what a build costs', () => {
     const created = await app.inject({ method: 'POST', url: '/api/submissions', headers: authHeaders, payload: body });
     const { token } = created.json() as { token: string };
 
+    // A delivery so the feedback round is a real revision (not the undelivered path).
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v1');
+
     const feedback = await app.inject({
       method: 'POST',
       url: `/api/submissions/${token}/feedback`,
@@ -2760,6 +2836,54 @@ describe('what a build costs', () => {
     const [record] = await store.listSubmissionsByOwner('g:test-user');
     expect(record?.costs?.map((entry) => entry.ref)).toEqual(['task-1', 'task-2']);
     expect(record?.costs?.every((entry) => entry.credits === 1)).toBe(true);
+
+    await app.close();
+  });
+
+  it('overwrites the dispatch placeholder with the real bill once the session reports usage', async () => {
+    // The create response has no usage. Observation does — and that can arrive after
+    // delivery has already moved the job past the agent, so cost reconciliation must
+    // not be gated on job state the way lifecycle reconciliation is.
+    const stub = createGithubClientStub({});
+    const { backend } = createBackendStub();
+    const observe = vi.fn(async () => ({
+      state: 'completed' as const,
+      hasCandidate: true,
+      sessionCredits: 403.45,
+    }));
+    const clock = { t: Date.now() };
+    const { app, store, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      agentBackend: { ...backend, observe },
+      submissionTokenSecret: secret,
+      now: () => clock.t,
+    });
+
+    const created = await app.inject({ method: 'POST', url: '/api/submissions', headers: authHeaders, payload: body });
+    const { token } = created.json() as { token: string };
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v1');
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'submitted',
+      at: new Date(clock.t).toISOString(),
+      by: 'agent',
+      reason: 'sources_uploaded',
+    });
+
+    clock.t += 3 * 60 * 1000;
+    await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+
+    const costs = (await store.getSubmission(job.issueNumber))?.costs;
+    expect(costs).toEqual([
+      {
+        kind: 'agent_session',
+        at: expect.any(String),
+        by: 'stub',
+        ref: 'task-1',
+        credits: 403.45,
+        creditsMeasured: true,
+      },
+    ]);
 
     await app.close();
   });
