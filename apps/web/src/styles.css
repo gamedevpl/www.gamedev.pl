@@ -5116,6 +5116,40 @@ body.player-open {
   color: #ffd56a;
 }
 
+.controller-voice-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.controller-voice-btn {
+  min-height: 44px;
+  border: 2px solid var(--slot-color);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--slot-color);
+  font-weight: 700;
+  font-size: 0.95rem;
+  touch-action: none;
+}
+
+.controller-voice-btn.is-on {
+  background: rgba(0, 228, 172, 0.16);
+}
+
+.controller-voice-btn.is-listening {
+  background: var(--slot-color);
+  color: #07101f;
+}
+
+.controller-voice-notice {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #ffd56a;
+  text-align: center;
+}
+
 .controller-pad {
   flex: 1;
   display: grid;

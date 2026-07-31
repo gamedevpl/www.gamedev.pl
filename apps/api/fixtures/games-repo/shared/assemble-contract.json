@@ -18,7 +18,8 @@
     "commons",
     "presence",
     "mascot",
-    "zone"
+    "zone",
+    "voice"
   ],
   "authorBudgetBytes": 204800,
   "platformAllowancesBytes": {
@@ -26,20 +27,21 @@
     "restart": 2477,
     "music": 7741,
     "touchHint": 89,
-    "progress": 307,
+    "progress": 613,
     "universalInput": 3191,
     "pointerPoll": 7083,
     "drawSurface": 9459,
     "pointerRelease": 430,
     "hostPause": 1473,
     "mascotDraw": 679,
-    "headroom": 75237,
+    "headroom": 74931,
     "gfx3d": 96000,
     "lookControls": 4683,
     "spatialAudio": 2977,
-    "zone": 12000
+    "zone": 12000,
+    "voice": 8000
   },
-  "maxProjectBytes": 441687,
+  "maxProjectBytes": 449687,
   "audio": {
     "musicField": "string",
     "musicCatalogRequiredKeys": ["version", "tracks"],
