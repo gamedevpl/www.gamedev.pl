@@ -46,7 +46,11 @@ function readFlag(name: string): string | null {
 const dryRun = process.argv.includes('--dry-run');
 const repo = (process.env.GAMES_REPO ?? 'gamedevpl/www.gamedev.pl-games').trim();
 const requestedRef = (readFlag('ref') ?? process.env.GAMES_PUBLISHED_REF ?? 'main').trim();
-const commitSha = readFlag('commit-sha');
+// Normalized once, then used for both the ref below and the pointer metadata.
+// Keeping an untrimmed copy for the pointer would reintroduce, in miniature,
+// the exact failure this script is being fixed for: a `--commit-sha "  "` that
+// reads from the branch while recording whitespace as the commit it read.
+const commitSha = readFlag('commit-sha')?.trim() || null;
 
 /**
  * What the bake actually reads.
@@ -65,7 +69,7 @@ const commitSha = readFlag('commit-sha');
  * what keeps them consistent — `games-repo-archive` refuses to serve a ref it
  * does not hold, and rightly so.
  */
-const ref = commitSha?.trim() || requestedRef;
+const ref = commitSha || requestedRef;
 const bucket = (process.env.GAMES_SNAPSHOT_BUCKET ?? '').trim();
 const token = (process.env.GAMES_REPO_TOKEN ?? process.env.GITHUB_TOKEN ?? '').trim();
 
