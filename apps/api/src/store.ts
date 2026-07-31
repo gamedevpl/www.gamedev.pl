@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { FieldValue, Firestore, type DocumentData } from '@google-cloud/firestore';
 import type { AgentTaskState } from './agent-tasks.js';
 import type { PublicationHealthCheck, PublicationRecord } from './games-store.js';
-import type { JobState, JobTransition } from './job-state.js';
+import { nextRoundGeneration, transitionClosesRound, type JobState, type JobTransition } from './job-state.js';
 import type { BuildEvent, SubmissionStatus } from './submission-status.js';
 
 /**
@@ -227,6 +227,17 @@ export interface SubmissionRecord {
    * the rounds themselves.
    */
   costs?: JobCostEntry[];
+  /**
+   * Active build-channel token generation for this job.
+   *
+   * Round-scoped channel tokens HMAC over this value; closing a round bumps it
+   * transactionally with the state transition (see {@link transitionClosesRound}), so a
+   * copied token from an earlier round stops validating without a revocation list.
+   * Absent only on legacy jobs that have not yet closed a round under this model —
+   * those still accept the pre-generation token shape until the first close initializes
+   * the field. New jobs start at `1`.
+   */
+  roundGeneration?: number;
 }
 
 /**
@@ -1035,9 +1046,24 @@ export interface Store {
    *
    * Callers decide *whether* to move (the rules live in job-state.ts); this only records
    * the decision. Returns false when the record is gone, so a caller can tell a no-op
-   * from a write.
+   * from a write. Round-closing transitions also bump `roundGeneration` in the same
+   * write (see `transitionClosesRound`).
    */
   recordJobTransition(issueNumber: number, transition: JobTransition): Promise<boolean>;
+  /**
+   * Advances `roundGeneration` without a state change — used when a new round starts
+   * (creator feedback / operator retry) so the mint that follows binds to the new
+   * generation. Returns the new value, or null when the job is gone.
+   */
+  bumpRoundGeneration(issueNumber: number): Promise<number | null>;
+  /**
+   * Returns the job's active generation, initializing it to `1` when absent.
+   *
+   * Used when minting a round-scoped channel token for a legacy job that has never
+   * closed a round under the new model: the mint must write the field it claims, or
+   * validation rejects the brand-new key (`active === undefined`).
+   */
+  ensureRoundGeneration(issueNumber: number): Promise<number | null>;
   /** Records the agent backend's last reported state, for stall detection. */
   setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void>;
   /** Appends a dispatch ref, recording which backend is building this job and where. */
@@ -1650,6 +1676,9 @@ export class InMemoryStore implements Store {
       ownerUid,
       createdAt: new Date().toISOString(),
       title,
+      // New jobs are generation-scoped from the first mint; legacy records created
+      // before this field existed stay unset until their current round closes.
+      roundGeneration: 1,
     };
     this.submissions.set(issueNumber, record);
     return { ...record };
@@ -1673,13 +1702,31 @@ export class InMemoryStore implements Store {
   async recordJobTransition(issueNumber: number, transition: JobTransition): Promise<boolean> {
     const sub = this.submissions.get(issueNumber);
     if (!sub) return false;
+    const closes = transitionClosesRound(transition);
     this.submissions.set(issueNumber, {
       ...sub,
       state: transition.to,
       stateSince: transition.at,
       transitions: [...(sub.transitions ?? []), transition].slice(-MAX_JOB_TRANSITIONS),
+      ...(closes ? { roundGeneration: nextRoundGeneration(sub.roundGeneration) } : {}),
     });
     return true;
+  }
+
+  async bumpRoundGeneration(issueNumber: number): Promise<number | null> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub) return null;
+    const roundGeneration = nextRoundGeneration(sub.roundGeneration);
+    this.submissions.set(issueNumber, { ...sub, roundGeneration });
+    return roundGeneration;
+  }
+
+  async ensureRoundGeneration(issueNumber: number): Promise<number | null> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub) return null;
+    if (sub.roundGeneration !== undefined) return sub.roundGeneration;
+    this.submissions.set(issueNumber, { ...sub, roundGeneration: 1 });
+    return 1;
   }
 
   async setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void> {
@@ -2662,6 +2709,9 @@ export class FirestoreStore implements Store {
       ownerUid,
       createdAt: new Date().toISOString(),
       title,
+      // New jobs are generation-scoped from the first mint; legacy records created
+      // before this field existed stay unset until their current round closes.
+      roundGeneration: 1,
     };
     await this.db.collection('submissions').doc(String(issueNumber)).set(record);
     return record;
@@ -2689,21 +2739,48 @@ export class FirestoreStore implements Store {
     // A transaction, not a merge: the status poll and the reconciler sweep can both
     // observe the same job at once, and appending to a list read outside a transaction
     // loses whichever write landed second — silently, and exactly under the concurrent
-    // load where the history matters most.
+    // load where the history matters most. The round-generation bump rides in the same
+    // write so a closing transition never leaves a stale channel token valid.
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) return false;
       const current = snap.data() as SubmissionRecord;
+      const closes = transitionClosesRound(transition);
       tx.set(
         ref,
         {
           state: transition.to,
           stateSince: transition.at,
           transitions: [...(current.transitions ?? []), transition].slice(-MAX_JOB_TRANSITIONS),
+          ...(closes ? { roundGeneration: nextRoundGeneration(current.roundGeneration) } : {}),
         },
         { merge: true },
       );
       return true;
+    });
+  }
+
+  async bumpRoundGeneration(issueNumber: number): Promise<number | null> {
+    const ref = this.db.collection('submissions').doc(String(issueNumber));
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return null;
+      const current = snap.data() as SubmissionRecord;
+      const roundGeneration = nextRoundGeneration(current.roundGeneration);
+      tx.set(ref, { roundGeneration }, { merge: true });
+      return roundGeneration;
+    });
+  }
+
+  async ensureRoundGeneration(issueNumber: number): Promise<number | null> {
+    const ref = this.db.collection('submissions').doc(String(issueNumber));
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return null;
+      const current = snap.data() as SubmissionRecord;
+      if (current.roundGeneration !== undefined) return current.roundGeneration;
+      tx.set(ref, { roundGeneration: 1 }, { merge: true });
+      return 1;
     });
   }
 

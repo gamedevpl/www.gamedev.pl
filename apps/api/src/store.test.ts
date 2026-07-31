@@ -41,6 +41,76 @@ describe('InMemoryStore', () => {
     expect(record?.transitions?.map((t) => t.to)).toEqual(['queued', 'building']);
   });
 
+  it('bumps roundGeneration on each closing transition, and initializes legacy jobs', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(3, 'g:123', 'A game');
+    expect((await store.getSubmission(3))?.roundGeneration).toBe(1);
+
+    await store.recordJobTransition(3, {
+      to: 'ready_for_review',
+      at: '2026-07-30T10:00:00Z',
+      by: 'gate',
+      reason: 'gate_green',
+    });
+    expect((await store.getSubmission(3))?.roundGeneration).toBe(2);
+
+    await store.recordJobTransition(3, {
+      to: 'needs_changes',
+      at: '2026-07-30T10:01:00Z',
+      by: 'operator',
+      reason: 'rejected',
+    });
+    expect((await store.getSubmission(3))?.roundGeneration).toBe(3);
+
+    await store.recordJobTransition(3, {
+      to: 'canceled',
+      at: '2026-07-30T10:02:00Z',
+      by: 'operator',
+      reason: 'operator_canceled',
+    });
+    expect((await store.getSubmission(3))?.roundGeneration).toBe(4);
+
+    // Legacy job: no field until the first close initializes it.
+    const legacyStore = new InMemoryStore();
+    await legacyStore.createSubmission(4, 'g:123', 'Legacy');
+    const legacyMap = (legacyStore as unknown as { submissions: Map<number, import('./store.js').SubmissionRecord> })
+      .submissions;
+    legacyMap.set(4, { ...(await legacyStore.getSubmission(4))!, roundGeneration: undefined });
+    await legacyStore.recordJobTransition(4, {
+      to: 'canceled',
+      at: '2026-07-30T10:03:00Z',
+      by: 'creator',
+      reason: 'abandoned',
+    });
+    expect((await legacyStore.getSubmission(4))?.roundGeneration).toBe(1);
+
+    // A red gate does not close the round — same-session repair still holds the token.
+    const repairStore = new InMemoryStore();
+    await repairStore.createSubmission(5, 'g:123', 'Repair');
+    await repairStore.recordJobTransition(5, {
+      to: 'needs_changes',
+      at: '2026-07-30T10:04:00Z',
+      by: 'gate',
+      reason: 'gate_red',
+    });
+    expect((await repairStore.getSubmission(5))?.roundGeneration).toBe(1);
+    expect(await repairStore.bumpRoundGeneration(5)).toBe(2);
+  });
+
+  it('ensureRoundGeneration initializes a legacy job without bumping an existing one', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(6, 'g:123', 'Legacy');
+    const map = (store as unknown as { submissions: Map<number, import('./store.js').SubmissionRecord> }).submissions;
+    map.set(6, { ...(await store.getSubmission(6))!, roundGeneration: undefined });
+
+    expect(await store.ensureRoundGeneration(6)).toBe(1);
+    expect((await store.getSubmission(6))?.roundGeneration).toBe(1);
+    // Idempotent: a job already on generation 3 stays there.
+    await store.bumpRoundGeneration(6);
+    await store.bumpRoundGeneration(6);
+    expect(await store.ensureRoundGeneration(6)).toBe(3);
+  });
+
   it('reports a missing submission rather than inventing one', async () => {
     const store = new InMemoryStore();
     expect(await store.recordJobTransition(404, { to: 'queued', at: '2026-07-30T10:00:00Z', by: 'system' })).toBe(

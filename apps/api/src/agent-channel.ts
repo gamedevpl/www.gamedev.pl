@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { InvalidAgentTokenError, readBearerToken, verifyAgentToken } from './agent-token.js';
+import { assertAgentTokenActive, InvalidAgentTokenError, readBearerToken, verifyAgentToken } from './agent-token.js';
 import { InvalidUploadError, type GamesStore } from './games-store.js';
 import { parseSpecTitle } from './github-client.js';
 import { canTransition, resolveJobState } from './job-state.js';
@@ -268,20 +268,35 @@ export async function registerAgentChannelRoutes(
       return null;
     }
 
-    let issueNumber: number;
+    let claims;
     try {
-      issueNumber = verifyAgentToken(token, agentTokenSecret);
+      claims = verifyAgentToken(token, agentTokenSecret);
     } catch (error) {
       if (error instanceof InvalidAgentTokenError) {
-        reply.status(401).send({ error: 'invalid build token' });
+        reply.status(401).send({ error: error.message || 'invalid build token' });
         return null;
       }
       throw error;
     }
 
+    const issueNumber = claims.jobId;
     const record = await store.getSubmission(issueNumber);
     if (!record) {
       reply.status(404).send({ error: 'unknown build' });
+      return null;
+    }
+
+    try {
+      assertAgentTokenActive(claims, record, now());
+    } catch (error) {
+      if (!(error instanceof InvalidAgentTokenError)) throw error;
+      // Stale/expired tokens are a strict 401 in every case — including terminal jobs.
+      // `publishedAt` (and other stop reasons) are permanent; letting a signature-valid
+      // but generation-stale or expired key through would grant indefinite read of
+      // sources/inbox plus unguarded inbox/ack writes. The 401 body already is the
+      // stop signal ("this build is finished — get a fresh prompt…"). Terminal-receipt
+      // reads for a closed round's own gate verdict belong to BY-05/BY-06, not here.
+      reply.status(401).send({ error: error.message || 'invalid build token' });
       return null;
     }
 

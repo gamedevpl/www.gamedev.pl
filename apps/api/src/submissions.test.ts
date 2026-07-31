@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mintAgentToken } from './agent-token.js';
+import { assertAgentTokenActive, verifyAgentToken } from './agent-token.js';
 import { buildApp } from './app.js';
 import type { GameSeeder, SeedDraft } from './game-seed.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
@@ -551,7 +551,12 @@ describe('submission routes', () => {
     expect(briefs[0].spec).toContain('This is a sufficiently long concept with markup and details.');
     expect(briefs[0].spec).not.toContain('<script>');
     expect(briefs[0].spec).not.toContain('<i>');
-    expect(briefs[0].channelToken).toBe(mintAgentToken(jobs[0].issueNumber, secret));
+    // Round-scoped: same job + generation. `exp` is wall-clock, so compare claims
+    // rather than the opaque string (a second boundary would flake an equality check).
+    expect(verifyAgentToken(briefs[0].channelToken, secret)).toMatchObject({
+      jobId: jobs[0].issueNumber,
+      roundGeneration: jobs[0].roundGeneration ?? 1,
+    });
   });
   it('gives two games of the same name addresses of their own', async () => {
     const { githubClient } = createGithubClientStub({ issueNumber: 93 });
@@ -2768,6 +2773,30 @@ describe('a session that finishes without delivering', () => {
     await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: getAuthHeaders() });
 
     expect(briefs.at(-1)?.undelivered).toBeUndefined();
+
+    await app.close();
+  });
+
+  it('remints a validating round-scoped token for a legacy job with no generation field', async () => {
+    // Pre-migration records have no roundGeneration. Undelivered resume remints a
+    // round-scoped key claiming generation 1 — that field must be written, or the
+    // brand-new token fails assertAgentTokenActive (active === undefined).
+    const { app, store, job, briefs, clock, token } = await jobWithFinishedSession();
+    const submissions = (store as unknown as { submissions: Map<number, import('./store.js').SubmissionRecord> })
+      .submissions;
+    const before = await store.getSubmission(job.issueNumber);
+    submissions.set(job.issueNumber, { ...before!, roundGeneration: undefined });
+
+    clock.t += 3 * 60 * 1000;
+    await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: getAuthHeaders() });
+
+    const reminted = briefs.at(-1)?.channelToken;
+    expect(reminted).toBeTruthy();
+    const after = await store.getSubmission(job.issueNumber);
+    expect(after?.roundGeneration).toBe(1);
+    const claims = verifyAgentToken(reminted!, secret);
+    expect(claims).toMatchObject({ jobId: job.issueNumber, roundGeneration: 1 });
+    expect(() => assertAgentTokenActive(claims, after!, clock.t)).not.toThrow();
 
     await app.close();
   });

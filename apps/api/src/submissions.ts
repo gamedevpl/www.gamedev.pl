@@ -666,12 +666,19 @@ export async function registerSubmissionRoutes(
             ...(draft.notes ? { notes: draft.notes } : {}),
           }
         : undefined;
+      // Persist generation before minting. New jobs already carry `1` from
+      // createSubmission; a legacy job without the field must be initialized here so
+      // the round-scoped token we hand the agent validates against the record.
+      const roundGeneration = (await store?.ensureRoundGeneration(input.issueNumber)) ?? 1;
       const result = await agentBackend.dispatch({
         issueNumber: input.issueNumber,
         ...(input.slug ? { slug: input.slug } : {}),
         spec: input.spec,
         locale: input.locale,
-        channelToken: mintAgentToken(input.issueNumber, submissionTokenSecret),
+        channelToken: mintAgentToken(input.issueNumber, submissionTokenSecret, {
+          roundGeneration,
+          now: now(),
+        }),
         apiBaseUrl: notifyAppBaseUrl,
         ...(input.slug ? { slug: input.slug } : {}),
         ...(input.feedback ? { feedback: input.feedback } : {}),
@@ -759,13 +766,23 @@ export async function registerSubmissionRoutes(
     const record = await store.getSubmission(input.issueNumber);
     const previous = record?.dispatch;
     try {
+      // A new round closes the previous one's token. Bump *before* minting so the brief
+      // carries the generation that is now active. An undelivered nudge is the same
+      // round continuing — the agent never uploaded, so its token must keep working —
+      // but a legacy job still needs the field written so the reminted key validates.
+      const roundGeneration = input.undelivered
+        ? ((await store.ensureRoundGeneration(input.issueNumber)) ?? 1)
+        : ((await store.bumpRoundGeneration(input.issueNumber)) ?? (record?.roundGeneration ?? 0) + 1);
       const brief = {
         issueNumber: input.issueNumber,
         slug: record?.slug,
         spec: input.feedback,
         feedback: input.feedback,
         locale: input.locale,
-        channelToken: mintAgentToken(input.issueNumber, submissionTokenSecret),
+        channelToken: mintAgentToken(input.issueNumber, submissionTokenSecret, {
+          roundGeneration,
+          now: now(),
+        }),
         apiBaseUrl: notifyAppBaseUrl,
         ...(input.undelivered
           ? { undelivered: true, ...(previous?.workspace ? { previousWorkspace: previous.workspace } : {}) }
