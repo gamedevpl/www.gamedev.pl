@@ -469,6 +469,8 @@
       "submit": "Send feedback",
       "sending": "Sending…",
       "sent": "Sent! The agent will revise your game — watch the build log above.",
+      "noCapacity": "Saved — but no build round could start: the build agent is out of capacity right now. Your note is safe and the next round will read it.",
+      "notStarted": "Saved — but a new build round didn't start. Your note is safe; we're looking into it.",
       "error": "We couldn't send that right now. Please try again in a moment.",
       "quota": "You've sent a lot of feedback today — please try again tomorrow.",
       "published": "This game is already published. Submit a new idea to make another version."

@@ -2751,6 +2751,15 @@ body.player-open {
   font-weight: 600;
 }
 
+/* Kept, but nothing started behind it. Amber rather than the error red: the creator did
+   nothing wrong and has nothing to redo — this is a caveat on "sent", not a failure. */
+.status-feedback-notice {
+  margin: 0;
+  color: #fbbf24; /* same amber as .status-warning — one colour for "true, not alarming" */
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
 /* MOBILE RESPONSIVENESS */
 @media (max-width: 768px) {
   /* One row, not two. A stacked header cost 102px — an eighth of a phone

@@ -888,6 +888,71 @@ describe('SubmissionStatusView', () => {
     });
   });
 
+  it('says the note was kept but no round started, instead of a bare “Sent!”', async () => {
+    // A creator sent "where is my game?" into a thread that answered "Sent!" and then
+    // stayed silent for three hours, because the agent account was out of premium
+    // requests and the API swallowed the 412. "Sent" was true and useless.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      preview: { slug: 'space-runner' },
+      progress: { headSha: 'sha-1', commits: [], checklist: [] },
+    });
+    mockedGetSubmissionPreview.mockResolvedValue({
+      slug: 'space-runner',
+      title: 'Space Runner',
+      html: '<canvas></canvas>',
+    });
+    mockedSubmitFeedback.mockResolvedValue({
+      ok: true,
+      target: 'pull_request',
+      roundStarted: false,
+      reason: 'no_capacity',
+    });
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/status/feedback-token');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'feedback-token' }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    const textarea = container.querySelector<HTMLTextAreaElement>('.status-feedback-input');
+    await act(async () => {
+      if (textarea) {
+        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+        setter?.call(textarea, 'Please make the car faster and add a boost pad.');
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      await flushEffects();
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.status-feedback .primary-btn')?.dispatchEvent(
+        new MouseEvent('click', { bubbles: true }),
+      );
+      await flushEffects();
+      await flushEffects();
+    });
+
+    const notice = container.querySelector('.status-feedback-notice');
+    expect(notice?.textContent).toContain('out of capacity');
+    // Not a success tick beside it: the round it promises is not running.
+    expect(container.querySelector('.status-feedback-sent')).toBeNull();
+    // And not an error either — the message is kept, so there is nothing to send again.
+    expect(container.querySelector('.status-feedback .error')).toBeNull();
+    // It still shows in the thread, because that is where it actually is.
+    expect(container.querySelector('.build-activity-revision')?.textContent).toContain('boost pad');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('shows the creator’s earlier change requests interleaved with the agent’s commits', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({

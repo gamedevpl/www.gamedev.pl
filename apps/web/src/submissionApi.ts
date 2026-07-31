@@ -318,11 +318,27 @@ export type FeedbackContext = {
   };
 };
 
+/**
+ * The message was kept, but no build round started behind it.
+ *
+ * Present only in that case — absent means a round is running, which is the answer this
+ * call gives almost every time. `no_capacity` says the coding-agent account is out of
+ * premium requests: nothing about this game is wrong and pressing send again changes
+ * nothing, which is a different sentence from "that didn't work".
+ */
+export type FeedbackResult = {
+  ok: boolean;
+  target: string;
+  shotId?: string;
+  roundStarted?: false;
+  reason?: 'not_configured' | 'no_capacity' | 'dispatch_failed';
+};
+
 export async function submitFeedback(
   token: string,
   feedback: string,
   context?: FeedbackContext,
-): Promise<{ ok: boolean; target: string; shotId?: string }> {
+): Promise<FeedbackResult> {
   const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/feedback`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -334,7 +350,7 @@ export async function submitFeedback(
     await throwResponseError(response);
   }
 
-  return (await response.json()) as { ok: boolean; target: string; shotId?: string };
+  return (await response.json()) as FeedbackResult;
 }
 
 /** What the pre-submission refiner has to say about a concept. */
