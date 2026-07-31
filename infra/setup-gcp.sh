@@ -271,30 +271,55 @@ else
   gcloud iam service-accounts create "$GATE_SA_NAME" \
     --display-name="Games quality gate runner" \
     --project="$PROJECT_ID"
+  echo "    Created ${GATE_SA_EMAIL}."
+  # Same race as setup-backups.sh: a brand-new SA is not immediately usable in an IAM
+  # binding — add-iam-policy-binding answers "Service account … does not exist" until
+  # the identity propagates. That is exactly how the first post-BY-11 run of this
+  # script died, one line after successfully creating gate-runner.
+  printf '    Waiting for the identity to propagate'
+  for _ in $(seq 1 30); do
+    if gcloud iam service-accounts describe "$GATE_SA_EMAIL" --project="$PROJECT_ID" >/dev/null 2>&1; then
+      break
+    fi
+    printf '.'
+    sleep 2
+  done
+  printf '\n'
 fi
+
+# Even once `describe` answers, the policy layer can still lag, so grants below retry
+# rather than fail the whole run on a race that clears itself in seconds. Last attempt
+# is unsuppressed so a real permission problem stays readable.
+grant_gate_with_retry() {
+  local attempt
+  for attempt in 1 2 3 4; do
+    if "$@" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep $((attempt * 3))
+  done
+  "$@" >/dev/null
+}
 
 # objectAdmin (includes delete) is forced by in-place manifest updates — see
 # infra/gate-hardening.md "Store IAM: why objectAdmin". Compensate with bucket
 # versioning / soft-delete (owner console).
-gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
+grant_gate_with_retry gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
   --member="serviceAccount:${GATE_SA_EMAIL}" \
   --role="roles/storage.objectAdmin" \
-  --project="$PROJECT_ID" \
-  >/dev/null
+  --project="$PROJECT_ID"
 
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+grant_gate_with_retry gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:${GATE_SA_EMAIL}" \
   --role="roles/logging.logWriter" \
-  --condition=None \
-  >/dev/null
+  --condition=None
 
 # Narrow accessor on the one secret the gate may hold — not a project-wide secretAccessor.
 if gcloud secrets describe github-token --project="$PROJECT_ID" >/dev/null 2>&1; then
-  gcloud secrets add-iam-policy-binding github-token \
+  grant_gate_with_retry gcloud secrets add-iam-policy-binding github-token \
     --member="serviceAccount:${GATE_SA_EMAIL}" \
     --role="roles/secretmanager.secretAccessor" \
-    --project="$PROJECT_ID" \
-    >/dev/null
+    --project="$PROJECT_ID"
   echo "    gate-runner may read secret github-token."
 else
   echo "    WARN: secret github-token missing — create it before gate runs can clone the harness."
@@ -308,16 +333,14 @@ fi
 # there is no "submit only" role. actAs is scoped to gate-runner (not project-wide
 # serviceAccountUser) so the runtime cannot launch builds as arbitrary identities.
 echo "==> Letting the runtime start gate builds as ${GATE_SA_EMAIL}"
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+grant_gate_with_retry gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:${RUN_SA}" \
   --role="roles/cloudbuild.builds.editor" \
-  --condition=None \
-  >/dev/null
-gcloud iam service-accounts add-iam-policy-binding "$GATE_SA_EMAIL" \
+  --condition=None
+grant_gate_with_retry gcloud iam service-accounts add-iam-policy-binding "$GATE_SA_EMAIL" \
   --member="serviceAccount:${RUN_SA}" \
   --role="roles/iam.serviceAccountUser" \
-  --project="$PROJECT_ID" \
-  >/dev/null
+  --project="$PROJECT_ID"
 gcloud services enable cloudbuild.googleapis.com --project="$PROJECT_ID" >/dev/null
 echo "    Cloud Run may submit gate builds as gate-runner."
 
