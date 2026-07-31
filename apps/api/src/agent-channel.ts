@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { assertAgentTokenActive, InvalidAgentTokenError, readBearerToken, verifyAgentToken } from './agent-token.js';
+import { selfBuildDeliveryCap } from './builder.js';
 import { InvalidUploadError, type GamesStore } from './games-store.js';
 import { parseSpecTitle } from './github-client.js';
 import { canTransition, resolveJobState } from './job-state.js';
@@ -207,7 +208,13 @@ export interface AgentChannelOptions {
   }) => Promise<{ buildId?: string } | void> | void;
 }
 
-type RejectionReason = 'stopped' | 'rate_limited' | 'too_many_events' | 'too_many_shots';
+type RejectionReason =
+  | 'stopped'
+  | 'rate_limited'
+  | 'too_many_events'
+  | 'too_many_shots'
+  /** Self-round sources-delivery budget exhausted; machine-readable for agents. */
+  | 'delivery_cap';
 
 /** Sliding-window limiter keyed by build. The token is the identity, not the IP. */
 function isRateLimited(buckets: Map<number, number[]>, key: number, currentTime: number, max: number): boolean {
@@ -314,6 +321,25 @@ export async function registerAgentChannelRoutes(
     // implementing it.
     if (resolveJobState(record) === 'canceled') return 'canceled';
     return null;
+  }
+
+  /**
+   * First channel activity on a waiting job is the moment it becomes `building`.
+   *
+   * For self rounds this is the entire state advance — there is no external task to
+   * observe. Harmless for platform rounds that are already `building` via the
+   * reconciler: `canTransition` refuses a no-op.
+   */
+  async function markBuildingFromChannel(issueNumber: number, record: SubmissionRecord): Promise<void> {
+    if (!store) return;
+    const current = record.state ?? 'queued';
+    if (!canTransition(current, 'building')) return;
+    await store.recordJobTransition(issueNumber, {
+      to: 'building',
+      at: new Date().toISOString(),
+      by: 'agent',
+      reason: 'channel_signal',
+    });
   }
 
   /**
@@ -464,6 +490,7 @@ export async function registerAgentChannelRoutes(
       };
 
       const stored = await store!.appendBuildEvent(issueNumber, event);
+      await markBuildingFromChannel(issueNumber, record);
       options.onEvent?.(issueNumber);
 
       return reply.send({ accepted: true, event: stored, ...(await channelState(issueNumber, record)) });
@@ -655,6 +682,22 @@ export async function registerAgentChannelRoutes(
       if (isRateLimited(submitsByBuild, issueNumber, now(), maxSubmitsPerWindow)) {
         return reply.send({ accepted: false, rejected: 'rate_limited', ...(await channelState(issueNumber, record)) });
       }
+      // Self rounds bound gate spend per round. The budget resets when a new round
+      // opens, so exhausting it never bricks the game's next attempt.
+      if (record.builder === 'self') {
+        const cap = selfBuildDeliveryCap();
+        const used = record.roundDeliveryCount ?? 0;
+        if (used >= cap) {
+          return reply.send({
+            accepted: false,
+            rejected: 'delivery_cap',
+            reason: 'self_build_delivery_cap',
+            deliveryCap: cap,
+            deliveriesUsed: used,
+            ...(await channelState(issueNumber, record)),
+          });
+        }
+      }
 
       // The job's own slug wins whenever it has one. A build that has already been
       // associated with a game cannot deliver into a different one, whatever it sends.
@@ -681,16 +724,23 @@ export async function registerAgentChannelRoutes(
       }
 
       try {
+        await markBuildingFromChannel(issueNumber, record);
         const { version } = await options.gamesStore.putCandidateSources({
           slug,
           issueNumber,
           files: parsed.data.files,
+          // Provenance: which backend built this version. Backend name on the dispatch
+          // ('copilot' / 'self') is the durable record; builder is the round selector.
+          backend: record.dispatch?.backend ?? record.builder,
         });
         // Recorded before the gate is asked to run: this is what the creator's preview
         // reads, and a delivered game should be playable on the status page whether or
         // not anything ever verifies it. The gate decides whether it may be *published*,
         // which is a different question from whether its author can watch it.
         await store?.setSubmissionDeliveredVersion(issueNumber, version);
+        if (store && record.builder === 'self') {
+          await store.incrementRoundDeliveryCount(issueNumber);
+        }
         // The shelf, studio, and notifications all show `record.title`. Games that
         // predated the naming step still carry the truncated prompt there, even after
         // the agent wrote a real name into SPEC.md — and publish already prefers the

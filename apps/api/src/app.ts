@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import { registerAccessTokenRoutes } from './access-token-routes.js';
 import { registerJobAdminRoutes } from './job-admin-routes.js';
-import { createAgentBackendFromEnv, createGameSeederFromEnv } from './agent-backend-env.js';
+import { createGameSeederFromEnv, createPlatformBackendFromEnv } from './agent-backend-env.js';
 import { createGcsGamesStore } from './games-store.js';
 import { createCloudBuildGateTrigger, gateTriggerOptionsFromEnv } from './gate-trigger.js';
 import { registerAdminRoutes } from './admin.js';
@@ -210,7 +210,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // people its alerts are addressed to. Two lists would drift, and the failure mode of
     // drift here is an alert nobody receives.
     adminUids,
-    agentBackend: options.submissionRoutes?.agentBackend ?? createAgentBackendFromEnv(app.log),
+    agentBackend: options.submissionRoutes?.agentBackend,
+    // Platform only here — `self` is wired inside registerSubmissionRoutes with store
+    // callbacks for seed persistence. Passing a pre-built self would skip those.
+    agentBackends:
+      options.submissionRoutes?.agentBackends ??
+      (options.submissionRoutes?.agentBackend ? undefined : { platform: createPlatformBackendFromEnv(app.log) }),
     gameSeeder: options.submissionRoutes?.gameSeeder ?? createGameSeederFromEnv(app.log),
     agentChannel: {
       ...options.submissionRoutes?.agentChannel,
