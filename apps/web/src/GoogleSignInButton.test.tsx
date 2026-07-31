@@ -77,7 +77,8 @@ describe('GoogleSignInButton', () => {
 
     const slot = container.querySelector('.google-sign-in-container');
     expect(slot).not.toBeNull();
-    // Dimensions live in CSS; the class is the contract the stylesheet sizes.
+    // Dimensions + color-scheme:light live in CSS; the class is the contract that
+    // keeps Apple from jumping and stops the dark-scheme white iframe frame.
     expect(slot?.className).toBe('google-sign-in-container');
   });
 
