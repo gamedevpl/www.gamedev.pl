@@ -23,7 +23,6 @@
 /** Canonical GameKit module order — must match games-repo `GAME_KIT_MODULES`. */
 export const GAME_KIT_MODULES = [
   'input',
-  'motion',
   'collision',
   'world',
   'ai',
