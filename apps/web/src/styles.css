@@ -4363,8 +4363,14 @@ body.player-open {
    in the URL, so a URL-driven class left exactly that case on the old broken shape. What
    matters is whether a game is open on screen, which is what this asks. Browsers without
    `:has()` drop the block and get today's layout — the degradation is the old page, not a
-   broken one. */
-@media (max-width: 900px) {
+   broken one.
+
+   800px, not 900, because that is where the studio itself changes shape: below it the
+   shelf collapses into the switcher and the detail's own title row is hidden. Between
+   801 and 900 the shelf is still stacked above the thread and the title row is the only
+   place the game is named — an earlier draft of this ran to 900 and left that band with
+   no title on screen at all. */
+@media (max-width: 800px) {
   .app:has(.studio-layout.is-game-open) {
     height: 100dvh;
     display: flex;
@@ -4445,6 +4451,68 @@ body.player-open {
      is what pushed that line onto two rows. */
   .app:has(.studio-layout.is-game-open) .studio-thread-context .studio-slug {
     display: none;
+  }
+
+  /* Two rows of chrome above the conversation — a switcher row and an actions row —
+     was about 150px of a phone screen spent on furniture. One row: which game, and the
+     two things you can do to it. `display: contents` is what lets the actions join that
+     row without moving them in the markup, where their place beside the title is right
+     on every wider screen. */
+  .app:has(.studio-layout.is-game-open) .studio-detail-head {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .app:has(.studio-layout.is-game-open) .studio-detail-title-row {
+    display: contents;
+  }
+
+  .app:has(.studio-layout.is-game-open) .studio-game-switcher {
+    flex: 1;
+  }
+
+  /* "Switch game / 1 game" spells out what the chevron already says, and the slug is
+     repeated in the address bar and again on the details sheet. The title is the thing
+     you actually need to see, and it was the one item the row had no width for. */
+  .app:has(.studio-layout.is-game-open) .studio-game-switcher-meta,
+  .app:has(.studio-layout.is-game-open) .studio-game-switcher .studio-slug,
+  .app:has(.studio-layout.is-game-open) .studio-detail-title-block {
+    display: none;
+  }
+
+  .app:has(.studio-layout.is-game-open) .studio-game-switcher-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .app:has(.studio-layout.is-game-open) .studio-head-actions {
+    flex: none;
+  }
+
+  /* Details keeps its icon and loses its word. Clipped rather than display: none, so the
+     button is still called "Details" by a screen reader. Playtest keeps both — it is the
+     thing most people came to do. */
+  .app:has(.studio-layout.is-game-open) .studio-head-action:not(.is-primary) .studio-head-action-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* A bordered card around two words of status, directly above a bordered composer, read
+     as two controls stacked. It is a caption; it can look like one. */
+  .app:has(.studio-layout.is-game-open) .studio-thread-context {
+    border: 0;
+    background: none;
+    padding: 0 2px;
   }
 
   /* The tall empty box existed to fit a placeholder that ran to four lines. The
