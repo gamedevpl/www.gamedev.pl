@@ -503,9 +503,9 @@ export async function registerSubmissionRoutes(
         at: new Date(now()).toISOString(),
         by: agentBackend.name,
         ref,
-        // One premium request per session. Tokens are not exposed by this backend at
-        // all, so recording a zero would be an invented measurement rather than a
-        // missing one — the field is simply absent until something can fill it.
+        // Placeholder: usage is not on the dispatch response. Observation overwrites
+        // this with the real `session.usage.amount / 1e9` once the session reports it
+        // (typically 46–861 credits). Leaving 1 forever under-reports by up to 860×.
         credits: 1,
       });
     } catch (error) {
@@ -1437,9 +1437,18 @@ export async function registerSubmissionRoutes(
     const refs = record.dispatch?.refs;
     if (!refs || refs.length === 0) return null;
     const state = record.state ?? 'queued';
-    // Only while the agent's own lifecycle is the open question. Once the job is past
-    // the agent (delivered, gated, terminal), its sessions stop being authoritative.
-    if (state !== 'queued' && state !== 'dispatched' && state !== 'building') return null;
+    const lastRef = refs[refs.length - 1];
+    // Cost reconciliation is independent of job state: usage is only final once the
+    // session completes, which can be after delivery has already moved the job past
+    // the agent. A placeholder of 1 credit stays until observation overwrites it.
+    const costPending = (record.costs ?? []).some(
+      (entry) => entry.kind === 'agent_session' && entry.ref === lastRef && !entry.creditsMeasured,
+    );
+    // Lifecycle observation only while the agent's own lifecycle is the open question.
+    // Once the job is past the agent (delivered, gated, terminal), sessions stop being
+    // authoritative for state — but we still observe when cost is unmeasured.
+    const agentActive = state === 'queued' || state === 'dispatched' || state === 'building';
+    if (!agentActive && !costPending) return null;
     const quietFrom = record.lastAgentSignalAt ?? record.stateSince ?? record.createdAt;
     const silence = now() - Date.parse(quietFrom);
     // A job whose branch we never learned is asked about regardless of how chatty it
@@ -1447,14 +1456,26 @@ export async function registerSubmissionRoutes(
     // a fresh dispatch and the creator's game starts again from nothing — so learning
     // it is not an error path, it is the normal completion of a dispatch.
     const needsWorkspace = !record.dispatch?.workspace;
-    if (!needsWorkspace && (!Number.isFinite(silence) || silence < observeQuietMs)) return null;
+    // Cost-only polls skip the quiet window: the session is already done, and waiting
+    // would only delay the ledger catching up with the bill.
+    if (!needsWorkspace && agentActive && (!Number.isFinite(silence) || silence < observeQuietMs)) return null;
     try {
       // The last ref is the session that owns the job now; earlier ones were
       // superseded by a resume and their fate stopped mattering when it started.
-      const observation = await agentBackend.observe(refs[refs.length - 1], {
+      const observation = await agentBackend.observe(lastRef, {
         hasCandidate: Boolean(record.deliveredVersion),
       });
       if (!observation) return null;
+      if (observation.sessionCredits !== undefined) {
+        try {
+          await store.setJobCostCredits(record.issueNumber, lastRef, observation.sessionCredits);
+        } catch (error) {
+          app.log.error({ err: error, issueNumber: record.issueNumber }, 'could not reconcile agent session cost');
+        }
+      }
+      // A cost-only poll on a job past the agent: write the credits and stop. State
+      // transitions from a late observation would snatch a delivered candidate back.
+      if (!agentActive) return null;
       if (observation.workspace && observation.workspace !== record.dispatch?.workspace) {
         await store.setDispatchWorkspace(record.issueNumber, observation.workspace);
         // Learning the agent's own branch is proof it has forked, which is the exact
@@ -2194,11 +2215,18 @@ export async function registerSubmissionRoutes(
       // account is silently ignored. That whole apparatus — the marker, the relay
       // workflow, the licensed PAT — existed only to get a message to an agent through
       // someone else's system, and none of it is needed now that we dispatch directly.
+      //
+      // When nothing was ever delivered, this is not a revision: the store has nothing
+      // to restore, and briefing the agent as if it were one spends the opening of the
+      // prompt on a `npm run restore` that cannot work. The record already knows
+      // (`deliveredVersion`); pass that through so `buildPrompt` leads with recovery
+      // of the previous branch instead.
       const outcome = await resumeBuild({
         issueNumber,
         feedback: contextBlock ? `${sanitizedFeedback}\n\n${contextBlock}` : sanitizedFeedback,
         locale: creatorLocale,
         log: request.log,
+        ...(record?.deliveredVersion ? {} : { undelivered: true }),
       });
 
       // Queue the same request on the build channel, so an agent already mid-session

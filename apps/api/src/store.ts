@@ -249,8 +249,19 @@ export interface JobCostEntry {
   by: string;
   /** The vendor's own id, so a line on a bill can be traced back to a job. */
   ref?: string;
-  /** Premium requests. One per agent session, which is how Copilot bills. */
+  /**
+   * AI credits billed. For an `agent_session` this starts as a placeholder of 1 at
+   * dispatch (usage is not on the create response) and is overwritten with the real
+   * `session.usage.amount / 1e9` once observation sees it — measured sessions run
+   * 46–861 credits, so leaving the placeholder would under-report by up to 860×.
+   */
   credits?: number;
+  /**
+   * True once `credits` came from the vendor's usage figure rather than the dispatch
+   * placeholder. Lets the reconciler stop re-polling a finished task for a cost it
+   * already has, without mistaking a real 1-credit session for an unmeasured one.
+   */
+  creditsMeasured?: boolean;
   /**
    * Model tokens, when the thing that spent them reports them.
    *
@@ -1041,6 +1052,12 @@ export interface Store {
    */
   recordJobCost(issueNumber: number, entry: JobCostEntry): Promise<void>;
   /**
+   * Overwrites the credits on an existing `agent_session` ledger entry identified by
+   * `ref`, once the vendor has reported real usage. No-op when no matching entry exists.
+   * Best-effort like {@link recordJobCost}: must never fail the poll that discovered it.
+   */
+  setJobCostCredits(issueNumber: number, ref: string, credits: number): Promise<void>;
+  /**
    * Records where a dispatched job's work actually lives, once the backend can say.
    *
    * Deliberately not `recordDispatch`: that appends a session ref, and the ref list is
@@ -1708,6 +1725,19 @@ export class InMemoryStore implements Store {
       ...sub,
       costs: [...(sub.costs ?? []), entry].slice(-MAX_JOB_COSTS),
     });
+  }
+
+  async setJobCostCredits(issueNumber: number, ref: string, credits: number): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub?.costs?.length) return;
+    let changed = false;
+    const costs = sub.costs.map((entry) => {
+      if (entry.kind !== 'agent_session' || entry.ref !== ref || entry.creditsMeasured) return entry;
+      changed = true;
+      return { ...entry, credits, creditsMeasured: true };
+    });
+    if (!changed) return;
+    this.submissions.set(issueNumber, { ...sub, costs });
   }
 
   async setDispatchWorkspace(issueNumber: number, workspace: string): Promise<void> {
@@ -2733,6 +2763,23 @@ export class FirestoreStore implements Store {
       if (!snap.exists) return;
       const existing = (snap.data() as SubmissionRecord).costs ?? [];
       tx.set(ref, { costs: [...existing, entry].slice(-MAX_JOB_COSTS) }, { merge: true });
+    });
+  }
+
+  async setJobCostCredits(issueNumber: number, ref: string, credits: number): Promise<void> {
+    const docRef = this.db.collection('submissions').doc(String(issueNumber));
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef);
+      if (!snap.exists) return;
+      const existing = (snap.data() as SubmissionRecord).costs ?? [];
+      let changed = false;
+      const costs = existing.map((entry) => {
+        if (entry.kind !== 'agent_session' || entry.ref !== ref || entry.creditsMeasured) return entry;
+        changed = true;
+        return { ...entry, credits, creditsMeasured: true };
+      });
+      if (!changed) return;
+      tx.set(docRef, { costs }, { merge: true });
     });
   }
 

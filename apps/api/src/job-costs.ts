@@ -9,11 +9,12 @@
 // (see `JobCostEntry`). Nothing is estimated, and nothing is inferred from state: a job
 // that took four sessions reports four whether or not its transitions still say so.
 //
-// The unit problem is narrower than it looks. Copilot bills a premium request per session
-// and exposes no token counts, so tokens stay absent — but a credit is not a proxy for
-// money, it *is* money in another unit, and converting it estimates nothing. What remains
-// genuinely unpriced is Cloud Build minutes behind the gate, which is a smaller and
-// nameable hole rather than the whole money column.
+// The unit problem is narrower than it looks. Copilot bills AI credits per session
+// (`session.usage.amount`, nano-credits) and exposes no token counts, so tokens stay
+// absent — but a credit is not a proxy for money, it *is* money in another unit, and
+// converting it estimates nothing. What remains genuinely unpriced is Cloud Build
+// minutes behind the gate, which is a smaller and nameable hole rather than the whole
+// money column.
 //
 // Where absence is still the truth, this module reports absence rather than zero: a job
 // with no ledger reads as unmeasured, not as free.
@@ -42,9 +43,13 @@ export interface JobCostSummary {
   title: string;
   slug?: string;
   state?: JobState;
-  /** Agent sessions started. One premium request each on the Copilot backend. */
+  /** Agent sessions started (ledger rows of kind `agent_session`). */
   sessions: number;
-  /** Premium requests booked. Equal to `sessions` today; separate because it need not be. */
+  /**
+   * AI credits booked. Equal to `sessions` only while every row still holds the
+   * dispatch placeholder of 1; once observation writes real usage, this is the sum of
+   * those figures (typically tens to hundreds per session).
+   */
   credits: number;
   /** Gate runs started for this job — one per delivery that reached the verifier. */
   gateRuns: number;

@@ -11,7 +11,12 @@
 // over the build channel instead of into a commit somebody merges.
 
 import type { AgentBackend, BuildBrief, DispatchResult, SeedFiles } from './agent-backend.js';
-import { resolveTaskBranch, type AgentTaskModel, type AgentTasksClient } from './agent-tasks.js';
+import {
+  creditsFromUsageAmount,
+  resolveTaskBranch,
+  type AgentTaskModel,
+  type AgentTasksClient,
+} from './agent-tasks.js';
 import type { GitHubClient } from './github-client.js';
 import type { AgentObservation } from './job-state.js';
 
@@ -328,7 +333,17 @@ export function createCopilotBackend(options: CopilotBackendOptions): AgentBacke
       // agent has created one, so a dispatch that does not come back and ask never
       // learns where its own work lives.
       const workspace = resolveTaskBranch(task);
-      return { state: task.state, hasCandidate, ...(workspace ? { workspace } : {}) };
+      // Sum every session that has reported usage. A task can host more than one
+      // session; the ledger entry is keyed by the task ref, so the figure has to be
+      // the whole bill for that dispatch, not just the latest run.
+      const usageTotal = task.sessions.reduce((sum, session) => (session.usage ? sum + session.usage.amount : sum), 0);
+      const hasUsage = task.sessions.some((session) => session.usage);
+      return {
+        state: task.state,
+        hasCandidate,
+        ...(workspace ? { workspace } : {}),
+        ...(hasUsage ? { sessionCredits: creditsFromUsageAmount(usageTotal) } : {}),
+      };
     },
 
     async cancel(): Promise<{ enforced: boolean }> {

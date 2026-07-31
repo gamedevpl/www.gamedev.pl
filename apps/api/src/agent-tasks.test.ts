@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { createAgentTasksClient, normalizeModel, parseAgentTask, resolveTaskBranch } from './agent-tasks.js';
+import {
+  createAgentTasksClient,
+  creditsFromUsageAmount,
+  normalizeModel,
+  parseAgentTask,
+  resolveTaskBranch,
+} from './agent-tasks.js';
 
 /** A settled task, shaped exactly as the live API answered on 2026-07-29. */
 const SETTLED_TASK = {
@@ -23,6 +29,7 @@ const SETTLED_TASK = {
       model: 'sweagent-capi:gpt-5.4',
       prompt: 'Add one blank line at the end of that file.',
       state: 'completed',
+      usage: { amount: 403451775000, type: 'ai_credits' },
     },
   ],
   state: 'completed',
@@ -51,11 +58,28 @@ function stubFetch(handler: (url: string, init: RequestInit) => unknown) {
   return { impl, calls };
 }
 
+describe('creditsFromUsageAmount', () => {
+  it('converts nano-credits to ledger credits', () => {
+    // Live reading from the 403-credit global-thermonuclear-strategy session.
+    expect(creditsFromUsageAmount(403451775000)).toBe(403.45);
+    expect(creditsFromUsageAmount(861100000000)).toBe(861.1);
+  });
+});
+
 describe('parseAgentTask', () => {
   it('lifts the branch and pull artifacts out of the artifact list', () => {
     const task = parseAgentTask(SETTLED_TASK);
     expect(task.branch).toEqual({ baseRef: 'main', headRef: 'copilot/fix-trailing-whitespace' });
     expect(task.pull).toEqual({ id: 4164924791, globalId: 'PR_kwDOTf4x3s74P7V3' });
+  });
+
+  it('keeps session usage so the ledger can book the real bill', () => {
+    // The parser used to drop `usage`, which is why every session was booked as 1 credit
+    // against bills of 46–861. The figure is nano-credits; conversion is the caller's job.
+    expect(parseAgentTask(SETTLED_TASK).sessions[0]?.usage).toEqual({
+      amount: 403451775000,
+      type: 'ai_credits',
+    });
   });
 
   it('reports no pull request when the task did not open one', () => {
