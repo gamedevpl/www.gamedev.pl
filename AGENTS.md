@@ -45,6 +45,34 @@ will be; exchange it at `POST /api/auth/session` for the cookie the SPA sends if
 driving a browser. Tokens are issued by the repo owner and must never be committed. See
 [`docs/agent-access-tokens.md`](docs/agent-access-tokens.md).
 
+## Layout changes: check the states that coexist with the one you built
+
+A green suite says nothing about layout. jsdom runs no media queries and does no layout, so
+every CSS decision in this repo is held by someone looking at it in a browser — which means
+looking at the _right_ screen, not just the one you were working on.
+
+The trap is that you verify the state you built and miss the states that share the screen
+with it. A studio thread was checked at six widths and looked right at all of them; it was
+still broken, because a bottom-anchored install/update banner sat on the composer, and the
+shell that pinned the composer to the bottom edge had also removed the page scroll that used
+to let a reader escape from under it. Nothing about that is visible on a screen with no
+banner.
+
+So when you change layout, before you call it done, put the other states on screen:
+
+- **Bottom-anchored overlays** — `.install-prompt`, `.app-update`. Both are `position: fixed`
+  at `z-index: 900` and appear on conditions you will not hit by accident.
+- **The on-screen keyboard**, which halves the viewport on a phone and is what `100dvh`
+  behaves differently under.
+- **Sheets, modals, and the details rail**, which change what "the bottom of the screen"
+  means.
+- **The longest real string you have**, in Polish as well as English — Polish runs longer,
+  and a box sized to English clips it.
+
+Forcing a state that needs an event you cannot trigger (an install prompt, a waiting service
+worker) is legitimate: inject an element with the same class and measure against it. That is
+what the CSS contract actually promises.
+
 ## Current architecture
 
 Production games will live in a **dedicated games repo maintained by coding agents**; this app
@@ -58,7 +86,7 @@ reasons** and is not a future phase. Read
 The steel thread is **built and deployed** — all milestones M0–M5 merged. The app (web + API,
 one same-origin service) is **live on Cloud Run in `europe-west1`** (GCP project `gamedevpl`)
 and serves **`https://www.gamedev.pl`** through a native domain mapping. It is no longer a
-GitHub Pages site — the domain *is* the app.
+GitHub Pages site — the domain _is_ the app.
 
 Firestore lives in `europe-central2`, which is why backup and scheduler commands use a
 different region from deploy commands. That split is deliberate, not a typo.

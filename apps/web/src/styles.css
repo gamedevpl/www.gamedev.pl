@@ -1171,6 +1171,11 @@ button:disabled {
   display: grid;
   gap: 20px;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  /* Published cards are a single 16:9 media box. A build card in the same row is often
+     taller (status + title + Open), and the grid's default stretch would grow every
+     neighbour to match — leaving empty panel padding under their videos. Keep each
+     card at its own height. */
+  align-items: start;
 }
 
 .catalog-card {
@@ -2744,6 +2749,15 @@ body.player-open {
   color: var(--turquoise);
   font-size: 0.9rem;
   font-weight: 600;
+}
+
+/* Kept, but nothing started behind it. Amber rather than the error red: the creator did
+   nothing wrong and has nothing to redo — this is a caveat on "sent", not a failure. */
+.status-feedback-notice {
+  margin: 0;
+  color: #fbbf24; /* same amber as .status-warning — one colour for "true, not alarming" */
+  font-size: 0.85rem;
+  line-height: 1.4;
 }
 
 /* MOBILE RESPONSIVENESS */
@@ -4352,6 +4366,276 @@ body.player-open {
   }
 }
 
+/* The studio thread as an app screen rather than a section of a scrolling page.
+   Measured on a phone, the old shape put the composer mid-document with ~350px of empty
+   panel under it and the marketing footer below that — so the one thing a scroll down
+   from the composer could reach was the privacy policy. The shell owns the viewport now:
+   header, transcript, composer, nothing else.
+
+   Keyed off `:has()` rather than a class on the route, because the route is not the
+   question. Bare /studio picks a game for you and shows its thread without ever naming it
+   in the URL, so a URL-driven class left exactly that case on the old broken shape. What
+   matters is whether a game is open on screen, which is what this asks. Browsers without
+   `:has()` drop the block and get today's layout — the degradation is the old page, not a
+   broken one.
+
+   800px, not 900, because that is where the studio itself changes shape: below it the
+   shelf collapses into the switcher and the detail's own title row is hidden. Between
+   801 and 900 the shelf is still stacked above the thread and the title row is the only
+   place the game is named — an earlier draft of this ran to 900 and left that band with
+   no title on screen at all. */
+@media (max-width: 800px) {
+  .app:has(.studio-layout.is-game-open) {
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .app:has(.studio-layout.is-game-open) > .content {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    /* The page centres its sections, which sizes them to their content — fine for a
+       column of cards, wrong for a screen that has to be exactly as wide as the phone.
+       Without this the panel took its width from the longest slug in it. */
+    align-items: stretch;
+    overflow: hidden;
+  }
+
+  /* Legal links and a strapline do not belong under a live conversation. */
+  .app:has(.studio-layout.is-game-open) .site-footer {
+    display: none;
+  }
+
+  /* Every wrapper between the shell and the transcript has to give up its height, or the
+     scroller at the bottom of the chain has nothing to measure itself against. */
+  .app:has(.studio-layout.is-game-open) .studio-panel,
+  .app:has(.studio-layout.is-game-open) .studio-layout,
+  .app:has(.studio-layout.is-game-open) .studio-detail,
+  .app:has(.studio-layout.is-game-open) .studio-workspace,
+  .app:has(.studio-layout.is-game-open) .studio-build {
+    flex: 1;
+    min-height: 0;
+    /* Without this a flex item refuses to shrink below its content, and one long slug
+       chip is enough to push the whole column wider than the phone. */
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    /* Two things quietly opt an element out of being stretched to its parent's width, and
+       this chain had both: an `auto` cross-axis margin (which disables stretch outright)
+       and an `align-items` that is not `stretch` (which sizes children to their content).
+       Either one lets the widest thing inside decide how wide the screen is. */
+    align-items: stretch;
+    margin-left: 0;
+    margin-right: 0;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  /* A masthead and a trip home above a conversation, on the screen where the header
+     already offers both. */
+  .app:has(.studio-layout.is-game-open) .studio-panel-header {
+    display: none;
+  }
+
+  /* The switcher holds a slug, and a slug can be longer than a phone. It never showed
+     because the grid used to cap the column; once the shell became a flex chain the row
+     sized to its content and pushed everything past the right edge. Truncate it here
+     rather than letting one long name decide the width of the screen. */
+  .app:has(.studio-layout.is-game-open) .studio-detail-head,
+  .app:has(.studio-layout.is-game-open) .studio-game-switcher {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .app:has(.studio-layout.is-game-open) .studio-game-switcher .studio-slug {
+    /* Overrides the flex-shrink: 0 the chip carries everywhere else. A slug that refuses
+       to shrink is a slug that decides how wide the screen is. */
+    flex-shrink: 1;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* The switcher directly above already names the game; repeating it in the status line
+     is what pushed that line onto two rows. */
+  .app:has(.studio-layout.is-game-open) .studio-thread-context .studio-slug {
+    display: none;
+  }
+
+  /* Two rows of chrome above the conversation — a switcher row and an actions row —
+     was about 150px of a phone screen spent on furniture. One row: which game, and the
+     two things you can do to it. `display: contents` is what lets the actions join that
+     row without moving them in the markup, where their place beside the title is right
+     on every wider screen. */
+  .app:has(.studio-layout.is-game-open) .studio-detail-head {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .app:has(.studio-layout.is-game-open) .studio-detail-title-row {
+    display: contents;
+  }
+
+  .app:has(.studio-layout.is-game-open) .studio-game-switcher {
+    flex: 1;
+  }
+
+  /* "Switch game / 1 game" spells out what the chevron already says, and the slug is
+     repeated in the address bar and again on the details sheet. The title is the thing
+     you actually need to see, and it was the one item the row had no width for. */
+  .app:has(.studio-layout.is-game-open) .studio-game-switcher-meta,
+  .app:has(.studio-layout.is-game-open) .studio-game-switcher .studio-slug,
+  .app:has(.studio-layout.is-game-open) .studio-detail-title-block {
+    display: none;
+  }
+
+  .app:has(.studio-layout.is-game-open) .studio-game-switcher-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .app:has(.studio-layout.is-game-open) .studio-head-actions {
+    flex: none;
+  }
+
+  /* Details keeps its icon and loses its word. Clipped rather than display: none, so the
+     button is still called "Details" by a screen reader. Playtest keeps both — it is the
+     thing most people came to do. */
+  .app:has(.studio-layout.is-game-open) .studio-head-action:not(.is-primary) .studio-head-action-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* A bordered card around two words of status, directly above a bordered composer, read
+     as two controls stacked. It is a caption; it can look like one. */
+  .app:has(.studio-layout.is-game-open) .studio-thread-context {
+    border: 0;
+    background: none;
+    padding: 0 2px;
+  }
+
+  /* The install nudge and the update bar are fixed to the bottom of the viewport at
+     z-index 900, which is exactly where this shell now pins the composer. On the old
+     scrolling page a reader could push the composer up past them; here there is nothing
+     to scroll, so a banner would sit on the textarea until it was dismissed.
+
+     They join the column instead of floating over it. Both are already the last children
+     of `.app`, so as ordinary flex items they land under the composer and the transcript
+     gives up the height — a bar at the foot of the screen rather than a lid on the one
+     control that matters. Suppressing them was the other option and a worse one: the
+     update bar is how a phone finds out there is a new shell, and the studio is a screen
+     people sit on for a long time. */
+  .app:has(.studio-layout.is-game-open) .install-prompt,
+  .app:has(.studio-layout.is-game-open) .app-update {
+    position: static;
+    flex: none;
+    margin: 0 12px max(12px, env(safe-area-inset-bottom, 0px));
+    animation: none;
+  }
+
+  /* The tall empty box existed to fit a placeholder that ran to four lines. The
+     placeholder is one line now, so the box can start at the size of a reply and grow
+     into the message — which is a third of a phone screen handed back to the thread. */
+  .app:has(.studio-layout.is-game-open) .status-composer.is-compact .status-feedback-input {
+    min-height: 2.75rem;
+  }
+
+  /* Undoes the one-scroller compromise above. That rule existed because the transcript's
+     scroller and the page's fought each other; with the page no longer scrolling there is
+     only one again, and it can be the transcript's. */
+  .app:has(.studio-layout.is-game-open) .studio-thread {
+    flex: 1;
+    min-height: 0;
+    height: auto;
+  }
+
+  .app:has(.studio-layout.is-game-open) .studio-thread-scroll {
+    overflow-y: auto;
+  }
+
+  /* 126px of page padding — 60 on the content, 48 on the panel, 18 on the detail — was
+     what put the composer that far above the bottom of the screen with nothing under it.
+     Right for a section of a document, wrong for the bottom edge of an app. */
+  .app:has(.studio-layout.is-game-open) > .content,
+  .app:has(.studio-layout.is-game-open) .studio-panel,
+  .app:has(.studio-layout.is-game-open) .studio-detail {
+    padding-bottom: 0;
+  }
+
+  /* Edge to edge. A card with a rounded border floating inside a screen reads as one
+     panel on a page; the screen itself is the panel here. */
+  .app:has(.studio-layout.is-game-open) > .content {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .app:has(.studio-layout.is-game-open) .studio-panel {
+    border: 0;
+    border-radius: 0;
+    background: none;
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: 0;
+  }
+
+  /* The detail card is the screen now. Its rounded border used to enclose a section;
+     full height, it just ran off the bottom edge with nothing to enclose. */
+  .app:has(.studio-layout.is-game-open) .studio-detail {
+    border: 0;
+    border-radius: 0;
+    padding-left: 14px;
+    padding-right: 14px;
+    padding-top: 12px;
+  }
+
+  .app:has(.studio-layout.is-game-open) .studio-thread-foot {
+    position: static;
+    /* Clear of the iOS home indicator, and of nothing at all where there isn't one. */
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Four stacked rows of status above the composer is most of a phone screen spent on
+     metadata. One line: which game, and what it is doing. */
+  .studio-thread-context {
+    gap: 8px;
+    font-size: 0.78rem;
+  }
+
+  /* Left to wrap rather than forced onto one line: nowrap here just moves the overflow
+     somewhere it cannot be seen. It fits on one line because there is less in it. */
+  .studio-thread-context .studio-context-state {
+    min-width: 0;
+    gap: 8px;
+  }
+
+  .studio-thread-context .studio-slug {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* The heartbeat is the first thing to go: "updated 10 minutes ago" is reassurance, and
+     the phase beside it already carries the fact. */
+  .studio-thread-context .studio-context-beat {
+    display: none;
+  }
+}
+
 @media (max-width: 640px) {
   /* Too little width left for two sides of a conversation; the bubble carries it. */
   .studio-turn.is-mine .studio-turn-body {
@@ -4839,6 +5123,40 @@ body.player-open {
 
 .controller-status-reconnecting {
   color: #ffd56a;
+}
+
+.controller-voice-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.controller-voice-btn {
+  min-height: 44px;
+  border: 2px solid var(--slot-color);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--slot-color);
+  font-weight: 700;
+  font-size: 0.95rem;
+  touch-action: none;
+}
+
+.controller-voice-btn.is-on {
+  background: rgba(0, 228, 172, 0.16);
+}
+
+.controller-voice-btn.is-listening {
+  background: var(--slot-color);
+  color: #07101f;
+}
+
+.controller-voice-notice {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #ffd56a;
+  text-align: center;
 }
 
 .controller-pad {
@@ -7116,6 +7434,17 @@ body.player-open {
 .studio-muted {
   color: var(--muted);
   margin: 0 0 0.75rem;
+}
+
+.studio-playtest-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.studio-playtest-empty .secondary-btn {
+  margin-top: 0.5rem;
 }
 
 /* Full-viewport playtest theater — same contract as `.stage.is-playing-full-viewport`.

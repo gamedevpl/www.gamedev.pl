@@ -348,8 +348,10 @@ describe('global creation cap and pause switch', () => {
     expect((await store.getUsage('g:test-user', dateStr)).submissions).toBe(2);
     // And only two builds were dispatched, so the refusal cost an agent run as well as a
     // quota slot. This is the assertion the cap exists for: the ceiling is about spend,
-    // and an agent run is what the platform actually pays for.
-    expect(briefs).toHaveLength(2);
+    // and an agent run is what the platform actually pays for. Awaited because dispatch
+    // is off the response path — a refused submission returns before an accepted one
+    // has finished dispatching.
+    await vi.waitFor(() => expect(briefs).toHaveLength(2));
 
     await app.close();
   });
@@ -891,6 +893,46 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  it('names a gate bounce so Studio can say why the build needs another round', async () => {
+    // Public status collapses `needs_changes` into a label; without `failure` the
+    // creator who clicked the notification sees planning notes and an empty foot.
+    const { githubClient } = createGithubClientStub({ issueNumber: 88 });
+    const { backend } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v1');
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'needs_changes',
+      at: new Date().toISOString(),
+      by: 'gate',
+      reason: 'gate_red',
+    });
+
+    const status = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}`,
+      headers: authHeaders,
+    });
+
+    expect(status.statusCode).toBe(200);
+    expect(status.json().status).toBe('needs_changes');
+    expect(status.json().phase).toBe('needs_changes');
+    expect(status.json().failure).toEqual({ reason: 'gate_red' });
+
+    await app.close();
+  });
+
   it('reports the job phase alongside the status, so the page can say which wait this is', async () => {
     // `toSubmissionStatus` is lossy on purpose — `gating` and `building` arrive as one
     // word, and `ready_for_review` (delivered, checked, waiting on us) arrives as the
@@ -1047,9 +1089,58 @@ describe('submission routes', () => {
     expect(briefs.at(-1)?.feedback).toContain('pick this up again');
     // The dead round must not orphan the job: the retry moves it back to building.
     expect((await store.getSubmission(job.issueNumber))?.state).toBe('building');
+    // Nothing to report when the round did start — the field exists to say otherwise.
+    expect(response.json()).not.toHaveProperty('roundStarted');
 
     await app.close();
   });
+
+  it('says so when the message was kept but no round could start', async () => {
+    // The failure this is written for: GitHub answers an exhausted premium-request
+    // allowance with 412, `resumeBuild` logs it and swallows it, and the creator is left
+    // with a thread showing their message and a game that never moves again. It cost one
+    // real creator three hours of watching a build that was never running.
+    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { backend } = createBackendStub();
+    backend.resume = async () => {
+      throw Object.assign(new Error('agent tasks POST 412: insufficient premium quota to create assignment'), {
+        name: 'AgentTasksError',
+        status: 412,
+      });
+    };
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Please make the asteroids slower and the parcels bigger.' },
+    });
+
+    // Accepted — the note is kept and queued, so it is not the creator's to send again —
+    // but the answer says plainly that nothing is running behind it, and says which kind
+    // of nothing: out of capacity is a billing problem, not a broken game.
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ ok: true, roundStarted: false, reason: 'no_capacity' });
+    expect(await store.listCreatorMessages(job.issueNumber)).not.toHaveLength(0);
+    // And the job must not claim to be building when no session exists.
+    expect((await store.getSubmission(job.issueNumber))?.state).not.toBe('building');
+
+    await app.close();
+  });
+
 
   it('abandons a native job without closing anything on GitHub', async () => {
     const { githubClient, closeIssue, closePullRequest } = createGithubClientStub({ issueNumber: 77 });
@@ -2883,6 +2974,40 @@ describe('operator cancel and retry', () => {
 
     await second.app.close();
   });
+
+  it('names an exhausted agent allowance rather than calling it a dispatch failure', async () => {
+    // 412 from the agent-tasks API means the coding-agent account has no premium requests
+    // left. Every job on the site is equally stuck and the button will not fix any of
+    // them, so the operator has to be sent to billing rather than back to the button.
+    const { backend } = createBackendStub();
+    const outOfQuota: AgentBackend = {
+      ...backend,
+      resume: async () => {
+        throw Object.assign(new Error('agent tasks POST 412: insufficient premium quota to create assignment'), {
+          name: 'AgentTasksError',
+          status: 412,
+        });
+      },
+    };
+    const { app, store, job } = await appWithJob({ backend: outOfQuota });
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'failed',
+      at: new Date().toISOString(),
+      by: 'reconciler',
+      reason: 'task_failed',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/admin/jobs/${job.issueNumber}/retry`,
+      headers: bossHeaders(),
+    });
+
+    expect(response.statusCode).toBe(502);
+    expect(response.json()).toMatchObject({ error: 'no_capacity' });
+
+    await app.close();
+  });
 });
 
 /**
@@ -3066,6 +3191,9 @@ describe('seeded dispatch', () => {
     });
 
     expect(response.statusCode).toBe(200);
+    // Dispatch is off the response path, so this is awaited rather than assumed: the
+    // submit returns as soon as the job exists, and seeding runs behind it.
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
     // The submission minted and confirmed this address before dispatch; the seeder
     // writes into it rather than deciding a second one.
     expect(seeded).toEqual(['comet-courier']);
@@ -3097,7 +3225,7 @@ describe('seeded dispatch', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(briefs).toHaveLength(1);
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
     expect(briefs[0].seed).toBeUndefined();
     // The job keeps the slug the submission gave it — seeding declining changes nothing
     // about the game's address — and nothing is billed for a seed that never happened.
@@ -3160,6 +3288,7 @@ describe('seeded dispatch', () => {
     });
 
     expect(response.statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
     // Deliberately off the submit response path, so the preview lands moments later.
     const previews = await vi.waitFor(async () => {
       const listed = await store.listBuildPreviews(briefs[0].issueNumber);
@@ -3210,12 +3339,75 @@ describe('seeded dispatch', () => {
     });
 
     expect(response.statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
     // A draft that does not bundle is still dispatched (the agent will fix it) — the
     // only thing withheld is showing it to the creator.
     expect(briefs[0].seed).toBeDefined();
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(await store.listBuildPreviews(briefs[0].issueNumber)).toEqual([]);
     expect(stub.githubClient.getGameSources).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('stops generating drafts after one cannot be staged', async () => {
+    // The money bug this exists for: a mis-scoped dispatch credential fails only after
+    // the draft has been generated, so without a circuit breaker every submission pays
+    // ~2 minutes and tens of thousands of tokens for a draft discarded a second later.
+    const stub = createGithubClientStub({});
+    const briefs: BuildBrief[] = [];
+    const backend: AgentBackend = {
+      name: 'stub',
+      dispatch: async (brief) => {
+        briefs.push(brief);
+        // Seed accepted, no workspace back — exactly what a 403 on the branch write
+        // looks like from here.
+        return { ref: 'task-1', workspace: 'copilot/x' };
+      },
+      resume: async () => ({ ref: 'task-2' }),
+      observe: async () => null,
+      cancel: async () => ({ enforced: false }),
+    };
+    let seedCalls = 0;
+    const { app, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      gameSeeder: {
+        seed: async ({ slug }) => {
+          seedCalls++;
+          return {
+            slug,
+            files: [{ path: 'game.ts', content: 'export {};\n' }],
+            references: ['apex-sprint'],
+            usage: { inputTokens: 30_000, outputTokens: 9_000, model: 'gemini-3.6-flash' },
+            elapsedMs: 156_000,
+            compiles: false,
+            repaired: true,
+          };
+        },
+      },
+    });
+
+    const submit = (title: string) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/submissions',
+        headers: authHeaders,
+        payload: { title, concept: 'A game where you deliver parcels between comets, dodging debris.' },
+      });
+
+    expect((await submit('First Game')).statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
+    expect(briefs[0].seed).toBeDefined();
+
+    expect((await submit('Second Game')).statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(2));
+
+    // The second build still dispatches — seeding is an optimization, and muting it
+    // must never cost a creator their game — it just does not pay for another draft.
+    expect(briefs[1].seed).toBeUndefined();
+    expect(seedCalls).toBe(1);
 
     await app.close();
   });
@@ -3270,17 +3462,27 @@ describe('seeded dispatch', () => {
     });
     const { token } = created.json() as { token: string };
 
+    // Dispatch is backgrounded, so the seed branch is only on the record once it has
+    // landed. Abandoning before that would test nothing — there would be no branch to
+    // release — so the wait is on the state this test is about, not on a timer.
+    await vi.waitFor(async () => {
+      const pending = await store.getSubmission(briefs[0]?.issueNumber ?? -1);
+      expect(pending?.dispatch?.seedWorkspace).toBe('seed/job-9');
+    });
+
     const abandoned = await app.inject({
       method: 'POST',
       url: `/api/submissions/${token}/abandon`,
       headers: authHeaders,
     });
 
+    // The abandon route awaits both releases, so `cleaned` is complete here — asserting
+    // the exact set rather than waiting for one entry, which would pass just as happily
+    // if the branch were released twice.
     expect(abandoned.statusCode).toBe(200);
-    // Both branches released once...
-    expect(cleaned).toContain('seed/job-9');
-    expect(cleaned.filter((branch) => branch === 'seed/job-9')).toHaveLength(1);
-    // ...and the name is off the record, so a second abandon cannot ask again.
+    expect(cleaned).toEqual(['copilot/x', 'seed/job-9']);
+
+    // And the name is off the record, so a second abandon cannot ask again.
     const record = await store.getSubmission(briefs[0].issueNumber);
     expect(record?.dispatch?.seedWorkspace).toBeUndefined();
     expect(record?.dispatch?.workspace).toBe('copilot/x');
@@ -3381,6 +3583,104 @@ describe('operator slug backfill', () => {
     const second = await app.inject({ method: 'POST', url: '/api/admin/slug-backfill', headers: bossHeaders() });
 
     expect(second.json()).toMatchObject({ scanned: 0, named: 0, failed: 0 });
+    await app.close();
+  });
+});
+
+describe('operator title backfill', () => {
+  const bossHeaders = () => getAuthHeaders('g:boss');
+
+  async function appWithTruncatedTitle() {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    await store.createSubmission(600, 'g:test-user', 'A game tycoon like where I run a tv busi');
+    await store.setSubmissionSlug(600, 'tv-tycoon');
+    await store.setSubmissionDeliveredVersion(600, 'v1');
+    const gamesStore = {
+      getSourceFile: async (_slug: string, _version: string, path: string) =>
+        path === 'SPEC.md' ? '---\ntitle: TV Tycoon\n---\n' : null,
+    } as unknown as GamesStore;
+    const { app } = await createApp({
+      adminUids: 'g:boss',
+      store,
+      agentChannel: { gamesStore },
+    });
+    return { app, store };
+  }
+
+  it('answers 404 to a non-operator', async () => {
+    const { app } = await appWithTruncatedTitle();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/title-backfill',
+      headers: getAuthHeaders('g:someone-else'),
+    });
+
+    expect(response.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('replaces the truncated prompt with the delivered SPEC title', async () => {
+    const { app, store } = await appWithTruncatedTitle();
+
+    const response = await app.inject({ method: 'POST', url: '/api/admin/title-backfill', headers: bossHeaders() });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      ok: true,
+      dryRun: false,
+      scanned: 1,
+      renamed: 1,
+      unchanged: 0,
+    });
+    expect(response.json().games[0]).toMatchObject({
+      issueNumber: 600,
+      slug: 'tv-tycoon',
+      from: 'A game tycoon like where I run a tv busi',
+      to: 'TV Tycoon',
+      changed: true,
+    });
+    expect((await store.getSubmission(600))?.title).toBe('TV Tycoon');
+
+    await app.close();
+  });
+
+  it('reports without writing when asked to rehearse', async () => {
+    const { app, store } = await appWithTruncatedTitle();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/title-backfill?dryRun=1',
+      headers: bossHeaders(),
+    });
+
+    expect(response.json()).toMatchObject({ dryRun: true, renamed: 1 });
+    expect((await store.getSubmission(600))?.title).toBe('A game tycoon like where I run a tv busi');
+
+    await app.close();
+  });
+
+  it('leaves a title alone when it already matches the SPEC', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    await store.createSubmission(601, 'g:test-user', 'TV Tycoon');
+    await store.setSubmissionSlug(601, 'tv-tycoon');
+    await store.setSubmissionDeliveredVersion(601, 'v1');
+    const gamesStore = {
+      getSourceFile: async () => '---\ntitle: TV Tycoon\n---\n',
+    } as unknown as GamesStore;
+    const { app } = await createApp({
+      adminUids: 'g:boss',
+      store,
+      agentChannel: { gamesStore },
+    });
+
+    const response = await app.inject({ method: 'POST', url: '/api/admin/title-backfill', headers: bossHeaders() });
+
+    expect(response.json()).toMatchObject({ scanned: 1, renamed: 0, unchanged: 1 });
+    expect(response.json().games[0].changed).toBe(false);
+
     await app.close();
   });
 });

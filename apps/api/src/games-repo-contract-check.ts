@@ -61,6 +61,12 @@ const MAX_BODY_CHARS = 300;
 
 class UnreachableGamesRepoError extends Error {}
 
+/** True when `remote` is an exact prefix of `local` (same order; local may be longer). */
+export function isModulePrefix(remote: string[], local: string[]): boolean {
+  if (remote.length > local.length) return false;
+  return remote.every((name, index) => local[index] === name);
+}
+
 function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -218,6 +224,10 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
   // half may know about a module the published games tip has not selected yet. Fail
   // only when games-repo ships a module (or reorders shared ones) this side does not
   // recognize — that would 502 every game that asks for it.
+  //
+  // Guard: the extras must be explicitly declared website-ahead modules (below).
+  // Without this, a games-repo rollback of a module would pass silently because
+  // the remaining modules are still a subsequence. See Codex review on PR #379.
   if (!isGameKitModuleSubsequence(remoteModules, localModules)) {
     return {
       kind: 'drift',
@@ -228,17 +238,34 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
         `(website may list extra modules ahead of the games tip — merge website first).`,
     };
   }
+
+  // Declared website-ahead modules: explicitly list modules this side has added
+  // before the games-repo tip merges them. If a local-only module is NOT in this
+  // list, it means games-repo dropped or rolled it back — that is drift, not an
+  // intentional lead. (Codex review — PR #379.)
+  const DECLARED_AHEAD_MODULES: ReadonlySet<string> = new Set(['motion']);
+  const websiteExtras = localModules.filter((m) => !remoteModules.includes(m));
+  const undeclaredExtras = websiteExtras.filter((m) => !DECLARED_AHEAD_MODULES.has(m));
+  if (undeclaredExtras.length > 0) {
+    return {
+      kind: 'drift',
+      reason:
+        `Undeclared website-ahead modules: ${undeclaredExtras.join(', ')}.\n` +
+        `  If these are intentional new modules, add them to DECLARED_AHEAD_MODULES in ` +
+        `games-repo-contract-check.ts. If games-repo removed them, update GAME_KIT_MODULES.`,
+    };
+  }
   if (remoteModules.join(',') !== localModules.join(',')) {
     log(
       `  ✓ GAME_KIT_MODULES (games ${remoteModules.length}, website ${localModules.length}; ` +
-        `website-ahead extras allowed)`,
+        `website-ahead extras: ${websiteExtras.join(', ')})`,
     );
   } else {
     log(`  ✓ GAME_KIT_MODULES (${remoteModules.length} modules)`);
   }
 
   const remoteBudget = extractMaxBundleBytes(validateSource);
-  if (remoteBudget !== MAX_PROJECT_BYTES) {
+  if (remoteBudget > MAX_PROJECT_BYTES) {
     const assignLine =
       validateSource
         .split('\n')
@@ -249,10 +276,15 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
       reason:
         `MAX_BUNDLE_BYTES mismatch: games-repo=${remoteBudget} website MAX_PROJECT_BYTES=${MAX_PROJECT_BYTES}\n` +
         `  games-repo assignment: ${assignLine}\n` +
-        `  Update GAMEKIT_PLATFORM_BYTES / MAX_PROJECT_BYTES in apps/api/src/games-repo-contract.ts to match.`,
+        `  Website is behind the build ceiling — raise GAMEKIT_PLATFORM_BYTES / MAX_PROJECT_BYTES ` +
+        `in apps/api/src/games-repo-contract.ts (website-first).`,
     };
   }
-  log(`  ✓ MAX_BUNDLE_BYTES / MAX_PROJECT_BYTES (${remoteBudget})`);
+  if (MAX_PROJECT_BYTES > remoteBudget) {
+    log(`  ✓ MAX_BUNDLE_BYTES / MAX_PROJECT_BYTES (website ahead: ${MAX_PROJECT_BYTES} > remote ${remoteBudget})`);
+  } else {
+    log(`  ✓ MAX_BUNDLE_BYTES / MAX_PROJECT_BYTES (${remoteBudget})`);
+  }
 
   const music = extractMusicContractSignals(assembleSource);
   if (!music.injectsMusicName || !music.readsTracksKey || !music.readsMusicCatalog) {

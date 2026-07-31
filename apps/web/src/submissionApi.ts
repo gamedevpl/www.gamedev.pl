@@ -119,10 +119,10 @@ export type SubmissionStatus = {
    */
   stall?: 'awaiting_input' | 'not_dispatched' | 'quiet' | 'gate_not_started';
   /**
-   * The last build round ended in an error rather than a delivery. `reason` is a
-   * machine-readable cause (`task_failed`, `task_timed_out`, …) — render translated
-   * copy keyed on it, never the string itself. Sending feedback starts a new round,
-   * so the message to pair with this is "retry", not "give up".
+   * Why this build is asking the creator to act. Covers a dead agent round
+   * (`task_failed`, …) and a gate bounce (`gate_red`) — both arrive as public
+   * `needs_changes`. Render translated copy keyed on `reason`, never the string
+   * itself. Sending feedback starts a new round.
    */
   failure?: { reason: string };
 };
@@ -318,11 +318,27 @@ export type FeedbackContext = {
   };
 };
 
+/**
+ * The message was kept, but no build round started behind it.
+ *
+ * Present only in that case — absent means a round is running, which is the answer this
+ * call gives almost every time. `no_capacity` says the coding-agent account is out of
+ * premium requests: nothing about this game is wrong and pressing send again changes
+ * nothing, which is a different sentence from "that didn't work".
+ */
+export type FeedbackResult = {
+  ok: boolean;
+  target: string;
+  shotId?: string;
+  roundStarted?: false;
+  reason?: 'not_configured' | 'no_capacity' | 'dispatch_failed';
+};
+
 export async function submitFeedback(
   token: string,
   feedback: string,
   context?: FeedbackContext,
-): Promise<{ ok: boolean; target: string; shotId?: string }> {
+): Promise<FeedbackResult> {
   const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/feedback`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -334,7 +350,7 @@ export async function submitFeedback(
     await throwResponseError(response);
   }
 
-  return (await response.json()) as { ok: boolean; target: string; shotId?: string };
+  return (await response.json()) as FeedbackResult;
 }
 
 /** What the pre-submission refiner has to say about a concept. */

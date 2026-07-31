@@ -1050,6 +1050,15 @@ export interface Store {
   allocateJobId(): Promise<number>;
   /** Records the game directory a submission is building, once it is known. */
   setSubmissionSlug(issueNumber: number, slug: string): Promise<void>;
+  /**
+   * Updates the name shown on the shelf, in the studio, and in notifications.
+   *
+   * The creator confirms a title at submission, but games that predate that step were
+   * named by truncating the prompt — "A game tycoon like where I run a tv busi" — and
+   * that string stuck even after the agent wrote a real title into SPEC.md. Delivery
+   * (and the operator backfill) adopt the SPEC title so the shelf matches the game.
+   */
+  setSubmissionTitle(issueNumber: number, title: string): Promise<void>;
   /** Records the candidate version a delivery just stored, for the preview to read. */
   setSubmissionDeliveredVersion(issueNumber: number, version: string): Promise<void>;
   /** Counts a send-back for finishing without delivering. Returns the new total. */
@@ -1191,6 +1200,16 @@ export interface Store {
    * games that might want it later.
    */
   listSubmissionsMissingSlug(): Promise<SubmissionRecord[]>;
+  /**
+   * Delivered (or published) games whose shelf title may still be the truncated prompt
+   * from before the naming step — the title-backfill's work list.
+   *
+   * A delivery writes the SPEC title onto the record now, so this is the backlog of
+   * games that arrived before that. Needs a slug and a delivered version so the SPEC
+   * can be read from the games store. Abandoned builds are left out for the same
+   * reason as {@link listSubmissionsMissingSlug}.
+   */
+  listSubmissionsWithDelivery(): Promise<SubmissionRecord[]>;
   /**
    * Every submission a creator owns, newest first. Backs the "my games" rail, so a
    * creator finds their work-in-progress without having saved the tracking link
@@ -1707,6 +1726,11 @@ export class InMemoryStore implements Store {
     if (sub) this.submissions.set(issueNumber, { ...sub, slug });
   }
 
+  async setSubmissionTitle(issueNumber: number, title: string): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (sub) this.submissions.set(issueNumber, { ...sub, title });
+  }
+
   async setSubmissionDeliveredVersion(issueNumber: number, version: string): Promise<void> {
     const sub = this.submissions.get(issueNumber);
     if (sub) this.submissions.set(issueNumber, { ...sub, deliveredVersion: version });
@@ -1962,6 +1986,13 @@ export class InMemoryStore implements Store {
   async listSubmissionsMissingSlug(): Promise<SubmissionRecord[]> {
     return Array.from(this.submissions.values())
       .filter((s) => !s.slug && !s.abandonedAt)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map((s) => ({ ...s }));
+  }
+
+  async listSubmissionsWithDelivery(): Promise<SubmissionRecord[]> {
+    return Array.from(this.submissions.values())
+      .filter((s) => Boolean(s.slug && s.deliveredVersion) && !s.abandonedAt)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
       .map((s) => ({ ...s }));
   }
@@ -2766,6 +2797,10 @@ export class FirestoreStore implements Store {
     await this.db.collection('submissions').doc(String(issueNumber)).set({ slug }, { merge: true });
   }
 
+  async setSubmissionTitle(issueNumber: number, title: string): Promise<void> {
+    await this.db.collection('submissions').doc(String(issueNumber)).set({ title }, { merge: true });
+  }
+
   async setSubmissionDeliveredVersion(issueNumber: number, version: string): Promise<void> {
     // Last write wins on purpose: the newest delivery is the one worth previewing.
     await this.db
@@ -3108,6 +3143,14 @@ export class FirestoreStore implements Store {
     return snap.docs
       .map((d) => d.data() as SubmissionRecord)
       .filter((s) => !s.slug && !s.abandonedAt)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+
+  async listSubmissionsWithDelivery(): Promise<SubmissionRecord[]> {
+    const snap = await this.db.collection('submissions').get();
+    return snap.docs
+      .map((d) => d.data() as SubmissionRecord)
+      .filter((s) => Boolean(s.slug && s.deliveredVersion) && !s.abandonedAt)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
 

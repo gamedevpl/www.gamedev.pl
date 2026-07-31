@@ -62,6 +62,30 @@ describe('locale resources', () => {
     }
   });
 
+  // The composer's placeholder is one line of a phone screen, in every language.
+  // It started as the same paragraph the status page shows above its feedback box; at
+  // 390px that ran to four lines and the box clipped the last one mid-word, which is
+  // worse in Polish, where the sentence is longer than the English it came from. The
+  // limit is what stops a future edit from quietly putting the paragraph back.
+  it('keeps the composer placeholders short enough for a phone', () => {
+    const MAX = 60;
+    for (const [lang, resource] of [
+      ['en', en],
+      ['pl', pl],
+    ] as const) {
+      const feedback = (resource as unknown as { statusView: { feedback: Record<string, string> } }).statusView
+        .feedback;
+      const composerHints = Object.entries(feedback).filter(([key]) => key.startsWith('composerHint'));
+      expect(composerHints.length, `${lang} has no composer placeholders`).toBe(3);
+      for (const [key, value] of composerHints) {
+        expect(
+          value.length,
+          `${lang}.statusView.feedback.${key} is ${value.length} chars: "${value}"`,
+        ).toBeLessThanOrEqual(MAX);
+      }
+    }
+  });
+
   it('has no empty translation values', () => {
     for (const [lang, resource] of [
       ['en', en],

@@ -140,7 +140,7 @@ function StatusTimeline({ current }: { current: SubmissionStatus['status'] }) {
 type PendingRevision = { text: string; at: number };
 
 /** Failure reasons with their own copy; anything newer gets the generic sentence. */
-const FAILURE_COPY_KEYS = new Set(['task_failed', 'task_timed_out', 'task_completed_without_delivery']);
+const FAILURE_COPY_KEYS = new Set(['task_failed', 'task_timed_out', 'task_completed_without_delivery', 'gate_red']);
 
 function failureCopyKey(reason: string): string {
   return FAILURE_COPY_KEYS.has(reason) ? reason : 'generic';
@@ -486,11 +486,19 @@ export function SubmissionStatusView({
               <div className="studio-thread-foot">
                 {/* Trouble is said once, immediately above the box the creator would use
                     to do something about it. A dead round outranks a slow one: when both
-                    are set the failure is the explanation and the stall is its symptom. */}
+                    are set the failure is the explanation and the stall is its symptom.
+                    `needs_changes` without a typed failure (legacy GitHub path) still
+                    needs a sentence here — the thread's emptyLabel only shows when there
+                    are no turns, which is exactly when a bounced build still has planning
+                    notes and used to look like nothing was wrong. */}
                 {status.failure ? (
                   <p className="status-warning">
                     <PixelIcon name="signal" size={13} />{' '}
                     {t(`statusView.failure.${failureCopyKey(status.failure.reason)}`)}
+                  </p>
+                ) : status.status === 'needs_changes' ? (
+                  <p className="status-warning">
+                    <PixelIcon name="signal" size={13} /> {t('statusView.states.needs_changes.description')}
                   </p>
                 ) : status.stall ? (
                   <p className="status-warning">
@@ -879,6 +887,12 @@ function FeedbackPanel({
   const [text, setText] = useState('');
   const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [error, setError] = useState<string | null>(null);
+  // Sent, kept, and *not* acted on: the API took the message but no round started behind
+  // it. Its own slot rather than `error`, because nothing failed on the creator's side and
+  // there is nothing for them to redo — the note is safe and will be read by the next
+  // round. Without this the composer says "sent" and the thread then says nothing for
+  // hours, which is exactly how an exhausted agent allowance reads as a hung game.
+  const [notice, setNotice] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const trimmed = text.trim();
@@ -898,11 +912,22 @@ function FeedbackPanel({
     if (trimmed.length < 10) return;
     setState('sending');
     setError(null);
+    setNotice(null);
     try {
       // Same box, same act, different destination — decided here from the state the
       // server reported rather than by asking the creator which one they meant.
-      if (published) await submitImprovement(token, trimmed);
-      else await submitFeedback(token, trimmed);
+      if (published) {
+        await submitImprovement(token, trimmed);
+      } else {
+        const result = await submitFeedback(token, trimmed);
+        if (result.roundStarted === false) {
+          setNotice(
+            result.reason === 'no_capacity'
+              ? t('statusView.feedback.noCapacity')
+              : t('statusView.feedback.notStarted'),
+          );
+        }
+      }
       setState('sent');
       setText('');
       // Back to the CSS height rather than the height the sent message grew it to: an
@@ -938,6 +963,15 @@ function FeedbackPanel({
     : building
       ? 'statusView.feedback.titleBuilding'
       : 'statusView.feedback.title';
+  // The composer gets its own, much shorter version of the same three hints. The
+  // paragraph reads fine above a page; as placeholder text on a phone it ran to four
+  // lines and the box clipped the last of them mid-word — worse in Polish, where the
+  // same sentence is longer. The placeholder now says where the message goes and stops.
+  const composerHintKey = published
+    ? 'statusView.feedback.composerHintPublished'
+    : building
+      ? 'statusView.feedback.composerHintBuilding'
+      : 'statusView.feedback.composerHint';
 
   // Compact is the thread's composer: a field and a send, the way a reply box looks
   // everywhere else. The heading and the standing hint paragraph were page furniture —
@@ -956,14 +990,15 @@ function FeedbackPanel({
             autoGrow();
             if (state === 'sent') setState('idle');
           }}
-          placeholder={t(hintKey)}
+          placeholder={t(composerHintKey)}
           aria-label={t(titleKey)}
           rows={2}
           maxLength={2000}
         />
         <div className="status-feedback-actions">
           {error ? <p className="error">{error}</p> : null}
-          {state === 'sent' && !error ? (
+          {notice && !error ? <p className="status-feedback-notice">{notice}</p> : null}
+          {state === 'sent' && !error && !notice ? (
             <span className="status-feedback-sent">
               <PixelIcon name="check" size={13} /> {t('statusView.feedback.sent')}
             </span>
@@ -1003,13 +1038,14 @@ function FeedbackPanel({
         >
           {state === 'sending' ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
         </button>
-        {state === 'sent' ? (
+        {state === 'sent' && !notice ? (
           <span className="status-feedback-sent">
             <PixelIcon name="check" size={13} /> {t('statusView.feedback.sent')}
           </span>
         ) : null}
       </div>
       {error ? <p className="error">{error}</p> : null}
+      {notice && !error ? <p className="status-feedback-notice">{notice}</p> : null}
     </div>
   );
 }

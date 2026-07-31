@@ -21,6 +21,12 @@ export interface PendingQaSession {
   spec: { title: string; concept: string; displayName: string };
   questions: QAQuestion[];
   answers: PendingQaAnswers;
+  /**
+   * UI language the questions were authored in. When the creator switches language
+   * mid-round, the app re-asks so chips and free-text stay in the language they are
+   * reading — without this, a Polish UI would keep showing English AI text.
+   */
+  locale?: string;
   savedAt: number;
 }
 
@@ -56,6 +62,7 @@ export function loadPendingQa(): PendingQaSession | null {
       // displayName is optional to the creator, so tolerate its absence in older blobs.
       spec: { ...parsed.spec, title: parsed.spec.title ?? '', displayName: parsed.spec.displayName ?? '' },
       answers: { selected: parsed.answers?.selected ?? {}, custom: parsed.answers?.custom ?? {} },
+      ...(typeof parsed.locale === 'string' && parsed.locale ? { locale: parsed.locale } : {}),
     };
   } catch {
     // Corrupt or unreadable (private mode, disabled storage): start clean rather than

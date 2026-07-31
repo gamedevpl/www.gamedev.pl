@@ -43,6 +43,8 @@ export const GAME_KIT_MODULES = [
   // it has a reserve of its own rather than coming out of the author budget — see the
   // note on GAMEKIT_PLATFORM_BYTES for what changed that.
   'zone',
+  // Voice loudness meter (games-repo voice-on-phones Layer 0). Opt-in reserve like zone.
+  'voice',
 ] as const;
 
 export type GameKitModuleName = (typeof GAME_KIT_MODULES)[number];
@@ -55,9 +57,11 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
  * music, touch hint, progress, universal input, pointer poll, draw surface,
  * pointer release, host pause, mascot draw, headroom, gfx3d, look, spatial, …). Together with
  * {@link GAME_BUDGET_BYTES} this must equal games-repo `MAX_BUNDLE_BYTES`
- * (441_687, matching games-repo `shared/assemble-contract.json` `maxProjectBytes`). Not a round KiB.
+ * (449_687, matching games-repo `shared/assemble-contract.json` `maxProjectBytes`). Not a round KiB.
  *
- * Last moved by games-repo #163: +12_000 for a named `zone` reserve, 429_687 → 441_687.
+ * Last moved for voice Layer 0: +8_000 named `voice` reserve, 441_687 → 449_687.
+ *
+ * Before that, games-repo #163: +12_000 for a named `zone` reserve, 429_687 → 441_687.
  * The module shipped charged to the author budget, on the reasoning that it is small and
  * opt-in the way `save` and `commons` are. biplane-skirmish disproved that on arrival —
  * the first published game to select `zone` landed 20 bytes under the ceiling, which made
@@ -96,7 +100,7 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
  * Before that, games-repo #102: +679 (`mascotDraw`) and +75_237 (`headroom`) — 30% of
  * the 250_790 ceiling — plus earlier host-pause / touch steer raises.
  */
-export const GAMEKIT_PLATFORM_BYTES = 236_887;
+export const GAMEKIT_PLATFORM_BYTES = 244_887;
 
 /** Combined html+js+css size cap — must match games-repo `MAX_BUNDLE_BYTES`. */
 export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;

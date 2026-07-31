@@ -276,12 +276,14 @@
     "playtest": {
       "hint": "Play the game, pause on a moment worth changing, and send a request with that viewport and live instrumentation attached.",
       "loading": "Loading the playable build…",
-      "loadError": "No playable build is ready yet. Check the Build tab and try again once a preview exists.",
+      "loadError": "No playable build is ready yet. Go back to the thread and try again once a preview appears.",
+      "backToThread": "Back to thread",
       "theaterAria": "Playtest · {{title}}",
       "pause": "Pause & note",
       "resume": "Resume",
       "played": "{{seconds}}s played",
-      "errorCount": "{{count}} errors",
+      "errorCount_one": "{{count}} error",
+      "errorCount_other": "{{count}} errors",
       "promptTitle": "What should change here?",
       "promptHint": "Your note goes to the build agent (draft) or opens an improvement issue (published). The paused viewport and session signals ride along as data.",
       "shotCaption": "Viewport captured at pause",
@@ -456,14 +458,19 @@
     "feedback": {
       "title": "Want changes?",
       "hint": "Played it and something's off? Tell the agent what to change and it'll revise your game.",
+      "composerHint": "Say what to change",
       "titleBuilding": "Want to steer it?",
       "hintBuilding": "It's still being made — you don't have to wait. Say what to change and the agent picks it up on its next update.",
+      "composerHintBuilding": "Say what to change as it builds",
       "titlePublished": "Ask for a change",
       "hintPublished": "Your game is live. Describe what to change and an agent picks it up as an improvement to it.",
+      "composerHintPublished": "Describe an improvement",
       "placeholder": "e.g. make the car faster, add a second track, use brighter colours…",
       "submit": "Send feedback",
       "sending": "Sending…",
       "sent": "Sent! The agent will revise your game — watch the build log above.",
+      "noCapacity": "Saved — but no build round could start: the build agent is out of capacity right now. Your note is safe and the next round will read it.",
+      "notStarted": "Saved — but a new build round didn't start. Your note is safe; we're looking into it.",
       "error": "We couldn't send that right now. Please try again in a moment.",
       "quota": "You've sent a lot of feedback today — please try again tomorrow.",
       "published": "This game is already published. Submit a new idea to make another version."
@@ -512,7 +519,7 @@
       },
       "needs_changes": {
         "label": "Needs a tweak",
-        "description": "This one didn't make it through. Tweak the idea and submit it again."
+        "description": "This build needs another round before it can go live. Send a short note below to continue — even \"please fix the checks\" is enough."
       },
       "abandoned": {
         "label": "Stopped",
@@ -536,6 +543,7 @@
       "task_failed": "The build agent stopped unexpectedly before finishing. Your game and everything built so far are safe — send feedback below to start another round.",
       "task_timed_out": "The build ran out of time before finishing. Your progress is safe — send feedback below to start another round.",
       "task_completed_without_delivery": "The agent finished without delivering the game. Send feedback below to start another round.",
+      "gate_red": "This build didn't pass our automatic checks, so it can't go live yet. Send feedback below to start another round — the agent will see what failed and fix it.",
       "generic": "This build round ended with an error. Your progress is safe — send feedback below to start another round."
     },
     "stall": {
@@ -688,6 +696,14 @@
     "left": "Left",
     "right": "Right",
     "action": "Action button",
+    "voiceOff": "Voice",
+    "voiceOn": "Voice on",
+    "voiceListening": "Listening…",
+    "voiceStart": "Enable voice commands",
+    "voiceStop": "Disable voice commands",
+    "voiceUnsupported": "Voice recognition is not available in this browser.",
+    "voiceDenied": "Microphone permission denied.",
+    "voiceError": "Voice error: {{error}}",
     "roomClosedTitle": "The lobby closed",
     "backToCatalog": "Back to the catalog",
     "controllerClosedHint": "Ask the host to open a new lobby, then scan again.",

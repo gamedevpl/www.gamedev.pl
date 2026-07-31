@@ -4,6 +4,7 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ArcadeCatalog } from './ArcadeCatalog.js';
+import * as AuthContextModule from './AuthContext.js';
 import type { CatalogEntry } from './catalog.js';
 import i18n from './i18n/index.js';
 
@@ -284,6 +285,101 @@ describe('ArcadeCatalog soft-refresh failure', () => {
       container.querySelector<HTMLButtonElement>('.catalog-refresh-error__retry')?.click();
     });
     expect(onRetryCatalog).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+});
+
+describe('ArcadeCatalog in-progress builds', () => {
+  beforeEach(async () => {
+    installIntersectionObserverMock();
+    sessionStorage.setItem(
+      'gdpl.catalogSortSignals',
+      JSON.stringify({ items: [], popularity: [], lastPlayed: [], newest: [] }),
+    );
+    await i18n.changeLanguage('en');
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+    sessionStorage.clear();
+    localStorage.clear();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('passes slug or token to onOpenStatus when opening an in-progress card', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.spyOn(AuthContextModule, 'useAuth').mockReturnValue({
+      user: { uid: 'test-user', tier: 'standard' },
+      loading: false,
+      privateBeta: false,
+    } as ReturnType<typeof AuthContextModule.useAuth>);
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/api/submissions/mine')) {
+        return new Response(
+          JSON.stringify({
+            submissions: [
+              {
+                token: 'token-with-slug',
+                title: 'Building Game 1',
+                createdAt: new Date().toISOString(),
+                lastKnownStatus: 'building',
+                slug: 'my-cool-game',
+              },
+              {
+                token: 'token-without-slug',
+                title: 'Building Game 2',
+                createdAt: new Date(Date.now() - 1000).toISOString(),
+                lastKnownStatus: 'queued',
+                slug: null,
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return new Response(JSON.stringify({ items: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+
+    const onOpenStatus = vi.fn();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(ArcadeCatalog, {
+          catalogStatus: 'ready',
+          catalogError: null,
+          catalogEntries: entries,
+          onPlayGame: vi.fn(),
+          onPlayTogether: vi.fn(),
+          onRetryCatalog: vi.fn(),
+          onOpenStatus,
+        }),
+      );
+      await flushEffects();
+    });
+
+    const openButtons = container.querySelectorAll<HTMLButtonElement>('.catalog-build-card .primary-btn');
+    expect(openButtons).toHaveLength(2);
+
+    await act(async () => {
+      openButtons[0]?.click();
+    });
+    expect(onOpenStatus).toHaveBeenLastCalledWith('my-cool-game');
+
+    await act(async () => {
+      openButtons[1]?.click();
+    });
+    expect(onOpenStatus).toHaveBeenLastCalledWith('token-without-slug');
 
     await act(async () => {
       root.unmount();

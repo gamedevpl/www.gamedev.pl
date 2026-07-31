@@ -6,7 +6,13 @@ import { registerAgentChannelRoutes, type AgentChannelOptions } from './agent-ch
 import { mintAgentToken } from './agent-token.js';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import { createCreationGate, CREATION_REFUSAL_CODES, type CreationGate } from './creation-limits.js';
-import { catalogEntryFromSpec, createGitHubClient, type CatalogGameEntry, type GitHubClient } from './github-client.js';
+import {
+  catalogEntryFromSpec,
+  createGitHubClient,
+  parseSpecTitle,
+  type CatalogGameEntry,
+  type GitHubClient,
+} from './github-client.js';
 import {
   createSnapshotReaderFromEnv,
   SnapshotIncompleteError,
@@ -66,6 +72,34 @@ const CreateSubmissionRequestSchema = z.object({
 // Re-exported for callers (and tests) that knew it here; it now lives with the status
 // parser, which reads the same marker back off the PR to rebuild the revision history.
 export { CREATOR_FEEDBACK_MARKER };
+
+/**
+ * Why a round did not start, when one did not.
+ *
+ * `no_capacity` is its own answer because it is the one failure that is nothing to do
+ * with this job: the coding-agent account has run out of premium requests, every job on
+ * the site is equally stuck, and retrying is not the fix. Told apart from an ordinary
+ * dispatch fault so the creator can be told the truth ("not now") rather than a guess
+ * ("something went wrong"), and so an operator reading the queue knows to go and look at
+ * billing rather than at the build.
+ */
+export type ResumeFailureReason = 'not_configured' | 'no_capacity' | 'dispatch_failed';
+
+export type ResumeOutcome = { started: true } | { started: false; reason: ResumeFailureReason };
+
+/**
+ * Reads a dispatch failure for the one distinction a caller can act on.
+ *
+ * GitHub answers an exhausted premium-request allowance with 412 and a message saying so;
+ * the status alone is enough, and the message is matched too because a 412 from this API
+ * has meant nothing else and a future one would still be worth reporting as "not now".
+ */
+export function classifyResumeFailure(error: unknown): ResumeFailureReason {
+  const status = (error as { status?: unknown } | null)?.status;
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  if (status === 412 || /premium quota|insufficient .*quota/i.test(message)) return 'no_capacity';
+  return 'dispatch_failed';
+}
 
 const FeedbackRequestSchema = z.object({
   feedback: z
@@ -370,6 +404,21 @@ export async function registerSubmissionRoutes(
   const internalAuthVerifier = options.internalAuthVerifier ?? createInternalAuthVerifierFromEnv();
   const agentBackend = options.agentBackend;
   const gameSeeder = options.gameSeeder;
+  /**
+   * When to stop generating seeds nobody can place.
+   *
+   * A backend that cannot stage a draft — a mis-scoped dispatch credential is the way
+   * this happens, and did — fails *after* the draft has been generated, because that is
+   * the first moment there is anything to write. Without this, every submission pays a
+   * couple of minutes and tens of thousands of tokens for a draft that is discarded a
+   * second later, and the only symptom is a warning line nobody is reading.
+   *
+   * So a staging failure mutes seeding for a while rather than forever: long enough that
+   * a broken credential costs one seed instead of one per submission, short enough that
+   * a transient failure heals without a deploy.
+   */
+  const SEED_STAGING_COOLDOWN_MS = 10 * 60_000;
+  let seedStagingMutedUntil = 0;
 
   // Shared deps for notification emission (in-app + best-effort email). The mailer
   // degrades to a no-op without RESEND_API_KEY, and email is skipped entirely
@@ -508,6 +557,13 @@ export async function registerSubmissionRoutes(
     log: { error: (context: object, message: string) => void };
   }): Promise<SeedDraft | undefined> {
     if (!gameSeeder || !store) return undefined;
+    if (now() < seedStagingMutedUntil) {
+      input.log.error(
+        { issueNumber: input.issueNumber },
+        'skipping the seed: a recent draft could not be staged, so generating another would be wasted',
+      );
+      return undefined;
+    }
     try {
       const record = await store.getSubmission(input.issueNumber);
       if (!record) return undefined;
@@ -620,6 +676,17 @@ export async function registerSubmissionRoutes(
         ...(input.feedback ? { feedback: input.feedback } : {}),
         ...(seed ? { seed } : {}),
       });
+      // A seed that went in without a workspace coming back is a backend that could not
+      // place it. Inferred rather than reported because it is true of every backend: the
+      // seam promises a `seedWorkspace` when a seed was staged, so its absence is the
+      // signal, whatever the reason underneath.
+      if (seed && !result.seedWorkspace) {
+        seedStagingMutedUntil = now() + SEED_STAGING_COOLDOWN_MS;
+        input.log.error(
+          { issueNumber: input.issueNumber, mutedForMs: SEED_STAGING_COOLDOWN_MS },
+          'the generated seed could not be staged; pausing seeding rather than generating drafts nobody can place',
+        );
+      }
       await store?.recordDispatch(input.issueNumber, {
         backend: agentBackend.name,
         ref: result.ref,
@@ -665,6 +732,12 @@ export async function registerSubmissionRoutes(
    * The backend decides what "another round" costs: Copilot needs an open pull request
    * on the branch before it will resume one, which its adapter arranges on demand. That
    * detail stays inside the adapter — here it is simply "continue this job".
+   *
+   * Returns what happened rather than only logging it. A round that never started is
+   * indistinguishable, from the creator's side, from one that started and is thinking —
+   * the thread shows their message either way and the status does not move. Callers get
+   * the outcome so they can say so; `no_capacity` is separated out because it is not a
+   * fault in the job and it will not clear by trying again in a minute.
    */
   async function resumeBuild(input: {
     issueNumber: number;
@@ -680,8 +753,8 @@ export async function registerSubmissionRoutes(
      * fact an audit of that job would want.
      */
     transition?: { by: JobTransition['by']; reason: string };
-  }): Promise<void> {
-    if (!agentBackend || !submissionTokenSecret || !store) return;
+  }): Promise<ResumeOutcome> {
+    if (!agentBackend || !submissionTokenSecret || !store) return { started: false, reason: 'not_configured' };
     const record = await store.getSubmission(input.issueNumber);
     const previous = record?.dispatch;
     try {
@@ -734,10 +807,13 @@ export async function registerSubmissionRoutes(
           ...(input.transition ? { reason: input.transition.reason } : {}),
         });
       }
+      return { started: true };
     } catch (error) {
       // The creator's request is already queued on the build channel, so a failed
       // resume costs the round its head start, not the request itself.
-      input.log.error({ err: error, issueNumber: input.issueNumber }, 'agent resume failed');
+      const reason = classifyResumeFailure(error);
+      input.log.error({ err: error, issueNumber: input.issueNumber, reason }, 'agent resume failed');
+      return { started: false, reason };
     }
   }
 
@@ -1302,13 +1378,16 @@ export async function registerSubmissionRoutes(
       ...(record.abandonedAt ? {} : { phase: state }),
       ...(record.slug ? { slug: record.slug } : {}),
     };
-    // `failed` projects onto `needs_changes`, which the page renders as "waiting for
-    // your input" — true about what to do next, a lie about what happened. Name the
-    // error, with the transition's own reason, so the creator is asked to retry a
-    // build that died rather than left waiting on one that looks alive.
-    if (state === 'failed' && !record.abandonedAt) {
-      const lastFailure = [...(record.transitions ?? [])].reverse().find((transition) => transition.to === 'failed');
-      status.failure = { reason: lastFailure?.reason ?? 'unknown' };
+    // `failed` and a gate bounce both project onto public `needs_changes`. Without a
+    // reason the Studio page only says the label — creators click the notification,
+    // land on a thread of old planning notes, and never learn *why* the build stopped
+    // or that sending feedback below is what starts the next round. Name the
+    // transition's own cause so the page can render translated copy for it.
+    if ((state === 'failed' || state === 'needs_changes') && !record.abandonedAt) {
+      const lastBounce = [...(record.transitions ?? [])].reverse().find((transition) => transition.to === state);
+      status.failure = {
+        reason: lastBounce?.reason ?? (state === 'failed' ? 'unknown' : 'gate_red'),
+      };
     }
     // Echo the creator's change requests from the store. On jobs without a pull
     // request the store copy is the only durable record — the page used to render
@@ -1650,7 +1729,24 @@ export async function registerSubmissionRoutes(
         reason: 'submitted',
       });
 
-      await dispatchBuild({
+      // Deliberately not awaited. The job exists, is slugged, and is `queued` by now —
+      // everything the creator's status page needs — and dispatch is minutes of work
+      // that used to happen while they watched a "Submitting…" button: an agent-tasks
+      // round trip, and since seeding, a model writing a first draft of the game
+      // (~1 minute, or ~2 with a repair round). Holding the response for that made a
+      // submission look hung and put it within reach of a request timeout, which would
+      // have shown an error for a build that was in fact starting normally.
+      //
+      // Nothing is lost by letting go: a job whose dispatch has not landed yet is
+      // exactly the `queued` state the reconciler already reports as `not_dispatched`
+      // once it has waited long enough, and dispatchBuild swallows its own failures for
+      // that reason. The catch here is belt-and-braces against an unhandled rejection.
+      //
+      // The logger is lifted out first: a closure over `request` would hold the whole
+      // Fastify request — headers, body, reply — alive for as long as dispatch runs,
+      // which since seeding is minutes rather than milliseconds, on every submission.
+      const dispatchLog = request.log;
+      void dispatchBuild({
         issueNumber: jobId,
         // The agent is told where to build rather than left to name the place itself.
         // Its brief previously read "games/(the slug named in your first progress
@@ -1658,7 +1754,9 @@ export async function registerSubmissionRoutes(
         slug,
         spec: issueBody,
         locale: creatorLocale,
-        log: request.log,
+        log: dispatchLog,
+      }).catch((error: unknown) => {
+        dispatchLog.error({ err: error, issueNumber: jobId }, 'background dispatch failed');
       });
 
       const token = mintToken(jobId, submissionTokenSecret);
@@ -2113,7 +2211,7 @@ export async function registerSubmissionRoutes(
       // account is silently ignored. That whole apparatus — the marker, the relay
       // workflow, the licensed PAT — existed only to get a message to an agent through
       // someone else's system, and none of it is needed now that we dispatch directly.
-      await resumeBuild({
+      const outcome = await resumeBuild({
         issueNumber,
         feedback: contextBlock ? `${sanitizedFeedback}\n\n${contextBlock}` : sanitizedFeedback,
         locale: creatorLocale,
@@ -2132,7 +2230,16 @@ export async function registerSubmissionRoutes(
         }
       }
 
-      return reply.send({ ok: true, ...(shotId ? { shotId } : {}) });
+      // Accepted, and honest about what it bought. The message is kept either way — it is
+      // on the record and in the thread, and the next round to start will read it — but a
+      // creator whose round never started must not be shown the same silence as one whose
+      // agent is already working. That silence is what turned an exhausted premium-request
+      // allowance into a game that appeared to be thinking for hours.
+      return reply.send({
+        ok: true,
+        ...(shotId ? { shotId } : {}),
+        ...(outcome.started ? {} : { roundStarted: false, reason: outcome.reason }),
+      });
     },
   );
 
@@ -2347,7 +2454,7 @@ export async function registerSubmissionRoutes(
     }
 
     const refsBefore = record.dispatch?.refs?.length ?? 0;
-    await resumeBuild({
+    const outcome = await resumeBuild({
       issueNumber,
       feedback: undelivered ? '' : OPERATOR_RETRY_BRIEF,
       locale: record.locale ?? 'en',
@@ -2358,10 +2465,16 @@ export async function registerSubmissionRoutes(
       transition: { by: 'operator', reason: 'operator_retry' },
     });
 
-    // `resumeBuild` reports dispatch failure by logging, not throwing — right for the
-    // feedback route, where the request is queued on the channel either way, but an
-    // operator clicking retry needs the truth now. A new session always appends a ref,
-    // so no new ref means no new session.
+    // `resumeBuild` reports dispatch failure by returning it rather than throwing — right
+    // for the feedback route, where the request is queued on the channel either way, but
+    // an operator clicking retry needs the truth now, and needs to be told *which* truth:
+    // an exhausted premium-request allowance is a trip to billing, not a button to press
+    // again. The ref count is still checked behind it, because a resume that reported
+    // success without starting a session would be the same silence one layer down — a new
+    // session always appends a ref.
+    if (!outcome.started) {
+      return reply.status(502).send({ error: outcome.reason });
+    }
     const after = await store.getSubmission(issueNumber);
     if ((after?.dispatch?.refs?.length ?? 0) <= refsBefore) {
       return reply.status(502).send({ error: 'dispatch_failed' });
@@ -2492,6 +2605,72 @@ export async function registerSubmissionRoutes(
     // Logged as well as returned: this changes permanent addresses, and the response
     // goes to one browser tab that may not be open the next time anyone asks what ran.
     request.log.info({ dryRun, scanned: result.scanned, named, failed: result.failed }, 'slug backfill complete');
+    return reply.send(result);
+  });
+
+  /**
+   * Gives the delivered SPEC title to games still showing the truncated prompt.
+   *
+   * Delivery adopts the SPEC title now, so this exists for records that arrived before
+   * that — the production example was "A game tycoon like where I run a tv busi" on the
+   * shelf while SPEC.md already said "TV Tycoon". Publish already prefers the SPEC title
+   * for the catalog; this makes the shelf, studio, and notifications agree with it.
+   *
+   * Same shape as the slug backfill: operator-only, `?dryRun=1` rehearses, abandoned
+   * builds are left alone. Games whose shelf title already matches the SPEC are reported
+   * as unchanged rather than rewritten.
+   */
+  app.post<{ Querystring: { dryRun?: string } }>('/api/admin/title-backfill', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });
+    if (!store) return reply.status(503).send({ error: 'store_unavailable' });
+    const gamesStore = options.agentChannel?.gamesStore;
+    if (!gamesStore) return reply.status(503).send({ error: 'games_store_unavailable' });
+
+    const dryRun = request.query.dryRun === '1' || request.query.dryRun === 'true';
+    const pending = await store.listSubmissionsWithDelivery();
+    const games: Array<{
+      issueNumber: number;
+      slug: string;
+      from: string;
+      to: string | null;
+      changed: boolean;
+    }> = [];
+
+    for (const record of pending) {
+      const slug = record.slug!;
+      const version = record.deliveredVersion!;
+      const spec = await gamesStore.getSourceFile(slug, version, 'SPEC.md');
+      const parsed = spec ? parseSpecTitle(spec) : null;
+      const next = parsed ? sanitizeCreatorText(parsed, { singleLine: true }).slice(0, 80) : null;
+      const usable = next && next.length >= 3 ? next : null;
+      const changed = Boolean(usable && usable !== record.title);
+
+      if (!dryRun && changed && usable) {
+        await store.setSubmissionTitle(record.issueNumber, usable);
+      }
+
+      games.push({
+        issueNumber: record.issueNumber,
+        slug,
+        from: record.title,
+        to: usable,
+        changed,
+      });
+    }
+
+    const renamed = games.filter((game) => game.changed).length;
+    const result = {
+      ok: true,
+      dryRun,
+      scanned: pending.length,
+      renamed,
+      unchanged: pending.length - renamed,
+      games,
+    };
+    request.log.info(
+      { dryRun, scanned: result.scanned, renamed, unchanged: result.unchanged },
+      'title backfill complete',
+    );
     return reply.send(result);
   });
 

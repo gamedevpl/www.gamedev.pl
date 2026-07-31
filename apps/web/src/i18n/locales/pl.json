@@ -278,12 +278,16 @@
     "playtest": {
       "hint": "Zagraj, wstrzymaj w momencie wartym zmiany i wyślij prośbę z tym widokiem oraz sygnałami z sesji.",
       "loading": "Ładujemy grywalny build…",
-      "loadError": "Nie ma jeszcze grywalnego buildu. Sprawdź zakładkę Build i spróbuj, gdy pojawi się podgląd.",
+      "loadError": "Nie ma jeszcze grywalnego buildu. Wróć do wątku i spróbuj, gdy pojawi się podgląd.",
+      "backToThread": "Wróć do wątku",
       "theaterAria": "Playtest · {{title}}",
       "pause": "Wstrzymaj i zanotuj",
       "resume": "Wznów",
       "played": "{{seconds}}s gry",
-      "errorCount": "{{count}} błędów",
+      "errorCount_one": "{{count}} błąd",
+      "errorCount_few": "{{count}} błędy",
+      "errorCount_many": "{{count}} błędów",
+      "errorCount_other": "{{count}} błędu",
       "promptTitle": "Co tu zmienić?",
       "promptHint": "Notatka idzie do agenta buildu (szkic) albo otwiera zgłoszenie ulepszenia (opublikowane). Wstrzymany widok i sygnały sesji jadą jako dane.",
       "shotCaption": "Widok z momentu wstrzymania",
@@ -458,14 +462,19 @@
     "feedback": {
       "title": "Chcesz zmian?",
       "hint": "Zagrałeś i coś jest nie tak? Napisz agentowi, co zmienić, a poprawi Twoją grę.",
+      "composerHint": "Napisz, co zmienić",
       "titleBuilding": "Chcesz coś podpowiedzieć?",
       "hintBuilding": "Gra wciąż powstaje — nie musisz czekać. Napisz, co zmienić, a agent odbierze wiadomość przy najbliższej aktualizacji.",
+      "composerHintBuilding": "Napisz, co zmienić w trakcie budowy",
       "titlePublished": "Poproś o zmianę",
       "hintPublished": "Twoja gra jest opublikowana. Opisz, co zmienić — agent podejmie to jako ulepszenie.",
+      "composerHintPublished": "Opisz ulepszenie",
       "placeholder": "np. przyspiesz samochód, dodaj drugą trasę, użyj jaśniejszych kolorów…",
       "submit": "Wyślij uwagi",
       "sending": "Wysyłanie…",
       "sent": "Wysłano! Agent poprawi Twoją grę — obserwuj dziennik budowy powyżej.",
+      "noCapacity": "Zapisano — ale nie udało się rozpocząć rundy budowania: agent nie ma teraz wolnych mocy. Twoja wiadomość jest bezpieczna i zostanie odczytana w kolejnej rundzie.",
+      "notStarted": "Zapisano — ale nowa runda budowania się nie rozpoczęła. Twoja wiadomość jest bezpieczna; sprawdzamy, co się stało.",
       "error": "Nie udało się teraz tego wysłać. Spróbuj ponownie za chwilę.",
       "quota": "Wysłałeś dziś dużo uwag — spróbuj ponownie jutro.",
       "published": "Ta gra jest już opublikowana. Prześlij nowy pomysł, aby stworzyć kolejną wersję."
@@ -514,7 +523,7 @@
       },
       "needs_changes": {
         "label": "Wymaga poprawki",
-        "description": "Ta wersja nie przeszła. Popraw pomysł i zgłoś go ponownie."
+        "description": "Ta wersja potrzebuje jeszcze jednej rundy, zanim będzie mogła trafić do arcade. Wyślij poniżej krótką uwagę, aby kontynuować — nawet „popraw testy” wystarczy."
       },
       "abandoned": {
         "label": "Zatrzymana",
@@ -538,6 +547,7 @@
       "task_failed": "Agent budujący niespodziewanie przerwał pracę. Twoja gra i dotychczasowe postępy są bezpieczne — wyślij poniżej uwagi, aby rozpocząć kolejną rundę.",
       "task_timed_out": "Budowanie nie zdążyło się skończyć w wyznaczonym czasie. Postępy są bezpieczne — wyślij poniżej uwagi, aby rozpocząć kolejną rundę.",
       "task_completed_without_delivery": "Agent zakończył pracę, ale nie dostarczył gry. Wyślij poniżej uwagi, aby rozpocząć kolejną rundę.",
+      "gate_red": "Ta wersja nie przeszła naszych automatycznych testów, więc jeszcze nie może trafić do arcade. Wyślij poniżej uwagi, aby rozpocząć kolejną rundę — agent zobaczy, co nie przeszło, i to poprawi.",
       "generic": "Ta runda budowania zakończyła się błędem. Postępy są bezpieczne — wyślij poniżej uwagi, aby rozpocząć kolejną rundę."
     },
     "stall": {
@@ -690,6 +700,14 @@
     "left": "Lewo",
     "right": "Prawo",
     "action": "Przycisk akcji",
+    "voiceOff": "Głos",
+    "voiceOn": "Głos włączony",
+    "voiceListening": "Słucham…",
+    "voiceStart": "Włącz komendy głosowe",
+    "voiceStop": "Wyłącz komendy głosowe",
+    "voiceUnsupported": "Rozpoznawanie mowy nie jest dostępne w tej przeglądarce.",
+    "voiceDenied": "Odmowa dostępu do mikrofonu.",
+    "voiceError": "Błąd głosu: {{error}}",
     "roomClosedTitle": "Pokój został zamknięty",
     "backToCatalog": "Wróć do katalogu",
     "controllerClosedHint": "Poproś gospodarza o nowy pokój i zeskanuj kod ponownie.",
