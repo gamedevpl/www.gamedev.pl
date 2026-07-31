@@ -8,6 +8,13 @@ import type { ContentChecker } from './moderation.js';
 import { sanitizeCreatorText } from './submission-status.js';
 import type { Store } from './store.js';
 import { logModerationRejection } from './moderation-metrics.js';
+import { normalizeLocale } from './translate.js';
+
+/** Full names the model is asked to write in — a bare `pl` tag is easy to ignore. */
+const LANGUAGE_NAMES: Record<string, string> = {
+  pl: 'Polish',
+  en: 'English',
+};
 
 export interface RefineOption {
   label: string;
@@ -163,6 +170,12 @@ export class VertexSpecRefiner implements SpecRefiner {
     }
 
     try {
+      // Resolve to a language *name*: models routinely echo English when the concept
+      // is English and the instruction only says `(pl)`. The UI language wins even
+      // when the creator typed their idea in another language.
+      const locale = normalizeLocale(params.locale);
+      const languageName = LANGUAGE_NAMES[locale] ?? 'English';
+
       const promptText = `You are a helpful game design assistant for gamedev.pl.
 Analyze the following game concept specification.
 
@@ -170,7 +183,7 @@ Do two things:
 1. Propose "suggestedTitle": a short, catchy name for this game — at most 6 words, no quotes, no trailing punctuation. Name the game, do not describe it, and never echo the concept text back as a sentence.
 2. Identify up to 4 underspecified or missing gameplay/design dimensions (such as visual style, controls, difficulty/pacing, or win/lose conditions) that would help a coding agent build a better game.
 
-Language requirement: Write the title, questions and options in the language specified (${params.locale ?? 'en'}).
+Language requirement (mandatory): Write suggestedTitle, every question, every option label, and every option detail entirely in ${languageName}. The game concept below may be written in a different language — ignore that and still write all of your output in ${languageName}. Do not mix languages. Proper nouns from the concept may stay as-is.
 
 Respond STRICTLY with a JSON object following this schema:
 {
@@ -303,7 +316,7 @@ export async function registerRefineRoute(app: FastifyInstance, options: RefineR
 
   const cacheKey = (data: { title?: string; concept: string; locale?: string }) =>
     createHash('sha256')
-      .update(`${data.locale ?? 'en'}\x00${data.title ?? ''}\x00${data.concept}`)
+      .update(`${normalizeLocale(data.locale)}\x00${data.title ?? ''}\x00${data.concept}`)
       .digest('hex');
 
   const readCache = (key: string, now: number): RefineResponse | null => {
@@ -386,7 +399,7 @@ export async function registerRefineRoute(app: FastifyInstance, options: RefineR
       const result = await specRefiner.refine({
         ...(parseResult.data.title ? { title: parseResult.data.title } : {}),
         concept: parseResult.data.concept,
-        locale: parseResult.data.locale,
+        locale: normalizeLocale(parseResult.data.locale),
       });
       // Fail-open makes an outage look exactly like a fully-specified concept: both
       // are zero questions and a 200. Without this line there is no way to tell them

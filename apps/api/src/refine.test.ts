@@ -256,7 +256,21 @@ describe('VertexSpecRefiner over a genaicode client', () => {
     });
     expect(seen?.temperature).toBe(0.2);
     expect(seen?.prompt[0]?.text).toContain('Carrot Farm');
-    expect(seen?.prompt[0]?.text).toContain('(pl)');
+    // Full language name, not a bare `pl` tag — models ignore the tag when the
+    // concept itself is English.
+    expect(seen?.prompt[0]?.text).toContain('Polish');
+    expect(seen?.prompt[0]?.text).toContain('entirely in Polish');
+  });
+
+  it('asks for English by name when locale is missing or unknown', async () => {
+    let seen: GenerationRequest | undefined;
+    const refiner = new VertexSpecRefiner({
+      client: stubClient(JSON.stringify({ questions: [] }), (req) => (seen = req)),
+    });
+
+    await refiner.refine({ concept: 'A concept long enough to refine without a title yet' });
+
+    expect(seen?.prompt[0]?.text).toContain('entirely in English');
   });
 
   it('fills defaults for partial question objects', async () => {
