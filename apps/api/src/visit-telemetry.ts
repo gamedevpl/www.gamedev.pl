@@ -52,6 +52,7 @@ const CreateStepSchema = z.enum([
   'qa_shown',
   'title_confirmed',
   'submission_created',
+  'dimension_3d_selected',
 ]);
 /**
  * Closed-beta waitlist funnel. Same closed-enum posture as create steps: the value

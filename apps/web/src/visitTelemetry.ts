@@ -92,7 +92,14 @@ export type CreateStep =
    */
   | 'title_confirmed'
   /** A submission actually reached the games repo. */
-  | 'submission_created';
+  | 'submission_created'
+  /**
+   * Opted into 3D on the prompt card. Not a funnel rung — a side branch off
+   * `prompt_started`, answering "how many creators want the heavier path" without
+   * changing the event shape. 2D is deliberately not recorded: it is the default
+   * every visit starts on, so a row for it would just restate the starter count.
+   */
+  | 'dimension_3d_selected';
 
 /**
  * The closed-beta waitlist funnel, in the order a visitor meets it.

@@ -37,6 +37,13 @@ npm run type-check && npm run lint && npm run test && npm run build
 `npm run dev` runs everything locally; the generator defaults to the offline `mock` provider,
 so no cloud or API keys are needed.
 
+**Anything visual ships with pictures.** A PR that changes layout, styling or an on-screen
+control must include screenshots of each meaningful state — and a GIF when the change is a
+motion or an interaction — captured from the **running app**, not from a mockup. Commit them
+under `docs/media/<feature>/` and link them from the PR body. Green tests say nothing about
+whether a thing looks right. Recipe and the traps in
+[`docs/contributing-for-agents.md`](docs/contributing-for-agents.md#anything-visual-ships-with-pictures).
+
 **Testing behind sign-in.** Locally, `curl -X POST http://localhost:5173/api/auth/dev -c
 cookies.txt` gives you a full session — no credentials, in-memory store, nothing real
 touched. To exercise the **deployed** site you need a personal access token

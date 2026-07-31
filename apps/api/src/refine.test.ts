@@ -364,3 +364,75 @@ describe('VertexSpecRefiner over a genaicode client', () => {
     expect(seen?.prompt[0]?.text).toContain('Carrot Farm');
   });
 });
+
+/**
+ * The dimension is chosen on the prompt card before the refiner ever runs. Asking
+ * "2D or 3D?" in the clarifying round would spend one of four questions re-asking
+ * something the creator has already answered with a switch.
+ */
+describe('refiner and the creator’s dimension choice', () => {
+  function stubClient(responseText: string, capture?: (request: GenerationRequest) => void) {
+    return genaicode({
+      name: 'stub',
+      async generate(request) {
+        capture?.(request);
+        return { parts: [{ type: 'text' as const, text: responseText }] };
+      },
+    });
+  }
+
+  it('tells the model the dimension is settled, and which way', async () => {
+    let seen: GenerationRequest | undefined;
+    const refiner = new VertexSpecRefiner({ client: stubClient('{"questions": []}', (req) => (seen = req)) });
+
+    await refiner.refine({ title: 'Tower', concept: 'Climb a tower', dimension: '3d' });
+
+    const prompt = seen?.prompt[0]?.text ?? '';
+    expect(prompt).toContain('already chosen the graphics dimension: 3D');
+    expect(prompt).toContain('Do NOT ask about 2D vs 3D');
+  });
+
+  it('says 2D when the field is absent, rather than leaving it open', async () => {
+    let seen: GenerationRequest | undefined;
+    const refiner = new VertexSpecRefiner({ client: stubClient('{"questions": []}', (req) => (seen = req)) });
+
+    await refiner.refine({ title: 'Tower', concept: 'Climb a tower' });
+
+    expect(seen?.prompt[0]?.text).toContain('already chosen the graphics dimension: 2D');
+  });
+
+  /**
+   * The refine cache is keyed on content because identical specs deserve identical
+   * questions for free. The dimension is now part of the prompt, so it has to be part
+   * of that key — otherwise whoever asks second gets the other dimension's questions.
+   */
+  it('does not serve one dimension’s cached questions to the other', async () => {
+    const spec = { title: 'Tower Climb', concept: 'Climb a procedurally generated tower, floor by floor.' };
+    const prompts: string[] = [];
+    const refiner = {
+      refine: async (params: { dimension?: '2d' | '3d' }) => {
+        prompts.push(params.dimension ?? '2d');
+        return { questions: [{ id: 'q1', question: 'How fast?', options: [{ label: 'Fast' }] }] };
+      },
+    };
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:test-user' });
+    const testApp = await buildApp({
+      store,
+      specRefiner: refiner,
+      contentChecker: new PatternChecker(),
+      sessionSecret,
+    });
+    const headers = { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken('g:test-user', sessionSecret)}` };
+    const post = (dimension: '2d' | '3d') =>
+      testApp.inject({ method: 'POST', url: '/api/submissions/refine', headers, payload: { ...spec, dimension } });
+
+    expect((await post('2d')).statusCode).toBe(200);
+    expect((await post('2d')).statusCode).toBe(200);
+    expect((await post('3d')).statusCode).toBe(200);
+
+    // Two distinct model calls: the 2D repeat was a cache hit, the 3D one was not.
+    expect(prompts).toEqual(['2d', '3d']);
+    await testApp.close();
+  });
+});

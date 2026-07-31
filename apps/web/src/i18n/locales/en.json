@@ -102,7 +102,11 @@
     "dragDropHint": "Drop image files here to attach to prompt",
     "attachmentsTitle": "Attached Visuals ({{count}}):",
     "removeAttachment": "Remove attachment",
-    "quotaLeft": "{{left}} of {{limit}} games left today"
+    "quotaLeft": "{{left}} of {{limit}} games left today",
+    "dimensionLabel": "Game dimension",
+    "dimension2d": "2D",
+    "dimension3d": "3D",
+    "dimensionSwitchLabel": "3D graphics"
   },
   "sketch": {
     "title": "Sketch Simple Drawing",

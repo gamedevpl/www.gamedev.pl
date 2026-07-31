@@ -9,6 +9,7 @@ import { sanitizeCreatorText } from './submission-status.js';
 import type { Store } from './store.js';
 import { logModerationRejection } from './moderation-metrics.js';
 import { normalizeLocale } from './translate.js';
+import { DimensionSchema, type GameDimension } from './submissions.js';
 
 /** Full names the model is asked to write in — a bare `pl` tag is easy to ignore. */
 const LANGUAGE_NAMES: Record<string, string> = {
@@ -53,6 +54,8 @@ export interface RefineParams {
   title?: string;
   concept: string;
   locale?: string;
+  /** Already answered on the prompt card; the prompt tells the model not to re-ask. */
+  dimension?: GameDimension;
 }
 
 export interface SpecRefiner {
@@ -185,6 +188,8 @@ Do two things:
 
 Language requirement (mandatory): Write suggestedTitle, every question, every option label, and every option detail entirely in ${languageName}. The game concept below may be written in a different language — ignore that and still write all of your output in ${languageName}. Do not mix languages. Proper nouns from the concept may stay as-is.
 
+The creator has already chosen the graphics dimension: ${params.dimension === '3d' ? '3D' : '2D'}. Do NOT ask about 2D vs 3D, dimensionality, perspective or camera projection — that question is answered. Ask about anything else that is underspecified.
+
 Respond STRICTLY with a JSON object following this schema:
 {
   "suggestedTitle": "Short Game Name",
@@ -265,6 +270,8 @@ const RefineRequestSchema = z.object({
     .min(30, 'concept must be at least 30 characters')
     .max(4000, 'concept must be at most 4000 characters'),
   locale: z.string().trim().optional(),
+  /** Chosen on the prompt card before the refiner runs — so it must not re-ask. */
+  dimension: DimensionSchema.optional(),
 });
 
 export interface RefineRouteOptions {
@@ -314,9 +321,12 @@ export async function registerRefineRoute(app: FastifyInstance, options: RefineR
    */
   const refineCache = new Map<string, { expiresAt: number; result: RefineResponse }>();
 
-  const cacheKey = (data: { title?: string; concept: string; locale?: string }) =>
+  // `dimension` is in the key because it is in the prompt: the same concept asked
+  // in 2D and in 3D can legitimately need different questions, and sharing one
+  // cached answer between them would serve the wrong set to whoever arrived second.
+  const cacheKey = (data: { title?: string; concept: string; locale?: string; dimension?: string }) =>
     createHash('sha256')
-      .update(`${normalizeLocale(data.locale)}\x00${data.title ?? ''}\x00${data.concept}`)
+      .update(`${normalizeLocale(data.locale)}\x00${data.title ?? ''}\x00${data.concept}\x00${data.dimension ?? '2d'}`)
       .digest('hex');
 
   const readCache = (key: string, now: number): RefineResponse | null => {
@@ -400,6 +410,7 @@ export async function registerRefineRoute(app: FastifyInstance, options: RefineR
         ...(parseResult.data.title ? { title: parseResult.data.title } : {}),
         concept: parseResult.data.concept,
         locale: normalizeLocale(parseResult.data.locale),
+        dimension: parseResult.data.dimension,
       });
       // Fail-open makes an outage look exactly like a fully-specified concept: both
       // are zero questions and a 200. Without this line there is no way to tell them

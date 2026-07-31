@@ -50,6 +50,7 @@ import { useActiveBuildCount } from './activeBuilds.js';
 import { getSavedSpecs, saveSpec, type SavedSpec } from './mySpecs.js';
 import { saveLastBuilder, type BuilderKind } from './builderKind.js';
 import { clearPendingQa, loadPendingQa, savePendingQa, type PendingQaAnswers } from './pendingQa.js';
+import { DEFAULT_DIMENSION, type GameDimension } from './DimensionToggle.js';
 import { useAuth } from './AuthContext.js';
 import { AuthModal } from './AuthModal.js';
 import { recordCreateStep, recordStudioStep } from './visitTelemetry.js';
@@ -112,8 +113,15 @@ export function App() {
   // questions away and charging another refine to ask them again.
   const restoredQa = useRef(loadPendingQa());
   const [qaQuestions, setQaQuestions] = useState<QAQuestion[]>(restoredQa.current?.questions ?? []);
-  const [pendingSpec, setPendingSpec] = useState<{ title: string; concept: string; displayName: string } | null>(
-    restoredQa.current?.spec ?? null,
+  const [pendingSpec, setPendingSpec] = useState<{
+    title: string;
+    concept: string;
+    displayName: string;
+    dimension: GameDimension;
+  } | null>(
+    restoredQa.current?.spec
+      ? { ...restoredQa.current.spec, dimension: restoredQa.current.spec.dimension ?? DEFAULT_DIMENSION }
+      : null,
   );
   // Language the parked questions were written in. Empty when an older blob never
   // recorded one — that mismatch with the live UI language is what triggers a
@@ -507,7 +515,11 @@ export function App() {
   // The generation gate: before spending a submission we run the spec refiner. If it
   // returns clarifying questions, generation pauses on the QA panel until they're
   // answered; a clean spec (or a refiner error — fail-open) submits straight through.
-  async function handleSubmitSpec(concept: string, displayName: string = '') {
+  async function handleSubmitSpec(
+    concept: string,
+    dimension: GameDimension = DEFAULT_DIMENSION,
+    displayName: string = '',
+  ) {
     if (!user) {
       // The wall between "wrote an idea" and "made an account". Everything before this
       // is anonymous, so this is the only place that drop-off is visible at all.
@@ -525,7 +537,13 @@ export function App() {
     let questions: QAQuestion[] = [];
     let suggestedTitle: string | undefined;
     try {
-      const refined = await refineSpec({ concept: trimmedConcept, locale: i18n.language });
+      const refined = await refineSpec({
+        concept: trimmedConcept,
+        locale: i18n.language,
+        // Told to the refiner so it stops asking "2D or 3D?" — a question the
+        // creator answered on the card before ever pressing the button.
+        dimension,
+      });
       questions = refined.questions;
       suggestedTitle = refined.suggestedTitle;
     } catch {
@@ -537,11 +555,13 @@ export function App() {
     if (questions.length > 0) recordCreateStep('qa_shown');
 
     // The confirm step always happens now, questions or not: it is where the game gets
-    // its name, and a build must not start without one the creator has seen.
+    // its name, and a build must not start without one the creator has seen. The
+    // dimension rides along in the spec because submission happens from there, not here.
     const spec = {
       title: suggestedTitle ?? deriveTitleFromConcept(trimmedConcept),
       concept: trimmedConcept,
       displayName: displayName.trim(),
+      dimension,
     };
     const locale = i18n.resolvedLanguage ?? i18n.language;
     setPendingSpec(spec);
@@ -561,7 +581,13 @@ export function App() {
   }
 
   // Actually creates the submission (after the QA gate) and jumps to its status page.
-  async function submitRefinedSpec(title: string, concept: string, displayName: string, builder: BuilderKind) {
+  async function submitRefinedSpec(
+    title: string,
+    concept: string,
+    displayName: string,
+    builder: BuilderKind,
+    dimension: GameDimension,
+  ) {
     setSubmissionStatus('loading');
     setSubmissionError(null);
 
@@ -570,6 +596,9 @@ export function App() {
         title,
         concept,
         displayName: displayName || undefined,
+        // Reaches the agent as a build requirement in the brief, which is the only
+        // reason this control is not decoration.
+        dimension,
         // The agent is told this, so its progress updates arrive already written in
         // the creator's language rather than machine-translated afterwards.
         locale: i18n.language,
@@ -640,7 +669,7 @@ export function App() {
     if (!spec) return;
     // The name the creator settled on, which is the step that gates the build.
     recordCreateStep('title_confirmed');
-    await submitRefinedSpec(title, finalConcept, spec.displayName, builder);
+    await submitRefinedSpec(title, finalConcept, spec.displayName, builder, spec.dimension);
   };
 
   const handleQaCancel = () => {
@@ -901,7 +930,7 @@ export function App() {
                 onPlayGame={handlePlayGame}
                 submissionStatus={submissionStatus}
                 submissionError={submissionError}
-                onSubmitSpec={(concept) => void handleSubmitSpec(concept)}
+                onSubmitSpec={(concept, dimension) => void handleSubmitSpec(concept, dimension)}
                 mockStatus={mockStatus}
                 mockError={mockError}
                 onGenerateMock={(prompt) => void handleGenerateMock(prompt)}

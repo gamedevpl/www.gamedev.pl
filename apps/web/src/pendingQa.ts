@@ -1,6 +1,7 @@
 import type { BuilderKind } from './builderKind.js';
 import { isBuilderKind } from './builderKind.js';
 import type { QAQuestion } from './CreatorQA.js';
+import type { GameDimension } from './DimensionToggle.js';
 
 /**
  * The clarifying-questions session, parked in localStorage.
@@ -20,7 +21,7 @@ export interface PendingQaAnswers {
 }
 
 export interface PendingQaSession {
-  spec: { title: string; concept: string; displayName: string };
+  spec: { title: string; concept: string; displayName: string; dimension?: GameDimension };
   questions: QAQuestion[];
   answers: PendingQaAnswers;
   /**

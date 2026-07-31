@@ -65,6 +65,31 @@ npm run type-check && npm run lint && npm run test && npm run build
 This mirrors the CI workflow (`.github/workflows/ci.yml`, Node 20). A Husky `pre-commit` hook
 runs `lint-staged` (Prettier) on staged files.
 
+### Anything visual ships with pictures
+
+**A pull request that changes layout, styling or any on-screen control must show it** — a
+screenshot per meaningful state, and an animated GIF when the change is a motion or an
+interaction. A green test run proves the code does what the test says; it says nothing about
+whether the thing looks right, and a reviewer should not have to check out a branch and run
+`npm run dev` to find out.
+
+Capture from the **running app**, not from a mockup — a mockup can be wrong in exactly the way
+the review is meant to catch. Drive it with Playwright against `npm run dev` and commit the
+files under `docs/media/<feature>/`, then reference them from the PR body with
+`![...](https://raw.githubusercontent.com/<owner>/<repo>/<branch>/docs/media/...)`. The repo is
+public, so those URLs render in the PR.
+
+Practical notes, learned the hard way:
+
+- **Measure the crop in the same browser session that records**, not a separate one. A
+  bounding box from another page load belongs to another scroll position.
+- **The site header is sticky.** Scrolling an element to `top` parks it _underneath_ the
+  header; subtract the header's height plus a margin, or the recording shows the header.
+- Playwright's bundled ffmpeg (`/opt/pw-browsers/ffmpeg-*/ffmpeg-linux`) has **no GIF muxer
+  and almost no filters**. Extract PNG frames with `-f image2 -c:v png` and encode the GIF in
+  JS (`pngjs` + `gifenc`), cropping in the encoder. Quantize **once** for the whole clip — a
+  per-frame palette makes the dark background shimmer.
+
 ### Exercising the authenticated half of the product
 
 A green gate says the code compiles and its tests pass. It does not say the flow works. If

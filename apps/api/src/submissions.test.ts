@@ -4110,3 +4110,92 @@ describe('operator title backfill', () => {
     await app.close();
   });
 });
+
+/**
+ * The 2D/3D switch on the prompt card is only real if the choice survives all the way
+ * into the brief the agent receives. These are the tests that make it not decoration.
+ */
+describe('game dimension reaches the agent', () => {
+  const body = { title: 'Game idea', concept: 'A concept long enough to pass validation rules.' };
+
+  async function submitWith(dimension?: '2d' | '3d') {
+    const stub = createGithubClientStub({});
+    const { backend, briefs } = createBackendStub();
+    const { app, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: dimension ? { ...body, dimension } : body,
+    });
+    return { response, briefs, app };
+  }
+
+  it('names gfx3d in the brief when the creator asked for 3D', async () => {
+    const { response, briefs, app } = await submitWith('3d');
+    expect(response.statusCode).toBe(200);
+    // Dispatch is fire-and-forget off the request path, so the brief lands after the reply.
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
+    expect(briefs[0].spec).toContain('Build this game in **3D**');
+    expect(briefs[0].spec).toContain('`gfx3d`');
+    await app.close();
+  });
+
+  it('tells the agent to stay off gfx3d when the creator asked for 2D', async () => {
+    const { briefs, app } = await submitWith('2d');
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
+    expect(briefs[0].spec).toContain('Build this game in **2D**');
+    expect(briefs[0].spec).toContain('Do not select the `gfx3d` GameKit module');
+    await app.close();
+  });
+
+  // An older web build, or any client predating the toggle, must still submit — and
+  // must land on the same behaviour as every game published before this existed.
+  it('defaults to 2D when the field is absent', async () => {
+    const { response, briefs, app } = await submitWith();
+    expect(response.statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
+    expect(briefs[0].spec).toContain('Build this game in **2D**');
+    await app.close();
+  });
+
+  it('rejects a dimension outside the enum rather than passing it through', async () => {
+    const stub = createGithubClientStub({});
+    const { backend, briefs } = createBackendStub();
+    const { app, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { ...body, dimension: '4d' },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(briefs).toEqual([]);
+    await app.close();
+  });
+
+  /**
+   * The instruction sits outside the fenced creator block. Everything inside that block
+   * is untrusted text the agent is told to treat as data; the dimension is the platform
+   * speaking, and an agent that cannot tell them apart is the prompt-injection hole the
+   * games-repo agent instructions exist to close.
+   */
+  it('keeps the build requirement outside the creator-text block', async () => {
+    const { briefs, app } = await submitWith('3d');
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
+    const spec = briefs[0].spec;
+    const conceptBlockEnd = spec.indexOf('```', spec.indexOf('## Concept'));
+    const requirementAt = spec.indexOf('## Build requirement — dimension');
+    expect(requirementAt).toBeGreaterThan(conceptBlockEnd);
+    expect(spec).toContain('platform instruction, not creator text');
+    await app.close();
+  });
+});

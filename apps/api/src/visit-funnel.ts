@@ -120,6 +120,10 @@ export const CREATE_STEPS = [
   'qa_shown',
   'title_confirmed',
   'submission_created',
+  // Deliberately last, and deliberately not a rung: it is a branch off the first
+  // step, so its "of starters" percentage is the share of creators wanting 3D
+  // rather than a drop-off between two stages.
+  'dimension_3d_selected',
 ] as const;
 
 export type CreateStep = (typeof CREATE_STEPS)[number];

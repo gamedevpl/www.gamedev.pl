@@ -124,7 +124,27 @@ describe('summarizeVisitFunnel', () => {
       { step: 'qa_shown', visits: 0 },
       { step: 'title_confirmed', visits: 0 },
       { step: 'submission_created', visits: 0 },
+      // Last, and a branch rather than a rung: it hangs off prompt_started, so its
+      // share is "who wanted 3D", not a drop-off between two consecutive stages.
+      { step: 'dimension_3d_selected', visits: 0 },
     ]);
+  });
+
+  it('counts the 3D branch without disturbing the rungs it hangs off', () => {
+    const step = (visitId: string, step: string): VisitEvent =>
+      ({ visitId, type: 'create_step', at: '2026-07-26T10:00:00.000Z', msSinceStart: 0, step }) as VisitEvent;
+
+    const funnel = summarizeVisitFunnel([
+      started('a'),
+      step('a', 'prompt_started'),
+      step('a', 'dimension_3d_selected'),
+      started('b'),
+      step('b', 'prompt_started'),
+    ]);
+
+    const byStep = Object.fromEntries(funnel.creating.map((row) => [row.step, row.visits]));
+    expect(byStep.prompt_started).toBe(2);
+    expect(byStep.dimension_3d_selected).toBe(1);
   });
 
   it('counts a repeated step once per visit', () => {

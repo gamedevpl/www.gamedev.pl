@@ -1,3 +1,5 @@
+import type { GameDimension } from './DimensionToggle.js';
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
 export type SubmissionState =
@@ -215,6 +217,8 @@ export async function submitSpec(input: {
   locale?: string;
   /** Who builds this round — platform team (default) or the creator's own agent. */
   builder?: 'platform' | 'self';
+  /** '3d' asks the agent for the `gfx3d` GameKit module; omitted means 2D. */
+  dimension?: GameDimension;
 }): Promise<{ token: string; slug?: string; statusUrl: string }> {
   const response = await fetch(`${API_BASE}/api/submissions`, {
     method: 'POST',
@@ -390,7 +394,13 @@ export type RefinedSpec = {
  * `title` is optional and normally omitted — the creator has not been asked for one at
  * this point in the flow, which is the whole reason `suggestedTitle` comes back.
  */
-export async function refineSpec(input: { title?: string; concept: string; locale?: string }): Promise<RefinedSpec> {
+export async function refineSpec(input: {
+  title?: string;
+  concept: string;
+  locale?: string;
+  /** Already decided on the card, so the refiner must not ask about it again. */
+  dimension?: GameDimension;
+}): Promise<RefinedSpec> {
   const response = await fetch(`${API_BASE}/api/submissions/refine`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

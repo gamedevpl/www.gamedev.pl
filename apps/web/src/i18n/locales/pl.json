@@ -102,7 +102,11 @@
     "dragDropHint": "Upuść pliki graficzne tutaj, aby dołączyć do promptu",
     "attachmentsTitle": "Załączone elementy wizualne ({{count}}):",
     "removeAttachment": "Usuń załącznik",
-    "quotaLeft": "zostało dziś {{left}} z {{limit}} gier"
+    "quotaLeft": "zostało dziś {{left}} z {{limit}} gier",
+    "dimensionLabel": "Wymiar gry",
+    "dimension2d": "2D",
+    "dimension3d": "3D",
+    "dimensionSwitchLabel": "Grafika 3D"
   },
   "sketch": {
     "title": "Szkicuj prosty rysunek",

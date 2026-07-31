@@ -23,6 +23,8 @@ const STEP_LABELS: Record<string, string> = {
   signin_required: 'hit sign-in wall',
   qa_shown: 'asked questions',
   submission_created: 'game submitted',
+  // A branch, not a rung — see the note on CREATE_STEPS in apps/api/src/visit-funnel.ts.
+  dimension_3d_selected: 'chose 3D (branch)',
 };
 
 const WAITLIST_LABELS: Record<string, string> = {
