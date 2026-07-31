@@ -136,10 +136,46 @@ describe('summarizeVisitFunnel', () => {
     expect(funnel.creating[0]).toEqual({ step: 'prompt_started', visits: 1 });
   });
 
+  it('reports the waitlist funnel in step order, zeroes included', () => {
+    const step = (visitId: string, step: string): VisitEvent =>
+      ({ visitId, type: 'waitlist_step', at: '2026-07-26T10:00:00.000Z', msSinceStart: 0, step }) as VisitEvent;
+
+    const funnel = summarizeVisitFunnel([
+      started('a'),
+      step('a', 'cta_clicked'),
+      step('a', 'joined'),
+      started('b'),
+      step('b', 'cta_clicked'),
+      started('c'),
+    ]);
+
+    expect(funnel.waitlist).toEqual([
+      { step: 'cta_clicked', visits: 2 },
+      { step: 'joined', visits: 1 },
+    ]);
+  });
+
+  it('keeps waitlist and create steps from colliding', () => {
+    // Both event types share the `step` field on the wire; a shared Set would make a
+    // waitlist click look like a create step if the names ever overlapped.
+    const funnel = summarizeVisitFunnel([
+      started('a'),
+      { visitId: 'a', type: 'waitlist_step', at: '2026-07-26T10:00:00.000Z', msSinceStart: 0, step: 'cta_clicked' },
+      { visitId: 'a', type: 'create_step', at: '2026-07-26T10:00:00.000Z', msSinceStart: 1, step: 'prompt_started' },
+    ]);
+    expect(funnel.waitlist[0]).toEqual({ step: 'cta_clicked', visits: 1 });
+    expect(funnel.creating[0]).toEqual({ step: 'prompt_started', visits: 1 });
+    expect(funnel.waitlist.find((row) => row.step === 'joined')?.visits).toBe(0);
+  });
+
   it('survives a window with no events at all', () => {
     const funnel = summarizeVisitFunnel([]);
     expect(funnel).toMatchObject({ visits: 0, bounces: 0, plays: 0, medianPlaysPerPlayingVisit: 0 });
     expect(funnel.entries).toEqual([]);
+    expect(funnel.waitlist).toEqual([
+      { step: 'cta_clicked', visits: 0 },
+      { step: 'joined', visits: 0 },
+    ]);
   });
 
   it('counts a visit whose landing event fell outside the window', () => {

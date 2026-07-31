@@ -66,6 +66,8 @@ export interface VisitFunnel {
   campaigns: Array<{ source?: string; medium?: string; campaign?: string; visits: number; plays: number }>;
   /** Creation funnel in step order, every step present even at zero. */
   creating: Array<{ step: string; visits: number }>;
+  /** Closed-beta waitlist funnel in step order, every step present even at zero. */
+  waitlist: Array<{ step: string; visits: number }>;
 }
 
 export interface VisitsResponse {

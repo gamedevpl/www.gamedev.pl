@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider } from './AuthContext.js';
 import { ClosedBetaSplash } from './ClosedBetaSplash.js';
 import i18n from './i18n/index.js';
+import { setVisitSessionForTesting, VisitSession } from './visitTelemetry.js';
 
 import { AppLoadingScreen } from './AppLoadingScreen.js';
 
@@ -19,6 +20,7 @@ describe('ClosedBetaSplash', () => {
     document.body.innerHTML = '';
     vi.restoreAllMocks();
     delete (globalThis as { google?: unknown }).google;
+    setVisitSessionForTesting(null);
   });
 
   it('renders the full screen AppLoadingScreen component', async () => {
@@ -39,7 +41,7 @@ describe('ClosedBetaSplash', () => {
     await act(async () => root.unmount());
   });
 
-  it('signed-out visitor sees the Google sign-in button', async () => {
+  it('signed-out visitor sees Join waitlist before sign-in', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
@@ -60,8 +62,16 @@ describe('ClosedBetaSplash', () => {
       await flushEffects();
     });
 
+    const joinButton = container.querySelector<HTMLButtonElement>('#btn-join-waitlist');
+    expect(joinButton).not.toBeNull();
+    expect(joinButton?.textContent).toMatch(/waitlist/i);
     expect(container.querySelector('.google-sign-in-container')).not.toBeNull();
-    expect(container.querySelector('#btn-join-waitlist')).toBeNull();
+    // Join sits above the sign-in buttons in the DOM.
+    const waitlist = container.querySelector('.beta-splash__waitlist');
+    const signin = container.querySelector('.beta-splash__signin');
+    expect(waitlist).not.toBeNull();
+    expect(signin).not.toBeNull();
+    expect(waitlist!.compareDocumentPosition(signin!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const mascot = container.querySelector<HTMLButtonElement>('button.mascot-interactive.beta-splash__mascot');
     expect(mascot).not.toBeNull();
     expect(mascot?.getAttribute('aria-label')).toMatch(/poke|szturchnij/i);
@@ -69,7 +79,130 @@ describe('ClosedBetaSplash', () => {
     await act(async () => root.unmount());
   });
 
-  it('a rejected sign-in shows the waitlist CTA, and joining shows confirmation', async () => {
+  it('Join without a token asks for sign-in and does not POST yet', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const sent: unknown[] = [];
+    const session = new VisitSession('11111111-1111-4111-8111-111111111111', 0, (body) => sent.push(body));
+    setVisitSessionForTesting(session);
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/me')) return new Response(JSON.stringify({}), { status: 401 });
+      if (url.endsWith('/api/health')) {
+        return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: true }));
+      }
+      if (url.endsWith('/api/waitlist')) {
+        throw new Error('waitlist must not be called before sign-in');
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    await i18n.changeLanguage('en');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(AuthProvider, null, createElement(ClosedBetaSplash)));
+      await flushEffects();
+    });
+
+    const joinButton = container.querySelector<HTMLButtonElement>('#btn-join-waitlist');
+    await act(async () => {
+      joinButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.beta-splash__signin-hint')?.textContent).toMatch(/Sign in/i);
+    session.flush();
+    const flush = sent[0] as { events: Array<{ type: string; step?: string }> };
+    expect(flush.events).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: 'waitlist_step', step: 'cta_clicked' })]),
+    );
+
+    await act(async () => root.unmount());
+  });
+
+  it('Join then rejected sign-in auto-joins and records both funnel steps', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    let capturedCallback: ((res: { credential: string }) => void) | null = null;
+    const sent: unknown[] = [];
+    const session = new VisitSession('22222222-2222-4222-8222-222222222222', 0, (body) => sent.push(body));
+    setVisitSessionForTesting(session);
+
+    (globalThis as unknown as { google: unknown }).google = {
+      accounts: {
+        id: {
+          initialize: (config: { callback: (res: { credential: string }) => void }) => {
+            capturedCallback = config.callback;
+          },
+          renderButton: () => {},
+          prompt: () => {},
+        },
+      },
+    };
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/me')) return new Response(JSON.stringify({}), { status: 401 });
+      if (url.endsWith('/api/health')) {
+        return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: true }));
+      }
+      if (url.endsWith('/api/auth/google')) {
+        return new Response(JSON.stringify({ error: 'private beta — sign-ups are closed', waitlistStatus: null }), {
+          status: 403,
+        });
+      }
+      if (url.endsWith('/api/waitlist')) {
+        const body = JSON.parse(String(init?.body)) as { idToken: string };
+        expect(body.idToken).toBe('test-credential');
+        return new Response(JSON.stringify({ status: 'ok', waitlistStatus: 'pending' }));
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    await i18n.changeLanguage('en');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(AuthProvider, null, createElement(ClosedBetaSplash)));
+      await flushEffects();
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('#btn-join-waitlist')?.dispatchEvent(
+        new MouseEvent('click', { bubbles: true }),
+      );
+      await flushEffects();
+    });
+
+    expect(capturedCallback).not.toBeNull();
+
+    await act(async () => {
+      capturedCallback!({ credential: 'test-credential' });
+      await flushEffects();
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(container.querySelector('#btn-join-waitlist')).toBeNull();
+    expect(container.querySelector('.beta-splash__waitlist-confirm')).not.toBeNull();
+
+    session.flush();
+    const steps = sent.flatMap((body) => (body as { events: Array<{ type: string; step?: string }> }).events);
+    expect(steps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'waitlist_step', step: 'cta_clicked' }),
+        expect.objectContaining({ type: 'waitlist_step', step: 'joined' }),
+      ]),
+    );
+
+    await act(async () => root.unmount());
+  });
+
+  it('a rejected sign-in without prior Join still shows the waitlist CTA with a token', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     let capturedCallback: ((res: { credential: string }) => void) | null = null;
 
@@ -92,7 +225,6 @@ describe('ClosedBetaSplash', () => {
         return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: true }));
       }
       if (url.endsWith('/api/auth/google')) {
-        // 403 with no waitlistStatus — user is not yet on the waitlist
         return new Response(JSON.stringify({ error: 'private beta — sign-ups are closed', waitlistStatus: null }), {
           status: 403,
         });
@@ -162,7 +294,6 @@ describe('ClosedBetaSplash', () => {
         return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: true }));
       }
       if (url.endsWith('/api/auth/google')) {
-        // 403 with pending status — user is already on the waitlist
         return new Response(
           JSON.stringify({ error: 'private beta — sign-ups are closed', waitlistStatus: 'pending' }),
           { status: 403 },
@@ -189,7 +320,6 @@ describe('ClosedBetaSplash', () => {
       await flushEffects();
     });
 
-    // Should show the pending status directly, NOT the join button
     expect(container.querySelector('#btn-join-waitlist')).toBeNull();
     expect(container.querySelector('.beta-splash__waitlist-confirm')).not.toBeNull();
 

@@ -16,34 +16,41 @@ render a branded closed-beta landing instead of the app UI:
   accent, gamedev.pl wordmark (`.pl` in turquoise), Proxima Nova.
 - Copy (i18n en/pl): what this is ("create games with AI, play what others
   made") + "closed beta — access is invite-only for now".
-- Primary action: **Sign in with Google** (existing GIS button).
+- Primary action: **Join the waitlist** (visible before sign-in; still requires
+  Google/Apple login to complete) plus **Sign in with Google** / Apple.
 - No data fetches beyond `/api/auth/me` — the catalog is walled anyway;
   don't fire requests that will 401 and log noise.
 
 ## Waitlist — sign-in based, consent-explicit
 
-Mechanic: non-allowlisted user signs in with Google → `/api/auth/google`
-returns 403 (existing behavior, still writes NOTHING) → UI shows
-"The beta is closed — want to join the waitlist?" with a join button.
+Mechanic: the splash always shows **Join the waitlist** above the sign-in buttons.
+Clicking it without an ID token asks the visitor to sign in (Google or Apple); joining
+still requires a verified token. After a rejected allowlist sign-in with join intent,
+the splash auto-joins so the visitor is not asked to press Join twice. A rejected
+sign-in without prior intent still leaves the CTA visible and keeps the token for an
+explicit click.
 
-- Clicking join calls **`POST /api/waitlist`** with the same Google ID token
-  (re-verified server-side — never trust the client's claim of who they are).
+- Clicking join (with a token) calls **`POST /api/waitlist`** with the same Google/Apple
+  ID token (re-verified server-side — never trust the client's claim of who they are).
   The endpoint:
-  - verifies the token (same `GoogleAuthVerifier`, same audience pinning);
+  - verifies the token (same verifier, same audience pinning);
   - upserts `waitlist/{uid}`: `{ uid, email, name, requestedAt, locale }`
     (idempotent — joining twice updates `requestedAt` at most);
   - is rate-limited by the existing per-IP auth limiter;
   - works WITHOUT a session (the caller is by definition not allowed in).
 - Privacy invariants:
   - A rejected sign-in alone still leaves no Firestore trace; only the
-    explicit join click writes data (that click is the consent moment).
+    explicit join click (or auto-join after an explicit Join → sign-in) writes data
+    (that click is the consent moment).
   - Deletion = delete one doc. No marketing use implied; the doc exists so
     the owner can invite people.
   - `email_verified` must be true on the token to store the email (same
     rule as the beta email allowlist).
 - UI after joining: "You're on the list" confirmation; joining again is a
   no-op visually ("already on the list").
-
+- **Telemetry:** `waitlist_step` on the visit stream (`cta_clicked` → `joined`),
+  aggregated in `summarizeVisitFunnel` and rendered as a Waitlist block on the
+  operator telemetry panel beside Creating.
 ## Store
 
 `Store` interface gains `upsertWaitlistEntry(entry)` (+ `InMemoryStore` and
@@ -67,8 +74,10 @@ v2 (only if the list grows): store-backed allowlist — `waitlist/{uid}.status
 - Invalid/forged token → 401, nothing written.
 - Unverified email on token → entry stored WITHOUT email (or rejected —
   either is fine, but never store an unverified email).
-- Web: signed-out state renders splash; 403 sign-in shows waitlist CTA;
-  joined state renders confirmation.
+- Web: signed-out state renders splash with Join waitlist above sign-in; Join without
+  a token prompts sign-in and does not POST; Join → rejected sign-in auto-joins;
+  rejected sign-in without prior Join still shows the CTA; joined state renders
+  confirmation; `waitlist_step` events reach the visit funnel panel.
 
 ## Smoke (deploy.yml)
 

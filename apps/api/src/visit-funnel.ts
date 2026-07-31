@@ -62,6 +62,11 @@ export interface VisitFunnel {
    * step where everyone stopped.
    */
   creating: Array<{ step: CreateStep; visits: number }>;
+  /**
+   * The closed-beta waitlist funnel, always in step order and always with every step
+   * present — including zeroes. Same posture as `creating`.
+   */
+  waitlist: Array<{ step: WaitlistStep; visits: number }>;
 }
 
 /** Step order is the funnel's meaning, so it is declared once and reused. */
@@ -76,10 +81,16 @@ export const CREATE_STEPS = [
 
 export type CreateStep = (typeof CREATE_STEPS)[number];
 
+export const WAITLIST_STEPS = ['cta_clicked', 'joined'] as const;
+
+export type WaitlistStep = (typeof WAITLIST_STEPS)[number];
+
 interface VisitRollup {
   started: boolean;
   /** Creation steps this visit reached. A Set, so a repeated step counts once. */
   steps: Set<string>;
+  /** Waitlist steps this visit reached. Separate from create so the two funnels cannot collide. */
+  waitlistSteps: Set<string>;
   entry?: string;
   referrer?: string;
   utmSource?: string;
@@ -108,7 +119,12 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
   const visits = new Map<string, VisitRollup>();
 
   for (const event of events) {
-    const rollup = visits.get(event.visitId) ?? { started: false, plays: 0, steps: new Set<string>() };
+    const rollup = visits.get(event.visitId) ?? {
+      started: false,
+      plays: 0,
+      steps: new Set<string>(),
+      waitlistSteps: new Set<string>(),
+    };
 
     if (event.type === 'visit_started') {
       rollup.started = true;
@@ -121,6 +137,8 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       // The client already dedupes, but a Set here means a replayed or duplicated
       // flush cannot inflate a funnel rung either.
       if (event.step) rollup.steps.add(event.step);
+    } else if (event.type === 'waitlist_step') {
+      if (event.step) rollup.waitlistSteps.add(event.step);
     } else if (event.type === 'play_started') {
       rollup.plays += 1;
       // Earliest wins: a flush can deliver events out of order, and "time to first
@@ -204,6 +222,10 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
     creating: CREATE_STEPS.map((step) => ({
       step,
       visits: rollups.filter((rollup) => rollup.steps.has(step)).length,
+    })),
+    waitlist: WAITLIST_STEPS.map((step) => ({
+      step,
+      visits: rollups.filter((rollup) => rollup.waitlistSteps.has(step)).length,
     })),
   };
 }

@@ -42,7 +42,9 @@ export type VisitEvent =
   /** A published game began playing. Intentionally carries no slug. */
   | { type: 'play_started' }
   /** A step of the creation funnel was reached. Carries no prompt text, ever. */
-  | { type: 'create_step'; step: CreateStep };
+  | { type: 'create_step'; step: CreateStep }
+  /** A step of the closed-beta waitlist funnel. Carries no identity, ever. */
+  | { type: 'waitlist_step'; step: WaitlistStep };
 
 /**
  * The creation funnel, in the order a creator meets it.
@@ -70,6 +72,20 @@ export type CreateStep =
   | 'title_confirmed'
   /** A submission actually reached the games repo. */
   | 'submission_created';
+
+/**
+ * The closed-beta waitlist funnel, in the order a visitor meets it.
+ *
+ * The Join CTA is visible before sign-in; `cta_clicked` is intent, and `joined` is the
+ * successful write after an ID token arrives. Sign-in itself is not a rung here — the
+ * drop between click and join *is* the sign-in wall, and inventing a middle step would
+ * double-count it against the creation funnel's `signin_required`.
+ */
+export type WaitlistStep =
+  /** Pressed Join the waitlist on the splash. */
+  | 'cta_clicked'
+  /** `POST /api/waitlist` succeeded for this visit. */
+  | 'joined';
 
 const FLUSH_AT = 5;
 const MAX_BATCH = 25;
@@ -320,11 +336,20 @@ export function recordCreateStep(step: CreateStep): void {
   currentSession.record({ type: 'create_step', step });
 }
 
+let recordedWaitlistSteps = new Set<WaitlistStep>();
+
+export function recordWaitlistStep(step: WaitlistStep): void {
+  if (!currentSession || recordedWaitlistSteps.has(step)) return;
+  recordedWaitlistSteps.add(step);
+  currentSession.record({ type: 'waitlist_step', step });
+}
+
 /** Test seam: installs a session without touching the DOM. */
 export function setVisitSessionForTesting(session: VisitSession | null): void {
   currentSession = session;
   // Otherwise one test's steps would silence the next test's identical steps.
   recordedSteps = new Set();
+  recordedWaitlistSteps = new Set();
 }
 
 export interface StartVisitTrackingOptions {
@@ -357,6 +382,7 @@ export function startVisitTracking(options: StartVisitTrackingOptions = {}): () 
   // A reload continues the visit but re-runs this module, so the funnel would silently
   // stop deduping across it if these were not cleared with the session that owns them.
   recordedSteps = new Set();
+  recordedWaitlistSteps = new Set();
 
   if (identity.isNew) {
     const referrer = referrerDomain(document.referrer ?? '', window.location.hostname);
