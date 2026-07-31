@@ -500,6 +500,44 @@ describe('SubmissionStatusView', () => {
     });
 
     expect(container.textContent).toContain('Needs a tweak');
+    expect(container.textContent).toContain('Send a short note below to continue');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('names a gate bounce in Studio even when the thread already has turns', async () => {
+    // The bounce reason used to live only in emptyLabel — once the agent had posted
+    // planning notes, "Needs a tweak" was a label with no explanation above the box.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'needs_changes',
+      failure: { reason: 'gate_red' },
+      events: [
+        {
+          id: 'e1',
+          kind: 'step',
+          step: 'planning',
+          text: 'Sketching the board.',
+          createdAt: '2026-07-30T12:00:00.000Z',
+        },
+      ],
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'gate-red-token', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.status-warning')?.textContent).toContain("didn't pass our automatic checks");
+    expect(container.textContent).toContain('Needs a tweak');
 
     await act(async () => {
       root.unmount();

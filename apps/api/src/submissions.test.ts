@@ -891,6 +891,46 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  it('names a gate bounce so Studio can say why the build needs another round', async () => {
+    // Public status collapses `needs_changes` into a label; without `failure` the
+    // creator who clicked the notification sees planning notes and an empty foot.
+    const { githubClient } = createGithubClientStub({ issueNumber: 88 });
+    const { backend } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v1');
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'needs_changes',
+      at: new Date().toISOString(),
+      by: 'gate',
+      reason: 'gate_red',
+    });
+
+    const status = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}`,
+      headers: authHeaders,
+    });
+
+    expect(status.statusCode).toBe(200);
+    expect(status.json().status).toBe('needs_changes');
+    expect(status.json().phase).toBe('needs_changes');
+    expect(status.json().failure).toEqual({ reason: 'gate_red' });
+
+    await app.close();
+  });
+
   it('reports the job phase alongside the status, so the page can say which wait this is', async () => {
     // `toSubmissionStatus` is lossy on purpose — `gating` and `building` arrive as one
     // word, and `ready_for_review` (delivered, checked, waiting on us) arrives as the
