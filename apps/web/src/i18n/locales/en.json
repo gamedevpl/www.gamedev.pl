@@ -457,10 +457,13 @@
     "feedback": {
       "title": "Want changes?",
       "hint": "Played it and something's off? Tell the agent what to change and it'll revise your game.",
+      "composerHint": "Say what to change",
       "titleBuilding": "Want to steer it?",
       "hintBuilding": "It's still being made — you don't have to wait. Say what to change and the agent picks it up on its next update.",
+      "composerHintBuilding": "Say what to change as it builds",
       "titlePublished": "Ask for a change",
       "hintPublished": "Your game is live. Describe what to change and an agent picks it up as an improvement to it.",
+      "composerHintPublished": "Describe an improvement",
       "placeholder": "e.g. make the car faster, add a second track, use brighter colours…",
       "submit": "Send feedback",
       "sending": "Sending…",
