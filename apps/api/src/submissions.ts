@@ -2268,6 +2268,63 @@ export async function registerSubmissionRoutes(
     return reply.send({ ok: true, slug, version: start.version, ...(start.buildId ? { buildId: start.buildId } : {}) });
   });
 
+  /**
+   * Gives an address to every game still missing one.
+   *
+   * A slug is minted at submission now, so this exists for the records that predate
+   * that and for anything that died between the record being written and its slug
+   * being set. Those games still work — the studio addresses them by status token —
+   * but a token in the URL bar is the thing slugs were introduced to stop, and a
+   * fallback nobody sweeps up is a fallback that becomes permanent.
+   *
+   * An operator button rather than a scheduled sweep: the backlog is finite and
+   * shrinking, so a nightly job would spend most of its life finding nothing. Run it
+   * with `?dryRun=1` first — that reports exactly what it would name each game and
+   * writes nothing.
+   *
+   * Sequential on purpose. Each mint asks the store what is taken, so the previous
+   * write has to be visible before the next candidate is judged; running these
+   * concurrently would reintroduce the race the claim read-back exists to settle.
+   */
+  app.post<{ Querystring: { dryRun?: string } }>('/api/admin/slug-backfill', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });
+    if (!store) return reply.status(503).send({ error: 'store_unavailable' });
+
+    const dryRun = request.query.dryRun === '1' || request.query.dryRun === 'true';
+    const pending = await store.listSubmissionsMissingSlug();
+
+    // Names handed out earlier in this run. Redundant on the write path, where the store
+    // already knows, and load-bearing on the dry run, where nothing is written and two
+    // games with the same title would otherwise both be promised the same slug.
+    const mintedHere = new Set<string>();
+    const games: Array<{ issueNumber: number; title: string; slug: string | null }> = [];
+
+    for (const record of pending) {
+      const isTaken = async (candidate: string): Promise<boolean> =>
+        mintedHere.has(candidate) || (await isSlugClaimed(candidate, record.issueNumber));
+      const wanted = await mintGameSlug(record.title, isTaken);
+
+      if (dryRun) {
+        mintedHere.add(wanted);
+        games.push({ issueNumber: record.issueNumber, title: record.title, slug: wanted });
+        continue;
+      }
+
+      await store.setSubmissionSlug(record.issueNumber, wanted);
+      // Same read-back as submission creation: the write is a claim, not a grant.
+      const settled = await confirmSlugClaim(record.issueNumber, wanted, record.title);
+      if (settled) mintedHere.add(settled);
+      games.push({ issueNumber: record.issueNumber, title: record.title, slug: settled });
+    }
+
+    const named = games.filter((game) => game.slug !== null).length;
+    const result = { ok: true, dryRun, scanned: pending.length, named, failed: pending.length - named, games };
+    // Logged as well as returned: this changes permanent addresses, and the response
+    // goes to one browser tab that may not be open the next time anyone asks what ran.
+    request.log.info({ dryRun, scanned: result.scanned, named, failed: result.failed }, 'slug backfill complete');
+    return reply.send(result);
+  });
+
   // The notification sweep (docs/notifications-plan.md N1): the closed-tab backstop
   // for the opportunistic poll-path detection above. Cloud Scheduler POSTs here with
   // an OIDC token; we derive the current status of every still-active submission and
