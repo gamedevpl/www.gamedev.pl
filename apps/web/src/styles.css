@@ -4844,7 +4844,7 @@ body.player-open {
   }
 }
 
-/* SKETCH — the same app shell on a desktop, for review before it is kept.
+/* The same app shell, shaped for a desktop.
    The phone got this in #386 and the reasoning does not stop at 800px: the studio is a
    place you sit in, not a page you read down. On a 1440 window today it is a 1180px card
    floating in the middle of a document, the composer lands wherever the transcript
