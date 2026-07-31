@@ -26,7 +26,11 @@
  * Usage:
  *   npm run snapshot:publish -w @gamedevpl/api
  *   npm run snapshot:publish -w @gamedevpl/api -- --dry-run
- *   npm run snapshot:publish -w @gamedevpl/api -- --ref <sha> --commit-sha <sha>
+ *   npm run snapshot:publish -w @gamedevpl/api -- --ref main --commit-sha <sha>
+ *
+ * `--commit-sha` is not just metadata: when present it is the ref every read
+ * is pinned to, so a bake is a photograph of one tree rather than of whatever
+ * the branch pointed at during each request. See `ref` below.
  */
 
 import { publishSnapshot } from '../src/game-snapshot-publish.js';
@@ -41,8 +45,31 @@ function readFlag(name: string): string | null {
 
 const dryRun = process.argv.includes('--dry-run');
 const repo = (process.env.GAMES_REPO ?? 'gamedevpl/www.gamedev.pl-games').trim();
-const ref = (readFlag('ref') ?? process.env.GAMES_PUBLISHED_REF ?? 'main').trim();
-const commitSha = readFlag('commit-sha');
+const requestedRef = (readFlag('ref') ?? process.env.GAMES_PUBLISHED_REF ?? 'main').trim();
+// Normalized once, then used for both the ref below and the pointer metadata.
+// Keeping an untrimmed copy for the pointer would reintroduce, in miniature,
+// the exact failure this script is being fixed for: a `--commit-sha "  "` that
+// reads from the branch while recording whitespace as the commit it read.
+const commitSha = readFlag('commit-sha')?.trim() || null;
+
+/**
+ * What the bake actually reads.
+ *
+ * A branch name is a moving target. The games repo pushes its refreshed
+ * `catalog.json` and dispatches this job seconds later, so resolving `main`
+ * here can still land on the pre-push tree — and it did: a merge that added a
+ * game published a snapshot of the previous 92 while recording the newer
+ * commit in the pointer. Green run, correct-looking metadata, missing game,
+ * and nothing else retires that snapshot until the next merge or the nightly
+ * re-bake.
+ *
+ * The dispatch already tells us the exact commit, so bake that. `ref` stays
+ * the fallback for callers that cannot name one (a manual bake, the nightly).
+ * Both the archive download and every read below use this one value, which is
+ * what keeps them consistent — `games-repo-archive` refuses to serve a ref it
+ * does not hold, and rightly so.
+ */
+const ref = commitSha || requestedRef;
 const bucket = (process.env.GAMES_SNAPSHOT_BUCKET ?? '').trim();
 const token = (process.env.GAMES_REPO_TOKEN ?? process.env.GITHUB_TOKEN ?? '').trim();
 
@@ -95,7 +122,11 @@ async function main(): Promise<void> {
   const client = createGitHubClient({ token, repo, files });
   const writer = dryRun ? createDryRunWriter() : createGcsSnapshotStore({ bucket });
 
-  console.log(`snapshot publish: ${repo}@${ref} → ${dryRun ? '(dry run, nothing written)' : `gs://${bucket}`}`);
+  console.log(
+    `snapshot publish: ${repo}@${ref}` +
+      (ref === requestedRef ? '' : ` (${requestedRef} pinned at this commit)`) +
+      ` → ${dryRun ? '(dry run, nothing written)' : `gs://${bucket}`}`,
+  );
 
   const result = await publishSnapshot({
     client,
