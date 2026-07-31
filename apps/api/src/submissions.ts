@@ -6,7 +6,13 @@ import { registerAgentChannelRoutes, type AgentChannelOptions } from './agent-ch
 import { mintAgentToken } from './agent-token.js';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import { createCreationGate, CREATION_REFUSAL_CODES, type CreationGate } from './creation-limits.js';
-import { catalogEntryFromSpec, createGitHubClient, type CatalogGameEntry, type GitHubClient } from './github-client.js';
+import {
+  catalogEntryFromSpec,
+  createGitHubClient,
+  parseSpecTitle,
+  type CatalogGameEntry,
+  type GitHubClient,
+} from './github-client.js';
 import {
   createSnapshotReaderFromEnv,
   SnapshotIncompleteError,
@@ -2492,6 +2498,72 @@ export async function registerSubmissionRoutes(
     // Logged as well as returned: this changes permanent addresses, and the response
     // goes to one browser tab that may not be open the next time anyone asks what ran.
     request.log.info({ dryRun, scanned: result.scanned, named, failed: result.failed }, 'slug backfill complete');
+    return reply.send(result);
+  });
+
+  /**
+   * Gives the delivered SPEC title to games still showing the truncated prompt.
+   *
+   * Delivery adopts the SPEC title now, so this exists for records that arrived before
+   * that — the production example was "A game tycoon like where I run a tv busi" on the
+   * shelf while SPEC.md already said "TV Tycoon". Publish already prefers the SPEC title
+   * for the catalog; this makes the shelf, studio, and notifications agree with it.
+   *
+   * Same shape as the slug backfill: operator-only, `?dryRun=1` rehearses, abandoned
+   * builds are left alone. Games whose shelf title already matches the SPEC are reported
+   * as unchanged rather than rewritten.
+   */
+  app.post<{ Querystring: { dryRun?: string } }>('/api/admin/title-backfill', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });
+    if (!store) return reply.status(503).send({ error: 'store_unavailable' });
+    const gamesStore = options.agentChannel?.gamesStore;
+    if (!gamesStore) return reply.status(503).send({ error: 'games_store_unavailable' });
+
+    const dryRun = request.query.dryRun === '1' || request.query.dryRun === 'true';
+    const pending = await store.listSubmissionsWithDelivery();
+    const games: Array<{
+      issueNumber: number;
+      slug: string;
+      from: string;
+      to: string | null;
+      changed: boolean;
+    }> = [];
+
+    for (const record of pending) {
+      const slug = record.slug!;
+      const version = record.deliveredVersion!;
+      const spec = await gamesStore.getSourceFile(slug, version, 'SPEC.md');
+      const parsed = spec ? parseSpecTitle(spec) : null;
+      const next = parsed ? sanitizeCreatorText(parsed, { singleLine: true }).slice(0, 80) : null;
+      const usable = next && next.length >= 3 ? next : null;
+      const changed = Boolean(usable && usable !== record.title);
+
+      if (!dryRun && changed && usable) {
+        await store.setSubmissionTitle(record.issueNumber, usable);
+      }
+
+      games.push({
+        issueNumber: record.issueNumber,
+        slug,
+        from: record.title,
+        to: usable,
+        changed,
+      });
+    }
+
+    const renamed = games.filter((game) => game.changed).length;
+    const result = {
+      ok: true,
+      dryRun,
+      scanned: pending.length,
+      renamed,
+      unchanged: pending.length - renamed,
+      games,
+    };
+    request.log.info(
+      { dryRun, scanned: result.scanned, renamed, unchanged: result.unchanged },
+      'title backfill complete',
+    );
     return reply.send(result);
   });
 

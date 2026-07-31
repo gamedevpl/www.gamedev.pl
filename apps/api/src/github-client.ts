@@ -1437,6 +1437,6 @@ function parseSpecFrontmatter(specMd: string): Record<string, string> {
 }
 
 /** Extracts the `title:` value from a game's SPEC.md YAML frontmatter, if any. */
-function parseSpecTitle(specMd: string): string | null {
+export function parseSpecTitle(specMd: string): string | null {
   return parseSpecFrontmatter(specMd).title || null;
 }

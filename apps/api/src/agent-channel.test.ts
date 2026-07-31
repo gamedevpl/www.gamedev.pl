@@ -613,6 +613,30 @@ describe('agent build channel', () => {
       expect(stored[0]).toMatchObject({ slug: 'comet-courier', issueNumber: ISSUE });
     });
 
+    it('adopts the SPEC title so the shelf stops showing a truncated prompt', async () => {
+      // The production example: submission title was prompt.slice(0, 40), SPEC said
+      // "TV Tycoon". Publish already preferred the SPEC title for the catalog; the
+      // shelf and studio kept the fragment until delivery wrote it back.
+      const store = new InMemoryStore();
+      await store.createSubmission(ISSUE, 'g:owner', 'A game tycoon like where I run a tv busi');
+      await store.setSubmissionLocale(ISSUE, 'pl');
+      const { gamesStore } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      const files = MINIMAL.map((file) =>
+        file.path === 'SPEC.md' ? { ...file, content: '---\ntitle: TV Tycoon\n---\n' } : file,
+      );
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources',
+        headers: agentHeaders(),
+        payload: { slug: 'tv-tycoon', files },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect((await store.getSubmission(ISSUE))?.title).toBe('TV Tycoon');
+    });
+
     it('tells the agent the gate refused its delivery, and that it is not done', async () => {
       // The step an agent cannot see: the gate runs after the upload, in our container,
       // against our engine. A session that delivered and exited learned nothing, so the
