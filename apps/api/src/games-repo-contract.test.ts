@@ -40,6 +40,7 @@ describe('games-repo-contract (website half)', () => {
   it('lists GameKit modules in the post-draw-surface canonical order', () => {
     expect([...GAME_KIT_MODULES]).toEqual([
       'input',
+      'motion',
       'collision',
       'world',
       'ai',
@@ -71,7 +72,7 @@ describe('games-repo source extractors', () => {
     const source = `
       // Canonical order
       export const GAME_KIT_MODULES = [
-        'input', 'collision', 'world', 'ai', 'gameplay',
+        'input', 'motion', 'collision', 'world', 'ai', 'gameplay',
         'drawing', 'actors', 'gfx', 'gfx3d', 'effects', 'audio', 'party', 'save', 'commons', 'presence', 'mascot', 'zone', 'voice',
       ] as const;
     `;

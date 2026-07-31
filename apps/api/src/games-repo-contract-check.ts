@@ -121,6 +121,20 @@ export function describeQuota(response: Response): string | null {
   return `rate limit ${remaining ?? '?'}/${limit ?? '?'} remaining${resetAt ? `, resets ${resetAt}` : ''}`;
 }
 
+/**
+ * True when every `remote` module appears in `local` in the same relative order.
+ * `local` may insert extra names (website-first GameKit module adds).
+ */
+export function isGameKitModuleSubsequence(remote: readonly string[], local: readonly string[]): boolean {
+  let localIndex = 0;
+  for (const name of remote) {
+    const found = local.indexOf(name, localIndex);
+    if (found === -1) return false;
+    localIndex = found + 1;
+  }
+  return true;
+}
+
 export async function runGamesRepoContractCheck(options: ContractCheckOptions): Promise<ContractCheckOutcome> {
   const { repo, ref, token } = options;
   const fetchImpl = options.fetchImpl ?? fetch;
@@ -206,24 +220,45 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
 
   const remoteModules = extractGameKitModules(assembleSource);
   const localModules = [...GAME_KIT_MODULES];
-  // Website-first lockstep (docs/games-repo-validation-spec.md §2): this side may
-  // temporarily list modules / a budget ahead of games-repo `main`. Fail only when
-  // we are *behind* — missing a remote module or under the remote ceiling — which
-  // is the direction that 502s published games.
-  if (!isModulePrefix(remoteModules, localModules)) {
+  // Website-first module adds are intentional (same rule as budget raises): the serve
+  // half may know about a module the published games tip has not selected yet. Fail
+  // only when games-repo ships a module (or reorders shared ones) this side does not
+  // recognize — that would 502 every game that asks for it.
+  //
+  // Guard: the extras must be explicitly declared website-ahead modules (below).
+  // Without this, a games-repo rollback of a module would pass silently because
+  // the remaining modules are still a subsequence. See Codex review on PR #379.
+  if (!isGameKitModuleSubsequence(remoteModules, localModules)) {
     return {
       kind: 'drift',
       reason:
         `GAME_KIT_MODULES mismatch.\n  games-repo: ${remoteModules.join(', ')}\n` +
         `  website:    ${localModules.join(', ')}\n` +
-        `  Website may extend the list (website-first), but must keep remote modules ` +
-        `in the same order as a prefix.`,
+        `  Every games-repo module must appear on the website in the same relative order ` +
+        `(website may list extra modules ahead of the games tip — merge website first).`,
     };
   }
-  if (localModules.length > remoteModules.length) {
+
+  // Declared website-ahead modules: explicitly list modules this side has added
+  // before the games-repo tip merges them. If a local-only module is NOT in this
+  // list, it means games-repo dropped or rolled it back — that is drift, not an
+  // intentional lead. (Codex review — PR #379.)
+  const DECLARED_AHEAD_MODULES: ReadonlySet<string> = new Set(['motion', 'voice']);
+  const websiteExtras = localModules.filter((m) => !remoteModules.includes(m));
+  const undeclaredExtras = websiteExtras.filter((m) => !DECLARED_AHEAD_MODULES.has(m));
+  if (undeclaredExtras.length > 0) {
+    return {
+      kind: 'drift',
+      reason:
+        `Undeclared website-ahead modules: ${undeclaredExtras.join(', ')}.\n` +
+        `  If these are intentional new modules, add them to DECLARED_AHEAD_MODULES in ` +
+        `games-repo-contract-check.ts. If games-repo removed them, update GAME_KIT_MODULES.`,
+    };
+  }
+  if (remoteModules.join(',') !== localModules.join(',')) {
     log(
-      `  ✓ GAME_KIT_MODULES (website ahead: +${localModules.length - remoteModules.length} ` +
-        `pending games-repo merge; remote ${remoteModules.length})`,
+      `  ✓ GAME_KIT_MODULES (games ${remoteModules.length}, website ${localModules.length}; ` +
+        `website-ahead extras: ${websiteExtras.join(', ')})`,
     );
   } else {
     log(`  ✓ GAME_KIT_MODULES (${remoteModules.length} modules)`);
