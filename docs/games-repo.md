@@ -107,7 +107,9 @@ Two remain, and they're simpler than before.
 by creator specs and player remix requests. It runs in the player's browser, so the existing
 invariant is unchanged and non-negotiable: `sandbox="allow-scripts allow-pointer-lock"` with **no
 `allow-same-origin`** (see [`security-model.md`](./security-model.md)). Serving games from a
-separate, cookieless origin remains the right call.
+separate, cookieless origin remains the right call. The play iframe also sets
+`allow="accelerometer; gyroscope; magnetometer"` so opt-in GameKit `motion` (phone tilt) can
+receive sensors inside that opaque origin — tilt stays optional; keyboard / pad remain enough.
 
 **2. Creator-submitted specs are untrusted input.** The app files them into our repo under our
 identity, which is content submission rather than compute-on-behalf — a much weaker concern
