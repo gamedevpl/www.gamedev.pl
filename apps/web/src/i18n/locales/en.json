@@ -536,7 +536,7 @@
       },
       "abandoned": {
         "label": "Stopped",
-        "description": "You stopped this build. The agent is no longer working on it — start a new idea whenever you like."
+        "description": "This build was stopped. The agent is no longer working on it — start a new idea whenever you like."
       }
     },
     "phases": {

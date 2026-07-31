@@ -540,7 +540,7 @@
       },
       "abandoned": {
         "label": "Zatrzymana",
-        "description": "Zatrzymałeś tę grę. Agent już nad nią nie pracuje — możesz zacząć nowy pomysł, kiedy zechcesz."
+        "description": "Ta gra została zatrzymana. Agent już nad nią nie pracuje — możesz zacząć nowy pomysł, kiedy zechcesz."
       }
     },
     "phases": {

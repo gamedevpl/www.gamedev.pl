@@ -162,7 +162,9 @@ export async function registerCreatorStudioRoutes(
 
     const records = await store.listSubmissionsByOwner(request.user!.uid, { limit: MAX_STUDIO_GAMES });
     const games: CreatorStudioGame[] = records
-      .filter((record) => !record.abandonedAt)
+      // `abandonedAt` is the shelf contract; also drop `canceled` so an operator
+      // reject that predated writing `abandonedAt` does not leave a zombie row.
+      .filter((record) => !record.abandonedAt && record.state !== 'canceled')
       .map((record) => ({
         token: options.mintStatusToken!(record.issueNumber),
         title: record.title,

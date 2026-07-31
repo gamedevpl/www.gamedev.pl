@@ -1961,10 +1961,11 @@ export async function registerSubmissionRoutes(
 
     const records = await store.listSubmissionsByOwner(request.user!.uid, { limit: 50 });
     return reply.send({
-      // Abandoned builds are gone as far as the creator is concerned — they asked
-      // for them to stop, so they don't belong in "your games".
+      // Abandoned / operator-canceled builds are gone as far as the creator is
+      // concerned — they don't belong in "your games". `state === 'canceled'` heals
+      // jobs canceled before the operator path wrote `abandonedAt`.
       submissions: records
-        .filter((record) => !record.abandonedAt)
+        .filter((record) => !record.abandonedAt && record.state !== 'canceled')
         .map((record) => ({
           token: mintToken(record.issueNumber, submissionTokenSecret),
           title: record.title,
@@ -2383,6 +2384,23 @@ export async function registerSubmissionRoutes(
       } catch (cancelError) {
         request.log.error({ err: cancelError, issueNumber }, 'agent cancel failed; job is canceled regardless');
       }
+    }
+
+    // Same bookkeeping as a creator abandon. Without `abandonedAt` the job is terminal
+    // for the queue but still sits on the creator's studio shelf — a reject from this
+    // console left street-heist looking "Stopped" with Playtest still offered, because
+    // the shelf only filters on `abandonedAt`, not on job state.
+    const afterCancel = await store.getSubmission(issueNumber);
+    if (afterCancel?.dispatch?.workspace) {
+      await releaseWorkspace(issueNumber, afterCancel.dispatch.workspace, request.log);
+    }
+    if (afterCancel?.dispatch?.seedWorkspace) {
+      await releaseWorkspace(issueNumber, afterCancel.dispatch.seedWorkspace, request.log);
+      await store.clearDispatchSeedWorkspace(issueNumber);
+    }
+    await store.setSubmissionAbandoned(issueNumber, at);
+    for (const key of [...statusCache.keys()]) {
+      if (key.startsWith(`${issueNumber}:`)) statusCache.delete(key);
     }
 
     return reply.send({ ok: true, state: 'canceled', stopEnforced });
