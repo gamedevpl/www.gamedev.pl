@@ -1102,6 +1102,17 @@ describe('failed request reporting', () => {
     expect((error as Error).message).toContain('rate limit exhausted');
   });
 
+  it('treats an empty 204 as the success it is', async () => {
+    // `DELETE /git/refs` answers 204 No Content. Parsing that as JSON threw
+    // `Unexpected end of JSON input`, so every branch delete that worked was reported to
+    // its caller as a failure — and the caller logs "could not delete a spent build
+    // workspace" and moves on, above a branch that is in fact gone.
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 204 })) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    await expect(client.deleteBranch('copilot/spent')).resolves.toBeUndefined();
+  });
+
   it('keeps the status when the body explains nothing', async () => {
     const fetchImpl = respondWith(500, '<html>upstream is having a day</html>');
     const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });

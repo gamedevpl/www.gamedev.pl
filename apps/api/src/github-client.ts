@@ -698,6 +698,14 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
     if (!response.ok) {
       throw await failureFrom(url, response, 'github request');
     }
+    // A successful write need not answer with a document. `DELETE /git/refs` returns 204
+    // No Content, and parsing that empty body threw `Unexpected end of JSON input` — so
+    // every branch delete that *worked* was reported to its caller as a failure. The one
+    // caller logs and continues, which is why "could not delete a spent build workspace"
+    // has been appearing above branches that were, in fact, deleted.
+    if (response.status === 204 || response.headers.get('content-length') === '0') {
+      return undefined as T;
+    }
     return (await response.json()) as T;
   }
 
