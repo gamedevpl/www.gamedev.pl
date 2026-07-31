@@ -1695,6 +1695,11 @@ export async function registerSubmissionRoutes(
       // exactly the `queued` state the reconciler already reports as `not_dispatched`
       // once it has waited long enough, and dispatchBuild swallows its own failures for
       // that reason. The catch here is belt-and-braces against an unhandled rejection.
+      //
+      // The logger is lifted out first: a closure over `request` would hold the whole
+      // Fastify request — headers, body, reply — alive for as long as dispatch runs,
+      // which since seeding is minutes rather than milliseconds, on every submission.
+      const dispatchLog = request.log;
       void dispatchBuild({
         issueNumber: jobId,
         // The agent is told where to build rather than left to name the place itself.
@@ -1703,9 +1708,9 @@ export async function registerSubmissionRoutes(
         slug,
         spec: issueBody,
         locale: creatorLocale,
-        log: request.log,
+        log: dispatchLog,
       }).catch((error: unknown) => {
-        request.log.error({ err: error, issueNumber: jobId }, 'background dispatch failed');
+        dispatchLog.error({ err: error, issueNumber: jobId }, 'background dispatch failed');
       });
 
       const token = mintToken(jobId, submissionTokenSecret);

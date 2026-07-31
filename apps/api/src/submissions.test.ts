@@ -3339,18 +3339,27 @@ describe('seeded dispatch', () => {
     });
     const { token } = created.json() as { token: string };
 
+    // Dispatch is backgrounded, so the seed branch is only on the record once it has
+    // landed. Abandoning before that would test nothing — there would be no branch to
+    // release — so the wait is on the state this test is about, not on a timer.
+    await vi.waitFor(async () => {
+      const pending = await store.getSubmission(briefs[0]?.issueNumber ?? -1);
+      expect(pending?.dispatch?.seedWorkspace).toBe('seed/job-9');
+    });
+
     const abandoned = await app.inject({
       method: 'POST',
       url: `/api/submissions/${token}/abandon`,
       headers: authHeaders,
     });
 
+    // The abandon route awaits both releases, so `cleaned` is complete here — asserting
+    // the exact set rather than waiting for one entry, which would pass just as happily
+    // if the branch were released twice.
     expect(abandoned.statusCode).toBe(200);
-    await vi.waitFor(() => expect(cleaned).toContain('seed/job-9'));
-    // Both branches released once...
-    expect(cleaned).toContain('seed/job-9');
-    expect(cleaned.filter((branch) => branch === 'seed/job-9')).toHaveLength(1);
-    // ...and the name is off the record, so a second abandon cannot ask again.
+    expect(cleaned).toEqual(['copilot/x', 'seed/job-9']);
+
+    // And the name is off the record, so a second abandon cannot ask again.
     const record = await store.getSubmission(briefs[0].issueNumber);
     expect(record?.dispatch?.seedWorkspace).toBeUndefined();
     expect(record?.dispatch?.workspace).toBe('copilot/x');
