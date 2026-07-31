@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { APIRequestContext, Browser, Page } from 'playwright-core';
+import type { APIRequestContext, Browser, Page, Route } from 'playwright-core';
 import {
   collectProblems,
   describeProblems,
@@ -34,6 +34,13 @@ import {
  * next change to the shell reintroduced both failures at every width above 800 — a review
  * caught what this test was written to catch, because this test never went there. Each
  * entry below is a band the shell is assembled by different rules in.
+ *
+ * Data is stubbed, not borrowed from `bot:e2e`'s shelf. The layout contract is CSS and
+ * the real React tree; which games that identity happens to own is not part of it, and
+ * a gate that skipped when the shelf was empty shipped the bugs above twice (#386, #391).
+ * Stubbing the shelf + status responses keeps the suite read-only against production
+ * (no submission, no agent build) and means an emptied shelf cannot turn the gate into
+ * four green ticks that asserted nothing.
  */
 const prereq = e2ePrerequisites();
 if (!prereq.ok) {
@@ -53,6 +60,69 @@ const VIEWPORTS = [
   { label: 'desktop', width: 1440, height: 900 },
 ] as const;
 
+/** Stable ids used only inside the stubbed responses — never written to the API. */
+const FIXTURE_TOKEN = 'e2e-studio-shell-token';
+const FIXTURE_SLUG = 'e2e-studio-shell';
+
+async function fulfillJson(route: Route, body: unknown) {
+  await route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * Give `/studio` a game with a composer without touching production shelf state.
+ *
+ * The SPA still mounts CreatorStudioView + SubmissionStatusView and applies the real
+ * stylesheet; only the JSON those views fetch is replaced.
+ */
+async function stubStudioThreadData(page: Page) {
+  await page.route('**/api/me/studio**', async (route) => {
+    const path = new URL(route.request().url()).pathname.replace(/\/$/, '');
+    if (path.endsWith('/api/me/studio/health')) {
+      await fulfillJson(route, { days: [], truncated: false, games: [] });
+      return;
+    }
+    if (path.endsWith('/api/me/studio/scorecards')) {
+      await fulfillJson(route, { scorecards: [] });
+      return;
+    }
+    if (path.endsWith('/api/me/studio')) {
+      await fulfillJson(route, {
+        games: [
+          {
+            token: FIXTURE_TOKEN,
+            title: 'E2E Studio Shell Fixture',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            lastKnownStatus: 'published',
+            slug: FIXTURE_SLUG,
+            publishedAt: '2026-01-02T00:00:00.000Z',
+          },
+        ],
+      });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.route(`**/api/submissions/${FIXTURE_TOKEN}**`, async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fulfill({ status: 405, contentType: 'application/json', body: '{"error":"method not allowed"}' });
+      return;
+    }
+    const path = new URL(route.request().url()).pathname.replace(/\/$/, '');
+    if (path.endsWith(`/api/submissions/${FIXTURE_TOKEN}`)) {
+      // Terminal status so the view stops polling; composer still mounts for any
+      // non-abandoned state (SubmissionStatusView, embedded + compact).
+      await fulfillJson(route, { status: 'published', slug: FIXTURE_SLUG });
+      return;
+    }
+    await route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not found"}' });
+  });
+}
+
 describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
   let browser: Browser;
   let api: APIRequestContext;
@@ -63,6 +133,7 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
     browser = await launchSiteBrowser();
     const context = await signedInContext(browser, api);
     page = await context.newPage();
+    await stubStudioThreadData(page);
   });
 
   afterAll(async () => {
@@ -126,14 +197,14 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await visit(page, '/studio', 4_000);
 
-      // The bot identity's shelf is whatever previous runs left behind. With no games
-      // there is no thread and nothing to assert — say so rather than passing quietly,
-      // because a guard that silently stops guarding is worse than no guard.
-      const hasComposer = await page.locator('.status-composer.is-compact').count();
-      if (hasComposer === 0) {
-        console.warn('[e2e] studio shell: the e2e account has no games open in the studio; layout check skipped');
-        expect(describeProblems(watcher.drain())).toBe('');
-        return;
+      // The fixture must put a composer on screen. If it does not, the shell CSS under
+      // test never ran — fail loudly rather than green-ticking an empty assertion.
+      try {
+        await page.waitForSelector('.status-composer.is-compact', { state: 'visible', timeout: 15_000 });
+      } catch {
+        expect.fail(
+          'studio shell fixture did not open a thread with a composer — the layout gate would assert nothing',
+        );
       }
 
       const shell = await page.evaluate(() => {
@@ -141,8 +212,11 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
         return {
           pageScroll: document.documentElement.scrollHeight - document.documentElement.clientHeight,
           scrollerOverflowY: scroller ? getComputedStyle(scroller).overflowY : null,
+          gameOpen: Boolean(document.querySelector('.studio-layout.is-game-open')),
         };
       });
+
+      expect(shell.gameOpen, 'the studio should mark a game open so the shell CSS applies').toBe(true);
 
       // The page owning the window is the precondition for the rest: it is what removes
       // the scroll a reader would otherwise use to escape a bar sitting on the composer.

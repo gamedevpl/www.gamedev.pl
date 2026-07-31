@@ -85,7 +85,8 @@ When one shape holds across widths, write it **once, outside every media query**
 media blocks carry only what genuinely differs. A rule that must never be forgotten cannot
 live in a place where it has to be remembered twice. The same applies to the test: a guard
 pinned to a single viewport stops guarding the moment the layout gains a second one, so cover
-each band the CSS assembles differently — see `apps/e2e/src/studio-shell.test.ts`.
+each band the CSS assembles differently — see `apps/e2e/src/studio-shell.test.ts`
+(that gate stubs the shelf/status JSON so an empty `bot:e2e` shelf cannot skip the check).
 
 ## Current architecture
 
