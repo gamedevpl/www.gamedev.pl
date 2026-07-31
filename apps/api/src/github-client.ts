@@ -222,7 +222,7 @@ export interface CatalogGameEntry {
    */
   world: CatalogGameWorld | null;
   /**
-   * `tilt` when the game reads the device's motion as a stick (`sensing: tilt` in
+   * `tilt` / `backdrop` when the game opts into device sensing (`sensing:` in
    * SPEC.md frontmatter), null otherwise. Advisory metadata for the catalog UI: the
    * sense relay is actually gated by the running game saying hello over the bridge
    * (apps/web/src/sensing.ts), not by this field.
@@ -263,7 +263,7 @@ export interface CatalogGameMultiplayer {
 
 export type CatalogGameSaves = 'player';
 export type CatalogGameWorld = 'shared';
-export type CatalogGameSensing = 'tilt';
+export type CatalogGameSensing = 'tilt' | 'backdrop';
 
 /**
  * `player` is the only mode that exists. Anything else — a typo, a value from a newer
@@ -279,7 +279,7 @@ function parseWorld(value: unknown): CatalogGameWorld | null {
 }
 
 function parseSensing(value: unknown): CatalogGameSensing | null {
-  return value === 'tilt' ? 'tilt' : null;
+  return value === 'tilt' || value === 'backdrop' ? value : null;
 }
 
 /** Platform ceiling on player slots — mirrors SLOT_COLORS in mp.ts. */

@@ -2029,7 +2029,7 @@ body.player-open {
 .game-viewport-container {
   flex: 1;
   width: 100%;
-  /* Positioning context for the rotate hint that overlays the game. */
+  /* Positioning context for the rotate hint / camera backdrop that overlay the game. */
   position: relative;
   /* `height: 100%` here would resolve against the stage and ignore the header bar,
      overflowing the game off the bottom of a short (landscape phone) viewport.
@@ -2043,6 +2043,75 @@ body.player-open {
   padding-bottom: env(safe-area-inset-bottom);
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
+}
+
+/* Shell camera under the sandboxed iframe (sensing Phase 2). The game document makes
+   itself transparent when `sense.backdrop` is live; the iframe element itself must
+   also drop its black fill or the video stays hidden. */
+.theater-camera-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+  pointer-events: none;
+  background: #000;
+}
+
+.theater-camera-backdrop.is-mirrored {
+  transform: scaleX(-1);
+}
+
+.game-viewport-container.has-camera-backdrop .game-frame {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+}
+
+.theater-camera-indicator {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left));
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
+.theater-camera-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff3b30;
+  box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.55);
+  animation: theater-camera-pulse 1.6s ease-out infinite;
+}
+
+@keyframes theater-camera-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(255, 59, 48, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 59, 48, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theater-camera-dot {
+    animation: none;
+  }
 }
 
 .is-playing-full-viewport .game-frame {

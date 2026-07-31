@@ -3,29 +3,30 @@ import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
 import { tiltFromOrientation } from './useDeviceTilt.js';
 
 /**
- * The shell half of device sensing (games-repo docs/camera-ar-platform.md, Phase 0: tilt).
+ * The shell half of device sensing (games-repo docs/camera-ar-platform.md).
  *
- * The same arrangement as the save, world and presence bridges — the sandboxed game
- * cannot reach the device's sensors (the iframe has no `allow=` and never will; see
- * GameFrame.sandbox.test.ts), so this ordinary app code on the real origin reads
- * `deviceorientation` and relays a normalized `{ x, y }` stick over postMessage. Two
- * properties are the point:
+ * Phase 0 — tilt: the sandboxed game cannot reach the device's sensors (the iframe
+ * has no `allow=` and never will; see GameFrame.sandbox.test.ts), so this ordinary
+ * app code on the real origin reads `deviceorientation` and relays a normalized
+ * `{ x, y }` stick over postMessage.
  *
- * - **The shell owns the permission.** iOS gates orientation events behind
- *   `DeviceOrientationEvent.requestPermission()`, which must be called from a real user
- *   gesture on the shell's own chrome — a relayed tap inside the iframe does not count.
- *   The theater renders the request button; `request()` here must stay inside the
- *   gesture's task, exactly like useDeviceTilt's.
- * - **The shell owns the rate.** Readings fire at display rate; the relay forwards at
- *   most one frame per RELAY_MS and only when the stick actually moved. A game cannot
- *   ask for more, and raw readings never leave the browser — not to the game (which
- *   gets the clamped stick), and not to any API (there is no sensor telemetry, by
- *   design; the games-repo module reports a single derived `tilt-active` landmark
- *   through the ordinary play-signals funnel instead).
+ * Phase 2 — camera backdrop: the shell opens `getUserMedia` on its own origin and
+ * composites a `<video>` *under* the iframe. No pixels cross the bridge — only a
+ * boolean `backdrop` on `sensing:state`. The game paints a stand-in when false and
+ * clears transparent when true. Camera never auto-starts; a theater chrome tap is
+ * required every session.
+ *
+ * Shared properties of both phases:
+ *
+ * - **The shell owns the permission.** iOS (tilt) and every browser (camera) need a
+ *   real user gesture on the shell's own chrome — a relayed tap inside the iframe
+ *   does not count.
+ * - **Raw readings / frames never leave the browser.** No sensor telemetry; the
+ *   games-repo module reports a single derived `tilt-active` / `backdrop-active`
+ *   landmark through the ordinary play-signals funnel instead.
  *
  * Nothing happens until a game says `sensing:hello`, so this bridge being mounted for
- * every published game costs the ones that never ask precisely nothing — the same
- * derive-from-behavior rule the save and world bridges follow.
+ * every published game costs the ones that never ask precisely nothing.
  */
 
 /** Forward at most one tilt frame per this many ms. Games decay the stick after ~1.2s. */
@@ -40,6 +41,8 @@ const RELAY_THRESHOLD = 0.01;
 const HEARTBEAT_MS = 400;
 /** Readings smaller than this read as level, matching the game module's own deadzone. */
 const DEADZONE = 0.06;
+
+export type BackdropFacing = 'user' | 'environment';
 
 /**
  * The angle the viewport is rotated from the device's natural orientation. Raw
@@ -74,7 +77,16 @@ function orientationCtor(): OrientationConstructor | null {
   return ctor ?? null;
 }
 
-export type SensingHello = { t: 'sensing:hello'; features: string[] };
+function parseFacing(raw: unknown): BackdropFacing {
+  return raw === 'environment' ? 'environment' : 'user';
+}
+
+export type SensingHello = {
+  t: 'sensing:hello';
+  features: string[];
+  /** Present when the game asked for backdrop; default `'user'` if omitted. */
+  facing: BackdropFacing | null;
+};
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -85,39 +97,111 @@ export function parseSensingMessage(raw: unknown): SensingHello | null {
   if (!isObject(raw) || raw.ns !== BRIDGE_NAMESPACE || raw.v !== PROTOCOL_VERSION) return null;
   if (raw.t !== 'sensing:hello') return null;
   const features = Array.isArray(raw.features) ? raw.features.filter((f): f is string => typeof f === 'string') : [];
-  return { t: 'sensing:hello', features };
+  const wantsBackdrop = features.includes('backdrop');
+  return {
+    t: 'sensing:hello',
+    features,
+    facing: wantsBackdrop ? parseFacing(raw.facing) : null,
+  };
 }
 
+export type SensingBackdrop = {
+  /** A game in the frame has asked for a camera backdrop. */
+  engaged: boolean;
+  /** The browser exposes `mediaDevices.getUserMedia`. */
+  supported: boolean;
+  /** A live stream is composited under the iframe. */
+  live: boolean;
+  /** Facing mode the game declared (`user` mirrored by the theater CSS). */
+  facing: BackdropFacing;
+  /** The active stream, if any — attach to a muted autoplay `<video playsInline>`. */
+  stream: MediaStream | null;
+  /** Safe to call unconditionally; only meaningful inside a user gesture. */
+  start: () => void;
+  stop: () => void;
+};
+
 export type SensingBridge = {
-  /** A game in the frame has asked for tilt. Until then, render nothing. */
+  /** A game in the frame has asked for tilt. Until then, render nothing tilt-related. */
   engaged: boolean;
   /** The browser exposes orientation events at all (false on most desktops). */
   supported: boolean;
   /** iOS: a gesture-initiated `request()` is still required before readings flow. */
   needsPermission: boolean;
-  /** Readings are arriving and being relayed. */
+  /** Tilt readings are arriving and being relayed. */
   active: boolean;
   /** Safe to call unconditionally; only meaningful inside a user gesture on iOS. */
   request: () => void;
+  /** Camera-backdrop half; `engaged` is false until a game asks for it. */
+  backdrop: SensingBackdrop;
 };
 
+function cameraSupported(): boolean {
+  try {
+    return typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia);
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Serves device tilt to the game running in `frameRef`. Mount once per theater; the
- * effect is inert until a game says hello, and detaches every listener on unmount.
+ * Serves device tilt and/or a camera backdrop to the game running in `frameRef`.
+ * Mount once per theater; the effect is inert until a game says hello, and detaches
+ * every listener / stops every track on unmount.
  */
 export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | null>): SensingBridge {
-  const [engaged, setEngaged] = useState(false);
+  const [tiltEngaged, setTiltEngaged] = useState(false);
   const [supported, setSupported] = useState(false);
   const [needsPermission, setNeedsPermission] = useState(false);
   const [granted, setGranted] = useState(false);
   const [active, setActive] = useState(false);
+
+  const [backdropEngaged, setBackdropEngaged] = useState(false);
+  const [backdropSupported, setBackdropSupported] = useState(false);
+  const [backdropLive, setBackdropLive] = useState(false);
+  const [backdropFacing, setBackdropFacing] = useState<BackdropFacing>('user');
+  const [backdropStream, setBackdropStream] = useState<MediaStream | null>(null);
+
+  const tiltActiveRef = useRef(false);
+  const backdropLiveRef = useRef(false);
+  const backdropFacingRef = useRef<BackdropFacing>('user');
+  const streamRef = useRef<MediaStream | null>(null);
+  const wantsTiltRef = useRef(false);
+  const wantsBackdropRef = useRef(false);
 
   useEffect(() => {
     const ctor = orientationCtor();
     setSupported(Boolean(ctor));
     // Only iOS defines requestPermission; everywhere else the events just flow.
     setNeedsPermission(Boolean(ctor && typeof ctor.requestPermission === 'function'));
+    setBackdropSupported(cameraSupported());
   }, []);
+
+  const postState = useCallback(() => {
+    frameRef.current?.contentWindow?.postMessage(
+      {
+        ns: BRIDGE_NAMESPACE,
+        v: PROTOCOL_VERSION,
+        t: 'sensing:state',
+        active: tiltActiveRef.current,
+        backdrop: backdropLiveRef.current,
+      },
+      '*',
+    );
+  }, [frameRef]);
+
+  const stopBackdropTracks = useCallback(() => {
+    const stream = streamRef.current;
+    if (!stream) return;
+    for (const track of stream.getTracks()) track.stop();
+    streamRef.current = null;
+    setBackdropStream(null);
+    if (backdropLiveRef.current) {
+      backdropLiveRef.current = false;
+      setBackdropLive(false);
+      postState();
+    }
+  }, [postState]);
 
   const request = useCallback(() => {
     const ctor = orientationCtor();
@@ -136,35 +220,90 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
       .catch(() => undefined);
   }, []);
 
-  const listening = engaged && supported && (granted || !needsPermission);
+  const startBackdrop = useCallback(() => {
+    if (!wantsBackdropRef.current || !cameraSupported()) return;
+    if (streamRef.current) return;
+    // Must stay inside the gesture's task — getUserMedia is the prompt.
+    void navigator.mediaDevices
+      .getUserMedia({
+        audio: false,
+        video: {
+          facingMode: { ideal: backdropFacingRef.current },
+          // Prefer a modest stream; the video is cover-fit under the play surface.
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+      })
+      .then((stream) => {
+        // Theater may have closed while the prompt was up.
+        if (!wantsBackdropRef.current) {
+          for (const track of stream.getTracks()) track.stop();
+          return;
+        }
+        streamRef.current = stream;
+        setBackdropStream(stream);
+        backdropLiveRef.current = true;
+        setBackdropLive(true);
+        postState();
+      })
+      // Denied / no camera: the game keeps its stand-in. Do not surface an error.
+      .catch(() => undefined);
+  }, [postState]);
+
+  const stopBackdrop = useCallback(() => {
+    stopBackdropTracks();
+  }, [stopBackdropTracks]);
+
+  const listening = tiltEngaged && supported && (granted || !needsPermission);
 
   // Refs, not state: readings arrive at display rate and must not render the theater.
   const baseline = useRef<{ beta: number; gamma: number } | null>(null);
   const lastSent = useRef<{ x: number; y: number; at: number }>({ x: 0, y: 0, at: 0 });
-  const announcedActive = useRef(false);
 
   useEffect(() => {
-    function postToGame(payload: Record<string, unknown>) {
-      // The frame is sandboxed to an opaque origin, so '*' is the only possible target;
-      // the game in turn only accepts messages whose source is its parent.
-      frameRef.current?.contentWindow?.postMessage({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload }, '*');
-    }
-
     function onMessage(event: MessageEvent) {
       // Pin to this theater's frame: any other window posting `gdp` traffic is not the
       // game we are serving.
       if (!frameRef.current || event.source !== frameRef.current.contentWindow) return;
       const message = parseSensingMessage(event.data);
-      if (!message || !message.features.includes('tilt')) return;
-      setEngaged(true);
+      if (!message) return;
+
+      const wantsTilt = message.features.includes('tilt');
+      const wantsBackdrop = message.features.includes('backdrop');
+      if (!wantsTilt && !wantsBackdrop) return;
+
+      wantsTiltRef.current = wantsTilt;
+      wantsBackdropRef.current = wantsBackdrop;
+      if (wantsTilt) setTiltEngaged(true);
+      if (wantsBackdrop) {
+        const facing = message.facing ?? 'user';
+        backdropFacingRef.current = facing;
+        setBackdropFacing(facing);
+        setBackdropEngaged(true);
+      }
       // A reloaded or restarted game says hello again; tell it where things stand so it
       // does not sit out its handshake timeout when the sensor is already flowing.
-      postToGame({ t: 'sensing:state', active: announcedActive.current });
+      postState();
     }
 
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [frameRef]);
+  }, [frameRef, postState]);
+
+  // Camera stream must die when the tab hides or the theater unmounts — OS camera
+  // indicator and trust both depend on MediaStreamTrack.stop(), not pause().
+  useEffect(() => {
+    if (!backdropEngaged) return;
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') stopBackdropTracks();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      stopBackdropTracks();
+      wantsBackdropRef.current = false;
+    };
+  }, [backdropEngaged, stopBackdropTracks]);
 
   useEffect(() => {
     if (!listening) return;
@@ -201,10 +340,10 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
       const held = x !== 0 || y !== 0;
       if (!moved && !(held && now - previous.at >= HEARTBEAT_MS)) return;
       lastSent.current = { x, y, at: now };
-      if (!announcedActive.current) {
-        announcedActive.current = true;
+      if (!tiltActiveRef.current) {
+        tiltActiveRef.current = true;
         setActive(true);
-        postToGame({ t: 'sensing:state', active: true });
+        postState();
       }
       postToGame({ t: 'sensing:tilt', x, y });
     };
@@ -222,13 +361,28 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
       window.removeEventListener('orientationchange', onOrientationChange);
       baseline.current = null;
       lastSent.current = { x: 0, y: 0, at: 0 };
-      if (announcedActive.current) {
-        announcedActive.current = false;
+      if (tiltActiveRef.current) {
+        tiltActiveRef.current = false;
         setActive(false);
-        postToGame({ t: 'sensing:state', active: false });
+        postState();
       }
     };
-  }, [listening, frameRef]);
+  }, [listening, frameRef, postState]);
 
-  return { engaged, supported, needsPermission, active, request };
+  return {
+    engaged: tiltEngaged,
+    supported,
+    needsPermission,
+    active,
+    request,
+    backdrop: {
+      engaged: backdropEngaged,
+      supported: backdropSupported,
+      live: backdropLive,
+      facing: backdropFacing,
+      stream: backdropStream,
+      start: startBackdrop,
+      stop: stopBackdrop,
+    },
+  };
 }

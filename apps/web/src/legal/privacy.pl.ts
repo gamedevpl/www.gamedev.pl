@@ -170,6 +170,13 @@ export const privacyPl: LegalDocument = {
             'ani identyfikator Twojego konta, ani adres IP. Dwa otwarcia tej samej gry przez tę samą osobę są dla ' +
             'nas dwiema niepowiązanymi sesjami. Mierzymy gry, nie ludzi.',
         },
+        {
+          kind: 'p',
+          text:
+            'Niektóre gry mogą pokazać obraz z kamery urządzenia pod powierzchnią gry. Ten obraz jest wyświetlany ' +
+            'tylko w przeglądarce na czas sesji; nigdy nie jest nagrywany, nigdy nie jest przesyłany i nigdy nie ' +
+            'trafia do powyższych statystyk rozgrywki.',
+        },
       ],
     },
     {

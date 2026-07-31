@@ -295,6 +295,11 @@ function CatalogCard({
                 <PixelIcon name="phone" size={12} /> {t('catalog.tiltBadge')}
               </span>
             )}
+            {entry.sensing === 'backdrop' && (
+              <span className="card-party-badge" title={t('catalog.cameraTooltip')}>
+                <PixelIcon name="phone" size={12} /> {t('catalog.cameraBadge')}
+              </span>
+            )}
           </h3>
           <p className="card-author">
             {t('player.byAuthor', {
