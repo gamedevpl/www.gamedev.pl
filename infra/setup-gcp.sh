@@ -238,7 +238,7 @@ fi
 # version. It gets objectCreator + objectViewer rather than objectAdmin — create and read
 # but never delete — so a compromised runtime cannot destroy stored games, and the
 # immutable version ids mean it has no existing path worth overwriting anyway. The
-# deployer keeps objectAdmin because the bake and the gate also prune and rewrite.
+# deployer keeps objectAdmin for the bake; the gate writes through its own SA (below).
 gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
   --member="serviceAccount:${DEPLOYER_SA}" \
   --role="roles/storage.objectAdmin" \
@@ -258,23 +258,68 @@ done
 # games — versioned history is the rollback path and the creator's own record of work.
 echo "    IAM applied (deployer: admin, Cloud Run: read+create). No lifecycle: these are originals."
 
+# Dedicated identity for gate Cloud Build runs (cloudbuild-gate.yaml / gate-trigger.ts).
+# Submitted sources are hostile: the build must not inherit the project default Cloud
+# Build or Compute SA. Store write on this bucket + read of github-token + logWriter
+# only — see infra/gate-hardening.md.
+GATE_SA_NAME="${GATE_SA_NAME:-gate-runner}"
+GATE_SA_EMAIL="${GATE_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
+echo "==> Ensuring gate-runner service account ${GATE_SA_EMAIL}"
+if gcloud iam service-accounts describe "$GATE_SA_EMAIL" --project="$PROJECT_ID" >/dev/null 2>&1; then
+  echo "    Service account already exists."
+else
+  gcloud iam service-accounts create "$GATE_SA_NAME" \
+    --display-name="Games quality gate runner" \
+    --project="$PROJECT_ID"
+fi
+
+# objectAdmin (includes delete) is forced by in-place manifest updates — see
+# infra/gate-hardening.md "Store IAM: why objectAdmin". Compensate with bucket
+# versioning / soft-delete (owner console).
+gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
+  --member="serviceAccount:${GATE_SA_EMAIL}" \
+  --role="roles/storage.objectAdmin" \
+  --project="$PROJECT_ID" \
+  >/dev/null
+
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${GATE_SA_EMAIL}" \
+  --role="roles/logging.logWriter" \
+  --condition=None \
+  >/dev/null
+
+# Narrow accessor on the one secret the gate may hold — not a project-wide secretAccessor.
+if gcloud secrets describe github-token --project="$PROJECT_ID" >/dev/null 2>&1; then
+  gcloud secrets add-iam-policy-binding github-token \
+    --member="serviceAccount:${GATE_SA_EMAIL}" \
+    --role="roles/secretmanager.secretAccessor" \
+    --project="$PROJECT_ID" \
+    >/dev/null
+  echo "    gate-runner may read secret github-token."
+else
+  echo "    WARN: secret github-token missing — create it before gate runs can clone the harness."
+fi
+
 # The runtime starts the gate itself when a game is delivered (gate-trigger.ts). Without
 # this a candidate is stored and never verified, so it can never publish and the upload
 # path ends in a queue nobody drains.
 #
 # builds.editor rather than a narrower role because submitting a build is what it does;
-# there is no "submit only" role. serviceAccountUser is the second half: Cloud Build runs
-# as a service account, and starting a build means acting as one.
-echo "==> Letting the runtime start gate builds"
-for role in roles/cloudbuild.builds.editor roles/iam.serviceAccountUser; do
-  gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-    --member="serviceAccount:${RUN_SA}" \
-    --role="$role" \
-    --condition=None \
-    >/dev/null
-done
+# there is no "submit only" role. actAs is scoped to gate-runner (not project-wide
+# serviceAccountUser) so the runtime cannot launch builds as arbitrary identities.
+echo "==> Letting the runtime start gate builds as ${GATE_SA_EMAIL}"
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${RUN_SA}" \
+  --role="roles/cloudbuild.builds.editor" \
+  --condition=None \
+  >/dev/null
+gcloud iam service-accounts add-iam-policy-binding "$GATE_SA_EMAIL" \
+  --member="serviceAccount:${RUN_SA}" \
+  --role="roles/iam.serviceAccountUser" \
+  --project="$PROJECT_ID" \
+  >/dev/null
 gcloud services enable cloudbuild.googleapis.com --project="$PROJECT_ID" >/dev/null
-echo "    Cloud Run may submit gate builds."
+echo "    Cloud Run may submit gate builds as gate-runner."
 
 echo ""
-echo "==> Done. Firestore database, snapshot bucket, IAM roles (datastore.user, aiplatform.user), session-secret, telemetry TTL, and the scorecards read index configured for project ${PROJECT_ID}."
+echo "==> Done. Firestore database, snapshot bucket, IAM roles (datastore.user, aiplatform.user), session-secret, telemetry TTL, scorecards read index, and gate-runner SA configured for project ${PROJECT_ID}."

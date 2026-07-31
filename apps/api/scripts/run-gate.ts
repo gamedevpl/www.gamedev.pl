@@ -112,8 +112,16 @@ async function main(): Promise<void> {
         // it would otherwise pull is ~200 MB of capture media it will never read.
         const clone = await run('git', ['clone', '--depth', '1', '--branch', engineRef, url, dir], process.cwd());
         if (clone.code !== 0) throw new Error(`could not fetch harness at ${engineRef}`);
+        // Drop the PAT from the remote before any agent-authored tree runs: check:game
+        // executes under this harness, and `.git/config` would otherwise hand the token
+        // to anything that reads the remote URL (hostile-input invariant, BY-11).
+        const scrub = await run('git', ['remote', 'set-url', 'origin', `https://github.com/${repo}.git`], dir);
+        if (scrub.code !== 0) throw new Error('could not scrub harness git credentials');
         const install = await run('npm', ['ci', '--no-audit', '--no-fund'], dir);
         if (install.code !== 0) throw new Error('harness install failed');
+        // Same reason for the process env: spawn inherits it, and check:game must not.
+        delete process.env.GAMES_REPO_TOKEN;
+        delete process.env.GITHUB_TOKEN;
         return dir;
       },
     },

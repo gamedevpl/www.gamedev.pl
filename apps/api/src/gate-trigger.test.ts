@@ -95,6 +95,27 @@ describe('createCloudBuildGateTrigger', () => {
     expect(JSON.stringify(calls[0]!.body)).not.toContain('agent-tasks-token');
   });
 
+  it('runs as the least-privilege gate-runner SA with hard machine and time caps', async () => {
+    // Hostile sources inherit whatever the build SA can do. Default Cloud Build /
+    // Compute identities are too wide; caps live in the CONFIG we pin, not in the
+    // candidate (BY-11 / infra/gate-hardening.md).
+    const { impl, calls } = stubFetch();
+    const trigger = createCloudBuildGateTrigger({ ...OPTIONS, fetchImpl: impl });
+
+    await trigger!({ slug: 'comet-courier', version: 'v1' });
+
+    const body = calls[0]!.body;
+    expect(body.serviceAccount).toBe(
+      'projects/gamedevpl/serviceAccounts/gate-runner@gamedevpl.iam.gserviceaccount.com',
+    );
+    expect(body.options).toMatchObject({
+      logging: 'CLOUD_LOGGING_ONLY',
+      machineType: 'E2_HIGHCPU_8',
+      diskSizeGb: 50,
+    });
+    expect(body.timeout).toBe('1800s');
+  });
+
   it('does not fail a delivery when the gate cannot be started', async () => {
     // The sources are already stored and the agent has finished. Answering it with an
     // error would make it upload everything again, storing a duplicate version of a
