@@ -31,7 +31,20 @@ interface GoogleSignInButtonProps {
 export function GoogleSignInButton({ onSuccess, onError }: GoogleSignInButtonProps) {
   const { signInWithGoogleToken } = useAuth();
   const buttonRef = useRef<HTMLDivElement>(null);
+  const rendered = useRef(false);
   const [scriptLoaded, setScriptLoaded] = useState(false);
+
+  // Callers pass inline lambdas (ClosedBetaSplash, AuthModal). Putting those in the
+  // GIS effect deps cleared the button on every parent re-render — empty flash, then
+  // paint again — which shoved the Apple button below it. Same for the auth context
+  // function, which is recreated whenever AuthProvider updates (e.g. waitlist status
+  // after a rejected One Tap). Hold the latest values in refs and init GIS once.
+  const onSuccessRef = useRef(onSuccess);
+  const onErrorRef = useRef(onError);
+  const signInRef = useRef(signInWithGoogleToken);
+  onSuccessRef.current = onSuccess;
+  onErrorRef.current = onError;
+  signInRef.current = signInWithGoogleToken;
 
   useEffect(() => {
     if (window.google?.accounts?.id) {
@@ -44,14 +57,15 @@ export function GoogleSignInButton({ onSuccess, onError }: GoogleSignInButtonPro
     script.async = true;
     script.defer = true;
     script.onload = () => setScriptLoaded(true);
-    script.onerror = () => onError?.('Failed to load Google Identity Services');
+    script.onerror = () => onErrorRef.current?.('Failed to load Google Identity Services');
     document.body.appendChild(script);
-  }, [onError]);
+  }, []);
 
   useEffect(() => {
-    if (!scriptLoaded || !buttonRef.current || !window.google?.accounts?.id) {
+    if (!scriptLoaded || !buttonRef.current || !window.google?.accounts?.id || rendered.current) {
       return;
     }
+    rendered.current = true;
 
     const clientId = (import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID as string) || undefined;
 
@@ -60,12 +74,12 @@ export function GoogleSignInButton({ onSuccess, onError }: GoogleSignInButtonPro
       auto_select: true,
       callback: async (response) => {
         try {
-          await signInWithGoogleToken(response.credential);
-          onSuccess?.();
+          await signInRef.current(response.credential);
+          onSuccessRef.current?.();
         } catch (err) {
           window.google?.accounts?.id?.disableAutoSelect?.();
           const message = err instanceof Error ? err.message : 'Sign in failed';
-          onError?.(message, response.credential);
+          onErrorRef.current?.(message, response.credential);
         }
       },
     });
@@ -85,7 +99,8 @@ export function GoogleSignInButton({ onSuccess, onError }: GoogleSignInButtonPro
       width: 240,
     });
     window.google.accounts.id.prompt();
-  }, [scriptLoaded, signInWithGoogleToken, onSuccess, onError]);
+  }, [scriptLoaded]);
 
+  // Width/height reserved in CSS before GIS paints — see `.google-sign-in-container`.
   return <div ref={buttonRef} className="google-sign-in-container" />;
 }
