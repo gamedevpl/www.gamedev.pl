@@ -72,10 +72,10 @@ immutable objects.”
 
 Add these to the post-merge owner list (not done by merging this PR):
 
-1. **Enable object versioning and/or soft-delete retention** on `GAMES_STORE_BUCKET`, so
-   a hostile (or buggy) gate run’s deletions/overwrites remain recoverable for a defined
-   retention window. Prefer both if cost allows: versioning for overwrite recovery,
-   soft-delete for explicit deletes.
+1. **Object versioning + soft-delete + noncurrent prune** on `GAMES_STORE_BUCKET` —
+   applied by `setup-gcp.sh` (versioning on, soft-delete 30d, lifecycle deletes
+   noncurrent versions after 30d). Live originals are never aged out. Re-run
+   `./infra/setup-gcp.sh` if a fresh project is missing these.
 2. **Longer-term (record, do not block):** route verdict/manifest writes through the API’s
    own runtime identity (or a narrow “manifest writer” SA the gate calls via an internal
    endpoint), so the Cloud Build gate SA can drop to `objectCreator` + `objectViewer` and
@@ -114,9 +114,10 @@ These require project credentials. Re-run or perform after merging:
 5. **Optional: drop project-wide `roles/iam.serviceAccountUser` on the runtime SA** if it
    was granted only so Cloud Build could run as arbitrary SAs — prefer the
    per-SA binding `setup-gcp.sh` adds on `gate-runner` only.
-6. **Bucket versioning / soft-delete on the games store** — compensating control for
-   `gate-runner`’s `objectAdmin` (see “Store IAM: why objectAdmin” above). Enable before
-   or immediately after flipping production builds onto `gate-runner`.
+6. **Bucket versioning / soft-delete / noncurrent prune** — applied by `setup-gcp.sh`
+   (see store-bucket block). Confirm with
+   `gcloud storage buckets describe gs://$GAMES_STORE_BUCKET --format='yaml(versioning_enabled,soft_delete_policy,lifecycle_config)'`
+   after the first post-BY-11 run if you have not already.
 7. **Optional longer-term:** move manifest/verdict writes off the gate SA so it can drop
    to `objectCreator`+`objectViewer` (API-mediated writes).
 
