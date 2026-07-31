@@ -54,6 +54,38 @@ describe('parseSeedResponse', () => {
     expect(parsed.files[0].content).toBe(`${spec}\n`);
   });
 
+  it('does not let game text that looks like a fence truncate a file', () => {
+    // A game containing `--- GAME OVER ---` in a template literal is entirely ordinary,
+    // and matching any `--- anything ---` line cost that file everything after it plus a
+    // bogus unwritable path. The label now has to look like a path we would accept.
+    const body = ['export const BANNER = `', '--- GAME OVER ---', '--- ---', '`;'].join('\n');
+    const parsed = parseSeedResponse(`--- games/x/game/hud.ts ---\n${body}\n`);
+
+    expect(parsed.files).toHaveLength(1);
+    expect(parsed.files[0].path).toBe('games/x/game/hud.ts');
+    expect(parsed.files[0].content).toBe(`${body}\n`);
+  });
+
+  it('still splits on real file fences that follow such text', () => {
+    const parsed = parseSeedResponse(
+      [
+        '--- games/x/game/hud.ts ---',
+        'export const BANNER = `--- GAME OVER ---`;',
+        '--- games/x/game/model.ts ---',
+        'export const SPEED = 1;',
+      ].join('\n'),
+    );
+
+    expect(parsed.files.map((file) => file.path)).toEqual(['games/x/game/hud.ts', 'games/x/game/model.ts']);
+  });
+
+  it('normalizes trailing whitespace to one newline, and says so', () => {
+    // The one documented deviation from byte-for-byte: the blank line before the next
+    // fence is separator, not content.
+    const parsed = parseSeedResponse('--- games/x/game.ts ---\nexport {};   \n\n\n');
+    expect(parsed.files[0].content).toBe('export {};\n');
+  });
+
   it('unwraps a whole-response markdown fence', () => {
     const parsed = parseSeedResponse('```\n--- games/x/game.ts ---\nexport {};\n```\n');
     expect(parsed.files).toEqual([{ path: 'games/x/game.ts', content: 'export {};\n' }]);

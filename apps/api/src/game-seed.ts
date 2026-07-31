@@ -177,12 +177,22 @@ export interface ParsedSeedResponse {
  * A fence has no escaping layer to get wrong, and a malformed one costs at most the file
  * it labels. The format is also identical to how the reference sources are presented in
  * the prompt, so the model is copying a shape it has just been shown.
+ *
+ * Content is preserved exactly, with one deliberate exception: trailing whitespace is
+ * normalized to a single newline, because the blank line before the next fence is
+ * separator rather than content and every file in this repository ends that way.
  */
 export function parseSeedResponse(text: string): ParsedSeedResponse {
   const unwrapped = text.replace(/^\s*```[a-z]*\r?\n/i, '').replace(/\r?\n```\s*$/, '');
   // Anchored to line starts with a trailing newline, so SPEC.md's own `---` frontmatter
   // delimiters (no label, no trailing content on the line) can never look like a fence.
-  const headers = [...unwrapped.matchAll(/^[ \t]*--- (.+?) ---[ \t]*\r?\n/gm)];
+  //
+  // And the label must look like a path we would accept, or `NOTES`. Matching any
+  // `--- anything ---` line was a real defect: a game with `--- GAME OVER ---` inside a
+  // template literal — which is an entirely ordinary thing for a game to contain — had
+  // its file truncated at that line and the remainder thrown away as an unwritable path.
+  // A space in the label is now enough to disqualify it.
+  const headers = [...unwrapped.matchAll(/^[ \t]*--- (NOTES|[\w./-]+\.(?:ts|md|json|html|css)) ---[ \t]*\r?\n/gm)];
   const files: { path: string; content: string }[] = [];
   let notes: string | undefined;
 
