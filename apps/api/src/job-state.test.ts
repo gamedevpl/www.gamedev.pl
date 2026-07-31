@@ -73,6 +73,34 @@ describe('transition rules', () => {
     expect(canTransition('needs_changes', 'queued')).toBe(true);
     expect(canTransition('ready_for_review', 'needs_changes')).toBe(true);
   });
+
+  // The gate reports by writing its verdict to the version manifest, which we read on a
+  // poll — so a delivered job goes straight from `submitted` to the outcome and is never
+  // seen mid-gate. When `gating` was the only exit, that made `submitted` a dead end:
+  // the reconciler computed the right target, canTransition refused it, and the job sat
+  // there telling the creator the gate had never started for as long as they watched.
+  it('lets a delivered job reach the gate verdict without passing through gating', () => {
+    expect(canTransition('submitted', 'ready_for_review')).toBe(true);
+    expect(canTransition('submitted', 'needs_changes')).toBe(true);
+    // Still reachable, for records written while it was a step and for a future gate
+    // that reports its start.
+    expect(canTransition('submitted', 'gating')).toBe(true);
+    // But not a shortcut past the moderation boundary.
+    expect(canTransition('submitted', 'published')).toBe(false);
+    expect(canTransition('submitted', 'publishing')).toBe(false);
+  });
+
+  // The shape of the bug rather than the instance: any state a reconciler can compute a
+  // target for has to be able to reach it. Read as "no state is a dead end that isn't
+  // meant to be one" — every non-terminal state must have somewhere to go.
+  it('gives every non-terminal state a way forward', () => {
+    for (const state of JOB_STATES.filter((s) => !isTerminal(s))) {
+      const forward = JOB_STATES.filter(
+        (target) => target !== state && canTransition(state, target) && !['canceled', 'abandoned'].includes(target),
+      );
+      expect(forward.length, `${state} has no exit other than cancel/abandon`).toBeGreaterThan(0);
+    }
+  });
 });
 
 describe('reconcileAgentObservation', () => {

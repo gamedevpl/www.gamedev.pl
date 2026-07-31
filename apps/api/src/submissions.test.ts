@@ -933,6 +933,66 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  // The bug this covers was visible to creators and invisible to us: a delivered game
+  // whose gate had passed kept showing "delivered, but verification hasn't started —
+  // that's on our side" indefinitely. The gate had run and its verdict was in the
+  // manifest; the job could not act on it, because `submitted` listed only `gating` as
+  // an exit and nothing writes `gating`. The reconciler computed `ready_for_review`,
+  // canTransition refused it, and the job sat in `submitted` until the creator gave up.
+  it('acts on a gate verdict for a job still sitting in submitted', async () => {
+    const { githubClient } = createGithubClientStub({ issueNumber: 97 });
+    const { backend } = createBackendStub();
+    const gamesStore = {
+      getManifest: async () => ({
+        slug: 'space-parcels',
+        version: 'v3',
+        createdAt: '2026-07-31T10:00:00.000Z',
+        issueNumber: 97,
+        sourceFiles: [],
+        gate: { green: true, ranAt: '2026-07-31T10:30:00.000Z' },
+      }),
+    } as unknown as GamesStore;
+
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+
+    // The shape a real delivery leaves behind: the agent channel marked the sources
+    // delivered, and the gate wrote its verdict to that version's manifest.
+    await store.setSubmissionSlug(job.issueNumber, 'space-parcels');
+    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v3');
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'submitted',
+      at: '2026-07-31T10:00:00.000Z',
+      by: 'agent',
+      reason: 'sources_delivered',
+    });
+
+    const status = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}`,
+      headers: authHeaders,
+    });
+
+    expect(status.statusCode).toBe(200);
+    expect(status.json().phase).toBe('ready_for_review');
+    // And the warning the creator was staring at is gone with the state that caused it.
+    expect(status.json().stall).toBeUndefined();
+
+    await app.close();
+  });
+
   it('reports the job phase alongside the status, so the page can say which wait this is', async () => {
     // `toSubmissionStatus` is lossy on purpose — `gating` and `building` arrive as one
     // word, and `ready_for_review` (delivered, checked, waiting on us) arrives as the
@@ -1140,7 +1200,6 @@ describe('submission routes', () => {
 
     await app.close();
   });
-
 
   it('abandons a native job without closing anything on GitHub', async () => {
     const { githubClient, closeIssue, closePullRequest } = createGithubClientStub({ issueNumber: 77 });

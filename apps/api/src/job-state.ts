@@ -29,7 +29,15 @@ export const JOB_STATES = [
   'building',
   /** The agent delivered candidate sources; nothing has verified them yet. */
   'submitted',
-  /** Our own gate is running against the delivered sources. */
+  /**
+   * Our own gate is running against the delivered sources.
+   *
+   * Nothing writes this today. The gate runs in Cloud Build and reports by writing its
+   * verdict to the version manifest, which we read on a poll — so the job goes from
+   * `submitted` to the verdict in one hop and is never observed mid-gate. Kept because
+   * stored records may still hold it and the projection reads it, not because it is a
+   * step anything passes through.
+   */
   'gating',
   /** Gate green. Waiting on the human review that is the moderation boundary. */
   'ready_for_review',
@@ -72,7 +80,13 @@ const ALLOWED_TRANSITIONS: Readonly<Record<JobState, readonly JobState[]>> = {
   queued: ['dispatched', 'building', 'canceled', 'abandoned', 'failed'],
   dispatched: ['building', 'submitted', 'failed', 'canceled', 'abandoned'],
   building: ['submitted', 'ready_for_review', 'needs_changes', 'failed', 'canceled', 'abandoned'],
-  submitted: ['gating', 'failed', 'canceled', 'abandoned'],
+  // The verdict is read off the version manifest in a single poll, so a delivered job
+  // reaches its outcome without ever being seen in `gating`. Listing only `gating` here
+  // made `submitted` a trap: reconcileGateVerdict computes `ready_for_review` or
+  // `needs_changes`, canTransition refused both, and nothing else writes `gating` — so
+  // every job that arrived here stayed, showing "delivered, gate never started" for as
+  // long as the creator kept the page open.
+  submitted: ['gating', 'ready_for_review', 'needs_changes', 'failed', 'canceled', 'abandoned'],
   gating: ['ready_for_review', 'needs_changes', 'failed', 'canceled', 'abandoned'],
   ready_for_review: ['publishing', 'needs_changes', 'canceled', 'abandoned'],
   // A failed bake must be able to fall back, or a job strands with no way home.
