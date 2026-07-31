@@ -289,6 +289,54 @@ describe('CreatorStudioView', () => {
     root.unmount();
   });
 
+  it('makes the details panel behave like a sheet on a narrow screen', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue(manyGames(2));
+    // jsdom has no matchMedia, which is also the fallback path in real embedded
+    // webviews — the width is what decides when the query is unavailable.
+    const width = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { value: 420, configurable: true });
+
+    const { container, root } = await renderStudio({ selectedGame: 'token-0', selectedTab: 'details' });
+
+    // Over the thread, so: something to tap beside it, and a page that does not scroll
+    // away behind it. Without these it is a fixed panel the page slides underneath.
+    expect(container.querySelector('.studio-rail-backdrop')).not.toBeNull();
+    expect(container.querySelector('.studio-rail')?.getAttribute('aria-modal')).toBe('true');
+    expect(document.body.style.overflow).toBe('hidden');
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    expect(container.querySelector('.studio-rail')).toBeNull();
+    expect(document.body.style.overflow).not.toBe('hidden');
+
+    Object.defineProperty(window, 'innerWidth', { value: width, configurable: true });
+    root.unmount();
+  });
+
+  it('leaves the details panel a plain rail when there is room beside the thread', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue(manyGames(2));
+    const width = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { value: 1440, configurable: true });
+
+    const { container, root } = await renderStudio({ selectedGame: 'token-0', selectedTab: 'details' });
+
+    // Beside the thread it is not modal, and must not lock the page — the reader can
+    // see straight past it to the conversation it is about.
+    expect(container.querySelector('.studio-rail')).not.toBeNull();
+    expect(container.querySelector('.studio-rail-backdrop')).toBeNull();
+    expect(document.body.style.overflow).not.toBe('hidden');
+
+    Object.defineProperty(window, 'innerWidth', { value: width, configurable: true });
+    root.unmount();
+  });
+
   it('opens a game addressed by its slug', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');

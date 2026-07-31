@@ -57,6 +57,15 @@ import {
 
 const WINDOWS = [1, 7, 30];
 
+/**
+ * Where the details panel stops being a rail beside the thread and becomes a sheet over
+ * it. Kept in step with the same breakpoint in styles.css by hand — the two describe one
+ * decision, and a panel that behaves like a sheet while it is drawn as a rail (or the
+ * reverse) locks the page scroll for something the reader can see straight past.
+ */
+const SHEET_MAX_WIDTH = 1099;
+const SHEET_QUERY = `(max-width: ${SHEET_MAX_WIDTH}px)`;
+
 type NavigateOptions = { replace?: boolean };
 
 type CreatorStudioViewProps = {
@@ -292,6 +301,47 @@ export function CreatorStudioView({
     }
   }, [selected, selectedTab, selectedGame, games, onNavigate]);
 
+  /**
+   * Below the rail breakpoint the details panel is a sheet over the thread, and a sheet
+   * has obligations a side panel does not: the page behind it must not scroll, Escape
+   * must close it, and there must be something to tap beside it to dismiss. The game
+   * picker already does all three; this arrived without any of them.
+   */
+  const detailsOpen = tab === 'details';
+  const [detailsIsSheet, setDetailsIsSheet] = useState(false);
+  useEffect(() => {
+    if (!detailsOpen) {
+      setDetailsIsSheet(false);
+      return;
+    }
+    // Width, not `matchMedia` alone: the query is the precise instrument but it is not
+    // universally present (jsdom has none, and neither do some embedded webviews), and a
+    // panel that throws where it is missing is worse than one measured a cruder way.
+    const query = typeof window.matchMedia === 'function' ? window.matchMedia(SHEET_QUERY) : null;
+    const sync = () => setDetailsIsSheet(query ? query.matches : window.innerWidth <= SHEET_MAX_WIDTH);
+    sync();
+    query?.addEventListener('change', sync);
+    window.addEventListener('resize', sync);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') openTabRef.current('thread');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      query?.removeEventListener('change', sync);
+      window.removeEventListener('resize', sync);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [detailsOpen]);
+
+  useEffect(() => {
+    if (!detailsIsSheet) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [detailsIsSheet]);
+
   useEffect(() => {
     if (!pickerOpen) return;
     const previous = document.body.style.overflow;
@@ -317,11 +367,18 @@ export function CreatorStudioView({
     if (next) onNavigate(studioPath(studioAddress(next), nextTab));
   }
 
+  // Read by the Escape handler above, which is registered once per open rather than
+  // re-registered on every render that changes what `openTab` closes over.
+  const openTabRef = useRef((next: StudioTab) => {
+    void next;
+  });
+
   function openTab(next: StudioTab) {
     if (!activeGame || !tabAvailable(activeGame, next)) return;
     setTab(next);
     onNavigate(studioPath(studioAddress(activeGame), next));
   }
+  openTabRef.current = openTab;
 
   if (!user) {
     return (
@@ -491,35 +548,48 @@ export function CreatorStudioView({
                 {/* Everything that is about the game rather than said to it: when it was
                     made, who can play it, how it is doing, and how to stop it. */}
                 {tab === 'details' ? (
-                  <aside className="studio-rail" aria-label={t('studioPanel.tabs.details')}>
-                    <div className="studio-rail-head">
-                      <h3>{t('studioPanel.tabs.details')}</h3>
-                      <button
-                        type="button"
-                        className="modal-close-btn"
+                  <>
+                    {detailsIsSheet ? (
+                      <div
+                        className="modal-backdrop studio-rail-backdrop"
+                        role="presentation"
                         onClick={() => openTab('thread')}
-                        aria-label={t('studioPanel.shelf.closePicker')}
-                      >
-                        <PixelIcon name="close" size={14} />
-                      </button>
-                    </div>
-                    <DetailsPanel
-                      game={activeGame}
-                      health={selectedHealth}
-                      days={days}
-                      healthDays={healthDays}
-                      truncated={truncated}
-                      scorecard={selectedScorecard}
-                      onDaysChange={setDays}
-                      onOpenPlaytest={() => openTab('playtest')}
-                      onPlay={() => activeGame.slug && onPlay(activeGame.slug)}
-                      onRemoved={(token) => {
-                        setGames((prev) => prev.filter((game) => game.token !== token));
-                        setSelected((current) => (current === token ? null : current));
-                        onNavigate(studioPath());
-                      }}
-                    />
-                  </aside>
+                      />
+                    ) : null}
+                    <aside
+                      className="studio-rail"
+                      aria-label={t('studioPanel.tabs.details')}
+                      {...(detailsIsSheet ? { role: 'dialog', 'aria-modal': true } : {})}
+                    >
+                      <div className="studio-rail-head">
+                        <h3>{t('studioPanel.tabs.details')}</h3>
+                        <button
+                          type="button"
+                          className="modal-close-btn"
+                          onClick={() => openTab('thread')}
+                          aria-label={t('studioPanel.shelf.closePicker')}
+                        >
+                          <PixelIcon name="close" size={14} />
+                        </button>
+                      </div>
+                      <DetailsPanel
+                        game={activeGame}
+                        health={selectedHealth}
+                        days={days}
+                        healthDays={healthDays}
+                        truncated={truncated}
+                        scorecard={selectedScorecard}
+                        onDaysChange={setDays}
+                        onOpenPlaytest={() => openTab('playtest')}
+                        onPlay={() => activeGame.slug && onPlay(activeGame.slug)}
+                        onRemoved={(token) => {
+                          setGames((prev) => prev.filter((game) => game.token !== token));
+                          setSelected((current) => (current === token ? null : current));
+                          onNavigate(studioPath());
+                        }}
+                      />
+                    </aside>
+                  </>
                 ) : null}
               </div>
             </div>

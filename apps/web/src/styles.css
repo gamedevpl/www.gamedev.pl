@@ -3917,6 +3917,12 @@ body.player-open {
   color: var(--muted);
 }
 
+/* The sheet's backdrop: something to tap beside it, and a dimmed page behind so the
+   thread underneath reads as out of reach rather than merely covered. */
+.studio-rail-backdrop {
+  z-index: 1090;
+}
+
 /* Below the rail breakpoint the details arrive over the thread as a sheet, anchored to
    the bottom where a thumb is — the same shape the game picker already uses. */
 @media (max-width: 1099px) {
@@ -4160,6 +4166,9 @@ body.player-open {
   width: 100%;
   border-radius: 12px;
   resize: vertical;
+  /* The placeholder says where the message will land, which is two lines of text on a
+     phone; at two rows it was cut off mid-sentence. */
+  min-height: 5.25rem;
 }
 
 .status-composer.is-compact .status-feedback-actions {
@@ -4175,12 +4184,31 @@ body.player-open {
   margin-right: auto;
 }
 
-@media (max-width: 640px) {
+/* On a narrow screen the thread does not get a scroller of its own.
+   It had one, and the page had one too: scrolling the transcript moved the page instead,
+   or the other way about, and the composer sat 477px below the fold behind whichever of
+   the two you guessed wrong. One scroller — the page — and the composer rides at the
+   bottom of the viewport until the thread ends. */
+@media (max-width: 900px) {
   .studio-thread {
-    height: calc(100dvh - 18rem);
-    min-height: 20rem;
+    height: auto;
+    min-height: 0;
   }
 
+  .studio-thread-scroll {
+    overflow: visible;
+  }
+
+  .studio-thread-foot {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    padding-bottom: 10px;
+    background: var(--panel);
+  }
+}
+
+@media (max-width: 640px) {
   /* Too little width left for two sides of a conversation; the bubble carries it. */
   .studio-turn.is-mine .studio-turn-body {
     max-width: 100%;
@@ -6821,50 +6849,6 @@ body.player-open {
   padding: 2px 10px;
 }
 
-/* Underline tabs — clearer hierarchy than chip pills for a primary work surface. */
-.studio-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
-  margin: 0 0 20px;
-  padding: 0;
-  border-bottom: 1px solid var(--panel-border);
-}
-
-.studio-tab {
-  position: relative;
-  background: transparent;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  color: var(--muted);
-  border-radius: 0;
-  padding: 10px 14px;
-  margin-bottom: -1px;
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    color 0.15s,
-    border-color 0.15s;
-}
-
-.studio-tab:hover {
-  color: #fff;
-}
-
-.studio-tab.is-active {
-  color: var(--turquoise);
-  background: transparent;
-  border-bottom-color: var(--turquoise);
-  box-shadow: none;
-}
-
-.studio-tab.is-active:hover {
-  color: var(--turquoise);
-  filter: none;
-}
-
 .studio-tab-panel {
   min-width: 0;
 }
@@ -7275,8 +7259,14 @@ body.player-open {
     display: flex;
   }
 
-  .studio-layout.is-game-open .studio-detail-title-row {
+  /* The switcher above already names the game, so the title block goes — but the
+     actions beside it must not, or Playtest and Details become unreachable on a phone. */
+  .studio-layout.is-game-open .studio-detail-title-block {
     display: none;
+  }
+
+  .studio-layout.is-game-open .studio-detail-title-row {
+    justify-content: flex-end;
   }
 
   .studio-layout.is-game-open .studio-detail {
@@ -7299,18 +7289,6 @@ body.player-open {
 
   .studio-detail {
     padding: 18px 16px;
-  }
-
-  .studio-tabs {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    mask-image: linear-gradient(90deg, #000 85%, transparent);
-  }
-
-  .studio-tabs::-webkit-scrollbar {
-    display: none;
   }
 
   .studio-picker {
