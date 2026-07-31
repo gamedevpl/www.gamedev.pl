@@ -99,7 +99,7 @@ export function GoogleSignInButton({ onSuccess, onError }: GoogleSignInButtonPro
     rendered.current = true;
 
     const clientId = (import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID as string) || undefined;
-    // GIS locale tags are BCP-47 with underscore (en_US); i18n gives "en" / "pl".
+    // GIS accepts short language codes here (`en`, `pl`); keep them aligned with i18n.
     const locale = i18n.language?.toLowerCase().startsWith('pl') ? 'pl' : 'en';
 
     window.google.accounts.id.initialize({

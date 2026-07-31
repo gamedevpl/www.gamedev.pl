@@ -85,6 +85,25 @@ describe('GoogleSignInButton', () => {
     expect(container.querySelector('.google-sign-in-gis')).not.toBeNull();
     expect(container.querySelector('.google-sign-in-face')?.textContent).toMatch(/Sign in with Google/i);
     expect(container.querySelector('.google-sign-in-mark')).not.toBeNull();
+    expect(gis.renderButton).toHaveBeenCalledWith(
+      expect.any(HTMLElement),
+      expect.objectContaining({ locale: 'en', theme: 'filled_black', width: 240 }),
+    );
+  });
+
+  it('passes a Polish locale to GIS when the UI language is pl', async () => {
+    await i18n.changeLanguage('pl');
+    const { GoogleSignInButton } = await import('./GoogleSignInButton.js');
+
+    await act(async () => {
+      root.render(createElement(GoogleSignInButton));
+    });
+
+    expect(gis.renderButton).toHaveBeenCalledWith(
+      expect.any(HTMLElement),
+      expect.objectContaining({ locale: 'pl' }),
+    );
+    expect(container.querySelector('.google-sign-in-face')?.textContent).toMatch(/Zaloguj się przez Google/i);
   });
 
   it('does not wipe and re-render the GIS button when the parent passes a new onError', async () => {
