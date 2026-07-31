@@ -4432,9 +4432,9 @@ body.player-open {
    covers both. */
 .status-composer.is-compact {
   margin: 0;
-  padding: 7px 8px 8px 10px;
+  padding: 5px 5px 5px 12px;
   border: 1px solid var(--panel-border);
-  border-radius: 14px;
+  border-radius: 18px;
   background: var(--panel-card);
   transition:
     border-color 0.2s,
@@ -4446,20 +4446,34 @@ body.player-open {
   box-shadow: 0 0 0 3px rgba(0, 228, 172, 0.08);
 }
 
+/* Field and send share a line. `flex-end` rather than `center` so the button stays at
+   the bottom edge as the box grows into a paragraph, where the caret is — centred, it
+   drifts into the middle of a message. */
+.status-composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
 .status-composer.is-compact .status-feedback-input {
-  width: 100%;
+  flex: 1;
+  /* A flex item will not shrink below its content without this, and a long unbroken word
+     is enough to push the send button off the edge of a phone. */
+  min-width: 0;
   border: 0;
   border-radius: 0;
   background: none;
-  padding: 4px 2px;
+  padding: 7px 0;
   /* The box grows with the text instead (see autoGrow). A drag handle sitting in the
      middle of the composer's right edge, now that the border belongs to the box rather
      than the field, looked like something had gone wrong. */
   resize: none;
   overflow-y: auto;
-  /* The placeholder says where the message will land, which is two lines of text on a
-     phone; at two rows it was cut off mid-sentence. */
-  min-height: 5.25rem;
+  line-height: 1.4;
+  /* One line at rest. It was five rems back when the placeholder ran to four lines; the
+     placeholder is one line now, so an empty box the height of a paragraph is just a
+     paragraph of the thread that nobody can read. */
+  min-height: 2.4rem;
 }
 
 .status-composer.is-compact .status-feedback-input:focus {
@@ -4468,31 +4482,142 @@ body.player-open {
   box-shadow: none;
 }
 
+/* A round tap target the size of the line beside it, holding an arrow instead of a verb.
+   The verb is what forced the button onto its own row: "Wyślij uwagi" is half the width
+   of a phone, and a label that long beside the field would have left the field narrower
+   than the message going into it. */
+.status-composer.is-compact .status-composer-send {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+}
+
+/* Square again where every button gets a 44px floor for fingers — with a fixed width and
+   a floored height it would have come out an oval. */
+@media (max-width: 768px) {
+  .status-composer.is-compact .status-composer-send {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* Present only when there is an error or a receipt to show — see the composer's markup.
+   A row that is always in the DOM is a row the resting composer pays for. */
 .status-composer.is-compact .status-feedback-actions {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   gap: 10px;
-  margin-top: 2px;
-}
-
-/* Sized down to sit inside the composer rather than under it. */
-.status-composer.is-compact .status-feedback-actions .primary-btn {
-  padding: 7px 15px;
-  font-size: 0.84rem;
-  border-radius: 9px;
+  margin: 2px 4px 3px 0;
+  font-size: 0.82rem;
 }
 
 .status-composer.is-compact .status-feedback-actions .error {
   margin: 0;
-  margin-right: auto;
+}
+
+/* THE STUDIO THREAD AS AN APP SCREEN — the part that is true at every width.
+   Below this, two media blocks give the shell its shape: edge-to-edge on a phone at
+   800px and under, a shelf rail and a capped reading column above that. What lives here
+   is what neither of them may forget.
+
+   It is here because forgetting it is exactly what went wrong. These rules started
+   inside the phone block; when the desktop block was written it re-derived the geometry
+   and left three of them behind, and each one is only visible in a state a screenshot
+   does not reach: a transcript long enough to overflow, an update banner nobody can
+   summon on demand. The shell takes the page's scroll away, so anything that assumed a
+   page scroll now has no fallback — which makes "both blocks remembered" the wrong
+   thing to rely on, and one unconditioned block the right one.
+
+   Keyed off `:has()` rather than a class on the route, because the route is not the
+   question. Bare /studio picks a game for you and shows its thread without ever naming
+   it in the URL, so a URL-driven class left exactly that case on the old broken shape.
+   What matters is whether a game is open on screen, which is what this asks. Browsers
+   without `:has()` drop the block and get the old scrolling page — the degradation is
+   yesterday's layout, not a broken one. */
+.app:has(.studio-layout.is-game-open) {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.app:has(.studio-layout.is-game-open) > .content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  /* The page centres its sections, which sizes them to their content — fine for a column
+     of cards, wrong for a screen that has to be exactly as wide as the window. Without
+     this the panel took its width from the longest slug in it. */
+  align-items: stretch;
+  overflow: hidden;
+}
+
+/* Legal links and a strapline do not belong under a live conversation, and with the page
+   no longer scrolling there is nothing that could reach them anyway. */
+.app:has(.studio-layout.is-game-open) .site-footer {
+  display: none;
+}
+
+/* A kicker, a page title, a strapline and a way home, above a screen whose header
+   already offers the way home. On a page it introduces; in an app it is a lid. */
+.app:has(.studio-layout.is-game-open) .studio-panel-header {
+  display: none;
+}
+
+/* The transcript keeps its own scroller, and it must be the one that works: the shell
+   has taken the page's scroll away, so a thread without this is simply cut off at the
+   bottom edge of the window with no way to reach the end of it. Higher specificity than
+   the `overflow: visible` below, which was the one-scroller compromise from when the
+   page still scrolled. */
+.app:has(.studio-layout.is-game-open) .studio-thread {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+
+.app:has(.studio-layout.is-game-open) .studio-thread-scroll {
+  overflow-y: auto;
+}
+
+/* Nothing left to stick to — the foot is the last item of a column that ends at the
+   bottom of the window. */
+.app:has(.studio-layout.is-game-open) .studio-thread-foot {
+  position: static;
+}
+
+/* The install nudge and the update bar are fixed to the bottom of the viewport at
+   z-index 900, which is exactly where this shell pins the composer. On the old scrolling
+   page a reader could push the composer up past them; here there is nothing to scroll,
+   so a banner sits on the textarea until it is dismissed.
+
+   They join the column instead of floating over it. Both are already the last children
+   of `.app`, so as ordinary flex items they land under the composer and the transcript
+   gives up the height — a bar at the foot of the screen rather than a lid on the one
+   control that matters. Suppressing them was the other option and a worse one: the
+   update bar is how a browser finds out there is a new shell, and the studio is a screen
+   people sit on for a long time. */
+.app:has(.studio-layout.is-game-open) .install-prompt,
+.app:has(.studio-layout.is-game-open) .app-update {
+  position: static;
+  flex: none;
+  margin: 0 12px max(12px, env(safe-area-inset-bottom, 0px));
+  animation: none;
 }
 
 /* On a narrow screen the thread does not get a scroller of its own.
    It had one, and the page had one too: scrolling the transcript moved the page instead,
    or the other way about, and the composer sat 477px below the fold behind whichever of
    the two you guessed wrong. One scroller — the page — and the composer rides at the
-   bottom of the viewport until the thread ends. */
+   bottom of the viewport until the thread ends.
+
+   Only reaches the studio when the shell above has not claimed it; every rule here is
+   overridden by its higher-specificity counterpart when a game is open. */
 @media (max-width: 900px) {
   .studio-thread {
     height: auto;
@@ -4531,30 +4656,6 @@ body.player-open {
    place the game is named — an earlier draft of this ran to 900 and left that band with
    no title on screen at all. */
 @media (max-width: 800px) {
-  .app:has(.studio-layout.is-game-open) {
-    height: 100dvh;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  .app:has(.studio-layout.is-game-open) > .content {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    /* The page centres its sections, which sizes them to their content — fine for a
-       column of cards, wrong for a screen that has to be exactly as wide as the phone.
-       Without this the panel took its width from the longest slug in it. */
-    align-items: stretch;
-    overflow: hidden;
-  }
-
-  /* Legal links and a strapline do not belong under a live conversation. */
-  .app:has(.studio-layout.is-game-open) .site-footer {
-    display: none;
-  }
-
   /* Every wrapper between the shell and the transcript has to give up its height, or the
      scroller at the bottom of the chain has nothing to measure itself against. */
   .app:has(.studio-layout.is-game-open) .studio-panel,
@@ -4578,12 +4679,6 @@ body.player-open {
     margin-right: 0;
     width: 100%;
     max-width: 100%;
-  }
-
-  /* A masthead and a trip home above a conversation, on the screen where the header
-     already offers both. */
-  .app:has(.studio-layout.is-game-open) .studio-panel-header {
-    display: none;
   }
 
   /* The switcher holds a slug, and a slug can be longer than a phone. It never showed
@@ -4675,45 +4770,6 @@ body.player-open {
     padding: 0 2px;
   }
 
-  /* The install nudge and the update bar are fixed to the bottom of the viewport at
-     z-index 900, which is exactly where this shell now pins the composer. On the old
-     scrolling page a reader could push the composer up past them; here there is nothing
-     to scroll, so a banner would sit on the textarea until it was dismissed.
-
-     They join the column instead of floating over it. Both are already the last children
-     of `.app`, so as ordinary flex items they land under the composer and the transcript
-     gives up the height — a bar at the foot of the screen rather than a lid on the one
-     control that matters. Suppressing them was the other option and a worse one: the
-     update bar is how a phone finds out there is a new shell, and the studio is a screen
-     people sit on for a long time. */
-  .app:has(.studio-layout.is-game-open) .install-prompt,
-  .app:has(.studio-layout.is-game-open) .app-update {
-    position: static;
-    flex: none;
-    margin: 0 12px max(12px, env(safe-area-inset-bottom, 0px));
-    animation: none;
-  }
-
-  /* The tall empty box existed to fit a placeholder that ran to four lines. The
-     placeholder is one line now, so the box can start at the size of a reply and grow
-     into the message — which is a third of a phone screen handed back to the thread. */
-  .app:has(.studio-layout.is-game-open) .status-composer.is-compact .status-feedback-input {
-    min-height: 2.75rem;
-  }
-
-  /* Undoes the one-scroller compromise above. That rule existed because the transcript's
-     scroller and the page's fought each other; with the page no longer scrolling there is
-     only one again, and it can be the transcript's. */
-  .app:has(.studio-layout.is-game-open) .studio-thread {
-    flex: 1;
-    min-height: 0;
-    height: auto;
-  }
-
-  .app:has(.studio-layout.is-game-open) .studio-thread-scroll {
-    overflow-y: auto;
-  }
-
   /* 126px of page padding — 60 on the content, 48 on the panel, 18 on the detail — was
      what put the composer that far above the bottom of the screen with nothing under it.
      Right for a section of a document, wrong for the bottom edge of an app. */
@@ -4750,7 +4806,6 @@ body.player-open {
   }
 
   .app:has(.studio-layout.is-game-open) .studio-thread-foot {
-    position: static;
     /* Clear of the iOS home indicator, and of nothing at all where there isn't one. */
     padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   }
@@ -4786,6 +4841,117 @@ body.player-open {
   /* Too little width left for two sides of a conversation; the bubble carries it. */
   .studio-turn.is-mine .studio-turn-body {
     max-width: 100%;
+  }
+}
+
+/* The same app shell, shaped for a desktop.
+   The phone got this in #386 and the reasoning does not stop at 800px: the studio is a
+   place you sit in, not a page you read down. On a 1440 window today it is a 1180px card
+   floating in the middle of a document, the composer lands wherever the transcript
+   happens to end, and the thing under a scroll from it is the marketing footer.
+
+   Full bleed here means the shell owns the window — shelf as a rail from the header to
+   the bottom edge, transcript with its own scroller, composer pinned above the bottom of
+   the window — but not that the text stretches to the window's edges. A 2560px monitor
+   would give a 2200px line of prose, so the column stays capped and centred inside the
+   full-width shell; what goes edge to edge is the furniture, not the reading.
+
+   The shell itself — the window-owning, footer-hiding, banner-reflowing part — is
+   above, outside any media query, and shared with the phone. What is here is only what
+   is different about a desktop: a rail instead of a switcher, and a capped column.
+
+   Keyed the same way as the phone rules — on a game being open, not on the route. */
+@media (min-width: 801px) {
+  .app:has(.studio-layout.is-game-open) > .content {
+    max-width: none;
+    padding: 0;
+  }
+
+  /* The chain that hands the window's height down to the transcript's scroller. Every
+     wrapper has to give up its height or the scroller at the end has nothing to measure
+     against — the same chain as the phone rules, one link longer for the rail. */
+  .app:has(.studio-layout.is-game-open) .studio-panel {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    max-width: none;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  .app:has(.studio-layout.is-game-open) .studio-layout {
+    flex: 1;
+    min-height: 0;
+    gap: 0;
+    align-items: stretch;
+  }
+
+  /* The shelf stops being a card that sticks and becomes the edge of the window. It
+     already scrolls internally, so it only has to stop capping its own height. */
+  .app:has(.studio-layout.is-game-open) .studio-shelf {
+    position: static;
+    min-height: 0;
+    max-height: none;
+    border: 0;
+    border-right: 1px solid var(--panel-border);
+    border-radius: 0;
+    background: var(--panel);
+    padding: 14px 12px;
+  }
+
+  .app:has(.studio-layout.is-game-open) .studio-detail,
+  .app:has(.studio-layout.is-game-open) .studio-build {
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* Height, but not a new display type: the workspace is the grid that puts the details
+     rail beside the thread at 1100+. Turning it into a flex column here dropped the rail
+     under the transcript, in a chain with no scroller — so it was simply cut off at the
+     bottom edge of the window with no way to reach the rest of it. */
+  .app:has(.studio-layout.is-game-open) .studio-workspace {
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    align-items: stretch;
+  }
+
+  /* The rail is as tall as the window now, and what is in it can be longer than that. */
+  .app:has(.studio-layout.is-game-open) .studio-workspace.is-details-open .studio-rail {
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  /* The card border used to enclose a section of a page. At full height it encloses the
+     window, which is not something that needs a line drawn around it. */
+  .app:has(.studio-layout.is-game-open) .studio-detail {
+    max-width: none;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: none;
+    padding: 16px 24px 0;
+  }
+
+  /* Where full bleed stops. The shell is as wide as the window; the conversation is as
+     wide as a conversation should be, centred in it. */
+  .app:has(.studio-layout.is-game-open) .studio-detail-head,
+  .app:has(.studio-layout.is-game-open) .studio-workspace {
+    width: 100%;
+    max-width: 1080px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .app:has(.studio-layout.is-game-open) .studio-thread-foot {
+    padding-bottom: 16px;
   }
 }
 
