@@ -260,3 +260,142 @@ describe('GameTheater how-to-play', () => {
     expect(onExit).not.toHaveBeenCalled();
   });
 });
+
+describe('GameTheater controls reported by the game', () => {
+  const CATALOG_CONTROLS = 'Left/Right to move; Space to fire; M to mute';
+
+  /** Relay a bridge message the way an opaque-origin frame does. */
+  async function report(payload: Record<string, unknown>) {
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { source: 'gdpl-player', type: 'controls', ...payload },
+          origin: 'null',
+        }),
+      );
+    });
+  }
+
+  it('offers how-to-play on a deep link, where the catalog never arrives', async () => {
+    // The gap this closes: /play/<slug> renders from a placeholder entry whose `controls`
+    // is empty, because the catalog is fetched on the home route only. The game document
+    // is the only source of truth there — and it is always present, because it is the
+    // thing being played.
+    await draw({ controls: '' });
+    expect(container.querySelector('.howto-btn')).toBeNull();
+
+    await report({ rows: [{ keys: 'Z/X', action: 'Rotate' }] });
+
+    const trigger = container.querySelector('.howto-btn');
+    expect(trigger).not.toBeNull();
+    await click(trigger);
+    expect(
+      [...document.querySelectorAll('.howto-row')].map((row) => [
+        row.querySelector('dt')?.textContent,
+        row.querySelector('dd')?.textContent,
+      ]),
+    ).toEqual([['Z/X', 'Rotate']]);
+  });
+
+  it('lets the game overrule the catalog, which is a spec claim about it', async () => {
+    await draw({ controls: CATALOG_CONTROLS });
+    await report({ rows: [{ keys: 'A/D', action: 'Skręt' }] });
+    await click(container.querySelector('.howto-btn'));
+    expect([...document.querySelectorAll('.howto-row dd')].map((cell) => cell.textContent)).toEqual(['Skręt']);
+  });
+
+  it('keeps the catalog rows when a later report says nothing', async () => {
+    // The bridge re-sends after i18n and after GameKit wires input. An empty re-send
+    // must not blank a card that already had content.
+    await draw({ controls: CATALOG_CONTROLS });
+    await report({ rows: [], kit: [], hint: '' });
+    await click(container.querySelector('.howto-btn'));
+    expect(document.querySelectorAll('.howto-row').length).toBe(3);
+  });
+
+  it('ignores a controls report that did not come from this game frame', async () => {
+    await draw({ controls: '' });
+    await act(async () => {
+      // Same shape, wrong origin — another window trying to put text on our card.
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { source: 'gdpl-player', type: 'controls', rows: [{ keys: 'X', action: 'Spoofed' }] },
+          origin: 'https://evil.example',
+        }),
+      );
+    });
+    expect(container.querySelector('.howto-btn')).toBeNull();
+  });
+});
+
+describe('GameTheater how-to-play reachability', () => {
+  /**
+   * jsdom implements no matchMedia, so a breakpoint has to be stated to be tested.
+   * `width` here is the viewport the component should believe it is on.
+   */
+  function stubViewport(width: number) {
+    const listeners = new Set<() => void>();
+    (window as unknown as Record<string, unknown>).matchMedia = (query: string) => {
+      const limit = Number(/max-width:\s*(\d+)px/.exec(query)?.[1] ?? 0);
+      return {
+        matches: width <= limit,
+        addEventListener: (_: string, fn: () => void) => listeners.add(fn),
+        removeEventListener: (_: string, fn: () => void) => listeners.delete(fn),
+      };
+    };
+    return () => delete (window as unknown as Record<string, unknown>).matchMedia;
+  }
+
+  async function drawDraft() {
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(
+        <GameTheater
+          title="Draft"
+          badge={{ icon: 'rocket', label: 'AI' }}
+          source={{ html: '<canvas></canvas>' }}
+          onExit={() => undefined}
+        />,
+      );
+    });
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { source: 'gdpl-player', type: 'controls', rows: [{ keys: 'W', action: 'Jump' }] },
+          origin: 'null',
+        }),
+      );
+    });
+  }
+
+  it('renders the More menu for a slug-less game at a width where the bar copy is hidden', async () => {
+    // The bar copy sheds at 900px but the menu only existed below 768px, so between the
+    // two a game with no `reportSlug` — a draft or a generated game, which have no catalog
+    // entry but do report their own controls over the bridge — had the bar copy hidden by
+    // CSS and no menu to fall back to, and the control vanished. Unreachable while the
+    // catalog was the only source; reachable the moment the game itself became one.
+    const restore = stubViewport(820);
+    try {
+      await drawDraft();
+      expect(container.querySelector('.theater-more')).not.toBeNull();
+      const menuItems = [...container.querySelectorAll('.theater-more-panel .theater-menu-item')];
+      expect(menuItems.some((el) => el.textContent?.includes('How to play'))).toBe(true);
+    } finally {
+      restore();
+    }
+  });
+
+  it('does not grow a More menu on a wide screen, where the bar copy is the route', async () => {
+    // The menu must not appear just because a game has controls: on a wide screen the bar
+    // copy is visible, and an otherwise-empty overflow menu is the thing `isNarrow` was
+    // introduced to avoid.
+    const restore = stubViewport(1280);
+    try {
+      await drawDraft();
+      expect(container.querySelector('.howto-btn')).not.toBeNull();
+      expect(container.querySelector('.theater-more')).toBeNull();
+    } finally {
+      restore();
+    }
+  });
+});

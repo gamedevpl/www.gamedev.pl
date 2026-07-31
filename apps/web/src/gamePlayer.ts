@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { isPlayTimeAccruing, TelemetrySession } from './telemetry.js';
+import { readReportedControls, type ReportedControls } from './howToPlay.js';
 import { recordVisitEvent } from './visitTelemetry.js';
 
 // Message envelope tags. The host is the app; the player is the bridge script
@@ -30,7 +31,15 @@ const PLAYER = 'gdpl-player';
 //      cannot inspect, and its CSP blocks every way it could report for itself. An
 //      uncaught error is the single most reliable "this published game is broken"
 //      signal we can get, and `frames: 0` while on screen distinguishes a stalled
-//      game from a hard game (docs/improvement-loop-plan.md IL-1).
+//      game from a hard game (docs/improvement-loop-plan.md IL-1);
+//   7. reports the game's own account of its controls, for the player's How-to-play
+//      card. Job 1 is exactly why this is needed: the card is host chrome because the
+//      game's `.game-controls` and `.hint` are hidden here, and an opaque origin means
+//      the host cannot read them for itself. The alternative — the catalog's `controls`
+//      string — is prose an agent wrote in a SPEC, is English-only, cannot name a touch
+//      button, and is absent entirely on a `/play/` deep link (the catalog is fetched on
+//      the home route only). Everything reported here is agent-authored text and is
+//      validated and rendered as text by the host, never as markup.
 const BRIDGE = `(function(){
   function el(id){return document.getElementById(id);}
   function post(m){m.source='${PLAYER}';parent.postMessage(m,'*');}
@@ -40,6 +49,94 @@ const BRIDGE = `(function(){
     post({type:'meta',title:t?(t.textContent||'').trim():'',desc:d?(d.textContent||'').trim():'',muted:isMuted()});
   }
   function sendSound(){post({type:'sound',muted:isMuted()});}
+  // --- controls (job 7) -------------------------------------------------------
+  // Everything below reads the game's *own* account of its controls and hands it to
+  // the host, which has no other way to get one: it hides this document's chrome and
+  // cannot see into an opaque origin. Three sources, best first. All of it is
+  // agent-authored text — the host validates and renders it as text, never as markup.
+  function text(node){return node?String(node.textContent||'').replace(/\\s+/g,' ').trim():'';}
+  /** The shell's how-to-play popup: already a dt/dd key→action table, already localized. */
+  function legendRows(){
+    var out=[],groups=document.querySelectorAll('.legend-keys');
+    for(var g=0;g<groups.length;g++){
+      var kids=groups[g].children;
+      // dt/dd arrive as siblings, not wrapped: pair each dt with the dd that follows.
+      for(var i=0;i<kids.length;i++){
+        if(kids[i].tagName!=='DT')continue;
+        var next=kids[i+1];
+        if(!next||next.tagName!=='DD')continue;
+        var keys=text(kids[i]),action=text(next);
+        if(keys||action)out.push({keys:keys,action:action});
+      }
+    }
+    return out;
+  }
+  /**
+   * Keycaps, from the names GameKit reads keys by.
+   *
+   * Space arrives as " ", which survives a truthiness check but is whitespace — the host
+   * collapses and trims every reported field, so posting it raw loses the key entirely and
+   * "Space to fire" renders as an actionless row. The rest are lowercase internal names
+   * ("shift", "arrowup") that read as code rather than as something to press.
+   */
+  var KEY_NAMES={' ':'Space',shift:'Shift',control:'Ctrl',alt:'Alt',meta:'Meta',enter:'Enter',
+    escape:'Esc',tab:'Tab',backspace:'Backspace',arrowup:'Up',arrowdown:'Down',
+    arrowleft:'Left',arrowright:'Right'};
+  function keyName(key){
+    var raw=String(key),lower=raw.toLowerCase();
+    // hasOwnProperty, not a bare lookup: these names come from game code, and "constructor"
+    // would otherwise resolve up the prototype chain to a function.
+    if(Object.prototype.hasOwnProperty.call(KEY_NAMES,lower))return KEY_NAMES[lower];
+    return raw.length===1?raw.toUpperCase():raw;
+  }
+  /** GameKit's resolved input config — the only source that can name a touch button. */
+  function kitRows(){
+    var out=[];
+    try{
+      var kit=window.GameKit;
+      if(!kit||typeof kit.controlsManifest!=='function')return padRows();
+      var m=kit.controlsManifest();
+      if(!m)return padRows();
+      var buttons=m.buttons||[];
+      for(var i=0;i<buttons.length;i++){
+        var names=[],raw=buttons[i].keys||[];
+        for(var k=0;k<raw.length;k++)names.push(keyName(raw[k]));
+        var keys=names.join(' / '),label=String(buttons[i].label||'');
+        if(keys&&label)out.push({keys:keys,action:label,touch:true});
+      }
+      if(m.pad)out.push({keys:'',action:'',pad:String(m.pad)});
+    }catch(err){return padRows();}
+    return out.length>0?out:padRows();
+  }
+  /**
+   * The pad GameKit actually built, read off the page.
+   *
+   * Weaker than the manifest — it names buttons but not the keys behind them, and it
+   * exists only where the pad does (a coarse pointer) — but it needs nothing from the
+   * games repo, so it works on every published snapshot today rather than after a
+   * re-bake. On the devices where it is present, the key behind a button is not the
+   * question anyway: you tap the button.
+   */
+  function padRows(){
+    // \`seen\` is a list, not a keyed object: these labels are written by the game, and
+    // "__proto__" as a property name would reach Object.prototype.
+    var out=[],seen=[];
+    try{
+      var buttons=document.querySelectorAll('.gamekit-touch-btn');
+      for(var i=0;i<buttons.length;i++){
+        var label=text(buttons[i]);
+        if(!label||seen.indexOf(label)!==-1)continue;
+        seen.push(label);
+        out.push({keys:'',action:label,touch:true});
+      }
+      if(document.querySelector('.gamekit-touch-pad'))out.push({keys:'',action:'',pad:'full'});
+    }catch(err){}
+    return out;
+  }
+  function sendControls(){
+    var rows=legendRows(),kit=kitRows();
+    post({type:'controls',rows:rows,kit:kit,hint:text(document.querySelector('.hint'))});
+  }
   addEventListener('error',function(e){post({type:'error',message:String((e&&e.message)||'error').slice(0,200)});});
   addEventListener('unhandledrejection',function(e){
     var r=e&&e.reason;post({type:'error',message:String((r&&r.message)||r||'unhandled rejection').slice(0,200)});
@@ -208,7 +305,7 @@ const BRIDGE = `(function(){
   addEventListener('message',function(e){
     var m=e.data||{};
     if(m.source!=='${HOST}')return;
-    if(m.type==='hello'){sendMeta();}
+    if(m.type==='hello'){sendMeta();sendControls();}
     else if(m.type==='setSound'){var s=el('sound-toggle');if(s&&isMuted()!==!!m.muted){s.click();}sendSound();}
     else if(m.type==='pause'){setPaused(true);}
     else if(m.type==='resume'){setPaused(false);}
@@ -228,7 +325,11 @@ const BRIDGE = `(function(){
     sendMeta();
     var s=el('sound-toggle');
     if(s&&'MutationObserver'in window){new MutationObserver(sendSound).observe(s,{attributes:true,attributeFilter:['aria-pressed']});}
-    setTimeout(sendMeta,400); // pick up any i18n applied just after load
+    sendControls();
+    // Same 400ms retry as the title/description, for the same reason (i18n applies
+    // just after load) plus one of its own: GameKit resolves its input config when the
+    // game calls createInput, which happens after this script runs.
+    setTimeout(function(){sendMeta();sendControls();},400);
   }
   if(document.readyState==='loading')addEventListener('DOMContentLoaded',init);else init();
 })();`;
@@ -398,8 +499,9 @@ export type GamePlayerMeta = { title: string; desc: string };
 
 /**
  * Subscribes to the player bridge for the currently-embedded game iframe and
- * exposes its title/description and a sound toggle the header can drive. `active`
- * gates the subscription so it only runs while a single-player game is on stage.
+ * exposes its title/description, the controls it reports, and a sound toggle the
+ * header can drive. `active` gates the subscription so it only runs while a
+ * single-player game is on stage.
  */
 export function useGamePlayer(
   frameRef: MutableRefObject<HTMLIFrameElement | null>,
@@ -410,6 +512,7 @@ export function useGamePlayer(
   onPointer?: () => void,
 ) {
   const [meta, setMeta] = useState<GamePlayerMeta | null>(null);
+  const [controls, setControls] = useState<ReportedControls | null>(null);
   const [muted, setMuted] = useState(false);
 
   // Held in refs so a caller's inline closures can't resubscribe the listener below.
@@ -421,6 +524,7 @@ export function useGamePlayer(
   useEffect(() => {
     if (!active) {
       setMeta(null);
+      setControls(null);
       setMuted(false);
       return;
     }
@@ -443,6 +547,13 @@ export function useGamePlayer(
       if (data.type === 'meta') {
         setMeta({ title: String(data.title ?? ''), desc: String(data.desc ?? '') });
         setMuted(Boolean(data.muted));
+      } else if (data.type === 'controls') {
+        // The bridge re-sends this (i18n and GameKit both land after load), so a later
+        // report replaces an earlier one — but a report with nothing in it never clears
+        // one that had something, or a game that swaps its own chrome would blank the
+        // card mid-play.
+        const next = readReportedControls(data);
+        if (next) setControls(next);
       } else if (data.type === 'sound') {
         setMuted(Boolean(data.muted));
       } else if (data.type === 'key' && data.key === 'Escape') {
@@ -473,7 +584,7 @@ export function useGamePlayer(
     });
   }, [frameRef]);
 
-  return { meta, muted, toggleSound };
+  return { meta, controls, muted, toggleSound };
 }
 
 /** Instrumentation gathered while a creator playtests inside Studio. */

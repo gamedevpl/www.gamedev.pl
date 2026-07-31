@@ -5,7 +5,7 @@ import { GameFrame } from './GameFrame.js';
 import { HowToPlayPanel } from './HowToPlayPanel.js';
 import { PublishedGameFrame } from './PublishedGameFrame.js';
 import { PixelIcon, type PixelIconName } from './PixelIcon.js';
-import { parseControls } from './howToPlay.js';
+import { resolveControlRows } from './howToPlay.js';
 import { PlayerFeedbackWidget } from './PlayerFeedbackWidget.js';
 import { ReportGameButton } from './ReportGameButton.js';
 import { ShareGameButton } from './ShareGameButton.js';
@@ -46,10 +46,10 @@ type GameTheaterProps = {
    */
   submittedBy?: string | null;
   /**
-   * The game's `controls` line from the catalog, which turns on the "How to play"
-   * control. Absent for generated and draft games: they have no catalog entry, and the
-   * frame is sandboxed without `allow-same-origin`, so there is nowhere else to read a
-   * control list from. The control simply does not render for them.
+   * The game's `controls` line from the catalog. A fallback now rather than the only
+   * source: the player bridge reports the game's own control list, which is localized,
+   * already split into key and action, and present on a deep link where the catalog is
+   * never fetched. This still covers a game whose document reports nothing.
    */
   controls?: string;
   /** Catalog touch support; `none` adds the keyboard-only line to the panel. */
@@ -107,12 +107,6 @@ export function GameTheater({
   const [moreOpen, setMoreOpen] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
 
-  // A deep-linked /play/<slug> renders before the catalog lands, with a placeholder
-  // entry whose `controls` is empty; the real string arrives on a later render. Deriving
-  // this every render (rather than memoizing the first value) is what lets the control
-  // appear when it does.
-  const hasControls = parseControls(controls ?? '').length > 0;
-
   // Playing is the one thing you do here without touching the screen for minutes at
   // a time, which is exactly when a phone dims and sleeps. Hold the screen awake.
   useScreenWakeLock(true);
@@ -166,6 +160,19 @@ export function GameTheater({
   // and swallows its own key events.
   const player = useGamePlayer(frameRef, true, escapeOrExit, dismissMore);
 
+  // What the game says about itself, falling back to what the catalog says about it.
+  // Derived every render rather than memoized on first value, because both sources
+  // arrive late and at different times: on a deep-linked /play/<slug> the catalog never
+  // arrives at all (the placeholder entry's `controls` stays empty) and the bridge report
+  // is the only source there, while the bridge itself re-reports once GameKit has wired
+  // its input. Recomputing is what lets the control appear when either one lands.
+  const controlRows = resolveControlRows(player.controls, controls ?? '');
+  // A pad counts on its own. A generated game on a phone can mount an on-screen pad while
+  // shipping no legend, no hint and no catalog entry — naming its buttons is the whole
+  // answer to "how do I play this", and gating the control on keyboard rows hid it.
+  const hasControls =
+    controlRows.length > 0 || Boolean(player.controls?.pad) || (player.controls?.padButtons.length ?? 0) > 0;
+
   // Durable progress for games that ask for it (docs/persistent-world-plan.md P1).
   // Keyed on `reportSlug` — the *published* slug — for the same reason the vote and
   // feedback widgets are: a draft is rebuilt commit by commit, and progress saved
@@ -212,6 +219,20 @@ export function GameTheater({
     if (typeof matchMedia !== 'function') return;
     const query = matchMedia('(max-width: 768px)');
     const update = () => setIsNarrow(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+
+  // Where the how-to-play bar copy is hidden but the rest of the chrome is still on the
+  // bar. Tracked in JS for the same reason `isNarrow` is: the menu must not be rendered
+  // empty, so whether it exists is a render decision, not something CSS can make.
+  const [isMidWidth, setIsMidWidth] = useState(false);
+
+  useEffect(() => {
+    if (typeof matchMedia !== 'function') return;
+    const query = matchMedia('(max-width: 900px)');
+    const update = () => setIsMidWidth(query.matches);
     update();
     query.addEventListener('change', update);
     return () => query.removeEventListener('change', update);
@@ -298,7 +319,12 @@ export function GameTheater({
     };
   }, [moreOpen]);
 
-  const showMoreMenu = Boolean(reportSlug) || isNarrow;
+  // The menu also has to exist wherever a control has shed into it. How-to-play sheds at
+  // 900px while sound and fullscreen shed at 768px, so between those widths a game with
+  // no `reportSlug` (a draft, a generated game — no catalog entry, but the game document
+  // still reports its own controls) would have had the bar copy hidden by CSS and no menu
+  // to fall back to, and the control would have vanished entirely.
+  const showMoreMenu = Boolean(reportSlug) || isNarrow || (hasControls && isMidWidth);
 
   const soundControl = (className: string) => (
     <button
@@ -449,9 +475,11 @@ export function GameTheater({
       ) : null}
       <HowToPlayPanel
         open={howToOpen}
-        controls={controls ?? ''}
+        rows={controlRows}
         gameTitle={displayTitle}
         touch={touch}
+        padReported={player.controls?.pad ?? false}
+        padButtons={player.controls?.padButtons ?? []}
         onClose={closeHowTo}
       />
     </section>
