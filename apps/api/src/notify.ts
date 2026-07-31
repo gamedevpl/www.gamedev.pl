@@ -248,13 +248,9 @@ export async function emitOperatorAlert(
     });
     if (!result.created) continue;
     created += 1;
-    await sendOperatorEmail(deps, uid, alert.id, type, {
+    await sendOperatorEmail(deps, uid, alert.id, type, OPERATOR_ALERT_LINK, {
       title: alert.title,
       issueNumber: alert.issueNumber,
-      actionUrl: absoluteAppUrl(
-        deps.appBaseUrl ?? process.env.APP_BASE_URL?.trim() ?? 'https://www.gamedev.pl',
-        OPERATOR_ALERT_LINK,
-      ),
       ...(alert.stall ? { detail: alert.stall } : {}),
     });
     await maybePush(deps, uid, result.notification);
@@ -278,7 +274,6 @@ export async function emitWaitlistJoined(
   const createdAt = deps.now ? new Date(deps.now()).toISOString() : new Date().toISOString();
   const type: OperatorNotificationType = 'operator.waitlist_joined';
   const id = `op-waitlist-${event.uid}`;
-  const appBaseUrl = deps.appBaseUrl ?? process.env.APP_BASE_URL?.trim() ?? 'https://www.gamedev.pl';
   let created = 0;
 
   for (const uid of deps.adminUids) {
@@ -296,9 +291,8 @@ export async function emitWaitlistJoined(
     });
     if (!result.created) continue;
     created += 1;
-    await sendOperatorEmail(deps, uid, id, type, {
+    await sendOperatorEmail(deps, uid, id, type, WAITLIST_ALERT_LINK, {
       title: event.title,
-      actionUrl: absoluteAppUrl(appBaseUrl, WAITLIST_ALERT_LINK),
       ...(event.email ? { email: event.email } : {}),
     });
     await maybePush(deps, uid, result.notification);
@@ -313,13 +307,19 @@ const OPERATOR_ALERT_LINK = '/admin/queue';
 /** Waitlist joins land on telemetry — that is where the waitlist funnel is measured. */
 const WAITLIST_ALERT_LINK = '/admin/telemetry';
 
-/** Best-effort, like every other send here: a failed alert email must not fail the caller. */
+/**
+ * Best-effort, like every other send here: a failed alert email must not fail the caller.
+ *
+ * `actionUrl` is built here — after the mailer early-return — so a bad `APP_BASE_URL`
+ * cannot abort the operator fan-out loop before in-app + push land for everyone else.
+ */
 async function sendOperatorEmail(
   deps: EmitDeps,
   uid: string,
   notificationId: string,
   type: OperatorNotificationType,
-  params: OperatorEmailParams,
+  link: string,
+  params: Omit<OperatorEmailParams, 'actionUrl'>,
 ): Promise<void> {
   const mailer = deps.mailer ?? (process.env.RESEND_API_KEY ? createMailerFromEnv() : undefined);
   if (!mailer) return;
@@ -327,7 +327,9 @@ async function sendOperatorEmail(
   try {
     const user = await deps.store.getUser(uid);
     if (!user?.email) return;
-    await mailer.send(operatorNotificationMessage(user.email, type, params));
+    const appBaseUrl = deps.appBaseUrl ?? process.env.APP_BASE_URL?.trim() ?? 'https://www.gamedev.pl';
+    const actionUrl = absoluteAppUrl(appBaseUrl, link);
+    await mailer.send(operatorNotificationMessage(user.email, type, { ...params, actionUrl }));
     await deps.store.markNotificationEmailed(uid, notificationId);
   } catch (err) {
     deps.logError?.(err, 'operator alert email send failed');

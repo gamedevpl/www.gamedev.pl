@@ -595,4 +595,28 @@ describe('emitWaitlistJoined', () => {
     expect(mailer.sent).toHaveLength(1);
     expect(mailer.sent[0].headers?.['List-Unsubscribe']).toBeUndefined();
   });
+
+  it('keeps in-app fan-out going when the mail action URL cannot be built', async () => {
+    await store.upsertUser({ uid: 'g:second', email: 'second@example.com' });
+    const errors: string[] = [];
+
+    const { created } = await emitWaitlistJoined(
+      {
+        store,
+        mailer,
+        // Not an absolute origin — absoluteAppUrl throws. Email must swallow that and
+        // the second operator must still get their in-app notification.
+        appBaseUrl: 'not-a-url',
+        adminUids: ['g:boss', 'g:second'],
+        logError: (_err, msg) => errors.push(msg),
+      },
+      { uid: 'g:waiter', title: 'Waiter' },
+    );
+
+    expect(created).toBe(2);
+    expect(await store.listNotifications('g:boss')).toHaveLength(1);
+    expect(await store.listNotifications('g:second')).toHaveLength(1);
+    expect(mailer.sent).toHaveLength(0);
+    expect(errors).toContain('operator alert email send failed');
+  });
 });
