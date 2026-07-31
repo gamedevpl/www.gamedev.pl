@@ -134,7 +134,8 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
   and the aggregate dedupes again so a replayed flush cannot inflate one. Adding a rung
   means touching the enum in `visitTelemetry.ts`, the zod enum in `visit-telemetry.ts`,
   and `CREATE_STEPS` in `visit-funnel.ts` — the order in `CREATE_STEPS` _is_ the funnel's
-  meaning.
+  meaning. The waitlist funnel (`waitlist_step` / `WAITLIST_STEPS`) follows the same
+  three-place contract beside it.
 - ~~Closed-beta waitlist funnel unmeasured~~ — **closed 2026-07-31**: `waitlist_step` on
   the visit stream records `cta_clicked` → `joined`. Same three-place enum contract as
   `create_step` (`visitTelemetry.ts`, `visit-telemetry.ts`, `WAITLIST_STEPS` in

@@ -69,7 +69,9 @@ describe('ClosedBetaSplash', () => {
     // Join sits above the sign-in buttons in the DOM.
     const waitlist = container.querySelector('.beta-splash__waitlist');
     const signin = container.querySelector('.beta-splash__signin');
-    expect(waitlist?.compareDocumentPosition(signin!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(waitlist).not.toBeNull();
+    expect(signin).not.toBeNull();
+    expect(waitlist!.compareDocumentPosition(signin!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const mascot = container.querySelector<HTMLButtonElement>('button.mascot-interactive.beta-splash__mascot');
     expect(mascot).not.toBeNull();
     expect(mascot?.getAttribute('aria-label')).toMatch(/poke|szturchnij/i);
