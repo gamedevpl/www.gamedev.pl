@@ -1650,7 +1650,19 @@ export async function registerSubmissionRoutes(
         reason: 'submitted',
       });
 
-      await dispatchBuild({
+      // Deliberately not awaited. The job exists, is slugged, and is `queued` by now —
+      // everything the creator's status page needs — and dispatch is minutes of work
+      // that used to happen while they watched a "Submitting…" button: an agent-tasks
+      // round trip, and since seeding, a model writing a first draft of the game
+      // (~1 minute, or ~2 with a repair round). Holding the response for that made a
+      // submission look hung and put it within reach of a request timeout, which would
+      // have shown an error for a build that was in fact starting normally.
+      //
+      // Nothing is lost by letting go: a job whose dispatch has not landed yet is
+      // exactly the `queued` state the reconciler already reports as `not_dispatched`
+      // once it has waited long enough, and dispatchBuild swallows its own failures for
+      // that reason. The catch here is belt-and-braces against an unhandled rejection.
+      void dispatchBuild({
         issueNumber: jobId,
         // The agent is told where to build rather than left to name the place itself.
         // Its brief previously read "games/(the slug named in your first progress
@@ -1659,6 +1671,8 @@ export async function registerSubmissionRoutes(
         spec: issueBody,
         locale: creatorLocale,
         log: request.log,
+      }).catch((error: unknown) => {
+        request.log.error({ err: error, issueNumber: jobId }, 'background dispatch failed');
       });
 
       const token = mintToken(jobId, submissionTokenSecret);

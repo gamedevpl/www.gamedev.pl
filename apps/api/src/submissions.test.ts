@@ -348,8 +348,10 @@ describe('global creation cap and pause switch', () => {
     expect((await store.getUsage('g:test-user', dateStr)).submissions).toBe(2);
     // And only two builds were dispatched, so the refusal cost an agent run as well as a
     // quota slot. This is the assertion the cap exists for: the ceiling is about spend,
-    // and an agent run is what the platform actually pays for.
-    expect(briefs).toHaveLength(2);
+    // and an agent run is what the platform actually pays for. Awaited because dispatch
+    // is off the response path — a refused submission returns before an accepted one
+    // has finished dispatching.
+    await vi.waitFor(() => expect(briefs).toHaveLength(2));
 
     await app.close();
   });
@@ -3066,6 +3068,9 @@ describe('seeded dispatch', () => {
     });
 
     expect(response.statusCode).toBe(200);
+    // Dispatch is off the response path, so this is awaited rather than assumed: the
+    // submit returns as soon as the job exists, and seeding runs behind it.
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
     // The submission minted and confirmed this address before dispatch; the seeder
     // writes into it rather than deciding a second one.
     expect(seeded).toEqual(['comet-courier']);
@@ -3097,7 +3102,7 @@ describe('seeded dispatch', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(briefs).toHaveLength(1);
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
     expect(briefs[0].seed).toBeUndefined();
     // The job keeps the slug the submission gave it — seeding declining changes nothing
     // about the game's address — and nothing is billed for a seed that never happened.
@@ -3160,6 +3165,7 @@ describe('seeded dispatch', () => {
     });
 
     expect(response.statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
     // Deliberately off the submit response path, so the preview lands moments later.
     const previews = await vi.waitFor(async () => {
       const listed = await store.listBuildPreviews(briefs[0].issueNumber);
@@ -3210,6 +3216,7 @@ describe('seeded dispatch', () => {
     });
 
     expect(response.statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
     // A draft that does not bundle is still dispatched (the agent will fix it) — the
     // only thing withheld is showing it to the creator.
     expect(briefs[0].seed).toBeDefined();
@@ -3277,6 +3284,7 @@ describe('seeded dispatch', () => {
     });
 
     expect(abandoned.statusCode).toBe(200);
+    await vi.waitFor(() => expect(cleaned).toContain('seed/job-9'));
     // Both branches released once...
     expect(cleaned).toContain('seed/job-9');
     expect(cleaned.filter((branch) => branch === 'seed/job-9')).toHaveLength(1);
