@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { InvalidAgentTokenError, readBearerToken, verifyAgentToken } from './agent-token.js';
 import { InvalidUploadError, type GamesStore } from './games-store.js';
+import { parseSpecTitle } from './github-client.js';
 import { canTransition, resolveJobState } from './job-state.js';
 import { type CreatorMessage, type Store, type SubmissionRecord } from './store.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from './submission-status.js';
@@ -675,6 +676,21 @@ export async function registerAgentChannelRoutes(
         // not anything ever verifies it. The gate decides whether it may be *published*,
         // which is a different question from whether its author can watch it.
         await store?.setSubmissionDeliveredVersion(issueNumber, version);
+        // The shelf, studio, and notifications all show `record.title`. Games that
+        // predated the naming step still carry the truncated prompt there, even after
+        // the agent wrote a real name into SPEC.md — and publish already prefers the
+        // SPEC title for the catalog, so the two surfaces disagreed. Adopting it here
+        // keeps them aligned for every delivery from now on.
+        if (store) {
+          const spec = parsed.data.files.find((file) => file.path === 'SPEC.md')?.content;
+          const deliveredTitle = spec ? parseSpecTitle(spec) : null;
+          if (deliveredTitle) {
+            const sanitized = sanitizeCreatorText(deliveredTitle, { singleLine: true }).slice(0, 80);
+            if (sanitized.length >= 3 && sanitized !== record.title) {
+              await store.setSubmissionTitle(issueNumber, sanitized);
+            }
+          }
+        }
         // Past the agent, and recorded as such. Without this the job stays `building`,
         // and the agent's own session then reports `completed` with a candidate present
         // — which the reconciler reads as "done, ready for review". That would promote a

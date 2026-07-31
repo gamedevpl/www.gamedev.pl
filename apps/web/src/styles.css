@@ -1171,6 +1171,11 @@ button:disabled {
   display: grid;
   gap: 20px;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  /* Published cards are a single 16:9 media box. A build card in the same row is often
+     taller (status + title + Open), and the grid's default stretch would grow every
+     neighbour to match — leaving empty panel padding under their videos. Keep each
+     card at its own height. */
+  align-items: start;
 }
 
 .catalog-card {

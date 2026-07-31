@@ -18,7 +18,6 @@ import {
   NAVIGATE_EVENT,
   navUpTarget,
   parsePathRoute,
-  statusPath,
   playPath,
   studioPath,
   type AppRoute,
@@ -841,7 +840,7 @@ export function App() {
                 onRetryCatalog={handleRetryCatalog}
                 recommendationsRefreshKey={recommendationsRefreshKey}
                 creatorGamesRefreshKey={myGamesRefreshKey}
-                onOpenStatus={(token) => navigate(statusPath(token))}
+                onOpenStatus={(address) => navigate(studioPath(address))}
                 onOpenStudio={() => navigate(studioPath())}
               />
             )}

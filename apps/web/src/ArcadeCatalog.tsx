@@ -47,7 +47,8 @@ type ArcadeCatalogProps = {
   recommendationsRefreshKey?: number;
   /** Bump after a new submission so in-progress cards appear immediately. */
   creatorGamesRefreshKey?: number;
-  onOpenStatus?: (token: string) => void;
+  /** Open the studio view for an in-progress build or creator game by address (slug or token). */
+  onOpenStatus?: (address: string) => void;
   onOpenStudio?: () => void;
 };
 
@@ -326,10 +327,13 @@ function initialSignals(): { signals: CatalogSortSignals; ready: boolean } {
   return { signals: payloadToSignals(cached), ready: true };
 }
 
-function InProgressCard({ item, onOpenStatus }: { item: CreatorGameItem; onOpenStatus: (token: string) => void }) {
+function InProgressCard({ item, onOpen }: { item: CreatorGameItem; onOpen: (address: string) => void }) {
   const { t, i18n } = useTranslation();
   const status = item.status;
   const isLive = status !== null && CREATOR_LIVE_STATUSES.has(status);
+  // Prefer the permanent address when we have one — the status token still works, but
+  // it is the capability grant the studio was redesigned to keep out of the URL bar.
+  const address = item.slug ?? item.token;
 
   return (
     <article className={`catalog-card catalog-build-card${isLive ? ' is-live' : ''}`}>
@@ -343,7 +347,7 @@ function InProgressCard({ item, onOpenStatus }: { item: CreatorGameItem; onOpenS
         </span>
         <h3 className="card-title">{item.title}</h3>
         <p className="catalog-build-meta">{formatRelativeTime(item.createdAt, i18n.language)}</p>
-        <button type="button" className="primary-btn" onClick={() => onOpenStatus(item.token)}>
+        <button type="button" className="primary-btn" onClick={() => onOpen(address)}>
           <PixelIcon name="eye" size={13} /> {t('myGames.open')}
         </button>
       </div>
@@ -619,7 +623,7 @@ export function ArcadeCatalog({
       ) : (
         <div className="catalog-grid">
           {onOpenStatus
-            ? inProgress.map((item) => <InProgressCard key={item.token} item={item} onOpenStatus={onOpenStatus} />)
+            ? inProgress.map((item) => <InProgressCard key={item.token} item={item} onOpen={onOpenStatus} />)
             : null}
           {orderedEntries.map((entry) => (
             <CatalogCard

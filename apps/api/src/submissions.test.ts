@@ -3503,3 +3503,101 @@ describe('operator slug backfill', () => {
     await app.close();
   });
 });
+
+describe('operator title backfill', () => {
+  const bossHeaders = () => getAuthHeaders('g:boss');
+
+  async function appWithTruncatedTitle() {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    await store.createSubmission(600, 'g:test-user', 'A game tycoon like where I run a tv busi');
+    await store.setSubmissionSlug(600, 'tv-tycoon');
+    await store.setSubmissionDeliveredVersion(600, 'v1');
+    const gamesStore = {
+      getSourceFile: async (_slug: string, _version: string, path: string) =>
+        path === 'SPEC.md' ? '---\ntitle: TV Tycoon\n---\n' : null,
+    } as unknown as GamesStore;
+    const { app } = await createApp({
+      adminUids: 'g:boss',
+      store,
+      agentChannel: { gamesStore },
+    });
+    return { app, store };
+  }
+
+  it('answers 404 to a non-operator', async () => {
+    const { app } = await appWithTruncatedTitle();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/title-backfill',
+      headers: getAuthHeaders('g:someone-else'),
+    });
+
+    expect(response.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('replaces the truncated prompt with the delivered SPEC title', async () => {
+    const { app, store } = await appWithTruncatedTitle();
+
+    const response = await app.inject({ method: 'POST', url: '/api/admin/title-backfill', headers: bossHeaders() });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      ok: true,
+      dryRun: false,
+      scanned: 1,
+      renamed: 1,
+      unchanged: 0,
+    });
+    expect(response.json().games[0]).toMatchObject({
+      issueNumber: 600,
+      slug: 'tv-tycoon',
+      from: 'A game tycoon like where I run a tv busi',
+      to: 'TV Tycoon',
+      changed: true,
+    });
+    expect((await store.getSubmission(600))?.title).toBe('TV Tycoon');
+
+    await app.close();
+  });
+
+  it('reports without writing when asked to rehearse', async () => {
+    const { app, store } = await appWithTruncatedTitle();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/title-backfill?dryRun=1',
+      headers: bossHeaders(),
+    });
+
+    expect(response.json()).toMatchObject({ dryRun: true, renamed: 1 });
+    expect((await store.getSubmission(600))?.title).toBe('A game tycoon like where I run a tv busi');
+
+    await app.close();
+  });
+
+  it('leaves a title alone when it already matches the SPEC', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    await store.createSubmission(601, 'g:test-user', 'TV Tycoon');
+    await store.setSubmissionSlug(601, 'tv-tycoon');
+    await store.setSubmissionDeliveredVersion(601, 'v1');
+    const gamesStore = {
+      getSourceFile: async () => '---\ntitle: TV Tycoon\n---\n',
+    } as unknown as GamesStore;
+    const { app } = await createApp({
+      adminUids: 'g:boss',
+      store,
+      agentChannel: { gamesStore },
+    });
+
+    const response = await app.inject({ method: 'POST', url: '/api/admin/title-backfill', headers: bossHeaders() });
+
+    expect(response.json()).toMatchObject({ scanned: 1, renamed: 0, unchanged: 1 });
+    expect(response.json().games[0].changed).toBe(false);
+
+    await app.close();
+  });
+});
