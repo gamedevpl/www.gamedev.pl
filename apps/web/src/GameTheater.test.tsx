@@ -36,6 +36,7 @@ vi.mock('./useScreenWakeLock', () => ({
 }));
 
 import { GameTheater } from './GameTheater.js';
+import { setVisitSessionForTesting, VisitSession, type WireVisitEvent } from './visitTelemetry.js';
 
 let container: HTMLDivElement;
 let root: Root | null = null;
@@ -397,5 +398,57 @@ describe('GameTheater how-to-play reachability', () => {
     } finally {
       restore();
     }
+  });
+});
+
+describe('GameTheater how-to-play visit telemetry', () => {
+  let batches: Array<{ events: WireVisitEvent[] }>;
+  let session: VisitSession;
+
+  beforeEach(() => {
+    batches = [];
+    session = new VisitSession('visit-howto', Date.now(), (body) => {
+      batches.push(body);
+    });
+    setVisitSessionForTesting(session);
+  });
+
+  afterEach(() => {
+    setVisitSessionForTesting(null);
+  });
+
+  it('records via and same-card reopen for a published play', async () => {
+    await draw({ controls: 'Arrow keys to move' });
+    await click(container.querySelector('.howto-btn'));
+    await click(container.querySelector('.howto-close'));
+    await click(container.querySelector('.howto-btn'));
+    session.flush();
+
+    const opens = batches.flatMap((batch) => batch.events).filter((event) => event.type === 'how_to_play_opened');
+    expect(opens).toEqual([
+      expect.objectContaining({ type: 'how_to_play_opened', via: 'bar' }),
+      expect.objectContaining({ type: 'how_to_play_opened', via: 'bar', reopen: true }),
+    ]);
+    expect(opens[0]).not.toHaveProperty('reopen');
+  });
+
+  it('does not record how_to_play_opened for a draft theater', async () => {
+    // Draft / generated theaters share the card UI but must not enter the open-rate
+    // numerator against a denominator that only counts published plays.
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(
+        <GameTheater
+          title="Draft"
+          badge={{ icon: 'rocket', label: 'AI' }}
+          source={{ html: '<canvas></canvas>' }}
+          onExit={() => undefined}
+          controls="Space to jump"
+        />,
+      );
+    });
+    await click(container.querySelector('.howto-btn'));
+    session.flush();
+    expect(batches.flatMap((batch) => batch.events)).toEqual([]);
   });
 });

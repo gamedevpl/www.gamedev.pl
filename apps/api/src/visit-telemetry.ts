@@ -97,6 +97,8 @@ const EventSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('how_to_play_opened'),
     via: HowToPlayViaSchema.optional(),
+    /** True only — a client that sends `false` is treated the same as omitting it. */
+    reopen: z.literal(true).optional(),
     ...offsetField,
   }),
   z.object({ type: z.literal('create_step'), step: CreateStepSchema, ...offsetField }),
@@ -198,6 +200,7 @@ export async function registerVisitTelemetryRoutes(
             ...base,
             type: event.type,
             ...(event.via === undefined ? {} : { via: event.via }),
+            ...(event.reopen === true ? { reopen: true } : {}),
           };
         default:
           return { ...base, type: 'play_started' };

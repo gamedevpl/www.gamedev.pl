@@ -145,13 +145,12 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
   the creation wall).
 - ~~How-to-play opens recorded but unreadable~~ — **closed 2026-07-31** for the read
   path that [#395](https://github.com/gamedevpl/www.gamedev.pl/issues/395) needs:
-  `how_to_play_opened` now carries `via: 'bar' | 'more'` (optional on intake so a tab
-  still on the previous client is not dropped), every open is kept (unlike create/
-  waitlist steps — a second open is the "card did not answer" signal), and
-  `summarizeVisitFunnel` exposes `howToPlay` (opens, distinct visits, repeat visits,
-  via breakdown, byEntry for deep-link vs arcade). Rendered on `VisitFunnelPanel`.
-  The product decision in #395 — whether a richer per-game format is worth building —
-  still waits on those numbers; this only makes the questions answerable.
+  `how_to_play_opened` carries `via: 'bar' | 'more'` and optional `reopen: true` (same
+  theater card opened again — not "opened twice in the visit"), is recorded only for
+  published plays (`reportSlug`, same population as `play_started`), and
+  `summarizeVisitFunnel` exposes `howToPlay` (opens/visits among playing visits, same-
+  card repeat visits, via, byEntry with `playingVisits` denominators). Rendered on
+  `VisitFunnelPanel`. The product decision in #395 still waits on those numbers.
 - ~~Creator return is under-measured~~ — **closed 2026-07-26**: `User.activeDays` (a
   capped list of `yyyy-mm-dd`, touched once per account per day from the auth hook)
   plus `summarizeCreatorMetrics` behind `GET /api/admin/telemetry/creators`. Use a list

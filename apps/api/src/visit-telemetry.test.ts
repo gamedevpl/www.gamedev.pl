@@ -105,6 +105,22 @@ describe('POST /api/telemetry/visit', () => {
     expect(events[0]).not.toHaveProperty('via');
   });
 
+  it('stores reopen: true on a same-card how_to_play_opened', async () => {
+    await post(app, {
+      visitId,
+      flushMsSinceStart: 500,
+      events: [
+        { type: 'how_to_play_opened', via: 'bar', msSinceStart: 100 },
+        { type: 'how_to_play_opened', via: 'bar', reopen: true, msSinceStart: 500 },
+      ],
+    });
+
+    const events = await store.listVisitEvents(today(), { visitId });
+    expect(events).toHaveLength(2);
+    expect(events[0]).not.toHaveProperty('reopen');
+    expect(events[1]?.reopen).toBe(true);
+  });
+
   it('never stores a game identity, even if a client sends one', async () => {
     await post(app, {
       visitId,

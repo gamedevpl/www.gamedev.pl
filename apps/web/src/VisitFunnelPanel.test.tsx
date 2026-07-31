@@ -204,8 +204,8 @@ describe('VisitFunnelPanel', () => {
             { via: 'more', opens: 1, visits: 1 },
           ],
           byEntry: [
-            { entry: 'home', visits: 1, opens: 3 },
-            { entry: 'play', visits: 1, opens: 2 },
+            { entry: 'home', playingVisits: 100, visits: 1, opens: 3 },
+            { entry: 'play', playingVisits: 2, visits: 1, opens: 2 },
           ],
         },
       }),
@@ -216,8 +216,11 @@ describe('VisitFunnelPanel', () => {
     expect(text).toContain('More menu');
     expect(text).toContain('deep link (/play)');
     expect(text).toContain('arcade (home)');
-    // 1 of 2 openers opened again — 50%, not 10% of all visits.
-    expect(text).toContain('50% opened again');
+    // 1 of 2 openers reopened the same card — 50%, not 10% of all visits.
+    expect(text).toContain('50% reopened the same card');
+    // byEntry rates: 1/100 home vs 1/2 play — not raw opener counts.
+    expect(text).toContain('1%');
+    expect(text).toContain('50%');
   });
 
   it('says so when nobody opened How to play', () => {

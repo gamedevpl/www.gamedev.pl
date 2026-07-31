@@ -47,11 +47,12 @@ export type VisitEvent =
    * stream. What this answers is how often players need the controls spelled out —
    * and, with `via`, whether they found the bar control or had to dig into More.
    *
-   * Every open is recorded (unlike create/waitlist steps): a second open in the same
-   * visit is the signal that the card did not answer the first time. Distinct-visit
-   * rates are derived on the read side.
+   * Recorded only for published plays (same population as `play_started`). Every open
+   * of the *current* theater card is kept: `reopen: true` marks a second-or-later open
+   * of that card, so multi-game sittings that open each game once are not counted as
+   * "the card did not answer". Distinct-visit rates are derived on the read side.
    */
-  | { type: 'how_to_play_opened'; via: HowToPlayVia }
+  | { type: 'how_to_play_opened'; via: HowToPlayVia; reopen?: true }
   /** A step of the creation funnel was reached. Carries no prompt text, ever. */
   | { type: 'create_step'; step: CreateStep }
   /** A step of the closed-beta waitlist funnel. Carries no identity, ever. */

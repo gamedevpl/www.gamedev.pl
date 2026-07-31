@@ -493,6 +493,12 @@ export interface VisitEvent {
    * Absent on events recorded before the field existed; never a game identity.
    */
   via?: string;
+  /**
+   * `how_to_play_opened`: true when this open is a second-or-later open of the *same*
+   * theater card (same published play). Absent means first open — or a legacy event
+   * recorded before the field existed. Never a game identity.
+   */
+  reopen?: boolean;
   /** `visit_started`: bare hostname of an external referrer. Never a full URL. */
   referrer?: string;
   utmSource?: string;

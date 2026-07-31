@@ -56,7 +56,7 @@ export interface HowToPlayFunnel {
   visits: number;
   repeatVisits: number;
   via: Array<{ via: string; opens: number; visits: number }>;
-  byEntry: Array<{ entry: string; visits: number; opens: number }>;
+  byEntry: Array<{ entry: string; playingVisits: number; visits: number; opens: number }>;
 }
 
 export interface VisitFunnel {

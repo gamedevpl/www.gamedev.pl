@@ -238,13 +238,13 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
             <>
               {/*
                * Open rate is visits-that-opened / playing visits — not opens / plays.
-               * Opens stay as a separate count so a second open in one visit (the
-               * "card did not answer" signal) stays visible beside the rate.
+               * Repeat rate is same-card reopens (`reopen: true`), not "opened twice in
+               * the visit" (which would count one open per game in a multi-game sitting).
                */}
               <p className="funnel-howto-summary">
                 {percent(funnel.howToPlay.visits, funnel.visitsWithPlay)} of playing visits opened the card (
                 {funnel.howToPlay.visits} of {funnel.visitsWithPlay}). {funnel.howToPlay.opens} opens total;{' '}
-                {percent(funnel.howToPlay.repeatVisits, funnel.howToPlay.visits)} opened again in the same visit.
+                {percent(funnel.howToPlay.repeatVisits, funnel.howToPlay.visits)} reopened the same card.
               </p>
               <table className="health-table">
                 <thead>
@@ -274,10 +274,13 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
                     <tr>
                       <th scope="col">Visit landed on</th>
                       <th scope="col" className="num">
-                        Visits
+                        Playing
                       </th>
                       <th scope="col" className="num">
-                        Opens
+                        Opened
+                      </th>
+                      <th scope="col" className="num">
+                        Rate
                       </th>
                     </tr>
                   </thead>
@@ -285,8 +288,9 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
                     {funnel.howToPlay.byEntry.map((row) => (
                       <tr key={row.entry}>
                         <td>{HOW_TO_ENTRY_LABELS[row.entry] ?? row.entry}</td>
+                        <td className="num">{row.playingVisits}</td>
                         <td className="num">{row.visits}</td>
-                        <td className="num">{row.opens}</td>
+                        <td className="num">{percent(row.visits, row.playingVisits)}</td>
                       </tr>
                     ))}
                   </tbody>
