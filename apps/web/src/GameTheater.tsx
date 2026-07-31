@@ -15,6 +15,7 @@ import { recordVisitEvent } from './visitTelemetry.js';
 import { useGameSaveBridge } from './gameSave.js';
 import { usePresenceBridge } from './presence.js';
 import { useSensingBridge } from './sensing.js';
+import { useVoiceMeterBridge } from './voiceMeter.js';
 import { useWorldBridge } from './world.js';
 import { useZoneBridge } from './zone.js';
 import { useScreenWakeLock } from './useScreenWakeLock.js';
@@ -199,6 +200,11 @@ export function GameTheater({
   // arbiter no longer has is a desync on the first tick.
   useZoneBridge(frameRef, reportSlug);
 
+  // Loudness mic for shout games (voice-on-phones Layer 0). Opaque sandboxed iframes
+  // cannot call getUserMedia; the theater header owns the gesture and relays levels.
+  // Quiet until createVoiceMeter posts voice:hello.
+  const voiceMeter = useVoiceMeterBridge(frameRef);
+
   // Device tilt for games that ask for it (games-repo camera-ar-platform Phase 0). Not
   // keyed on a slug: it touches no API and reads nothing durable — the shell relays
   // orientation readings into the frame, and the readings never leave the browser. On
@@ -346,6 +352,32 @@ export function GameTheater({
     </button>
   );
 
+  const micLabel =
+    voiceMeter.status === 'pending'
+      ? t('player.micPending')
+      : voiceMeter.status === 'denied'
+        ? t('player.micDenied')
+        : voiceMeter.status === 'unsupported'
+          ? t('player.micUnsupported')
+          : voiceMeter.live
+            ? t('player.micOn')
+            : t('player.micOff');
+
+  const micControl = (className: string) =>
+    voiceMeter.available ? (
+      <button
+        type="button"
+        className={className}
+        onClick={voiceMeter.toggle}
+        aria-pressed={voiceMeter.live}
+        aria-label={micLabel}
+        disabled={voiceMeter.status === 'unsupported' || voiceMeter.status === 'pending'}
+      >
+        <PixelIcon name="mic" size={13} />
+        <span className="btn-label">{micLabel}</span>
+      </button>
+    ) : null;
+
   // The one thing a player needs before the first key press, and the game's own copy of
   // it is hidden inside the frame by HIDE_CHROME. Reuses `theater-menu-item` in the
   // overflow menu so the four hand-enumerated selector lists in styles.css keep working.
@@ -425,6 +457,7 @@ export function GameTheater({
             {/* Desktop: sound + fullscreen sit on the bar. Phone: they move into More. */}
             {howToPlayControl('secondary-btn howto-btn howto-bar')}
             {soundControl('secondary-btn sound-btn theater-desktop-chrome')}
+            {micControl('secondary-btn mic-btn theater-desktop-chrome')}
             {fullscreenControl('secondary-btn fullscreen-btn theater-desktop-chrome')}
             {showMoreMenu && (
               <div className={`theater-more${moreOpen ? ' is-open' : ''}`} ref={moreRef}>
@@ -443,6 +476,7 @@ export function GameTheater({
                 <div className="theater-more-panel" role="menu">
                   {howToPlayControl('theater-menu-item howto-menu')}
                   {soundControl('theater-menu-item theater-mobile-chrome')}
+                  {micControl('theater-menu-item theater-mobile-chrome')}
                   {fullscreenControl('theater-menu-item theater-mobile-chrome')}
                   {reportSlug && (
                     <>

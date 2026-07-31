@@ -127,6 +127,11 @@
   "player": {
     "soundOn": "Dźwięk: Wł.",
     "soundOff": "Dźwięk: Wył.",
+    "micOn": "Mikrofon: Wł.",
+    "micOff": "Mikrofon: Wył.",
+    "micPending": "Mikrofon: …",
+    "micDenied": "Mikrofon: Odmowa",
+    "micUnsupported": "Mikrofon: Brak",
     "fullscreen": "Pełny ekran",
     "exitFullscreen": "Zamknij pełny ekran",
     "rotateLandscape": "Obróć telefon poziomo, aby zagrać",
