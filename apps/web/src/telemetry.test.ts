@@ -259,4 +259,27 @@ describe('zone_link', () => {
     const session = new TelemetrySession('ember-watch', 's', () => {});
     expect(session.record({ type: 'zone_link', step: 'shared' } as never)).toBe(false);
   });
+
+  it('cannot be starved by the game it is measuring', () => {
+    // A frame that floods before admission resolves would otherwise push the zone rungs
+    // past the shared session cap, and a broken zone would render as '—' — no evidence —
+    // on the word of the thing being measured. Separating the channel the game cannot
+    // reach was not enough; the budget had to be separate too.
+    const sent: Array<{ events: WireEvent[] }> = [];
+    const session = new TelemetrySession('ember-watch', 's', (body) => sent.push(body));
+    for (let index = 0; index < 500; index += 1) session.record({ type: 'score', value: index });
+
+    expect(session.count).toBe(400);
+    expect(session.record({ type: 'zone_link', step: 'admitted' })).toBe(true);
+    expect(session.record({ type: 'zone_link', step: 'joined' })).toBe(true);
+  });
+
+  it('does not let a shell budget become a second flood channel', () => {
+    const session = new TelemetrySession('ember-watch', 's', () => {});
+    // Dedupe already holds this to one of each rung; the cap is the backstop under it.
+    for (const step of ['admitted', 'joined', 'lost'] as const) {
+      expect(session.record({ type: 'zone_link', step })).toBe(true);
+    }
+    expect(session.count).toBe(0);
+  });
 });

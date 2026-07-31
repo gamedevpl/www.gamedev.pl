@@ -46,6 +46,27 @@ const FLUSH_AT = 10;
 const MAX_BATCH = 50;
 /** Session ceiling. A game emitting past this is buggy or hostile; we stop listening. */
 const MAX_EVENTS_PER_SESSION = 400;
+/**
+ * Types the shell reports about a game, which the game itself has no way to send.
+ *
+ * Keyed by type rather than by a flag on the call, and that is safe only because these
+ * types are structurally unreachable from inside the frame: `gamePlayer.ts` does not
+ * accept them over postMessage. Adding a type here that a game *can* send would hand it
+ * a private budget to flood.
+ */
+const SHELL_OWNED_TYPES = new Set<TelemetryEvent['type']>(['zone_link']);
+/**
+ * A budget for those, separate from the game's.
+ *
+ * Sharing one ceiling let a game starve the evidence about itself: a frame that emits
+ * 399 valid events before admission resolves would push the zone rungs past the cap, and
+ * a broken zone would then render as `—` — no evidence — on the word of the thing being
+ * measured. Separating the channel was not enough; the budget had to be separate too.
+ *
+ * Small on purpose. Per-session dedupe already holds this to one of each rung, so it is
+ * a backstop rather than an allowance.
+ */
+const MAX_SHELL_EVENTS_PER_SESSION = 8;
 /** Distinct `progress` labels one session may introduce — a label flood is a DoS. */
 const MAX_DISTINCT_LABELS = 20;
 const MAX_MESSAGE_LENGTH = 200;
@@ -102,6 +123,7 @@ export const sendTelemetry: TelemetrySend = (body) => {
 export class TelemetrySession {
   private queue: WireEvent[] = [];
   private accepted = 0;
+  private shellAccepted = 0;
   private labels = new Set<string>();
   /** Zone rungs already recorded — each is a "this session got this far", so once each. */
   private zoneSteps = new Set<string>();
@@ -127,7 +149,7 @@ export class TelemetrySession {
     return Math.min(MAX_SESSION_MS, Math.max(0, Math.round(this.clock() - this.openedAt)));
   }
 
-  /** Events accepted so far — what the caps are measured against. */
+  /** Game-reported events accepted so far — what the game's cap is measured against. */
   get count(): number {
     return this.accepted;
   }
@@ -138,7 +160,11 @@ export class TelemetrySession {
    * probe for the limits.
    */
   record(event: TelemetryEvent): boolean {
-    if (this.closed || this.accepted >= MAX_EVENTS_PER_SESSION) return false;
+    if (this.closed) return false;
+    const shellOwned = SHELL_OWNED_TYPES.has(event.type);
+    if (shellOwned) {
+      if (this.shellAccepted >= MAX_SHELL_EVENTS_PER_SESSION) return false;
+    } else if (this.accepted >= MAX_EVENTS_PER_SESSION) return false;
 
     const normalized = this.normalize(event);
     if (!normalized) return false;
@@ -146,7 +172,8 @@ export class TelemetrySession {
     // Stamped at record time, not at flush time — the whole point is that the two are
     // not the same instant.
     this.queue.push({ ...normalized, msSinceOpen: this.elapsed() });
-    this.accepted += 1;
+    if (shellOwned) this.shellAccepted += 1;
+    else this.accepted += 1;
     if (this.queue.length >= FLUSH_AT) this.flush();
     return true;
   }
