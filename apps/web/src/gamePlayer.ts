@@ -98,13 +98,15 @@ const BRIDGE = `(function(){
    * question anyway: you tap the button.
    */
   function padRows(){
-    var out=[],seen={};
+    // \`seen\` is a list, not a keyed object: these labels are written by the game, and
+    // "__proto__" as a property name would reach Object.prototype.
+    var out=[],seen=[];
     try{
       var buttons=document.querySelectorAll('.gamekit-touch-btn');
       for(var i=0;i<buttons.length;i++){
         var label=text(buttons[i]);
-        if(!label||seen[label])continue;
-        seen[label]=1;
+        if(!label||seen.indexOf(label)!==-1)continue;
+        seen.push(label);
         out.push({keys:'',action:label,touch:true});
       }
       if(document.querySelector('.gamekit-touch-pad'))out.push({keys:'',action:'',pad:'full'});

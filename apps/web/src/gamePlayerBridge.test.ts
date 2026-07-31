@@ -1,13 +1,24 @@
-// @vitest-environment jsdom
-
 import { afterEach, describe, expect, it } from 'vitest';
 import { embedGameHtml } from './gamePlayer.js';
 
 /*
+ * jsdom is a devDependency here but ships no types, and the surface this file uses is
+ * three members wide — cheaper to state than to take on `@types/jsdom` for one test.
+ */
+type FrameWindow = Record<string, unknown> & {
+  addEventListener(type: 'message', listener: (event: MessageEvent) => void): void;
+  close(): void;
+};
+type JsdomLike = { window: FrameWindow };
+type JsdomOptions = { runScripts: 'dangerously'; pretendToBeVisual: boolean; beforeParse(win: FrameWindow): void };
+// @ts-expect-error - jsdom ships no type declarations and this repo does not install them.
+const { JSDOM } = (await import('jsdom')) as { JSDOM: new (html: string, options: JsdomOptions) => JsdomLike };
+
+/*
  * The bridge ships as a source string injected into an opaque-origin game document, so
  * it is the one part of the player that no type-checker and no import graph can reach.
- * These tests run the string that actually ships, in a document shaped like a real game
- * document, and read what it posts.
+ * These tests run the document `embedGameHtml` actually produces, in a JSDOM that
+ * executes scripts the way a browser does, and read what it posts.
  *
  * What it reports is the game's own account of its controls — the input the How-to-play
  * card trusts first. If the scraper silently stops finding rows, the card quietly falls
@@ -15,36 +26,34 @@ import { embedGameHtml } from './gamePlayer.js';
  * else in the suite would notice.
  */
 
-/** Pull the injected bridge out of an embedded document, as the iframe would run it. */
-function bridgeSource(): string {
-  const embedded = embedGameHtml('<html><head></head><body></body></html>');
-  const match = embedded.match(/<script>([\s\S]*?)<\/script>/);
-  if (!match?.[1]) throw new Error('no bridge script in the embedded document');
-  return match[1];
-}
-
 type Posted = { type?: string; rows?: unknown; kit?: unknown; hint?: unknown };
 
+let dom: JsdomLike | null = null;
+
 /**
- * Runs the bridge against a game-shaped document and returns everything it posted.
+ * Embeds a game-shaped document, runs it, and returns everything the bridge posted.
  *
- * `parent` is this same window under jsdom, so the bridge's `parent.postMessage` lands
- * on a listener here — the same path a real frame takes to reach the host.
+ * The whole `embedGameHtml` output is handed to JSDOM rather than a script pulled out of
+ * it, so the injection itself is under test too. `parent` is the same window here, so the
+ * bridge's `parent.postMessage` lands on a listener inside it — the path a real frame
+ * takes to reach the host.
  */
 async function runBridge(bodyHtml: string, gameKit?: Record<string, unknown>): Promise<Posted[]> {
-  document.body.innerHTML = bodyHtml;
-  if (gameKit) (window as unknown as Record<string, unknown>).GameKit = gameKit;
-
   const posted: Posted[] = [];
-  const collect = (event: MessageEvent) => {
-    if (event.data?.source === 'gdpl-player') posted.push(event.data as Posted);
-  };
-  window.addEventListener('message', collect);
-  // Indirect eval so the bridge's `var`s land on the window, as they do in a real frame.
-  (0, eval)(bridgeSource());
-  // jsdom queues postMessage delivery; let the microtask/macrotask queue drain.
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  window.removeEventListener('message', collect);
+  dom = new JSDOM(embedGameHtml(`<html><head></head><body>${bodyHtml}</body></html>`), {
+    runScripts: 'dangerously',
+    pretendToBeVisual: true,
+    // Both the stub and the listener have to exist before the bridge script runs: it
+    // reads GameKit and posts its first report during its own initialization.
+    beforeParse(win: FrameWindow) {
+      if (gameKit) win.GameKit = gameKit;
+      win.addEventListener('message', (event: MessageEvent) => {
+        if (event.data?.source === 'gdpl-player') posted.push(event.data as Posted);
+      });
+    },
+  });
+  // The bridge posts on DOMContentLoaded (or immediately), and JSDOM queues delivery.
+  await new Promise((resolve) => setTimeout(resolve, 20));
   return posted;
 }
 
@@ -53,8 +62,8 @@ function controlsFrom(posted: Posted[]): Posted | undefined {
 }
 
 afterEach(() => {
-  document.body.innerHTML = '';
-  delete (window as unknown as Record<string, unknown>).GameKit;
+  dom?.window.close();
+  dom = null;
 });
 
 describe('the bridge control scraper', () => {
@@ -203,6 +212,25 @@ describe('the bridge pad fallback', () => {
     const controls = controlsFrom(await runBridge(PAD, { wantsTouchControls: () => true }));
     const kit = (controls?.kit ?? []) as Array<{ action: string }>;
     expect(kit.some((row) => row.action === 'Fire')).toBe(true);
+  });
+
+  it('does not let a button label reach Object.prototype', async () => {
+    // Button labels are written by the game. Deduping them through a keyed object would
+    // make "__proto__" a property assignment on the prototype rather than an entry.
+    const controls = controlsFrom(
+      await runBridge(`
+        <div class="gamekit-touch-buttons">
+          <div class="gamekit-touch-btn">__proto__</div>
+          <div class="gamekit-touch-btn">constructor</div>
+          <div class="gamekit-touch-btn">Fire</div>
+        </div>`),
+    );
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+    expect((controls?.kit as Array<{ action: string }>).map((row) => row.action)).toEqual([
+      '__proto__',
+      'constructor',
+      'Fire',
+    ]);
   });
 
   it('reports no pad on a desktop, where GameKit builds none', async () => {
