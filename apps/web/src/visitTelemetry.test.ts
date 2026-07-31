@@ -11,6 +11,7 @@ import {
   readVisitIdentity,
   recordCreateStep,
   recordVisitEvent,
+  recordWaitlistStep,
   referrerDomain,
   routeKind,
   sanitizeUtm,
@@ -292,6 +293,30 @@ describe('recordCreateStep', () => {
 
     // The second visit must record its own start; dedupe is per visit, not global.
     expect(second.batches[0].events).toHaveLength(1);
+  });
+});
+
+describe('recordWaitlistStep', () => {
+  it('records each waitlist step once per visit', () => {
+    const { batches, send } = capture();
+    const session = new VisitSession('v1', 0, send, () => 0);
+    setVisitSessionForTesting(session);
+
+    recordWaitlistStep('cta_clicked');
+    recordWaitlistStep('cta_clicked');
+    recordWaitlistStep('joined');
+    session.flush();
+    setVisitSessionForTesting(null);
+
+    expect(batches[0].events).toEqual([
+      expect.objectContaining({ type: 'waitlist_step', step: 'cta_clicked' }),
+      expect.objectContaining({ type: 'waitlist_step', step: 'joined' }),
+    ]);
+  });
+
+  it('is a silent no-op when tracking was never started', () => {
+    setVisitSessionForTesting(null);
+    expect(() => recordWaitlistStep('cta_clicked')).not.toThrow();
   });
 });
 

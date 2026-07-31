@@ -572,6 +572,7 @@
     "blockedMsg": "Beta jest obecnie zamknięta — dostęp tylko na zaproszenie.",
     "joinWaitlist": "Dołącz do listy oczekujących",
     "joiningWaitlist": "Dołączanie…",
+    "signInToJoin": "Zaloguj się przez Google lub Apple poniżej, aby dołączyć.",
     "waitlistJoined": "Jesteś na liście — napiszemy, gdy zwolni się miejsce.",
     "waitlistPending": "✓ Jesteś na liście oczekujących — napiszemy, gdy zwolni się miejsce.",
     "waitlistApproved": "🎉 Twoja aplikacja została zaakceptowana! Zaloguj się ponownie, aby uzyskać dostęp.",

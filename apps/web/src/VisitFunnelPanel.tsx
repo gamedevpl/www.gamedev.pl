@@ -25,6 +25,11 @@ const STEP_LABELS: Record<string, string> = {
   submission_created: 'game submitted',
 };
 
+const WAITLIST_LABELS: Record<string, string> = {
+  cta_clicked: 'clicked Join waitlist',
+  joined: 'joined waitlist',
+};
+
 function bucketLabel(upToSeconds: number | null): string {
   if (upToSeconds === null) return 'slower';
   if (upToSeconds < 60) return `≤ ${upToSeconds}s`;
@@ -177,6 +182,36 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
                      * and most visitors never try.
                      */}
                     <td className="num">{percent(row.visits, funnel.creating[0]?.visits ?? 0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="funnel-block">
+          <h3>Waitlist</h3>
+          {funnel.waitlist.every((row) => row.visits === 0) ? (
+            <p className="health-empty">Nobody clicked Join waitlist in this window.</p>
+          ) : (
+            <table className="health-table">
+              <thead>
+                <tr>
+                  <th scope="col">Step</th>
+                  <th scope="col" className="num">
+                    Visits
+                  </th>
+                  <th scope="col" className="num">
+                    Of clicks
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {funnel.waitlist.map((row) => (
+                  <tr key={row.step}>
+                    <td>{WAITLIST_LABELS[row.step] ?? row.step}</td>
+                    <td className="num">{row.visits}</td>
+                    <td className="num">{percent(row.visits, funnel.waitlist[0]?.visits ?? 0)}</td>
                   </tr>
                 ))}
               </tbody>

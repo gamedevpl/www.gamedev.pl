@@ -3634,6 +3634,14 @@ body.player-open {
   margin-bottom: 28px;
 }
 
+.beta-splash__waitlist {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
 .beta-splash__signin {
   display: flex;
   flex-direction: column;
@@ -3645,7 +3653,14 @@ body.player-open {
 .beta-splash__blocked-msg {
   color: var(--text);
   font-size: 0.95rem;
-  margin-bottom: 16px;
+  margin: 0;
+}
+
+.beta-splash__signin-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0;
+  max-width: 28ch;
 }
 
 .beta-splash__waitlist-btn {
@@ -3776,6 +3791,11 @@ body.player-open {
     margin-bottom: 16px;
   }
 
+  .beta-splash__waitlist {
+    margin-bottom: 16px;
+    gap: 8px;
+  }
+
   .beta-splash__signin {
     margin-bottom: 14px;
   }
@@ -3788,18 +3808,20 @@ body.player-open {
      margin 0 and must stay there, or the blocked state grows instead of shrinking. */
   .beta-splash__blocked-msg {
     font-size: 0.92rem;
-    margin-bottom: 12px;
+  }
+
+  .beta-splash__signin-hint {
+    font-size: 0.8rem;
   }
 
   .beta-splash__legal {
     margin-top: 0.7rem;
   }
 
-  /* The invite-only panel adds a message and a button, and it only ever appears after
-     the visitor has read the pitch and tried to sign in — so on a short screen the
-     pitch is what gives way, rather than the legal links dropping off the bottom
-     again. Progressive enhancement: without :has() the card scrolls, as it does now. */
-  .beta-splash__card:has(.beta-splash__blocked) .beta-splash__sub {
+  /* The waitlist CTA is always on the splash, and on a short screen the pitch is what
+     gives way rather than the legal links dropping off the bottom again. Progressive
+     enhancement: without :has() the card scrolls, as it does now. */
+  .beta-splash__card:has(.beta-splash__waitlist) .beta-splash__sub {
     display: none;
   }
 }

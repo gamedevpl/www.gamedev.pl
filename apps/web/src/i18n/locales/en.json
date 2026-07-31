@@ -572,6 +572,7 @@
     "blockedMsg": "The beta is closed right now — access is invite-only.",
     "joinWaitlist": "Join the waitlist",
     "joiningWaitlist": "Joining…",
+    "signInToJoin": "Sign in with Google or Apple below to join.",
     "waitlistJoined": "You're on the list — we'll email you when a spot opens up.",
     "waitlistPending": "✓ You're on the waitlist — we'll email you when a spot opens up.",
     "waitlistApproved": "🎉 You've been approved! Please sign in again to access the beta.",
