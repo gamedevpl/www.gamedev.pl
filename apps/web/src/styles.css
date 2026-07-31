@@ -4515,6 +4515,25 @@ body.player-open {
     padding: 0 2px;
   }
 
+  /* The install nudge and the update bar are fixed to the bottom of the viewport at
+     z-index 900, which is exactly where this shell now pins the composer. On the old
+     scrolling page a reader could push the composer up past them; here there is nothing
+     to scroll, so a banner would sit on the textarea until it was dismissed.
+
+     They join the column instead of floating over it. Both are already the last children
+     of `.app`, so as ordinary flex items they land under the composer and the transcript
+     gives up the height — a bar at the foot of the screen rather than a lid on the one
+     control that matters. Suppressing them was the other option and a worse one: the
+     update bar is how a phone finds out there is a new shell, and the studio is a screen
+     people sit on for a long time. */
+  .app:has(.studio-layout.is-game-open) .install-prompt,
+  .app:has(.studio-layout.is-game-open) .app-update {
+    position: static;
+    flex: none;
+    margin: 0 12px max(12px, env(safe-area-inset-bottom, 0px));
+    animation: none;
+  }
+
   /* The tall empty box existed to fit a placeholder that ran to four lines. The
      placeholder is one line now, so the box can start at the size of a reply and grow
      into the message — which is a third of a phone screen handed back to the thread. */
