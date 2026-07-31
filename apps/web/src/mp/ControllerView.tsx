@@ -9,19 +9,77 @@ type ControllerViewProps = { code: string; token: string };
 const NICK_ADJECTIVES = ['Swift', 'Brave', 'Sly', 'Wild', 'Calm', 'Bold', 'Lucky', 'Sneaky'];
 const NICK_ANIMALS = ['Fox', 'Otter', 'Lynx', 'Crane', 'Bison', 'Moth', 'Heron', 'Wolf'];
 
+/** Bilingual phrase → party key. One-shot recognition maps a final transcript onto these. */
+const VOICE_PHRASES: Array<{ key: InputKey; phrases: string[] }> = [
+  { key: 'up', phrases: ['up', 'góra', 'gora'] },
+  { key: 'down', phrases: ['down', 'dół', 'dol'] },
+  { key: 'left', phrases: ['left', 'lewo'] },
+  { key: 'right', phrases: ['right', 'prawo'] },
+  { key: 'a', phrases: ['a', 'go', 'fire', 'action', 'jump', 'akcja', 'strzał', 'strzal', 'ogień', 'ogien', 'skok'] },
+];
+
+interface SpeechRecognitionResultItem {
+  transcript: string;
+}
+interface SpeechRecognitionResult {
+  [index: number]: SpeechRecognitionResultItem;
+  isFinal?: boolean;
+}
+interface SpeechRecognitionEvent {
+  results: SpeechRecognitionResult[];
+}
+interface SpeechRecognitionErrorEvent {
+  error: string;
+}
+interface SpeechRecognitionInstance {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onstart: (() => void) | null;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+}
+
 function randomNick(): string {
   const adjective = NICK_ADJECTIVES[Math.floor(Math.random() * NICK_ADJECTIVES.length)];
   const animal = NICK_ANIMALS[Math.floor(Math.random() * NICK_ANIMALS.length)];
   return `${adjective} ${animal}`;
 }
 
+function mapTranscriptToKey(transcript: string): InputKey | null {
+  const normalized = transcript.trim().toLowerCase().normalize('NFD').replace(/\p{M}/gu, '');
+  if (!normalized) return null;
+  const tokens = normalized.split(/[^a-z0-9]+/).filter(Boolean);
+  for (const entry of VOICE_PHRASES) {
+    for (const phrase of entry.phrases) {
+      const plain = phrase.normalize('NFD').replace(/\p{M}/gu, '');
+      if (tokens.includes(plain) || normalized === plain) return entry.key;
+    }
+  }
+  return null;
+}
+
+function speechRecognitionClass(): (new () => SpeechRecognitionInstance) | null {
+  const win = window as unknown as {
+    SpeechRecognition?: new () => SpeechRecognitionInstance;
+    webkitSpeechRecognition?: new () => SpeechRecognitionInstance;
+  };
+  return win.SpeechRecognition || win.webkitSpeechRecognition || null;
+}
+
 /**
  * The phone half of the party: a nickname prompt, then a d-pad and one action
  * button. This page is our own trusted shell code — never game code — so it can
  * hold the websocket the sandboxed game is not allowed to open.
+ *
+ * Optional Voice maps short phrases onto the same five keys the pad already
+ * sends (Layer 1 of voice-on-phones). Pad remains the always-available path.
  */
 export function ControllerView({ code, token }: ControllerViewProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [nick, setNick] = useState(randomNick);
   const [joined, setJoined] = useState(false);
   const [status, setStatus] = useState<RoomStatus>('connecting');
@@ -29,8 +87,14 @@ export function ControllerView({ code, token }: ControllerViewProps) {
   const [slot, setSlot] = useState<number | null>(null);
   const [color, setColor] = useState('#00e4ac');
   const [closedReason, setClosedReason] = useState<string | null>(null);
+  const [voiceOn, setVoiceOn] = useState(false);
+  const [voiceListening, setVoiceListening] = useState(false);
+  const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
   const clientRef = useRef<RoomClient | null>(null);
   const heldRef = useRef<Set<InputKey>>(new Set());
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const voiceWantedRef = useRef(false);
+  const pulseTimersRef = useRef<number[]>([]);
 
   useEffect(() => {
     if (!joined) return;
@@ -81,6 +145,98 @@ export function ControllerView({ code, token }: ControllerViewProps) {
     clientRef.current?.sendInput(key, value);
     if (value === 1 && 'vibrate' in navigator) navigator.vibrate?.(12);
   }, []);
+
+  const pulseKey = useCallback(
+    (key: InputKey) => {
+      press(key, 1);
+      const timer = window.setTimeout(() => press(key, 0), 140);
+      pulseTimersRef.current.push(timer);
+    },
+    [press],
+  );
+
+  const stopVoice = useCallback(() => {
+    voiceWantedRef.current = false;
+    setVoiceOn(false);
+    setVoiceListening(false);
+    try {
+      recognitionRef.current?.stop();
+    } catch {
+      /* ignore */
+    }
+    recognitionRef.current = null;
+    for (const timer of pulseTimersRef.current) window.clearTimeout(timer);
+    pulseTimersRef.current = [];
+  }, []);
+
+  const startVoice = useCallback(() => {
+    setVoiceNotice(null);
+    const SpeechClass = speechRecognitionClass();
+    if (!SpeechClass) {
+      setVoiceNotice(t('party.voiceUnsupported'));
+      setVoiceOn(false);
+      voiceWantedRef.current = false;
+      return;
+    }
+
+    voiceWantedRef.current = true;
+    setVoiceOn(true);
+
+    try {
+      recognitionRef.current?.stop();
+    } catch {
+      /* ignore */
+    }
+
+    const recognition = new SpeechClass();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = i18n.language?.startsWith('pl') ? 'pl-PL' : 'en-US';
+
+    recognition.onstart = () => setVoiceListening(true);
+    recognition.onresult = (event) => {
+      const transcript = event.results?.[0]?.[0]?.transcript;
+      if (!transcript) return;
+      const key = mapTranscriptToKey(transcript);
+      if (key) pulseKey(key);
+    };
+    recognition.onerror = (event) => {
+      setVoiceListening(false);
+      if (event.error === 'not-allowed') {
+        setVoiceNotice(t('party.voiceDenied'));
+        voiceWantedRef.current = false;
+        setVoiceOn(false);
+      } else if (event.error !== 'aborted' && event.error !== 'no-speech') {
+        setVoiceNotice(t('party.voiceError', { error: event.error }));
+      }
+    };
+    recognition.onend = () => {
+      setVoiceListening(false);
+      recognitionRef.current = null;
+      // One-shot: restart while the toggle stays on (fewer iOS beeps than continuous).
+      if (!voiceWantedRef.current) return;
+      window.setTimeout(() => {
+        if (voiceWantedRef.current) startVoiceRef.current();
+      }, 120);
+    };
+
+    recognitionRef.current = recognition;
+    try {
+      recognition.start();
+    } catch {
+      setVoiceListening(false);
+      setVoiceNotice(t('party.voiceUnsupported'));
+      voiceWantedRef.current = false;
+      setVoiceOn(false);
+    }
+  }, [i18n.language, pulseKey, t]);
+
+  const startVoiceRef = useRef(startVoice);
+  startVoiceRef.current = startVoice;
+
+  useEffect(() => {
+    return () => stopVoice();
+  }, [stopVoice]);
 
   if (closedReason) {
     return (
@@ -142,6 +298,22 @@ export function ControllerView({ code, token }: ControllerViewProps) {
         </span>
       </header>
 
+      <div className="controller-voice-row">
+        <button
+          type="button"
+          className={`controller-voice-btn${voiceOn ? ' is-on' : ''}${voiceListening ? ' is-listening' : ''}`}
+          aria-pressed={voiceOn}
+          aria-label={voiceOn ? t('party.voiceStop') : t('party.voiceStart')}
+          onClick={() => {
+            if (voiceOn) stopVoice();
+            else startVoice();
+          }}
+        >
+          {voiceListening ? t('party.voiceListening') : voiceOn ? t('party.voiceOn') : t('party.voiceOff')}
+        </button>
+        {voiceNotice ? <p className="controller-voice-notice">{voiceNotice}</p> : null}
+      </div>
+
       <div className="controller-pad">
         <button className="pad-btn pad-up" aria-label={t('party.up')} {...buttonProps('up')}>
           ▲
@@ -163,3 +335,6 @@ export function ControllerView({ code, token }: ControllerViewProps) {
     </div>
   );
 }
+
+/** Exported for unit tests. */
+export { mapTranscriptToKey };
