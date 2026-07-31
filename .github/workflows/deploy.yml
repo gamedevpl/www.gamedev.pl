@@ -153,6 +153,18 @@ jobs:
             ENV_VARS="${ENV_VARS}|ZONE_HOST_URL=${ZONE_HOST_URL_VAL}"
           fi
 
+          # Seeded dispatch: a model writes a first draft of the game before the coding
+          # agent starts, and a compiling draft becomes the creator's round-0 preview
+          # (docs/agent-adapters.md). Threaded from a repo variable for the same reason
+          # as the two below — set by hand on the service, the next deploy would wipe it
+          # and builds would quietly stop being seeded with nothing to show why. Absent
+          # or anything other than "true" leaves seeding off, which is how every build
+          # ran before it existed.
+          SEED_DISPATCH_VAL="${{ vars.SEED_DISPATCH }}"
+          if [ -n "$SEED_DISPATCH_VAL" ]; then
+            ENV_VARS="${ENV_VARS}|SEED_DISPATCH=${SEED_DISPATCH_VAL}"
+          fi
+
           # Threaded through the same way as ZONE_HOST_URL, and for the same reason:
           # --set-env-vars replaces the whole map, so a value set by hand on the service
           # would be wiped by the next deploy — here that would silently pull room
