@@ -92,6 +92,13 @@ const EventSchema = z.discriminatedUnion('type', [
     ...offsetField,
   }),
   z.object({ type: z.literal('score'), value: z.number().finite(), ...offsetField }),
+  // P3 zones. Shell-originated: `apps/web/src/gamePlayer.ts` does not accept this type
+  // over postMessage, so a game cannot claim to be shared while it is sitting alone.
+  z.object({
+    type: z.literal('zone_link'),
+    step: z.enum(['admitted', 'joined', 'lost']),
+    ...offsetField,
+  }),
   z.object({
     type: z.literal('end'),
     outcome: z.enum(['won', 'lost', 'quit']),
@@ -235,6 +242,8 @@ export async function registerTelemetryRoutes(app: FastifyInstance, options: Tel
           };
         case 'score':
           return { ...base, type: event.type, value: event.value };
+        case 'zone_link':
+          return { ...base, type: event.type, step: event.step };
         case 'end':
           return {
             ...base,

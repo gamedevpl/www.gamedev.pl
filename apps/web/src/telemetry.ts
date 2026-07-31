@@ -21,7 +21,24 @@ export type TelemetryEvent =
   | { type: 'alive'; frames: number }
   | { type: 'progress'; label: string; gfxBackend?: 'canvas2d' | 'webgl' | 'webgl3d' }
   | { type: 'score'; value: number }
-  | { type: 'end'; outcome: 'won' | 'lost' | 'quit'; gfxBackend?: 'canvas2d' | 'webgl' | 'webgl3d' };
+  | { type: 'end'; outcome: 'won' | 'lost' | 'quit'; gfxBackend?: 'canvas2d' | 'webgl' | 'webgl3d' }
+  /**
+   * How far this open got towards an actually shared world (P3 zones).
+   *
+   * A rung, in the shape `create_step` established: it means "this session reached
+   * here", so each is recorded once and the read side is a funnel. `joined` over
+   * `admitted` is the number worth having — anything below 1 is players who were issued
+   * a seat and ended up alone anyway, which is the one zone failure with no symptom.
+   * The shell falls back to solo play in silence by design, so without this the
+   * difference between a working host and a dead one is invisible in aggregate.
+   *
+   * Emitted by the shell, never accepted from inside the frame. A game that could send
+   * `joined` could report itself multiplayer while sitting alone.
+   */
+  | { type: 'zone_link'; step: 'admitted' | 'joined' | 'lost' };
+
+/** Order is the funnel's meaning, as with the visit stream's `create_step`. */
+export const ZONE_LINK_STEPS = ['admitted', 'joined', 'lost'] as const;
 
 /** Flush when this many events are queued, so a busy session does not sit on data. */
 const FLUSH_AT = 10;
@@ -86,6 +103,8 @@ export class TelemetrySession {
   private queue: WireEvent[] = [];
   private accepted = 0;
   private labels = new Set<string>();
+  /** Zone rungs already recorded — each is a "this session got this far", so once each. */
+  private zoneSteps = new Set<string>();
   private closed = false;
   private readonly openedAt: number;
 
@@ -180,6 +199,15 @@ export class TelemetrySession {
         this.labels.add(label);
         const gfxBackend = normalizeGfxBackend(event.gfxBackend);
         return gfxBackend ? { type: 'progress', label, gfxBackend } : { type: 'progress', label };
+      }
+      case 'zone_link': {
+        if (!ZONE_LINK_STEPS.includes(event.step)) return null;
+        // Once per rung per session. A link that flaps says the same thing about this
+        // open as a link that dropped once, and repeats would swamp the denominator the
+        // ratio is measured against.
+        if (this.zoneSteps.has(event.step)) return null;
+        this.zoneSteps.add(event.step);
+        return { type: 'zone_link', step: event.step };
       }
       case 'score':
         return Number.isFinite(event.value) ? { type: 'score', value: event.value } : null;

@@ -365,3 +365,46 @@ describe('POST /api/telemetry', () => {
     await app.close();
   });
 });
+
+describe('zone_link', () => {
+  let store: InMemoryStore;
+  beforeEach(async () => {
+    store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:me' });
+  });
+
+  it('records the rungs the shell reports', async () => {
+    const app = await appWith(store);
+    const res = await post(app, {
+      slug: 'space-hop',
+      sessionId,
+      events: [
+        { type: 'zone_link', step: 'admitted' },
+        { type: 'zone_link', step: 'joined' },
+      ],
+    });
+
+    expect(res.statusCode).toBe(202);
+    const stored = await store.listTelemetryEvents(today(), { slug: 'space-hop' });
+    expect(stored.map((event) => [event.type, event.step])).toEqual([
+      ['zone_link', 'admitted'],
+      ['zone_link', 'joined'],
+    ]);
+    await app.close();
+  });
+
+  it('rejects a rung outside the vocabulary', async () => {
+    // A free-text step would let a caller mint labels the read side copes with forever,
+    // and everything arriving here is untrusted whoever is supposed to have sent it.
+    const app = await appWith(store);
+    const res = await post(app, {
+      slug: 'space-hop',
+      sessionId,
+      events: [{ type: 'zone_link', step: 'shared' }],
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(await store.listTelemetryEvents(today())).toHaveLength(0);
+    await app.close();
+  });
+});

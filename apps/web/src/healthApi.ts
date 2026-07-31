@@ -23,6 +23,12 @@ export interface GameHealth {
   sessionsWithEnding: number;
   /** Sessions that finished a round, over all sessions. */
   finishRate: number;
+  /** Sessions issued a seat in a shared world; 0 for a game that declares no zone. */
+  zoneAdmitted: number;
+  /** Of those, how many had a world actually arrive. */
+  zoneJoined: number;
+  /** `zoneJoined / zoneAdmitted`, or null when this game never asked for a zone. */
+  zoneJoinRate: number | null;
   /** `won / (won + lost)`; null when no round was decided. Quits decide nothing. */
   winRate: number | null;
   /** Median across sessions of each session's best score; null when nothing scored. */

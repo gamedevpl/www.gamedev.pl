@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
-import { isPlayTimeAccruing, TelemetrySession } from './telemetry.js';
+import { isPlayTimeAccruing, TelemetrySession, type TelemetryEvent } from './telemetry.js';
 import { readReportedControls, type ReportedControls } from './howToPlay.js';
 import { recordVisitEvent } from './visitTelemetry.js';
 
@@ -400,11 +400,31 @@ export function withGameLocale(html: string, lang: string | undefined | null): s
  * makes "is this a real play of a real game" a structural fact instead of a condition
  * someone has to remember to write.
  */
+/**
+ * The open play session, for shell code that observes something the game cannot report.
+ *
+ * Zones are the case this exists for: whether an open became a *shared* world is known
+ * to the shell (it owns the socket) and must not be reported by the game (a frame that
+ * could claim `joined` could claim to be multiplayer while sitting alone). Everything a
+ * game may say still arrives over postMessage and is validated there; this is the other
+ * direction and is deliberately not reachable from inside the frame.
+ *
+ * Null between opens, so a stray late call records nothing rather than attaching to
+ * whatever game is open next.
+ */
+let openSession: TelemetrySession | null = null;
+
+/** Record a shell-observed play event, if a game is open. Best-effort, like every send. */
+export function recordPlayEvent(event: TelemetryEvent): void {
+  openSession?.record(event);
+}
+
 export function useGameTelemetry(slug: string, enabled: boolean, slots?: number) {
   useEffect(() => {
     if (!enabled) return;
 
     const session = new TelemetrySession(slug, crypto.randomUUID());
+    openSession = session;
     session.record({ type: 'game_opened', ...(slots === undefined ? {} : { slots }) });
     // The same moment, counted in the visit stream — deliberately without the slug, so
     // depth ("did this sitting play a second game") is answerable while "which games did
@@ -491,6 +511,7 @@ export function useGameTelemetry(slug: string, enabled: boolean, slots?: number)
       document.removeEventListener('visibilitychange', onHide);
       session.record({ type: 'game_closed' });
       session.close();
+      if (openSession === session) openSession = null;
     };
   }, [slug, enabled, slots]);
 }

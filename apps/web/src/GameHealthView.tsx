@@ -203,6 +203,7 @@ export function GameHealthView() {
                     <th>Finished</th>
                     <th>Won</th>
                     <th>Best score</th>
+                    <th title="Sessions issued a seat in a shared world that actually got one">Shared</th>
                     <th>Progress</th>
                     <th>FPS</th>
                     <th>Stalled</th>
@@ -237,6 +238,21 @@ export function GameHealthView() {
                           {game.winRate === null ? '—' : percent(game.winRate)}
                         </td>
                         <td>{game.medianBestScore === null ? '—' : formatScore(game.medianBestScore)}</td>
+                        {/*
+                          Below 100% is players who were promised company and played alone:
+                          the shell's fallback to solo is silent by design, so this column
+                          is the only place in the product where that shows. A game with no
+                          zone reads '—', never 0%, exactly as Finished does.
+                        */}
+                        <td
+                          title={
+                            game.zoneJoinRate === null
+                              ? undefined
+                              : `${game.zoneJoined} of ${game.zoneAdmitted} admitted sessions reached a world`
+                          }
+                        >
+                          {game.zoneJoinRate === null ? '—' : percent(game.zoneJoinRate)}
+                        </td>
                         <td>
                           {game.progressLabels.length === 0 ? (
                             '—'

@@ -3,6 +3,7 @@ import { BRIDGE_NAMESPACE } from './mp/protocol.js';
 import { MAX_INPUTS_PER_SECOND, ZONE_PROTOCOL_VERSION, parseZoneBridgeMessage } from './zone/protocol.js';
 import { ZoneClient } from './zone/zoneClient.js';
 import { fetchZoneAdmission } from './zoneApi.js';
+import { recordPlayEvent } from './gamePlayer.js';
 
 /**
  * The shell half of authoritative real-time zones (docs/persistent-world-plan.md P3).
@@ -46,6 +47,8 @@ export function useZoneBridge(frameRef: MutableRefObject<HTMLIFrameElement | nul
     let admitting = false;
     /** Sliding one-second window of input timestamps, owned by this effect run. */
     let sent: number[] = [];
+    /** Whether a world ever arrived, which is what separates a fallback from a drop. */
+    let joined = false;
 
     function postToGame(payload: Record<string, unknown>) {
       if (cancelled) return;
@@ -76,6 +79,11 @@ export function useZoneBridge(frameRef: MutableRefObject<HTMLIFrameElement | nul
           return;
         }
 
+        // A seat was issued. This is the denominator: every open past this point was
+        // *supposed* to end up in a shared world, so anything that does not is a
+        // fallback the player was never told about.
+        recordPlayEvent({ type: 'zone_link', step: 'admitted' });
+
         postToGame({
           t: 'zone:state',
           available: true,
@@ -91,11 +99,23 @@ export function useZoneBridge(frameRef: MutableRefObject<HTMLIFrameElement | nul
           zone: admission.zone,
           ticket: admission.ticket,
           onFrame: (frame) => {
+            // The snapshot is the join, not the socket. A connection that upgrades and is
+            // then closed with `zone_unavailable` is precisely how this failed on its
+            // first day — counting `connected` as arrival would have had the metric
+            // reporting health for the whole outage. A world only exists once one is sent.
+            if (frame.t === 'snap' && !joined) {
+              joined = true;
+              recordPlayEvent({ type: 'zone_link', step: 'joined' });
+            }
             // Relayed verbatim under a `zone:` prefix. The shell has already proved the
             // frame is well-formed; what it means is the sim's business.
             postToGame({ ...frame, t: `zone:${frame.t}` });
           },
           onStatus: (status, reason) => {
+            // Only a world we actually had can be lost. Without the guard, a link that
+            // never delivered a snapshot would report `lost` and read as churn, when it
+            // is the flat failure `joined`-over-`admitted` is there to expose.
+            if (status === 'closed' && joined) recordPlayEvent({ type: 'zone_link', step: 'lost' });
             postToGame({ t: 'zone:link', status, ...(reason ? { reason } : {}) });
           },
         });

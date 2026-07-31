@@ -237,3 +237,26 @@ describe('sendTelemetry', () => {
     fetchSpy.mockRestore();
   });
 });
+
+describe('zone_link', () => {
+  it('records each rung once, however much the link flaps', () => {
+    // A reconnect loop says the same thing about this open as one drop, and repeats
+    // would swamp the `admitted` denominator the whole ratio is measured against.
+    const sent: Array<{ events: WireEvent[] }> = [];
+    const session = new TelemetrySession('ember-watch', 's', (body) => sent.push(body));
+
+    expect(session.record({ type: 'zone_link', step: 'admitted' })).toBe(true);
+    expect(session.record({ type: 'zone_link', step: 'joined' })).toBe(true);
+    expect(session.record({ type: 'zone_link', step: 'joined' })).toBe(false);
+    expect(session.record({ type: 'zone_link', step: 'lost' })).toBe(true);
+    expect(session.record({ type: 'zone_link', step: 'lost' })).toBe(false);
+
+    session.flush();
+    expect(sent[0].events.map((event) => (event as { step: string }).step)).toEqual(['admitted', 'joined', 'lost']);
+  });
+
+  it('refuses a rung it does not know', () => {
+    const session = new TelemetrySession('ember-watch', 's', () => {});
+    expect(session.record({ type: 'zone_link', step: 'shared' } as never)).toBe(false);
+  });
+});
