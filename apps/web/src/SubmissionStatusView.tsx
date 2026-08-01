@@ -74,9 +74,16 @@ const ACTIVE_BUILD_STATUSES = new Set<SubmissionStatus['status']>(['building', '
 /** Exported so tests advance timers by the real cadence instead of a magic number. */
 export const ACTIVE_POLL_MS = 3000;
 const IDLE_POLL_MS = 10000;
+/** Client ceiling on feedback/improve — matches the server's agent-tasks budget with slack. */
+const FEEDBACK_SEND_TIMEOUT_MS = 35_000;
 
 function pollDelayMs(status: SubmissionStatus['status'], stall?: SubmissionStatus['stall']): number | null {
-  if (TERMINAL_STATUSES.has(status)) return null;
+  // `needs_changes` is terminal for the *round*, not for the page: feedback from here
+  // starts another round, and stopping the poll meant the UI kept saying "needs changes"
+  // after a successful send until the creator refreshed. Published and abandoned are
+  // finished for good — nothing the composer can do moves them.
+  if (status === 'published' || status === 'abandoned') return null;
+  if (status === 'needs_changes') return IDLE_POLL_MS;
   // Flip the connect card to live progress as soon as the agent signals.
   if (stall === 'no_agent_yet') return ACTIVE_POLL_MS;
   return ACTIVE_BUILD_STATUSES.has(status) ? ACTIVE_POLL_MS : IDLE_POLL_MS;
@@ -1068,10 +1075,16 @@ function FeedbackPanel({
   };
 
   const send = async () => {
-    if (trimmed.length < 10) return;
+    if (trimmed.length < 10 || state === 'sending') return;
     setState('sending');
     setError(null);
     setNotice(null);
+    // Dispatch awaits the agent-tasks API on the server. A hung upstream used to leave
+    // this button disabled with no other signal until the browser or Cloud Run gave up —
+    // so the client also holds a ceiling, and shows a clear "Sending…" state while it
+    // waits (the compact composer is icon-only and otherwise looks merely greyed out).
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), FEEDBACK_SEND_TIMEOUT_MS);
     try {
       const roundBuilder = chooseBuilder ? builder : undefined;
       // Same box, same act, different destination — decided here from the state the
@@ -1079,15 +1092,11 @@ function FeedbackPanel({
       // Only pass builder when a new round is being chosen — keeps the 2-arg call
       // shape for ordinary mid-round messages (and the tests that assert it).
       if (published) {
-        if (roundBuilder) {
-          await submitImprovement(token, trimmed, undefined, roundBuilder);
-        } else {
-          await submitImprovement(token, trimmed);
-        }
+        // Builder (BYOCA) stays optional; the abort signal always travels so a hung
+        // dispatch cannot leave the compact send disabled with no recovery.
+        await submitImprovement(token, trimmed, undefined, roundBuilder, controller.signal);
       } else {
-        const result = roundBuilder
-          ? await submitFeedback(token, trimmed, undefined, roundBuilder)
-          : await submitFeedback(token, trimmed);
+        const result = await submitFeedback(token, trimmed, undefined, roundBuilder, controller.signal);
         if (result.roundStarted === false) {
           setNotice(
             result.reason === 'no_capacity' ? t('statusView.feedback.noCapacity') : t('statusView.feedback.notStarted'),
@@ -1118,6 +1127,8 @@ function FeedbackPanel({
         setError(t('statusView.feedback.error'));
       }
       setState('idle');
+    } finally {
+      window.clearTimeout(timeoutId);
     }
   };
 
@@ -1153,12 +1164,16 @@ function FeedbackPanel({
   // said still matters, so it becomes the placeholder: it is on screen exactly while the
   // box is empty, which is when "where does this go?" is the open question.
   if (compact) {
+    const sending = state === 'sending';
     return (
-      <div className="status-feedback status-composer is-compact">
+      <div
+        className={`status-feedback status-composer is-compact${sending ? ' is-sending' : ''}`}
+        aria-busy={sending || undefined}
+      >
         {chooseBuilder ? (
-          <BuilderChoice value={builder} onChange={handleBuilderChange} disabled={state === 'sending'} compact />
+          <BuilderChoice value={builder} onChange={handleBuilderChange} disabled={sending} compact />
         ) : null}
-        {routeNoteKey && state !== 'sent' && !error && !notice ? (
+        {routeNoteKey && !sending && state !== 'sent' && !error && !notice ? (
           <p className="status-feedback-route">{t(routeNoteKey)}</p>
         ) : null}
         {/* Field and send on one line. The button used to sit on a row of its own below
@@ -1180,26 +1195,38 @@ function FeedbackPanel({
             aria-label={t(titleKey)}
             rows={1}
             maxLength={2000}
+            disabled={sending}
           />
           <button
             type="button"
             className="primary-btn status-composer-send"
             onClick={() => void send()}
-            disabled={state === 'sending' || trimmed.length < 10}
-            aria-label={state === 'sending' ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
-            title={state === 'sending' ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
+            disabled={sending || trimmed.length < 10}
+            aria-label={sending ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
+            title={sending ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
           >
-            <PixelIcon name="arrowRight" size={13} />
+            {sending ? (
+              <span className="status-composer-send-spinner" aria-hidden="true" />
+            ) : (
+              <PixelIcon name="arrowRight" size={13} />
+            )}
           </button>
         </div>
-        {/* Only on screen when there is something to report. An always-rendered row is
+        {/* Only on screen when there is something to report — including "Sending…",
+            which the icon-only button cannot say on its own. An always-rendered row is
             what made the composer two rows tall in its resting state. One slot, in the
-            order the three states rank: a failure to send outranks a message that was
-            kept but started nothing, which outranks the plain receipt. */}
-        {error || notice || state === 'sent' ? (
+            order the four states rank: a failure to send outranks in-flight, which
+            outranks a message that was kept but started nothing, which outranks the
+            plain receipt. */}
+        {error || sending || notice || state === 'sent' ? (
           <div className="status-feedback-actions">
             {error ? (
               <p className="error">{error}</p>
+            ) : sending ? (
+              <span className="status-feedback-sending" role="status">
+                <span className="status-composer-send-spinner" aria-hidden="true" />
+                {t('statusView.feedback.sending')}
+              </span>
             ) : notice ? (
               <p className="status-feedback-notice">{notice}</p>
             ) : (

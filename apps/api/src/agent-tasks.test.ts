@@ -175,6 +175,45 @@ describe('startTask', () => {
     });
   });
 
+  it('bounds every call so a hung GitHub cannot strand a creator-facing dispatch', async () => {
+    // Feedback and improve await startTask. Without a ceiling, a quiet upstream left the
+    // studio send button disabled until the platform killed the HTTP request — which
+    // looked like nothing was happening at all.
+    const { impl, calls } = stubFetch(() => FRESH_TASK);
+    const client = createAgentTasksClient({ token: 't', repo: 'o/r', fetchImpl: impl, timeoutMs: 1_500 });
+
+    await client.startTask({
+      prompt: 'build it',
+      baseRef: 'main',
+      model: 'claude-sonnet-4.6',
+      createPullRequest: false,
+    });
+
+    expect(calls[0]?.init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('names a timeout as a 504 rather than a generic network failure', async () => {
+    const impl = (async (_url: string | URL | Request, init: RequestInit = {}) => {
+      // Honour the client's abort so the test does not hang when the signal fires.
+      await new Promise<never>((_resolve, reject) => {
+        const fail = () => reject(new DOMException('The operation was aborted.', 'AbortError'));
+        if (init.signal?.aborted) fail();
+        else init.signal?.addEventListener('abort', fail, { once: true });
+      });
+      return new Response('{}');
+    }) as unknown as typeof fetch;
+    const client = createAgentTasksClient({ token: 't', repo: 'o/r', fetchImpl: impl, timeoutMs: 20 });
+
+    await expect(
+      client.startTask({
+        prompt: 'build it',
+        baseRef: 'main',
+        model: 'claude-sonnet-4.6',
+        createPullRequest: false,
+      }),
+    ).rejects.toMatchObject({ name: 'AgentTasksError', status: 504 });
+  });
+
   it('targets the repository-scoped endpoint with the pinned API version', async () => {
     const { impl, calls } = stubFetch(() => FRESH_TASK);
     const client = createAgentTasksClient({ token: 't', repo: 'gamedevpl/www.gamedev.pl-games', fetchImpl: impl });

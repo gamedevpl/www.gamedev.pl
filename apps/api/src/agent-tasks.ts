@@ -163,6 +163,9 @@ export interface AgentTaskInput {
   customAgent?: string;
 }
 
+/** How long a single agent-tasks HTTP call may take before we give up. */
+export const DEFAULT_AGENT_TASKS_TIMEOUT_MS = 25_000;
+
 export interface AgentTasksClientOptions {
   /**
    * A **user-to-server** token: a fine-grained PAT with the `Agent tasks` repository
@@ -177,6 +180,13 @@ export interface AgentTasksClientOptions {
   /** `owner/name`. */
   repo: string;
   fetchImpl?: typeof fetch;
+  /**
+   * Ceiling on one HTTP round trip. Absent → {@link DEFAULT_AGENT_TASKS_TIMEOUT_MS},
+   * or `AGENT_TASKS_TIMEOUT_MS` when that is set. Without a bound, a hung GitHub call
+   * held the creator's feedback POST open until the platform timed the request out —
+   * which looked like a send button that disabled itself and never came back.
+   */
+  timeoutMs?: number;
 }
 
 export interface AgentTasksClient {
@@ -280,6 +290,20 @@ export function resolveTaskBranch(task: AgentTask): string | null {
   return task.branch?.headRef ?? task.sessions[task.sessions.length - 1]?.headRef ?? null;
 }
 
+function resolveTimeoutMs(explicit: number | undefined): number {
+  if (typeof explicit === 'number' && Number.isFinite(explicit) && explicit > 0) return explicit;
+  const fromEnv = Number(process.env.AGENT_TASKS_TIMEOUT_MS);
+  if (Number.isFinite(fromEnv) && fromEnv > 0) return fromEnv;
+  return DEFAULT_AGENT_TASKS_TIMEOUT_MS;
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    (error instanceof Error && error.name === 'AbortError') ||
+    (typeof DOMException !== 'undefined' && error instanceof DOMException && error.name === 'AbortError')
+  );
+}
+
 export function createAgentTasksClient(options: AgentTasksClientOptions): AgentTasksClient {
   const fetchImpl = options.fetchImpl ?? fetch;
   const [owner, name] = options.repo.split('/');
@@ -287,18 +311,31 @@ export function createAgentTasksClient(options: AgentTasksClientOptions): AgentT
     throw new Error(`invalid repo "${options.repo}"`);
   }
   const base = `https://api.github.com/agents/repos/${owner}/${name}/tasks`;
+  const timeoutMs = resolveTimeoutMs(options.timeoutMs);
 
   async function request(url: string, init: RequestInit): Promise<Record<string, unknown>> {
-    const response = await fetchImpl(url, {
-      ...init,
-      headers: {
-        accept: 'application/vnd.github+json',
-        'x-github-api-version': AGENT_TASKS_API_VERSION,
-        authorization: `Bearer ${options.token}`,
-        ...(init.body ? { 'content-type': 'application/json' } : {}),
-        ...init.headers,
-      },
-    });
+    // Caller-supplied signals win; otherwise every call gets the client ceiling so a
+    // hung upstream cannot strand a creator-facing request that awaits dispatch.
+    const signal = init.signal ?? AbortSignal.timeout(timeoutMs);
+    let response: Response;
+    try {
+      response = await fetchImpl(url, {
+        ...init,
+        signal,
+        headers: {
+          accept: 'application/vnd.github+json',
+          'x-github-api-version': AGENT_TASKS_API_VERSION,
+          authorization: `Bearer ${options.token}`,
+          ...(init.body ? { 'content-type': 'application/json' } : {}),
+          ...init.headers,
+        },
+      });
+    } catch (error) {
+      if (isAbortError(error)) {
+        throw new AgentTasksError(`agent tasks ${init.method ?? 'GET'} timed out after ${timeoutMs}ms`, 504);
+      }
+      throw error;
+    }
 
     if (!response.ok) {
       // A rate-limited dispatch is worth naming distinctly: the same token is the only

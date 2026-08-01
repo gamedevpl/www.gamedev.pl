@@ -117,6 +117,7 @@ export async function submitImprovement(
   feedback: string,
   context?: FeedbackContext,
   builder?: 'platform' | 'self',
+  signal?: AbortSignal,
 ): Promise<{ ok: boolean; issueNumber: number; slug: string; shotId?: string }> {
   const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/improve`, {
     method: 'POST',
@@ -127,6 +128,7 @@ export async function submitImprovement(
       ...(context ? { context } : {}),
       ...(builder ? { builder } : {}),
     }),
+    ...(signal ? { signal } : {}),
   });
   if (!response.ok) {
     await throwResponseError(response);

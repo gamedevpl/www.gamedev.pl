@@ -2545,26 +2545,27 @@ export async function registerSubmissionRoutes(
           });
         }
       }
-      const outcome = await resumeBuild({
-        issueNumber,
-        feedback: contextBlock ? `${sanitizedFeedback}\n\n${contextBlock}` : sanitizedFeedback,
-        locale: creatorLocale,
-        log: request.log,
-        ...(record?.deliveredVersion ? {} : { undelivered: true }),
-        ...(requestedBuilder && isBuilderKind(requestedBuilder) ? { builder: requestedBuilder } : {}),
-      });
-
-      // Queue the same request on the build channel, so an agent already mid-session
-      // hears it in seconds rather than on its next dispatch. Best effort: the request
-      // is already dispatched above, so a queue failure must not report failure.
+      // Queue *before* dispatch. resumeBuild awaits the agent-tasks API, and a slow or
+      // hung upstream used to hold this handler open with the creator's words still only
+      // in the request body — so a timed-out send lost the note. The inbox is the durable
+      // copy; the dispatch is the head start.
+      const inboxText = contextBlock ? `${sanitizedFeedback}\n\n${contextBlock}` : sanitizedFeedback;
       if (store) {
         try {
-          const inboxText = contextBlock ? `${sanitizedFeedback}\n\n${contextBlock}` : sanitizedFeedback;
           await store.appendCreatorMessage(issueNumber, inboxText);
         } catch (queueError) {
           request.log.error({ err: queueError }, 'failed to queue feedback for the agent');
         }
       }
+
+      const outcome = await resumeBuild({
+        issueNumber,
+        feedback: inboxText,
+        locale: creatorLocale,
+        log: request.log,
+        ...(record?.deliveredVersion ? {} : { undelivered: true }),
+        ...(requestedBuilder && isBuilderKind(requestedBuilder) ? { builder: requestedBuilder } : {}),
+      });
 
       // Accepted, and honest about what it bought. The message is kept either way — it is
       // on the record and in the thread, and the next round to start will read it — but a

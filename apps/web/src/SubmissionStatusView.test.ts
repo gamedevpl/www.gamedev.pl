@@ -488,6 +488,7 @@ describe('SubmissionStatusView', () => {
       'The second level is far too hard, please add a checkpoint.',
       undefined,
       'platform',
+      expect.any(AbortSignal),
     );
     expect(mockedSubmitFeedback).not.toHaveBeenCalled();
     expect(container.querySelector('.builder-choice')).not.toBeNull();
@@ -1036,6 +1037,9 @@ describe('SubmissionStatusView', () => {
     expect(mockedSubmitFeedback).toHaveBeenCalledWith(
       'feedback-token',
       'Please make the car faster and add a boost pad.',
+      undefined,
+      undefined,
+      expect.any(AbortSignal),
     );
     expect(container.querySelector('.status-feedback-sent')).not.toBeNull();
 
@@ -1048,6 +1052,165 @@ describe('SubmissionStatusView', () => {
     await act(async () => {
       root.unmount();
     });
+  });
+
+  it('shows a sending indicator on the compact composer while the request is in flight', async () => {
+    // The compact send is icon-only. Disabling it without a spinner or "Sending…" left
+    // creators staring at a grey arrow with no idea whether anything was happening —
+    // and when the upstream hung, that was the last thing the page ever did.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'needs_changes',
+      preview: { slug: 'space-runner' },
+      progress: { headSha: 'sha-1', commits: [], checklist: [] },
+    });
+    mockedGetSubmissionPreview.mockResolvedValue({
+      slug: 'space-runner',
+      title: 'Space Runner',
+      html: '<canvas></canvas>',
+    });
+    let resolveSend!: (value: { ok: boolean; target: string }) => void;
+    mockedSubmitFeedback.mockReturnValue(
+      new Promise((resolve) => {
+        resolveSend = resolve;
+      }),
+    );
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/studio/feedback-token/thread');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'feedback-token', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    const textarea = container.querySelector<HTMLTextAreaElement>('.status-feedback-input');
+    await act(async () => {
+      if (textarea) {
+        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+        setter?.call(textarea, 'Please make the car faster and add a boost pad.');
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      await flushEffects();
+    });
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('.status-composer-send')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.status-composer.is-sending')).not.toBeNull();
+    expect(container.querySelector('.status-feedback-sending')?.textContent).toMatch(/Sending/i);
+    expect(container.querySelector('.status-composer-send-spinner')).not.toBeNull();
+    expect(container.querySelector<HTMLButtonElement>('.status-composer-send')?.disabled).toBe(true);
+
+    await act(async () => {
+      resolveSend({ ok: true, target: 'pull_request' });
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.status-composer.is-sending')).toBeNull();
+    expect(container.querySelector('.status-feedback-sent')).not.toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('re-enables the compact send when the request fails, instead of staying disabled', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'needs_changes',
+      preview: { slug: 'space-runner' },
+      progress: { headSha: 'sha-1', commits: [], checklist: [] },
+    });
+    mockedGetSubmissionPreview.mockResolvedValue({
+      slug: 'space-runner',
+      title: 'Space Runner',
+      html: '<canvas></canvas>',
+    });
+    mockedSubmitFeedback.mockRejectedValue(new Error('dispatch_failed'));
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/studio/feedback-token/thread');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'feedback-token', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    const textarea = container.querySelector<HTMLTextAreaElement>('.status-feedback-input');
+    await act(async () => {
+      if (textarea) {
+        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+        setter?.call(textarea, 'Please make the car faster and add a boost pad.');
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      await flushEffects();
+    });
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('.status-composer-send')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.status-feedback .error')).not.toBeNull();
+    expect(container.querySelector<HTMLButtonElement>('.status-composer-send')?.disabled).toBe(false);
+    expect(container.querySelector('.status-composer.is-sending')).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('keeps polling after needs_changes so a restarted round can appear without a refresh', async () => {
+    // needs_changes used to stop the poll. Feedback from that state starts another
+    // round; without a follow-up poll the page kept saying "needs a tweak" forever.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.useFakeTimers();
+    mockedGetSubmissionStatus
+      .mockResolvedValueOnce({ status: 'needs_changes' })
+      .mockResolvedValue({ status: 'building', progress: { headSha: 'sha-2', commits: [], checklist: [] } });
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/status/needs-poll');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'needs-poll' }));
+      await flushEffects();
+    });
+
+    expect(container.textContent).toContain('Needs a tweak');
+    expect(mockedGetSubmissionStatus).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+      await flushEffects();
+    });
+
+    expect(mockedGetSubmissionStatus).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain('Writing code');
+
+    await act(async () => {
+      root.unmount();
+    });
+    vi.useRealTimers();
   });
 
   it('says the note was kept but no round started, instead of a bare “Sent!”', async () => {
