@@ -12,6 +12,10 @@ describe('kit window (kits/current.json)', () => {
     expect(parseKitRegistry(JSON.stringify(REGISTRY))).toEqual(REGISTRY);
   });
 
+  it('rejects an empty-string previous (null is the only “no previous”)', () => {
+    expect(() => parseKitRegistry(JSON.stringify({ ...REGISTRY, previous: '' }))).toThrow(/previous/);
+  });
+
   it('accepts current and previous, refuses everything else', () => {
     expect(isKitEngineRefSupported(REGISTRY.current, REGISTRY)).toBe(true);
     expect(isKitEngineRefSupported(REGISTRY.previous!, REGISTRY)).toBe(true);

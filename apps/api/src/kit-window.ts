@@ -30,8 +30,10 @@ export function parseKitRegistry(raw: string): KitRegistry {
   if (typeof obj.current !== 'string' || !obj.current) {
     throw new Error('kits/current.json.current must be a non-empty string');
   }
-  if (!(obj.previous === null || typeof obj.previous === 'string')) {
-    throw new Error('kits/current.json.previous must be a string or null');
+  // Empty string is not "no previous" — null is. Accepting "" would shrink the window
+  // silently and produce confusing kit_outdated reports.
+  if (!(obj.previous === null || (typeof obj.previous === 'string' && obj.previous.length > 0))) {
+    throw new Error('kits/current.json.previous must be a non-empty string or null');
   }
   if (typeof obj.updatedAt !== 'string' || !obj.updatedAt) {
     throw new Error('kits/current.json.updatedAt must be a non-empty string');

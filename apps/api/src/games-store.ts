@@ -114,6 +114,9 @@ export class InvalidUploadError extends Error {
   }
 }
 
+/** Hint derived from {@link ALLOWED_SOURCE_FILES} so refusal text cannot drift from the contract. */
+const ALLOWED_SOURCES_HINT = `${ALLOWED_SOURCE_FILES.join(', ')}, or your own .ts modules`;
+
 /**
  * True when a path is config-shaped or executable-config: tsconfig*, package*.json,
  * lockfiles, workflows, shell/JS entrypoints, dotfiles. The reason always names `path`.
@@ -123,8 +126,7 @@ export function forbiddenDeliveryPathReason(path: string): string | null {
   if (path.startsWith('.') || path.split('/').some((segment) => segment.startsWith('.'))) {
     return (
       `path not deliverable: ${path}. Dotfiles and hidden paths are config/executable-shaped — ` +
-      'deliver only game sources (SPEC.md, GAME.json, CAPTURE.json, PLAYTEST.json, index.html, ' +
-      'style.css, game.ts, and your own .ts modules).'
+      `deliver only game sources (${ALLOWED_SOURCES_HINT}).`
     );
   }
   if (path === 'media' || path.startsWith('media/')) {
@@ -136,8 +138,7 @@ export function forbiddenDeliveryPathReason(path: string): string | null {
   if (FORBIDDEN_DELIVERY_BASENAME.test(basename) || FORBIDDEN_DELIVERY_EXTENSION.test(basename)) {
     return (
       `path not deliverable: ${path}. Config or executable-shaped files are refused — ` +
-      'deliver only game sources (SPEC.md, GAME.json, CAPTURE.json, PLAYTEST.json, index.html, ' +
-      'style.css, game.ts, and your own .ts modules).'
+      `deliver only game sources (${ALLOWED_SOURCES_HINT}).`
     );
   }
   if (path.includes('.github/') || basename === 'Dockerfile' || basename === 'Makefile') {
