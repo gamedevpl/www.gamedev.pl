@@ -10,6 +10,7 @@ vi.stubGlobal('crypto', webcrypto);
 import {
   readVisitIdentity,
   recordCreateStep,
+  recordStudioStep,
   recordVisitEvent,
   recordWaitlistStep,
   referrerDomain,
@@ -317,6 +318,80 @@ describe('recordWaitlistStep', () => {
   it('is a silent no-op when tracking was never started', () => {
     setVisitSessionForTesting(null);
     expect(() => recordWaitlistStep('cta_clicked')).not.toThrow();
+  });
+});
+
+describe('recordCreateStep builder dimension', () => {
+  it('attaches an optional builder on create_step', () => {
+    const { batches, send } = capture();
+    const session = new VisitSession('v1', 0, send, () => 0);
+    setVisitSessionForTesting(session);
+
+    recordCreateStep('submission_created', 'self');
+    session.flush();
+    setVisitSessionForTesting(null);
+
+    expect(batches[0].events).toEqual([
+      expect.objectContaining({ type: 'create_step', step: 'submission_created', builder: 'self' }),
+    ]);
+  });
+});
+
+describe('recordStudioStep', () => {
+  it('records studio funnel steps with a builder dimension, once per key', () => {
+    const { batches, send } = capture();
+    // Clock advances so agent_signaled's msSinceStart is time-to-first-signal.
+    let now = 0;
+    const session = new VisitSession('v1', 0, send, () => now);
+    setVisitSessionForTesting(session);
+
+    recordStudioStep('builder_chosen', 'self');
+    recordStudioStep('builder_chosen', 'self');
+    recordStudioStep('builder_chosen', 'platform');
+    recordStudioStep('connect_copied', 'self', 'install');
+    recordStudioStep('connect_copied', 'self', 'kickoff');
+    now = 12_000;
+    recordStudioStep('agent_signaled', 'self');
+    recordStudioStep('agent_signaled', 'self');
+    recordStudioStep('gate_verdict', 'self', 'red');
+    session.flush();
+    setVisitSessionForTesting(null);
+
+    // Auto-flush at 5 may split the batch; gather every recorded event.
+    const recorded = batches.flatMap((batch) => batch.events);
+    expect(recorded).toEqual([
+      expect.objectContaining({ type: 'studio_step', step: 'builder_chosen', builder: 'self' }),
+      expect.objectContaining({ type: 'studio_step', step: 'builder_chosen', builder: 'platform' }),
+      expect.objectContaining({
+        type: 'studio_step',
+        step: 'connect_copied',
+        builder: 'self',
+        detail: 'install',
+      }),
+      expect.objectContaining({
+        type: 'studio_step',
+        step: 'connect_copied',
+        builder: 'self',
+        detail: 'kickoff',
+      }),
+      expect.objectContaining({
+        type: 'studio_step',
+        step: 'agent_signaled',
+        builder: 'self',
+        msSinceStart: 12_000,
+      }),
+      expect.objectContaining({
+        type: 'studio_step',
+        step: 'gate_verdict',
+        builder: 'self',
+        detail: 'red',
+      }),
+    ]);
+  });
+
+  it('is a silent no-op when tracking was never started', () => {
+    setVisitSessionForTesting(null);
+    expect(() => recordStudioStep('builder_chosen', 'self')).not.toThrow();
   });
 });
 

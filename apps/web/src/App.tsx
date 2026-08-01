@@ -52,7 +52,7 @@ import { saveLastBuilder, type BuilderKind } from './builderKind.js';
 import { clearPendingQa, loadPendingQa, savePendingQa, type PendingQaAnswers } from './pendingQa.js';
 import { useAuth } from './AuthContext.js';
 import { AuthModal } from './AuthModal.js';
-import { recordCreateStep } from './visitTelemetry.js';
+import { recordCreateStep, recordStudioStep } from './visitTelemetry.js';
 import { ClosedBetaSplash } from './ClosedBetaSplash.js';
 import { AppLoadingScreen } from './AppLoadingScreen.js';
 import { ControllerView } from './mp/ControllerView.js';
@@ -589,7 +589,8 @@ export function App() {
       saveLastBuilder(response.token, builder);
 
       setSubmissionStatus('idle');
-      recordCreateStep('submission_created');
+      recordCreateStep('submission_created', builder);
+      recordStudioStep('builder_chosen', builder);
 
       // Only now is the QA panel done: it stayed up, in its submitting state, for the
       // whole call. A no-op when the spec never went through the gate.

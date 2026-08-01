@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { BuilderKind } from './builderKind.js';
+import { recordStudioStep } from './visitTelemetry.js';
 
 type BuilderChoiceProps = {
   value: BuilderKind;
@@ -18,6 +19,11 @@ type BuilderChoiceProps = {
 export function BuilderChoice({ value, onChange, disabled = false, compact = false }: BuilderChoiceProps) {
   const { t } = useTranslation();
 
+  const select = (next: BuilderKind) => {
+    onChange(next);
+    recordStudioStep('builder_chosen', next);
+  };
+
   return (
     <fieldset className={`builder-choice${compact ? ' is-compact' : ''}`} disabled={disabled}>
       <legend className="builder-choice-legend">{t('builder.legend')}</legend>
@@ -28,7 +34,7 @@ export function BuilderChoice({ value, onChange, disabled = false, compact = fal
           aria-checked={value === 'platform'}
           className={`builder-choice-option${value === 'platform' ? ' is-selected' : ''}`}
           disabled={disabled}
-          onClick={() => onChange('platform')}
+          onClick={() => select('platform')}
         >
           <span className="builder-choice-option-title">{t('builder.platform.title')}</span>
           <span className="builder-choice-option-detail">{t('builder.platform.detail')}</span>
@@ -39,7 +45,7 @@ export function BuilderChoice({ value, onChange, disabled = false, compact = fal
           aria-checked={value === 'self'}
           className={`builder-choice-option${value === 'self' ? ' is-selected' : ''}`}
           disabled={disabled}
-          onClick={() => onChange('self')}
+          onClick={() => select('self')}
         >
           <span className="builder-choice-option-title">{t('builder.self.title')}</span>
           <span className="builder-choice-option-detail">{t('builder.self.detail')}</span>

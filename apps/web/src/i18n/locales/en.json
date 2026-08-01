@@ -482,6 +482,10 @@
       "submit": "Send feedback",
       "sending": "Sending…",
       "sent": "Sent! The agent will revise your game — watch the build log above.",
+      "routeSelfActive": "Your agent picks this up on its next check-in.",
+      "routeSelfWaiting": "Saved — your agent will get this when you start it.",
+      "sentSelfActive": "Sent — your agent picks this up on its next check-in.",
+      "sentSelfWaiting": "Saved — your agent will get this when you start it.",
       "noCapacity": "Saved — but no build round could start: the build agent is out of capacity right now. Your note is safe and the next round will read it.",
       "notStarted": "Saved — but a new build round didn't start. Your note is safe; we're looking into it.",
       "error": "We couldn't send that right now. Please try again in a moment.",
@@ -557,14 +561,16 @@
       "task_timed_out": "The build ran out of time before finishing. Your progress is safe — send feedback below to start another round.",
       "task_completed_without_delivery": "The agent finished without delivering the game. Send feedback below to start another round.",
       "gate_red": "This build didn't pass our automatic checks, so it can't go live yet. Send feedback below to start another round — the agent will see what failed and fix it.",
+      "self_build_delivery_cap": "This round hit its delivery limit, so your agent can't submit another build until you start a new round. Send a short note below to continue — your progress so far is safe.",
       "generic": "This build round ended with an error. Your progress is safe — send feedback below to start another round."
     },
     "stall": {
       "awaiting_input": "The agent is waiting for your input — reply below to keep the build moving.",
       "not_dispatched": "The build hasn't been picked up by an agent yet. It's been waiting longer than expected — we're looking into it.",
       "quiet": "The agent has been quiet for a while. It may still be working — or you can send feedback below to start another round.",
+      "quietSelf": "Your coding agent has been quiet. We can't start it from here — paste the prompt below into your agent when you're ready, or send a note that it will pick up on its next run.",
       "gate_not_started": "The game was delivered, but verification hasn't started yet. This is on our side — no action needed from you.",
-      "no_agent_yet": "Waiting for your coding agent — follow the steps below to connect it."
+      "no_agent_yet": "No agent yet — this round waits for your coding agent. Follow the steps below to connect it."
     },
     "tryAgain": "Try this idea again",
     "abandon": {

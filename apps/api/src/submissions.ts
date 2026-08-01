@@ -26,7 +26,13 @@ import { startHealthCheck } from './game-health.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
 import type { AgentBackend, SeedFiles } from './agent-backend.js';
 import { resolveBuilderBackend, type AgentBackendRegistry } from './agent-backend-env.js';
-import { isActiveBuildRound, isBuilderKind, selfBuildConnectDays, type BuilderKind } from './builder.js';
+import {
+  isActiveBuildRound,
+  isBuilderKind,
+  selfBuildConnectDays,
+  selfBuildDeliveryCap,
+  type BuilderKind,
+} from './builder.js';
 import type { GameSeeder, SeedDraft } from './game-seed.js';
 import {
   canTransition,
@@ -1563,6 +1569,12 @@ export async function registerSubmissionRoutes(
     if (roundBuilder) status.builder = roundBuilder;
     const lastBuilder = record.defaultBuilder ?? record.builder;
     if (lastBuilder) status.defaultBuilder = lastBuilder;
+    // Delivery-cap is refused to the agent over the channel; echo it on status so the
+    // Studio can show honest copy without a new endpoint (BY-08). Only when nothing
+    // stronger (gate_red, task_failed, …) already explains the stop.
+    if (builderOf(record) === 'self' && !status.failure && (record.roundDeliveryCount ?? 0) >= selfBuildDeliveryCap()) {
+      status.failure = { reason: 'self_build_delivery_cap' };
+    }
     return status;
   }
 

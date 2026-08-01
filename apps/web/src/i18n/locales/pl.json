@@ -486,6 +486,10 @@
       "submit": "Wyślij uwagi",
       "sending": "Wysyłanie…",
       "sent": "Wysłano! Agent poprawi Twoją grę — obserwuj dziennik budowy powyżej.",
+      "routeSelfActive": "Twój agent odbierze to przy następnym odczycie skrzynki.",
+      "routeSelfWaiting": "Zapisano — Twój agent dostanie to, gdy go uruchomisz.",
+      "sentSelfActive": "Wysłano — Twój agent odbierze to przy następnym odczycie skrzynki.",
+      "sentSelfWaiting": "Zapisano — Twój agent dostanie to, gdy go uruchomisz.",
       "noCapacity": "Zapisano — ale nie udało się rozpocząć rundy budowania: agent nie ma teraz wolnych mocy. Twoja wiadomość jest bezpieczna i zostanie odczytana w kolejnej rundzie.",
       "notStarted": "Zapisano — ale nowa runda budowania się nie rozpoczęła. Twoja wiadomość jest bezpieczna; sprawdzamy, co się stało.",
       "error": "Nie udało się teraz tego wysłać. Spróbuj ponownie za chwilę.",
@@ -561,14 +565,16 @@
       "task_timed_out": "Budowanie nie zdążyło się skończyć w wyznaczonym czasie. Postępy są bezpieczne — wyślij poniżej uwagi, aby rozpocząć kolejną rundę.",
       "task_completed_without_delivery": "Agent zakończył pracę, ale nie dostarczył gry. Wyślij poniżej uwagi, aby rozpocząć kolejną rundę.",
       "gate_red": "Ta wersja nie przeszła naszych automatycznych testów, więc jeszcze nie może trafić do arcade. Wyślij poniżej uwagi, aby rozpocząć kolejną rundę — agent zobaczy, co nie przeszło, i to poprawi.",
+      "self_build_delivery_cap": "Ta runda wyczerpała limit dostarczeń, więc Twój agent nie może wysłać kolejnej wersji, dopóki nie zaczniesz nowej rundy. Wyślij poniżej krótką uwagę, aby kontynuować — dotychczasowe postępy są bezpieczne.",
       "generic": "Ta runda budowania zakończyła się błędem. Postępy są bezpieczne — wyślij poniżej uwagi, aby rozpocząć kolejną rundę."
     },
     "stall": {
       "awaiting_input": "Agent czeka na Twoją odpowiedź — napisz poniżej, aby budowa ruszyła dalej.",
       "not_dispatched": "Budowa nie została jeszcze podjęta przez agenta. Trwa to dłużej niż zwykle — sprawdzamy to.",
       "quiet": "Agent od dłuższej chwili nie daje znaku życia. Może wciąż pracuje — możesz też wysłać poniżej uwagi, aby rozpocząć kolejną rundę.",
+      "quietSelf": "Twój agent od dłuższej chwili milczy. Nie możemy go stąd uruchomić — wklej poniżej prompt do swojego agenta, gdy będziesz gotowy, albo wyślij uwagę, którą odbierze przy następnym uruchomieniu.",
       "gate_not_started": "Gra została dostarczona, ale weryfikacja jeszcze się nie rozpoczęła. To po naszej stronie — nie musisz nic robić.",
-      "no_agent_yet": "Czekamy na Twojego agenta — wykonaj kroki poniżej, żeby go podłączyć."
+      "no_agent_yet": "Nie ma jeszcze agenta — ta runda czeka na Twojego agenta. Wykonaj kroki poniżej, żeby go podłączyć."
     },
     "tryAgain": "Spróbuj z tym pomysłem jeszcze raz",
     "abandon": {

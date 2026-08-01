@@ -13,6 +13,12 @@ import {
   submitFeedback,
 } from './submissionApi.js';
 import { submitImprovement } from './studioApi.js';
+import { recordStudioStep } from './visitTelemetry.js';
+
+vi.mock('./visitTelemetry', async () => {
+  const actual = await vi.importActual<typeof import('./visitTelemetry')>('./visitTelemetry');
+  return { ...actual, recordStudioStep: vi.fn() };
+});
 
 vi.mock('./studioApi', async () => {
   const actual = await vi.importActual<typeof import('./studioApi')>('./studioApi');
@@ -37,6 +43,7 @@ const mockedGetChannelPlayable = vi.mocked(getChannelPlayable);
 const mockedSubmitFeedback = vi.mocked(submitFeedback);
 const mockedAbandonSubmission = vi.mocked(abandonSubmission);
 const mockedSubmitImprovement = vi.mocked(submitImprovement);
+const mockedRecordStudioStep = vi.mocked(recordStudioStep);
 
 async function flushEffects() {
   await Promise.resolve();
@@ -49,6 +56,7 @@ describe('SubmissionStatusView', () => {
     localStorage.clear();
     window.history.pushState(null, '', '/');
     vi.clearAllMocks();
+    vi.useRealTimers();
   });
 
   it('renders queued state copy', async () => {
@@ -566,12 +574,93 @@ describe('SubmissionStatusView', () => {
       });
 
       expect(container.querySelector('.studio-connect')).toBeNull();
+      // Active self round: composer routing says the agent will pick the note up.
+      expect(container.textContent).toContain('picks this up on its next check-in');
     } finally {
       await act(async () => {
         root.unmount();
       });
       vi.useRealTimers();
       vi.unstubAllGlobals();
+    }
+  });
+
+  it('resurfaces the connect card with quiet-self copy when a self agent goes silent', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const connectFetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        installSnippets: {
+          claudeCode: 'claude mcp add gamedevpl https://example.test/api/mcp',
+          codex: 'url = "https://example.test/api/mcp"',
+          cursor: '{"mcpServers":{}}',
+          kimi: 'npx mcp-remote https://example.test/api/mcp',
+          cli: 'curl https://example.test/api/mcp',
+        },
+        kickoffPrompt: 'Build "Quiet Game" for gamedev.pl.\nStart with the gamedevpl tool, key: quiet.key',
+        expiresAt: Math.floor(Date.now() / 1000) + 3600,
+      }),
+    }));
+    vi.stubGlobal('fetch', connectFetch);
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      stall: 'quiet',
+      builder: 'self',
+      events: [],
+    });
+
+    await i18n.changeLanguage('en');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    try {
+      await act(async () => {
+        root.render(createElement(SubmissionStatusView, { token: 'quiet-token', embedded: true }));
+        await flushEffects();
+        await flushEffects();
+      });
+
+      expect(container.querySelector('.status-warning')?.textContent).toContain("can't start it from here");
+      expect(container.querySelector('.studio-connect')).not.toBeNull();
+      expect(container.textContent).toContain('your agent will get this when you start it');
+      expect(container.textContent?.toLowerCase()).not.toMatch(/\btoken\b/);
+    } finally {
+      await act(async () => {
+        root.unmount();
+      });
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('names a delivery-cap stop for a self round', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      builder: 'self',
+      failure: { reason: 'self_build_delivery_cap' },
+      events: [],
+    });
+
+    await i18n.changeLanguage('en');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    try {
+      await act(async () => {
+        root.render(createElement(SubmissionStatusView, { token: 'cap-token', embedded: true }));
+        await flushEffects();
+        await flushEffects();
+      });
+
+      expect(container.querySelector('.status-warning')?.textContent).toContain('delivery limit');
+      expect(container.querySelector('.studio-connect')).toBeNull();
+      expect(container.textContent?.toLowerCase()).not.toMatch(/\btoken\b/);
+    } finally {
+      await act(async () => {
+        root.unmount();
+      });
     }
   });
 
@@ -1353,5 +1442,61 @@ describe('SubmissionStatusView stop & retry', () => {
     await act(async () => {
       root.unmount();
     });
+  });
+
+  it('emits gate_verdict only on a live transition, not on reload of a finished build', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    vi.useFakeTimers();
+
+    // Reload into an already-published self build: must not mint gate_verdict.
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'published',
+      builder: 'self',
+    });
+    window.history.pushState(null, '', '/status/verdict-reload');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'verdict-reload', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+    expect(mockedRecordStudioStep).not.toHaveBeenCalledWith('gate_verdict', expect.anything(), expect.anything());
+
+    await act(async () => {
+      root.unmount();
+    });
+    mockedRecordStudioStep.mockClear();
+
+    // Live transition: building → in_review should emit green once.
+    mockedGetSubmissionStatus
+      .mockResolvedValueOnce({ status: 'building', builder: 'self' })
+      .mockResolvedValue({ status: 'in_review', builder: 'self' });
+    window.history.pushState(null, '', '/status/verdict-live');
+    const live = document.createElement('div');
+    document.body.appendChild(live);
+    const liveRoot = createRoot(live);
+
+    await act(async () => {
+      liveRoot.render(createElement(SubmissionStatusView, { token: 'verdict-live', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+    expect(mockedRecordStudioStep).not.toHaveBeenCalledWith('gate_verdict', 'self', 'green');
+
+    await act(async () => {
+      vi.advanceTimersByTime(ACTIVE_POLL_MS);
+      await flushEffects();
+      await flushEffects();
+    });
+    expect(mockedRecordStudioStep).toHaveBeenCalledWith('gate_verdict', 'self', 'green');
+
+    await act(async () => {
+      liveRoot.unmount();
+    });
+    vi.useRealTimers();
   });
 });

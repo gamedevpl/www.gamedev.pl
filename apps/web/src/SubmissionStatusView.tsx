@@ -22,12 +22,25 @@ import {
 } from './submissionApi.js';
 import { statusPath, studioPath } from './router.js';
 import { formatRelativeTime } from './relativeTime.js';
+import { selfComposerRoute, selfStatusCopy, shouldShowConnectCard } from './selfBuildCopy.js';
 import { StudioConnectCard } from './StudioConnectCard.js';
 import { submitImprovement } from './studioApi.js';
+import { recordStudioStep, type StudioStepDetail } from './visitTelemetry.js';
 
-/** A self round waiting for the creator's agent — show the connect card, not stall copy. */
+function copyInputFromStatus(status: SubmissionStatus | null | undefined) {
+  return {
+    builder: status?.builder,
+    stall: status?.stall,
+    failureReason: status?.failure?.reason,
+  };
+}
+
+/**
+ * Whether the Studio connect card should be on screen for this status snapshot.
+ * True for self rounds with no agent yet *or* a quiet agent (card resurfaced).
+ */
 function isAwaitingOwnAgent(status: SubmissionStatus | null | undefined): boolean {
-  return status?.stall === 'no_agent_yet';
+  return shouldShowConnectCard(copyInputFromStatus(status));
 }
 
 /**
@@ -172,7 +185,13 @@ function StatusTimeline({ current }: { current: SubmissionStatus['status'] }) {
 type PendingRevision = { text: string; at: number };
 
 /** Failure reasons with their own copy; anything newer gets the generic sentence. */
-const FAILURE_COPY_KEYS = new Set(['task_failed', 'task_timed_out', 'task_completed_without_delivery', 'gate_red']);
+const FAILURE_COPY_KEYS = new Set([
+  'task_failed',
+  'task_timed_out',
+  'task_completed_without_delivery',
+  'gate_red',
+  'self_build_delivery_cap',
+]);
 
 function failureCopyKey(reason: string): string {
   return FAILURE_COPY_KEYS.has(reason) ? reason : 'generic';
@@ -318,18 +337,59 @@ export function SubmissionStatusView({
 
   const publishedGameTitle = submittedTitle ?? status?.slug ?? t('statusView.publishedGameTitle');
   const heartbeatAt = latestAgentActivityAt(status);
+  const selfCopy = selfStatusCopy(copyInputFromStatus(status));
 
   /**
    * What is happening, in the creator's words.
    *
    * Only the phases that mean something the coarse status cannot say carry their own
    * sentence (see `statusView.phases`); everything else falls through to the status
-   * copy rather than being written twice and drifting.
+   * copy rather than being written twice and drifting. Self rounds replace the
+   * platform "an agent picks it up" sentence while still waiting to connect.
    */
   const stateDescription = status
-    ? (status.phase ? t(`statusView.phases.${status.phase}`, { defaultValue: '' }) : '') ||
-      t(`statusView.states.${status.status}.description`)
+    ? selfCopy === 'no_agent_yet'
+      ? t('statusView.stall.no_agent_yet')
+      : (status.phase ? t(`statusView.phases.${status.phase}`, { defaultValue: '' }) : '') ||
+        t(`statusView.states.${status.status}.description`)
     : '';
+
+  // Studio telemetry: first agent signal + gate verdict, with builder dimension.
+  // Emit only on transitions observed during this mount — a reload of an already
+  // finished submission must not mint a fresh gate_verdict (visit stream is per-tab).
+  const prevStallRef = useRef<SubmissionStatus['stall'] | undefined>(undefined);
+  const prevVerdictRef = useRef<StudioStepDetail | null | undefined>(undefined);
+  const hasSeenStatusRef = useRef(false);
+  useEffect(() => {
+    if (!status) return;
+    const builder = status.builder && isBuilderKind(status.builder) ? status.builder : null;
+
+    const failureReason = status.failure?.reason;
+    let verdict: StudioStepDetail | null = null;
+    if (failureReason === 'gate_red') verdict = 'red';
+    else if (failureReason === 'kit_outdated') verdict = 'kit_outdated';
+    else if (
+      status.status === 'in_review' ||
+      status.status === 'publishing' ||
+      status.status === 'published' ||
+      status.phase === 'ready_for_review'
+    ) {
+      verdict = 'green';
+    }
+
+    if (builder) {
+      if (prevStallRef.current === 'no_agent_yet' && status.stall !== 'no_agent_yet') {
+        recordStudioStep('agent_signaled', builder);
+      }
+      if (hasSeenStatusRef.current && verdict && prevVerdictRef.current !== verdict) {
+        recordStudioStep('gate_verdict', builder, verdict);
+      }
+    }
+
+    prevStallRef.current = status.stall;
+    prevVerdictRef.current = verdict;
+    hasSeenStatusRef.current = true;
+  }, [status]);
 
   // No share link here any more. It used to be shown unconditionally and pointed at
   // `/draft/<slug>`, which was readable by any signed-in visitor who knew the slug.
@@ -523,8 +583,9 @@ export function SubmissionStatusView({
                     needs a sentence here — the thread's emptyLabel only shows when there
                     are no turns, which is exactly when a bounced build still has planning
                     notes and used to look like nothing was wrong.
-                    Self rounds waiting to connect get the connect card instead of stall
-                    copy — the card *is* the waiting state. */}
+                    Self rounds: no-agent-yet is the connect card alone; quiet keeps a
+                    self-specific warning *and* resurfaces the card (we cannot wake the
+                    agent). Delivery-cap is a failure sentence, not a stall. */}
                 {status.failure ? (
                   <p className="status-warning">
                     <PixelIcon name="signal" size={13} />{' '}
@@ -534,7 +595,11 @@ export function SubmissionStatusView({
                   <p className="status-warning">
                     <PixelIcon name="signal" size={13} /> {t('statusView.states.needs_changes.description')}
                   </p>
-                ) : isAwaitingOwnAgent(status) ? null : status.stall ? (
+                ) : selfCopy === 'no_agent_yet' ? null : selfCopy === 'quiet_agent' ? (
+                  <p className="status-warning">
+                    <PixelIcon name="signal" size={13} /> {t('statusView.stall.quietSelf')}
+                  </p>
+                ) : status.stall ? (
                   <p className="status-warning">
                     <PixelIcon name="signal" size={13} /> {t(`statusView.stall.${status.stall}`)}
                   </p>
@@ -578,6 +643,9 @@ export function SubmissionStatusView({
                     compact
                     chooseBuilder={canChooseBuilder(status)}
                     initialBuilder={resolveDefaultBuilder(token, status)}
+                    roundBuilder={status.builder && isBuilderKind(status.builder) ? status.builder : undefined}
+                    stall={status.stall}
+                    failureReason={status.failure?.reason}
                     onSent={(text) => setPendingRevisions((current) => [...current, { text, at: Date.now() }])}
                   />
                 ) : null}
@@ -645,12 +713,17 @@ export function SubmissionStatusView({
             ) : null}
 
             {/* A dead round outranks a slow one: when both are set, the failure is
-                the explanation and the stall is just its symptom. */}
+                the explanation and the stall is just its symptom. Self quiet keeps
+                its warning and resurfaces the connect card. */}
             {status.failure ? (
               <p className="status-warning">
                 <PixelIcon name="signal" size={13} /> {t(`statusView.failure.${failureCopyKey(status.failure.reason)}`)}
               </p>
-            ) : isAwaitingOwnAgent(status) ? null : status.stall ? (
+            ) : selfCopy === 'no_agent_yet' ? null : selfCopy === 'quiet_agent' ? (
+              <p className="status-warning">
+                <PixelIcon name="signal" size={13} /> {t('statusView.stall.quietSelf')}
+              </p>
+            ) : status.stall ? (
               <p className="status-warning">
                 <PixelIcon name="signal" size={13} /> {t(`statusView.stall.${status.stall}`)}
               </p>
@@ -736,6 +809,9 @@ export function SubmissionStatusView({
                 building={!preview && !channelHtml}
                 chooseBuilder={canChooseBuilder(status)}
                 initialBuilder={resolveDefaultBuilder(token, status)}
+                roundBuilder={status.builder && isBuilderKind(status.builder) ? status.builder : undefined}
+                stall={status.stall}
+                failureReason={status.failure?.reason}
                 onSent={(text) => setPendingRevisions((current) => [...current, { text, at: Date.now() }])}
               />
             ) : null}
@@ -921,6 +997,9 @@ function FeedbackPanel({
   compact = false,
   chooseBuilder = false,
   initialBuilder = 'platform',
+  roundBuilder,
+  stall,
+  failureReason,
   onSent,
 }: {
   token: string;
@@ -932,6 +1011,10 @@ function FeedbackPanel({
   /** Show builder choice — the next send opens a new round. */
   chooseBuilder?: boolean;
   initialBuilder?: BuilderKind;
+  /** Builder of the *current* round — drives self-build routing copy. */
+  roundBuilder?: BuilderKind;
+  stall?: SubmissionStatus['stall'];
+  failureReason?: string;
   onSent: (text: string) => void;
 }) {
   const { t } = useTranslation();
@@ -952,6 +1035,26 @@ function FeedbackPanel({
   }, [initialBuilder, token]);
 
   const trimmed = text.trim();
+  // When choosing a builder for a new round, the selector is the truth; otherwise the
+  // current round's builder drives the honest self-build routing note.
+  const routeBuilder = chooseBuilder ? builder : roundBuilder;
+  const composerRoute = selfComposerRoute({
+    builder: routeBuilder,
+    stall: chooseBuilder ? null : stall,
+    failureReason: chooseBuilder ? null : failureReason,
+  });
+  const sentSelfKey =
+    composerRoute === 'active'
+      ? 'statusView.feedback.sentSelfActive'
+      : composerRoute === 'waiting'
+        ? 'statusView.feedback.sentSelfWaiting'
+        : null;
+  const routeNoteKey =
+    composerRoute === 'active'
+      ? 'statusView.feedback.routeSelfActive'
+      : composerRoute === 'waiting'
+        ? 'statusView.feedback.routeSelfWaiting'
+        : null;
 
   // The composer grows with what is typed, which is what replaced the resize grip: once
   // the send button moved inside the box, a drag handle in the middle of its right edge
@@ -991,7 +1094,10 @@ function FeedbackPanel({
           );
         }
       }
-      if (roundBuilder) saveLastBuilder(token, roundBuilder);
+      if (roundBuilder) {
+        saveLastBuilder(token, roundBuilder);
+        recordStudioStep('builder_chosen', roundBuilder);
+      }
       setState('sent');
       setText('');
       // Back to the CSS height rather than the height the sent message grew it to: an
@@ -1013,6 +1119,10 @@ function FeedbackPanel({
       }
       setState('idle');
     }
+  };
+
+  const handleBuilderChange = (next: BuilderKind) => {
+    setBuilder(next);
   };
 
   // Three states, one box. The copy is the only thing that changes, and it changes so
@@ -1046,7 +1156,10 @@ function FeedbackPanel({
     return (
       <div className="status-feedback status-composer is-compact">
         {chooseBuilder ? (
-          <BuilderChoice value={builder} onChange={setBuilder} disabled={state === 'sending'} compact />
+          <BuilderChoice value={builder} onChange={handleBuilderChange} disabled={state === 'sending'} compact />
+        ) : null}
+        {routeNoteKey && state !== 'sent' && !error && !notice ? (
+          <p className="status-feedback-route">{t(routeNoteKey)}</p>
         ) : null}
         {/* Field and send on one line. The button used to sit on a row of its own below
             the box, which cost a phone screen an entire line to say what an arrow beside
@@ -1091,7 +1204,7 @@ function FeedbackPanel({
               <p className="status-feedback-notice">{notice}</p>
             ) : (
               <span className="status-feedback-sent">
-                <PixelIcon name="check" size={13} /> {t('statusView.feedback.sent')}
+                <PixelIcon name="check" size={13} /> {t(sentSelfKey ?? 'statusView.feedback.sent')}
               </span>
             )}
           </div>
@@ -1104,7 +1217,12 @@ function FeedbackPanel({
     <div className="status-feedback status-composer">
       <h3 className="status-feedback-title">{t(titleKey)}</h3>
       <p className="status-feedback-hint">{t(hintKey)}</p>
-      {chooseBuilder ? <BuilderChoice value={builder} onChange={setBuilder} disabled={state === 'sending'} /> : null}
+      {chooseBuilder ? (
+        <BuilderChoice value={builder} onChange={handleBuilderChange} disabled={state === 'sending'} />
+      ) : null}
+      {routeNoteKey && state !== 'sent' && !error && !notice ? (
+        <p className="status-feedback-route">{t(routeNoteKey)}</p>
+      ) : null}
       <textarea
         className="status-feedback-input"
         value={text}
@@ -1126,7 +1244,7 @@ function FeedbackPanel({
         </button>
         {state === 'sent' && !notice ? (
           <span className="status-feedback-sent">
-            <PixelIcon name="check" size={13} /> {t('statusView.feedback.sent')}
+            <PixelIcon name="check" size={13} /> {t(sentSelfKey ?? 'statusView.feedback.sent')}
           </span>
         ) : null}
       </div>
