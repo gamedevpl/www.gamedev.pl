@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createGcsGamesStore,
   defaultVersionId,
+  forbiddenDeliveryPathReason,
   InvalidUploadError,
   MAX_UPLOAD_BYTES,
   validateSourceUpload,
@@ -104,6 +105,55 @@ describe('validateSourceUpload — the delivery contract', () => {
     expect(() => validateSourceUpload([...MINIMAL, { path: 'notes.txt', content: 'x' }])).toThrow(
       /Deliver only your own game's files/,
     );
+  });
+
+  it('accept/reject matrix for the delivery filename allowlist', () => {
+    const accept = [
+      'GAME.json',
+      'CAPTURE.json',
+      'style.css',
+      'game/loop.ts',
+      'game/systems/physics.ts',
+      'entities/player.ts',
+    ];
+    for (const path of accept) {
+      expect(
+        validateSourceUpload([...MINIMAL, { path, content: path.endsWith('.json') ? '{}' : 'export {};' }]).map(
+          (f) => f.path,
+        ),
+      ).toContain(path);
+    }
+
+    const reject = [
+      'package.json',
+      'package-lock.json',
+      'tsconfig.json',
+      'tsconfig.build.json',
+      'pnpm-lock.yaml',
+      'yarn.lock',
+      '.env',
+      '.github/workflows/ci.yml',
+      'vite.config.ts', // .ts but config basename — wait, EXTRA allows *.ts; forbid by basename
+      'setup.js',
+      'index.mjs',
+      'run.cjs',
+      'media/opening.png',
+      'Dockerfile',
+      'script.sh',
+    ];
+    for (const path of reject) {
+      const reason = forbiddenDeliveryPathReason(path);
+      // Config-shaped paths must name themselves in the refusal.
+      if (reason) {
+        expect(reason).toContain(path);
+        expect(() => validateSourceUpload([...MINIMAL, { path, content: 'x' }])).toThrow(
+          new RegExp(path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+        );
+      } else {
+        // Non-config leftovers (e.g. notes) still refuse via the allowlist.
+        expect(() => validateSourceUpload([...MINIMAL, { path, content: 'x' }])).toThrow(/path not deliverable/);
+      }
+    }
   });
 });
 

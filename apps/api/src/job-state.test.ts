@@ -55,6 +55,7 @@ describe('round-closing transitions', () => {
 
   it('keeps the round open after a red gate so the session can repair', () => {
     expect(transitionClosesRound({ to: 'needs_changes', at: 't', by: 'gate', reason: 'gate_red' })).toBe(false);
+    expect(transitionClosesRound({ to: 'needs_changes', at: 't', by: 'gate', reason: 'kit_outdated' })).toBe(false);
     expect(transitionClosesRound({ to: 'submitted', at: 't', by: 'agent', reason: 'sources_delivered' })).toBe(false);
     expect(transitionClosesRound({ to: 'building', at: 't', by: 'operator', reason: 'operator_retry' })).toBe(false);
   });

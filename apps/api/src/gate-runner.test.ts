@@ -25,6 +25,7 @@ function stubStore(overrides: Partial<GamesStore> = {}) {
     putCandidateSources: vi.fn(),
     putGateResult: vi.fn(),
     getDerivedArtifact: async () => null,
+    getKitRegistry: async () => null,
     ...overrides,
   } as unknown as GamesStore;
   return { store, derived };
@@ -239,6 +240,61 @@ describe('runGate', () => {
       'media/opening.png',
     ]);
     expect(outcome.artifacts).toContain('bundle.html');
+    expect(outcome.screenshot).toBe('media/opening.png');
+  });
+
+  it('refuses a delivery whose kitEngineRef is outside kits/current.json', async () => {
+    const prepareHarness = vi.fn(async () => harnessDir());
+    const run = vi.fn(async () => ({ code: 0, output: '' }));
+    const { store } = stubStore({
+      getManifest: async () => ({
+        ...MANIFEST,
+        kitEngineRef: 'cccccccccccccccccccccccccccccccccccccccc',
+      }),
+    });
+
+    const outcome = await runGate('comet-courier', 'v1', {
+      store,
+      prepareHarness,
+      run,
+      assembleBundle: stubAssemble,
+      readKitRegistry: async () => ({
+        current: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        previous: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        updatedAt: '2026-07-31T12:00:00.000Z',
+      }),
+    });
+
+    expect(outcome).toMatchObject({ green: false, status: 'kit_outdated' });
+    expect(outcome.report).toMatch(/^kit_outdated:/);
+    expect(outcome.report).toContain('cccccccccccccccccccccccccccccccccccccccc');
+    // No harness, no check:game — the window refusal is the whole verdict.
+    expect(prepareHarness).not.toHaveBeenCalled();
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('accepts a kitEngineRef that is the registry previous (N−1)', async () => {
+    const previous = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    const { store } = stubStore({
+      getManifest: async () => ({ ...MANIFEST, kitEngineRef: previous }),
+    });
+    const run = vi.fn(async () => ({ code: 0, output: '' }));
+
+    const outcome = await runGate('comet-courier', 'v1', {
+      store,
+      prepareHarness: harnessDir,
+      run,
+      assembleBundle: stubAssemble,
+      readKitRegistry: async () => ({
+        current: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        previous,
+        updatedAt: '2026-07-31T12:00:00.000Z',
+      }),
+    });
+
+    expect(outcome.green).toBe(true);
+    expect(outcome.status).toBeUndefined();
+    expect(run).toHaveBeenCalled();
   });
 
   it('serves the assembler’s document, not the games repo’s own build output', async () => {

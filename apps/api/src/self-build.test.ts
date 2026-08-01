@@ -59,18 +59,29 @@ const MINIMAL_FILES = [
 ];
 
 function stubGamesStore() {
-  const stored: Array<{ slug: string; issueNumber: number; backend?: string; files: unknown[] }> = [];
-  const versions = new Map<string, { files: typeof MINIMAL_FILES; backend?: string }>();
+  const stored: Array<{
+    slug: string;
+    issueNumber: number;
+    backend?: string;
+    kitEngineRef?: string;
+    files: unknown[];
+  }> = [];
+  const versions = new Map<string, { files: typeof MINIMAL_FILES; backend?: string; kitEngineRef?: string }>();
   const gamesStore = {
     putCandidateSources: async (input: {
       slug: string;
       issueNumber: number;
       files: typeof MINIMAL_FILES;
       backend?: string;
+      kitEngineRef?: string;
     }) => {
       stored.push(input);
       const version = `v${stored.length}`;
-      versions.set(`${input.slug}:${version}`, { files: input.files, backend: input.backend });
+      versions.set(`${input.slug}:${version}`, {
+        files: input.files,
+        backend: input.backend,
+        kitEngineRef: input.kitEngineRef,
+      });
       return {
         version,
         manifest: {
@@ -79,6 +90,7 @@ function stubGamesStore() {
           createdAt: new Date().toISOString(),
           issueNumber: input.issueNumber,
           backend: input.backend,
+          kitEngineRef: input.kitEngineRef,
           sourceFiles: input.files.map((f) => f.path),
         },
       };
@@ -92,6 +104,7 @@ function stubGamesStore() {
         createdAt: new Date().toISOString(),
         issueNumber: 0,
         backend: hit.backend,
+        kitEngineRef: hit.kitEngineRef,
         sourceFiles: hit.files.map((f) => f.path),
       };
     },
@@ -103,9 +116,12 @@ function stubGamesStore() {
     putHealthResult: async () => {},
     putDerivedArtifact: async () => {},
     getDerivedArtifact: async () => null,
+    getKitRegistry: async () => null,
   } as unknown as GamesStore;
   return { gamesStore, stored };
 }
+
+const KIT_REF = 'abcdef1234567890';
 
 async function createApp(options: {
   platform?: AgentBackend;
@@ -277,11 +293,40 @@ describe('self builder (BY-02)', () => {
       method: 'POST',
       url: '/api/agent/build/sources',
       headers: agentHeaders(issueNumber),
-      payload: { slug, files: MINIMAL_FILES },
+      payload: { slug, files: MINIMAL_FILES, kitEngineRef: KIT_REF },
     });
     expect(delivery.json()).toMatchObject({ accepted: true });
     expect((await store.getSubmission(issueNumber))?.state).toBe('submitted');
     expect(stored[0]?.backend).toBe('self');
+  });
+
+  it('rejects a self-build delivery that omits kitEngineRef', async () => {
+    const { gamesStore } = stubGamesStore();
+    const created = await createApp({ gamesStore });
+    app = created.app;
+    const { store } = created;
+
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'Need Kit Ref', concept: CONCEPT, builder: 'self' },
+    });
+    const slug = submit.json().slug as string;
+    let issueNumber = 0;
+    await vi.waitFor(async () => {
+      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
+    });
+
+    const refused = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/sources',
+      headers: agentHeaders(issueNumber),
+      payload: { slug, files: MINIMAL_FILES },
+    });
+    expect(refused.statusCode).toBe(400);
+    expect(refused.json()).toMatchObject({ reason: 'kit_engine_ref_required' });
+    expect(refused.json().error).toMatch(/kitEngineRef/i);
   });
 
   it('enforces SELF_BUILD_DELIVERY_CAP with a machine-readable refusal', async () => {
@@ -309,7 +354,7 @@ describe('self builder (BY-02)', () => {
         method: 'POST',
         url: '/api/agent/build/sources',
         headers: agentHeaders(issueNumber),
-        payload: { slug, files: MINIMAL_FILES },
+        payload: { slug, files: MINIMAL_FILES, kitEngineRef: KIT_REF },
       });
       expect(ok.json().accepted).toBe(true);
     }
@@ -317,7 +362,7 @@ describe('self builder (BY-02)', () => {
       method: 'POST',
       url: '/api/agent/build/sources',
       headers: agentHeaders(issueNumber),
-      payload: { slug, files: MINIMAL_FILES },
+      payload: { slug, files: MINIMAL_FILES, kitEngineRef: KIT_REF },
     });
     expect(refused.json()).toMatchObject({
       accepted: false,
@@ -400,7 +445,7 @@ describe('self builder (BY-02)', () => {
       method: 'POST',
       url: '/api/agent/build/sources',
       headers: agentHeaders(issueNumber),
-      payload: { slug, files: MINIMAL_FILES },
+      payload: { slug, files: MINIMAL_FILES, kitEngineRef: KIT_REF },
     });
     await store.recordJobTransition(issueNumber, {
       to: 'ready_for_review',
@@ -479,9 +524,10 @@ describe('self builder (BY-02)', () => {
       method: 'POST',
       url: '/api/agent/build/sources',
       headers: agentHeaders(issueNumber),
-      payload: { slug, files: MINIMAL_FILES },
+      payload: { slug, files: MINIMAL_FILES, kitEngineRef: KIT_REF },
     });
     expect(stored[0]?.backend).toBe('self');
+    expect(stored[0]?.kitEngineRef).toBe(KIT_REF);
     expect((await store.getSubmission(issueNumber))?.builder).toBe('self');
   });
 
