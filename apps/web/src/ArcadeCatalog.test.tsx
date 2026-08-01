@@ -162,16 +162,164 @@ describe('ArcadeCatalog lazy media', () => {
       await flushEffects();
     });
 
-    const preview = container.querySelector<HTMLVideoElement>('video.catalog-preview');
-    expect(preview?.getAttribute('src')).toBe('/api/games/above-fold/media/gameplay.mp4');
-    expect(preview?.getAttribute('poster')).toBe('/api/games/above-fold/media/opening.png');
+    // Entering the viewport buys the poster and the moment strip — but NOT a media
+    // player. See the note on `previewRequested` in ArcadeCatalog.tsx: a card that is
+    // merely on screen used to mount a `<video>`, and sixty of those is what made
+    // scrolling stutter.
+    const poster = container.querySelector<HTMLImageElement>('img.catalog-preview');
+    expect(poster?.getAttribute('src')).toBe('/api/games/above-fold/media/opening.png');
+    expect(container.querySelectorAll('video')).toHaveLength(0);
     expect(container.querySelectorAll('.catalog-moment')).toHaveLength(2);
 
-    // The second card still has no media srcs — it never intersected.
-    expect(container.querySelectorAll('video')).toHaveLength(1);
     expect(container.querySelectorAll('.catalog-moment img')).toHaveLength(2);
     const momentSrcs = [...container.querySelectorAll<HTMLImageElement>('.catalog-moment img')].map((img) => img.src);
     expect(momentSrcs.every((src) => src.includes('/api/games/above-fold/'))).toBe(true);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('mounts the player only once somebody asks to watch the preview', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ items: [] })));
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(ArcadeCatalog, {
+          catalogStatus: 'ready',
+          catalogError: null,
+          catalogEntries: entries,
+          onPlayGame: vi.fn(),
+          onPlayTogether: vi.fn(),
+          onRetryCatalog: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    const firstMedia = container.querySelectorAll('.catalog-media')[0]!;
+    await act(async () => {
+      intersect(observers[0]!, firstMedia, true);
+      await flushEffects();
+    });
+    expect(container.querySelectorAll('video')).toHaveLength(0);
+
+    // The toggle is the touch path — no hover on a phone, so this is how most people
+    // reach a preview at all.
+    const toggle = container.querySelector<HTMLButtonElement>('.preview-toggle')!;
+    expect(toggle).toBeTruthy();
+    await act(async () => {
+      toggle.click();
+      await flushEffects();
+    });
+
+    const preview = container.querySelector<HTMLVideoElement>('video.catalog-preview');
+    expect(preview?.getAttribute('src')).toBe('/api/games/above-fold/media/gameplay.mp4');
+    expect(preview?.getAttribute('poster')).toBe('/api/games/above-fold/media/opening.png');
+    // Fetching the whole clip is the point once it has been asked for; it is also what
+    // pays back the round trip the deferral costs.
+    expect(preview?.getAttribute('preload')).toBe('auto');
+
+    // The card nobody touched still has none.
+    expect(container.querySelectorAll('video')).toHaveLength(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  // Deferring the mount puts a load between the press and the first frame. jsdom never
+  // reaches `canplay`, which makes it the perfect stand-in for a slow connection: the
+  // control must already read "Pause preview" here, or a viewer on a bad line presses
+  // again and toggles their own preview back off.
+  it('acknowledges the press before the video can possibly have started', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ items: [] })));
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(ArcadeCatalog, {
+          catalogStatus: 'ready',
+          catalogError: null,
+          catalogEntries: entries,
+          onPlayGame: vi.fn(),
+          onPlayTogether: vi.fn(),
+          onRetryCatalog: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    await act(async () => {
+      intersect(observers[0]!, container.querySelectorAll('.catalog-media')[0]!, true);
+      await flushEffects();
+    });
+
+    const toggle = container.querySelector<HTMLButtonElement>('.preview-toggle')!;
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+
+    await act(async () => {
+      toggle.click();
+      await flushEffects();
+    });
+
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect(toggle.getAttribute('aria-label')).toContain('Pause');
+
+    // And pressing again gives the preview up rather than leaving it pending.
+    await act(async () => {
+      toggle.click();
+      await flushEffects();
+    });
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('keeps the keyboard path working: focusing the media asks for the preview too', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ items: [] })));
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(ArcadeCatalog, {
+          catalogStatus: 'ready',
+          catalogError: null,
+          catalogEntries: entries,
+          onPlayGame: vi.fn(),
+          onPlayTogether: vi.fn(),
+          onRetryCatalog: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    const firstMedia = container.querySelectorAll<HTMLElement>('.catalog-media')[0]!;
+    await act(async () => {
+      intersect(observers[0]!, firstMedia, true);
+      await flushEffects();
+    });
+
+    await act(async () => {
+      firstMedia.focus();
+      await flushEffects();
+    });
+
+    expect(container.querySelector('video.catalog-preview')?.getAttribute('src')).toBe(
+      '/api/games/above-fold/media/gameplay.mp4',
+    );
 
     await act(async () => {
       root.unmount();

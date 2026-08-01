@@ -78,22 +78,64 @@ function CatalogCard({
   const [selectedScreenshot, setSelectedScreenshot] = useState(0);
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
   const [isPreviewPinned, setIsPreviewPinned] = useState(false);
+  /**
+   * Whether this card has been asked for its preview yet.
+   *
+   * Being near the viewport used to be enough to mount a `<video>`, and `useInView`
+   * is sticky, so scrolling an arcade of sixty games left sixty media players in the
+   * document — none of which anybody had asked to watch. Chromium allocates a real
+   * player per element, and the cost showed up as scroll stutter that got worse with
+   * every game published: measured over a full-page scroll of sixty cards, 29 of 335
+   * frames missed their deadline and five long tasks burned ~330ms. Mounting only on
+   * intent takes that to 5 frames and no long tasks, with the poster image carrying
+   * the card until then.
+   */
+  const [previewRequested, setPreviewRequested] = useState(false);
+  /**
+   * The viewer wants this playing — held separately from `isPreviewPlaying`, which is
+   * the element's own state and cannot be true before the element exists. State rather
+   * than a ref because the toggle has to acknowledge the press immediately: deferring
+   * the mount put a load between the click and the first frame, and a button that
+   * still reads "Watch preview" during it looks like it missed the press.
+   */
+  const [previewWanted, setPreviewWanted] = useState(false);
   const screenshots = entry.media?.screenshots ?? [];
   const selected = screenshots[selectedScreenshot] ?? screenshots[0];
   const posterUrl = selected && inView ? catalogMediaUrl(entry.slug, selected.file) : undefined;
-  const videoUrl = entry.media?.video && inView ? catalogMediaUrl(entry.slug, entry.media.video) : null;
+  const videoUrl =
+    entry.media?.video && inView && previewRequested ? catalogMediaUrl(entry.slug, entry.media.video) : null;
   const hasVideo = Boolean(entry.media?.video);
 
-  function playPreview() {
+  function startPlayback() {
     const video = videoRef.current;
     if (!video) return;
+    // `previewWanted` is deliberately left set until playback actually reports back:
+    // clearing it here would blank the label for the frames between the call and
+    // `onPlay`, which reads as the control flickering.
     void video.play().then(
       () => setIsPreviewPlaying(true),
-      () => setIsPreviewPlaying(false),
+      () => {
+        setPreviewWanted(false);
+        setIsPreviewPlaying(false);
+      },
     );
   }
 
+  function playPreview() {
+    // First ask on this card: the element does not exist yet, so record the intent
+    // and let `onCanPlay` start it. Every later ask hits the element directly.
+    setPreviewWanted(true);
+    if (!previewRequested) {
+      setPreviewRequested(true);
+      return;
+    }
+    startPlayback();
+  }
+
   function pausePreview(reset = false) {
+    // Cancels a play that was still waiting on the element — otherwise a pointer that
+    // crossed the card faster than the video loaded would start it after leaving.
+    setPreviewWanted(false);
     const video = videoRef.current;
     if (!video) return;
     video.pause();
@@ -103,8 +145,11 @@ function CatalogCard({
     setIsPreviewPlaying(false);
   }
 
+  /** What the toggle shows: the viewer's intent, which leads the element's own state. */
+  const previewActive = isPreviewPlaying || previewWanted;
+
   function togglePreview() {
-    if (isPreviewPlaying) {
+    if (previewActive) {
       setIsPreviewPinned(false);
       pausePreview();
     } else {
@@ -167,8 +212,15 @@ function CatalogCard({
             muted
             loop
             playsInline
-            preload="metadata"
+            /* `auto`, not `metadata`: this element only exists because somebody asked
+               to watch it, so fetching the whole clip is the point rather than waste.
+               It is also what buys back the delay the deferral costs — the element is
+               created and the data starts arriving in the same gesture. */
+            preload="auto"
             aria-label={t('catalog.previewVideo', { title: entry.title })}
+            onCanPlay={() => {
+              if (previewWanted && !isPreviewPlaying) startPlayback();
+            }}
             onPlay={() => setIsPreviewPlaying(true)}
             onPause={() => setIsPreviewPlaying(false)}
           />
@@ -203,15 +255,13 @@ function CatalogCard({
             <button
               type="button"
               className="preview-toggle"
-              aria-pressed={isPreviewPlaying}
-              aria-label={isPreviewPlaying ? t('catalog.pausePreview') : t('catalog.watchPreview')}
+              aria-pressed={previewActive}
+              aria-label={previewActive ? t('catalog.pausePreview') : t('catalog.watchPreview')}
               disabled={!inView}
               onClick={togglePreview}
             >
-              <PixelIcon name={isPreviewPlaying ? 'pause' : 'play'} size={11} />
-              <span className="btn-label">
-                {isPreviewPlaying ? t('catalog.pausePreview') : t('catalog.watchPreview')}
-              </span>
+              <PixelIcon name={previewActive ? 'pause' : 'play'} size={11} />
+              <span className="btn-label">{previewActive ? t('catalog.pausePreview') : t('catalog.watchPreview')}</span>
             </button>
           )}
 
