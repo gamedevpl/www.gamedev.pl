@@ -1735,6 +1735,10 @@ export class InMemoryStore implements Store {
   async recordJobTransition(issueNumber: number, transition: JobTransition): Promise<boolean> {
     const sub = this.submissions.get(issueNumber);
     if (!sub) return false;
+    // Idempotent: concurrent reconcilers that both observed `submitted` must not both
+    // "win" — the loser sees `state === transition.to` and returns false so gate
+    // screenshots (keyed off `recorded`) post once.
+    if (sub.state === transition.to) return false;
     const closes = transitionClosesRound(transition);
     const next: SubmissionRecord = {
       ...sub,
@@ -2822,6 +2826,10 @@ export class FirestoreStore implements Store {
       const snap = await tx.get(ref);
       if (!snap.exists) return false;
       const current = snap.data() as SubmissionRecord;
+      // Same race as InMemoryStore: concurrent status poll + notify sweep both see
+      // `submitted` before either commits. Without this, both return true and each posts
+      // a platform gate screenshot (Codex P2 on BY-06).
+      if (current.state === transition.to) return false;
       const closes = transitionClosesRound(transition);
       if (closes) {
         const next: SubmissionRecord = {

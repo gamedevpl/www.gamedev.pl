@@ -195,6 +195,31 @@ describe('runGate', () => {
     expect(outcome.artifacts).toEqual(['preview.html']);
   });
 
+  it('still returns a red verdict when capture media upload fails', async () => {
+    // Optional screenshots must not discard the actionable report (Codex P1).
+    const harness = await harnessDir();
+    const { store } = stubStore({
+      putDerivedArtifact: async (_s, _v, name) => {
+        if (name.startsWith('media/')) throw new Error('GCS unavailable');
+      },
+    });
+
+    const outcome = await runGate('comet-courier', 'v1', {
+      store,
+      prepareHarness: async () => harness,
+      assembleBundle: stubAssemble,
+      run: async () => {
+        await mkdir(path.join(harness, 'games/comet-courier/media'), { recursive: true });
+        await writeFile(path.join(harness, 'games/comet-courier/media/opening.png'), 'png-bytes');
+        return { code: 1, output: 'Check 12: capture diverged' };
+      },
+    });
+
+    expect(outcome.green).toBe(false);
+    expect(outcome.report).toContain('capture diverged');
+    expect(outcome.artifacts).toEqual(['preview.html']);
+  });
+
   it('reports a red verdict even when the candidate cannot be assembled at all', async () => {
     // The common case for "no preview": sources that fail the check precisely because
     // they do not assemble. The verdict is still the answer, and a gate that crashed

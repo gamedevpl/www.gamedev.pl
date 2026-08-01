@@ -118,6 +118,36 @@ describe('InMemoryStore', () => {
     );
   });
 
+  it('treats a duplicate same-state transition as a no-op (concurrent reconciler)', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(7, 'g:123', 'Race');
+    expect(
+      await store.recordJobTransition(7, {
+        to: 'submitted',
+        at: '2026-07-30T10:00:00Z',
+        by: 'system',
+      }),
+    ).toBe(true);
+    expect(
+      await store.recordJobTransition(7, {
+        to: 'needs_changes',
+        at: '2026-07-30T10:01:00Z',
+        by: 'gate',
+        reason: 'gate_red',
+      }),
+    ).toBe(true);
+    expect(
+      await store.recordJobTransition(7, {
+        to: 'needs_changes',
+        at: '2026-07-30T10:01:01Z',
+        by: 'gate',
+        reason: 'gate_red',
+      }),
+    ).toBe(false);
+    const record = await store.getSubmission(7);
+    expect(record?.transitions?.filter((t) => t.to === 'needs_changes')).toHaveLength(1);
+  });
+
   it('caps transition history so a flapping reconciler cannot grow the document', async () => {
     const store = new InMemoryStore();
     await store.createSubmission(2, 'g:123', 'A game');

@@ -310,18 +310,29 @@ async function storeCaptureMedia(
   harness: string,
   roots: NonNullable<GateRunnerDeps['artifactRoots']>,
 ): Promise<string[]> {
-  const mediaDir = path.join(harness, roots.media(slug));
-  const { readdir } = await import('node:fs/promises');
-  const entries = await readdir(mediaDir).catch(() => [] as string[]);
-  const stored: string[] = [];
-  for (const entry of entries) {
-    if (!MEDIA_EXTENSIONS.includes(path.extname(entry).toLowerCase())) continue;
-    const body = await readFile(path.join(mediaDir, entry)).catch(() => null);
-    if (!body) continue;
-    await deps.store.putDerivedArtifact(slug, version, `media/${entry}`, body, contentTypeFor(entry));
-    stored.push(`media/${entry}`);
+  // Best-effort end to end: a red check already has a report the agent can act on, and
+  // a transient GCS blip on an optional screenshot must not discard that verdict
+  // (Codex: awaited throw here used to prevent putGateResult).
+  try {
+    const mediaDir = path.join(harness, roots.media(slug));
+    const { readdir } = await import('node:fs/promises');
+    const entries = await readdir(mediaDir).catch(() => [] as string[]);
+    const stored: string[] = [];
+    for (const entry of entries) {
+      if (!MEDIA_EXTENSIONS.includes(path.extname(entry).toLowerCase())) continue;
+      const body = await readFile(path.join(mediaDir, entry)).catch(() => null);
+      if (!body) continue;
+      try {
+        await deps.store.putDerivedArtifact(slug, version, `media/${entry}`, body, contentTypeFor(entry));
+        stored.push(`media/${entry}`);
+      } catch {
+        // Skip this file; keep trying the rest.
+      }
+    }
+    return stored;
+  } catch {
+    return [];
   }
-  return stored;
 }
 
 /** Stores what the check produced, so the shipped artifacts are the verified ones. */
