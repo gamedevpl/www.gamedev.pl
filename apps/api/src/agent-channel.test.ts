@@ -681,6 +681,7 @@ describe('agent build channel', () => {
       { path: 'game.ts', content: 'export {};' },
       { path: 'TRACE.json', content: '{"samples":[]}' },
       { path: 'PLAYTEST.json', content: '{"expectProgress":["round-start"]}' },
+      { path: 'AGENT.json', content: '{"policy":"capture"}' },
     ];
 
     function stubGamesStore() {
