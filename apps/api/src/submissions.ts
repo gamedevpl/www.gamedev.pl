@@ -366,6 +366,11 @@ export interface SubmissionRoutesHandle {
     title: string;
     locale: string;
     log: { error: (context: object, message: string) => void };
+    /**
+     * Who builds the new improvement job. Defaults to the source game's last-used
+     * builder (`builder` / `defaultBuilder`), then `platform`.
+     */
+    builder?: BuilderKind;
   }) => Promise<{ route: 'job'; jobId: number } | null>;
 }
 
@@ -976,12 +981,22 @@ export async function registerSubmissionRoutes(
     title: string;
     locale: string;
     log: { error: (context: object, message: string) => void };
+    /**
+     * Who builds this improvement. Explicit choice wins; otherwise inherit the source
+     * game's last-used builder. A new job has neither field until dispatch sets them,
+     * so omitting this used to silently route every post-publish improve to `platform`.
+     */
+    builder?: BuilderKind;
   }): Promise<{ route: 'job'; jobId: number } | null> {
     if (!store) return null;
     const source = await store.getSubmission(input.issueNumber);
     // Without a slug there is no game to improve, and dispatching would quietly
     // commission a brand-new one against a creator's improvement request.
     if (!source?.slug) return null;
+
+    // Resolve against the *source* game before the new job exists. `dispatchBuild`
+    // would otherwise ask `builderOf` on a blank record and always pick `platform`.
+    const builder = input.builder ?? builderOf(source);
 
     const jobId = await store.allocateJobId();
     await store.createSubmission(jobId, source.ownerUid, source.title);
@@ -1007,6 +1022,7 @@ export async function registerSubmissionRoutes(
       slug: source.slug,
       locale: input.locale,
       log: input.log,
+      builder,
     });
     // The job exists either way. A failed dispatch leaves it `queued`, which the operator
     // queue already reports as `not_dispatched` — a visible stall rather than a silently
@@ -2516,6 +2532,7 @@ export async function registerSubmissionRoutes(
         }
       }
       const contextBlock = formatPlaytestContextBlock(parsed.data.context, shotId);
+      const requestedBuilder = parsed.data.builder;
       const started = await startImprovementRound({
         issueNumber,
         text: contextBlock ? `${sanitizedFeedback}\n\n${contextBlock}` : sanitizedFeedback,
@@ -2523,6 +2540,9 @@ export async function registerSubmissionRoutes(
         // The record was already loaded above for the ownership check.
         locale: record.locale ?? 'en',
         log: request.log,
+        // Publishing is terminal — this opens a *new* job, so builder choice is always
+        // a round-boundary decision (no active-round lock like draft feedback).
+        ...(requestedBuilder && isBuilderKind(requestedBuilder) ? { builder: requestedBuilder } : {}),
       });
       if (!started) {
         return reply.status(502).send({ error: 'failed to submit improvement request' });

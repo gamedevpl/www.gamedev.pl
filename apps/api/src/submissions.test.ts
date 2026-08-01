@@ -2967,6 +2967,77 @@ describe('POST /api/submissions/:token/improve', () => {
     expect(source?.dispatch).toBeUndefined();
     await app.close();
   });
+
+  it('inherits the source game’s last-used builder when the body omits builder', async () => {
+    // Regression: improve used to create a blank job and let dispatchBuild default to
+    // platform, so a self-built published game silently went to Copilot on the next
+    // post-publish change — even when Studio later started sending builder again.
+    const stub = createGithubClientStub({});
+    const { backend } = createBackendStub();
+    const { app, store, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    const published = await store.allocateJobId();
+    await store.createSubmission(published, 'g:test-user', 'Self Crashy');
+    await store.setSubmissionSlug(published, 'self-crashy');
+    await store.setRoundBuilder(published, 'self');
+    await store.setSubmissionPublishedAt(published, '2026-07-01T00:00:00.000Z');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(published, secret)}/improve`,
+      headers: authHeaders,
+      payload: { feedback: 'Keep the self agent on this revision of the published game.' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const jobId = res.json().jobId as number;
+    expect(jobId).not.toBe(published);
+    const improvement = await store.getSubmission(jobId);
+    expect(improvement?.builder).toBe('self');
+    expect(improvement?.defaultBuilder).toBe('self');
+    expect(improvement?.dispatch?.backend).toBe('self');
+    expect(improvement?.dispatch?.refs).toEqual([`self:${jobId}`]);
+    await app.close();
+  });
+
+  it('honours an explicit builder on improve, overriding the source game’s last builder', async () => {
+    const stub = createGithubClientStub({});
+    const { backend, briefs } = createBackendStub();
+    const { app, store, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    const published = await store.allocateJobId();
+    await store.createSubmission(published, 'g:test-user', 'Was Self');
+    await store.setSubmissionSlug(published, 'was-self');
+    await store.setRoundBuilder(published, 'self');
+    await store.setSubmissionPublishedAt(published, '2026-07-01T00:00:00.000Z');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(published, secret)}/improve`,
+      headers: authHeaders,
+      payload: {
+        feedback: 'Hand this published revision back to the platform team for once.',
+        builder: 'platform',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const jobId = res.json().jobId as number;
+    const improvement = await store.getSubmission(jobId);
+    expect(improvement?.builder).toBe('platform');
+    expect(improvement?.defaultBuilder).toBe('platform');
+    expect(improvement?.dispatch?.backend).toBe('stub');
+    expect(briefs.at(-1)?.issueNumber).toBe(jobId);
+    await app.close();
+  });
 });
 
 /**
