@@ -13,6 +13,12 @@ import {
   submitFeedback,
 } from './submissionApi.js';
 import { submitImprovement } from './studioApi.js';
+import { recordStudioStep } from './visitTelemetry.js';
+
+vi.mock('./visitTelemetry', async () => {
+  const actual = await vi.importActual<typeof import('./visitTelemetry')>('./visitTelemetry');
+  return { ...actual, recordStudioStep: vi.fn() };
+});
 
 vi.mock('./studioApi', async () => {
   const actual = await vi.importActual<typeof import('./studioApi')>('./studioApi');
@@ -37,6 +43,7 @@ const mockedGetChannelPlayable = vi.mocked(getChannelPlayable);
 const mockedSubmitFeedback = vi.mocked(submitFeedback);
 const mockedAbandonSubmission = vi.mocked(abandonSubmission);
 const mockedSubmitImprovement = vi.mocked(submitImprovement);
+const mockedRecordStudioStep = vi.mocked(recordStudioStep);
 
 async function flushEffects() {
   await Promise.resolve();
@@ -49,6 +56,7 @@ describe('SubmissionStatusView', () => {
     localStorage.clear();
     window.history.pushState(null, '', '/');
     vi.clearAllMocks();
+    vi.useRealTimers();
   });
 
   it('renders queued state copy', async () => {
@@ -1434,5 +1442,62 @@ describe('SubmissionStatusView stop & retry', () => {
     await act(async () => {
       root.unmount();
     });
+  });
+
+  it('emits gate_verdict only on a live transition, not on reload of a finished build', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    vi.useFakeTimers();
+
+    // Reload into an already-published self build: must not mint gate_verdict.
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'published',
+      builder: 'self',
+      stall: null,
+    });
+    window.history.pushState(null, '', '/status/verdict-reload');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'verdict-reload', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+    expect(mockedRecordStudioStep).not.toHaveBeenCalledWith('gate_verdict', expect.anything(), expect.anything());
+
+    await act(async () => {
+      root.unmount();
+    });
+    mockedRecordStudioStep.mockClear();
+
+    // Live transition: building → in_review should emit green once.
+    mockedGetSubmissionStatus
+      .mockResolvedValueOnce({ status: 'building', builder: 'self', stall: null })
+      .mockResolvedValue({ status: 'in_review', builder: 'self', stall: null });
+    window.history.pushState(null, '', '/status/verdict-live');
+    const live = document.createElement('div');
+    document.body.appendChild(live);
+    const liveRoot = createRoot(live);
+
+    await act(async () => {
+      liveRoot.render(createElement(SubmissionStatusView, { token: 'verdict-live', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+    expect(mockedRecordStudioStep).not.toHaveBeenCalledWith('gate_verdict', 'self', 'green');
+
+    await act(async () => {
+      vi.advanceTimersByTime(ACTIVE_POLL_MS);
+      await flushEffects();
+      await flushEffects();
+    });
+    expect(mockedRecordStudioStep).toHaveBeenCalledWith('gate_verdict', 'self', 'green');
+
+    await act(async () => {
+      liveRoot.unmount();
+    });
+    vi.useRealTimers();
   });
 });

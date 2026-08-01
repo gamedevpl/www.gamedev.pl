@@ -35,7 +35,10 @@ function copyInputFromStatus(status: SubmissionStatus | null | undefined) {
   };
 }
 
-/** A self round waiting for the creator's agent — show the connect card, not stall copy. */
+/**
+ * Whether the Studio connect card should be on screen for this status snapshot.
+ * True for self rounds with no agent yet *or* a quiet agent (card resurfaced).
+ */
 function isAwaitingOwnAgent(status: SubmissionStatus | null | undefined): boolean {
   return shouldShowConnectCard(copyInputFromStatus(status));
 }
@@ -352,19 +355,14 @@ export function SubmissionStatusView({
     : '';
 
   // Studio telemetry: first agent signal + gate verdict, with builder dimension.
-  // Dedupe lives in recordStudioStep; refs only detect the transitions worth emitting.
+  // Emit only on transitions observed during this mount — a reload of an already
+  // finished submission must not mint a fresh gate_verdict (visit stream is per-tab).
   const prevStallRef = useRef<SubmissionStatus['stall'] | undefined>(undefined);
+  const prevVerdictRef = useRef<StudioStepDetail | null | undefined>(undefined);
+  const hasSeenStatusRef = useRef(false);
   useEffect(() => {
     if (!status) return;
     const builder = status.builder && isBuilderKind(status.builder) ? status.builder : null;
-    if (!builder) {
-      prevStallRef.current = status.stall;
-      return;
-    }
-
-    if (prevStallRef.current === 'no_agent_yet' && status.stall !== 'no_agent_yet') {
-      recordStudioStep('agent_signaled', builder);
-    }
 
     const failureReason = status.failure?.reason;
     let verdict: StudioStepDetail | null = null;
@@ -378,9 +376,19 @@ export function SubmissionStatusView({
     ) {
       verdict = 'green';
     }
-    if (verdict) recordStudioStep('gate_verdict', builder, verdict);
+
+    if (builder) {
+      if (prevStallRef.current === 'no_agent_yet' && status.stall !== 'no_agent_yet') {
+        recordStudioStep('agent_signaled', builder);
+      }
+      if (hasSeenStatusRef.current && verdict && prevVerdictRef.current !== verdict) {
+        recordStudioStep('gate_verdict', builder, verdict);
+      }
+    }
 
     prevStallRef.current = status.stall;
+    prevVerdictRef.current = verdict;
+    hasSeenStatusRef.current = true;
   }, [status]);
 
   // No share link here any more. It used to be shown unconditionally and pointed at

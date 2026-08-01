@@ -461,6 +461,7 @@ export function startVisitTracking(options: StartVisitTrackingOptions = {}): () 
   // stop deduping across it if these were not cleared with the session that owns them.
   recordedSteps = new Set();
   recordedWaitlistSteps = new Set();
+  recordedStudioSteps = new Set();
 
   if (identity.isNew) {
     const referrer = referrerDomain(document.referrer ?? '', window.location.hostname);
