@@ -71,6 +71,7 @@ survives only in this repo's early history.
 | [`persistent-world-plan.md`](./persistent-world-plan.md)           | Shared persistent worlds ("the Ultima Online question") — P1 saves ✅ built, P2/P3 💭 concept          |
 | [`auth-and-usage-plan.md`](./auth-and-usage-plan.md)               | ✅ Google sign-in, sessions, per-user quotas                                                           |
 | [`agent-access-tokens.md`](./agent-access-tokens.md)               | ✅ How an agent in a cloud VM authenticates without a browser or a Google account                      |
+| [`agent-gcp-access.md`](./agent-gcp-access.md)                     | ✅ Read-only GCP credential + `infra/gcp-read.mjs` so an agent can triage prod without gcloud          |
 | [`content-safety-plan.md`](./content-safety-plan.md)               | ✅ Moderation of submitted specs before an agent ever sees them                                        |
 | [`agent-live-channel-plan.md`](./agent-live-channel-plan.md)       | ✅ How a working agent reports progress to the creator in seconds, not commits                         |
 | [`closed-beta-launch-plan.md`](./closed-beta-launch-plan.md)       | The launch that put the closed beta on the domain                                                      |

@@ -121,8 +121,9 @@ export function canTransition(from: JobState, to: JobState): boolean {
  *
  * Closing events written through `recordJobTransition`:
  * - delivery accepted (`ready_for_review`, typically `gate_green`)
- * - round rejected into `needs_changes`, except `gate_red` — a red gate keeps the round
- *   open so the live session can repair and re-deliver without a new token
+ * - round rejected into `needs_changes`, except `gate_red` / `kit_outdated` — those keep
+ *   the round open so the live session can repair (or refresh the kit) and re-deliver
+ *   without a new token
  * - creator/operator cancel or abandon
  * - agent failure (`failed`) — terminal for the round
  *
@@ -140,8 +141,8 @@ export function transitionClosesRound(transition: JobTransition): boolean {
     case 'failed':
       return true;
     case 'needs_changes':
-      // Same-session repair after a red gate still holds the current token.
-      return transition.reason !== 'gate_red';
+      // Same-session repair after a red gate / stale kit still holds the current token.
+      return transition.reason !== 'gate_red' && transition.reason !== 'kit_outdated';
     default:
       return false;
   }

@@ -118,6 +118,61 @@ describe('InMemoryStore', () => {
     );
   });
 
+  it('treats a duplicate same-state+reason transition as a no-op (concurrent reconciler)', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(7, 'g:123', 'Race');
+    expect(
+      await store.recordJobTransition(7, {
+        to: 'submitted',
+        at: '2026-07-30T10:00:00Z',
+        by: 'system',
+      }),
+    ).toBe(true);
+    expect(
+      await store.recordJobTransition(7, {
+        to: 'needs_changes',
+        at: '2026-07-30T10:01:00Z',
+        by: 'gate',
+        reason: 'gate_red',
+      }),
+    ).toBe(true);
+    expect(
+      await store.recordJobTransition(7, {
+        to: 'needs_changes',
+        at: '2026-07-30T10:01:01Z',
+        by: 'gate',
+        reason: 'gate_red',
+      }),
+    ).toBe(false);
+    const record = await store.getSubmission(7);
+    expect(record?.transitions?.filter((t) => t.to === 'needs_changes')).toHaveLength(1);
+  });
+
+  it('still records a same-state transition when the reason is new (operator retry)', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(8, 'g:123', 'Retry');
+    await store.recordJobTransition(8, {
+      to: 'building',
+      at: '2026-07-30T10:00:00Z',
+      by: 'reconciler',
+      reason: 'task_in_progress',
+    });
+    expect(
+      await store.recordJobTransition(8, {
+        to: 'building',
+        at: '2026-07-30T10:05:00Z',
+        by: 'operator',
+        reason: 'operator_retry',
+      }),
+    ).toBe(true);
+    const record = await store.getSubmission(8);
+    expect(record?.transitions?.at(-1)).toMatchObject({
+      to: 'building',
+      by: 'operator',
+      reason: 'operator_retry',
+    });
+  });
+
   it('caps transition history so a flapping reconciler cannot grow the document', async () => {
     const store = new InMemoryStore();
     await store.createSubmission(2, 'g:123', 'A game');

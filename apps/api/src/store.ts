@@ -262,6 +262,19 @@ export interface SubmissionRecord {
    * (`SELF_BUILD_DELIVERY_CAP`); resets when a new round opens.
    */
   roundDeliveryCount?: number;
+  /**
+   * Creator concept text (sanitized), without the QA clarifications block.
+   *
+   * Persisted so GET /api/agent/build/brief can answer without re-reading a GitHub
+   * issue — jobs no longer file one. Optional only on legacy records that predate
+   * brief persistence.
+   */
+  spec?: string;
+  /**
+   * Answers from the CreatorQA clarifications block, already split into lines.
+   * Empty when the creator skipped the panel or it had nothing to ask.
+   */
+  qa?: string[];
 }
 
 /**
@@ -1198,6 +1211,12 @@ export interface Store {
   setSubmissionLocale(issueNumber: number, locale: string): Promise<void>;
   /** Records how many QA answers reached the agent with this submission. */
   setSubmissionClarificationCount(issueNumber: number, count: number): Promise<void>;
+  /**
+   * Persists the concept the agent will build from (brief.spec / brief.qa).
+   * Written once at submission create; not cleared on round boundaries — the
+   * game's brief is the job's brief for its whole life.
+   */
+  setSubmissionBrief(issueNumber: number, brief: { spec: string; qa: string[] }): Promise<void>;
   /** Appends an agent progress event. Returns it with its assigned id and timestamp. */
   appendBuildEvent(
     issueNumber: number,
@@ -1735,6 +1754,13 @@ export class InMemoryStore implements Store {
   async recordJobTransition(issueNumber: number, transition: JobTransition): Promise<boolean> {
     const sub = this.submissions.get(issueNumber);
     if (!sub) return false;
+    // Idempotent for concurrent *identical* arrivals (status poll + notify sweep both
+    // seeing `submitted`→`needs_changes`/`gate_red`). Same-state with a *new* reason
+    // is intentional — operator retry re-enters `building` with `operator_retry`.
+    if (sub.state === transition.to) {
+      const last = sub.transitions?.at(-1);
+      if (last?.to === transition.to && last?.reason === transition.reason) return false;
+    }
     const closes = transitionClosesRound(transition);
     const next: SubmissionRecord = {
       ...sub,
@@ -1964,6 +1990,11 @@ export class InMemoryStore implements Store {
   async setSubmissionClarificationCount(issueNumber: number, count: number): Promise<void> {
     const sub = this.submissions.get(issueNumber);
     if (sub) this.submissions.set(issueNumber, { ...sub, clarificationCount: count });
+  }
+
+  async setSubmissionBrief(issueNumber: number, brief: { spec: string; qa: string[] }): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (sub) this.submissions.set(issueNumber, { ...sub, spec: brief.spec, qa: brief.qa });
   }
 
   async appendBuildEvent(
@@ -2822,6 +2853,13 @@ export class FirestoreStore implements Store {
       const snap = await tx.get(ref);
       if (!snap.exists) return false;
       const current = snap.data() as SubmissionRecord;
+      // Same race as InMemoryStore: concurrent identical arrivals must not both "win"
+      // (gate screenshots key off `recorded`). Same-state with a new reason is allowed
+      // (operator retry re-enters `building`).
+      if (current.state === transition.to) {
+        const last = current.transitions?.at(-1);
+        if (last?.to === transition.to && last?.reason === transition.reason) return false;
+      }
       const closes = transitionClosesRound(transition);
       if (closes) {
         const next: SubmissionRecord = {
@@ -3144,6 +3182,13 @@ export class FirestoreStore implements Store {
       .collection('submissions')
       .doc(String(issueNumber))
       .set({ clarificationCount: count }, { merge: true });
+  }
+
+  async setSubmissionBrief(issueNumber: number, brief: { spec: string; qa: string[] }): Promise<void> {
+    await this.db
+      .collection('submissions')
+      .doc(String(issueNumber))
+      .set({ spec: brief.spec, qa: brief.qa }, { merge: true });
   }
 
   private eventsCollection(issueNumber: number) {

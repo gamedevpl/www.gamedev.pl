@@ -2,10 +2,12 @@ import { createHash } from 'node:crypto';
 import type { GameProject } from '@gamedevpl/game-generator';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { splitConceptBrief } from './agent-build-brief.js';
 import { registerAgentChannelRoutes, type AgentChannelOptions } from './agent-channel.js';
 import { mintAgentToken } from './agent-token.js';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import { createCreationGate, CREATION_REFUSAL_CODES, type CreationGate } from './creation-limits.js';
+import { postGateScreenshotToThread } from './gate-screenshot.js';
 import {
   catalogEntryFromSpec,
   createGitHubClient,
@@ -271,7 +273,12 @@ export interface SubmissionRoutesOptions {
   gameSeeder?: GameSeeder;
   agentChannel?: Pick<
     AgentChannelOptions,
-    'maxEventsPerBuild' | 'maxEventsPerWindow' | 'gamesStore' | 'maxSubmitsPerWindow' | 'onSourcesDelivered'
+    | 'maxEventsPerBuild'
+    | 'maxEventsPerWindow'
+    | 'gamesStore'
+    | 'objectStore'
+    | 'maxSubmitsPerWindow'
+    | 'onSourcesDelivered'
   >;
   /**
    * Pre-assembled published games. Defaults to the bucket in
@@ -367,6 +374,11 @@ export interface SubmissionRoutesHandle {
     title: string;
     locale: string;
     log: { error: (context: object, message: string) => void };
+    /**
+     * Who builds the new improvement job. Defaults to the source game's last-used
+     * builder (`builder` / `defaultBuilder`), then `platform`.
+     */
+    builder?: BuilderKind;
   }) => Promise<{ route: 'job'; jobId: number } | null>;
 }
 
@@ -977,12 +989,22 @@ export async function registerSubmissionRoutes(
     title: string;
     locale: string;
     log: { error: (context: object, message: string) => void };
+    /**
+     * Who builds this improvement. Explicit choice wins; otherwise inherit the source
+     * game's last-used builder. A new job has neither field until dispatch sets them,
+     * so omitting this used to silently route every post-publish improve to `platform`.
+     */
+    builder?: BuilderKind;
   }): Promise<{ route: 'job'; jobId: number } | null> {
     if (!store) return null;
     const source = await store.getSubmission(input.issueNumber);
     // Without a slug there is no game to improve, and dispatching would quietly
     // commission a brand-new one against a creator's improvement request.
     if (!source?.slug) return null;
+
+    // Resolve against the *source* game before the new job exists. `dispatchBuild`
+    // would otherwise ask `builderOf` on a blank record and always pick `platform`.
+    const builder = input.builder ?? builderOf(source);
 
     const jobId = await store.allocateJobId();
     await store.createSubmission(jobId, source.ownerUid, source.title);
@@ -1008,6 +1030,7 @@ export async function registerSubmissionRoutes(
       slug: source.slug,
       locale: input.locale,
       log: input.log,
+      builder,
     });
     // The job exists either way. A failed dispatch leaves it `queued`, which the operator
     // queue already reports as `not_dispatched` — a visible stall rather than a silently
@@ -1724,10 +1747,25 @@ export async function registerSubmissionRoutes(
         to,
         at: verdict.ranAt,
         by: 'gate',
-        reason: verdict.green ? 'gate_green' : 'gate_red',
+        reason: verdict.green ? 'gate_green' : verdict.status === 'kit_outdated' ? 'kit_outdated' : 'gate_red',
       };
       const recorded = await store.recordJobTransition(record.issueNumber, transition);
-      return recorded ? transition : null;
+      if (!recorded) return null;
+      // First time we act on this verdict: post the capture frame into the thread so the
+      // creator sees what the platform check saw, on the same path as agent-sent shots.
+      if (verdict.screenshot) {
+        await postGateScreenshotToThread({
+          store,
+          gamesStore,
+          issueNumber: record.issueNumber,
+          slug: record.slug,
+          version: record.deliveredVersion,
+          screenshotPath: verdict.screenshot,
+        }).catch((error) => {
+          app.log.warn({ err: error, issueNumber: record.issueNumber }, 'could not post gate screenshot');
+        });
+      }
+      return transition;
     } catch (error) {
       app.log.error({ err: error, issueNumber: record.issueNumber }, 'could not read the gate verdict');
       return null;
@@ -1879,6 +1917,15 @@ export async function registerSubmissionRoutes(
       await store.setSubmissionLocale(jobId, creatorLocale);
       // Raw, not sanitized: the sanitizer strips the '##' that marks the block.
       await store.setSubmissionClarificationCount(jobId, countCreatorClarifications(parsed.data.concept));
+      // Brief persistence for GET /api/agent/build/brief — split before sanitize so the
+      // clarifications marker survives, then store the sanitized free-text as spec.
+      // Do not fall back to the full concept: that would re-merge QA bullets into `spec`
+      // when the free-text half sanitizes empty (clarifications-only submission).
+      {
+        const { spec: rawSpec, qa } = splitConceptBrief(parsed.data.concept);
+        const briefSpec = sanitizeCreatorText(rawSpec, { singleLine: false });
+        await store.setSubmissionBrief(jobId, { spec: briefSpec, qa });
+      }
       await store.recordJobTransition(jobId, {
         to: 'queued',
         at: new Date(now()).toISOString(),
@@ -1904,6 +1951,10 @@ export async function registerSubmissionRoutes(
       // which since seeding is minutes rather than milliseconds, on every submission.
       const dispatchLog = request.log;
       const builder: BuilderKind = parsed.data.builder ?? 'platform';
+      // Persist before the response returns. Connect (and Studio) read `record.builder`
+      // immediately; if we only wrote it inside background dispatch, a fast /connect
+      // after submit saw platform and returned a permanent-looking 409 (Codex P2).
+      await store.setRoundBuilder(jobId, builder, { resetRoundBudget: false });
       void dispatchBuild({
         issueNumber: jobId,
         // The agent is told where to build rather than left to name the place itself.
@@ -2012,7 +2063,7 @@ export async function registerSubmissionRoutes(
         issueNumber = verifyToken(id, submissionTokenSecret);
       } catch (error) {
         if (error instanceof InvalidTokenError) {
-          return reply.status(400).send({ error: 'invalid submission' });
+          return reply.status(400).send({ error: 'invalid submission token' });
         }
         throw error;
       }
@@ -2024,7 +2075,10 @@ export async function registerSubmissionRoutes(
         return reply.status(403).send({ error: 'only the creator can connect a build' });
       }
 
-      const builder = builderOf(record);
+      // Gate on the *active round's* builder field, not `builderOf` (which falls back to
+      // `defaultBuilder`). A legacy/platform round that once used self must not unlock
+      // connect just because defaultBuilder still says self.
+      const builder = record.builder ?? 'platform';
       if (builder !== 'self' || !isActiveBuildRound(record)) {
         return reply.status(409).send({
           error: 'connect_unavailable',
@@ -2034,17 +2088,32 @@ export async function registerSubmissionRoutes(
       }
 
       const roundGeneration = (await store.ensureRoundGeneration(issueNumber)) ?? 1;
+      // Re-read after ensureRoundGeneration: a closing transition can race between the
+      // first snapshot and minting. Without this we could mint generation N+1 for a
+      // round that just closed to ready_for_review (Codex P1) — channel auth only
+      // compares generations, and that state is not a stopReason.
+      const fresh = await store.getSubmission(issueNumber);
+      const freshBuilder = fresh?.builder ?? 'platform';
+      if (!fresh || freshBuilder !== 'self' || !isActiveBuildRound(fresh)) {
+        return reply.status(409).send({
+          error: 'connect_unavailable',
+          reason: freshBuilder !== 'self' ? 'not_self_round' : 'inactive_round',
+          builder: freshBuilder,
+        });
+      }
+      const activeGeneration = fresh.roundGeneration ?? roundGeneration;
       const pendingMessages = await store.listPendingCreatorMessages(issueNumber);
       const payload = mintConnectPayload({
         jobId: issueNumber,
-        title: record.title,
-        roundGeneration,
+        title: fresh.title,
+        roundGeneration: activeGeneration,
         submissionTokenSecret,
         appBaseUrl: notifyAppBaseUrl,
         pendingMessages,
         now: now(),
       });
-      return reply.send(payload);
+      // Kickoff embeds a round key — never let intermediaries cache it.
+      return reply.header('Cache-Control', 'no-store').send(payload);
     },
   );
 
@@ -2586,6 +2655,7 @@ export async function registerSubmissionRoutes(
         }
       }
       const contextBlock = formatPlaytestContextBlock(parsed.data.context, shotId);
+      const requestedBuilder = parsed.data.builder;
       const started = await startImprovementRound({
         issueNumber,
         text: contextBlock ? `${sanitizedFeedback}\n\n${contextBlock}` : sanitizedFeedback,
@@ -2593,6 +2663,9 @@ export async function registerSubmissionRoutes(
         // The record was already loaded above for the ownership check.
         locale: record.locale ?? 'en',
         log: request.log,
+        // Publishing is terminal — this opens a *new* job, so builder choice is always
+        // a round-boundary decision (no active-round lock like draft feedback).
+        ...(requestedBuilder && isBuilderKind(requestedBuilder) ? { builder: requestedBuilder } : {}),
       });
       if (!started) {
         return reply.status(502).send({ error: 'failed to submit improvement request' });

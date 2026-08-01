@@ -1,10 +1,19 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import {
+  AGENT_BUILD_RULES_DIGEST,
+  briefLocales,
+  buildConstraints,
+  DEFAULT_BUILD_ORIENTATION,
+} from './agent-build-brief.js';
+import { getAgentBuildExample, listAgentBuildExamples } from './agent-build-examples.js';
 import { assertAgentTokenActive, InvalidAgentTokenError, readBearerToken, verifyAgentToken } from './agent-token.js';
 import { selfBuildDeliveryCap } from './builder.js';
+import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from './gcs-sign.js';
 import { InvalidUploadError, type GamesStore } from './games-store.js';
 import { parseSpecTitle } from './github-client.js';
 import { canTransition, resolveJobState } from './job-state.js';
+import { KIT_ENTRY, KitRegistryError, kitUnpackCommand, parseKitRegistry, parseKitSidecar } from './kit-registry.js';
 import { type CreatorMessage, type Store, type SubmissionRecord } from './store.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from './submission-status.js';
 
@@ -126,6 +135,17 @@ const BuildSourcesInputSchema = z.object({
     )
     .min(1, 'files is required')
     .max(64, 'too many files'),
+  /**
+   * Creator Kit engineRef the sources were built against. Required for self-build
+   * deliveries (BY-06); the gate compares it to `kits/current.json`'s N/N−1 window.
+   */
+  kitEngineRef: z
+    .string()
+    .trim()
+    .min(7, 'kitEngineRef must be a kit engine commit')
+    .max(64)
+    .regex(/^[0-9a-f]+$/i, 'kitEngineRef must be a hex commit sha')
+    .optional(),
 });
 
 const BuildPreviewInputSchema = z.object({
@@ -187,6 +207,12 @@ export interface AgentChannelOptions {
    * rather than pretending to have accepted work.
    */
   gamesStore?: GamesStore;
+  /**
+   * Read + V4-sign against the games-store bucket (`kits/`, `examples/`). Absent when
+   * the bucket is not configured; kit/example downloads then answer 503 rather than
+   * inventing an engineRef or a URL.
+   */
+  objectStore?: GcsObjectStore;
   /** Deliveries one build may make per hour. */
   maxSubmitsPerWindow?: number;
   /** Called when a candidate version lands, so the job can move on to the gate. */
@@ -374,6 +400,8 @@ export async function registerAgentChannelRoutes(
         // The tail is where the chain names the check that stopped it; the runner has
         // already trimmed to 4000 characters for exactly this reason.
         ...(manifest.gate.report ? { report: manifest.gate.report } : {}),
+        // `kit_outdated` is a distinct refusal: refresh the kit, do not chase check:game.
+        ...(manifest.gate.status === 'kit_outdated' ? { status: 'kit_outdated' as const } : {}),
       };
     } catch (error) {
       app.log.warn({ err: error, issueNumber: record.issueNumber, slug }, 'could not read the gate verdict');
@@ -418,11 +446,15 @@ export async function registerAgentChannelRoutes(
         ...(gate && !gate.green
           ? {
               mustFixGate:
-                `The gate ran against your delivery and refused it (${gate.version}). You are not ` +
-                'done: nothing can be published until it passes. Read `gate.report` below — it ends ' +
-                'with the check that stopped the chain — fix the cause in your game, and deliver ' +
-                'again with `npm run submit -- <slug>`. Re-delivering without a fix just stores ' +
-                'another version that fails the same way.',
+                gate.status === 'kit_outdated'
+                  ? `The gate refused your delivery (${gate.version}) because the Creator Kit is ` +
+                    'outdated (`kit_outdated`). Refresh the kit (re-run get_kit), rebuild against ' +
+                    'it, and deliver again with the new kitEngineRef.'
+                  : `The gate ran against your delivery and refused it (${gate.version}). You are not ` +
+                    'done: nothing can be published until it passes. Read `gate.report` below — it ends ' +
+                    'with the check that stopped the chain — fix the cause in your game, and deliver ' +
+                    'again with `npm run submit -- <slug>`. Re-delivering without a fix just stores ' +
+                    'another version that fails the same way.',
             }
           : {}),
         ...(record.deliveredVersion
@@ -697,6 +729,16 @@ export async function registerAgentChannelRoutes(
             ...(await channelState(issueNumber, record)),
           });
         }
+        // Self-build deliveries must name the kit they built against — without it the
+        // gate cannot apply the N/N−1 window and would burn a delivery slot guessing.
+        if (!parsed.data.kitEngineRef) {
+          return reply.status(400).send({
+            error:
+              'kitEngineRef is required for self-build deliveries — send the engineRef from ' +
+              'the Creator Kit you built against (kit.json / get_kit).',
+            reason: 'kit_engine_ref_required',
+          });
+        }
       }
 
       // The job's own slug wins whenever it has one. A build that has already been
@@ -732,6 +774,7 @@ export async function registerAgentChannelRoutes(
           // Provenance: which backend built this version. Backend name on the dispatch
           // ('copilot' / 'self') is the durable record; builder is the round selector.
           backend: record.dispatch?.backend ?? record.builder,
+          ...(parsed.data.kitEngineRef ? { kitEngineRef: parsed.data.kitEngineRef } : {}),
         });
         // Recorded before the gate is asked to run: this is what the creator's preview
         // reads, and a delivered game should be playable on the status page whether or
@@ -808,7 +851,7 @@ export async function registerAgentChannelRoutes(
   );
 
   /**
-   * Hands a build back its own last delivery.
+   * Hands a build back the sources it should continue from.
    *
    * The channel was upload-only, and that quietly made the agent's *branch* the real
    * home of a game: a follow-up session could only continue the work if it happened to
@@ -817,8 +860,14 @@ export async function registerAgentChannelRoutes(
    * The store already holds every delivered version, immutably; this is the read that
    * makes it the source of truth rather than a copy nobody can get back.
    *
+   * Prefer the job's own last delivery. When this job has not delivered yet but its
+   * slug is already published — the shape of every post-publish improvement, which is a
+   * *new* job on an existing game — fall back to the live publication. Without that,
+   * `npm run restore` reports nothing to restore and the agent rebuilds a stranger's
+   * game instead of revising the one the creator asked to change.
+   *
    * Scoped to the job's own game by the same token that authorizes its delivery, so a
-   * build can restore what it delivered and nothing else.
+   * build can restore what it (or its published predecessor) delivered and nothing else.
    */
   app.get(
     '/api/agent/build/sources',
@@ -831,16 +880,28 @@ export async function registerAgentChannelRoutes(
       if (!options.gamesStore) {
         return reply.status(503).send({ error: 'delivery is not configured on this deployment' });
       }
+
+      const slug = record.slug;
+      let version = record.deliveredVersion;
+      // An improvement job inherits the slug before it has delivered anything of its
+      // own. The publication pointer is what is live — the version the creator played.
+      if (slug && !version) {
+        const publication = await store!.getPublication(slug);
+        if (publication?.state === 'published') {
+          version = publication.currentVersion;
+        }
+      }
+
       // Nothing delivered yet is the ordinary state of a first build, not an error:
       // the agent starts from the repository, exactly as it does today.
-      if (!record.slug || !record.deliveredVersion) {
+      if (!slug || !version) {
         return reply.send({ delivery: null, files: [] });
       }
 
-      const manifest = await options.gamesStore.getManifest(record.slug, record.deliveredVersion);
+      const manifest = await options.gamesStore.getManifest(slug, version);
       if (!manifest) {
         request.log.error(
-          { slug: record.slug, version: record.deliveredVersion },
+          { slug, version },
           'delivered version has no manifest — the store lost a version a job still points at',
         );
         return reply.status(502).send({ error: 'the delivered version could not be read back' });
@@ -849,7 +910,7 @@ export async function registerAgentChannelRoutes(
       const files = await Promise.all(
         manifest.sourceFiles.map(async (path) => ({
           path,
-          content: await options.gamesStore!.getSourceFile(record.slug!, record.deliveredVersion!, path),
+          content: await options.gamesStore!.getSourceFile(slug, version, path),
         })),
       );
       // A manifest listing a file the bucket does not have is a broken version, not a
@@ -857,15 +918,12 @@ export async function registerAgentChannelRoutes(
       // deletion it never made.
       const missing = files.filter((file) => file.content === null).map((file) => file.path);
       if (missing.length > 0) {
-        request.log.error(
-          { slug: record.slug, version: record.deliveredVersion, missing },
-          'delivered version is missing files its manifest lists',
-        );
+        request.log.error({ slug, version, missing }, 'delivered version is missing files its manifest lists');
         return reply.status(502).send({ error: 'the delivered version could not be read back' });
       }
 
       return reply.send({
-        delivery: { slug: record.slug, version: record.deliveredVersion },
+        delivery: { slug, version },
         files,
       });
     },
@@ -904,6 +962,191 @@ export async function registerAgentChannelRoutes(
 
       await store!.markCreatorMessagesDelivered(issueNumber, parsed.data.ids);
       return reply.send({ ok: true, ...(await channelState(issueNumber, record)) });
+    },
+  );
+
+  /**
+   * Everything an agent needs to start a round without reading a GitHub issue.
+   *
+   * Spec/qa live on the job document (written at submission). Rules and the byte
+   * ceiling are static / contract-derived — never invented per job.
+   */
+  app.get(
+    '/api/agent/build/brief',
+    { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      const { issueNumber, record } = resolved;
+
+      const pending = await store!.listPendingCreatorMessages(issueNumber);
+      return reply.send({
+        title: record.title,
+        slug: record.slug ?? null,
+        spec: record.spec ?? '',
+        qa: record.qa ?? [],
+        rules: AGENT_BUILD_RULES_DIGEST,
+        constraints: buildConstraints(DEFAULT_BUILD_ORIENTATION),
+        locales: briefLocales(record.locale),
+        seedAvailable: Boolean(record.seed),
+        pendingMessages: pending.map((message) => ({
+          id: message.id,
+          text: message.text,
+          createdAt: message.createdAt,
+        })),
+      });
+    },
+  );
+
+  /**
+   * Round-0 seed draft stored on the job (self builds and platform seeds that persisted).
+   * 404-shaped `{ available: false }` when none — not an auth failure.
+   */
+  app.get(
+    '/api/agent/build/seed',
+    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      const { record } = resolved;
+
+      if (!record.seed) {
+        return reply.status(404).send({ available: false, files: [], references: [], notes: null });
+      }
+      return reply.send({
+        available: true,
+        files: record.seed.files,
+        references: record.seed.references,
+        notes: record.seed.notes ?? null,
+      });
+    },
+  );
+
+  /**
+   * Current Creator Kit — engine-pinned tarball from `kits/current.json`.
+   *
+   * Missing registry is a clear machine-readable error (bucket empty until the first
+   * games-repo publish), never a fabricated engineRef.
+   */
+  app.get(
+    '/api/agent/build/kit',
+    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+
+      if (!options.objectStore) {
+        return reply.status(503).send({ error: 'kit_store_unavailable', message: 'the kit store is not configured' });
+      }
+
+      try {
+        const registryBody = await options.objectStore.readObject('kits/current.json');
+        if (!registryBody) {
+          return reply.status(404).send({
+            error: 'kit_registry_missing',
+            message: 'kits/current.json is not published yet — the games-repo kit publisher has not run',
+          });
+        }
+        const registry = parseKitRegistry(registryBody.toString('utf8'));
+        const engineRef = registry.current;
+        const sidecarBody = await options.objectStore.readObject(`kits/${engineRef}.json`);
+        if (!sidecarBody) {
+          return reply.status(404).send({
+            error: 'kit_artifact_missing',
+            message: `kits/${engineRef}.json sidecar is missing for the current registry entry`,
+          });
+        }
+        const sidecar = parseKitSidecar(sidecarBody.toString('utf8'));
+        // Metadata probe only — do not pull the multi-MB kit into the request path.
+        if (!(await options.objectStore.objectExists(`kits/${engineRef}.tgz`))) {
+          return reply.status(404).send({
+            error: 'kit_artifact_missing',
+            message: `kits/${engineRef}.tgz is missing for the current registry entry`,
+          });
+        }
+
+        const kitUrl = await options.objectStore.signReadUrl(`kits/${engineRef}.tgz`, DEFAULT_SIGNED_URL_TTL_SECONDS);
+        return reply.send({
+          engineRef,
+          kitUrl,
+          sha256: sidecar.sha256,
+          unpack: kitUnpackCommand(kitUrl),
+          entry: KIT_ENTRY,
+        });
+      } catch (error) {
+        if (error instanceof KitRegistryError) {
+          return reply.status(404).send({ error: error.code, message: error.message });
+        }
+        throw error;
+      }
+    },
+  );
+
+  /**
+   * Curated first-party exemplars — allowlist JSON in-repo, never a store listing.
+   */
+  app.get(
+    '/api/agent/build/examples',
+    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      return reply.send({ examples: listAgentBuildExamples() });
+    },
+  );
+
+  /**
+   * Signed tarball of one allowlisted exemplar's sources (`examples/<slug>.tgz`).
+   * Non-allowlisted slugs 404 even if an object happens to exist under that name.
+   */
+  app.get(
+    '/api/agent/build/examples/:slug',
+    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+
+      const slug = String((request.params as { slug?: string }).slug ?? '');
+      const example = getAgentBuildExample(slug);
+      if (!example) {
+        return reply.status(404).send({ error: 'unknown_example', message: 'slug is not on the exemplar allowlist' });
+      }
+
+      if (!options.objectStore) {
+        return reply
+          .status(503)
+          .send({ error: 'example_store_unavailable', message: 'the example store is not configured' });
+      }
+
+      const objectName = `examples/${example.slug}.tgz`;
+      if (!(await options.objectStore.objectExists(objectName))) {
+        return reply.status(404).send({
+          error: 'example_unavailable',
+          message: `no packed sources for allowlisted slug ${example.slug}`,
+        });
+      }
+
+      let sha256: string | null = null;
+      const sidecarBody = await options.objectStore.readObject(`examples/${example.slug}.json`);
+      if (sidecarBody) {
+        try {
+          const parsed = JSON.parse(sidecarBody.toString('utf8')) as { sha256?: unknown };
+          if (typeof parsed.sha256 === 'string' && /^[a-f0-9]{64}$/i.test(parsed.sha256)) {
+            sha256 = parsed.sha256.toLowerCase();
+          }
+        } catch {
+          // Sidecar is optional; a corrupt one must not block the download.
+        }
+      }
+
+      const tarballUrl = await options.objectStore.signReadUrl(objectName, DEFAULT_SIGNED_URL_TTL_SECONDS);
+      return reply.send({
+        slug: example.slug,
+        title: example.title,
+        tarballUrl,
+        ...(sha256 ? { sha256 } : {}),
+        unpack: kitUnpackCommand(tarballUrl),
+      });
     },
   );
 }

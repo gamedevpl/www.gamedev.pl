@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import type { BuilderKind } from './builder.js';
 import type { InternalAuthVerifier } from './internal-auth.js';
 import { routeScorecard, type Suggestion, type SuggestionClass } from './suggestions.js';
 import { OPEN_SUGGESTION_STATUSES, type Scorecard, type Store, type SuggestionRecord } from './store.js';
@@ -117,6 +118,7 @@ export interface SuggestionSweepDeps {
     title: string;
     locale: string;
     log: { error: (context: object, message: string) => void };
+    builder?: BuilderKind;
   }) => Promise<{ route: 'job'; jobId: number } | null>;
   /** Builds the brief an autonomously dispatched agent receives. */
   buildBrief?: (record: SuggestionRecord, untrusted: Scorecard['untrusted'] | null) => string;

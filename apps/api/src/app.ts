@@ -11,6 +11,7 @@ import { registerAccessTokenRoutes } from './access-token-routes.js';
 import { registerJobAdminRoutes } from './job-admin-routes.js';
 import { createGameSeederFromEnv, createPlatformBackendFromEnv } from './agent-backend-env.js';
 import { createGcsGamesStore } from './games-store.js';
+import { createGcsObjectStore } from './gcs-sign.js';
 import { createCloudBuildGateTrigger, gateTriggerOptionsFromEnv } from './gate-trigger.js';
 import { registerAdminRoutes } from './admin.js';
 import { parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
@@ -193,11 +194,14 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // every registration that needs them: three copies of these expressions is three ways
   // for delivery, publishing and the health sweep to end up pointed at different buckets
   // or different gates.
+  const gamesStoreBucket = process.env.GAMES_STORE_BUCKET?.trim();
   const gamesStore =
     options.submissionRoutes?.agentChannel?.gamesStore ??
-    (process.env.GAMES_STORE_BUCKET?.trim()
-      ? createGcsGamesStore({ bucket: process.env.GAMES_STORE_BUCKET.trim() })
-      : undefined);
+    (gamesStoreBucket ? createGcsGamesStore({ bucket: gamesStoreBucket }) : undefined);
+  // Same bucket as deliveries: kits/ and examples/ live next to games/<slug>/versions/.
+  const objectStore =
+    options.submissionRoutes?.agentChannel?.objectStore ??
+    (gamesStoreBucket ? createGcsObjectStore({ bucket: gamesStoreBucket }) : undefined);
   const gateTrigger =
     options.submissionRoutes?.agentChannel?.onSourcesDelivered ??
     createCloudBuildGateTrigger(gateTriggerOptionsFromEnv(), app.log);
@@ -223,6 +227,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       // work and silently dropping it — which is the right behaviour for local
       // development, where there is no bucket at all.
       gamesStore,
+      objectStore,
       // Run the gate as soon as a game is delivered. Without this a candidate is stored
       // and never verified, so it can never publish — the upload path would end in a
       // queue nobody drains.

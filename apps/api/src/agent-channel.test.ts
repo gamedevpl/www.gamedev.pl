@@ -338,6 +338,10 @@ describe('agent build channel', () => {
     for (const req of [
       { method: 'GET' as const, url: '/api/agent/build/sources' },
       { method: 'GET' as const, url: '/api/agent/build/inbox' },
+      { method: 'GET' as const, url: '/api/agent/build/brief' },
+      { method: 'GET' as const, url: '/api/agent/build/seed' },
+      { method: 'GET' as const, url: '/api/agent/build/kit' },
+      { method: 'GET' as const, url: '/api/agent/build/examples' },
       { method: 'POST' as const, url: '/api/agent/build/inbox/ack', payload: { ids: ['m1'] } },
       { method: 'POST' as const, url: '/api/agent/build/progress', payload: { text: 'hello' } },
     ]) {
@@ -681,12 +685,18 @@ describe('agent build channel', () => {
       { path: 'game.ts', content: 'export {};' },
       { path: 'TRACE.json', content: '{"samples":[]}' },
       { path: 'PLAYTEST.json', content: '{"expectProgress":["round-start"]}' },
+      { path: 'AGENT.json', content: '{"policy":"capture"}' },
     ];
 
     function stubGamesStore() {
-      const stored: Array<{ slug: string; issueNumber: number; files: unknown[] }> = [];
+      const stored: Array<{ slug: string; issueNumber: number; files: unknown[]; kitEngineRef?: string }> = [];
       const gamesStore = {
-        putCandidateSources: async (input: { slug: string; issueNumber: number; files: unknown[] }) => {
+        putCandidateSources: async (input: {
+          slug: string;
+          issueNumber: number;
+          files: unknown[];
+          kitEngineRef?: string;
+        }) => {
           stored.push(input);
           const { validateSourceUpload } = await import('./games-store.js');
           validateSourceUpload(input.files as Array<{ path: string; content: string }>);
@@ -697,6 +707,7 @@ describe('agent build channel', () => {
         putGateResult: async () => {},
         putDerivedArtifact: async () => {},
         getDerivedArtifact: async () => null,
+        getKitRegistry: async () => null,
       } as unknown as GamesStore;
       return { gamesStore, stored };
     }
@@ -711,11 +722,40 @@ describe('agent build channel', () => {
         method: 'POST',
         url: '/api/agent/build/sources',
         headers: agentHeaders(),
-        payload: { slug: 'comet-courier', files: MINIMAL },
+        payload: {
+          slug: 'comet-courier',
+          files: MINIMAL,
+          kitEngineRef: 'abcdef1234567890',
+        },
       });
 
       expect(response.json()).toMatchObject({ accepted: true, delivery: { slug: 'comet-courier', version: 'v1' } });
-      expect(stored[0]).toMatchObject({ slug: 'comet-courier', issueNumber: ISSUE });
+      expect(stored[0]).toMatchObject({
+        slug: 'comet-courier',
+        issueNumber: ISSUE,
+        kitEngineRef: 'abcdef1234567890',
+      });
+    });
+
+    it('rejects config-shaped filenames at the sources endpoint, naming the path', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          files: [...MINIMAL, { path: 'package.json', content: '{}' }],
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toContain('package.json');
+      expect(response.json().error).toMatch(/Config or executable-shaped/i);
     });
 
     it('adopts the SPEC title so the shelf stops showing a truncated prompt', async () => {
@@ -1014,6 +1054,87 @@ describe('agent build channel', () => {
       const store = new InMemoryStore();
       await seedSubmission(store);
       app = await createApp(store, { gamesStore: storeWithVersion({}) });
+
+      const response = await app.inject({ method: 'GET', url: '/api/agent/build/sources', headers: agentHeaders() });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ delivery: null, files: [] });
+    });
+
+    it('restores the live publication for an improvement job that has not delivered yet', async () => {
+      // An improvement is a *new* job on a published slug (job-state.ts: publishing is
+      // terminal). That job inherits the slug before it has a deliveredVersion of its
+      // own — without the publication fallback, restore reports nothing and the agent
+      // rebuilds from the spec instead of revising the game the creator played.
+      const IMPROVEMENT = 1000004;
+      const store = new InMemoryStore();
+      await seedSubmission(store, IMPROVEMENT);
+      await store.setSubmissionSlug(IMPROVEMENT, 'global-thermonuclear-strategy');
+      await store.setPublication({
+        slug: 'global-thermonuclear-strategy',
+        state: 'published',
+        currentVersion: 'v3',
+        publishedAt: '2026-07-01T00:00:00.000Z',
+      });
+      app = await createApp(store, {
+        gamesStore: storeWithVersion({
+          'SPEC.md': '# Global Thermonuclear Strategy',
+          'game.ts': 'export const tick = () => {};',
+        }),
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/agent/build/sources',
+        headers: agentHeaders(IMPROVEMENT),
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        delivery: { slug: 'global-thermonuclear-strategy', version: 'v3' },
+        files: [
+          { path: 'SPEC.md', content: '# Global Thermonuclear Strategy' },
+          { path: 'game.ts', content: 'export const tick = () => {};' },
+        ],
+      });
+    });
+
+    it('prefers this job’s own delivery over the publication when both exist', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      await store.setSubmissionSlug(ISSUE, 'comet-courier');
+      await store.setSubmissionDeliveredVersion(ISSUE, 'v2');
+      await store.setPublication({
+        slug: 'comet-courier',
+        state: 'published',
+        currentVersion: 'v1',
+        publishedAt: '2026-07-01T00:00:00.000Z',
+      });
+      app = await createApp(store, {
+        gamesStore: storeWithVersion({ 'SPEC.md': '# Candidate v2' }),
+      });
+
+      const response = await app.inject({ method: 'GET', url: '/api/agent/build/sources', headers: agentHeaders() });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ delivery: { slug: 'comet-courier', version: 'v2' } });
+    });
+
+    it('does not restore a taken-down publication as if it were still live', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      await store.setSubmissionSlug(ISSUE, 'comet-courier');
+      await store.setPublication({
+        slug: 'comet-courier',
+        state: 'disabled',
+        currentVersion: 'v1',
+        publishedAt: '2026-07-01T00:00:00.000Z',
+        takedownAt: '2026-07-15T00:00:00.000Z',
+        takedownReason: 'withdrawn',
+      });
+      app = await createApp(store, {
+        gamesStore: storeWithVersion({ 'SPEC.md': '# Gone' }),
+      });
 
       const response = await app.inject({ method: 'GET', url: '/api/agent/build/sources', headers: agentHeaders() });
 

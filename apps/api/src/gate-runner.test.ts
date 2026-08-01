@@ -25,6 +25,7 @@ function stubStore(overrides: Partial<GamesStore> = {}) {
     putCandidateSources: vi.fn(),
     putGateResult: vi.fn(),
     getDerivedArtifact: async () => null,
+    getKitRegistry: async () => null,
     ...overrides,
   } as unknown as GamesStore;
   return { store, derived };
@@ -194,6 +195,31 @@ describe('runGate', () => {
     expect(outcome.artifacts).toEqual(['preview.html']);
   });
 
+  it('still returns a red verdict when capture media upload fails', async () => {
+    // Optional screenshots must not discard the actionable report (Codex P1).
+    const harness = await harnessDir();
+    const { store } = stubStore({
+      putDerivedArtifact: async (_s, _v, name) => {
+        if (name.startsWith('media/')) throw new Error('GCS unavailable');
+      },
+    });
+
+    const outcome = await runGate('comet-courier', 'v1', {
+      store,
+      prepareHarness: async () => harness,
+      assembleBundle: stubAssemble,
+      run: async () => {
+        await mkdir(path.join(harness, 'games/comet-courier/media'), { recursive: true });
+        await writeFile(path.join(harness, 'games/comet-courier/media/opening.png'), 'png-bytes');
+        return { code: 1, output: 'Check 12: capture diverged' };
+      },
+    });
+
+    expect(outcome.green).toBe(false);
+    expect(outcome.report).toContain('capture diverged');
+    expect(outcome.artifacts).toEqual(['preview.html']);
+  });
+
   it('reports a red verdict even when the candidate cannot be assembled at all', async () => {
     // The common case for "no preview": sources that fail the check precisely because
     // they do not assemble. The verdict is still the answer, and a gate that crashed
@@ -239,6 +265,61 @@ describe('runGate', () => {
       'media/opening.png',
     ]);
     expect(outcome.artifacts).toContain('bundle.html');
+    expect(outcome.screenshot).toBe('media/opening.png');
+  });
+
+  it('refuses a delivery whose kitEngineRef is outside kits/current.json', async () => {
+    const prepareHarness = vi.fn(async () => harnessDir());
+    const run = vi.fn(async () => ({ code: 0, output: '' }));
+    const { store } = stubStore({
+      getManifest: async () => ({
+        ...MANIFEST,
+        kitEngineRef: 'cccccccccccccccccccccccccccccccccccccccc',
+      }),
+    });
+
+    const outcome = await runGate('comet-courier', 'v1', {
+      store,
+      prepareHarness,
+      run,
+      assembleBundle: stubAssemble,
+      readKitRegistry: async () => ({
+        current: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        previous: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        updatedAt: '2026-07-31T12:00:00.000Z',
+      }),
+    });
+
+    expect(outcome).toMatchObject({ green: false, status: 'kit_outdated' });
+    expect(outcome.report).toMatch(/^kit_outdated:/);
+    expect(outcome.report).toContain('cccccccccccccccccccccccccccccccccccccccc');
+    // No harness, no check:game — the window refusal is the whole verdict.
+    expect(prepareHarness).not.toHaveBeenCalled();
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('accepts a kitEngineRef that is the registry previous (N−1)', async () => {
+    const previous = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    const { store } = stubStore({
+      getManifest: async () => ({ ...MANIFEST, kitEngineRef: previous }),
+    });
+    const run = vi.fn(async () => ({ code: 0, output: '' }));
+
+    const outcome = await runGate('comet-courier', 'v1', {
+      store,
+      prepareHarness: harnessDir,
+      run,
+      assembleBundle: stubAssemble,
+      readKitRegistry: async () => ({
+        current: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        previous,
+        updatedAt: '2026-07-31T12:00:00.000Z',
+      }),
+    });
+
+    expect(outcome.green).toBe(true);
+    expect(outcome.status).toBeUndefined();
+    expect(run).toHaveBeenCalled();
   });
 
   it('serves the assembler’s document, not the games repo’s own build output', async () => {

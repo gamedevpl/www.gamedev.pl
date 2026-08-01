@@ -15,6 +15,10 @@ coverage
 .vite
 /gitleaks
 
+# Service account keys minted by infra/setup-agent-readonly.sh — never commit
+*-key.json
+*.b64
+
 # Playwright/browser run artifacts (apps/e2e)
 test-results
 playwright-report

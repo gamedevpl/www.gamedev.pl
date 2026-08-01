@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createGcsGamesStore,
   defaultVersionId,
+  forbiddenDeliveryPathReason,
   InvalidUploadError,
   MAX_UPLOAD_BYTES,
   validateSourceUpload,
@@ -19,6 +20,9 @@ const MINIMAL: SourceFile[] = [
   // a game that does not declare its progress landmarks, so a delivery without this one
   // reaches validate and stops there having produced nothing.
   { path: 'PLAYTEST.json', content: '{"expectProgress":["round-start"]}' },
+  // Check 28's play policy. Allowed (and present on the happy path); not hard-required
+  // at upload until in-flight workspaces drain — see ALLOWED_SOURCE_FILES note.
+  { path: 'AGENT.json', content: '{"policy":"capture"}' },
 ];
 
 describe('validateSourceUpload — the delivery contract', () => {
@@ -90,6 +94,14 @@ describe('validateSourceUpload — the delivery contract', () => {
     );
   });
 
+  it('accepts the agent-play contract without blocking pre-companion submit tools', () => {
+    // The bug this PR fixes is "path not deliverable" for AGENT.json — accepting the
+    // file is the unblock. Hard-requiring it would 400 in-flight workspaces that still
+    // ship the old submit tool; the gate's Check 28 covers absence until those drain.
+    expect(validateSourceUpload(MINIMAL).map((f) => f.path)).toContain('AGENT.json');
+    expect(validateSourceUpload(MINIMAL.filter((f) => f.path !== 'AGENT.json'))).toHaveLength(MINIMAL.length - 1);
+  });
+
   it('caps total upload size', () => {
     expect(() =>
       validateSourceUpload([...MINIMAL, { path: 'big.ts', content: 'x'.repeat(MAX_UPLOAD_BYTES + 1) }]),
@@ -104,6 +116,55 @@ describe('validateSourceUpload — the delivery contract', () => {
     expect(() => validateSourceUpload([...MINIMAL, { path: 'notes.txt', content: 'x' }])).toThrow(
       /Deliver only your own game's files/,
     );
+  });
+
+  it('accept/reject matrix for the delivery filename allowlist', () => {
+    const accept = [
+      'GAME.json',
+      'CAPTURE.json',
+      'style.css',
+      'game/loop.ts',
+      'game/systems/physics.ts',
+      'entities/player.ts',
+    ];
+    for (const path of accept) {
+      expect(
+        validateSourceUpload([...MINIMAL, { path, content: path.endsWith('.json') ? '{}' : 'export {};' }]).map(
+          (f) => f.path,
+        ),
+      ).toContain(path);
+    }
+
+    const reject = [
+      'package.json',
+      'package-lock.json',
+      'tsconfig.json',
+      'tsconfig.build.json',
+      'pnpm-lock.yaml',
+      'yarn.lock',
+      '.env',
+      '.github/workflows/ci.yml',
+      'vite.config.ts', // .ts but config basename — wait, EXTRA allows *.ts; forbid by basename
+      'setup.js',
+      'index.mjs',
+      'run.cjs',
+      'media/opening.png',
+      'Dockerfile',
+      'script.sh',
+    ];
+    for (const path of reject) {
+      const reason = forbiddenDeliveryPathReason(path);
+      // Config-shaped paths must name themselves in the refusal.
+      if (reason) {
+        expect(reason).toContain(path);
+        expect(() => validateSourceUpload([...MINIMAL, { path, content: 'x' }])).toThrow(
+          new RegExp(path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+        );
+      } else {
+        // Non-config leftovers (e.g. notes) still refuse via the allowlist.
+        expect(() => validateSourceUpload([...MINIMAL, { path, content: 'x' }])).toThrow(/path not deliverable/);
+      }
+    }
   });
 });
 

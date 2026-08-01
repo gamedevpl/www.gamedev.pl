@@ -23,7 +23,9 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { GameProject } from '@gamedevpl/game-generator';
 import { assembleGameHtml } from './assemble.js';
+import { firstGateScreenshotPath } from './gate-screenshot.js';
 import type { GamesStore, VersionManifest } from './games-store.js';
+import { isKitEngineRefSupported, kitOutdatedReport, type KitRegistry } from './kit-window.js';
 import { createLocalGamesClient } from './local-games-repo.js';
 
 export interface GateOutcome {
@@ -41,6 +43,10 @@ export interface GateOutcome {
    * was rendered — the sha that makes "it worked when we checked" checkable later.
    */
   engineCommit?: string;
+  /** Set when the delivery's kitEngineRef is outside `kits/current.json`'s window. */
+  status?: 'kit_outdated';
+  /** First capture PNG path under the version prefix, when one was stored. */
+  screenshot?: string;
 }
 
 export interface GateRunOptions {
@@ -69,6 +75,11 @@ export interface GateRunnerDeps {
    * Injected so the runner can be tested without esbuild or a games-repo tree.
    */
   assembleBundle?: (harness: string, slug: string) => Promise<string | null>;
+  /**
+   * The Creator Kit N/N−1 window. Injected so tests can fix the registry without GCS;
+   * production reads `kits/current.json` via {@link GamesStore.getKitRegistry}.
+   */
+  readKitRegistry?: () => Promise<KitRegistry | null>;
 }
 
 const DEFAULT_ARTIFACT_ROOTS = {
@@ -141,6 +152,23 @@ export async function runGate(
     return { green: false, report: `no such version: ${slug}@${version}`, artifacts: [], durationMs: 0 };
   }
 
+  // Kit window before any harness work: a delivery outside N/N−1 must not burn a
+  // check:game run. Health re-gates skip this — they ask about today's engine, not
+  // whether the original kit claim was still supported.
+  const healthRun = Boolean(options.engineRef);
+  if (!healthRun && manifest.kitEngineRef) {
+    const registry = await (deps.readKitRegistry ?? (() => deps.store.getKitRegistry()))().catch(() => null);
+    if (registry && !isKitEngineRefSupported(manifest.kitEngineRef, registry)) {
+      return {
+        green: false,
+        status: 'kit_outdated',
+        report: kitOutdatedReport(manifest.kitEngineRef, registry),
+        artifacts: [],
+        durationMs: now() - startedAt,
+      };
+    }
+  }
+
   // Deliveries do not pin an engine commit yet — dispatch targets `main`, a moving
   // branch — so a first gate run checks against wherever `main` stands and stamps the
   // resolved sha back onto the manifest (see the caller). A *re*-run of a stamped
@@ -168,6 +196,12 @@ export async function runGate(
     // modified GameKit fails here, which is precisely the thing worth catching.
     const check = await deps.run('npm', ['run', 'check:game', '--', slug], harness);
     if (check.code !== 0) {
+      // Preview for the creator; media when capture got far enough — both best-effort.
+      const artifacts = [
+        ...(await storePreview(deps, slug, version, harness)),
+        ...(await storeCaptureMedia(deps, slug, version, harness, roots)),
+      ];
+      const screenshot = firstGateScreenshotPath(artifacts);
       return {
         green: false,
         // The tail, not the head: the chain fails at the bottom and the last lines are
@@ -180,9 +214,10 @@ export async function runGate(
         // with no explanation. Stored under its own name, never `bundle.html`: publishing
         // checks `manifest.gate.green` and the play route reads only the bundle, so an
         // unverified document has no path to a player either way.
-        artifacts: await storePreview(deps, slug, version, harness),
+        artifacts,
         durationMs: now() - startedAt,
         ...(engineCommit ? { engineCommit } : {}),
+        ...(screenshot ? { screenshot } : {}),
       };
     }
 
@@ -204,12 +239,14 @@ export async function runGate(
       };
     }
 
+    const screenshot = firstGateScreenshotPath(artifacts);
     return {
       green: true,
       report: `check:game passed against engine ${engineCommit ?? engineRef}; ${artifacts.length} artifacts stored`,
       artifacts,
       durationMs: now() - startedAt,
       ...(engineCommit ? { engineCommit } : {}),
+      ...(screenshot ? { screenshot } : {}),
     };
   } finally {
     // The harness is disposable and can be large. Leaving it behind is how a long-lived
@@ -265,6 +302,39 @@ async function storePreview(deps: GateRunnerDeps, slug: string, version: string,
   }
 }
 
+/** Stores capture media the check left under the game directory, when any. */
+async function storeCaptureMedia(
+  deps: GateRunnerDeps,
+  slug: string,
+  version: string,
+  harness: string,
+  roots: NonNullable<GateRunnerDeps['artifactRoots']>,
+): Promise<string[]> {
+  // Best-effort end to end: a red check already has a report the agent can act on, and
+  // a transient GCS blip on an optional screenshot must not discard that verdict
+  // (Codex: awaited throw here used to prevent putGateResult).
+  try {
+    const mediaDir = path.join(harness, roots.media(slug));
+    const { readdir } = await import('node:fs/promises');
+    const entries = await readdir(mediaDir).catch(() => [] as string[]);
+    const stored: string[] = [];
+    for (const entry of entries) {
+      if (!MEDIA_EXTENSIONS.includes(path.extname(entry).toLowerCase())) continue;
+      const body = await readFile(path.join(mediaDir, entry)).catch(() => null);
+      if (!body) continue;
+      try {
+        await deps.store.putDerivedArtifact(slug, version, `media/${entry}`, body, contentTypeFor(entry));
+        stored.push(`media/${entry}`);
+      } catch {
+        // Skip this file; keep trying the rest.
+      }
+    }
+    return stored;
+  } catch {
+    return [];
+  }
+}
+
 /** Stores what the check produced, so the shipped artifacts are the verified ones. */
 async function collectArtifacts(
   deps: GateRunnerDeps,
@@ -289,17 +359,7 @@ async function collectArtifacts(
     'text/html; charset=utf-8',
   );
   stored.push('bundle.html');
-
-  const mediaDir = path.join(harness, roots.media(slug));
-  const { readdir } = await import('node:fs/promises');
-  const entries = await readdir(mediaDir).catch(() => [] as string[]);
-  for (const entry of entries) {
-    if (!MEDIA_EXTENSIONS.includes(path.extname(entry).toLowerCase())) continue;
-    const body = await readFile(path.join(mediaDir, entry)).catch(() => null);
-    if (!body) continue;
-    await deps.store.putDerivedArtifact(slug, version, `media/${entry}`, body, contentTypeFor(entry));
-    stored.push(`media/${entry}`);
-  }
+  stored.push(...(await storeCaptureMedia(deps, slug, version, harness, roots)));
 
   return stored;
 }

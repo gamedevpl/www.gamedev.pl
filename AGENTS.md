@@ -45,6 +45,16 @@ will be; exchange it at `POST /api/auth/session` for the cookie the SPA sends if
 driving a browser. Tokens are issued by the repo owner and must never be committed. See
 [`docs/agent-access-tokens.md`](docs/agent-access-tokens.md).
 
+**Investigating prod.** You can read logs, metrics, Cloud Run state and build history
+yourself — don't guess at an outage or ask the owner to paste logs. `gcloud` is not installed
+in agent sandboxes, so use `node infra/gcp-read.mjs` (`whoami`, `logs`, `services`,
+`revisions`, `describe`, `raw`), which hits the GCP REST APIs with a credential that is
+**read-only by construction**: no writes anywhere, no Firestore, no secret payloads, no
+backup bucket. A 403 is therefore a boundary, not a bug — run `whoami` to tell the two apart,
+and escalate rather than route around it. See
+[`docs/agent-gcp-access.md`](docs/agent-gcp-access.md) and the incident procedures in
+[`docs/runbooks/`](docs/runbooks/README.md).
+
 ## Layout changes: check the states that coexist with the one you built
 
 A green suite says nothing about layout. jsdom runs no media queries and does no layout, so

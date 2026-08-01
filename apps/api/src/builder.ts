@@ -31,8 +31,8 @@ export function selfBuildDeliveryCap(): number {
 /**
  * Whether the current round is still live — builder must not change until it closes.
  *
- * Includes gate-red `needs_changes`: that outcome keeps the round open so the same
- * session can repair and re-deliver without a new kickoff.
+ * Includes gate-red / kit_outdated `needs_changes`: those keep the round open so the
+ * same session can repair (or refresh the kit) and re-deliver without a new kickoff.
  */
 export function isActiveBuildRound(record: { state?: JobState; transitions?: JobTransition[] }): boolean {
   const state = record.state;
@@ -46,7 +46,7 @@ export function isActiveBuildRound(record: { state?: JobState; transitions?: Job
       return true;
     case 'needs_changes': {
       const last = [...(record.transitions ?? [])].reverse().find((transition) => transition.to === 'needs_changes');
-      return last?.reason === 'gate_red';
+      return last?.reason === 'gate_red' || last?.reason === 'kit_outdated';
     }
     default:
       return false;

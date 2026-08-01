@@ -15,11 +15,17 @@ describe('builder helpers', () => {
     expect(isBuilderKind('copilot')).toBe(false);
   });
 
-  it('treats gate-red needs_changes as an active round', () => {
+  it('treats gate-red / kit_outdated needs_changes as an active round', () => {
     expect(
       isActiveBuildRound({
         state: 'needs_changes',
         transitions: [{ to: 'needs_changes', at: 't', by: 'gate', reason: 'gate_red' }],
+      }),
+    ).toBe(true);
+    expect(
+      isActiveBuildRound({
+        state: 'needs_changes',
+        transitions: [{ to: 'needs_changes', at: 't', by: 'gate', reason: 'kit_outdated' }],
       }),
     ).toBe(true);
     expect(

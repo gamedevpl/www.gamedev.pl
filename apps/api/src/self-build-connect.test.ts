@@ -157,6 +157,7 @@ describe('GET /api/submissions/:id/connect (BY-03)', () => {
       headers: authHeaders(),
     });
     expect(response.statusCode).toBe(200);
+    expect(response.headers['cache-control']).toBe('no-store');
     const body = response.json() as {
       installSnippets: Record<string, string>;
       kickoffPrompt: string;
@@ -230,6 +231,80 @@ describe('GET /api/submissions/:id/connect (BY-03)', () => {
     const response = await app.inject({
       method: 'GET',
       url: `/api/submissions/${id}/connect`,
+      headers: authHeaders(),
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      error: 'connect_unavailable',
+      reason: 'not_self_round',
+      builder: 'platform',
+    });
+  });
+
+  it('refuses to mint after a race closes the round between the first read and generation mint', async () => {
+    const created = await createApp();
+    app = created.app;
+    const { store } = created;
+
+    await store.createSubmission(99, 'g:creator', 'Race Close');
+    await store.setRoundBuilder(99, 'self');
+    await store.recordJobTransition(99, {
+      to: 'dispatched',
+      at: new Date().toISOString(),
+      by: 'system',
+    });
+    await store.ensureRoundGeneration(99);
+
+    const originalGet = store.getSubmission.bind(store);
+    let reads = 0;
+    store.getSubmission = async (issueNumber: number) => {
+      const hit = await originalGet(issueNumber);
+      reads += 1;
+      // After the connect handler's first ownership/builder check, close the round
+      // before ensureRoundGeneration / the revalidation read.
+      if (reads === 1 && hit) {
+        await store.recordJobTransition(99, {
+          to: 'ready_for_review',
+          at: new Date().toISOString(),
+          by: 'gate',
+          reason: 'gate_green',
+        });
+      }
+      return originalGet(issueNumber);
+    };
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(99, secret)}/connect`,
+      headers: authHeaders(),
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      error: 'connect_unavailable',
+      reason: 'inactive_round',
+    });
+  });
+
+  it('does not unlock connect from defaultBuilder alone when the active round builder is unset', async () => {
+    const created = await createApp();
+    app = created.app;
+    const { store } = created;
+
+    await store.createSubmission(88, 'g:creator', 'Legacy Default');
+    // Simulate a stale default without an active-round builder field.
+    await store.setRoundBuilder(88, 'self');
+    const sub = await store.getSubmission(88);
+    const map = (store as unknown as { submissions: Map<number, typeof sub> }).submissions;
+    map.set(88, { ...sub!, builder: undefined, defaultBuilder: 'self' });
+    await store.recordJobTransition(88, {
+      to: 'dispatched',
+      at: new Date().toISOString(),
+      by: 'system',
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(88, secret)}/connect`,
       headers: authHeaders(),
     });
     expect(response.statusCode).toBe(409);
