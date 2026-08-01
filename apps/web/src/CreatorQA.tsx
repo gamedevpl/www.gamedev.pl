@@ -174,9 +174,82 @@ export function CreatorQA({
         <p className="qa-name-hint">{t('qa.nameHint')}</p>
       </div>
 
+      {/* Questions directly under the header that announces them: the subtitle says
+          "click any proposed options", so the options must be the next thing on
+          screen — not parked below a green button that looks like the end of the
+          panel. The builder choice and the actions follow, in the order they are
+          decided: what the game is, who builds it, go. */}
+      {questions.length > 0 && (
+        <div className="qa-questions-list">
+          {questions.map((q) => {
+            const selected = selectedAnswers[q.id] ?? [];
+            const custom = customText[q.id] ?? '';
+
+            return (
+              <div key={q.id} className="qa-card">
+                <h4 className="qa-card__question">
+                  {q.question}
+                  {q.multiple && <span className="qa-card__hint"> {t('qa.pickSeveral')}</span>}
+                </h4>
+                <div className="qa-chips">
+                  {q.options.map((opt) => {
+                    // Stays lit while free text is typed: the two are now one answer,
+                    // and un-highlighting the chip was how the old behaviour hid itself.
+                    const isSelected = selected.includes(opt.label);
+                    return (
+                      <button
+                        key={opt.label}
+                        type="button"
+                        // Selection lived only in a class, so a screen reader announced
+                        // every chip identically whether or not it was chosen.
+                        aria-pressed={isSelected}
+                        className={`qa-chip ${isSelected ? 'qa-chip--selected' : ''}`}
+                        disabled={submitting}
+                        onClick={() => handleSelectOption(q, opt.label)}
+                      >
+                        <span className="qa-chip__label">{opt.label}</span>
+                        {opt.detail && <span className="qa-chip__detail">{opt.detail}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {q.allowFreeText !== false && (
+                  <div className="qa-custom-input">
+                    <input
+                      type="text"
+                      className="input-text"
+                      placeholder={t('qa.otherPlaceholder')}
+                      // The placeholder is the only visible cue, and placeholders are
+                      // not names — without this the field is announced unlabelled.
+                      aria-label={`${q.question} — ${t('qa.otherPlaceholder')}`}
+                      value={custom}
+                      disabled={submitting}
+                      onChange={(e) => handleCustomTextChange(q.id, e.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {Object.values(selectedAnswers).some(Boolean) || Object.values(customText).some((s) => s.trim().length > 0) ? (
+        <div className="qa-preview">
+          <h5>{t('qa.clarificationsTitle')}</h5>
+          <pre className="qa-preview__code">{buildMergedConcept().slice(initialConcept.trim().length).trim()}</pre>
+        </div>
+      ) : null}
+
       <BuilderChoice value={builder} onChange={handleBuilderChange} disabled={submitting} />
 
-      <div className="qa-actions qa-actions--top">
+      {error && <p className="error qa-error">{error}</p>}
+
+      {/* One action bar, after everything it submits. It sticks to the bottom of the
+          viewport while the panel is taller than the screen, so "Create Now" is always
+          in reach without printing the same green button twice. */}
+      <div className="qa-actions">
         <button
           type="button"
           className="btn btn-primary btn-create-now"
@@ -194,83 +267,6 @@ export function CreatorQA({
           </button>
         )}
       </div>
-
-      <div className="qa-questions-list">
-        {questions.map((q) => {
-          const selected = selectedAnswers[q.id] ?? [];
-          const custom = customText[q.id] ?? '';
-
-          return (
-            <div key={q.id} className="qa-card">
-              <h4 className="qa-card__question">
-                {q.question}
-                {q.multiple && <span className="qa-card__hint"> {t('qa.pickSeveral')}</span>}
-              </h4>
-              <div className="qa-chips">
-                {q.options.map((opt) => {
-                  // Stays lit while free text is typed: the two are now one answer,
-                  // and un-highlighting the chip was how the old behaviour hid itself.
-                  const isSelected = selected.includes(opt.label);
-                  return (
-                    <button
-                      key={opt.label}
-                      type="button"
-                      // Selection lived only in a class, so a screen reader announced
-                      // every chip identically whether or not it was chosen.
-                      aria-pressed={isSelected}
-                      className={`qa-chip ${isSelected ? 'qa-chip--selected' : ''}`}
-                      disabled={submitting}
-                      onClick={() => handleSelectOption(q, opt.label)}
-                    >
-                      <span className="qa-chip__label">{opt.label}</span>
-                      {opt.detail && <span className="qa-chip__detail">{opt.detail}</span>}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {q.allowFreeText !== false && (
-                <div className="qa-custom-input">
-                  <input
-                    type="text"
-                    className="input-text"
-                    placeholder={t('qa.otherPlaceholder')}
-                    // The placeholder is the only visible cue, and placeholders are
-                    // not names — without this the field is announced unlabelled.
-                    aria-label={`${q.question} — ${t('qa.otherPlaceholder')}`}
-                    value={custom}
-                    disabled={submitting}
-                    onChange={(e) => handleCustomTextChange(q.id, e.target.value)}
-                  />
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {Object.values(selectedAnswers).some(Boolean) || Object.values(customText).some((s) => s.trim().length > 0) ? (
-        <div className="qa-preview">
-          <h5>{t('qa.clarificationsTitle')}</h5>
-          <pre className="qa-preview__code">{buildMergedConcept().slice(initialConcept.trim().length).trim()}</pre>
-        </div>
-      ) : null}
-
-      {error && <p className="error qa-error">{error}</p>}
-
-      {/* Only worth a second button when there is a list to have scrolled past. */}
-      {questions.length > 0 ? (
-        <div className="qa-actions qa-actions--bottom">
-          <button
-            type="button"
-            className="btn btn-primary btn-create-now"
-            onClick={handleSubmit}
-            disabled={submitting || !titleReady}
-          >
-            <PixelIcon name="rocket" size={14} /> {submitting ? t('submit.submitting') : t('qa.createNow')}
-          </button>
-        </div>
-      ) : null}
     </div>
   );
 }

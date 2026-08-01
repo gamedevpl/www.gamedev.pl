@@ -227,12 +227,12 @@ describe('CreatorQA', () => {
       await flushEffects();
     });
 
+    // One submit button, in the sticky action bar — a second copy above the questions
+    // used to read as the end of the panel, with the questions orphaned below it.
     const createBtns = container.querySelectorAll<HTMLButtonElement>('.btn-create-now');
-    expect(createBtns).toHaveLength(2);
-    for (const btn of createBtns) {
-      expect(btn.disabled).toBe(true);
-      expect(btn.textContent).toContain('Submitting');
-    }
+    expect(createBtns).toHaveLength(1);
+    expect(createBtns[0].disabled).toBe(true);
+    expect(createBtns[0].textContent).toContain('Submitting');
 
     // Walking away mid-flight would strand a submission the creator can't see.
     expect(container.querySelector<HTMLButtonElement>('.btn-secondary')?.disabled).toBe(true);
@@ -438,7 +438,8 @@ describe('CreatorQA', () => {
     expect(container.querySelector('.qa-title')?.textContent).toContain('Name your game');
     expect(container.querySelector('.qa-name-input')).not.toBeNull();
     expect(container.querySelectorAll('.qa-card')).toHaveLength(0);
-    // One button, not two: the second exists to be reachable after a long list.
+    // Still exactly one button: the sticky bar is the same whether or not there
+    // was a question list to scroll past.
     expect(container.querySelectorAll('.btn-create-now')).toHaveLength(1);
 
     await act(async () => root.unmount());

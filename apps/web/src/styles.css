@@ -816,6 +816,10 @@ a {
 .creation-badge {
   color: var(--accent-blue);
   font-size: 0.85rem;
+  /* This badge quotes the creator's whole prompt back at them; the uppercase the
+     other badges use turned that quote into a full line of shouting. */
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .creation-sub {
@@ -4072,7 +4076,11 @@ body.player-open {
 
 /* Creator Q&A Clarifications */
 .qa-container {
-  margin-top: 24px;
+  /* Same column as the hero card above it. Left free, this panel stretched to the
+     1280px main container while the prompt card capped at 820px — two widths, and
+     the refine step read as an unrelated page rather than step two of the same flow. */
+  max-width: 820px;
+  margin: 24px auto 0;
   padding: 24px;
   background: var(--panel-bg, #1d2123);
   border: 1px solid var(--panel-border, #33383d);
@@ -5239,10 +5247,20 @@ body.player-open {
   color: var(--muted, #94a3b8);
 }
 
+/* Sticks to the viewport bottom while the question list runs past the screen, so
+   the submit is reachable from anywhere in the panel without a duplicate button.
+   The negative margins let the bar sit flush with the panel's bottom edge. */
 .qa-actions {
+  position: sticky;
+  bottom: 0;
   display: flex;
   align-items: center;
   gap: 12px;
+  margin: 0 -24px -24px;
+  padding: 14px 24px;
+  background: var(--panel-bg, #1d2123);
+  border-top: 1px solid var(--panel-border, #33383d);
+  border-radius: 0 0 12px 12px;
 }
 
 .btn-create-now {
@@ -5258,11 +5276,9 @@ body.player-open {
   transition:
     transform 0.15s ease,
     box-shadow 0.15s ease;
-  /* Two instances of this exact button — same markup, same class, same computed
-     padding/font/line-height — render at different heights (52px vs 36px) depending
-     on which one is in the DOM. No CSS difference explains it; whatever the browser's
-     reason, this is the CTA that actually submits the spec, so it gets an explicit
-     floor rather than an inherited "normal" line-height nobody can rely on. */
+  /* This is the CTA that actually submits the spec: an explicit floor (also the
+     minimum comfortable tap target) rather than an inherited "normal" line-height
+     that has rendered this same markup at 52px in one spot and 36px in another. */
   min-height: 44px;
   display: inline-flex;
   align-items: center;
