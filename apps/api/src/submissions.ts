@@ -1551,13 +1551,18 @@ export async function registerSubmissionRoutes(
     // tick — but it must not flip on until something is actually storable.
     if (record.slug && record.deliveredVersion) {
       const gamesStore = options.agentChannel?.gamesStore;
-      if (gamesStore) {
-        const [bundle, previewHtml] = await Promise.all([
-          gamesStore.getDerivedArtifact(record.slug, record.deliveredVersion, 'bundle.html'),
-          gamesStore.getDerivedArtifact(record.slug, record.deliveredVersion, 'preview.html'),
-        ]);
-        if (bundle || previewHtml) {
-          status.preview = { slug: record.slug };
+      if (gamesStore?.getDerivedArtifact) {
+        try {
+          const [bundle, previewHtml] = await Promise.all([
+            gamesStore.getDerivedArtifact(record.slug, record.deliveredVersion, 'bundle.html'),
+            gamesStore.getDerivedArtifact(record.slug, record.deliveredVersion, 'preview.html'),
+          ]);
+          if (bundle || previewHtml) {
+            status.preview = { slug: record.slug };
+          }
+        } catch {
+          // Preview readiness is advisory. A store miss or stub without artifacts must
+          // not 502 the status page the creator is polling.
         }
       }
     }
