@@ -126,6 +126,17 @@ const BuildSourcesInputSchema = z.object({
     )
     .min(1, 'files is required')
     .max(64, 'too many files'),
+  /**
+   * Creator Kit engineRef the sources were built against. Required for self-build
+   * deliveries (BY-06); the gate compares it to `kits/current.json`'s N/N−1 window.
+   */
+  kitEngineRef: z
+    .string()
+    .trim()
+    .min(7, 'kitEngineRef must be a kit engine commit')
+    .max(64)
+    .regex(/^[0-9a-f]+$/i, 'kitEngineRef must be a hex commit sha')
+    .optional(),
 });
 
 const BuildPreviewInputSchema = z.object({
@@ -374,6 +385,8 @@ export async function registerAgentChannelRoutes(
         // The tail is where the chain names the check that stopped it; the runner has
         // already trimmed to 4000 characters for exactly this reason.
         ...(manifest.gate.report ? { report: manifest.gate.report } : {}),
+        // `kit_outdated` is a distinct refusal: refresh the kit, do not chase check:game.
+        ...(manifest.gate.status === 'kit_outdated' ? { status: 'kit_outdated' as const } : {}),
       };
     } catch (error) {
       app.log.warn({ err: error, issueNumber: record.issueNumber, slug }, 'could not read the gate verdict');
@@ -418,11 +431,15 @@ export async function registerAgentChannelRoutes(
         ...(gate && !gate.green
           ? {
               mustFixGate:
-                `The gate ran against your delivery and refused it (${gate.version}). You are not ` +
-                'done: nothing can be published until it passes. Read `gate.report` below — it ends ' +
-                'with the check that stopped the chain — fix the cause in your game, and deliver ' +
-                'again with `npm run submit -- <slug>`. Re-delivering without a fix just stores ' +
-                'another version that fails the same way.',
+                gate.status === 'kit_outdated'
+                  ? `The gate refused your delivery (${gate.version}) because the Creator Kit is ` +
+                    'outdated (`kit_outdated`). Refresh the kit (re-run get_kit), rebuild against ' +
+                    'it, and deliver again with the new kitEngineRef.'
+                  : `The gate ran against your delivery and refused it (${gate.version}). You are not ` +
+                    'done: nothing can be published until it passes. Read `gate.report` below — it ends ' +
+                    'with the check that stopped the chain — fix the cause in your game, and deliver ' +
+                    'again with `npm run submit -- <slug>`. Re-delivering without a fix just stores ' +
+                    'another version that fails the same way.',
             }
           : {}),
         ...(record.deliveredVersion
@@ -697,6 +714,16 @@ export async function registerAgentChannelRoutes(
             ...(await channelState(issueNumber, record)),
           });
         }
+        // Self-build deliveries must name the kit they built against — without it the
+        // gate cannot apply the N/N−1 window and would burn a delivery slot guessing.
+        if (!parsed.data.kitEngineRef) {
+          return reply.status(400).send({
+            error:
+              'kitEngineRef is required for self-build deliveries — send the engineRef from ' +
+              'the Creator Kit you built against (kit.json / get_kit).',
+            reason: 'kit_engine_ref_required',
+          });
+        }
       }
 
       // The job's own slug wins whenever it has one. A build that has already been
@@ -732,6 +759,7 @@ export async function registerAgentChannelRoutes(
           // Provenance: which backend built this version. Backend name on the dispatch
           // ('copilot' / 'self') is the durable record; builder is the round selector.
           backend: record.dispatch?.backend ?? record.builder,
+          ...(parsed.data.kitEngineRef ? { kitEngineRef: parsed.data.kitEngineRef } : {}),
         });
         // Recorded before the gate is asked to run: this is what the creator's preview
         // reads, and a delivered game should be playable on the status page whether or

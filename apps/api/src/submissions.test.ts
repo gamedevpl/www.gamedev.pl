@@ -1069,6 +1069,70 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  it('posts the gate capture screenshot into the build thread on reconcile', async () => {
+    const { githubClient } = createGithubClientStub({ issueNumber: 197 });
+    const { backend } = createBackendStub();
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x11]);
+    const gamesStore = {
+      getManifest: async () => ({
+        slug: 'space-parcels',
+        version: 'v3',
+        createdAt: '2026-07-31T10:00:00.000Z',
+        issueNumber: 197,
+        sourceFiles: [],
+        gate: {
+          green: true,
+          ranAt: '2026-07-31T10:30:00.000Z',
+          screenshot: 'media/opening.png',
+        },
+      }),
+      getDerivedArtifact: async (_slug: string, _version: string, name: string) =>
+        name === 'media/opening.png' ? png : null,
+    } as unknown as GamesStore;
+
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionSlug(job.issueNumber, 'space-parcels');
+    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v3');
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'submitted',
+      at: '2026-07-31T10:00:00.000Z',
+      by: 'agent',
+      reason: 'sources_delivered',
+    });
+
+    await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}`,
+      headers: authHeaders,
+    });
+
+    const shots = await store.listBuildShots(job.issueNumber);
+    expect(shots).toHaveLength(1);
+    expect(shots[0]?.label).toBe('Platform check');
+    // Reconcile is once-only: a second poll must not double-post the frame.
+    await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}`,
+      headers: authHeaders,
+    });
+    expect(await store.countBuildShots(job.issueNumber)).toBe(1);
+
+    await app.close();
+  });
+
   // The other half of the same path, and the one that only became reachable once the
   // gate verdict could land at all: a red gate does not necessarily end the round. The
   // session that delivered is usually still alive, and `mustFixGate` tells it to fix the

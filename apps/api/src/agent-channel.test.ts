@@ -685,9 +685,14 @@ describe('agent build channel', () => {
     ];
 
     function stubGamesStore() {
-      const stored: Array<{ slug: string; issueNumber: number; files: unknown[] }> = [];
+      const stored: Array<{ slug: string; issueNumber: number; files: unknown[]; kitEngineRef?: string }> = [];
       const gamesStore = {
-        putCandidateSources: async (input: { slug: string; issueNumber: number; files: unknown[] }) => {
+        putCandidateSources: async (input: {
+          slug: string;
+          issueNumber: number;
+          files: unknown[];
+          kitEngineRef?: string;
+        }) => {
           stored.push(input);
           const { validateSourceUpload } = await import('./games-store.js');
           validateSourceUpload(input.files as Array<{ path: string; content: string }>);
@@ -698,6 +703,7 @@ describe('agent build channel', () => {
         putGateResult: async () => {},
         putDerivedArtifact: async () => {},
         getDerivedArtifact: async () => null,
+        getKitRegistry: async () => null,
       } as unknown as GamesStore;
       return { gamesStore, stored };
     }
@@ -712,11 +718,40 @@ describe('agent build channel', () => {
         method: 'POST',
         url: '/api/agent/build/sources',
         headers: agentHeaders(),
-        payload: { slug: 'comet-courier', files: MINIMAL },
+        payload: {
+          slug: 'comet-courier',
+          files: MINIMAL,
+          kitEngineRef: 'abcdef1234567890',
+        },
       });
 
       expect(response.json()).toMatchObject({ accepted: true, delivery: { slug: 'comet-courier', version: 'v1' } });
-      expect(stored[0]).toMatchObject({ slug: 'comet-courier', issueNumber: ISSUE });
+      expect(stored[0]).toMatchObject({
+        slug: 'comet-courier',
+        issueNumber: ISSUE,
+        kitEngineRef: 'abcdef1234567890',
+      });
+    });
+
+    it('rejects config-shaped filenames at the sources endpoint, naming the path', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          files: [...MINIMAL, { path: 'package.json', content: '{}' }],
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toContain('package.json');
+      expect(response.json().error).toMatch(/Config or executable-shaped/i);
     });
 
     it('adopts the SPEC title so the shelf stops showing a truncated prompt', async () => {

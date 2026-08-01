@@ -1735,6 +1735,13 @@ export class InMemoryStore implements Store {
   async recordJobTransition(issueNumber: number, transition: JobTransition): Promise<boolean> {
     const sub = this.submissions.get(issueNumber);
     if (!sub) return false;
+    // Idempotent for concurrent *identical* arrivals (status poll + notify sweep both
+    // seeing `submitted`→`needs_changes`/`gate_red`). Same-state with a *new* reason
+    // is intentional — operator retry re-enters `building` with `operator_retry`.
+    if (sub.state === transition.to) {
+      const last = sub.transitions?.at(-1);
+      if (last?.to === transition.to && last?.reason === transition.reason) return false;
+    }
     const closes = transitionClosesRound(transition);
     const next: SubmissionRecord = {
       ...sub,
@@ -2822,6 +2829,13 @@ export class FirestoreStore implements Store {
       const snap = await tx.get(ref);
       if (!snap.exists) return false;
       const current = snap.data() as SubmissionRecord;
+      // Same race as InMemoryStore: concurrent identical arrivals must not both "win"
+      // (gate screenshots key off `recorded`). Same-state with a new reason is allowed
+      // (operator retry re-enters `building`).
+      if (current.state === transition.to) {
+        const last = current.transitions?.at(-1);
+        if (last?.to === transition.to && last?.reason === transition.reason) return false;
+      }
       const closes = transitionClosesRound(transition);
       if (closes) {
         const next: SubmissionRecord = {

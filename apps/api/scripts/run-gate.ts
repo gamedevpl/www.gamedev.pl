@@ -138,11 +138,15 @@ async function main(): Promise<void> {
     });
   } else {
     // The resolved sha rides along so the manifest ends up pinned to what was actually
-    // checked — the first run stamps it, later runs leave the pin alone.
+    // checked — the first run stamps it, later runs leave the pin alone. screenshot /
+    // kit_outdated ride along so the API reconciler can post the frame and surface the
+    // status without re-deriving either from the bucket listing.
     await store.putGateResult(slug, version, {
       green: outcome.green,
       report: outcome.report,
       engineRef: outcome.engineCommit,
+      ...(outcome.status ? { status: outcome.status } : {}),
+      ...(outcome.screenshot ? { screenshot: outcome.screenshot } : {}),
     });
   }
 

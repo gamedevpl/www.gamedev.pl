@@ -6,6 +6,7 @@ import { registerAgentChannelRoutes, type AgentChannelOptions } from './agent-ch
 import { mintAgentToken } from './agent-token.js';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import { createCreationGate, CREATION_REFUSAL_CODES, type CreationGate } from './creation-limits.js';
+import { postGateScreenshotToThread } from './gate-screenshot.js';
 import {
   catalogEntryFromSpec,
   createGitHubClient,
@@ -1717,10 +1718,25 @@ export async function registerSubmissionRoutes(
         to,
         at: verdict.ranAt,
         by: 'gate',
-        reason: verdict.green ? 'gate_green' : 'gate_red',
+        reason: verdict.green ? 'gate_green' : verdict.status === 'kit_outdated' ? 'kit_outdated' : 'gate_red',
       };
       const recorded = await store.recordJobTransition(record.issueNumber, transition);
-      return recorded ? transition : null;
+      if (!recorded) return null;
+      // First time we act on this verdict: post the capture frame into the thread so the
+      // creator sees what the platform check saw, on the same path as agent-sent shots.
+      if (verdict.screenshot) {
+        await postGateScreenshotToThread({
+          store,
+          gamesStore,
+          issueNumber: record.issueNumber,
+          slug: record.slug,
+          version: record.deliveredVersion,
+          screenshotPath: verdict.screenshot,
+        }).catch((error) => {
+          app.log.warn({ err: error, issueNumber: record.issueNumber }, 'could not post gate screenshot');
+        });
+      }
+      return transition;
     } catch (error) {
       app.log.error({ err: error, issueNumber: record.issueNumber }, 'could not read the gate verdict');
       return null;
