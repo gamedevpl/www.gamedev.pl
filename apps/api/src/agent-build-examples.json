@@ -1,0 +1,44 @@
+[
+  {
+    "slug": "block-cascade",
+    "title": "Block Cascade",
+    "genre": "puzzle",
+    "modules": ["input", "collision", "drawing", "gfx", "effects", "audio"],
+    "whyReference": "Canonical defineGame / canvas 2D worked example — clear game loop, input, and win/lose."
+  },
+  {
+    "slug": "arena-tag",
+    "title": "Arena Tag",
+    "genre": "party",
+    "modules": ["input", "collision", "drawing", "gfx", "effects", "audio", "party"],
+    "whyReference": "Party / local-multiplayer reference — GameKit.party slots, handoff, and shared-screen play."
+  },
+  {
+    "slug": "crate-keeper",
+    "title": "Crate Keeper",
+    "genre": "puzzle",
+    "modules": ["input", "collision", "world", "gameplay", "drawing", "gfx", "effects", "audio", "save"],
+    "whyReference": "Save / progress reference — persistent levels and GameKit.save without inventing storage."
+  },
+  {
+    "slug": "party-realm",
+    "title": "Party Realm",
+    "genre": "party",
+    "modules": ["input", "collision", "drawing", "gfx", "effects", "audio", "party"],
+    "whyReference": "Larger party-mode composition — multiple mini-activities sharing one party session."
+  },
+  {
+    "slug": "biplane-skirmish",
+    "title": "Biplane Skirmish",
+    "genre": "flight combat",
+    "modules": ["input", "drawing", "gfx", "gfx3d", "effects", "audio", "zone"],
+    "whyReference": "Zone + Scene3D reference — shared-space play without assuming repo neighbors."
+  },
+  {
+    "slug": "football-3d",
+    "title": "Football 3D",
+    "genre": "sports",
+    "modules": ["input", "drawing", "gfx", "effects", "audio"],
+    "whyReference": "Sports / camera composition reference — a readable non-puzzle game loop agents can study."
+  }
+]

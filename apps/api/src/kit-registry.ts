@@ -1,0 +1,83 @@
+/**
+ * Creator Kit registry (`kits/current.json`) — supported N / N−1 window.
+ *
+ * Games-repo CI (BY-10) is the publisher. This module only parses what is already
+ * in the bucket; it never invents an engineRef.
+ */
+
+export interface KitRegistry {
+  current: string;
+  previous: string | null;
+  updatedAt: string;
+}
+
+export interface KitSidecar {
+  sha256: string;
+  packedAt?: string;
+}
+
+export class KitRegistryError extends Error {
+  readonly code: 'kit_registry_missing' | 'kit_registry_invalid' | 'kit_artifact_missing';
+
+  constructor(code: KitRegistryError['code'], message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = 'KitRegistryError';
+    this.code = code;
+  }
+}
+
+export function parseKitRegistry(raw: string): KitRegistry {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    throw new KitRegistryError('kit_registry_invalid', 'kits/current.json is not valid JSON', { cause: error });
+  }
+  if (!parsed || typeof parsed !== 'object') {
+    throw new KitRegistryError('kit_registry_invalid', 'kits/current.json must be an object');
+  }
+  const obj = parsed as Record<string, unknown>;
+  if (typeof obj.current !== 'string' || !obj.current) {
+    throw new KitRegistryError('kit_registry_invalid', 'kits/current.json.current must be a non-empty string');
+  }
+  if (!(obj.previous === null || typeof obj.previous === 'string')) {
+    throw new KitRegistryError('kit_registry_invalid', 'kits/current.json.previous must be a string or null');
+  }
+  if (typeof obj.updatedAt !== 'string' || !obj.updatedAt) {
+    throw new KitRegistryError('kit_registry_invalid', 'kits/current.json.updatedAt must be a non-empty string');
+  }
+  return {
+    current: obj.current,
+    previous: obj.previous,
+    updatedAt: obj.updatedAt,
+  };
+}
+
+export function parseKitSidecar(raw: string): KitSidecar {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    throw new KitRegistryError('kit_artifact_missing', 'kit sidecar is not valid JSON', { cause: error });
+  }
+  if (!parsed || typeof parsed !== 'object') {
+    throw new KitRegistryError('kit_artifact_missing', 'kit sidecar must be an object');
+  }
+  const obj = parsed as Record<string, unknown>;
+  if (typeof obj.sha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(obj.sha256)) {
+    throw new KitRegistryError('kit_artifact_missing', 'kit sidecar.sha256 must be a sha256 hex digest');
+  }
+  return {
+    sha256: obj.sha256.toLowerCase(),
+    ...(typeof obj.packedAt === 'string' ? { packedAt: obj.packedAt } : {}),
+  };
+}
+
+export const KIT_ENTRY = 'SKILL.md';
+
+/** One-liner an agent can shell after get_kit — URL is substituted by the route. */
+export function kitUnpackCommand(kitUrl: string): string {
+  // Single-quoted URL so shell metacharacters in the signed query string stay inert.
+  const safe = kitUrl.replace(/'/g, `'\\''`);
+  return `curl -fsSL '${safe}' | tar -xz`;
+}

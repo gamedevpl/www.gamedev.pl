@@ -338,6 +338,10 @@ describe('agent build channel', () => {
     for (const req of [
       { method: 'GET' as const, url: '/api/agent/build/sources' },
       { method: 'GET' as const, url: '/api/agent/build/inbox' },
+      { method: 'GET' as const, url: '/api/agent/build/brief' },
+      { method: 'GET' as const, url: '/api/agent/build/seed' },
+      { method: 'GET' as const, url: '/api/agent/build/kit' },
+      { method: 'GET' as const, url: '/api/agent/build/examples' },
       { method: 'POST' as const, url: '/api/agent/build/inbox/ack', payload: { ids: ['m1'] } },
       { method: 'POST' as const, url: '/api/agent/build/progress', payload: { text: 'hello' } },
     ]) {
