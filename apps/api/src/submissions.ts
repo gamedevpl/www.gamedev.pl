@@ -1535,6 +1535,37 @@ export async function registerSubmissionRoutes(
       ...(record.abandonedAt ? {} : { phase: state }),
       ...(record.slug ? { slug: record.slug } : {}),
     };
+    // Studio's play surface only fetches `/preview` when `preview.slug` is set (the
+    // same signal the PR-derived path used to emit). A self-build delivery has no PR
+    // and often no channel `playable[]` either — sources land in the games store and
+    // the gate writes `bundle.html` / `preview.html`. Without this field the thread
+    // never asked for that document, so a gate-green ready_for_review job looked
+    // unplayable to its own creator (BY-14c).
+    //
+    // Advertise only once a gate-built artifact exists for the delivered version —
+    // not merely once `deliveredVersion` is set. `onSourcesDelivered` persists the
+    // version before the async gate writes the HTML, and Studio's preview effect
+    // keys on slug + headSha only: a first-delivery 409 is never retried while those
+    // stay unchanged (Codex P1). Presence of `preview.slug` is therefore a readiness
+    // signal to attempt loading, not a promise that the route is warm on the same
+    // tick — but it must not flip on until something is actually storable.
+    if (record.slug && record.deliveredVersion) {
+      const gamesStore = options.agentChannel?.gamesStore;
+      if (gamesStore?.getDerivedArtifact) {
+        try {
+          const [bundle, previewHtml] = await Promise.all([
+            gamesStore.getDerivedArtifact(record.slug, record.deliveredVersion, 'bundle.html'),
+            gamesStore.getDerivedArtifact(record.slug, record.deliveredVersion, 'preview.html'),
+          ]);
+          if (bundle || previewHtml) {
+            status.preview = { slug: record.slug };
+          }
+        } catch {
+          // Preview readiness is advisory. A store miss or stub without artifacts must
+          // not 502 the status page the creator is polling.
+        }
+      }
+    }
     // `failed` and a gate bounce both project onto public `needs_changes`. Without a
     // reason the Studio page only says the label — creators click the notification,
     // land on a thread of old planning notes, and never learn *why* the build stopped

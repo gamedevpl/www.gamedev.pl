@@ -420,6 +420,53 @@ describe('SubmissionStatusView', () => {
     });
   });
 
+  it('loads Studio preview for a self-build ready_for_review job with no channel playable', async () => {
+    // BY-14c: self deliveries land in the games store; status advertises preview.slug
+    // (no playable[]). The embedded thread must still fetch /preview and offer Play.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'in_review',
+      phase: 'ready_for_review',
+      builder: 'self',
+      slug: 'studio-play',
+      preview: { slug: 'studio-play' },
+      progress: { headSha: 'v1', commits: [], checklist: [] },
+    });
+    mockedGetSubmissionPreview.mockResolvedValue({
+      slug: 'studio-play',
+      title: 'Studio Play',
+      html: '<!doctype html><canvas id="game"></canvas>',
+    });
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'self-ready-token', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(mockedGetSubmissionPreview).toHaveBeenCalledWith('self-ready-token');
+    expect(mockedGetChannelPlayable).not.toHaveBeenCalled();
+    const playDraft = container.querySelector<HTMLButtonElement>('.studio-thread-context .status-play-cta');
+    expect(playDraft?.textContent).toContain('Play the draft');
+
+    await act(async () => {
+      playDraft?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+    const iframe = container.querySelector('iframe');
+    expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts allow-pointer-lock');
+    expect(iframe?.getAttribute('srcdoc') ?? '').toContain('id="game"');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('falls back to the coarse status copy for a phase with nothing of its own to say', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({ status: 'building', phase: 'building' });

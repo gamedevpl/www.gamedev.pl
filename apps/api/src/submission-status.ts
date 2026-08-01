@@ -148,9 +148,12 @@ export interface SubmissionStatusResponseBase {
   phase?: JobState;
   slug?: string;
   /**
-   * Present while an unmerged PR is open (building/in_review): the creator can
-   * play the in-progress game straight from the PR branch, before the human
-   * merge. `slug` is the game directory on that branch.
+   * Signal to attempt/poll Studio draft loading via `/api/submissions/:token/preview`.
+   * Set for an open PR (slug on that branch) and for a native/self-build job once the
+   * gate has stored `bundle.html` or `preview.html` for the delivered version.
+   * Presence means "try loading," not a guarantee the route returns 200 on the same
+   * tick — a brief 409 (`no preview available…`) can still land if the artifact was
+   * just written or the store is catching up. Absent before the first storable draft.
    */
   preview?: { slug: string };
   /**
