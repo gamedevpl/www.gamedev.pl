@@ -113,7 +113,9 @@ const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
  * make a rogue upload interesting as a storage attack.
  */
 export const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
-export const MAX_UPLOAD_FILES = 64;
+/** Cap on files per delivery. Aligned with the MCP `submit_sources` schema; the
+ * byte budget (`MAX_UPLOAD_BYTES`) and filename allowlist still bound abuse. */
+export const MAX_UPLOAD_FILES = 200;
 
 export interface SourceFile {
   path: string;

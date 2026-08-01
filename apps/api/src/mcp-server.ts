@@ -11,7 +11,7 @@ import {
   type AgentTokenClaims,
 } from './agent-token.js';
 import { selfBuildDeliveryCap } from './builder.js';
-import type { GamesStore } from './games-store.js';
+import { MAX_UPLOAD_FILES, type GamesStore } from './games-store.js';
 import type { GcsObjectStore } from './gcs-sign.js';
 import {
   assertMcpSessionKeyUnexpired,
@@ -47,11 +47,15 @@ const SESSION_HEADER = 'mcp-session-id';
 const MAX_INVALID_STARTS_PER_WINDOW = 20;
 const INVALID_START_WINDOW_MS = 60 * 60 * 1000;
 
-/** Hard body ceiling for MCP POSTs (screenshots up to 2 MB base64-expanded). */
-const MAX_MCP_BODY_BYTES = 3 * 1024 * 1024;
+/** Hard body ceiling for MCP POSTs (screenshot base64 + JSON-RPC framing). */
+const MAX_MCP_BODY_BYTES = 2 * 1024 * 1024;
 
-const MAX_SCREENSHOT_BYTES = 2 * 1024 * 1024;
-const MAX_SUBMIT_FILES = 200;
+/** Matches channel `maxShotBytes` — Firestore doc limit, not the aspirational 2 MB brief. */
+const MAX_SCREENSHOT_BYTES = 700 * 1024;
+const MAX_SUBMIT_FILES = MAX_UPLOAD_FILES;
+
+const TRANSPORT_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+const MAX_TRANSPORT_SESSIONS = 10_000;
 
 export interface McpServerOptions {
   store?: Store;
@@ -172,7 +176,7 @@ const BEHAVIOURAL_CONTRACT = [
 const SESSION_KEY_PROP = {
   type: 'string' as const,
   description:
-    'Short-lived session capability from start(). Required on every tool call unless Authorization: Bearer <round key> is configured. Mcp-Session-Id alone is never authority.',
+    'Short-lived session capability from start(). Present this argument OR configure Authorization: Bearer <round key> — not both required. Mcp-Session-Id alone is never authority.',
 };
 
 export async function registerMcpServerRoutes(app: FastifyInstance, options: McpServerOptions = {}): Promise<void> {
@@ -185,6 +189,28 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
   const transportSessions = new Map<string, { createdAt: number }>();
   const invalidStartsByIp = new Map<string, number[]>();
 
+  function pruneTransportSessions(currentTime: number): void {
+    for (const [id, meta] of transportSessions) {
+      if (currentTime - meta.createdAt > TRANSPORT_SESSION_TTL_MS) {
+        transportSessions.delete(id);
+      }
+    }
+    if (transportSessions.size <= MAX_TRANSPORT_SESSIONS) return;
+    const oldest = [...transportSessions.entries()].sort((a, b) => a[1].createdAt - b[1].createdAt);
+    const overflow = transportSessions.size - MAX_TRANSPORT_SESSIONS;
+    for (let i = 0; i < overflow; i += 1) {
+      transportSessions.delete(oldest[i]![0]);
+    }
+  }
+
+  function pruneInvalidStartBuckets(currentTime: number): void {
+    for (const [ip, hits] of invalidStartsByIp) {
+      const kept = hits.filter((timestamp) => currentTime - timestamp < INVALID_START_WINDOW_MS);
+      if (kept.length === 0) invalidStartsByIp.delete(ip);
+      else invalidStartsByIp.set(ip, kept);
+    }
+  }
+
   function originAllowed(request: FastifyRequest): boolean {
     const origin = headerValue(request.headers.origin);
     if (!origin) return true;
@@ -193,14 +219,18 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
   }
 
   async function injectChannel(
+    request: FastifyRequest,
     method: 'GET' | 'POST',
     path: string,
     channelToken: string,
     body?: Record<string, unknown> | unknown[],
   ): Promise<{ statusCode: number; json: () => unknown }> {
+    // Propagate the outer caller IP so channel rate limiters do not collapse every
+    // MCP client onto 127.0.0.1 (light-my-request's default).
     const response = await app.inject({
       method,
       url: path,
+      remoteAddress: request.ip,
       headers: {
         authorization: `Bearer ${channelToken}`,
         'content-type': 'application/json',
@@ -245,6 +275,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           return toolErr(error.message || FINISHED_REASON);
         }
         throw error;
+      }
+      // Enforce the sessionId binding encoded in the capability when the client
+      // presents a transport session id. A sessionKey alone from logs is not enough
+      // to ride a different correlator. Absent header is allowed (some clients drop it).
+      if (ctx.sessionId && ctx.sessionId !== sessionClaims.sessionId) {
+        return toolErr('sessionKey is bound to a different Mcp-Session-Id');
       }
       claims = {
         jobId: sessionClaims.jobId,
@@ -297,9 +333,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
   }
 
   async function writePiggyback(
+    request: FastifyRequest,
     channelToken: string,
   ): Promise<{ stop: boolean; reason?: string; pendingMessages: unknown[] }> {
-    const inbox = await injectChannel('GET', '/api/agent/build/inbox', channelToken);
+    const inbox = await injectChannel(request, 'GET', '/api/agent/build/inbox', channelToken);
     if (inbox.statusCode !== 200) {
       return { stop: false, pendingMessages: [] };
     }
@@ -384,6 +421,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         }
 
         // Prefer the transport session id when the client already has one; otherwise mint.
+        pruneTransportSessions(now());
+        pruneInvalidStartBuckets(now());
         const sessionId = ctx.sessionId && transportSessions.has(ctx.sessionId) ? ctx.sessionId : newMcpSessionId();
         transportSessions.set(sessionId, { createdAt: now() });
 
@@ -421,12 +460,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       inputSchema: {
         type: 'object',
         properties: { sessionKey: SESSION_KEY_PROP },
-        required: ['sessionKey'],
+        required: [],
       },
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
-        const res = await injectChannel('GET', '/api/agent/build/brief', auth.channelToken);
+        const res = await injectChannel(ctx.request, 'GET', '/api/agent/build/brief', auth.channelToken);
         if (res.statusCode !== 200) {
           const body = res.json() as { error?: string };
           return toolErr(body.error ?? `brief failed (${res.statusCode})`);
@@ -443,12 +482,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       inputSchema: {
         type: 'object',
         properties: { sessionKey: SESSION_KEY_PROP },
-        required: ['sessionKey'],
+        required: [],
       },
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
-        const res = await injectChannel('GET', '/api/agent/build/seed', auth.channelToken);
+        const res = await injectChannel(ctx.request, 'GET', '/api/agent/build/seed', auth.channelToken);
         const body = res.json();
         if (res.statusCode === 404) {
           return toolOk(body);
@@ -468,12 +507,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       inputSchema: {
         type: 'object',
         properties: { sessionKey: SESSION_KEY_PROP },
-        required: ['sessionKey'],
+        required: [],
       },
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
-        const res = await injectChannel('GET', '/api/agent/build/kit', auth.channelToken);
+        const res = await injectChannel(ctx.request, 'GET', '/api/agent/build/kit', auth.channelToken);
         const body = res.json() as { error?: string; message?: string };
         if (res.statusCode !== 200) {
           return toolErr(body.message ?? body.error ?? `kit failed (${res.statusCode})`, body);
@@ -495,12 +534,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             description: "Optional. Reserved; the channel returns the job's latest delivery or published version.",
           },
         },
-        required: ['sessionKey'],
+        required: [],
       },
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
-        const res = await injectChannel('GET', '/api/agent/build/sources', auth.channelToken);
+        const res = await injectChannel(ctx.request, 'GET', '/api/agent/build/sources', auth.channelToken);
         const body = res.json() as { error?: string; delivery?: unknown; files?: unknown[] };
         if (res.statusCode !== 200) {
           return toolErr(body.error ?? `sources failed (${res.statusCode})`);
@@ -525,12 +564,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           feature: { type: 'string' },
           module: { type: 'string' },
         },
-        required: ['sessionKey'],
+        required: [],
       },
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
-        const res = await injectChannel('GET', '/api/agent/build/examples', auth.channelToken);
+        const res = await injectChannel(ctx.request, 'GET', '/api/agent/build/examples', auth.channelToken);
         const body = res.json() as {
           error?: string;
           examples?: Array<{ slug: string; title: string; genre: string; modules: string[]; whyReference: string }>;
@@ -570,7 +609,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           sessionKey: SESSION_KEY_PROP,
           slug: { type: 'string', description: 'Allowlisted exemplar slug from list_examples.' },
         },
-        required: ['sessionKey', 'slug'],
+        required: ['slug'],
       },
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
@@ -578,6 +617,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const slug = typeof args.slug === 'string' ? args.slug.trim() : '';
         if (!slug) return toolErr('slug is required');
         const res = await injectChannel(
+          ctx.request,
           'GET',
           `/api/agent/build/examples/${encodeURIComponent(slug)}`,
           auth.channelToken,
@@ -606,7 +646,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           done: { type: 'integer' },
           total: { type: 'integer' },
         },
-        required: ['sessionKey', 'text'],
+        required: ['text'],
       },
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
@@ -620,7 +660,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         if (typeof args.done === 'number' && typeof args.total === 'number') {
           payload.progress = { done: args.done, total: args.total };
         }
-        const res = await injectChannel('POST', '/api/agent/build/progress', auth.channelToken, payload);
+        const res = await injectChannel(ctx.request, 'POST', '/api/agent/build/progress', auth.channelToken, payload);
         const body = res.json() as {
           error?: string;
           accepted?: boolean;
@@ -642,18 +682,18 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
     send_screenshot: {
       description:
-        'Upload a PNG screenshot (base64, ≤2 MB decoded) as soon as the game draws. Reply includes stop and pendingMessages. ' +
+        'Upload a PNG screenshot (base64, ≤700 KB decoded — Firestore-backed) as soon as the game draws. Reply includes stop and pendingMessages. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
         type: 'object',
         properties: {
           sessionKey: SESSION_KEY_PROP,
-          png: { type: 'string', description: 'Base64-encoded PNG (≤2 MB decoded).' },
+          png: { type: 'string', description: 'Base64-encoded PNG (≤700 KB decoded).' },
           pngBase64: { type: 'string', description: 'Alias for png.' },
           caption: { type: 'string' },
           label: { type: 'string' },
         },
-        required: ['sessionKey'],
+        required: [],
       },
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
@@ -669,11 +709,11 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           return toolErr('png must be base64');
         }
         if (bytes.length > MAX_SCREENSHOT_BYTES) {
-          return toolErr('screenshot is too large (max 2 MB)');
+          return toolErr('screenshot is too large (max 700 KB)');
         }
         const label =
           typeof args.caption === 'string' ? args.caption : typeof args.label === 'string' ? args.label : undefined;
-        const res = await injectChannel('POST', '/api/agent/build/shot', auth.channelToken, {
+        const res = await injectChannel(ctx.request, 'POST', '/api/agent/build/shot', auth.channelToken, {
           png,
           ...(label ? { label } : {}),
         });
@@ -701,7 +741,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
     submit_sources: {
       description:
-        'Deliver game sources for the gate. files[{path, content, encoding utf8|base64}] ≤200 items; kitEngineRef required (from get_kit / kit.json). ' +
+        `Deliver game sources for the gate. files[{path, content, encoding utf8|base64}] ≤${MAX_SUBMIT_FILES} items; kitEngineRef required (from get_kit / kit.json). ` +
         'Subject to delivery cap and filename allowlist. Run kit checks green before submitting. Reply includes stop and pendingMessages. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
@@ -728,7 +768,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           slug: { type: 'string' },
           note: { type: 'string' },
         },
-        required: ['sessionKey', 'files', 'kitEngineRef'],
+        required: ['files', 'kitEngineRef'],
       },
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
@@ -773,7 +813,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const slug =
           typeof args.slug === 'string' && args.slug.trim() ? args.slug.trim() : (auth.record.slug ?? 'game');
 
-        const res = await injectChannel('POST', '/api/agent/build/sources', auth.channelToken, {
+        const res = await injectChannel(ctx.request, 'POST', '/api/agent/build/sources', auth.channelToken, {
           slug,
           files: decodedFiles,
           kitEngineRef,
@@ -822,7 +862,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           sessionKey: SESSION_KEY_PROP,
           deliveryId: { type: 'string', description: "Delivery version id; default is the job's latest." },
         },
-        required: ['sessionKey'],
+        required: [],
       },
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args, { allowTerminalReceipt: true });
@@ -833,7 +873,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const path = deliveryId
           ? `/api/agent/build/gate?version=${encodeURIComponent(deliveryId)}`
           : '/api/agent/build/gate';
-        const res = await injectChannel('GET', path, auth.channelToken);
+        const res = await injectChannel(ctx.request, 'GET', path, auth.channelToken);
         const body = res.json() as Record<string, unknown> & { error?: string };
         if (res.statusCode !== 200) {
           return toolErr(body.error ?? `gate verdict failed (${res.statusCode})`);
@@ -849,12 +889,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       inputSchema: {
         type: 'object',
         properties: { sessionKey: SESSION_KEY_PROP },
-        required: ['sessionKey'],
+        required: [],
       },
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
-        const res = await injectChannel('GET', '/api/agent/build/inbox', auth.channelToken);
+        const res = await injectChannel(ctx.request, 'GET', '/api/agent/build/inbox', auth.channelToken);
         const body = res.json() as {
           error?: string;
           pending?: Array<{ id: string; text: string; createdAt: string }>;
@@ -884,7 +924,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           sessionKey: SESSION_KEY_PROP,
           ids: { type: 'array', items: { type: 'string' }, maxItems: 50 },
         },
-        required: ['sessionKey', 'ids'],
+        required: ['ids'],
       },
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
@@ -893,7 +933,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         if (!idsParse.success) {
           return toolErr(idsParse.error.issues[0]?.message ?? 'invalid ids');
         }
-        const res = await injectChannel('POST', '/api/agent/build/inbox/ack', auth.channelToken, {
+        const res = await injectChannel(ctx.request, 'POST', '/api/agent/build/inbox/ack', auth.channelToken, {
           ids: idsParse.data,
         });
         const body = res.json() as {
@@ -908,7 +948,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         // Ack is a write — always piggyback stop/pending (fresh read if channel omitted).
         const piggy = body.pending
           ? { ...stopFromChannel(body), pendingMessages: pendingMessagesFromChannel(body) }
-          : await writePiggyback(auth.channelToken);
+          : await writePiggyback(ctx.request, auth.channelToken);
         return toolOk({
           ok: body.ok !== false,
           ...piggy,

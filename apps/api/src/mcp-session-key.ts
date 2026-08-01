@@ -13,7 +13,13 @@ import { InvalidAgentTokenError, STALE_AGENT_TOKEN_REASON } from './agent-token.
 
 const SCOPE = 'mcp-session-v1';
 
-/** Default lifetime for a sessionKey, in hours. Shorter than the round key. */
+/**
+ * Default lifetime for a sessionKey, in hours.
+ *
+ * A sessionKey may outlive the round key's own `exp` — generation revocation
+ * against the job document is the hard bound. The creator-visible "this key
+ * expires" copy in Studio refers to the round key, not this ceiling.
+ */
 export const DEFAULT_MCP_SESSION_KEY_TTL_HOURS = 24;
 
 export interface McpSessionKeyClaims {
@@ -58,8 +64,11 @@ export function mcpSessionKeyTtlHours(): number {
  * Mints a sessionKey. Callers pass the transport session id from `initialize` so
  * the capability is bound to that correlator without treating the header as auth.
  */
+/** Visible ASCII without `.` — the token wire format uses `.` as a field delimiter. */
+const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
+
 export function mintMcpSessionKey(secret: string, options: MintMcpSessionKeyOptions): string {
-  if (!options.sessionId || !/^[!-~]+$/.test(options.sessionId)) {
+  if (!options.sessionId || !SESSION_ID_RE.test(options.sessionId)) {
     throw new InvalidAgentTokenError('invalid session id');
   }
   if (!Number.isSafeInteger(options.jobId) || options.jobId <= 0) {
@@ -95,7 +104,7 @@ export function verifyMcpSessionKey(token: string, secret: string): McpSessionKe
       !generationRaw ||
       !expRaw ||
       !signature ||
-      !/^[!-~]+$/.test(sessionId) ||
+      !SESSION_ID_RE.test(sessionId) ||
       !/^\d+$/.test(jobIdRaw) ||
       !/^\d+$/.test(generationRaw) ||
       !/^\d+$/.test(expRaw) ||

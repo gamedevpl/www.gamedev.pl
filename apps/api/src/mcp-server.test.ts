@@ -296,6 +296,55 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(JSON.stringify(res.structured)).toContain('finished');
   });
 
+  it('rejects a sessionKey presented under a mismatched Mcp-Session-Id', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const sessionA = await initialize(app);
+    const sessionB = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionA });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const mismatch = await callTool(app, 'get_brief', { sessionKey }, { 'mcp-session-id': sessionB });
+    expect(mismatch.isError).toBe(true);
+    expect(JSON.stringify(mismatch.structured)).toMatch(/bound to a different Mcp-Session-Id/i);
+  });
+
+  it('reaches /api/mcp through the private-beta wall without a site session', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await buildApp({
+      store,
+      betaAllowedUids: 'g:anyone',
+      sessionSecret: 'dev-session-secret-change-me',
+      submissionRoutes: {
+        githubClient: stubGitHub(),
+        githubToken: 'gh-token',
+        submissionTokenSecret: secret,
+        translator: new NoopTranslator(),
+        agentChannel: {},
+      },
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/mcp',
+      headers: { 'content-type': 'application/json' },
+      payload: {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-11-25',
+          capabilities: {},
+          clientInfo: { name: 'beta-wall-test', version: '0' },
+        },
+      },
+    });
+    expect(res.statusCode).not.toBe(401);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ jsonrpc: '2.0', id: 1 });
+  });
+
   it('Bearer mode authenticates tools without sessionKey', async () => {
     const store = new InMemoryStore();
     await seedJob(store);
@@ -350,7 +399,8 @@ describe('POST /api/mcp (BY-05)', () => {
     const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
     const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
 
-    const huge = Buffer.alloc(2 * 1024 * 1024 + 100, 1).toString('base64');
+    // Over the Firestore-safe decoded ceiling, under the MCP bodyLimit.
+    const huge = Buffer.alloc(800 * 1024, 1).toString('base64');
     const res = await callTool(app, 'send_screenshot', { sessionKey, png: huge }, { 'mcp-session-id': sessionId });
     expect(res.isError).toBe(true);
     expect(JSON.stringify(res.structured)).toMatch(/too large/i);

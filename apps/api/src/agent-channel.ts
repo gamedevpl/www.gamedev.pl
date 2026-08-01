@@ -18,7 +18,7 @@ import {
 } from './agent-token.js';
 import { selfBuildDeliveryCap } from './builder.js';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from './gcs-sign.js';
-import { InvalidUploadError, type GamesStore } from './games-store.js';
+import { InvalidUploadError, MAX_UPLOAD_FILES, type GamesStore } from './games-store.js';
 import { parseSpecTitle } from './github-client.js';
 import { canTransition, resolveJobState } from './job-state.js';
 import { KIT_ENTRY, KitRegistryError, kitUnpackCommand, parseKitRegistry, parseKitSidecar } from './kit-registry.js';
@@ -79,10 +79,14 @@ const AckRequestSchema = z.object({
 
 const MAX_SHOT_LABEL = 120;
 /**
- * 2 MB decoded — the MCP `send_screenshot` contract (BY-05). Pixel-art frames sit
- * well inside; a full-resolution capture from a kit check may not.
+ * Decoded PNG ceiling. Shots are stored as canonical base64 in a single Firestore
+ * document (1 MiB hard limit); leave headroom for id/labels/timestamps. The MCP
+ * brief's "≤2 MB" needs object storage before it can be honest — do not raise this
+ * number alone or uploads pass validation and 500 at `.set()`.
  */
-const maxShotBytes = 2 * 1024 * 1024;
+const maxShotBytes = 700 * 1024;
+/** Fastify rejects before the handler when the JSON body exceeds this. */
+const shotBodyLimit = Math.ceil((maxShotBytes * 4) / 3) + 4096;
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 const BuildShotInputSchema = z.object({
@@ -145,8 +149,8 @@ const BuildSourcesInputSchema = z.object({
       }),
     )
     .min(1, 'files is required')
-    // MCP submit_sources allows ≤200; the filename allowlist + byte budget still bite.
-    .max(200, 'too many files'),
+    // Keep in lockstep with games-store MAX_UPLOAD_FILES (MCP advertise the same).
+    .max(MAX_UPLOAD_FILES, 'too many files'),
   /**
    * Creator Kit engineRef the sources were built against. Required for self-build
    * deliveries (BY-06); the gate compares it to `kits/current.json`'s N/N−1 window.
@@ -561,7 +565,11 @@ export async function registerAgentChannelRoutes(
    */
   app.post(
     '/api/agent/build/shot',
-    { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
+    {
+      // Match the decoded PNG ceiling (base64-expanded) so the schema's max is reachable.
+      bodyLimit: shotBodyLimit,
+      config: { rateLimit: { max: 120, timeWindow: '1 hour' } },
+    },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
       if (!resolved) return reply;

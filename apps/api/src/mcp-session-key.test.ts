@@ -54,4 +54,16 @@ describe('mcp sessionKey', () => {
     const claims = verifyMcpSessionKey(key, secret);
     expect(() => assertMcpSessionKeyUnexpired(claims, now + 2 * 60 * 60 * 1000)).toThrowError(STALE_AGENT_TOKEN_REASON);
   });
+
+  it('rejects a sessionId containing "." (token field delimiter)', () => {
+    expect(() =>
+      mintMcpSessionKey(secret, {
+        sessionId: 'has.dot',
+        jobId: 1,
+        roundGeneration: 1,
+        now,
+        ttlHours: 1,
+      }),
+    ).toThrow(InvalidAgentTokenError);
+  });
 });
