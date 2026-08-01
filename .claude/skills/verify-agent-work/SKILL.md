@@ -134,11 +134,12 @@ Two concrete instances of that (observed 2026-07-23):
   behind, so a window that only admits one-behind can never match. Lessons: (1) when a
   capability's validity is a narrow numeric window (`gen === active - 1`), a unit test
   that hard-sets the delta proves the comparison, not that production ever lands on it —
-  drive the real end-to-end sequence; (2) any guard reading `record.state` after an
-  earlier write in the same handler updated it in the DB but not the local object is
-  reading stale state — re-fetch or thread the new state; (3) fails-closed (rejects
-  access) so it is a contract/UX defect, not a security hole — say so explicitly when
-  reporting, so severity is not overstated.
+  drive the real end-to-end sequence; (2) a guard that reads `record.state` after an
+  earlier write in the same handler has updated the DB — but not the local object — is
+  reading stale state: re-fetch the record or thread the new state through; (3) this
+  class of bug fails closed (it rejects access), so it is a contract/UX defect rather
+  than a security hole — say so explicitly when reporting, so severity is not
+  overstated.
 
 ## Read the diff against the spec
 
