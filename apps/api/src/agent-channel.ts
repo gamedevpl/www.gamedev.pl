@@ -388,23 +388,22 @@ export async function registerAgentChannelRoutes(
    * job in `building`, and let the reconciler close the round a generation early.
    */
   async function markBuildingFromChannel(issueNumber: number, record: SubmissionRecord): Promise<JobState> {
-    const fallback = (record.state ?? 'queued') as JobState;
-    if (!store) return fallback;
-    const current = fallback;
-    if (canTransition(current, 'building')) {
-      await store.recordJobTransition(issueNumber, {
-        to: 'building',
-        at: new Date().toISOString(),
-        by: 'agent',
-        reason: 'channel_signal',
-      });
-      return 'building';
+    const current = (record.state ?? 'queued') as JobState;
+    if (!store) return current;
+    if (!canTransition(current, 'building')) {
+      // Common case: already `building` (every progress call after the first). The
+      // request-local snapshot from resolveBuild is fresh enough — avoid an extra
+      // store read on the hot path. Callers that need a post-write snapshot (sources)
+      // re-read explicitly.
+      return current;
     }
-    // Already at/past building, or a walk that refuses — prefer the store over the
-    // request snapshot (another writer, or a prior call in this same handler, may
-    // have moved it).
-    const fresh = await store.getSubmission(issueNumber);
-    return (fresh?.state ?? current) as JobState;
+    await store.recordJobTransition(issueNumber, {
+      to: 'building',
+      at: new Date().toISOString(),
+      by: 'agent',
+      reason: 'channel_signal',
+    });
+    return 'building';
   }
 
   /**
