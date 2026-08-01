@@ -346,6 +346,19 @@ describe('private beta gate', () => {
     await app.close();
   });
 
+  it('MCP endpoint is exempt from the private-beta wall (agents have no site session)', async () => {
+    const app = await buildApp({ betaAllowedUids: ownerUid });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/mcp',
+      headers: { 'content-type': 'application/json' },
+      payload: { jsonrpc: '2.0', id: 1, method: 'ping' },
+    });
+    // Not 401 from the wall — handler may 503 (unconfigured) or answer JSON-RPC.
+    expect(res.statusCode).not.toBe(401);
+    await app.close();
+  });
+
   it('non-API paths are never 401 in private-beta mode (shell must be reachable)', async () => {
     const app = await buildApp({ betaAllowedUids: ownerUid });
     const res = await app.inject({ method: 'GET', url: '/some-path' });

@@ -1,0 +1,649 @@
+import type { FastifyInstance } from 'fastify';
+import { afterEach, describe, expect, it } from 'vitest';
+import { classifyAgentTokenAccess, mintAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-token.js';
+import { buildApp } from './app.js';
+import type { GamesStore } from './games-store.js';
+import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
+import { mintMcpSessionKey, verifyMcpSessionKey } from './mcp-session-key.js';
+import { InMemoryStore } from './store.js';
+import { NoopTranslator } from './translate.js';
+
+const secret = 'test-secret';
+const ISSUE = 55;
+const ENGINE = 'abcdef0123456789abcdef0123456789abcdef01';
+
+/** Minimal valid 1×1 PNG. */
+const TINY_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64',
+).toString('base64');
+
+const MINIMAL_FILES = [
+  { path: 'SPEC.md', content: '---\ntitle: Comet Courier\n---\n' },
+  { path: 'index.html', content: '<!doctype html><html></html>' },
+  { path: 'game.ts', content: 'export {};' },
+  { path: 'TRACE.json', content: '{"samples":[]}' },
+  { path: 'PLAYTEST.json', content: '{"expectProgress":["round-start"]}' },
+  { path: 'AGENT.json', content: '{"policy":"capture"}' },
+];
+
+function stubGitHub(): GitHubClient {
+  return {
+    createIssue: async () => ({ number: ISSUE }),
+    getIssueState: async () => ({ state: 'open' as const }),
+    findLinkedPR: async (): Promise<LinkedPullRequest | null> => null,
+    createIssueComment: async () => ({ id: 1 }),
+    updateIssueBody: async () => {},
+    closeIssue: async () => {},
+    closePullRequest: async () => {},
+    ensureOpenPullRequest: async () => ({ number: 1 }),
+    deleteBranch: async () => {},
+    getGameSources: async (): Promise<GameSources | null> => null,
+    getGameMedia: async () => null,
+    getCatalog: async (): Promise<CatalogGameEntry[]> => [],
+    getProgressNotes: async () => null,
+  };
+}
+
+function stubGamesStore(gate?: { green: boolean; ranAt?: string; report?: string; status?: string }) {
+  const stored: Array<{ slug: string; files: unknown[]; kitEngineRef?: string }> = [];
+  const gamesStore = {
+    putCandidateSources: async (input: {
+      slug: string;
+      issueNumber: number;
+      files: Array<{ path: string; content: string }>;
+      kitEngineRef?: string;
+    }) => {
+      const { validateSourceUpload } = await import('./games-store.js');
+      validateSourceUpload(input.files);
+      stored.push(input);
+      return { version: 'v1', manifest: {} as never };
+    },
+    getManifest: async () =>
+      gate
+        ? {
+            gate: {
+              green: gate.green,
+              ranAt: gate.ranAt ?? '2026-08-01T12:00:00.000Z',
+              ...(gate.report ? { report: gate.report } : {}),
+              ...(gate.status ? { status: gate.status } : {}),
+            },
+          }
+        : null,
+    getSourceFile: async () => null,
+    putGateResult: async () => {},
+    putDerivedArtifact: async () => {},
+    getDerivedArtifact: async () => null,
+    getKitRegistry: async () => null,
+  } as unknown as GamesStore;
+  return { gamesStore, stored };
+}
+
+async function createApp(store: InMemoryStore, gamesStore?: GamesStore) {
+  return await buildApp({
+    store,
+    sessionSecret: 'dev-session-secret-change-me',
+    submissionRoutes: {
+      githubClient: stubGitHub(),
+      githubToken: 'gh-token',
+      submissionTokenSecret: secret,
+      translator: new NoopTranslator(),
+      agentChannel: gamesStore ? { gamesStore } : {},
+    },
+  });
+}
+
+async function seedJob(store: InMemoryStore) {
+  await store.createSubmission(ISSUE, 'g:owner', 'Comet Courier');
+  await store.setSubmissionSlug(ISSUE, 'comet-courier');
+  await store.setSubmissionLocale(ISSUE, 'en');
+  await store.setRoundBuilder(ISSUE, 'self');
+  await store.setSubmissionBrief(ISSUE, {
+    spec: 'Dodge debris while delivering parcels.',
+    qa: ['Tone: cheerful'],
+  });
+  await store.setSubmissionSeed(ISSUE, {
+    slug: 'comet-courier',
+    files: [{ path: 'game.ts', content: 'export const seed = true;' }],
+    references: [],
+    notes: 'continue me',
+  });
+}
+
+function roundKey(generation = 1, now?: number) {
+  return mintAgentToken(ISSUE, secret, { roundGeneration: generation, ...(now !== undefined ? { now } : {}) });
+}
+
+async function mcpCall(
+  app: FastifyInstance,
+  method: string,
+  params?: unknown,
+  headers: Record<string, string> = {},
+  id: string | number = 1,
+) {
+  return app.inject({
+    method: 'POST',
+    url: '/api/mcp',
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json, text/event-stream',
+      ...headers,
+    },
+    payload: { jsonrpc: '2.0', id, method, ...(params !== undefined ? { params } : {}) },
+  });
+}
+
+async function initialize(app: FastifyInstance) {
+  const res = await mcpCall(app, 'initialize', {
+    protocolVersion: '2025-11-25',
+    capabilities: {},
+    clientInfo: { name: 'test', version: '0' },
+  });
+  expect(res.statusCode).toBe(200);
+  const sessionId = res.headers['mcp-session-id'];
+  expect(typeof sessionId).toBe('string');
+  return String(sessionId);
+}
+
+async function callTool(
+  app: FastifyInstance,
+  name: string,
+  args: Record<string, unknown>,
+  headers: Record<string, string> = {},
+) {
+  const res = await mcpCall(app, 'tools/call', { name, arguments: args }, headers);
+  expect(res.statusCode).toBe(200);
+  const body = res.json() as {
+    result?: { content?: Array<{ text: string }>; structuredContent?: unknown; isError?: boolean };
+    error?: { message: string };
+  };
+  expect(body.error).toBeUndefined();
+  const structured =
+    body.result?.structuredContent ??
+    (body.result?.content?.[0]?.text ? JSON.parse(body.result.content[0].text) : undefined);
+  return { res, structured, isError: Boolean(body.result?.isError) };
+}
+
+describe('classifyAgentTokenAccess (terminal receipt)', () => {
+  it('returns terminal_receipt when generation is exactly one behind', () => {
+    const now = Date.now();
+    const token = mintAgentToken(1, secret, { roundGeneration: 1, now, ttlDays: 14 });
+    const claims = {
+      jobId: 1,
+      roundGeneration: 1,
+      exp: Math.floor(now / 1000) + 14 * 24 * 60 * 60,
+    };
+    expect(classifyAgentTokenAccess(claims, { roundGeneration: 2 }, now)).toBe('terminal_receipt');
+    expect(classifyAgentTokenAccess(claims, { roundGeneration: 1 }, now)).toBe('active');
+    expect(() => classifyAgentTokenAccess(claims, { roundGeneration: 3 }, now)).toThrow(STALE_AGENT_TOKEN_REASON);
+    void token;
+  });
+});
+
+describe('POST /api/mcp (BY-05)', () => {
+  let app: FastifyInstance | null = null;
+
+  afterEach(async () => {
+    await app?.close();
+    app = null;
+  });
+
+  it('initialize issues Mcp-Session-Id (transport only) and tools/list exposes the contract', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+
+    const sessionId = await initialize(app);
+    const listed = await mcpCall(app, 'tools/list', {}, { 'mcp-session-id': sessionId });
+    expect(listed.statusCode).toBe(200);
+    const names = (listed.json().result.tools as Array<{ name: string }>).map((t) => t.name);
+    expect(names).toEqual(
+      expect.arrayContaining([
+        'start',
+        'get_brief',
+        'get_seed',
+        'get_kit',
+        'get_sources',
+        'list_examples',
+        'get_example',
+        'report_progress',
+        'send_screenshot',
+        'submit_sources',
+        'get_gate_verdict',
+        'read_inbox',
+        'ack_inbox',
+      ]),
+    );
+    const start = (listed.json().result.tools as Array<{ name: string; description: string }>).find(
+      (t) => t.name === 'start',
+    );
+    expect(start?.description).toMatch(/screenshot|Honour stop|sessionKey/i);
+  });
+
+  it('start issues a sessionKey; subsequent tools work with it', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+    const key = roundKey();
+
+    const started = await callTool(app, 'start', { key }, { 'mcp-session-id': sessionId });
+    expect(started.isError).toBe(false);
+    expect(started.structured).toMatchObject({
+      jobId: ISSUE,
+      slug: 'comet-courier',
+      title: 'Comet Courier',
+    });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+    expect(sessionKey).toBeTruthy();
+    const claims = verifyMcpSessionKey(sessionKey, secret);
+    expect(claims).toMatchObject({ jobId: ISSUE, roundGeneration: 1 });
+
+    const brief = await callTool(app, 'get_brief', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(brief.isError).toBe(false);
+    expect(brief.structured).toMatchObject({
+      title: 'Comet Courier',
+      slug: 'comet-courier',
+      seedAvailable: true,
+    });
+  });
+
+  it('rejects a call bearing a valid Mcp-Session-Id but no or a forged sessionKey', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+    const key = roundKey();
+    const started = await callTool(app, 'start', { key }, { 'mcp-session-id': sessionId });
+    const realKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const missing = await callTool(app, 'get_brief', {}, { 'mcp-session-id': sessionId });
+    expect(missing.isError).toBe(true);
+    expect(JSON.stringify(missing.structured)).toMatch(/missing credential|sessionKey/i);
+
+    const forged = mintMcpSessionKey(secret, {
+      sessionId,
+      jobId: ISSUE,
+      roundGeneration: 1,
+      now: Date.now(),
+      ttlHours: 1,
+    });
+    // Tamper signature
+    const parts = Buffer.from(forged, 'base64url').toString('utf8').split('.');
+    parts[4] = 'a'.repeat(64);
+    const forgedKey = Buffer.from(parts.join('.'), 'utf8').toString('base64url');
+    expect(forgedKey).not.toBe(realKey);
+
+    const bad = await callTool(app, 'get_brief', { sessionKey: forgedKey }, { 'mcp-session-id': sessionId });
+    expect(bad.isError).toBe(true);
+  });
+
+  it('rejects an expired sessionKey', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+    const past = Date.parse('2020-01-01T00:00:00.000Z');
+    const expired = mintMcpSessionKey(secret, {
+      sessionId,
+      jobId: ISSUE,
+      roundGeneration: 1,
+      now: past,
+      ttlHours: 1,
+    });
+    const res = await callTool(app, 'get_brief', { sessionKey: expired }, { 'mcp-session-id': sessionId });
+    expect(res.isError).toBe(true);
+    expect(JSON.stringify(res.structured)).toContain('finished');
+  });
+
+  it('rejects a sessionKey presented under a mismatched Mcp-Session-Id', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const sessionA = await initialize(app);
+    const sessionB = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionA });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const mismatch = await callTool(app, 'get_brief', { sessionKey }, { 'mcp-session-id': sessionB });
+    expect(mismatch.isError).toBe(true);
+    expect(JSON.stringify(mismatch.structured)).toMatch(/bound to a different Mcp-Session-Id/i);
+  });
+
+  it('reaches /api/mcp through the private-beta wall without a site session', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await buildApp({
+      store,
+      betaAllowedUids: 'g:anyone',
+      sessionSecret: 'dev-session-secret-change-me',
+      submissionRoutes: {
+        githubClient: stubGitHub(),
+        githubToken: 'gh-token',
+        submissionTokenSecret: secret,
+        translator: new NoopTranslator(),
+        agentChannel: {},
+      },
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/mcp',
+      headers: { 'content-type': 'application/json' },
+      payload: {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-11-25',
+          capabilities: {},
+          clientInfo: { name: 'beta-wall-test', version: '0' },
+        },
+      },
+    });
+    expect(res.statusCode).not.toBe(401);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ jsonrpc: '2.0', id: 1 });
+  });
+
+  it('Bearer mode authenticates tools without sessionKey', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+    const brief = await callTool(
+      app,
+      'get_brief',
+      {},
+      { 'mcp-session-id': sessionId, authorization: `Bearer ${roundKey()}` },
+    );
+    expect(brief.isError).toBe(false);
+    expect(brief.structured).toMatchObject({ title: 'Comet Courier' });
+  });
+
+  it('piggybacks stop and pendingMessages on every write including ack_inbox', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const msg = await store.appendCreatorMessage(ISSUE, 'Make it faster');
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const progress = await callTool(
+      app,
+      'report_progress',
+      { sessionKey, text: 'Wiring the ship.', step: 'mechanics' },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(progress.structured).toMatchObject({
+      stop: false,
+      pendingMessages: [expect.objectContaining({ text: 'Make it faster' })],
+    });
+
+    const acked = await callTool(app, 'ack_inbox', { sessionKey, ids: [msg.id] }, { 'mcp-session-id': sessionId });
+    expect(acked.structured).toMatchObject({
+      ok: true,
+      stop: false,
+      pendingMessages: [],
+    });
+    // stop/pendingMessages keys must be present on the write reply.
+    expect(acked.structured).toHaveProperty('stop');
+    expect(acked.structured).toHaveProperty('pendingMessages');
+  });
+
+  it('rejects oversized screenshots at the MCP layer', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    // Over the Firestore-safe decoded ceiling, under the MCP bodyLimit.
+    const huge = Buffer.alloc(800 * 1024, 1).toString('base64');
+    const res = await callTool(app, 'send_screenshot', { sessionKey, png: huge }, { 'mcp-session-id': sessionId });
+    expect(res.isError).toBe(true);
+    expect(JSON.stringify(res.structured)).toMatch(/too large/i);
+  });
+
+  it('accepts a small screenshot via send_screenshot', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const res = await callTool(
+      app,
+      'send_screenshot',
+      { sessionKey, png: TINY_PNG, caption: 'first frame' },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(res.isError).toBe(false);
+    expect(res.structured).toMatchObject({ ok: true, stop: false });
+  });
+
+  it('rate-limits unauthenticated / invalid start attempts', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+
+    let last: { isError: boolean; structured: unknown } | null = null;
+    for (let i = 0; i < 25; i++) {
+      last = await callTool(app, 'start', { key: 'not-a-real-key' }, { 'mcp-session-id': sessionId });
+    }
+    expect(last?.isError).toBe(true);
+    expect(JSON.stringify(last?.structured)).toMatch(/too many invalid start/i);
+  });
+
+  it('scripted client: start → brief → seed → submit → verdict', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const { gamesStore } = stubGamesStore({
+      green: false,
+      report: 'Check 1 failed\nfix the spawn',
+    });
+    app = await createApp(store, gamesStore);
+    const sessionId = await initialize(app);
+    const key = roundKey();
+
+    const started = await callTool(app, 'start', { key }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const brief = await callTool(app, 'get_brief', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(brief.structured).toMatchObject({ seedAvailable: true, slug: 'comet-courier' });
+
+    const seed = await callTool(app, 'get_seed', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(seed.structured).toMatchObject({ available: true });
+
+    const submitted = await callTool(
+      app,
+      'submit_sources',
+      {
+        sessionKey,
+        kitEngineRef: ENGINE,
+        files: MINIMAL_FILES.map((f) => ({ ...f, encoding: 'utf8' })),
+      },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(submitted.isError).toBe(false);
+    expect(submitted.structured).toMatchObject({
+      ok: true,
+      deliveryId: 'v1',
+      stop: false,
+      pendingMessages: expect.any(Array),
+    });
+
+    // Gate red keeps the round open — verdict readable on the active key.
+    await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
+    const verdict = await callTool(app, 'get_gate_verdict', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(verdict.isError).toBe(false);
+    expect(verdict.structured).toMatchObject({ status: 'red', deliveryId: 'v1' });
+  });
+
+  describe('terminal receipt (generation one behind) on all three transports', () => {
+    async function closeRoundGreen(store: InMemoryStore, gamesStore: GamesStore) {
+      await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
+      await store.recordJobTransition(ISSUE, {
+        to: 'submitted',
+        at: '2026-08-01T11:00:00.000Z',
+        by: 'agent',
+        reason: 'sources_delivered',
+      });
+      // ready_for_review closes the round and bumps generation 1 → 2.
+      await store.recordJobTransition(ISSUE, {
+        to: 'ready_for_review',
+        at: '2026-08-01T12:00:00.000Z',
+        by: 'gate',
+        reason: 'gate_green',
+      });
+      expect((await store.getSubmission(ISSUE))?.roundGeneration).toBe(2);
+      void gamesStore;
+    }
+
+    it('sessionKey: get_gate_verdict still readable; writes rejected', async () => {
+      const store = new InMemoryStore();
+      await seedJob(store);
+      const { gamesStore } = stubGamesStore({ green: true, ranAt: '2026-08-01T12:00:00.000Z' });
+      app = await createApp(store, gamesStore);
+      const sessionId = await initialize(app);
+
+      const started = await callTool(app, 'start', { key: roundKey(1) }, { 'mcp-session-id': sessionId });
+      const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+      await closeRoundGreen(store, gamesStore);
+
+      const verdict = await callTool(app, 'get_gate_verdict', { sessionKey }, { 'mcp-session-id': sessionId });
+      expect(verdict.isError).toBe(false);
+      expect(verdict.structured).toMatchObject({ status: 'green', deliveryId: 'v1', access: 'terminal_receipt' });
+
+      const write = await callTool(
+        app,
+        'report_progress',
+        { sessionKey, text: 'still going' },
+        { 'mcp-session-id': sessionId },
+      );
+      expect(write.isError).toBe(true);
+      expect(JSON.stringify(write.structured)).toContain('finished');
+
+      const brief = await callTool(app, 'get_brief', { sessionKey }, { 'mcp-session-id': sessionId });
+      expect(brief.isError).toBe(true);
+    });
+
+    it('Bearer: get_gate_verdict still readable; writes rejected', async () => {
+      const store = new InMemoryStore();
+      await seedJob(store);
+      const { gamesStore } = stubGamesStore({ green: true });
+      app = await createApp(store, gamesStore);
+      const sessionId = await initialize(app);
+      const bearer = roundKey(1);
+      await closeRoundGreen(store, gamesStore);
+
+      const verdict = await callTool(
+        app,
+        'get_gate_verdict',
+        {},
+        { 'mcp-session-id': sessionId, authorization: `Bearer ${bearer}` },
+      );
+      expect(verdict.isError).toBe(false);
+      expect(verdict.structured).toMatchObject({ status: 'green', access: 'terminal_receipt' });
+
+      const write = await callTool(
+        app,
+        'report_progress',
+        { text: 'nope' },
+        { 'mcp-session-id': sessionId, authorization: `Bearer ${bearer}` },
+      );
+      expect(write.isError).toBe(true);
+    });
+
+    it('plain HTTP: GET /api/agent/build/gate readable; other channel routes rejected', async () => {
+      const store = new InMemoryStore();
+      await seedJob(store);
+      const { gamesStore } = stubGamesStore({ green: true });
+      app = await createApp(store, gamesStore);
+      const bearer = roundKey(1);
+      await closeRoundGreen(store, gamesStore);
+
+      const gate = await app.inject({
+        method: 'GET',
+        url: '/api/agent/build/gate',
+        headers: { authorization: `Bearer ${bearer}` },
+      });
+      expect(gate.statusCode).toBe(200);
+      expect(gate.json()).toMatchObject({ status: 'green', deliveryId: 'v1', access: 'terminal_receipt' });
+
+      const brief = await app.inject({
+        method: 'GET',
+        url: '/api/agent/build/brief',
+        headers: { authorization: `Bearer ${bearer}` },
+      });
+      expect(brief.statusCode).toBe(401);
+      expect(brief.json().error).toBe(STALE_AGENT_TOKEN_REASON);
+
+      const progress = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/progress',
+        headers: { authorization: `Bearer ${bearer}` },
+        payload: { text: 'nope' },
+      });
+      expect(progress.statusCode).toBe(401);
+    });
+  });
+
+  it('DELETE terminates the transport session (not auth)', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+
+    const del = await app.inject({
+      method: 'DELETE',
+      url: '/api/mcp',
+      headers: { 'mcp-session-id': sessionId },
+    });
+    expect(del.statusCode).toBe(204);
+
+    const listed = await mcpCall(app, 'tools/list', {}, { 'mcp-session-id': sessionId });
+    expect(listed.statusCode).toBe(404);
+  });
+
+  it('list_examples and get_sources wrap the channel', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const { gamesStore } = stubGamesStore();
+    app = await createApp(store, gamesStore);
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const examples = await callTool(app, 'list_examples', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(examples.isError).toBe(false);
+    expect(examples.structured).toHaveProperty('examples');
+
+    const sources = await callTool(app, 'get_sources', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(sources.isError).toBe(false);
+    expect(sources.structured).toMatchObject({ available: false, files: [] });
+  });
+
+  it('rejects submit_sources without kitEngineRef', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const { gamesStore } = stubGamesStore();
+    app = await createApp(store, gamesStore);
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const res = await callTool(
+      app,
+      'submit_sources',
+      { sessionKey, files: MINIMAL_FILES },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(res.isError).toBe(true);
+    expect(JSON.stringify(res.structured)).toMatch(/kitEngineRef/i);
+  });
+});

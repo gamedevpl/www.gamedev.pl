@@ -198,22 +198,50 @@ export function assertAgentTokenActive(
   record: { roundGeneration?: number },
   nowMs: number = Date.now(),
 ): void {
+  const access = classifyAgentTokenAccess(claims, record, nowMs);
+  if (access !== 'active') {
+    throw new InvalidAgentTokenError(STALE_AGENT_TOKEN_REASON);
+  }
+}
+
+/**
+ * How a still-signature-valid capability relates to the job's current generation.
+ *
+ * - `active` — generation matches; full channel access.
+ * - `terminal_receipt` — generation is exactly one behind current and unexpired.
+ *   Only {@link get_gate_verdict} (and its plain-HTTP twin) may use this: gate-green
+ *   closes the round, so the agent's next verdict poll would otherwise be rejected
+ *   a moment before it can observe the green it was told to wait for. Every write
+ *   and every other read still rejects. Expiry still applies.
+ */
+export type AgentTokenAccess = 'active' | 'terminal_receipt';
+
+export function classifyAgentTokenAccess(
+  claims: AgentTokenClaims,
+  record: { roundGeneration?: number },
+  nowMs: number = Date.now(),
+): AgentTokenAccess {
   const active = record.roundGeneration;
 
   if (claims.roundGeneration !== undefined && claims.exp !== undefined) {
-    if (active === undefined || claims.roundGeneration !== active) {
-      throw new InvalidAgentTokenError(STALE_AGENT_TOKEN_REASON);
-    }
     if (claims.exp * 1000 <= nowMs) {
       throw new InvalidAgentTokenError(STALE_AGENT_TOKEN_REASON);
     }
-    return;
+    if (active !== undefined && claims.roundGeneration === active) {
+      return 'active';
+    }
+    // Exactly one behind: the closed round that owns the job's current delivery.
+    if (active !== undefined && claims.roundGeneration === active - 1) {
+      return 'terminal_receipt';
+    }
+    throw new InvalidAgentTokenError(STALE_AGENT_TOKEN_REASON);
   }
 
   // Legacy shape: only while the job has never been generation-scoped.
   if (active !== undefined) {
     throw new InvalidAgentTokenError(STALE_AGENT_TOKEN_REASON);
   }
+  return 'active';
 }
 
 /**

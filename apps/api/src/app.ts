@@ -542,6 +542,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // session and never will. It authenticates with a per-build token verified in
     // the handler, scoped to talking about the one build it was handed.
     if (request.url.startsWith('/api/agent/')) return;
+    // Remote MCP (BY-05): same posture as the build channel — URL-only install,
+    // no site session. Auth is the round key / sessionKey verified per tool call.
+    if (request.url === '/api/mcp' || request.url.startsWith('/api/mcp?')) return;
     // The controller websocket is the one door anonymous guests may reach: a phone
     // that scanned a QR has no session and never will. It is useless without a
     // room token (verified in the first frame, not here), and the room it opens
