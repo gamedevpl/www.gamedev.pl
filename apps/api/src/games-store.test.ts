@@ -19,6 +19,9 @@ const MINIMAL: SourceFile[] = [
   // a game that does not declare its progress landmarks, so a delivery without this one
   // reaches validate and stops there having produced nothing.
   { path: 'PLAYTEST.json', content: '{"expectProgress":["round-start"]}' },
+  // Check 28's play policy. Allowed (and present on the happy path); not hard-required
+  // at upload until in-flight workspaces drain — see ALLOWED_SOURCE_FILES note.
+  { path: 'AGENT.json', content: '{"policy":"capture"}' },
 ];
 
 describe('validateSourceUpload — the delivery contract', () => {
@@ -88,6 +91,14 @@ describe('validateSourceUpload — the delivery contract', () => {
     expect(() => validateSourceUpload(MINIMAL.filter((f) => f.path !== 'PLAYTEST.json'))).toThrow(
       /PLAYTEST\.json is required/,
     );
+  });
+
+  it('accepts the agent-play contract without blocking pre-companion submit tools', () => {
+    // The bug this PR fixes is "path not deliverable" for AGENT.json — accepting the
+    // file is the unblock. Hard-requiring it would 400 in-flight workspaces that still
+    // ship the old submit tool; the gate's Check 28 covers absence until those drain.
+    expect(validateSourceUpload(MINIMAL).map((f) => f.path)).toContain('AGENT.json');
+    expect(validateSourceUpload(MINIMAL.filter((f) => f.path !== 'AGENT.json'))).toHaveLength(MINIMAL.length - 1);
   });
 
   it('caps total upload size', () => {

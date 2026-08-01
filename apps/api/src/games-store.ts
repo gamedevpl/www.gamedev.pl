@@ -47,6 +47,19 @@ export const ALLOWED_SOURCE_FILES = [
   // each delivered game reached validate and stopped there, with no gate artifacts and
   // therefore no draft preview for the creator watching.
   'PLAYTEST.json',
+  // Validate Check 28 (`tools/lib/agent-contract.ts`) requires AGENT.json so
+  // `npm run agent-play` knows whether to replay CAPTURE or load a closed-loop module.
+  // Same drift class as TRACE/PLAYTEST above: the check landed in the games repo while
+  // this list stayed put, so agents that wrote a correct AGENT.json were told the path
+  // was not deliverable, dropped it, and then failed the remote gate at Check 28 —
+  // burning a session on allowlist archaeology instead of the game.
+  //
+  // Accepted here, but not hard-required yet: in-flight builder workspaces still ship the
+  // pre-companion submit tool that omits AGENT.json, and the two repos cannot deploy
+  // atomically. Requiring it at upload would 400 those deliveries before the gate could
+  // even run. Let Check 28 report the missing contract until old workspaces drain; then
+  // promote to a required upload (same path TRACE/PLAYTEST already took).
+  'AGENT.json',
   'index.html',
   'game.ts',
   'style.css',
@@ -176,6 +189,8 @@ export function validateSourceUpload(files: SourceFile[]): SourceFile[] {
         '{"expectProgress": ["round-start"]}; list richer landmarks if your capture reaches them.',
     );
   }
+  // AGENT.json is allowed above but deliberately not required here yet — see the
+  // ALLOWED_SOURCE_FILES note. Missing file → Check 28 on the gate, not a 400 at upload.
 
   return files.map((file) => ({ path: file.path.trim(), content: file.content }));
 }
