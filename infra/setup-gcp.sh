@@ -371,5 +371,16 @@ grant_gate_with_retry gcloud iam service-accounts add-iam-policy-binding "$GATE_
 gcloud services enable cloudbuild.googleapis.com --project="$PROJECT_ID" >/dev/null
 echo "    Cloud Run may submit gate builds as gate-runner."
 
+# BY-04 signed kit/example URLs: on Cloud Run the metadata credentials have no private
+# key, so GoogleAuth.sign() calls IAM Credentials signBlob as RUN_SA on itself. Without
+# the API and TokenCreator, /api/agent/build/kit and /examples/:slug return 500.
+echo "==> Letting the runtime sign V4 download URLs (iamcredentials signBlob)"
+gcloud services enable iamcredentials.googleapis.com --project="$PROJECT_ID" >/dev/null
+grant_gate_with_retry gcloud iam service-accounts add-iam-policy-binding "${RUN_SA}" \
+  --member="serviceAccount:${RUN_SA}" \
+  --role="roles/iam.serviceAccountTokenCreator" \
+  --project="$PROJECT_ID"
+echo "    Cloud Run may signBlob as itself for games-store signed URLs."
+
 echo ""
 echo "==> Done. Firestore database, snapshot bucket, IAM roles (datastore.user, aiplatform.user), session-secret, telemetry TTL, scorecards read index, and gate-runner SA configured for project ${PROJECT_ID}."
