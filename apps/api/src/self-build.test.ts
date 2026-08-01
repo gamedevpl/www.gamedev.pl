@@ -263,6 +263,8 @@ describe('self builder (BY-02)', () => {
       url: `/api/submissions/${mintToken(issueNumber, secret)}`,
     });
     expect(statusWaiting.json().stall).toBe('no_agent_yet');
+    // Studio defaults from these — not localStorage alone (Codex P2 on BY-07).
+    expect(statusWaiting.json()).toMatchObject({ builder: 'self', defaultBuilder: 'self' });
 
     const progress = await app.inject({
       method: 'POST',

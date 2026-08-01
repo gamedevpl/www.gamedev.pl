@@ -37,6 +37,12 @@ function isAwaitingOwnAgent(status: SubmissionStatus | null | undefined): boolea
 function canChooseBuilder(status: SubmissionStatus | null | undefined): boolean {
   if (!status) return false;
   if (isAwaitingOwnAgent(status)) return false;
+  // Gate-red / kit_outdated keep the round open server-side (`builder_locked` on switch).
+  // Offering a selector that can only 409 is worse than hiding it until the repair lands.
+  const failureReason = status.failure?.reason;
+  if (status.status === 'needs_changes' && (failureReason === 'gate_red' || failureReason === 'kit_outdated')) {
+    return false;
+  }
   return status.status === 'published' || status.status === 'needs_changes' || Boolean(status.failure);
 }
 

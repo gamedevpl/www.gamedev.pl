@@ -606,6 +606,8 @@ describe('SubmissionStatusView', () => {
 
     expect(container.querySelector('.status-warning')?.textContent).toContain("didn't pass our automatic checks");
     expect(container.textContent).toContain('Needs a tweak');
+    // Active repair round — builder is locked server-side; do not offer a switch that 409s.
+    expect(container.querySelector('.builder-choice')).toBeNull();
 
     await act(async () => {
       root.unmount();
