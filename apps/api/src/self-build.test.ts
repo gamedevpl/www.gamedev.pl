@@ -59,7 +59,10 @@ const MINIMAL_FILES = [
   { path: 'AGENT.json', content: '{"policy":"capture"}' },
 ];
 
-function stubGamesStore() {
+function stubGamesStore(options?: {
+  /** When set, getManifest reports this gate verdict for every stored version. */
+  gateGreen?: boolean;
+}) {
   const stored: Array<{
     slug: string;
     issueNumber: number;
@@ -68,6 +71,7 @@ function stubGamesStore() {
     files: unknown[];
   }> = [];
   const versions = new Map<string, { files: typeof MINIMAL_FILES; backend?: string; kitEngineRef?: string }>();
+  const derived = new Map<string, Buffer>();
   const gamesStore = {
     putCandidateSources: async (input: {
       slug: string;
@@ -107,6 +111,9 @@ function stubGamesStore() {
         backend: hit.backend,
         kitEngineRef: hit.kitEngineRef,
         sourceFiles: hit.files.map((f) => f.path),
+        ...(options?.gateGreen !== undefined
+          ? { gate: { green: options.gateGreen, ranAt: new Date().toISOString() } }
+          : {}),
       };
     },
     getSourceFile: async (slug: string, version: string, path: string) => {
@@ -115,11 +122,14 @@ function stubGamesStore() {
     },
     putGateResult: async () => {},
     putHealthResult: async () => {},
-    putDerivedArtifact: async () => {},
-    getDerivedArtifact: async () => null,
+    putDerivedArtifact: async (slug: string, version: string, name: string, body: Buffer) => {
+      derived.set(`${slug}:${version}:${name}`, body);
+    },
+    getDerivedArtifact: async (slug: string, version: string, name: string) =>
+      derived.get(`${slug}:${version}:${name}`) ?? null,
     getKitRegistry: async () => null,
   } as unknown as GamesStore;
-  return { gamesStore, stored };
+  return { gamesStore, stored, derived };
 }
 
 const KIT_REF = 'abcdef1234567890';
@@ -664,5 +674,155 @@ describe('self builder (BY-02)', () => {
       expect(record?.dispatch?.refs?.length).toBeGreaterThan(0);
     });
     expect((await store.getSubmission(issueNumber))?.state).toBe('submitted');
+  });
+});
+
+describe('self-build Studio preview (BY-14c)', () => {
+  let app: FastifyInstance | null = null;
+
+  afterEach(async () => {
+    await app?.close();
+    app = null;
+  });
+
+  /**
+   * Self-build → channel sources → gate artifact → creator session hits the same
+   * `/api/submissions/:token/preview` route Studio's play surface uses.
+   */
+  async function deliverSelfBuild(artifact: 'bundle.html' | 'preview.html', html: string) {
+    // Gate-green jobs advertise a green verdict; the pre-green window has no gate
+    // field yet (distinct from gate-red, which would bounce to needs_changes).
+    const { gamesStore, derived } = stubGamesStore(artifact === 'bundle.html' ? { gateGreen: true } : undefined);
+    const created = await createApp({ gamesStore });
+    app = created.app;
+    const { store } = created;
+
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'Studio Play', concept: CONCEPT, builder: 'self' },
+    });
+    expect(submit.statusCode).toBe(200);
+    const slug = submit.json().slug as string;
+    const token = submit.json().token as string;
+
+    let issueNumber = 0;
+    await vi.waitFor(async () => {
+      const record = (await store.listSubmissionsByOwner('g:creator'))[0];
+      expect(record?.builder).toBe('self');
+      issueNumber = record!.issueNumber;
+    });
+
+    const delivery = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/sources',
+      headers: agentHeaders(issueNumber),
+      payload: { slug, files: MINIMAL_FILES, kitEngineRef: KIT_REF },
+    });
+    expect(delivery.json()).toMatchObject({ accepted: true });
+    const version = (await store.getSubmission(issueNumber))!.deliveredVersion!;
+    expect(version).toBeTruthy();
+
+    derived.set(`${slug}:${version}:${artifact}`, Buffer.from(html));
+
+    if (artifact === 'bundle.html') {
+      await store.recordJobTransition(issueNumber, {
+        to: 'ready_for_review',
+        at: new Date().toISOString(),
+        by: 'gate',
+        reason: 'gate_green',
+      });
+    }
+
+    return { store, token, slug, issueNumber, version };
+  }
+
+  it('advertises preview.slug on status once a self-build version is delivered', async () => {
+    // The regression: nativeJobStatus returned top-level slug but never preview.slug,
+    // so SubmissionStatusView never called getSubmissionPreview and the Play control
+    // stayed dark even after gate green.
+    const { token, slug } = await deliverSelfBuild(
+      'bundle.html',
+      '<!doctype html><title>Studio Play</title><canvas></canvas>',
+    );
+
+    const status = await app!.inject({
+      method: 'GET',
+      url: `/api/submissions/${token}`,
+      headers: authHeaders(),
+    });
+    expect(status.statusCode).toBe(200);
+    expect(status.json()).toMatchObject({
+      builder: 'self',
+      phase: 'ready_for_review',
+      slug,
+      preview: { slug },
+      progress: { headSha: expect.any(String) },
+    });
+    // Self deliveries do not push channel playables — Studio must use /preview.
+    expect(status.json().playable).toBeUndefined();
+  });
+
+  it('serves the gate-green bundle to the creator through Studio preview auth', async () => {
+    const html = '<!doctype html><title>Gate Green</title><canvas id="game"></canvas>';
+    const { token, slug } = await deliverSelfBuild('bundle.html', html);
+
+    const preview = await app!.inject({
+      method: 'GET',
+      url: `/api/submissions/${token}/preview`,
+      headers: authHeaders(),
+    });
+    expect(preview.statusCode).toBe(200);
+    // Delivery adopts the SPEC frontmatter title (`Self Built` in MINIMAL_FILES).
+    expect(preview.json()).toEqual({ slug, title: 'Self Built', html });
+  });
+
+  it('serves preview.html for a delivered-but-ungated self-build (pre-green window)', async () => {
+    // Gate decides publishability; the author can still watch the candidate. A red
+    // (or not-yet-finished) run stores preview.html — same contract as platform builds.
+    const html = '<!doctype html><title>Ungated Draft</title><canvas></canvas>';
+    const { token, slug, store, issueNumber } = await deliverSelfBuild('preview.html', html);
+    expect((await store.getSubmission(issueNumber))?.state).toBe('submitted');
+
+    const status = await app!.inject({
+      method: 'GET',
+      url: `/api/submissions/${token}`,
+      headers: authHeaders(),
+    });
+    expect(status.json()).toMatchObject({ builder: 'self', preview: { slug } });
+
+    const preview = await app!.inject({
+      method: 'GET',
+      url: `/api/submissions/${token}/preview`,
+      headers: authHeaders(),
+    });
+    expect(preview.statusCode).toBe(200);
+    expect(preview.json()).toEqual({ slug, title: 'Self Built', html });
+  });
+
+  it('does not advertise preview before the first self-build delivery', async () => {
+    const { gamesStore } = stubGamesStore();
+    const created = await createApp({ gamesStore });
+    app = created.app;
+
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'No Delivery Yet', concept: CONCEPT, builder: 'self' },
+    });
+    const token = submit.json().token as string;
+    await vi.waitFor(async () => {
+      const record = (await created.store.listSubmissionsByOwner('g:creator'))[0];
+      expect(record?.state).toBe('dispatched');
+    });
+
+    const status = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${token}`,
+      headers: authHeaders(),
+    });
+    expect(status.json().preview).toBeUndefined();
   });
 });

@@ -1534,6 +1534,15 @@ export async function registerSubmissionRoutes(
       // lossy by design, and the page needs the loss back to describe the wait honestly.
       ...(record.abandonedAt ? {} : { phase: state }),
       ...(record.slug ? { slug: record.slug } : {}),
+      // Studio's play surface only fetches `/preview` when `preview.slug` is set (the
+      // same signal the PR-derived path used to emit). A self-build delivery has no PR
+      // and often no channel `playable[]` either — sources land in the games store and
+      // the gate writes `bundle.html` / `preview.html`. Without this field the thread
+      // never asked for that document, so a gate-green ready_for_review job looked
+      // unplayable to its own creator (BY-14c). Advertise only once a version exists:
+      // before delivery there is nothing to serve, and a premature 409 would paint an
+      // error under an empty Play control.
+      ...(record.slug && record.deliveredVersion ? { preview: { slug: record.slug } } : {}),
     };
     // `failed` and a gate bounce both project onto public `needs_changes`. Without a
     // reason the Studio page only says the label — creators click the notification,

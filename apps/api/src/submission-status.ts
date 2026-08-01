@@ -148,9 +148,10 @@ export interface SubmissionStatusResponseBase {
   phase?: JobState;
   slug?: string;
   /**
-   * Present while an unmerged PR is open (building/in_review): the creator can
-   * play the in-progress game straight from the PR branch, before the human
-   * merge. `slug` is the game directory on that branch.
+   * Present when the creator can load a Studio draft via `/api/submissions/:token/preview`.
+   * Set for an open PR (slug on that branch) and for a native/self-build job once a
+   * candidate version has been delivered — the gate's `bundle.html` / `preview.html`
+   * is what that route serves. Absent before the first delivery.
    */
   preview?: { slug: string };
   /**
