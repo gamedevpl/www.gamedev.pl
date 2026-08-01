@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { BuilderChoice } from './BuilderChoice.js';
+import { isBuilderKind, type BuilderKind } from './builderKind.js';
 import { isSubmittableTitle, MAX_TITLE_LENGTH } from './gameTitle.js';
 import { PixelIcon } from './PixelIcon.js';
 import type { PendingQaAnswers } from './pendingQa.js';
@@ -26,7 +28,7 @@ interface CreatorQAProps {
    * when it had none. Editable here, and confirming it is what starts the build.
    */
   initialTitle: string;
-  onSubmitWithConcept: (finalConcept: string, title: string) => void;
+  onSubmitWithConcept: (finalConcept: string, title: string, builder: BuilderKind) => void;
   /** Fires on every edit so the caller can park the name with the rest of the session. */
   onTitleChange?: (title: string) => void;
   onCancel?: () => void;
@@ -38,6 +40,10 @@ interface CreatorQAProps {
   initialAnswers?: PendingQaAnswers;
   /** Fires on every edit so the caller can park the session; keep it referentially stable. */
   onAnswersChange?: (answers: PendingQaAnswers) => void;
+  /** Who builds this round — restored with the parked session when present. */
+  initialBuilder?: BuilderKind;
+  /** Fires when the builder choice changes so a reload keeps the selection. */
+  onBuilderChange?: (builder: BuilderKind) => void;
 }
 
 export function CreatorQA({
@@ -51,12 +57,20 @@ export function CreatorQA({
   error = null,
   initialAnswers,
   onAnswersChange,
+  initialBuilder = 'platform',
+  onBuilderChange,
 }: CreatorQAProps) {
   const { t } = useTranslation();
   const [title, setTitle] = useState(initialTitle);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string[]>>(initialAnswers?.selected ?? {});
   const [customText, setCustomText] = useState<Record<string, string>>(initialAnswers?.custom ?? {});
+  const [builder, setBuilder] = useState<BuilderKind>(isBuilderKind(initialBuilder) ? initialBuilder : 'platform');
   const titleReady = isSubmittableTitle(title);
+
+  const handleBuilderChange = (next: BuilderKind) => {
+    setBuilder(next);
+    onBuilderChange?.(next);
+  };
 
   const report = (selected: Record<string, string[]>, custom: Record<string, string>) => {
     onAnswersChange?.({ selected, custom });
@@ -128,7 +142,7 @@ export function CreatorQA({
 
   const handleSubmit = () => {
     if (!titleReady) return;
-    onSubmitWithConcept(buildMergedConcept(), title.trim());
+    onSubmitWithConcept(buildMergedConcept(), title.trim(), builder);
   };
 
   return (
@@ -159,6 +173,8 @@ export function CreatorQA({
         />
         <p className="qa-name-hint">{t('qa.nameHint')}</p>
       </div>
+
+      <BuilderChoice value={builder} onChange={handleBuilderChange} disabled={submitting} />
 
       <div className="qa-actions qa-actions--top">
         <button

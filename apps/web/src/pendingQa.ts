@@ -1,3 +1,5 @@
+import type { BuilderKind } from './builderKind.js';
+import { isBuilderKind } from './builderKind.js';
 import type { QAQuestion } from './CreatorQA.js';
 
 /**
@@ -27,6 +29,8 @@ export interface PendingQaSession {
    * reading — without this, a Polish UI would keep showing English AI text.
    */
   locale?: string;
+  /** Who should build this round once the confirm panel submits. */
+  builder?: BuilderKind;
   savedAt: number;
 }
 
@@ -63,6 +67,7 @@ export function loadPendingQa(): PendingQaSession | null {
       spec: { ...parsed.spec, title: parsed.spec.title ?? '', displayName: parsed.spec.displayName ?? '' },
       answers: { selected: parsed.answers?.selected ?? {}, custom: parsed.answers?.custom ?? {} },
       ...(typeof parsed.locale === 'string' && parsed.locale ? { locale: parsed.locale } : {}),
+      ...(isBuilderKind(parsed.builder) ? { builder: parsed.builder } : {}),
     };
   } catch {
     // Corrupt or unreadable (private mode, disabled storage): start clean rather than

@@ -191,6 +191,14 @@ export interface SubmissionStatusResponseBase {
    */
   stall?: JobStall;
   /**
+   * Who owns the *current* round (`platform` | `self`), when known. Studio uses this
+   * (with {@link defaultBuilder}) instead of localStorage alone so another browser
+   * still defaults to the game's last-used choice.
+   */
+  builder?: 'platform' | 'self';
+  /** Last builder used on this game — default for the next round-boundary choice. */
+  defaultBuilder?: 'platform' | 'self';
+  /**
    * Why this build is asking the creator to act, when it is. Set alongside `status`
    * because the public vocabulary projects both `failed` and a gate bounce onto
    * `needs_changes` — without this the page only shows the label, and a creator who

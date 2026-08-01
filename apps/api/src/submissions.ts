@@ -1556,6 +1556,12 @@ export async function registerSubmissionRoutes(
       builder: builderOf(record),
     });
     if (stall) status.stall = stall;
+    // Echo builder fields so Studio does not invent `platform` from empty localStorage
+    // when the server already knows the game's last-used choice (Codex P2 on BY-07).
+    const roundBuilder = record.builder;
+    if (roundBuilder) status.builder = roundBuilder;
+    const lastBuilder = record.defaultBuilder ?? record.builder;
+    if (lastBuilder) status.defaultBuilder = lastBuilder;
     return status;
   }
 

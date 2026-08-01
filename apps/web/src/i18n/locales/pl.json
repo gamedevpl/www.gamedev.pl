@@ -567,7 +567,8 @@
       "awaiting_input": "Agent czeka na Twoją odpowiedź — napisz poniżej, aby budowa ruszyła dalej.",
       "not_dispatched": "Budowa nie została jeszcze podjęta przez agenta. Trwa to dłużej niż zwykle — sprawdzamy to.",
       "quiet": "Agent od dłuższej chwili nie daje znaku życia. Może wciąż pracuje — możesz też wysłać poniżej uwagi, aby rozpocząć kolejną rundę.",
-      "gate_not_started": "Gra została dostarczona, ale weryfikacja jeszcze się nie rozpoczęła. To po naszej stronie — nie musisz nic robić."
+      "gate_not_started": "Gra została dostarczona, ale weryfikacja jeszcze się nie rozpoczęła. To po naszej stronie — nie musisz nic robić.",
+      "no_agent_yet": "Czekamy na Twojego agenta — wykonaj kroki poniżej, żeby go podłączyć."
     },
     "tryAgain": "Spróbuj z tym pomysłem jeszcze raz",
     "abandon": {
@@ -769,5 +770,43 @@
     "pullHint": "Pociągnij, aby odświeżyć",
     "pullRelease": "Puść, aby odświeżyć",
     "pullRefreshing": "Odświeżanie…"
+  },
+  "builder": {
+    "legend": "Kto buduje tę rundę?",
+    "platform": {
+      "title": "Nasz zespół AI",
+      "detail": "Przypisujemy agenta i postęp widać tutaj."
+    },
+    "self": {
+      "title": "Mój własny agent",
+      "detail": "Podłączasz Claude Code, Codex, Cursor albo innego agenta."
+    }
+  },
+  "connect": {
+    "title": "Podłącz swojego agenta",
+    "lead": "Ta runda czeka na Twojego agenta. Dodaj gamedev.pl raz, potem wklej prompt budowy.",
+    "loading": "Przygotowujemy kroki połączenia…",
+    "loadError": "Nie udało się wczytać kroków połączenia. Odśwież za chwilę.",
+    "copied": "Skopiowano",
+    "copyInstall": "Kopiuj",
+    "copyKickoff": "Kopiuj prompt",
+    "waiting": "Czekamy, aż Twój agent się odezwie…",
+    "step1": {
+      "title": "Dodaj gamedev.pl do swojego agenta",
+      "clients": "Klient agenta",
+      "skip": "Już dodałeś to przy innej grze? Pomiń",
+      "skipped": "Pominięte — używasz wcześniejszej instalacji."
+    },
+    "step2": {
+      "title": "Powiedz agentowi, co zbudować",
+      "expiry": "Ten klucz działa tylko dla tej gry i wygasa {{when}}."
+    },
+    "clients": {
+      "claudeCode": "Claude Code",
+      "codex": "Codex",
+      "cursor": "Cursor",
+      "kimi": "Kimi",
+      "cli": "CLI"
+    }
   }
 }

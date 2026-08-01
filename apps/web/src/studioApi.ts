@@ -116,12 +116,17 @@ export async function submitImprovement(
   token: string,
   feedback: string,
   context?: FeedbackContext,
+  builder?: 'platform' | 'self',
 ): Promise<{ ok: boolean; issueNumber: number; slug: string; shotId?: string }> {
   const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/improve`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ feedback, ...(context ? { context } : {}) }),
+    body: JSON.stringify({
+      feedback,
+      ...(context ? { context } : {}),
+      ...(builder ? { builder } : {}),
+    }),
   });
   if (!response.ok) {
     await throwResponseError(response);

@@ -97,4 +97,18 @@ describe('locale resources', () => {
       }
     }
   });
+
+  // BYOCA connect/builder copy must never say "token" — creators see a paste-ready
+  // prompt with a "key", and the credential concept stays undescribed (BY-07).
+  it('never uses the word token in builder or connect copy', () => {
+    for (const [lang, resource] of [
+      ['en', en],
+      ['pl', pl],
+    ] as const) {
+      for (const section of ['builder', 'connect'] as const) {
+        const blob = JSON.stringify((resource as Record<string, unknown>)[section] ?? {});
+        expect(blob, `${lang}.${section}`).not.toMatch(/\btoken\b/i);
+      }
+    }
+  });
 });
