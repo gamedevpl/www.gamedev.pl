@@ -1453,7 +1453,6 @@ describe('SubmissionStatusView stop & retry', () => {
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'published',
       builder: 'self',
-      stall: null,
     });
     window.history.pushState(null, '', '/status/verdict-reload');
     const container = document.createElement('div');
@@ -1474,8 +1473,8 @@ describe('SubmissionStatusView stop & retry', () => {
 
     // Live transition: building → in_review should emit green once.
     mockedGetSubmissionStatus
-      .mockResolvedValueOnce({ status: 'building', builder: 'self', stall: null })
-      .mockResolvedValue({ status: 'in_review', builder: 'self', stall: null });
+      .mockResolvedValueOnce({ status: 'building', builder: 'self' })
+      .mockResolvedValue({ status: 'in_review', builder: 'self' });
     window.history.pushState(null, '', '/status/verdict-live');
     const live = document.createElement('div');
     document.body.appendChild(live);
