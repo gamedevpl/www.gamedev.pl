@@ -1,10 +1,19 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import {
+  AGENT_BUILD_RULES_DIGEST,
+  briefLocales,
+  buildConstraints,
+  DEFAULT_BUILD_ORIENTATION,
+} from './agent-build-brief.js';
+import { getAgentBuildExample, listAgentBuildExamples } from './agent-build-examples.js';
 import { assertAgentTokenActive, InvalidAgentTokenError, readBearerToken, verifyAgentToken } from './agent-token.js';
 import { selfBuildDeliveryCap } from './builder.js';
+import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from './gcs-sign.js';
 import { InvalidUploadError, type GamesStore } from './games-store.js';
 import { parseSpecTitle } from './github-client.js';
 import { canTransition, resolveJobState } from './job-state.js';
+import { KIT_ENTRY, KitRegistryError, kitUnpackCommand, parseKitRegistry, parseKitSidecar } from './kit-registry.js';
 import { type CreatorMessage, type Store, type SubmissionRecord } from './store.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from './submission-status.js';
 
@@ -198,6 +207,12 @@ export interface AgentChannelOptions {
    * rather than pretending to have accepted work.
    */
   gamesStore?: GamesStore;
+  /**
+   * Read + V4-sign against the games-store bucket (`kits/`, `examples/`). Absent when
+   * the bucket is not configured; kit/example downloads then answer 503 rather than
+   * inventing an engineRef or a URL.
+   */
+  objectStore?: GcsObjectStore;
   /** Deliveries one build may make per hour. */
   maxSubmitsPerWindow?: number;
   /** Called when a candidate version lands, so the job can move on to the gate. */
@@ -947,6 +962,191 @@ export async function registerAgentChannelRoutes(
 
       await store!.markCreatorMessagesDelivered(issueNumber, parsed.data.ids);
       return reply.send({ ok: true, ...(await channelState(issueNumber, record)) });
+    },
+  );
+
+  /**
+   * Everything an agent needs to start a round without reading a GitHub issue.
+   *
+   * Spec/qa live on the job document (written at submission). Rules and the byte
+   * ceiling are static / contract-derived — never invented per job.
+   */
+  app.get(
+    '/api/agent/build/brief',
+    { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      const { issueNumber, record } = resolved;
+
+      const pending = await store!.listPendingCreatorMessages(issueNumber);
+      return reply.send({
+        title: record.title,
+        slug: record.slug ?? null,
+        spec: record.spec ?? '',
+        qa: record.qa ?? [],
+        rules: AGENT_BUILD_RULES_DIGEST,
+        constraints: buildConstraints(DEFAULT_BUILD_ORIENTATION),
+        locales: briefLocales(record.locale),
+        seedAvailable: Boolean(record.seed),
+        pendingMessages: pending.map((message) => ({
+          id: message.id,
+          text: message.text,
+          createdAt: message.createdAt,
+        })),
+      });
+    },
+  );
+
+  /**
+   * Round-0 seed draft stored on the job (self builds and platform seeds that persisted).
+   * 404-shaped `{ available: false }` when none — not an auth failure.
+   */
+  app.get(
+    '/api/agent/build/seed',
+    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      const { record } = resolved;
+
+      if (!record.seed) {
+        return reply.status(404).send({ available: false, files: [], references: [], notes: null });
+      }
+      return reply.send({
+        available: true,
+        files: record.seed.files,
+        references: record.seed.references,
+        notes: record.seed.notes ?? null,
+      });
+    },
+  );
+
+  /**
+   * Current Creator Kit — engine-pinned tarball from `kits/current.json`.
+   *
+   * Missing registry is a clear machine-readable error (bucket empty until the first
+   * games-repo publish), never a fabricated engineRef.
+   */
+  app.get(
+    '/api/agent/build/kit',
+    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+
+      if (!options.objectStore) {
+        return reply.status(503).send({ error: 'kit_store_unavailable', message: 'the kit store is not configured' });
+      }
+
+      try {
+        const registryBody = await options.objectStore.readObject('kits/current.json');
+        if (!registryBody) {
+          return reply.status(404).send({
+            error: 'kit_registry_missing',
+            message: 'kits/current.json is not published yet — the games-repo kit publisher has not run',
+          });
+        }
+        const registry = parseKitRegistry(registryBody.toString('utf8'));
+        const engineRef = registry.current;
+        const sidecarBody = await options.objectStore.readObject(`kits/${engineRef}.json`);
+        if (!sidecarBody) {
+          return reply.status(404).send({
+            error: 'kit_artifact_missing',
+            message: `kits/${engineRef}.json sidecar is missing for the current registry entry`,
+          });
+        }
+        const sidecar = parseKitSidecar(sidecarBody.toString('utf8'));
+        // Metadata probe only — do not pull the multi-MB kit into the request path.
+        if (!(await options.objectStore.objectExists(`kits/${engineRef}.tgz`))) {
+          return reply.status(404).send({
+            error: 'kit_artifact_missing',
+            message: `kits/${engineRef}.tgz is missing for the current registry entry`,
+          });
+        }
+
+        const kitUrl = await options.objectStore.signReadUrl(`kits/${engineRef}.tgz`, DEFAULT_SIGNED_URL_TTL_SECONDS);
+        return reply.send({
+          engineRef,
+          kitUrl,
+          sha256: sidecar.sha256,
+          unpack: kitUnpackCommand(kitUrl),
+          entry: KIT_ENTRY,
+        });
+      } catch (error) {
+        if (error instanceof KitRegistryError) {
+          return reply.status(404).send({ error: error.code, message: error.message });
+        }
+        throw error;
+      }
+    },
+  );
+
+  /**
+   * Curated first-party exemplars — allowlist JSON in-repo, never a store listing.
+   */
+  app.get(
+    '/api/agent/build/examples',
+    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      return reply.send({ examples: listAgentBuildExamples() });
+    },
+  );
+
+  /**
+   * Signed tarball of one allowlisted exemplar's sources (`examples/<slug>.tgz`).
+   * Non-allowlisted slugs 404 even if an object happens to exist under that name.
+   */
+  app.get(
+    '/api/agent/build/examples/:slug',
+    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+
+      const slug = String((request.params as { slug?: string }).slug ?? '');
+      const example = getAgentBuildExample(slug);
+      if (!example) {
+        return reply.status(404).send({ error: 'unknown_example', message: 'slug is not on the exemplar allowlist' });
+      }
+
+      if (!options.objectStore) {
+        return reply
+          .status(503)
+          .send({ error: 'example_store_unavailable', message: 'the example store is not configured' });
+      }
+
+      const objectName = `examples/${example.slug}.tgz`;
+      if (!(await options.objectStore.objectExists(objectName))) {
+        return reply.status(404).send({
+          error: 'example_unavailable',
+          message: `no packed sources for allowlisted slug ${example.slug}`,
+        });
+      }
+
+      let sha256: string | null = null;
+      const sidecarBody = await options.objectStore.readObject(`examples/${example.slug}.json`);
+      if (sidecarBody) {
+        try {
+          const parsed = JSON.parse(sidecarBody.toString('utf8')) as { sha256?: unknown };
+          if (typeof parsed.sha256 === 'string' && /^[a-f0-9]{64}$/i.test(parsed.sha256)) {
+            sha256 = parsed.sha256.toLowerCase();
+          }
+        } catch {
+          // Sidecar is optional; a corrupt one must not block the download.
+        }
+      }
+
+      const tarballUrl = await options.objectStore.signReadUrl(objectName, DEFAULT_SIGNED_URL_TTL_SECONDS);
+      return reply.send({
+        slug: example.slug,
+        title: example.title,
+        tarballUrl,
+        ...(sha256 ? { sha256 } : {}),
+        unpack: kitUnpackCommand(tarballUrl),
+      });
     },
   );
 }

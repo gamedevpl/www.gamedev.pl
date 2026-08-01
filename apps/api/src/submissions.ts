@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { GameProject } from '@gamedevpl/game-generator';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { splitConceptBrief } from './agent-build-brief.js';
 import { registerAgentChannelRoutes, type AgentChannelOptions } from './agent-channel.js';
 import { mintAgentToken } from './agent-token.js';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
@@ -271,7 +272,12 @@ export interface SubmissionRoutesOptions {
   gameSeeder?: GameSeeder;
   agentChannel?: Pick<
     AgentChannelOptions,
-    'maxEventsPerBuild' | 'maxEventsPerWindow' | 'gamesStore' | 'maxSubmitsPerWindow' | 'onSourcesDelivered'
+    | 'maxEventsPerBuild'
+    | 'maxEventsPerWindow'
+    | 'gamesStore'
+    | 'objectStore'
+    | 'maxSubmitsPerWindow'
+    | 'onSourcesDelivered'
   >;
   /**
    * Pre-assembled published games. Defaults to the bucket in
@@ -1888,6 +1894,15 @@ export async function registerSubmissionRoutes(
       await store.setSubmissionLocale(jobId, creatorLocale);
       // Raw, not sanitized: the sanitizer strips the '##' that marks the block.
       await store.setSubmissionClarificationCount(jobId, countCreatorClarifications(parsed.data.concept));
+      // Brief persistence for GET /api/agent/build/brief — split before sanitize so the
+      // clarifications marker survives, then store the sanitized free-text as spec.
+      // Do not fall back to the full concept: that would re-merge QA bullets into `spec`
+      // when the free-text half sanitizes empty (clarifications-only submission).
+      {
+        const { spec: rawSpec, qa } = splitConceptBrief(parsed.data.concept);
+        const briefSpec = sanitizeCreatorText(rawSpec, { singleLine: false });
+        await store.setSubmissionBrief(jobId, { spec: briefSpec, qa });
+      }
       await store.recordJobTransition(jobId, {
         to: 'queued',
         at: new Date(now()).toISOString(),
