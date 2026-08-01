@@ -1021,6 +1021,87 @@ describe('agent build channel', () => {
       expect(response.json()).toEqual({ delivery: null, files: [] });
     });
 
+    it('restores the live publication for an improvement job that has not delivered yet', async () => {
+      // An improvement is a *new* job on a published slug (job-state.ts: publishing is
+      // terminal). That job inherits the slug before it has a deliveredVersion of its
+      // own — without the publication fallback, restore reports nothing and the agent
+      // rebuilds from the spec instead of revising the game the creator played.
+      const IMPROVEMENT = 1000004;
+      const store = new InMemoryStore();
+      await seedSubmission(store, IMPROVEMENT);
+      await store.setSubmissionSlug(IMPROVEMENT, 'global-thermonuclear-strategy');
+      await store.setPublication({
+        slug: 'global-thermonuclear-strategy',
+        state: 'published',
+        currentVersion: 'v3',
+        publishedAt: '2026-07-01T00:00:00.000Z',
+      });
+      app = await createApp(store, {
+        gamesStore: storeWithVersion({
+          'SPEC.md': '# Global Thermonuclear Strategy',
+          'game.ts': 'export const tick = () => {};',
+        }),
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/agent/build/sources',
+        headers: agentHeaders(IMPROVEMENT),
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        delivery: { slug: 'global-thermonuclear-strategy', version: 'v3' },
+        files: [
+          { path: 'SPEC.md', content: '# Global Thermonuclear Strategy' },
+          { path: 'game.ts', content: 'export const tick = () => {};' },
+        ],
+      });
+    });
+
+    it('prefers this job’s own delivery over the publication when both exist', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      await store.setSubmissionSlug(ISSUE, 'comet-courier');
+      await store.setSubmissionDeliveredVersion(ISSUE, 'v2');
+      await store.setPublication({
+        slug: 'comet-courier',
+        state: 'published',
+        currentVersion: 'v1',
+        publishedAt: '2026-07-01T00:00:00.000Z',
+      });
+      app = await createApp(store, {
+        gamesStore: storeWithVersion({ 'SPEC.md': '# Candidate v2' }),
+      });
+
+      const response = await app.inject({ method: 'GET', url: '/api/agent/build/sources', headers: agentHeaders() });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ delivery: { slug: 'comet-courier', version: 'v2' } });
+    });
+
+    it('does not restore a taken-down publication as if it were still live', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      await store.setSubmissionSlug(ISSUE, 'comet-courier');
+      await store.setPublication({
+        slug: 'comet-courier',
+        state: 'disabled',
+        currentVersion: 'v1',
+        publishedAt: '2026-07-01T00:00:00.000Z',
+        takedownAt: '2026-07-15T00:00:00.000Z',
+        takedownReason: 'withdrawn',
+      });
+      app = await createApp(store, {
+        gamesStore: storeWithVersion({ 'SPEC.md': '# Gone' }),
+      });
+
+      const response = await app.inject({ method: 'GET', url: '/api/agent/build/sources', headers: agentHeaders() });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ delivery: null, files: [] });
+    });
+
     it('refuses a version with holes rather than restoring a game missing files', async () => {
       // A manifest listing a file the bucket does not have is a broken version, not a
       // partial one — handing it back would have the agent "restore" a deletion it

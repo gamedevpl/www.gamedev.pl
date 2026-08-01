@@ -808,7 +808,7 @@ export async function registerAgentChannelRoutes(
   );
 
   /**
-   * Hands a build back its own last delivery.
+   * Hands a build back the sources it should continue from.
    *
    * The channel was upload-only, and that quietly made the agent's *branch* the real
    * home of a game: a follow-up session could only continue the work if it happened to
@@ -817,8 +817,14 @@ export async function registerAgentChannelRoutes(
    * The store already holds every delivered version, immutably; this is the read that
    * makes it the source of truth rather than a copy nobody can get back.
    *
+   * Prefer the job's own last delivery. When this job has not delivered yet but its
+   * slug is already published — the shape of every post-publish improvement, which is a
+   * *new* job on an existing game — fall back to the live publication. Without that,
+   * `npm run restore` reports nothing to restore and the agent rebuilds a stranger's
+   * game instead of revising the one the creator asked to change.
+   *
    * Scoped to the job's own game by the same token that authorizes its delivery, so a
-   * build can restore what it delivered and nothing else.
+   * build can restore what it (or its published predecessor) delivered and nothing else.
    */
   app.get(
     '/api/agent/build/sources',
@@ -831,16 +837,28 @@ export async function registerAgentChannelRoutes(
       if (!options.gamesStore) {
         return reply.status(503).send({ error: 'delivery is not configured on this deployment' });
       }
+
+      const slug = record.slug;
+      let version = record.deliveredVersion;
+      // An improvement job inherits the slug before it has delivered anything of its
+      // own. The publication pointer is what is live — the version the creator played.
+      if (slug && !version) {
+        const publication = await store!.getPublication(slug);
+        if (publication?.state === 'published') {
+          version = publication.currentVersion;
+        }
+      }
+
       // Nothing delivered yet is the ordinary state of a first build, not an error:
       // the agent starts from the repository, exactly as it does today.
-      if (!record.slug || !record.deliveredVersion) {
+      if (!slug || !version) {
         return reply.send({ delivery: null, files: [] });
       }
 
-      const manifest = await options.gamesStore.getManifest(record.slug, record.deliveredVersion);
+      const manifest = await options.gamesStore.getManifest(slug, version);
       if (!manifest) {
         request.log.error(
-          { slug: record.slug, version: record.deliveredVersion },
+          { slug, version },
           'delivered version has no manifest — the store lost a version a job still points at',
         );
         return reply.status(502).send({ error: 'the delivered version could not be read back' });
@@ -849,7 +867,7 @@ export async function registerAgentChannelRoutes(
       const files = await Promise.all(
         manifest.sourceFiles.map(async (path) => ({
           path,
-          content: await options.gamesStore!.getSourceFile(record.slug!, record.deliveredVersion!, path),
+          content: await options.gamesStore!.getSourceFile(slug, version, path),
         })),
       );
       // A manifest listing a file the bucket does not have is a broken version, not a
@@ -857,15 +875,12 @@ export async function registerAgentChannelRoutes(
       // deletion it never made.
       const missing = files.filter((file) => file.content === null).map((file) => file.path);
       if (missing.length > 0) {
-        request.log.error(
-          { slug: record.slug, version: record.deliveredVersion, missing },
-          'delivered version is missing files its manifest lists',
-        );
+        request.log.error({ slug, version, missing }, 'delivered version is missing files its manifest lists');
         return reply.status(502).send({ error: 'the delivered version could not be read back' });
       }
 
       return reply.send({
-        delivery: { slug: record.slug, version: record.deliveredVersion },
+        delivery: { slug, version },
         files,
       });
     },
