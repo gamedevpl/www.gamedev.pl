@@ -487,6 +487,7 @@
       "submit": "Wyślij uwagi",
       "sending": "Wysyłanie…",
       "sent": "Wysłano! Agent poprawi Twoją grę — obserwuj dziennik budowy powyżej.",
+      "dismissSent": "Zamknij",
       "routeSelfActive": "Twój agent odbierze to przy następnym odczycie skrzynki.",
       "routeSelfWaiting": "Zapisano — Twój agent dostanie to, gdy go uruchomisz.",
       "sentSelfActive": "Wysłano — Twój agent odbierze to przy następnym odczycie skrzynki.",
@@ -583,6 +584,7 @@
     "tryAgain": "Spróbuj z tym pomysłem jeszcze raz",
     "abandon": {
       "start": "Zatrzymaj tę grę",
+      "compact": "Zatrzymaj",
       "confirm": "Zatrzymać tworzenie tej gry?",
       "yes": "Tak, zatrzymaj",
       "no": "Twórz dalej",

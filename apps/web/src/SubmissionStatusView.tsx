@@ -74,6 +74,8 @@ const ACTIVE_BUILD_STATUSES = new Set<SubmissionStatus['status']>(['building', '
 /** Exported so tests advance timers by the real cadence instead of a magic number. */
 export const ACTIVE_POLL_MS = 3000;
 const IDLE_POLL_MS = 10000;
+/** How long the compact composer's "Sent!" receipt stays up before clearing itself. */
+export const SENT_RECEIPT_MS = 4500;
 
 function pollDelayMs(status: SubmissionStatus['status'], stall?: SubmissionStatus['stall']): number | null {
   // `needs_changes` is terminal for the *round*, not for the page: feedback from here
@@ -673,6 +675,13 @@ export function SubmissionStatusView({
                   {...(status.slug ? { slug: status.slug } : {})}
                   phase={t(`statusView.states.${status.status}.label`)}
                   heartbeatAt={heartbeatAt}
+                  active={
+                    status.status === 'queued' ||
+                    status.status === 'building' ||
+                    status.status === 'in_review' ||
+                    status.status === 'publishing'
+                  }
+                  {...(!TERMINAL_STATUSES.has(status.status) ? { stopToken: token } : {})}
                   {...(total > 0 ? { progress: { done, total } } : {})}
                   {...(playable ? { primary: playable } : {})}
                   {...(onPlaytest && playable
@@ -892,7 +901,7 @@ export function SubmissionStatusView({
  * mis-tap can't throw away an hour of agent work. Deliberately understated — it is
  * an escape hatch, not something to invite.
  */
-function AbandonControl({ token }: { token: string }) {
+function AbandonControl({ token, compact = false }: { token: string; compact?: boolean }) {
   const { t } = useTranslation();
   const [armed, setArmed] = useState(false);
   const [state, setState] = useState<'idle' | 'sending'>('idle');
@@ -917,24 +926,40 @@ function AbandonControl({ token }: { token: string }) {
 
   if (!armed) {
     return (
-      <button type="button" className="status-abandon" onClick={() => setArmed(true)}>
-        {t('statusView.abandon.start')}
+      <button
+        type="button"
+        className={compact ? 'studio-context-stop' : 'status-abandon'}
+        onClick={() => setArmed(true)}
+        title={t('statusView.abandon.start')}
+        aria-label={t('statusView.abandon.start')}
+      >
+        {compact ? (
+          <>
+            <PixelIcon name="close" size={11} /> {t('statusView.abandon.compact')}
+          </>
+        ) : (
+          t('statusView.abandon.start')
+        )}
       </button>
     );
   }
 
   return (
-    <span className="status-abandon-confirm">
-      {t('statusView.abandon.confirm')}
+    <span className={`status-abandon-confirm${compact ? ' is-compact' : ''}`}>
+      {compact ? null : t('statusView.abandon.confirm')}
       <button
         type="button"
-        className="status-abandon is-danger"
+        className={compact ? 'studio-context-stop is-danger' : 'status-abandon is-danger'}
         disabled={state === 'sending'}
         onClick={() => void abandon()}
       >
         {state === 'sending' ? t('statusView.abandon.sending') : t('statusView.abandon.yes')}
       </button>
-      <button type="button" className="status-abandon" onClick={() => setArmed(false)}>
+      <button
+        type="button"
+        className={compact ? 'studio-context-stop' : 'status-abandon'}
+        onClick={() => setArmed(false)}
+      >
         {t('statusView.abandon.no')}
       </button>
     </span>
@@ -1093,6 +1118,15 @@ function FeedbackPanel({
     setBuilder(initialBuilder);
   }, [initialBuilder, token]);
 
+  // A receipt is confirmation, not furniture: clear it on its own so the composer returns
+  // to one row. Typing also clears it (below); the timer covers the common case where the
+  // creator just watches the thread after send.
+  useEffect(() => {
+    if (state !== 'sent') return;
+    const timer = window.setTimeout(() => setState('idle'), SENT_RECEIPT_MS);
+    return () => window.clearTimeout(timer);
+  }, [state]);
+
   const trimmed = text.trim();
   // When choosing a builder for a new round, the selector is the truth; otherwise the
   // current round's builder drives the honest self-build routing note.
@@ -1221,6 +1255,23 @@ function FeedbackPanel({
       ? 'statusView.feedback.composerHintBuilding'
       : 'statusView.feedback.composerHint';
 
+  const sentReceipt = (floating: boolean) =>
+    state === 'sent' && !notice && !error ? (
+      <div className={`status-feedback-receipt${floating ? ' is-floating' : ''}`} role="status">
+        <span className="status-feedback-sent">
+          <PixelIcon name="check" size={13} /> {t(sentSelfKey ?? 'statusView.feedback.sent')}
+        </span>
+        <button
+          type="button"
+          className="status-feedback-receipt-dismiss"
+          onClick={() => setState('idle')}
+          aria-label={t('statusView.feedback.dismissSent')}
+        >
+          <PixelIcon name="close" size={11} />
+        </button>
+      </div>
+    ) : null;
+
   // Compact is the thread's composer: a field and a send, the way a reply box looks
   // everywhere else. The heading and the standing hint paragraph were page furniture —
   // fine on a page read once, noise under a conversation you come back to. What the hint
@@ -1275,13 +1326,10 @@ function FeedbackPanel({
             )}
           </button>
         </div>
-        {/* Only on screen when there is something to report — including "Sending…",
-            which the icon-only button cannot say on its own. An always-rendered row is
-            what made the composer two rows tall in its resting state. One slot, in the
-            order the four states rank: a failure to send outranks in-flight, which
-            outranks a message that was kept but started nothing, which outranks the
-            plain receipt. */}
-        {error || sending || notice || state === 'sent' ? (
+        {/* Failures, in-flight, and "kept but nothing started" still need a row — they
+            ask the creator to wait or act. The plain "Sent!" receipt does not: it floats
+            above the box so the composer stays one row tall, then clears itself. */}
+        {error || sending || notice ? (
           <div className="status-feedback-actions">
             {error ? (
               <p className="error">{error}</p>
@@ -1290,15 +1338,12 @@ function FeedbackPanel({
                 <span className="status-composer-send-spinner" aria-hidden="true" />
                 {t('statusView.feedback.sending')}
               </span>
-            ) : notice ? (
-              <p className="status-feedback-notice">{notice}</p>
             ) : (
-              <span className="status-feedback-sent">
-                <PixelIcon name="check" size={13} /> {t(sentSelfKey ?? 'statusView.feedback.sent')}
-              </span>
+              <p className="status-feedback-notice">{notice}</p>
             )}
           </div>
         ) : null}
+        {sentReceipt(true)}
       </div>
     );
   }
@@ -1332,11 +1377,7 @@ function FeedbackPanel({
         >
           {state === 'sending' ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
         </button>
-        {state === 'sent' && !notice ? (
-          <span className="status-feedback-sent">
-            <PixelIcon name="check" size={13} /> {t(sentSelfKey ?? 'statusView.feedback.sent')}
-          </span>
-        ) : null}
+        {sentReceipt(false)}
       </div>
       {error ? <p className="error">{error}</p> : null}
       {notice && !error ? <p className="status-feedback-notice">{notice}</p> : null}
@@ -1449,6 +1490,8 @@ function ThreadContextBar({
   progress,
   primary,
   secondary,
+  active = false,
+  stopToken,
 }: {
   slug?: string;
   phase: string;
@@ -1456,14 +1499,21 @@ function ThreadContextBar({
   progress?: { done: number; total: number };
   primary?: { label: string; onClick: () => void };
   secondary?: { label: string; onClick: () => void };
+  /** Agent is mid-build — show motion so "Writing code" does not read as stuck text. */
+  active?: boolean;
+  /** When set, offer a two-step stop control for the running build. */
+  stopToken?: string;
 }) {
   const { t } = useTranslation();
 
   return (
-    <div className="studio-thread-context">
+    <div className={`studio-thread-context${active ? ' is-active' : ''}`}>
       <span className="studio-context-state">
         {slug ? <code className="studio-slug">{slug}</code> : null}
-        <span className="studio-context-phase">{phase}</span>
+        <span className="studio-context-phase">
+          {active ? <span className="studio-context-phase-spinner" aria-hidden="true" /> : null}
+          {phase}
+        </span>
         {heartbeatAt !== null ? (
           <span className="studio-context-beat">
             <BuildHeartbeat at={heartbeatAt} />
@@ -1476,6 +1526,7 @@ function ThreadContextBar({
             {t('statusView.progress.checklistCount', { done: progress.done, total: progress.total })}
           </span>
         ) : null}
+        {stopToken ? <AbandonControl token={stopToken} compact /> : null}
         {secondary ? (
           <button type="button" className="secondary-btn status-playtest-cta" onClick={secondary.onClick}>
             <PixelIcon name="wrench" size={13} /> {secondary.label}

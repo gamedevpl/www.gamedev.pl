@@ -483,6 +483,7 @@
       "submit": "Send feedback",
       "sending": "Sending…",
       "sent": "Sent! The agent will revise your game — watch the build log above.",
+      "dismissSent": "Dismiss",
       "routeSelfActive": "Your agent picks this up on its next check-in.",
       "routeSelfWaiting": "Saved — your agent will get this when you start it.",
       "sentSelfActive": "Sent — your agent picks this up on its next check-in.",
@@ -579,6 +580,7 @@
     "tryAgain": "Try this idea again",
     "abandon": {
       "start": "Stop this build",
+      "compact": "Stop",
       "confirm": "Stop building this game?",
       "yes": "Yes, stop it",
       "no": "Keep building",
