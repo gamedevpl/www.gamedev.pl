@@ -48,6 +48,7 @@ function readLocationRoute(): AppRoute {
 import { submitSpec, refineSpec, type SubmissionApiError } from './submissionApi.js';
 import { useActiveBuildCount } from './activeBuilds.js';
 import { getSavedSpecs, saveSpec, type SavedSpec } from './mySpecs.js';
+import { saveLastBuilder, type BuilderKind } from './builderKind.js';
 import { clearPendingQa, loadPendingQa, savePendingQa, type PendingQaAnswers } from './pendingQa.js';
 import { useAuth } from './AuthContext.js';
 import { AuthModal } from './AuthModal.js';
@@ -118,6 +119,10 @@ export function App() {
   // recorded one — that mismatch with the live UI language is what triggers a
   // one-shot re-ask so English chips don't stick under a Polish chrome.
   const [qaLocale, setQaLocale] = useState<string>(restoredQa.current?.locale ?? '');
+  // Who builds this round — parked with the confirm session so a reload keeps it.
+  const [qaBuilder, setQaBuilder] = useState<BuilderKind>(restoredQa.current?.builder ?? 'platform');
+  const qaBuilderRef = useRef(qaBuilder);
+  qaBuilderRef.current = qaBuilder;
   // Bumped when questions are rewritten for a new language so CreatorQA remounts
   // with empty answers — English chip labels must not survive as "selected" under
   // Polish options that no longer match.
@@ -409,6 +414,7 @@ export function App() {
           questions,
           answers: newAnswers,
           locale: targetLocale,
+          builder: qaBuilderRef.current,
         });
         setQaFormKey((key) => key + 1);
       } catch {
@@ -541,14 +547,21 @@ export function App() {
     setPendingSpec(spec);
     setQaQuestions(questions);
     setQaLocale(locale);
+    setQaBuilder('platform');
     latestAnswersRef.current = { selected: {}, custom: {} };
-    savePendingQa({ spec, questions, answers: { selected: {}, custom: {} }, locale });
+    savePendingQa({
+      spec,
+      questions,
+      answers: { selected: {}, custom: {} },
+      locale,
+      builder: 'platform',
+    });
     setQaFormKey((key) => key + 1);
     setSubmissionStatus('idle');
   }
 
   // Actually creates the submission (after the QA gate) and jumps to its status page.
-  async function submitRefinedSpec(title: string, concept: string, displayName: string) {
+  async function submitRefinedSpec(title: string, concept: string, displayName: string, builder: BuilderKind) {
     setSubmissionStatus('loading');
     setSubmissionError(null);
 
@@ -560,6 +573,7 @@ export function App() {
         // The agent is told this, so its progress updates arrive already written in
         // the creator's language rather than machine-translated afterwards.
         locale: i18n.language,
+        builder,
       });
 
       // Save to localStorage
@@ -572,6 +586,7 @@ export function App() {
       });
       setSavedSpecs(updatedSpecs);
       setMyGamesRefreshKey((key) => key + 1);
+      saveLastBuilder(response.token, builder);
 
       setSubmissionStatus('idle');
       recordCreateStep('submission_created');
@@ -581,6 +596,7 @@ export function App() {
       setQaQuestions([]);
       setPendingSpec(null);
       setQaLocale('');
+      setQaBuilder('platform');
       clearPendingQa();
 
       // Straight to the game's own address. Older API builds answer without a slug, in
@@ -618,18 +634,19 @@ export function App() {
   // dropped the creator into blank space for however long the API took to create the
   // issue — they had just clicked a button and the page answered by deleting itself.
   // On failure it stays up with the error, so the answers survive a retry.
-  const handleQaComplete = async (finalConcept: string, title: string) => {
+  const handleQaComplete = async (finalConcept: string, title: string, builder: BuilderKind) => {
     const spec = pendingSpec;
     if (!spec) return;
     // The name the creator settled on, which is the step that gates the build.
     recordCreateStep('title_confirmed');
-    await submitRefinedSpec(title, finalConcept, spec.displayName);
+    await submitRefinedSpec(title, finalConcept, spec.displayName, builder);
   };
 
   const handleQaCancel = () => {
     setQaQuestions([]);
     setPendingSpec(null);
     setQaLocale('');
+    setQaBuilder('platform');
     clearPendingQa();
   };
 
@@ -639,9 +656,15 @@ export function App() {
     (answers: PendingQaAnswers) => {
       latestAnswersRef.current = answers;
       if (!pendingSpec) return;
-      savePendingQa({ spec: pendingSpec, questions: qaQuestions, answers, locale: qaLocale });
+      savePendingQa({
+        spec: pendingSpec,
+        questions: qaQuestions,
+        answers,
+        locale: qaLocale,
+        builder: qaBuilder,
+      });
     },
-    [pendingSpec, qaQuestions, qaLocale],
+    [pendingSpec, qaQuestions, qaLocale, qaBuilder],
   );
 
   // The name is parked with the answers, for the same reason: an edited title is work,
@@ -657,6 +680,22 @@ export function App() {
         questions: qaQuestions,
         answers: latestAnswersRef.current,
         locale: qaLocale,
+        builder: qaBuilder,
+      });
+    },
+    [pendingSpec, qaQuestions, qaLocale, qaBuilder],
+  );
+
+  const handleQaBuilderChange = useCallback(
+    (builder: BuilderKind) => {
+      setQaBuilder(builder);
+      if (!pendingSpec) return;
+      savePendingQa({
+        spec: pendingSpec,
+        questions: qaQuestions,
+        answers: latestAnswersRef.current,
+        locale: qaLocale,
+        builder,
       });
     },
     [pendingSpec, qaQuestions, qaLocale],
@@ -884,6 +923,8 @@ export function App() {
                   error={submissionError}
                   initialAnswers={latestAnswersRef.current}
                   onAnswersChange={handleQaAnswersChange}
+                  initialBuilder={qaBuilder}
+                  onBuilderChange={handleQaBuilderChange}
                 />
               </div>
             )}

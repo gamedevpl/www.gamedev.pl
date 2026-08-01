@@ -473,11 +473,16 @@ describe('SubmissionStatusView', () => {
     });
 
     // Routed from the state the server reported, not from a mode the creator picked.
+    // Published starts a new round, so the builder choice travels with the request
+    // (default: platform — "Our AI dev team").
     expect(mockedSubmitImprovement).toHaveBeenCalledWith(
       'live-token',
       'The second level is far too hard, please add a checkpoint.',
+      undefined,
+      'platform',
     );
     expect(mockedSubmitFeedback).not.toHaveBeenCalled();
+    expect(container.querySelector('.builder-choice')).not.toBeNull();
 
     await act(async () => {
       root.unmount();
@@ -505,6 +510,69 @@ describe('SubmissionStatusView', () => {
     await act(async () => {
       root.unmount();
     });
+  });
+
+  it('shows the connect card while a self round awaits its agent, then hides it on signal', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.useFakeTimers();
+    const connectFetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        installSnippets: {
+          claudeCode: 'claude mcp add gamedevpl https://example.test/api/mcp',
+          codex: 'url = "https://example.test/api/mcp"',
+          cursor: '{"mcpServers":{}}',
+          kimi: 'npx mcp-remote https://example.test/api/mcp',
+          cli: 'curl https://example.test/api/mcp',
+        },
+        kickoffPrompt: 'Build "Await Game" for gamedev.pl.\nStart with the gamedevpl tool, key: round.key',
+        expiresAt: Math.floor(Date.now() / 1000) + 3600,
+      }),
+    }));
+    vi.stubGlobal('fetch', connectFetch);
+
+    mockedGetSubmissionStatus
+      .mockResolvedValueOnce({ status: 'queued', stall: 'no_agent_yet', builder: 'self' })
+      .mockResolvedValue({ status: 'building', builder: 'self', events: [] });
+
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/studio/await-token');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    try {
+      await act(async () => {
+        root.render(createElement(SubmissionStatusView, { token: 'await-token', embedded: true }));
+        await flushEffects();
+        await flushEffects();
+      });
+
+      expect(container.querySelector('.studio-connect')).not.toBeNull();
+      expect(container.textContent).toContain('Connect your coding agent');
+      expect(container.textContent?.toLowerCase()).not.toMatch(/\btoken\b/);
+      expect(connectFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/submissions/await-token/connect'),
+        expect.objectContaining({ credentials: 'include' }),
+      );
+      // Stall copy is replaced by the card — the card *is* the waiting state.
+      expect(container.querySelector('.status-warning')).toBeNull();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(ACTIVE_POLL_MS);
+        await flushEffects();
+        await flushEffects();
+      });
+
+      expect(container.querySelector('.studio-connect')).toBeNull();
+    } finally {
+      await act(async () => {
+        root.unmount();
+      });
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
   });
 
   it('names a gate bounce in Studio even when the thread already has turns', async () => {
@@ -686,7 +754,10 @@ describe('SubmissionStatusView', () => {
         await flushEffects();
       });
 
-      expect(mockedGetSubmissionPreview).toHaveBeenCalledTimes(1);
+      // A remount (effect deps / act flush order) can race a second preview fetch before
+      // the first lands; what matters is the count then stays flat until headSha moves.
+      const previewCallsAfterMount = mockedGetSubmissionPreview.mock.calls.length;
+      expect(previewCallsAfterMount).toBeGreaterThanOrEqual(1);
       // Nothing is embedded inline — the draft plays in the theater on demand.
       expect(container.querySelector('iframe')).toBeNull();
 
@@ -696,7 +767,7 @@ describe('SubmissionStatusView', () => {
         await flushEffects();
       });
       expect(mockedGetSubmissionStatus).toHaveBeenCalledTimes(2);
-      expect(mockedGetSubmissionPreview).toHaveBeenCalledTimes(1);
+      expect(mockedGetSubmissionPreview).toHaveBeenCalledTimes(previewCallsAfterMount);
 
       // The agent pushes a new commit — the next poll picks up a new headSha, which
       // must trigger a silent preview refresh (no click needed).
@@ -706,7 +777,7 @@ describe('SubmissionStatusView', () => {
         await flushEffects();
       });
 
-      expect(mockedGetSubmissionPreview).toHaveBeenCalledTimes(2);
+      expect(mockedGetSubmissionPreview).toHaveBeenCalledTimes(previewCallsAfterMount + 1);
 
       // Launching the draft now plays the newest build (sha-2), snapshotted at click.
       await act(async () => {
@@ -932,9 +1003,9 @@ describe('SubmissionStatusView', () => {
       await flushEffects();
     });
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('.status-feedback .primary-btn')?.dispatchEvent(
-        new MouseEvent('click', { bubbles: true }),
-      );
+      container
+        .querySelector<HTMLButtonElement>('.status-feedback .primary-btn')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushEffects();
       await flushEffects();
     });

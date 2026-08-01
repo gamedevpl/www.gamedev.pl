@@ -4960,6 +4960,242 @@ body.player-open {
   }
 }
 
+/* Who builds this round — confirm screen and new-round composer. Two options, not a
+   settings dig; selection is a pressed state, matching the QA chip language. */
+.builder-choice {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.builder-choice-legend {
+  padding: 0;
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-heading, #fff);
+}
+
+.builder-choice-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.builder-choice-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--panel-border, #33383d);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.builder-choice-option:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--turquoise, #00e4ac) 55%, var(--panel-border, #33383d));
+}
+
+.builder-choice-option.is-selected {
+  border-color: var(--turquoise, #00e4ac);
+  background: color-mix(in srgb, var(--turquoise, #00e4ac) 10%, transparent);
+}
+
+.builder-choice-option:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.builder-choice-option-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text-heading, #fff);
+}
+
+.builder-choice-option-detail {
+  font-size: 0.8rem;
+  color: var(--muted, #94a3b8);
+  line-height: 1.35;
+}
+
+.builder-choice.is-compact .builder-choice-option {
+  padding: 10px 12px;
+}
+
+.builder-choice.is-compact .builder-choice-option-detail {
+  font-size: 0.75rem;
+}
+
+@media (max-width: 560px) {
+  .builder-choice-options {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Self-build connect steps in the Studio thread. Interaction container, not card chrome. */
+.studio-connect {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0 0 10px;
+  padding: 14px 0 4px;
+  border-top: 1px solid var(--panel-border, #33383d);
+}
+
+.studio-connect-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-heading, #fff);
+}
+
+.studio-connect-lead,
+.studio-connect-state,
+.studio-connect-skipped,
+.studio-connect-expiry {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted, #94a3b8);
+  line-height: 1.4;
+}
+
+.studio-connect-step {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.studio-connect-step-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.studio-connect-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-heading, #fff);
+  background: color-mix(in srgb, var(--turquoise, #00e4ac) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--turquoise, #00e4ac) 40%, transparent);
+}
+
+.studio-connect-step-title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-heading, #fff);
+}
+
+.studio-connect-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.studio-connect-tab {
+  cursor: pointer;
+  padding: 0.28rem 0.7rem;
+  font: inherit;
+  font-size: 0.8rem;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border, #33383d);
+  background: transparent;
+  color: inherit;
+}
+
+.studio-connect-tab:hover {
+  border-color: color-mix(in srgb, var(--turquoise, #00e4ac) 50%, var(--panel-border, #33383d));
+}
+
+.studio-connect-tab.is-active {
+  border-color: var(--turquoise, #00e4ac);
+  background: color-mix(in srgb, var(--turquoise, #00e4ac) 12%, transparent);
+}
+
+.studio-connect-snippet {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border, #33383d);
+  background: color-mix(in srgb, #000 35%, var(--panel-bg, #1d2123));
+  color: var(--text, #e2e8f0);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 10rem;
+  overflow: auto;
+}
+
+.studio-connect-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.studio-connect-skip {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--muted, #94a3b8);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.studio-connect-skip:hover {
+  color: var(--text, #e2e8f0);
+}
+
+.studio-connect-waiting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 0;
+  font-size: 0.85rem;
+  color: var(--muted, #94a3b8);
+}
+
+.studio-connect-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--turquoise, #00e4ac);
+  animation: studio-connect-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes studio-connect-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 /* Naming the game — the step the build waits on, so it leads the panel and is sized
    like a decision rather than like one more field among the clarifying questions. */
 .qa-name {

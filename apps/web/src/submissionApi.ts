@@ -117,7 +117,14 @@ export type SubmissionStatus = {
    * Why the build looks stuck, when it does. Closed vocabulary; the page renders its
    * own translated copy per value. Absent means progressing normally.
    */
-  stall?: 'awaiting_input' | 'not_dispatched' | 'quiet' | 'gate_not_started';
+  stall?: 'awaiting_input' | 'not_dispatched' | 'quiet' | 'gate_not_started' | 'no_agent_yet';
+  /**
+   * Who is building the current round, when the API reports it. Optional — older
+   * deploys omit it; the Studio then falls back to local last-used memory.
+   */
+  builder?: 'platform' | 'self';
+  /** Last builder used on this game (default for the next round), when reported. */
+  defaultBuilder?: 'platform' | 'self';
   /**
    * Why this build is asking the creator to act. Covers a dead agent round
    * (`task_failed`, …) and a gate bounce (`gate_red`) — both arrive as public
@@ -206,6 +213,8 @@ export async function submitSpec(input: {
   displayName?: string;
   /** Told to the agent, so it writes its progress updates in this language. */
   locale?: string;
+  /** Who builds this round — platform team (default) or the creator's own agent. */
+  builder?: 'platform' | 'self';
 }): Promise<{ token: string; slug?: string; statusUrl: string }> {
   const response = await fetch(`${API_BASE}/api/submissions`, {
     method: 'POST',
@@ -338,12 +347,17 @@ export async function submitFeedback(
   token: string,
   feedback: string,
   context?: FeedbackContext,
+  builder?: 'platform' | 'self',
 ): Promise<FeedbackResult> {
   const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/feedback`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ feedback, ...(context ? { context } : {}) }),
+    body: JSON.stringify({
+      feedback,
+      ...(context ? { context } : {}),
+      ...(builder ? { builder } : {}),
+    }),
   });
 
   if (!response.ok) {

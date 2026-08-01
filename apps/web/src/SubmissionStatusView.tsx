@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { BuilderChoice } from './BuilderChoice.js';
+import { defaultBuilderFor, isBuilderKind, saveLastBuilder, type BuilderKind } from './builderKind.js';
 import { GameTheater } from './GameTheater.js';
 import { PixelIcon, type PixelIconName } from './PixelIcon.js';
 import {
@@ -20,7 +22,29 @@ import {
 } from './submissionApi.js';
 import { statusPath, studioPath } from './router.js';
 import { formatRelativeTime } from './relativeTime.js';
+import { StudioConnectCard } from './StudioConnectCard.js';
 import { submitImprovement } from './studioApi.js';
+
+/** A self round waiting for the creator's agent — show the connect card, not stall copy. */
+function isAwaitingOwnAgent(status: SubmissionStatus | null | undefined): boolean {
+  return status?.stall === 'no_agent_yet';
+}
+
+/**
+ * Whether the next message opens a new round (builder can be chosen) rather than
+ * continuing the current one.
+ */
+function canChooseBuilder(status: SubmissionStatus | null | undefined): boolean {
+  if (!status) return false;
+  if (isAwaitingOwnAgent(status)) return false;
+  return status.status === 'published' || status.status === 'needs_changes' || Boolean(status.failure);
+}
+
+function resolveDefaultBuilder(token: string, status: SubmissionStatus | null | undefined): BuilderKind {
+  if (status?.defaultBuilder && isBuilderKind(status.defaultBuilder)) return status.defaultBuilder;
+  if (status?.builder && isBuilderKind(status.builder)) return status.builder;
+  return defaultBuilderFor(token);
+}
 
 const TERMINAL_STATUSES = new Set<SubmissionStatus['status']>(['published', 'needs_changes', 'abandoned']);
 /** Statuses that halt the linear timeline rather than sitting on a step of it. */
@@ -32,8 +56,10 @@ const ACTIVE_BUILD_STATUSES = new Set<SubmissionStatus['status']>(['building', '
 export const ACTIVE_POLL_MS = 3000;
 const IDLE_POLL_MS = 10000;
 
-function pollDelayMs(status: SubmissionStatus['status']): number | null {
+function pollDelayMs(status: SubmissionStatus['status'], stall?: SubmissionStatus['stall']): number | null {
   if (TERMINAL_STATUSES.has(status)) return null;
+  // Flip the connect card to live progress as soon as the agent signals.
+  if (stall === 'no_agent_yet') return ACTIVE_POLL_MS;
   return ACTIVE_BUILD_STATUSES.has(status) ? ACTIVE_POLL_MS : IDLE_POLL_MS;
 }
 
@@ -239,8 +265,8 @@ export function SubmissionStatusView({
       }
     };
 
-    const scheduleNext = (nextStatus: SubmissionStatus['status']) => {
-      const delay = pollDelayMs(nextStatus);
+    const scheduleNext = (next: Pick<SubmissionStatus, 'status' | 'stall'>) => {
+      const delay = pollDelayMs(next.status, next.stall);
       if (delay === null || cancelled) return;
       timeoutId = window.setTimeout(() => {
         void poll();
@@ -256,7 +282,7 @@ export function SubmissionStatusView({
         setLoading(false);
         setErrorMessage(null);
         setIsInvalidToken(false);
-        scheduleNext(nextStatus.status);
+        scheduleNext(nextStatus);
       } catch (err) {
         if (cancelled) return;
 
@@ -270,7 +296,7 @@ export function SubmissionStatusView({
 
         if (apiError.status !== 400) {
           // Transient failure (network blip, rate limit) — keep trying at the idle cadence.
-          scheduleNext('queued');
+          scheduleNext({ status: 'queued' });
         }
       }
     };
@@ -490,7 +516,9 @@ export function SubmissionStatusView({
                     `needs_changes` without a typed failure (legacy GitHub path) still
                     needs a sentence here — the thread's emptyLabel only shows when there
                     are no turns, which is exactly when a bounced build still has planning
-                    notes and used to look like nothing was wrong. */}
+                    notes and used to look like nothing was wrong.
+                    Self rounds waiting to connect get the connect card instead of stall
+                    copy — the card *is* the waiting state. */}
                 {status.failure ? (
                   <p className="status-warning">
                     <PixelIcon name="signal" size={13} />{' '}
@@ -500,7 +528,7 @@ export function SubmissionStatusView({
                   <p className="status-warning">
                     <PixelIcon name="signal" size={13} /> {t('statusView.states.needs_changes.description')}
                   </p>
-                ) : status.stall ? (
+                ) : isAwaitingOwnAgent(status) ? null : status.stall ? (
                   <p className="status-warning">
                     <PixelIcon name="signal" size={13} /> {t(`statusView.stall.${status.stall}`)}
                   </p>
@@ -508,6 +536,10 @@ export function SubmissionStatusView({
                   <p className="status-warning">
                     <PixelIcon name="signal" size={13} /> {t('statusView.checksFailed')}
                   </p>
+                ) : null}
+
+                {isAwaitingOwnAgent(status) ? (
+                  <StudioConnectCard key={`connect-${pendingRevisions.length}`} token={token} />
                 ) : null}
 
                 {previewError && !preview && !channelHtml ? <p className="error">{previewError}</p> : null}
@@ -538,6 +570,8 @@ export function SubmissionStatusView({
                     published={status.status === 'published'}
                     building={!preview && !channelHtml}
                     compact
+                    chooseBuilder={canChooseBuilder(status)}
+                    initialBuilder={resolveDefaultBuilder(token, status)}
                     onSent={(text) => setPendingRevisions((current) => [...current, { text, at: Date.now() }])}
                   />
                 ) : null}
@@ -610,10 +644,14 @@ export function SubmissionStatusView({
               <p className="status-warning">
                 <PixelIcon name="signal" size={13} /> {t(`statusView.failure.${failureCopyKey(status.failure.reason)}`)}
               </p>
-            ) : status.stall ? (
+            ) : isAwaitingOwnAgent(status) ? null : status.stall ? (
               <p className="status-warning">
                 <PixelIcon name="signal" size={13} /> {t(`statusView.stall.${status.stall}`)}
               </p>
+            ) : null}
+
+            {isAwaitingOwnAgent(status) ? (
+              <StudioConnectCard key={`connect-${pendingRevisions.length}`} token={token} />
             ) : null}
 
             {TERMINAL_STATUSES.has(status.status) && status.status !== 'published' && submittedConcept && onRetry ? (
@@ -690,6 +728,8 @@ export function SubmissionStatusView({
                 token={token}
                 published={status.status === 'published'}
                 building={!preview && !channelHtml}
+                chooseBuilder={canChooseBuilder(status)}
+                initialBuilder={resolveDefaultBuilder(token, status)}
                 onSent={(text) => setPendingRevisions((current) => [...current, { text, at: Date.now() }])}
               />
             ) : null}
@@ -873,6 +913,8 @@ function FeedbackPanel({
   published,
   building,
   compact = false,
+  chooseBuilder = false,
+  initialBuilder = 'platform',
   onSent,
 }: {
   token: string;
@@ -881,6 +923,9 @@ function FeedbackPanel({
   building: boolean;
   /** The thread's reply box rather than a page section — field and send, nothing else. */
   compact?: boolean;
+  /** Show builder choice — the next send opens a new round. */
+  chooseBuilder?: boolean;
+  initialBuilder?: BuilderKind;
   onSent: (text: string) => void;
 }) {
   const { t } = useTranslation();
@@ -893,7 +938,12 @@ function FeedbackPanel({
   // round. Without this the composer says "sent" and the thread then says nothing for
   // hours, which is exactly how an exhausted agent allowance reads as a hung game.
   const [notice, setNotice] = useState<string | null>(null);
+  const [builder, setBuilder] = useState<BuilderKind>(initialBuilder);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    setBuilder(initialBuilder);
+  }, [initialBuilder, token]);
 
   const trimmed = text.trim();
 
@@ -914,18 +964,28 @@ function FeedbackPanel({
     setError(null);
     setNotice(null);
     try {
+      const roundBuilder = chooseBuilder ? builder : undefined;
       // Same box, same act, different destination — decided here from the state the
       // server reported rather than by asking the creator which one they meant.
+      // Only pass builder when a new round is being chosen — keeps the 2-arg call
+      // shape for ordinary mid-round messages (and the tests that assert it).
       if (published) {
-        await submitImprovement(token, trimmed);
+        if (roundBuilder) {
+          await submitImprovement(token, trimmed, undefined, roundBuilder);
+        } else {
+          await submitImprovement(token, trimmed);
+        }
       } else {
-        const result = await submitFeedback(token, trimmed);
+        const result = roundBuilder
+          ? await submitFeedback(token, trimmed, undefined, roundBuilder)
+          : await submitFeedback(token, trimmed);
         if (result.roundStarted === false) {
           setNotice(
             result.reason === 'no_capacity' ? t('statusView.feedback.noCapacity') : t('statusView.feedback.notStarted'),
           );
         }
       }
+      if (roundBuilder) saveLastBuilder(token, roundBuilder);
       setState('sent');
       setText('');
       // Back to the CSS height rather than the height the sent message grew it to: an
@@ -979,6 +1039,9 @@ function FeedbackPanel({
   if (compact) {
     return (
       <div className="status-feedback status-composer is-compact">
+        {chooseBuilder ? (
+          <BuilderChoice value={builder} onChange={setBuilder} disabled={state === 'sending'} compact />
+        ) : null}
         {/* Field and send on one line. The button used to sit on a row of its own below
             the box, which cost a phone screen an entire line to say what an arrow beside
             the text says — and put the thing you tap furthest from the thing you typed.
@@ -1035,6 +1098,7 @@ function FeedbackPanel({
     <div className="status-feedback status-composer">
       <h3 className="status-feedback-title">{t(titleKey)}</h3>
       <p className="status-feedback-hint">{t(hintKey)}</p>
+      {chooseBuilder ? <BuilderChoice value={builder} onChange={setBuilder} disabled={state === 'sending'} /> : null}
       <textarea
         className="status-feedback-input"
         value={text}

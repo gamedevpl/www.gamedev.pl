@@ -443,4 +443,51 @@ describe('CreatorQA', () => {
 
     await act(async () => root.unmount());
   });
+
+  it('lets the creator choose a builder and passes it on submit', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    let submittedBuilder = '';
+    const onBuilderChange = vi.fn();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(CreatorQA, {
+          questions: [],
+          initialConcept: 'Dodge the falling rocks and survive as long as possible',
+          initialTitle: 'Rock Dodger',
+          initialBuilder: 'platform',
+          onBuilderChange,
+          onSubmitWithConcept: (_concept, _title, builder) => {
+            submittedBuilder = builder;
+          },
+        }),
+      );
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.builder-choice')).not.toBeNull();
+    const options = container.querySelectorAll<HTMLButtonElement>('.builder-choice-option');
+    expect(options[0].getAttribute('aria-checked')).toBe('true');
+
+    await act(async () => {
+      options[1].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+    expect(onBuilderChange).toHaveBeenCalledWith('self');
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('.btn-create-now')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+    expect(submittedBuilder).toBe('self');
+
+    await act(async () => root.unmount());
+  });
 });
