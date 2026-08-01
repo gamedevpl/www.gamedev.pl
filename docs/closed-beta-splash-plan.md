@@ -53,20 +53,22 @@ explicit click.
   operator telemetry panel beside Creating.
 - **Operator notify:** each new applicant fans out `operator.waitlist_joined` to
   every `ADMIN_UIDS` account (in-app bell + email + push, same posture as queue
-  alerts — no unsubscribe). Idempotent per uid. Deep link: `/admin/telemetry`.
+  alerts — no unsubscribe). Idempotent per uid. Deep link: `/admin/waitlist`.
+
 ## Store
 
 `Store` interface gains `upsertWaitlistEntry(entry)` (+ `InMemoryStore` and
 `FirestoreStore` implementations; Firestore collection `waitlist`, doc id =
-uid). No reads needed in-app for v1 — the owner reads the collection in the
-Firestore console.
+uid). Operator reads/writes go through `listWaitlistEntries` /
+`setWaitlistStatus` / `setWaitlistStatusByEmail` and the `/api/admin/waitlist`
+routes behind the console tab.
 
-## Promotion flow (v1 = deliberately manual)
+## Promotion flow
 
-Owner reads `waitlist` collection → adds chosen uid to `BETA_ALLOWED_UIDS`
-repo variable → redeploys (or asks Claude to). At beta scale this is fine.
-v2 (only if the list grows): store-backed allowlist — `waitlist/{uid}.status
-= 'approved'` consulted by the auth check, no redeploy per invite.
+Primary: operator console **`/admin/waitlist`** — approve / reject / pre-approve
+by email (Firestore `status: 'approved'`, no redeploy). Fallback: `npm run
+beta:approve` or the env allowlists (`BETA_ALLOWED_EMAILS` /
+`BETA_ALLOWED_UIDS`) when a script or agent needs to act without a browser.
 
 ## Tests
 
@@ -91,4 +93,9 @@ v2 (only if the list grows): store-backed allowlist — `waitlist/{uid}.status
 ## Explicitly not in v1
 
 - Email-form waitlist (unverified input, bots, moderation surface — no).
-- Admin UI for the waitlist; invite emails; counts on the splash page.
+- Invite emails from the console (CLI `beta:invite` remains); counts on the splash page.
+
+## Later addition
+
+- Admin UI for the waitlist shipped as the operator console **Waitlist** tab
+  (`/admin/waitlist`) — list, approve/reject/reset, pre-approve by email.

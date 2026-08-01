@@ -26,12 +26,14 @@ vi.mock('./CostsPanel.js', () => ({ CostsPanel: () => createElement('p', null, '
 vi.mock('./CreationLimitsPanel.js', () => ({ CreationLimitsPanel: () => createElement('p', null, 'limits-panel') }));
 vi.mock('./AccessTokensPanel.js', () => ({ AccessTokensPanel: () => createElement('p', null, 'tokens-panel') }));
 vi.mock('./SuggestionsPanel.js', () => ({ SuggestionsPanel: () => createElement('p', null, 'suggestions-panel') }));
+vi.mock('./WaitlistPanel.js', () => ({ WaitlistPanel: () => createElement('p', null, 'waitlist-panel') }));
 
 function summary(overrides: Partial<AdminSummary> = {}): AdminSummary {
   return {
     alerts: [],
     queue: { active: 2, stalled: 0, byState: { building: 2 } },
     limits: { paused: false, globalDailySubmissionCap: 50, todaySubmissions: 3 },
+    waitlist: { pending: 0 },
     ...overrides,
   };
 }
@@ -232,6 +234,22 @@ describe('AdminConsole', () => {
     });
 
     expect(onNavigate).toHaveBeenCalledWith('/admin/tokens');
+
+    await act(async () => root.unmount());
+  });
+
+  it('routes to the waitlist section and badges pending applicants', async () => {
+    mocked.fetchAdminSummary.mockResolvedValue(summary({ waitlist: { pending: 3 } }));
+
+    const { container, root } = await render('waitlist');
+
+    expect(container.textContent).toContain('waitlist-panel');
+    const waitlistTab = Array.from(container.querySelectorAll('.admin-tab')).find((tab) =>
+      tab.textContent?.startsWith('Waitlist'),
+    );
+    expect(waitlistTab?.classList.contains('is-active')).toBe(true);
+    expect(waitlistTab?.getAttribute('href')).toBe('/admin/waitlist');
+    expect(waitlistTab?.querySelector('.admin-tab-badge')?.textContent).toBe('3');
 
     await act(async () => root.unmount());
   });

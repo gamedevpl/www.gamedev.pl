@@ -1373,6 +1373,23 @@ export interface Store {
   isWaitlistApproved(uid: string, email?: string): Promise<boolean>;
   setWaitlistStatus(uid: string, status: WaitlistStatus): Promise<WaitlistEntry | null>;
   /**
+   * Operator listing of the closed-beta waitlist.
+   *
+   * Sorted newest-request first. When `status` is set, only that status is returned.
+   * Bounded by `limit` (default 200) so a growing list cannot ship the whole collection
+   * in one console poll — at closed-beta scale the cap is generous; past that the panel
+   * filters by status rather than paging.
+   */
+  listWaitlistEntries(opts?: { status?: WaitlistStatus; limit?: number }): Promise<WaitlistEntry[]>;
+  /** Cheap count for the console tab badge. Optional status filter. */
+  countWaitlistEntries(status?: WaitlistStatus): Promise<number>;
+  /**
+   * Approve / reject / reset by email — including pre-approval before the person has
+   * ever visited. Mirrors `npm run beta:approve`: finds an existing row by email, or
+   * creates `waitlist/email:<lower>` with the requested status.
+   */
+  setWaitlistStatusByEmail(email: string, status: WaitlistStatus): Promise<WaitlistEntry>;
+  /**
    * Idempotent by notification id: a second emit for the same id is a no-op and
    * returns `created: false` (a crashed/re-run sweep can safely re-emit).
    */
@@ -2349,6 +2366,44 @@ export class InMemoryStore implements Store {
     return { ...updated };
   }
 
+  async listWaitlistEntries(opts?: { status?: WaitlistStatus; limit?: number }): Promise<WaitlistEntry[]> {
+    const limit = opts?.limit ?? 200;
+    const rows = Array.from(this.waitlist.values()).filter(
+      (entry) => opts?.status === undefined || entry.status === opts.status,
+    );
+    rows.sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
+    return rows.slice(0, limit).map((entry) => ({ ...entry }));
+  }
+
+  async countWaitlistEntries(status?: WaitlistStatus): Promise<number> {
+    if (status === undefined) return this.waitlist.size;
+    let count = 0;
+    for (const entry of this.waitlist.values()) {
+      if (entry.status === status) count += 1;
+    }
+    return count;
+  }
+
+  async setWaitlistStatusByEmail(email: string, status: WaitlistStatus): Promise<WaitlistEntry> {
+    const emailLower = email.toLowerCase();
+    for (const entry of this.waitlist.values()) {
+      if (entry.email?.toLowerCase() === emailLower) {
+        const updated: WaitlistEntry = { ...entry, status };
+        this.waitlist.set(entry.uid, updated);
+        return { ...updated };
+      }
+    }
+    const now = new Date().toISOString();
+    const created: WaitlistEntry = {
+      uid: `email:${emailLower}`,
+      email: emailLower,
+      requestedAt: now,
+      status,
+    };
+    this.waitlist.set(created.uid, created);
+    return { ...created };
+  }
+
   async createNotification(
     uid: string,
     notification: Omit<StoredNotification, 'readAt' | 'emailedAt'> & { createdAt?: string },
@@ -2732,8 +2787,7 @@ export class InMemoryStore implements Store {
     if (record) this.accessTokens.set(tokenId, { ...record, lastUsedAt: at });
   }
 
-  // Test/inspection only — not part of the Store interface. Production code never
-  // reads the waitlist back (v1 promotion is manual, via the Firestore console).
+  // Test/inspection only — production reads go through `listWaitlistEntries`.
   waitlistEntries(): WaitlistEntry[] {
     return Array.from(this.waitlist.values());
   }
@@ -3684,6 +3738,46 @@ export class FirestoreStore implements Store {
     await docRef.update({ status });
     const updatedSnap = await docRef.get();
     return updatedSnap.data() as WaitlistEntry;
+  }
+
+  async listWaitlistEntries(opts?: { status?: WaitlistStatus; limit?: number }): Promise<WaitlistEntry[]> {
+    // Equality-only (no orderBy) so a status filter needs no composite index; sort and
+    // slice in memory. The waitlist stays small at closed-beta scale, and the same
+    // posture as `listAccessTokens` keeps an operator page from depending on a new
+    // index that only fails in production.
+    const limit = opts?.limit ?? 200;
+    const collection = this.db.collection('waitlist');
+    const snap =
+      opts?.status === undefined ? await collection.get() : await collection.where('status', '==', opts.status).get();
+    const rows = snap.docs.map((doc) => doc.data() as WaitlistEntry);
+    rows.sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
+    return rows.slice(0, limit);
+  }
+
+  async countWaitlistEntries(status?: WaitlistStatus): Promise<number> {
+    const collection = this.db.collection('waitlist');
+    const query = status === undefined ? collection : collection.where('status', '==', status);
+    const snap = await query.count().get();
+    return snap.data().count;
+  }
+
+  async setWaitlistStatusByEmail(email: string, status: WaitlistStatus): Promise<WaitlistEntry> {
+    const emailLower = email.toLowerCase();
+    const querySnap = await this.db.collection('waitlist').where('email', '==', emailLower).limit(1).get();
+    if (!querySnap.empty) {
+      const doc = querySnap.docs[0]!;
+      await doc.ref.update({ status });
+      return { ...(doc.data() as WaitlistEntry), status };
+    }
+    const now = new Date().toISOString();
+    const created: WaitlistEntry = {
+      uid: `email:${emailLower}`,
+      email: emailLower,
+      requestedAt: now,
+      status,
+    };
+    await this.db.collection('waitlist').doc(created.uid).set(stripUndefined(created));
+    return created;
   }
 
   private notificationRef(uid: string, id: string) {

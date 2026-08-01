@@ -254,6 +254,26 @@ describe('FirestoreStore.upsertWaitlistEntry', () => {
     const entry = await store.upsertWaitlistEntry({ uid: 'g:3', email: 'a@b.c' });
     expect(entry.status).toBe('approved');
   });
+
+  it('lists, counts, and pre-approves by email', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+
+    await store.upsertWaitlistEntry({ uid: 'g:1', email: 'one@example.com' });
+    await store.upsertWaitlistEntry({ uid: 'g:2', email: 'two@example.com' });
+    await store.setWaitlistStatus('g:2', 'approved');
+
+    expect(await store.countWaitlistEntries('pending')).toBe(1);
+    expect((await store.listWaitlistEntries({ status: 'pending' })).map((row) => row.uid)).toEqual(['g:1']);
+
+    const created = await store.setWaitlistStatusByEmail('New@Example.com', 'approved');
+    expect(created).toMatchObject({
+      uid: 'email:new@example.com',
+      email: 'new@example.com',
+      status: 'approved',
+    });
+    expect(await store.isWaitlistApproved('g:other', 'new@example.com')).toBe(true);
+  });
 });
 
 describe('FirestoreStore game saves', () => {

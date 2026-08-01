@@ -50,9 +50,23 @@ accounts sign in, which they cannot.
 
 ## Approving or Managing Participants
 
-### 1. Using the NPM Command (Recommended)
+### 1. Using the Operator Console (Recommended)
 
-Approve access dynamically in Firestore using the helper script in `apps/api`:
+Signed-in operators (`ADMIN_UIDS`) open **`/admin/waitlist`** — a tab on the
+operator console. From there you can:
+
+- list applicants (filter pending / approved / rejected / all);
+- approve, reject, or reset an existing row;
+- pre-approve by email before the person has visited (creates
+  `waitlist/email:<lower>` the same way the CLI does).
+
+Join notifications deep-link here. The same writes go through
+`GET|POST /api/admin/waitlist` (session-only admin, 404 to everyone else).
+
+### 2. Using the NPM Command (scripts / agents)
+
+Approve access dynamically in Firestore using the helper script in `apps/api`
+when you are not at a browser:
 
 ```bash
 # From repository root

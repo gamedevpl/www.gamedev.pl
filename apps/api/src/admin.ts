@@ -24,6 +24,7 @@ import {
   type TelemetryEvent,
   type User,
   type VisitEvent,
+  type WaitlistEntry,
 } from './store.js';
 
 /**
@@ -176,7 +177,40 @@ export interface AdminSummaryResponse {
   alerts: OperatorAlert[];
   queue: { active: number; stalled: number; byState: Partial<Record<JobState, number>> };
   limits: { paused: boolean; globalDailySubmissionCap: number; todaySubmissions: number };
+  /** Closed-beta applicants still waiting — drives the Waitlist tab badge. */
+  waitlist: { pending: number };
 }
+
+export interface WaitlistListResponse {
+  entries: WaitlistEntry[];
+}
+
+/** How many waitlist rows one console read may return. Matches the store default. */
+const MAX_WAITLIST_ENTRIES = 200;
+
+const WaitlistStatusSchema = z.enum(['pending', 'approved', 'rejected']);
+
+const WaitlistListQuerySchema = z.object({
+  status: WaitlistStatusSchema.optional(),
+});
+
+const WaitlistStatusBodySchema = z.object({
+  status: WaitlistStatusSchema,
+});
+
+const WaitlistPreapproveSchema = z.object({
+  email: z.string().trim().email('invalid email').max(254),
+  status: WaitlistStatusSchema.default('approved'),
+});
+
+const WaitlistUidParamsSchema = z.object({
+  // Same shape the auth layer mints (`g:` / `a:`) plus the `email:` pre-approve prefix
+  // the CLI and this surface use when the person has not signed in yet.
+  uid: z
+    .string()
+    .trim()
+    .regex(/^(?:g:|a:|email:)[^\s]+$/i, 'invalid uid'),
+});
 
 export function isAdmin(uid: string | undefined, adminUids: Set<string> | undefined): boolean {
   return uid !== undefined && adminUids !== undefined && adminUids.has(uid);
@@ -260,7 +294,11 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
       return reply.status(404).send({ error: 'not found' });
     }
 
-    const [records, limits] = await Promise.all([store.listActiveSubmissions(), readCreationLimits()]);
+    const [records, limits, pendingWaitlist] = await Promise.all([
+      store.listActiveSubmissions(),
+      readCreationLimits(),
+      store.countWaitlistEntries('pending'),
+    ]);
     const at = now();
     const queue = buildJobQueue(records, at);
     const body: AdminSummaryResponse = {
@@ -271,8 +309,79 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
         globalDailySubmissionCap: limits.effective.globalDailySubmissionCap,
         todaySubmissions: limits.today.submissions,
       },
+      waitlist: { pending: pendingWaitlist },
     };
     return reply.status(200).send(body);
+  });
+
+  /**
+   * Closed-beta waitlist — list, approve, reject, pre-approve.
+   *
+   * Until this existed the only verbs were `npm run beta:approve` and the Firestore
+   * console, which meant approving someone meant finding a laptop. The panel is the
+   * same store writes the CLI makes; the CLI stays as the fallback for agents and
+   * scripts (see `.claude/skills/managing-beta-participants/SKILL.md`).
+   */
+  app.get('/api/admin/waitlist', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) {
+      return reply.status(404).send({ error: 'not found' });
+    }
+
+    const parsed = WaitlistListQuerySchema.safeParse(request.query ?? {});
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid query' });
+    }
+
+    const entries = await store.listWaitlistEntries({
+      ...(parsed.data.status ? { status: parsed.data.status } : {}),
+      limit: MAX_WAITLIST_ENTRIES,
+    });
+    const body: WaitlistListResponse = { entries };
+    return reply.status(200).send(body);
+  });
+
+  app.post<{ Params: { uid: string } }>('/api/admin/waitlist/:uid', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) {
+      return reply.status(404).send({ error: 'not found' });
+    }
+
+    const params = WaitlistUidParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) {
+      return reply.status(400).send({ error: params.error.issues[0]?.message ?? 'invalid uid' });
+    }
+    const parsed = WaitlistStatusBodySchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
+    }
+
+    const entry = await store.setWaitlistStatus(params.data.uid, parsed.data.status);
+    if (!entry) {
+      return reply.status(404).send({ error: 'not found' });
+    }
+    app.log.info(
+      { uid: entry.uid, status: entry.status, by: request.user!.uid },
+      'waitlist status changed by operator',
+    );
+    return reply.status(200).send(entry);
+  });
+
+  /** Pre-approve (or reject) by email before the person has a uid row. */
+  app.post('/api/admin/waitlist', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) {
+      return reply.status(404).send({ error: 'not found' });
+    }
+
+    const parsed = WaitlistPreapproveSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
+    }
+
+    const entry = await store.setWaitlistStatusByEmail(parsed.data.email, parsed.data.status);
+    app.log.info(
+      { uid: entry.uid, email: entry.email, status: entry.status, by: request.user!.uid },
+      'waitlist status set by email by operator',
+    );
+    return reply.status(200).send(entry);
   });
 
   /**

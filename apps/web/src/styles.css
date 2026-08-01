@@ -9121,7 +9121,9 @@ body.player-open {
 }
 
 .admin-limits-controls,
-.admin-tokens-form {
+.admin-tokens-form,
+.admin-waitlist-filters,
+.admin-waitlist-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
@@ -9129,9 +9131,20 @@ body.player-open {
   margin: 0.75rem 0;
 }
 
+.admin-waitlist-filters {
+  align-items: center;
+}
+
+.admin-waitlist-actions {
+  margin: 0;
+  gap: 0.35rem;
+}
+
 .admin-limits-controls button,
 .admin-tokens-form button,
-.admin-tokens button {
+.admin-tokens button,
+.admin-waitlist-filters button,
+.admin-waitlist-actions button {
   cursor: pointer;
   padding: 0.3rem 0.7rem;
   font: inherit;
@@ -9142,9 +9155,16 @@ body.player-open {
   color: inherit;
 }
 
+.admin-waitlist-filters button.is-active {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  font-weight: 600;
+}
+
 .admin-limits-controls button:disabled,
 .admin-tokens-form button:disabled,
-.admin-tokens button:disabled {
+.admin-tokens button:disabled,
+.admin-waitlist-filters button:disabled,
+.admin-waitlist-actions button:disabled {
   opacity: 0.5;
   cursor: default;
 }
@@ -9194,6 +9214,38 @@ body.player-open {
 
 .admin-token-row.is-expired {
   opacity: 0.55;
+}
+
+.admin-waitlist-person {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 10rem;
+}
+
+.admin-waitlist-name {
+  font-weight: 600;
+}
+
+.admin-waitlist-email,
+.admin-waitlist-uid {
+  font-size: 0.75rem;
+  opacity: 0.7;
+  word-break: break-all;
+}
+
+.admin-waitlist-status {
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
+
+.admin-waitlist-status.is-approved {
+  color: var(--accent, #00e4ac);
+}
+
+.admin-waitlist-status.is-rejected {
+  color: var(--danger, #c0392b);
 }
 
 .admin-suggestion-class {

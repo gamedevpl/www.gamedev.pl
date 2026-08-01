@@ -554,7 +554,7 @@ describe('emitWaitlistJoined', () => {
     await store.upsertUser({ uid: 'g:boss', email: 'boss@example.com' });
   });
 
-  it('notifies every operator and links them to telemetry', async () => {
+  it('notifies every operator and links them to the waitlist panel', async () => {
     await store.upsertUser({ uid: 'g:second', email: 'second@example.com' });
 
     const { created } = await emitWaitlistJoined(
@@ -568,13 +568,13 @@ describe('emitWaitlistJoined', () => {
       id: 'op-waitlist-g:waiter',
       type: 'operator.waitlist_joined',
       titleKey: 'notifications.operator.waitlist_joined.title',
-      link: '/admin/telemetry',
+      link: '/admin/waitlist',
       params: { title: 'Waiter', email: 'waiter@example.com' },
     });
     expect(mailer.sent).toHaveLength(2);
     expect(mailer.sent[0].subject).toContain('waitlist');
     expect(mailer.sent[0].text).toContain('waiter@example.com');
-    expect(mailer.sent[0].text).toContain('/admin/telemetry');
+    expect(mailer.sent[0].text).toContain('/admin/waitlist');
     expect(mailer.sent[0].text).not.toContain('Job #');
   });
 

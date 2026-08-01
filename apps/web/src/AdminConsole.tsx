@@ -5,6 +5,7 @@ import { CostsPanel } from './CostsPanel.js';
 import { CreationLimitsPanel } from './CreationLimitsPanel.js';
 import { GameHealthView } from './GameHealthView.js';
 import { SuggestionsPanel } from './SuggestionsPanel.js';
+import { WaitlistPanel } from './WaitlistPanel.js';
 import { fetchAdminSummary, type AdminSummary, type OperatorAlert } from './adminApi.js';
 import { ADMIN_SECTIONS, adminPath, type AdminSection } from './router.js';
 
@@ -28,6 +29,7 @@ const SECTION_LABELS: Record<AdminSection, string> = {
   limits: 'Limits',
   tokens: 'Tokens',
   suggestions: 'Suggestions',
+  waitlist: 'Waitlist',
 };
 
 const ALERT_COPY: Record<OperatorAlert['kind'], string> = {
@@ -230,6 +232,11 @@ export function AdminConsole({ section, onNavigate }: { section: AdminSection; o
                 paused
               </span>
             ) : null}
+            {candidate === 'waitlist' && summary && summary.waitlist.pending > 0 ? (
+              <span className="admin-tab-badge" aria-label={`${summary.waitlist.pending} waiting for access`}>
+                {summary.waitlist.pending}
+              </span>
+            ) : null}
           </a>
         ))}
       </nav>
@@ -250,6 +257,7 @@ export function AdminConsole({ section, onNavigate }: { section: AdminSection; o
       {section === 'limits' && <CreationLimitsPanel onChanged={() => void load()} />}
       {section === 'tokens' && <AccessTokensPanel />}
       {section === 'suggestions' && <SuggestionsPanel />}
+      {section === 'waitlist' && <WaitlistPanel />}
     </section>
   );
 }
