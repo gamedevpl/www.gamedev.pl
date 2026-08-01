@@ -57,6 +57,12 @@ against the in-memory store. Testing the **deployed** site needs a personal acce
 (`Authorization: Bearer $GAMEDEV_ACCESS_TOKEN`) — there is no bypass route. Never commit
 that token. See [`docs/agent-access-tokens.md`](../docs/agent-access-tokens.md).
 
+To investigate the deployed infrastructure — logs, Cloud Run revisions, error rates — use
+`node infra/gcp-read.mjs` rather than `gcloud`, which is not installed in agent sandboxes.
+The credential behind it is read-only by construction (no writes, no Firestore, no secret
+payloads), so a 403 is a boundary rather than a bug; `node infra/gcp-read.mjs whoami` tells
+the two apart. See [`docs/agent-gcp-access.md`](../docs/agent-gcp-access.md).
+
 ## Before larger changes
 
 Read [`docs/roadmap.md`](../docs/roadmap.md) (what's done vs next). The risk register
