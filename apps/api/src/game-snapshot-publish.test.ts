@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { PNG } from 'pngjs';
+import { VARIANT_WIDTHS } from './image-variants.js';
 import { publishSnapshot } from './game-snapshot-publish.js';
 import type { GameSnapshotWriter, SnapshotGame, SnapshotMedia, SnapshotPointer } from './game-snapshot.js';
 import type { CatalogGameEntry, GameSources, GitHubClient } from './github-client.js';
@@ -64,9 +66,10 @@ function createWriterSpy() {
       order.push(`game:${game.slug}`);
       games.set(game.slug, game);
     },
-    async putMedia(_id, slug, filename, value) {
-      order.push(`media:${slug}/${filename}`);
-      media.set(`${slug}/${filename}`, value);
+    async putMedia(_id, slug, filename, value, width) {
+      const key = width === undefined ? `${slug}/${filename}` : `${slug}/w${width}/${filename}`;
+      order.push(`media:${key}`);
+      media.set(key, value);
     },
     async putPointer(value) {
       order.push('pointer');
@@ -268,5 +271,79 @@ describe('publishSnapshot failure handling', () => {
     expect(result.published).toBe(0);
     expect(spy.catalog).toEqual([]);
     expect(spy.pointer?.gameCount).toBe(0);
+  });
+});
+
+/**
+ * Size variants, baked once at publish rather than resized per request. The arcade
+ * shows the same screenshot at ~48 CSS px in the moment strip and a few hundred as a
+ * card poster; serving the original for both is why scrolling a sixty-game arcade was
+ * paying for 240 full-size decodes and requests.
+ */
+describe('publishSnapshot media variants', () => {
+  function pngOfWidth(width: number, height: number): Uint8Array {
+    const png = new PNG({ width, height });
+    for (let i = 0; i < png.data.length; i += 4) {
+      png.data[i] = i % 255;
+      png.data[i + 1] = 40;
+      png.data[i + 2] = 90;
+      png.data[i + 3] = 255;
+    }
+    return new Uint8Array(PNG.sync.write(png));
+  }
+
+  const withMedia = catalogEntry('bubble-pop', {
+    media: { screenshots: [{ name: 'opening', file: 'opening.png' }], video: 'gameplay.mp4' },
+  });
+
+  it('writes a downscaled copy of each screenshot alongside the original', async () => {
+    const { client } = createClientStub({
+      catalog: [withMedia],
+      mediaBySlug: { 'bubble-pop': pngOfWidth(1280, 720) },
+    });
+    const spy = createWriterSpy();
+
+    await publishSnapshot({ client, writer: spy.writer, ref, now: fixedNow });
+
+    expect(spy.media.has('bubble-pop/opening.png')).toBe(true);
+    for (const width of VARIANT_WIDTHS) {
+      const variant = spy.media.get(`bubble-pop/w${width}/opening.png`);
+      expect(variant, `w${width}`).toBeDefined();
+      expect(PNG.sync.read(variant!.body).width).toBe(width);
+      // The whole point: materially fewer bytes than the original.
+      expect(variant!.body.byteLength).toBeLessThan(spy.media.get('bubble-pop/opening.png')!.body.byteLength);
+    }
+  });
+
+  it('leaves video alone — variants are a screenshot idea', async () => {
+    const { client } = createClientStub({
+      catalog: [withMedia],
+      mediaBySlug: { 'bubble-pop': pngOfWidth(1280, 720) },
+    });
+    const spy = createWriterSpy();
+
+    await publishSnapshot({ client, writer: spy.writer, ref, now: fixedNow });
+
+    expect(spy.media.has('bubble-pop/gameplay.mp4')).toBe(true);
+    for (const width of VARIANT_WIDTHS) {
+      expect(spy.media.has(`bubble-pop/w${width}/gameplay.mp4`)).toBe(false);
+    }
+  });
+
+  // A screenshot smaller than the target, or bytes that are not a readable PNG, must
+  // not fail the bake: the media route falls back to the original, which is what every
+  // snapshot baked before variants existed contains.
+  it('publishes the game even when no variant can be produced', async () => {
+    const { client } = createClientStub({
+      catalog: [withMedia],
+      mediaBySlug: { 'bubble-pop': new Uint8Array([1, 2, 3]) },
+    });
+    const spy = createWriterSpy();
+
+    const result = await publishSnapshot({ client, writer: spy.writer, ref, now: fixedNow });
+
+    expect(result.published).toBe(1);
+    expect(spy.media.has('bubble-pop/opening.png')).toBe(true);
+    expect(spy.media.has('bubble-pop/w96/opening.png')).toBe(false);
   });
 });

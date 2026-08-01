@@ -75,6 +75,7 @@ import {
 } from './submission-status.js';
 import { InvalidTokenError, mintToken, verifyToken } from './submission-token.js';
 import { createTranslatorFromEnv, normalizeLocale, type Translator } from './translate.js';
+import { isVariantWidth } from './image-variants.js';
 import { logModerationRejection } from './moderation-metrics.js';
 
 const CreateSubmissionRequestSchema = z.object({
@@ -1494,9 +1495,17 @@ export async function registerSubmissionRoutes(
   async function readSnapshotMedia(
     slug: string,
     filename: string,
+    width?: number,
   ): Promise<{ body: Buffer; contentType: string } | null> {
     if (!snapshotReader) return null;
     try {
+      if (width !== undefined) {
+        // Fall back rather than 404: snapshots baked before variants existed have
+        // none, and a bake skips a variant it could not produce. Either way the
+        // original is the right answer, and it is what was served before this.
+        const variant = await snapshotReader.getMedia(slug, filename, width);
+        if (variant) return variant;
+      }
       return await snapshotReader.getMedia(slug, filename);
     } catch (error) {
       if (error instanceof SnapshotUnavailableError) throw error;
@@ -4075,6 +4084,12 @@ export async function registerSubmissionRoutes(
       return reply.status(404).send({ error: 'media not found' });
     }
 
+    // An allowlist, not a number: `?w=` naming an arbitrary size would be an invitation
+    // to fill the cache with one entry per width somebody felt like asking for. Anything
+    // else is ignored and the original is served, so a stale client cannot break.
+    const requestedWidth = Number((request.query as { w?: string } | undefined)?.w);
+    const variantWidth = isVariantWidth(requestedWidth) ? requestedWidth : undefined;
+
     const currentTime = now();
     if (isRateLimited(mediaByIp, request.ip, currentTime, maxMediaPerWindow, gamesRateLimitWindowMs)) {
       return reply.status(429).send({ error: 'too many game requests, please try again later' });
@@ -4082,7 +4097,7 @@ export async function registerSubmissionRoutes(
 
     // Serving from cache still respects the allowlist below on the first fetch;
     // a cached entry can only exist for a filename that already passed it.
-    const cacheKey = `${parsedParams.data.slug}/${parsedParams.data.filename}`;
+    const cacheKey = `${parsedParams.data.slug}/${variantWidth ?? 'full'}/${parsedParams.data.filename}`;
     const cachedMedia = mediaCache.get(cacheKey);
     if (cachedMedia && cachedMedia.expiresAt > currentTime) {
       return sendMedia(request, reply, cachedMedia);
@@ -4100,7 +4115,11 @@ export async function registerSubmissionRoutes(
       let body: Buffer | null = null;
       if (entry && allowedFiles.has(parsedParams.data.filename)) {
         if (snapshotReader) {
-          const snapshotMedia = await readSnapshotMedia(parsedParams.data.slug, parsedParams.data.filename);
+          const snapshotMedia = await readSnapshotMedia(
+            parsedParams.data.slug,
+            parsedParams.data.filename,
+            variantWidth,
+          );
           body = snapshotMedia?.body ?? null;
         } else {
           const media = await githubClient.getGameMedia(

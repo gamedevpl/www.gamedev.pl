@@ -87,8 +87,27 @@ function CatalogCard({
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
   const [isPreviewPinned, setIsPreviewPinned] = useState(false);
   const [videoArmed, setVideoArmed] = useState(false);
+  /**
+   * Whether the viewer has engaged with this card at all — pointer over it, keyboard
+   * focus on it, or the preview toggle pressed.
+   *
+   * Gates the moment strip. Four thumbnails per card is 240 extra elements and 240
+   * extra requests across a sixty-game arcade, and measurement says that count — not
+   * the pixels — is what the scroll pays for: serving the thumbnails at 96px instead
+   * of full size (a 40x cut in bytes) moved the hitch count by nothing at all while
+   * the strip was still built for every card. Taking the strip off the scroll path
+   * takes a full-page scroll from a median of 11.5 hitches to 0.5, which is the floor
+   * an arcade with no media at all measures.
+   *
+   * Nobody can pick a moment on a card going past at speed, so nothing is lost while
+   * scrolling. The cost is on touch, where the strip now waits for a tap rather than
+   * being there on arrival.
+   */
+  const [engaged, setEngaged] = useState(false);
   const selected = screenshots[selectedScreenshot] ?? screenshots[0];
-  const posterUrl = selected && inView ? catalogMediaUrl(entry.slug, selected.file) : undefined;
+  // 640 rather than the original: the card box is a few hundred CSS pixels, so this is
+  // roughly 2x what is drawn and a fraction of a full screenshot to decode.
+  const posterUrl = selected && inView ? catalogMediaUrl(entry.slug, selected.file, 640) : undefined;
   const hasVideo = Boolean(entry.media?.video);
   const videoUrl =
     hasVideo && inView && videoArmed && entry.media?.video ? catalogMediaUrl(entry.slug, entry.media.video) : null;
@@ -98,6 +117,9 @@ function CatalogCard({
     setVideoArmed(false);
     setIsPreviewPlaying(false);
     setIsPreviewPinned(false);
+    // Engagement resets with the rest: a scrolled-away card gives its strip's
+    // elements back, and coming around again costs one hover to re-reveal.
+    setEngaged(false);
   }, [inView]);
 
   useEffect(() => {
@@ -115,6 +137,9 @@ function CatalogCard({
   }, [videoUrl]);
 
   function armPreview() {
+    // Arming is engagement by definition: it happens on hover, focus or the
+    // toggle press, and any of those should also reveal the moment strip.
+    setEngaged(true);
     setVideoArmed(true);
     const video = videoRef.current;
     if (!video?.src) return;
@@ -166,14 +191,15 @@ function CatalogCard({
       <div
         ref={mediaRef}
         className="catalog-media"
-        tabIndex={hasVideo ? 0 : undefined}
-        onPointerEnter={
-          hasVideo
-            ? (event) => {
-                if (event.pointerType === 'mouse') armPreview();
-              }
-            : undefined
-        }
+        tabIndex={hasVideo || screenshots.length > 1 ? 0 : undefined}
+        // Engagement is tracked whether or not there is a video: a game with
+        // screenshots and no clip still has a moment strip to reveal, and gating that
+        // on `hasVideo` would leave those cards without one for good.
+        onPointerEnter={(event) => {
+          if (event.pointerType !== 'mouse') return;
+          setEngaged(true);
+          if (hasVideo) armPreview();
+        }}
         onPointerLeave={
           hasVideo
             ? (event) => {
@@ -181,13 +207,11 @@ function CatalogCard({
               }
             : undefined
         }
-        onFocus={
-          hasVideo
-            ? (event) => {
-                if (event.target === event.currentTarget) armPreview();
-              }
-            : undefined
-        }
+        onFocus={(event) => {
+          if (event.target !== event.currentTarget) return;
+          setEngaged(true);
+          if (hasVideo) armPreview();
+        }}
         onBlur={
           hasVideo
             ? (event) => {
@@ -284,7 +308,7 @@ function CatalogCard({
 
         <span className="genre-pill">{entry.genre}</span>
 
-        {inView && screenshots.length > 1 && (
+        {engaged && screenshots.length > 1 && (
           <div className="catalog-moments" aria-label={t('catalog.gameMoments', { title: entry.title })}>
             {screenshots.slice(0, 4).map((screenshot, index) => (
               <button
@@ -295,7 +319,7 @@ function CatalogCard({
                 aria-pressed={index === selectedScreenshot}
                 onClick={() => selectScreenshot(index)}
               >
-                <img src={catalogMediaUrl(entry.slug, screenshot.file)} alt="" loading="lazy" decoding="async" />
+                <img src={catalogMediaUrl(entry.slug, screenshot.file, 96)} alt="" loading="lazy" decoding="async" />
               </button>
             ))}
           </div>

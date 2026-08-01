@@ -70,9 +70,10 @@ function createSnapshotStub(params: {
   const getGame = vi.fn(async (slug: string) =>
     params.failWith ? fail<SnapshotGame | null>() : (params.games?.[slug] ?? null),
   );
-  const getMedia = vi.fn(async (slug: string, filename: string) => {
+  const getMedia = vi.fn(async (slug: string, filename: string, width?: number) => {
     if (params.failWith) return fail<{ body: Buffer; contentType: string } | null>();
-    const body = params.media?.[`${slug}/${filename}`];
+    const key = width === undefined ? `${slug}/${filename}` : `${slug}/w${width}/${filename}`;
+    const body = params.media?.[key];
     return body ? { body, contentType: 'image/png' } : null;
   });
   const reader: GameSnapshotReader = {
@@ -255,6 +256,92 @@ describe('gallery media', () => {
     expect(response.statusCode).toBe(200);
     expect(response.rawPayload.toString()).toBe('baked-bytes');
     expect(getGameMedia).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  /**
+   * Size variants. The arcade shows the same screenshot at ~48 CSS px in the moment
+   * strip and a few hundred as a card poster; serving the original for both put 240
+   * full-size decodes and requests on the scroll path of a sixty-game arcade.
+   */
+  it('serves the baked size variant when one is asked for', async () => {
+    const { githubClient } = createGithubStub([withMedia]);
+    const snapshot = createSnapshotStub({
+      catalog: [withMedia],
+      media: {
+        'bubble-pop/opening.png': Buffer.from('full-size'),
+        'bubble-pop/w96/opening.png': Buffer.from('thumb'),
+      },
+    });
+    const app = await createApp({ githubClient, snapshotReader: snapshot.reader });
+
+    const response = await app.inject({ method: 'GET', url: '/api/games/bubble-pop/media/opening.png?w=96' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.rawPayload.toString()).toBe('thumb');
+    await app.close();
+  });
+
+  // Snapshots baked before variants existed have none, and a bake skips a variant it
+  // could not produce. Either way the original is the right answer — a 404 here would
+  // blank the strip on every game published before this shipped.
+  it('falls back to the original when the variant was never baked', async () => {
+    const { githubClient } = createGithubStub([withMedia]);
+    const snapshot = createSnapshotStub({
+      catalog: [withMedia],
+      media: { 'bubble-pop/opening.png': Buffer.from('full-size') },
+    });
+    const app = await createApp({ githubClient, snapshotReader: snapshot.reader });
+
+    const response = await app.inject({ method: 'GET', url: '/api/games/bubble-pop/media/opening.png?w=96' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.rawPayload.toString()).toBe('full-size');
+    await app.close();
+  });
+
+  // An allowlist, not a number: an arbitrary `?w=` would be an invitation to fill the
+  // media cache with one entry per width anybody felt like naming.
+  it('ignores a width it does not bake and serves the original', async () => {
+    const { githubClient } = createGithubStub([withMedia]);
+    const snapshot = createSnapshotStub({
+      catalog: [withMedia],
+      media: {
+        'bubble-pop/opening.png': Buffer.from('full-size'),
+        'bubble-pop/w97/opening.png': Buffer.from('never-asked-for'),
+      },
+    });
+    const app = await createApp({ githubClient, snapshotReader: snapshot.reader });
+
+    for (const query of ['?w=97', '?w=abc', '?w=-96', '?w=']) {
+      const response = await app.inject({ method: 'GET', url: `/api/games/bubble-pop/media/opening.png${query}` });
+      expect(response.statusCode, query).toBe(200);
+      expect(response.rawPayload.toString(), query).toBe('full-size');
+    }
+    await app.close();
+  });
+
+  // The cache is keyed per variant, or the first width asked for would be handed to
+  // every other one until the entry expired.
+  it('does not serve one width from another width’s cache entry', async () => {
+    const { githubClient } = createGithubStub([withMedia]);
+    const snapshot = createSnapshotStub({
+      catalog: [withMedia],
+      media: {
+        'bubble-pop/opening.png': Buffer.from('full-size'),
+        'bubble-pop/w96/opening.png': Buffer.from('thumb'),
+        'bubble-pop/w640/opening.png': Buffer.from('poster'),
+      },
+    });
+    const app = await createApp({ githubClient, snapshotReader: snapshot.reader });
+
+    const thumb = await app.inject({ method: 'GET', url: '/api/games/bubble-pop/media/opening.png?w=96' });
+    const poster = await app.inject({ method: 'GET', url: '/api/games/bubble-pop/media/opening.png?w=640' });
+    const full = await app.inject({ method: 'GET', url: '/api/games/bubble-pop/media/opening.png' });
+
+    expect(thumb.rawPayload.toString()).toBe('thumb');
+    expect(poster.rawPayload.toString()).toBe('poster');
+    expect(full.rawPayload.toString()).toBe('full-size');
     await app.close();
   });
 
