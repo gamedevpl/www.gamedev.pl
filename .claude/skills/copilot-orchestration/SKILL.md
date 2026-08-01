@@ -73,7 +73,7 @@ For interactive/local scripting prefer it: auth is handled for you and no token 
 shell variable. Pass the POST body with `--input file.json` (not `-f` flags) so
 `create_pull_request` stays a real boolean.
 
-**Licensing.** Available on all *paid* Copilot plans; the agent-tasks API reached Pro/Pro+/Max
+**Licensing.** Available on all _paid_ Copilot plans; the agent-tasks API reached Pro/Pro+/Max
 in June 2026. The REST reference still carries a stale line restricting `POST` to
 Business/Enterprise — it is wrong; a personal paid plan works. No Enterprise seat needed.
 
@@ -107,7 +107,7 @@ Business/Enterprise — it is wrong; a personal paid plan works. No Enterprise s
   `{base_ref, head_ref}`; a `pull` entry carries `{id, global_id}`. Both appear only once the
   task has progressed — a freshly-created task returns `artifacts: []` and
   `session_count: 0`. Poll `GET .../tasks/{id}` rather than trusting the create response.
-- **There is no cancel/stop endpoint.** `cancelled` exists as a *state*, but the API is
+- **There is no cancel/stop endpoint.** `cancelled` exists as a _state_, but the API is
   create/list/get only; stopping is a UI action that ends the underlying Actions run. Plan for
   cooperative cancellation (tell the agent to stop through whatever channel it reads) plus
   discarding the output.
@@ -119,6 +119,74 @@ Business/Enterprise — it is wrong; a personal paid plan works. No Enterprise s
 heuristic below — use it whenever you have the task ID.
 
 **Timing observed**: a trivial one-file task went `queued` → `completed` in ≈4.5 minutes.
+
+### Dumping a session's generation log
+
+**Verified 2026-08-01.** There are two sources at different fidelities. **Reach for the task
+page first** — the Actions log is a fallback for when you want machine-readable timing rather
+than what the agent actually saw.
+
+`GET /agents/.../sessions/{id}/logs` does not exist on `api.github.com` (404); the endpoint
+the runner posts to is `https://api.individual.githubcopilot.com/agents/sessions/{id}/logs`,
+which wants a Copilot token, not a PAT. `gh api /copilot_internal/v2/token` did not yield one.
+
+#### The full transcript — the task page
+
+`https://github.com/<owner>/<repo>/tasks/<id>` has prose, full commands, complete stdout and
+real exit codes. ⚠️ **It is collapsed, and text-extraction tools miss it entirely.** Each step
+is a separate `aria-expanded="false"` button and there are no `<details>` elements, so
+`get_page_text` returns only the prompt and the file diff — it reads as "this task has no
+transcript at all", which is what led one session to wrongly conclude none existed. Expand
+first:
+
+```js
+document.querySelectorAll('button[aria-expanded="false"]').forEach((b) => b.click());
+```
+
+On a 136-turn session that took `document.body.innerText` from ~10 KB to **~200 KB**. It
+carries what the Actions log lacks: the step titles the agent wrote for itself ("Find where
+unknown music error comes from"), every untruncated command, **complete stdout**, and
+`<shellId: … completed with exit code N>` — the real pass/fail. Dump it to disk with a Blob
+download rather than reading 200 KB back through a tool result.
+
+Two traps: the browser extension **blocks returned slices containing long token-like strings**,
+so redact (`replace(/[A-Za-z0-9_-]{40,}/g,'[REDACTED]')`) before returning any text overlapping
+a prompt that carries a build token. And this page is the only copy — nothing on
+`api.github.com` serves it.
+
+#### The metadata transcript — the Actions run
+
+```bash
+gh api "repos/OWNER/REPO/actions/runs?created=YYYY-MM-DD" \
+  --jq '.workflow_runs[] | select(.name=="Running Copilot cloud agent") | "\(.id) \(.head_branch)"'
+gh api "repos/OWNER/REPO/actions/runs/RUN_ID/logs" > logs.zip && unzip -q logs.zip -d run-logs
+```
+
+Match the run by `head_branch` against the task's `artifacts[].data.head_ref`. `0_copilot.txt`
+holds the whole session: setup, the firewall rule dump, and — from the line
+`[cca-engine] Created new session <id>` onward — a turn-by-turn event stream:
+
+| event                                  | carries                                                                                    |
+| -------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `turn=N assistant.usage`               | model, cumulative `input=`, `output=` tokens for that turn                                 |
+| `turn=N assistant.message`             | **char count only**, plus the number of tool calls                                         |
+| `turn=N tool.execution_start`          | tool name, and for `bash` the command **truncated at ≈120 chars**                          |
+| `turn=N tool.execution_complete`       | `success=true` / `success=false` — ⚠️ means _bash launched_, not that the command exited 0 |
+| `turn=N user.message` / `session.idle` | prompt/turn boundaries                                                                     |
+| `PR:` / `Sent pr_summary`              | final title and description lengths                                                        |
+
+So the Actions log is a **metadata transcript, not a transcript**: the shape of the run, never
+the model's prose or the tool output. Use it when you want timing, token spend per turn, or a
+machine-readable tool sequence. Strip timestamps and ANSI, then filter:
+
+```bash
+sed -e 's/^[0-9T:.Z-]*Z //' -e 's/\x1b\[[0-9;]*m//g' run-logs/0_copilot.txt \
+  | grep -E '^\[cca-engine\] turn=' | grep -v checkQuota
+```
+
+Two things worth reading every time: `success=false` lines, and the
+`⚠️ Warning: I tried to connect to the following addresses, but was blocked by firewall rules`
+block near the end — headless-Chrome playtests routinely trip it.
 
 ### Two environment traps
 
@@ -135,7 +203,7 @@ heuristic below — use it whenever you have the task ID.
 
 ## The dispatch procedure
 
-*(The issue-assignment path. Still valid; prefer the Agent tasks API above for scripting.)*
+_(The issue-assignment path. Still valid; prefer the Agent tasks API above for scripting.)_
 
 ### 1. Write the issue like a spec
 
