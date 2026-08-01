@@ -829,12 +829,23 @@ export async function registerSubmissionRoutes(
         });
       }
       await recordSessionCost(input.issueNumber, result.ref, selected, input.log);
-      await store.recordJobTransition(input.issueNumber, {
-        to: 'dispatched',
-        at: new Date(now()).toISOString(),
-        by: 'system',
-        reason: `dispatched_to_${selected.name}`,
-      });
+      // Dispatch is fire-and-forget from create — a self agent can deliver (→ building /
+      // submitted) before this line runs. recordJobTransition does not refuse walk
+      // regressions, so an unconditional `dispatched` write would yank a submitted job
+      // back to agent-active and re-open the CP-1 double-close. Only advance when the
+      // walk still allows it; refs/cost above are already durable either way.
+      const latest = await store.getSubmission(input.issueNumber);
+      const from = latest?.state ?? 'queued';
+      if (canTransition(from, 'dispatched')) {
+        await store.recordJobTransition(input.issueNumber, {
+          to: 'dispatched',
+          at: new Date(now()).toISOString(),
+          by: 'system',
+          reason: `dispatched_to_${selected.name}`,
+        });
+      }
+      // else: agent already advanced past dispatch (e.g. delivered while we were still
+      // opening the round). Refs/cost above are durable; do not regress state.
       return true;
     } catch (error) {
       // A failed dispatch leaves the job `queued`, which is exactly what the operator

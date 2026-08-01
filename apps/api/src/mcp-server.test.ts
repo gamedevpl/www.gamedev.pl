@@ -646,4 +646,85 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(res.isError).toBe(true);
     expect(JSON.stringify(res.structured)).toMatch(/kitEngineRef/i);
   });
+
+  it('terminal receipt after deliver-without-progress: readable on all three transports', async () => {
+    // Full assembled-app sequence (not a hard-set generation delta): queued self job →
+    // MCP submit_sources with no report_progress → gate-green closes once → receipt.
+    const store = new InMemoryStore();
+    await seedJob(store);
+    await store.recordJobTransition(ISSUE, {
+      to: 'queued',
+      at: '2026-08-01T11:00:00.000Z',
+      by: 'creator',
+      reason: 'submitted',
+    });
+    await store.recordDispatch(ISSUE, { backend: 'self', ref: `self:${ISSUE}` });
+    expect((await store.getSubmission(ISSUE))?.state).toBe('queued');
+
+    const { gamesStore } = stubGamesStore({ green: true, ranAt: '2026-08-01T12:30:00.000Z' });
+    app = await createApp(store, gamesStore);
+    const sessionId = await initialize(app);
+    const originalKey = roundKey(1);
+
+    const started = await callTool(app, 'start', { key: originalKey }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const submitted = await callTool(
+      app,
+      'submit_sources',
+      {
+        sessionKey,
+        kitEngineRef: ENGINE,
+        files: MINIMAL_FILES.map((f) => ({ ...f, encoding: 'utf8' })),
+      },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(submitted.isError).toBe(false);
+    expect((await store.getSubmission(ISSUE))?.state).toBe('submitted');
+    expect((await store.getSubmission(ISSUE))?.roundGeneration).toBe(1);
+
+    await store.recordJobTransition(ISSUE, {
+      to: 'ready_for_review',
+      at: '2026-08-01T12:30:00.000Z',
+      by: 'gate',
+      reason: 'gate_green',
+    });
+    expect((await store.getSubmission(ISSUE))?.roundGeneration).toBe(2);
+
+    const viaSession = await callTool(app, 'get_gate_verdict', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(viaSession.isError).toBe(false);
+    expect(viaSession.structured).toMatchObject({
+      status: 'green',
+      deliveryId: 'v1',
+      access: 'terminal_receipt',
+    });
+
+    const viaBearer = await callTool(
+      app,
+      'get_gate_verdict',
+      {},
+      { 'mcp-session-id': sessionId, authorization: `Bearer ${originalKey}` },
+    );
+    expect(viaBearer.isError).toBe(false);
+    expect(viaBearer.structured).toMatchObject({ status: 'green', access: 'terminal_receipt' });
+
+    const viaHttp = await app.inject({
+      method: 'GET',
+      url: '/api/agent/build/gate',
+      headers: { authorization: `Bearer ${originalKey}` },
+    });
+    expect(viaHttp.statusCode).toBe(200);
+    expect(viaHttp.json()).toMatchObject({ status: 'green', deliveryId: 'v1', access: 'terminal_receipt' });
+
+    const write = await callTool(
+      app,
+      'report_progress',
+      { sessionKey, text: 'should not write' },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(write.isError).toBe(true);
+
+    const brief = await callTool(app, 'get_brief', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(brief.isError).toBe(true);
+  });
 });

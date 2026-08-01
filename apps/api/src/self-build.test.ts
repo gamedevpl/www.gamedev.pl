@@ -559,4 +559,110 @@ describe('self builder (BY-02)', () => {
     expect(response.statusCode).toBe(401);
     expect(response.json().error).toMatch(/fresh prompt/i);
   });
+
+  it('delivery with no prior progress lands submitted; reconciler does not double-close the round', async () => {
+    // CP-1 regression: submit_sources while still `queued` (racing background dispatch)
+    // used a stale local state for the `submitted` guard, left the job in `building`,
+    // and let self observe() close the round before the gate — generation jumped +2
+    // and the terminal-receipt window never matched.
+    let clock = Date.parse('2026-08-01T12:00:00.000Z');
+    const { gamesStore } = stubGamesStore();
+    const created = await createApp({
+      gamesStore,
+      now: () => clock,
+      internalAuthVerifier: { verify: async () => true },
+    });
+    app = created.app;
+    const { store } = created;
+
+    const issueNumber = 77;
+    await store.createSubmission(issueNumber, 'g:creator', 'No Progress Race');
+    await store.setSubmissionSlug(issueNumber, 'no-progress-race');
+    await store.setRoundBuilder(issueNumber, 'self');
+    await store.recordJobTransition(issueNumber, {
+      to: 'queued',
+      at: new Date(clock).toISOString(),
+      by: 'creator',
+      reason: 'submitted',
+    });
+    // Refs exist (dispatch recorded) but state is still queued — the live race shape.
+    await store.recordDispatch(issueNumber, { backend: 'self', ref: `self:${issueNumber}` });
+    expect((await store.getSubmission(issueNumber))?.state).toBe('queued');
+    const initialGen = (await store.getSubmission(issueNumber))!.roundGeneration ?? 1;
+
+    const delivery = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/sources',
+      headers: agentHeaders(issueNumber),
+      payload: { slug: 'no-progress-race', files: MINIMAL_FILES, kitEngineRef: KIT_REF },
+    });
+    expect(delivery.statusCode).toBe(200);
+    expect(delivery.json()).toMatchObject({ accepted: true });
+    expect((await store.getSubmission(issueNumber))?.state).toBe('submitted');
+    expect((await store.getSubmission(issueNumber))?.roundGeneration).toBe(initialGen);
+
+    // Past the observe quiet window — reconciler must not move a submitted self job.
+    clock += 3 * 60 * 1000;
+    const sweep = await app.inject({
+      method: 'POST',
+      url: '/api/internal/notify-sweep',
+      headers: { authorization: 'Bearer internal' },
+    });
+    expect(sweep.statusCode).toBe(200);
+    expect((await store.getSubmission(issueNumber))?.state).toBe('submitted');
+    expect((await store.getSubmission(issueNumber))?.roundGeneration).toBe(initialGen);
+
+    // Only the gate's own closing transition bumps generation — exactly +1.
+    await store.recordJobTransition(issueNumber, {
+      to: 'ready_for_review',
+      at: new Date(clock).toISOString(),
+      by: 'gate',
+      reason: 'gate_green',
+    });
+    expect((await store.getSubmission(issueNumber))?.roundGeneration).toBe(initialGen + 1);
+  });
+
+  it('late background dispatch does not regress a submitted self delivery', async () => {
+    // Codex P1: create fires dispatchBuild unawaited; if the agent delivers first,
+    // the late `to: 'dispatched'` write must not yank submitted → dispatched.
+    const { gamesStore } = stubGamesStore();
+    const created = await createApp({ gamesStore });
+    app = created.app;
+    const { store } = created;
+
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'Late Dispatch Race', concept: CONCEPT, builder: 'self' },
+    });
+    expect(submit.statusCode).toBe(200);
+    const slug = submit.json().slug as string;
+
+    let issueNumber = 0;
+    await vi.waitFor(async () => {
+      const record = (await store.listSubmissionsByOwner('g:creator'))[0];
+      expect(record?.builder).toBe('self');
+      issueNumber = record!.issueNumber;
+    });
+
+    // Deliver immediately — typically still queued while background dispatch runs.
+    const delivery = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/sources',
+      headers: agentHeaders(issueNumber),
+      payload: { slug, files: MINIMAL_FILES, kitEngineRef: KIT_REF },
+    });
+    expect(delivery.json()).toMatchObject({ accepted: true });
+    expect((await store.getSubmission(issueNumber))?.state).toBe('submitted');
+
+    // Wait until the fire-and-forget dispatch has recorded its ref (and attempted its
+    // state write). State must remain submitted — not regress to dispatched.
+    await vi.waitFor(async () => {
+      const record = await store.getSubmission(issueNumber);
+      expect(record?.dispatch?.backend).toBe('self');
+      expect(record?.dispatch?.refs?.length).toBeGreaterThan(0);
+    });
+    expect((await store.getSubmission(issueNumber))?.state).toBe('submitted');
+  });
 });
