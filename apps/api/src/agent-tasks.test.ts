@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createAgentTasksClient,
   creditsFromUsageAmount,
+  isAbortError,
   normalizeModel,
   parseAgentTask,
   resolveTaskBranch,
@@ -63,6 +64,14 @@ describe('creditsFromUsageAmount', () => {
     // Live reading from the 403-credit global-thermonuclear-strategy session.
     expect(creditsFromUsageAmount(403451775000)).toBe(403.45);
     expect(creditsFromUsageAmount(861100000000)).toBe(861.1);
+  });
+});
+
+describe('isAbortError', () => {
+  it('treats native TimeoutError the same as AbortError', () => {
+    expect(isAbortError(new DOMException('aborted', 'AbortError'))).toBe(true);
+    expect(isAbortError(new DOMException('timed out', 'TimeoutError'))).toBe(true);
+    expect(isAbortError(new Error('nope'))).toBe(false);
   });
 });
 
@@ -173,6 +182,46 @@ describe('startTask', () => {
       model: 'gpt-5.4',
       create_pull_request: true,
     });
+  });
+
+  it('bounds every call so a hung GitHub cannot strand a creator-facing dispatch', async () => {
+    // Feedback and improve await startTask. Without a ceiling, a quiet upstream left the
+    // studio send button disabled until the platform killed the HTTP request — which
+    // looked like nothing was happening at all.
+    const { impl, calls } = stubFetch(() => FRESH_TASK);
+    const client = createAgentTasksClient({ token: 't', repo: 'o/r', fetchImpl: impl, timeoutMs: 1_500 });
+
+    await client.startTask({
+      prompt: 'build it',
+      baseRef: 'main',
+      model: 'claude-sonnet-4.6',
+      createPullRequest: false,
+    });
+
+    expect(calls[0]?.init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('names a timeout as a 504 rather than a generic network failure', async () => {
+    const impl = (async (_url: string | URL | Request, init: RequestInit = {}) => {
+      // Match Node's native fetch: AbortSignal.timeout rejects with TimeoutError, not
+      // AbortError. Honouring only AbortError would leave real hangs unclassified.
+      await new Promise<never>((_resolve, reject) => {
+        const fail = () => reject(new DOMException('The operation was aborted due to timeout', 'TimeoutError'));
+        if (init.signal?.aborted) fail();
+        else init.signal?.addEventListener('abort', fail, { once: true });
+      });
+      return new Response('{}');
+    }) as unknown as typeof fetch;
+    const client = createAgentTasksClient({ token: 't', repo: 'o/r', fetchImpl: impl, timeoutMs: 20 });
+
+    await expect(
+      client.startTask({
+        prompt: 'build it',
+        baseRef: 'main',
+        model: 'claude-sonnet-4.6',
+        createPullRequest: false,
+      }),
+    ).rejects.toMatchObject({ name: 'AgentTasksError', status: 504 });
   });
 
   it('targets the repository-scoped endpoint with the pinned API version', async () => {

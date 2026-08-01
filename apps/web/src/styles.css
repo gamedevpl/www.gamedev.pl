@@ -4510,6 +4510,35 @@ body.player-open {
   border-radius: 50%;
 }
 
+/* In-flight: keep the teal so "disabled" does not read as "broken", and swap the
+   arrow for a spinner the eye can see without reading the title attribute. */
+.status-composer.is-compact.is-sending .status-composer-send {
+  opacity: 1;
+  cursor: progress;
+}
+
+.status-composer-send-spinner {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  animation: status-spin 0.8s linear infinite;
+}
+
+.status-feedback-sending {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.status-feedback-sending .status-composer-send-spinner {
+  border-color: rgba(148, 163, 184, 0.25);
+  border-top-color: var(--turquoise);
+}
+
 /* Square again where every button gets a 44px floor for fingers — with a fixed width and
    a floored height it would have come out an oval. */
 @media (max-width: 768px) {
