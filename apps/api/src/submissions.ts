@@ -843,12 +843,9 @@ export async function registerSubmissionRoutes(
           by: 'system',
           reason: `dispatched_to_${selected.name}`,
         });
-      } else {
-        input.log.info(
-          { issueNumber: input.issueNumber, from, backend: selected.name },
-          'skipping dispatched transition; job already past dispatch',
-        );
       }
+      // else: agent already advanced past dispatch (e.g. delivered while we were still
+      // opening the round). Refs/cost above are durable; do not regress state.
       return true;
     } catch (error) {
       // A failed dispatch leaves the job `queued`, which is exactly what the operator
