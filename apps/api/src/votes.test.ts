@@ -231,6 +231,32 @@ describe('vote routes', () => {
     expect(res.statusCode).toBe(404);
     await app.close();
   });
+
+  it('admits a store-published slug with no repo-catalog entry', async () => {
+    // No voteRoutes.publishedSlugs override: exercises the combined gate wired in app.ts
+    // (repo catalog is null under NODE_ENV=test; store publication must open the gate).
+    await store.setPublication({
+      slug: 'miniature-warfare-2d',
+      state: 'published',
+      currentVersion: 'v1',
+      publishedAt: '2026-07-01T00:00:00.000Z',
+    });
+    const app = await buildApp({ store, sessionSecret });
+
+    const get = await app.inject({ method: 'GET', url: '/api/games/miniature-warfare-2d/votes' });
+    expect(get.statusCode).toBe(200);
+    expect(get.json()).toEqual({ up: 0, down: 0, mine: null });
+
+    const post = await app.inject({
+      method: 'POST',
+      url: '/api/games/miniature-warfare-2d/vote',
+      headers: authHeaders('g:alice'),
+      payload: { value: 'up' },
+    });
+    expect(post.statusCode).toBe(200);
+    expect(post.json()).toEqual({ up: 1, down: 0, mine: 'up' });
+    await app.close();
+  });
 });
 
 describe('InMemoryStore votes', () => {

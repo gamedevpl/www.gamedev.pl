@@ -1,4 +1,5 @@
 import { createGitHubClient, type GitHubClient } from './github-client.js';
+import type { Store } from './store.js';
 
 /**
  * "Is this slug a published game?" — the gate on telemetry intake.
@@ -10,10 +11,15 @@ import { createGitHubClient, type GitHubClient } from './github-client.js';
  * at all — they predate the submission flow or were seeded. `publishedAt` marks
  * "this creator's build was merged and they were told", not "this game is playable".
  *
- * Catalog membership is the honest question, and it also does the job the old gate
- * was reaching for: a creator playtesting an unmerged draft is playing a branch
- * preview, which is not in the published catalog, so draft traffic still stays out
- * of the funnel — this time for a reason that holds.
+ * Catalog membership is the honest question for repo-published games, and it also
+ * does the job the old gate was reaching for: a creator playtesting an unmerged
+ * draft is playing a branch preview, which is not in the published catalog, so
+ * draft traffic still stays out of the funnel — this time for a reason that holds.
+ *
+ * Self-build games never enter that catalog: they land in the games-store bucket
+ * and are recorded via `store.getPublication(slug)`. `createCombinedPublishedSlugGate`
+ * OR's that path with the repo-catalog gate so votes, telemetry, and recommendations
+ * see the same published set the `/play` route already does.
  *
  * Cached with a generous TTL because building the catalog fans out into a dozen-plus
  * contents-API calls, and that fan-out has already caused one rate-limit outage
@@ -85,9 +91,7 @@ export function createPublishedSlugGate(options: PublishedSlugGateOptions): Publ
  * fixture/checkout catalog the browse surface serves — otherwise every vote and
  * play-telemetry flush would 404 against fixture slugs that are clearly published.
  */
-export async function createPublishedSlugGateFromEnv(
-  fetchImpl?: typeof fetch,
-): Promise<PublishedSlugGate | null> {
+export async function createPublishedSlugGateFromEnv(fetchImpl?: typeof fetch): Promise<PublishedSlugGate | null> {
   const token = process.env.GITHUB_TOKEN?.trim();
   const repo = process.env.GAMES_REPO?.trim();
   if (token && repo) {
@@ -102,4 +106,35 @@ export async function createPublishedSlugGateFromEnv(
   }
 
   return null;
+}
+
+export interface CombinedPublishedSlugGateOptions {
+  /** Repo-catalog gate; null/undefined when the games repo is not configured. */
+  repoGate?: PublishedSlugGate | null;
+  /** Publication registry — the authority for self-build (store-published) games. */
+  store: Pick<Store, 'getPublication'>;
+}
+
+/**
+ * OR of the repo-catalog gate and the store publication registry.
+ *
+ * Self-build games never appear in `catalog.json`; they are published via
+ * `store.setPublication({ state: 'published', ... })`. The `/play` route already
+ * checks that path first (`storePublishedGame` in submissions.ts). Votes, telemetry,
+ * and recommendations share one `PublishedSlugGate` built in app.ts — wrapping that
+ * single construction site here keeps those callers from drifting apart again.
+ *
+ * Cheap by construction: one `getPublication` read per miss on the repo gate, the
+ * same cost `/play` already pays. The repo gate keeps its own TTL cache untouched.
+ */
+export function createCombinedPublishedSlugGate(options: CombinedPublishedSlugGateOptions): PublishedSlugGate {
+  const { repoGate, store } = options;
+
+  return {
+    async isPublished(slug: string): Promise<boolean> {
+      if (repoGate && (await repoGate.isPublished(slug))) return true;
+      const publication = await store.getPublication(slug);
+      return publication?.state === 'published';
+    },
+  };
 }
