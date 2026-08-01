@@ -40,6 +40,7 @@ import {
   type JobTransition,
 } from './job-state.js';
 import { createSelfBuildBackend } from './self-build-backend.js';
+import { mintConnectPayload } from './self-build-connect.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
@@ -1928,6 +1929,10 @@ export async function registerSubmissionRoutes(
       // which since seeding is minutes rather than milliseconds, on every submission.
       const dispatchLog = request.log;
       const builder: BuilderKind = parsed.data.builder ?? 'platform';
+      // Persist before the response returns. Connect (and Studio) read `record.builder`
+      // immediately; if we only wrote it inside background dispatch, a fast /connect
+      // after submit saw platform and returned a permanent-looking 409 (Codex P2).
+      await store.setRoundBuilder(jobId, builder, { resetRoundBudget: false });
       void dispatchBuild({
         issueNumber: jobId,
         // The agent is told where to build rather than left to name the place itself.
@@ -2008,6 +2013,87 @@ export async function registerSubmissionRoutes(
       },
     });
   });
+
+  /**
+   * Everything a creator needs to connect their own coding agent to a self-build round.
+   *
+   * Creator-session auth, owner only. Valid only while the active round's builder is
+   * `self`. Install snippets configure the MCP URL alone; the round key rides the
+   * kickoff prompt (and regenerating mints a fresh key with a new signed `exp`).
+   * Pending, undelivered creator inbox lines are embedded under "also apply:" so a
+   * re-copy never drops queued feedback. See self-build-connect.ts for the templates.
+   */
+  app.get(
+    '/api/submissions/:id/connect',
+    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      if (!submissionTokenSecret) {
+        return reply.status(503).send({ error: 'submissions are not configured' });
+      }
+      if (!checkUserAccess(request, reply)) return;
+      if (!store) {
+        return reply.status(503).send({ error: 'submissions are not configured' });
+      }
+
+      const id = z.string().parse((request.params as { id?: string }).id);
+      let issueNumber: number;
+      try {
+        issueNumber = verifyToken(id, submissionTokenSecret);
+      } catch (error) {
+        if (error instanceof InvalidTokenError) {
+          return reply.status(400).send({ error: 'invalid submission token' });
+        }
+        throw error;
+      }
+
+      const record = await store.getSubmission(issueNumber);
+      // Same shape as share/abandon: missing and not-yours both 403 so existence is not
+      // confirmed to a stranger who holds (or forges) a status link.
+      if (!record || record.ownerUid !== request.user!.uid) {
+        return reply.status(403).send({ error: 'only the creator can connect a build' });
+      }
+
+      // Gate on the *active round's* builder field, not `builderOf` (which falls back to
+      // `defaultBuilder`). A legacy/platform round that once used self must not unlock
+      // connect just because defaultBuilder still says self.
+      const builder = record.builder ?? 'platform';
+      if (builder !== 'self' || !isActiveBuildRound(record)) {
+        return reply.status(409).send({
+          error: 'connect_unavailable',
+          reason: builder !== 'self' ? 'not_self_round' : 'inactive_round',
+          builder,
+        });
+      }
+
+      const roundGeneration = (await store.ensureRoundGeneration(issueNumber)) ?? 1;
+      // Re-read after ensureRoundGeneration: a closing transition can race between the
+      // first snapshot and minting. Without this we could mint generation N+1 for a
+      // round that just closed to ready_for_review (Codex P1) — channel auth only
+      // compares generations, and that state is not a stopReason.
+      const fresh = await store.getSubmission(issueNumber);
+      const freshBuilder = fresh?.builder ?? 'platform';
+      if (!fresh || freshBuilder !== 'self' || !isActiveBuildRound(fresh)) {
+        return reply.status(409).send({
+          error: 'connect_unavailable',
+          reason: freshBuilder !== 'self' ? 'not_self_round' : 'inactive_round',
+          builder: freshBuilder,
+        });
+      }
+      const activeGeneration = fresh.roundGeneration ?? roundGeneration;
+      const pendingMessages = await store.listPendingCreatorMessages(issueNumber);
+      const payload = mintConnectPayload({
+        jobId: issueNumber,
+        title: fresh.title,
+        roundGeneration: activeGeneration,
+        submissionTokenSecret,
+        appBaseUrl: notifyAppBaseUrl,
+        pendingMessages,
+        now: now(),
+      });
+      // Kickoff embeds a round key — never let intermediaries cache it.
+      return reply.header('Cache-Control', 'no-store').send(payload);
+    },
+  );
 
   /**
    * The creator decides whether anyone else may play their game before it is published.
