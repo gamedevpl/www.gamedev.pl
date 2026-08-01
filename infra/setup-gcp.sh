@@ -19,7 +19,7 @@ echo "==> 1/8 Enabling required GCP APIs"
 # on a fresh one — and without it step 8 fails after everything before it succeeded.
 gcloud services enable run.googleapis.com cloudbuild.googleapis.com \
   artifactregistry.googleapis.com secretmanager.googleapis.com firestore.googleapis.com \
-  aiplatform.googleapis.com storage.googleapis.com \
+  aiplatform.googleapis.com storage.googleapis.com iamcredentials.googleapis.com \
   --project "$PROJECT_ID"
 
 echo "==> 2/8 Provisioning Firestore (Native Mode) in ${REGION}"
