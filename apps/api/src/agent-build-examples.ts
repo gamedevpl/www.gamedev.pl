@@ -6,7 +6,10 @@
  * these slugs may have their sources exposed via the signed-tarball endpoint.
  */
 
-import allowlistJson from './agent-build-examples.json';
+// Import attribute required at runtime under Node ESM (tsc emit + Node 20).
+// Without `with { type: 'json' }` the production image dies on boot with
+// ERR_IMPORT_ASSERTION_TYPE_MISSING — CI's Production image job caught that.
+import allowlistJson from './agent-build-examples.json' with { type: 'json' };
 
 export interface AgentBuildExample {
   slug: string;

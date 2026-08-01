@@ -1880,9 +1880,11 @@ export async function registerSubmissionRoutes(
       await store.setSubmissionClarificationCount(jobId, countCreatorClarifications(parsed.data.concept));
       // Brief persistence for GET /api/agent/build/brief — split before sanitize so the
       // clarifications marker survives, then store the sanitized free-text as spec.
+      // Do not fall back to the full concept: that would re-merge QA bullets into `spec`
+      // when the free-text half sanitizes empty (clarifications-only submission).
       {
         const { spec: rawSpec, qa } = splitConceptBrief(parsed.data.concept);
-        const briefSpec = sanitizeCreatorText(rawSpec, { singleLine: false }) || sanitizedConcept;
+        const briefSpec = sanitizeCreatorText(rawSpec, { singleLine: false });
         await store.setSubmissionBrief(jobId, { spec: briefSpec, qa });
       }
       await store.recordJobTransition(jobId, {

@@ -24,6 +24,16 @@ describe('splitConceptBrief', () => {
       qa: ['Pace: arcade', 'Tone: cheerful'],
     });
   });
+
+  it('keeps spec empty when the concept is only a clarifications block', () => {
+    // Persisting the brief must not fall back to the full concept — that would put
+    // these bullets into both `spec` and `qa`.
+    const raw = ['## Creator clarifications', '- Pace: arcade', '- Tone: cheerful', ''].join('\n');
+    expect(splitConceptBrief(raw)).toEqual({
+      spec: '',
+      qa: ['Pace: arcade', 'Tone: cheerful'],
+    });
+  });
 });
 
 describe('brief helpers', () => {
