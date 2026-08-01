@@ -488,7 +488,6 @@ describe('SubmissionStatusView', () => {
       'The second level is far too hard, please add a checkpoint.',
       undefined,
       'platform',
-      expect.any(AbortSignal),
     );
     expect(mockedSubmitFeedback).not.toHaveBeenCalled();
     expect(container.querySelector('.builder-choice')).not.toBeNull();
@@ -1037,9 +1036,6 @@ describe('SubmissionStatusView', () => {
     expect(mockedSubmitFeedback).toHaveBeenCalledWith(
       'feedback-token',
       'Please make the car faster and add a boost pad.',
-      undefined,
-      undefined,
-      expect.any(AbortSignal),
     );
     expect(container.querySelector('.status-feedback-sent')).not.toBeNull();
 

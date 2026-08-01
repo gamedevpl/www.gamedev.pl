@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createAgentTasksClient,
   creditsFromUsageAmount,
+  isAbortError,
   normalizeModel,
   parseAgentTask,
   resolveTaskBranch,
@@ -63,6 +64,14 @@ describe('creditsFromUsageAmount', () => {
     // Live reading from the 403-credit global-thermonuclear-strategy session.
     expect(creditsFromUsageAmount(403451775000)).toBe(403.45);
     expect(creditsFromUsageAmount(861100000000)).toBe(861.1);
+  });
+});
+
+describe('isAbortError', () => {
+  it('treats native TimeoutError the same as AbortError', () => {
+    expect(isAbortError(new DOMException('aborted', 'AbortError'))).toBe(true);
+    expect(isAbortError(new DOMException('timed out', 'TimeoutError'))).toBe(true);
+    expect(isAbortError(new Error('nope'))).toBe(false);
   });
 });
 
@@ -194,9 +203,10 @@ describe('startTask', () => {
 
   it('names a timeout as a 504 rather than a generic network failure', async () => {
     const impl = (async (_url: string | URL | Request, init: RequestInit = {}) => {
-      // Honour the client's abort so the test does not hang when the signal fires.
+      // Match Node's native fetch: AbortSignal.timeout rejects with TimeoutError, not
+      // AbortError. Honouring only AbortError would leave real hangs unclassified.
       await new Promise<never>((_resolve, reject) => {
-        const fail = () => reject(new DOMException('The operation was aborted.', 'AbortError'));
+        const fail = () => reject(new DOMException('The operation was aborted due to timeout', 'TimeoutError'));
         if (init.signal?.aborted) fail();
         else init.signal?.addEventListener('abort', fail, { once: true });
       });

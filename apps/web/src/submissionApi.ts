@@ -348,7 +348,6 @@ export async function submitFeedback(
   feedback: string,
   context?: FeedbackContext,
   builder?: 'platform' | 'self',
-  signal?: AbortSignal,
 ): Promise<FeedbackResult> {
   const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/feedback`, {
     method: 'POST',
@@ -359,7 +358,6 @@ export async function submitFeedback(
       ...(context ? { context } : {}),
       ...(builder ? { builder } : {}),
     }),
-    ...(signal ? { signal } : {}),
   });
 
   if (!response.ok) {

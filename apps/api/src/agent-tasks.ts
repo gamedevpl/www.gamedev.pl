@@ -297,11 +297,15 @@ function resolveTimeoutMs(explicit: number | undefined): number {
   return DEFAULT_AGENT_TASKS_TIMEOUT_MS;
 }
 
-function isAbortError(error: unknown): boolean {
-  return (
-    (error instanceof Error && error.name === 'AbortError') ||
-    (typeof DOMException !== 'undefined' && error instanceof DOMException && error.name === 'AbortError')
-  );
+/**
+ * Native `fetch` + `AbortSignal.timeout` rejects with `TimeoutError` (a DOMException);
+ * a manual `AbortController.abort()` rejects with `AbortError`. Both mean the call did
+ * not finish in time, and both must become the same 504 — otherwise a real hang escapes
+ * as an unclassified network failure while only the manual-abort test path looks green.
+ */
+export function isAbortError(error: unknown): boolean {
+  const name = error instanceof Error ? error.name : undefined;
+  return name === 'AbortError' || name === 'TimeoutError';
 }
 
 export function createAgentTasksClient(options: AgentTasksClientOptions): AgentTasksClient {

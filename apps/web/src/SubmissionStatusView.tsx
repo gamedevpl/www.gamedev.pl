@@ -74,8 +74,6 @@ const ACTIVE_BUILD_STATUSES = new Set<SubmissionStatus['status']>(['building', '
 /** Exported so tests advance timers by the real cadence instead of a magic number. */
 export const ACTIVE_POLL_MS = 3000;
 const IDLE_POLL_MS = 10000;
-/** Client ceiling on feedback/improve — matches the server's agent-tasks budget with slack. */
-const FEEDBACK_SEND_TIMEOUT_MS = 35_000;
 
 function pollDelayMs(status: SubmissionStatus['status'], stall?: SubmissionStatus['stall']): number | null {
   // `needs_changes` is terminal for the *round*, not for the page: feedback from here
@@ -1079,12 +1077,11 @@ function FeedbackPanel({
     setState('sending');
     setError(null);
     setNotice(null);
-    // Dispatch awaits the agent-tasks API on the server. A hung upstream used to leave
-    // this button disabled with no other signal until the browser or Cloud Run gave up —
-    // so the client also holds a ceiling, and shows a clear "Sending…" state while it
-    // waits (the compact composer is icon-only and otherwise looks merely greyed out).
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), FEEDBACK_SEND_TIMEOUT_MS);
+    // Show "Sending…" for the whole HTTP round trip. Do **not** abort the fetch from
+    // the browser: aborting does not cancel the Fastify handler, so a timed-out UI that
+    // re-enabled Send could dispatch a second improve/feedback while the first was still
+    // finishing (double job, double quota, round token invalidated). The agent-tasks
+    // client bounds the server call; this button stays disabled until that answer lands.
     try {
       const roundBuilder = chooseBuilder ? builder : undefined;
       // Same box, same act, different destination — decided here from the state the
@@ -1092,11 +1089,15 @@ function FeedbackPanel({
       // Only pass builder when a new round is being chosen — keeps the 2-arg call
       // shape for ordinary mid-round messages (and the tests that assert it).
       if (published) {
-        // Builder (BYOCA) stays optional; the abort signal always travels so a hung
-        // dispatch cannot leave the compact send disabled with no recovery.
-        await submitImprovement(token, trimmed, undefined, roundBuilder, controller.signal);
+        if (roundBuilder) {
+          await submitImprovement(token, trimmed, undefined, roundBuilder);
+        } else {
+          await submitImprovement(token, trimmed);
+        }
       } else {
-        const result = await submitFeedback(token, trimmed, undefined, roundBuilder, controller.signal);
+        const result = roundBuilder
+          ? await submitFeedback(token, trimmed, undefined, roundBuilder)
+          : await submitFeedback(token, trimmed);
         if (result.roundStarted === false) {
           setNotice(
             result.reason === 'no_capacity' ? t('statusView.feedback.noCapacity') : t('statusView.feedback.notStarted'),
@@ -1127,8 +1128,6 @@ function FeedbackPanel({
         setError(t('statusView.feedback.error'));
       }
       setState('idle');
-    } finally {
-      window.clearTimeout(timeoutId);
     }
   };
 
