@@ -148,10 +148,12 @@ export interface SubmissionStatusResponseBase {
   phase?: JobState;
   slug?: string;
   /**
-   * Present when the creator can load a Studio draft via `/api/submissions/:token/preview`.
-   * Set for an open PR (slug on that branch) and for a native/self-build job once a
-   * candidate version has been delivered — the gate's `bundle.html` / `preview.html`
-   * is what that route serves. Absent before the first delivery.
+   * Signal to attempt/poll Studio draft loading via `/api/submissions/:token/preview`.
+   * Set for an open PR (slug on that branch) and for a native/self-build job once the
+   * gate has stored `bundle.html` or `preview.html` for the delivered version.
+   * Presence means "try loading," not a guarantee the route returns 200 on the same
+   * tick — a brief 409 (`no preview available…`) can still land if the artifact was
+   * just written or the store is catching up. Absent before the first storable draft.
    */
   preview?: { slug: string };
   /**

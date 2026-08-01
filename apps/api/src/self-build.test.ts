@@ -738,10 +738,11 @@ describe('self-build Studio preview (BY-14c)', () => {
     return { store, token, slug, issueNumber, version };
   }
 
-  it('advertises preview.slug on status once a self-build version is delivered', async () => {
+  it('advertises preview.slug on status once a gate artifact exists for the delivery', async () => {
     // The regression: nativeJobStatus returned top-level slug but never preview.slug,
     // so SubmissionStatusView never called getSubmissionPreview and the Play control
-    // stayed dark even after gate green.
+    // stayed dark even after gate green. Artifact presence (not deliveredVersion alone)
+    // is the readiness signal — see the delivered-without-artifact case below.
     const { token, slug } = await deliverSelfBuild(
       'bundle.html',
       '<!doctype html><title>Studio Play</title><canvas></canvas>',
@@ -823,6 +824,49 @@ describe('self-build Studio preview (BY-14c)', () => {
       url: `/api/submissions/${token}`,
       headers: authHeaders(),
     });
+    expect(status.json().preview).toBeUndefined();
+  });
+
+  it('does not advertise preview after delivery until a gate artifact exists', async () => {
+    // deliveredVersion alone is the pre-artifact window: Studio must not see
+    // preview.slug yet, or a 409 would stick until headSha changes.
+    const { gamesStore } = stubGamesStore();
+    const created = await createApp({ gamesStore });
+    app = created.app;
+
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'Awaiting Gate', concept: CONCEPT, builder: 'self' },
+    });
+    expect(submit.statusCode).toBe(200);
+    const slug = submit.json().slug as string;
+    const token = submit.json().token as string;
+
+    let issueNumber = 0;
+    await vi.waitFor(async () => {
+      const record = (await created.store.listSubmissionsByOwner('g:creator'))[0];
+      expect(record?.builder).toBe('self');
+      issueNumber = record!.issueNumber;
+    });
+
+    const delivery = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/sources',
+      headers: agentHeaders(issueNumber),
+      payload: { slug, files: MINIMAL_FILES, kitEngineRef: KIT_REF },
+    });
+    expect(delivery.json()).toMatchObject({ accepted: true });
+    expect((await created.store.getSubmission(issueNumber))!.deliveredVersion).toBeTruthy();
+
+    const status = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${token}`,
+      headers: authHeaders(),
+    });
+    expect(status.statusCode).toBe(200);
+    expect(status.json()).toMatchObject({ builder: 'self', slug });
     expect(status.json().preview).toBeUndefined();
   });
 });
