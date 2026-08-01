@@ -2006,7 +2006,7 @@ export async function registerSubmissionRoutes(
         issueNumber = verifyToken(id, submissionTokenSecret);
       } catch (error) {
         if (error instanceof InvalidTokenError) {
-          return reply.status(400).send({ error: 'invalid submission' });
+          return reply.status(400).send({ error: 'invalid submission token' });
         }
         throw error;
       }
