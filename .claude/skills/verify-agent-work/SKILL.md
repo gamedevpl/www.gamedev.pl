@@ -120,6 +120,26 @@ Two concrete instances of that (observed 2026-07-23):
   in a single coverage pass). Also: a "solid" fill derived separately from the punched
   silhouette can leave pinholes inside the mouth/eyes; derive solid from idle + enclosed
   holes, and test that solid covers every idle pixel and leaves only intentional holes.
+- **A green unit suite can hide a live-only double-transition that a "one-behind"
+  window depends on.** Observed (BYOCA CP-1, 2026-08-01): the MCP terminal-receipt
+  grant (`get_gate_verdict` readable when the caller's generation is _exactly one
+  behind_ current) passed unit tests that set the generation delta by hand — but on the
+  real deployed self-build path it was unreachable, always `401 this build is finished`.
+  Root cause was a race the unit tests never assembled: an agent that goes straight
+  `start → submit_sources` (no intervening `report_progress`) leaves the in-memory
+  `record.state` stale, so the delivery's protective `submitted` transition
+  (`canTransition(staleState,'submitted')`) is skipped; the round stays `building`, and
+  the self backend's `observe()→completed` closes it (`ready_for_review`, generation +1)
+  _in parallel with_ the gate verdict closing it again (+1). Net generation is two
+  behind, so a window that only admits one-behind can never match. Lessons: (1) when a
+  capability's validity is a narrow numeric window (`gen === active - 1`), a unit test
+  that hard-sets the delta proves the comparison, not that production ever lands on it —
+  drive the real end-to-end sequence; (2) a guard that reads `record.state` after an
+  earlier write in the same handler has updated the DB — but not the local object — is
+  reading stale state: re-fetch the record or thread the new state through; (3) this
+  class of bug fails closed (it rejects access), so it is a contract/UX defect rather
+  than a security hole — say so explicitly when reporting, so severity is not
+  overstated.
 
 ## Read the diff against the spec
 
