@@ -4982,14 +4982,25 @@ body.player-open {
     padding: 16px 24px 0;
   }
 
-  /* Where full bleed stops. The shell is as wide as the window; the conversation is as
-     wide as a conversation should be, centred in it. */
-  .app:has(.studio-layout.is-game-open) .studio-detail-head,
-  .app:has(.studio-layout.is-game-open) .studio-workspace {
+  /* Where full bleed stops — only while the shelf is still the edge furniture.
+     Focus mode (5+ games) hides that rail; capping the column then just paints
+     gutters where the furniture used to be, which reads as the old floating card.
+     Turn prose already has its own measure (68ch), so readable line length does not
+     need a second cage around the whole work surface. */
+  .app:has(.studio-layout.is-game-open:not(.is-focus)) .studio-detail-head,
+  .app:has(.studio-layout.is-game-open:not(.is-focus)) .studio-workspace {
     width: 100%;
     max-width: 1080px;
     margin-left: auto;
     margin-right: auto;
+  }
+
+  /* Focus mode: the work surface is the furniture. Stretch it — the detail already
+     carries horizontal padding from the rule above, so no second gutter. */
+  .app:has(.studio-layout.is-game-open.is-focus) .studio-detail {
+    max-width: none;
+    width: 100%;
+    margin: 0;
   }
 
   .app:has(.studio-layout.is-game-open) .studio-thread-foot {
@@ -7734,7 +7745,10 @@ body.player-open {
   flex-shrink: 0;
 }
 
-/* 5+ games: collapse the shelf after selection so the selected game owns the page. */
+/* 5+ games: collapse the shelf after selection so the selected game owns the page.
+   Do not re-cage the detail here — a centred max-width on the work surface is what
+   made focus mode look like a floating card after the desktop shell went full-bleed.
+   Width comes from the shell rules above (padding, no max-width). */
 .studio-layout.is-focus {
   grid-template-columns: 1fr;
 }
@@ -7749,12 +7763,6 @@ body.player-open {
 
 .studio-layout.is-focus .studio-detail-title-row {
   display: none;
-}
-
-.studio-layout.is-focus .studio-detail {
-  max-width: 920px;
-  width: 100%;
-  margin: 0 auto;
 }
 
 .studio-picker-backdrop {

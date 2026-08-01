@@ -63,6 +63,9 @@ const VIEWPORTS = [
 /** Stable ids used only inside the stubbed responses — never written to the API. */
 const FIXTURE_TOKEN = 'e2e-studio-shell-token';
 const FIXTURE_SLUG = 'e2e-studio-shell';
+/** Enough games to trip focus mode (STUDIO_SHELF_TOOLS_AT = 5), which is the desktop
+ *  path that used to re-cage the work surface after the shelf collapsed. */
+const FOCUS_SHELF_SIZE = 5;
 
 async function fulfillJson(route: Route, body: unknown) {
   await route.fulfill({
@@ -72,11 +75,27 @@ async function fulfillJson(route: Route, body: unknown) {
   });
 }
 
+function fixtureGames() {
+  return Array.from({ length: FOCUS_SHELF_SIZE }, (_, i) => ({
+    token: i === 0 ? FIXTURE_TOKEN : `${FIXTURE_TOKEN}-${i}`,
+    title: i === 0 ? 'E2E Studio Shell Fixture' : `E2E Studio Shell Fixture ${i + 1}`,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    lastKnownStatus: 'published' as const,
+    slug: i === 0 ? FIXTURE_SLUG : `${FIXTURE_SLUG}-${i}`,
+    publishedAt: '2026-01-02T00:00:00.000Z',
+  }));
+}
+
 /**
  * Give `/studio` a game with a composer without touching production shelf state.
  *
  * The SPA still mounts CreatorStudioView + SubmissionStatusView and applies the real
  * stylesheet; only the JSON those views fetch is replaced.
+ *
+ * Five games, not one: a single-game shelf never enters focus mode, and that is the
+ * desktop state where a capped reading column used to float in empty gutters after the
+ * shelf hid. Stubbing under the threshold made the gate green while the live screen
+ * with a real shelf was wrong.
  */
 async function stubStudioThreadData(page: Page) {
   await page.route('**/api/me/studio**', async (route) => {
@@ -90,18 +109,7 @@ async function stubStudioThreadData(page: Page) {
       return;
     }
     if (path.endsWith('/api/me/studio')) {
-      await fulfillJson(route, {
-        games: [
-          {
-            token: FIXTURE_TOKEN,
-            title: 'E2E Studio Shell Fixture',
-            createdAt: '2026-01-01T00:00:00.000Z',
-            lastKnownStatus: 'published',
-            slug: FIXTURE_SLUG,
-            publishedAt: '2026-01-02T00:00:00.000Z',
-          },
-        ],
-      });
+      await fulfillJson(route, { games: fixtureGames() });
       return;
     }
     await route.continue();
@@ -209,14 +217,20 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
 
       const shell = await page.evaluate(() => {
         const scroller = document.querySelector('.studio-thread-scroll');
+        const detail = document.querySelector('.studio-detail');
+        const layout = document.querySelector('.studio-layout');
         return {
           pageScroll: document.documentElement.scrollHeight - document.documentElement.clientHeight,
           scrollerOverflowY: scroller ? getComputedStyle(scroller).overflowY : null,
           gameOpen: Boolean(document.querySelector('.studio-layout.is-game-open')),
+          focusMode: Boolean(layout?.classList.contains('is-focus')),
+          detailWidth: detail?.getBoundingClientRect().width ?? 0,
+          viewportWidth: window.innerWidth,
         };
       });
 
       expect(shell.gameOpen, 'the studio should mark a game open so the shell CSS applies').toBe(true);
+      expect(shell.focusMode, 'the fixture shelf must be large enough to enter focus mode').toBe(true);
 
       // The page owning the window is the precondition for the rest: it is what removes
       // the scroll a reader would otherwise use to escape a bar sitting on the composer.
@@ -229,6 +243,15 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
       expect(shell.scrollerOverflowY, 'the transcript needs its own scroller once the page has none').toMatch(
         /^(auto|scroll)$/,
       );
+
+      // Desktop focus mode used to leave a ~1080px column floating in gutters after the
+      // shelf hid. The work surface should own the window width (padding aside).
+      if (viewport.width >= 801) {
+        expect(
+          shell.detailWidth,
+          `focus-mode work surface should be full-bleed at ${viewport.width}px, not a centred card`,
+        ).toBeGreaterThan(viewport.width - 80);
+      }
 
       for (const bar of BOTTOM_BARS) {
         const { overlapsComposer, sendIsHittable } = await coverageBy(bar);
