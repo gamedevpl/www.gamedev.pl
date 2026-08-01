@@ -1898,6 +1898,10 @@ export async function registerSubmissionRoutes(
       // which since seeding is minutes rather than milliseconds, on every submission.
       const dispatchLog = request.log;
       const builder: BuilderKind = parsed.data.builder ?? 'platform';
+      // Persist before the response returns. Connect (and Studio) read `record.builder`
+      // immediately; if we only wrote it inside background dispatch, a fast /connect
+      // after submit saw platform and returned a permanent-looking 409 (Codex P2).
+      await store.setRoundBuilder(jobId, builder, { resetRoundBudget: false });
       void dispatchBuild({
         issueNumber: jobId,
         // The agent is told where to build rather than left to name the place itself.
@@ -2031,11 +2035,25 @@ export async function registerSubmissionRoutes(
       }
 
       const roundGeneration = (await store.ensureRoundGeneration(issueNumber)) ?? 1;
+      // Re-read after ensureRoundGeneration: a closing transition can race between the
+      // first snapshot and minting. Without this we could mint generation N+1 for a
+      // round that just closed to ready_for_review (Codex P1) — channel auth only
+      // compares generations, and that state is not a stopReason.
+      const fresh = await store.getSubmission(issueNumber);
+      const freshBuilder = fresh?.builder ?? 'platform';
+      if (!fresh || freshBuilder !== 'self' || !isActiveBuildRound(fresh)) {
+        return reply.status(409).send({
+          error: 'connect_unavailable',
+          reason: freshBuilder !== 'self' ? 'not_self_round' : 'inactive_round',
+          builder: freshBuilder,
+        });
+      }
+      const activeGeneration = fresh.roundGeneration ?? roundGeneration;
       const pendingMessages = await store.listPendingCreatorMessages(issueNumber);
       const payload = mintConnectPayload({
         jobId: issueNumber,
-        title: record.title,
-        roundGeneration,
+        title: fresh.title,
+        roundGeneration: activeGeneration,
         submissionTokenSecret,
         appBaseUrl: notifyAppBaseUrl,
         pendingMessages,
