@@ -113,6 +113,26 @@ describe('recommendation routes', () => {
     await server.close();
   });
 
+  it('records play for a store-published slug with no repo-catalog entry', async () => {
+    // No publishedSlugs override: exercises the combined gate wired in app.ts.
+    await store.setPublication({
+      slug: 'miniature-warfare-2d',
+      state: 'published',
+      currentVersion: 'v1',
+      publishedAt: '2026-07-01T00:00:00.000Z',
+    });
+    const server = await buildApp({ store, sessionSecret });
+
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/games/miniature-warfare-2d/played',
+      headers: authHeaders('g:alice'),
+    });
+    expect(res.statusCode).toBe(204);
+    expect((await store.listPlayAffinity('g:alice'))[0]?.slug).toBe('miniature-warfare-2d');
+    await server.close();
+  });
+
   it('returns community recommendations without a session', async () => {
     await store.putScorecard(
       'arcade-hit',

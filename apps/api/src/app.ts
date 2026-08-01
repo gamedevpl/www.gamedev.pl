@@ -51,7 +51,7 @@ import { registerTelemetryRoutes, type TelemetryRoutesOptions } from './telemetr
 import { registerVisitTelemetryRoutes } from './visit-telemetry.js';
 import { registerVoteRoutes, type VoteRoutesOptions } from './votes.js';
 import { registerRecommendationRoutes, type RecommendationRoutesOptions } from './recommendations.js';
-import { createPublishedSlugGateFromEnv } from './published-slugs.js';
+import { createCombinedPublishedSlugGate, createPublishedSlugGateFromEnv } from './published-slugs.js';
 import { createCatalogGenreSourceFromEnv } from './catalog-genre-source.js';
 import { peekQuota } from './quota-gate.js';
 import { registerRateLimit } from './rate-limit.js';
@@ -275,9 +275,14 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // request.user and records nothing that identifies a player.
   //
   // One env-derived gate is shared by telemetry, votes, and written feedback: all
-  // three ask the same question ("is this a published catalog slug?") and must not
-  // drift. Call-site overrides still win via the spreads below.
-  const envPublishedSlugs = await createPublishedSlugGateFromEnv();
+  // three ask the same question ("is this a published slug?") and must not drift.
+  // The combined gate OR's the games-repo catalog with store publications so
+  // self-build games (never in catalog.json) are visible to the same callers the
+  // /play route already serves. Call-site overrides still win via the spreads below.
+  const envPublishedSlugs = createCombinedPublishedSlugGate({
+    repoGate: await createPublishedSlugGateFromEnv(),
+    store,
+  });
   await registerTelemetryRoutes(app, {
     store,
     publishedSlugs: envPublishedSlugs,

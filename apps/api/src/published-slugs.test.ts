@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createPublishedSlugGate } from './published-slugs.js';
+import { createCombinedPublishedSlugGate, createPublishedSlugGate } from './published-slugs.js';
+import { InMemoryStore } from './store.js';
 
 type Entry = { slug: string; status: string };
 
@@ -89,5 +90,86 @@ describe('createPublishedSlugGate', () => {
 
     // No cache to fall back on: dropping data beats letting any string become a key.
     expect(await gate.isPublished('arena-tag')).toBe(false);
+  });
+});
+
+describe('createCombinedPublishedSlugGate', () => {
+  async function storeWithPublication(
+    slug: string,
+    state: 'published' | 'archived' | 'disabled',
+  ): Promise<InMemoryStore> {
+    const store = new InMemoryStore();
+    await store.setPublication({
+      slug,
+      state,
+      currentVersion: 'v1',
+      publishedAt: '2026-07-01T00:00:00.000Z',
+    });
+    return store;
+  }
+
+  it('admits a repo-catalog slug unchanged', async () => {
+    const fake = fakeClient([{ slug: 'arena-tag', status: 'published' }]);
+    const gate = createCombinedPublishedSlugGate({
+      repoGate: createPublishedSlugGate({ client: fake.client }),
+      store: new InMemoryStore(),
+    });
+
+    expect(await gate.isPublished('arena-tag')).toBe(true);
+  });
+
+  it('admits a store-published slug with no repo-catalog entry', async () => {
+    const fake = fakeClient([]);
+    const store = await storeWithPublication('miniature-warfare-2d', 'published');
+    const gate = createCombinedPublishedSlugGate({
+      repoGate: createPublishedSlugGate({ client: fake.client }),
+      store,
+    });
+
+    expect(await gate.isPublished('miniature-warfare-2d')).toBe(true);
+  });
+
+  it('refuses a slug that is neither in the catalog nor store-published', async () => {
+    const fake = fakeClient([{ slug: 'arena-tag', status: 'draft' }]);
+    const gate = createCombinedPublishedSlugGate({
+      repoGate: createPublishedSlugGate({ client: fake.client }),
+      store: new InMemoryStore(),
+    });
+
+    expect(await gate.isPublished('arena-tag')).toBe(false);
+    expect(await gate.isPublished('never-existed')).toBe(false);
+  });
+
+  it('refuses a store publication whose state is not published', async () => {
+    const fake = fakeClient([]);
+    for (const state of ['archived', 'disabled'] as const) {
+      const store = await storeWithPublication('retired-game', state);
+      const gate = createCombinedPublishedSlugGate({
+        repoGate: createPublishedSlugGate({ client: fake.client }),
+        store,
+      });
+      expect(await gate.isPublished('retired-game')).toBe(false);
+    }
+  });
+
+  it('still admits store-published slugs when the repo gate is absent', async () => {
+    const store = await storeWithPublication('self-build', 'published');
+    const gate = createCombinedPublishedSlugGate({ repoGate: null, store });
+
+    expect(await gate.isPublished('self-build')).toBe(true);
+    expect(await gate.isPublished('stranger')).toBe(false);
+  });
+
+  it('fails closed when the store read throws', async () => {
+    const gate = createCombinedPublishedSlugGate({
+      repoGate: null,
+      store: {
+        getPublication: async () => {
+          throw new Error('firestore unavailable');
+        },
+      },
+    });
+
+    expect(await gate.isPublished('anything')).toBe(false);
   });
 });

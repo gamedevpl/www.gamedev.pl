@@ -125,6 +125,27 @@ describe('POST /api/telemetry', () => {
     await app.close();
   });
 
+  it('records events for a store-published slug with no repo-catalog entry', async () => {
+    // No telemetryRoutes.publishedSlugs override: exercises the combined gate in app.ts.
+    await store.setPublication({
+      slug: 'miniature-warfare-2d',
+      state: 'published',
+      currentVersion: 'v1',
+      publishedAt: '2026-07-01T00:00:00.000Z',
+    });
+    const app = await buildApp({ store, sessionSecret });
+
+    const res = await post(app, {
+      slug: 'miniature-warfare-2d',
+      sessionId,
+      events: [{ type: 'game_opened' }],
+    });
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toEqual({ accepted: 1 });
+    expect(await store.listTelemetryEvents(today(), { slug: 'miniature-warfare-2d' })).toHaveLength(1);
+    await app.close();
+  });
+
   it('drops everything when no games repo is configured, rather than trusting the slug', async () => {
     const app = await buildApp({ store, sessionSecret, telemetryRoutes: { publishedSlugs: null } });
     const res = await post(app, { slug: 'space-hop', sessionId, events: [{ type: 'game_opened' }] });
