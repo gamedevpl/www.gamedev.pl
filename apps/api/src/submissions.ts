@@ -2018,7 +2018,10 @@ export async function registerSubmissionRoutes(
         return reply.status(403).send({ error: 'only the creator can connect a build' });
       }
 
-      const builder = builderOf(record);
+      // Gate on the *active round's* builder field, not `builderOf` (which falls back to
+      // `defaultBuilder`). A legacy/platform round that once used self must not unlock
+      // connect just because defaultBuilder still says self.
+      const builder = record.builder ?? 'platform';
       if (builder !== 'self' || !isActiveBuildRound(record)) {
         return reply.status(409).send({
           error: 'connect_unavailable',
@@ -2038,7 +2041,8 @@ export async function registerSubmissionRoutes(
         pendingMessages,
         now: now(),
       });
-      return reply.send(payload);
+      // Kickoff embeds a round key — never let intermediaries cache it.
+      return reply.header('Cache-Control', 'no-store').send(payload);
     },
   );
 
