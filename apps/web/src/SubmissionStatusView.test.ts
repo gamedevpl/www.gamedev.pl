@@ -496,7 +496,7 @@ describe('SubmissionStatusView', () => {
   it('offers the same one box on a published game, and sends it somewhere else', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({ status: 'published', slug: 'tv-tycoon' });
-    mockedSubmitImprovement.mockResolvedValue({ ok: true, issueNumber: 5, slug: 'tv-tycoon' });
+    mockedSubmitImprovement.mockResolvedValue({ ok: true, jobId: 5, token: 'improve-token', slug: 'tv-tycoon' });
     await i18n.changeLanguage('en');
     window.history.pushState(null, '', '/status/live-token');
 
