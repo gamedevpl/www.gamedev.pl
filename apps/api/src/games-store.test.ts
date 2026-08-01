@@ -19,6 +19,9 @@ const MINIMAL: SourceFile[] = [
   // a game that does not declare its progress landmarks, so a delivery without this one
   // reaches validate and stops there having produced nothing.
   { path: 'PLAYTEST.json', content: '{"expectProgress":["round-start"]}' },
+  // Check 28's play policy — same status as TRACE/PLAYTEST. Without it the remote gate
+  // stops at agent-play after the upload was accepted.
+  { path: 'AGENT.json', content: '{"policy":"capture"}' },
 ];
 
 describe('validateSourceUpload — the delivery contract', () => {
@@ -87,6 +90,17 @@ describe('validateSourceUpload — the delivery contract', () => {
     expect(validateSourceUpload(MINIMAL).map((f) => f.path)).toContain('PLAYTEST.json');
     expect(() => validateSourceUpload(MINIMAL.filter((f) => f.path !== 'PLAYTEST.json'))).toThrow(
       /PLAYTEST\.json is required/,
+    );
+  });
+
+  it('accepts and requires the agent-play contract the harness checks against', () => {
+    // Third time: Check 28 landed requiring AGENT.json; this list lagged again. Agents
+    // that included the file were told the path was not deliverable, dropped it to match
+    // the allowlist error, and then failed the remote gate — exactly the retry loop that
+    // burned builder sessions after the game itself was done.
+    expect(validateSourceUpload(MINIMAL).map((f) => f.path)).toContain('AGENT.json');
+    expect(() => validateSourceUpload(MINIMAL.filter((f) => f.path !== 'AGENT.json'))).toThrow(
+      /AGENT\.json is required/,
     );
   });
 

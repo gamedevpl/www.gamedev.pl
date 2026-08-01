@@ -47,6 +47,13 @@ export const ALLOWED_SOURCE_FILES = [
   // each delivered game reached validate and stopped there, with no gate artifacts and
   // therefore no draft preview for the creator watching.
   'PLAYTEST.json',
+  // Validate Check 28 (`tools/lib/agent-contract.ts`) requires AGENT.json so
+  // `npm run agent-play` knows whether to replay CAPTURE or load a closed-loop module.
+  // Same drift class as TRACE/PLAYTEST above: the check landed in the games repo while
+  // this list stayed put, so agents that wrote a correct AGENT.json were told the path
+  // was not deliverable, dropped it, and then failed the remote gate at Check 28 —
+  // burning a session on allowlist archaeology instead of the game.
+  'AGENT.json',
   'index.html',
   'game.ts',
   'style.css',
@@ -174,6 +181,16 @@ export function validateSourceUpload(files: SourceFile[]): SourceFile[] {
       'PLAYTEST.json is required — it declares the progress landmarks your CAPTURE.json ' +
         'run must reach, and the gate refuses a game without one. The minimum is ' +
         '{"expectProgress": ["round-start"]}; list richer landmarks if your capture reaches them.',
+    );
+  }
+  // Same reasoning again for Check 28. Accepting a delivery without AGENT.json stores a
+  // version that cannot pass agent-play, which is exactly the loop that burned real
+  // builder sessions on submit retries after the game itself was done.
+  if (!seen.has('AGENT.json')) {
+    throw new InvalidUploadError(
+      "AGENT.json is required — the gate's agent-play stage needs it to choose a play " +
+        'policy (validate Check 28). The minimum is {"policy": "capture"}; write it next ' +
+        'to PLAYTEST.json, then deliver again.',
     );
   }
 
