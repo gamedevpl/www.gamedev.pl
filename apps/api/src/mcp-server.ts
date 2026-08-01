@@ -501,7 +501,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
     get_kit: {
       description:
-        'Fetch the current Creator Kit: engineRef, signed kitUrl, sha256, unpack one-liner, entry=SKILL.md. ' +
+        'Fetch the current Creator Kit: engineRef, signed kitUrl, sha256, unpack one-liner ' +
+        '(ends in gamedevpl-creator-kit/), entry=SKILL.md (relative to that directory). ' +
         'Unpack and follow SKILL.md. Run kit checks green before submit_sources. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
@@ -852,8 +853,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
     get_gate_verdict: {
       description:
-        'Poll the gate verdict for a delivery (default: latest). Terminal receipt: still readable after the round closes ' +
-        "when your capability's generation owns that delivery (generation may be exactly one behind current). " +
+        'Poll the gate verdict for a delivery (default: latest). Verdicts typically land in 2–5 minutes; ' +
+        'poll every ~30s until green or red. Terminal receipt: still readable after the round closes ' +
+        "when your capability's generation owns that delivery (generation may be exactly one behind current), " +
+        'so the verdict stays readable if the round closes between polls. ' +
         'Expiry still applies. Wait for green before considering the round done. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {

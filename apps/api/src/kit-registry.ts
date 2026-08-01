@@ -73,11 +73,30 @@ export function parseKitSidecar(raw: string): KitSidecar {
   };
 }
 
+/** Tarball member root from games-repo pack-kit (`KIT_NAME`). */
+export const KIT_ROOT_DIR = 'gamedevpl-creator-kit';
+
+/** Path relative to {@link KIT_ROOT_DIR} — read after the unpack one-liner cds there. */
 export const KIT_ENTRY = 'SKILL.md';
 
-/** One-liner an agent can shell after get_kit — URL is substituted by the route. */
+/** Shell-escape a URL for single-quoted use in an unpack one-liner. */
+function shellSingleQuote(url: string): string {
+  return url.replace(/'/g, `'\\''`);
+}
+
+/**
+ * One-liner an agent can shell after get_kit — URL is substituted by the route.
+ * Tarball roots at {@link KIT_ROOT_DIR}/, so the command cds there for the next step
+ * (`cat SKILL.md`, `npm ci`, …).
+ */
 export function kitUnpackCommand(kitUrl: string): string {
   // Single-quoted URL so shell metacharacters in the signed query string stay inert.
-  const safe = kitUrl.replace(/'/g, `'\\''`);
-  return `curl -fsSL '${safe}' | tar -xz`;
+  return `curl -fsSL '${shellSingleQuote(kitUrl)}' | tar -xz && cd ${KIT_ROOT_DIR}`;
+}
+
+/**
+ * Exemplar tarballs root at `games/<slug>/` (pack into a kit checkout). No post-unpack cd.
+ */
+export function exampleUnpackCommand(tarballUrl: string): string {
+  return `curl -fsSL '${shellSingleQuote(tarballUrl)}' | tar -xz`;
 }

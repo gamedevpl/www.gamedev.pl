@@ -214,10 +214,18 @@ describe('POST /api/mcp (BY-05)', () => {
         'ack_inbox',
       ]),
     );
-    const start = (listed.json().result.tools as Array<{ name: string; description: string }>).find(
-      (t) => t.name === 'start',
-    );
+    const tools = listed.json().result.tools as Array<{ name: string; description: string }>;
+    const start = tools.find((t) => t.name === 'start');
     expect(start?.description).toMatch(/screenshot|Honour stop|sessionKey/i);
+
+    const getKit = tools.find((t) => t.name === 'get_kit');
+    expect(getKit?.description).toMatch(/gamedevpl-creator-kit/);
+    expect(getKit?.description).toMatch(/entry=SKILL\.md/);
+
+    const gateVerdict = tools.find((t) => t.name === 'get_gate_verdict');
+    expect(gateVerdict?.description).toMatch(/2–5 minutes/);
+    expect(gateVerdict?.description).toMatch(/~30s/);
+    expect(gateVerdict?.description).toMatch(/terminal receipt/i);
   });
 
   it('start issues a sessionKey; subsequent tools work with it', async () => {
