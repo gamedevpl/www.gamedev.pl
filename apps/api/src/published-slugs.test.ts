@@ -159,4 +159,17 @@ describe('createCombinedPublishedSlugGate', () => {
     expect(await gate.isPublished('self-build')).toBe(true);
     expect(await gate.isPublished('stranger')).toBe(false);
   });
+
+  it('fails closed when the store read throws', async () => {
+    const gate = createCombinedPublishedSlugGate({
+      repoGate: null,
+      store: {
+        getPublication: async () => {
+          throw new Error('firestore unavailable');
+        },
+      },
+    });
+
+    expect(await gate.isPublished('anything')).toBe(false);
+  });
 });

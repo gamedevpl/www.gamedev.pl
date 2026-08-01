@@ -83,9 +83,11 @@ export function createPublishedSlugGate(options: PublishedSlugGateOptions): Publ
 }
 
 /**
- * Builds the gate from the environment, or returns null when the games repo is not
- * configured (secret-less deploys run browse/play-only). A null gate means telemetry
- * accepts and drops, exactly as it does for an unknown slug.
+ * Builds the repo-catalog gate from the environment, or returns null when the games
+ * repo is not configured (secret-less deploys run browse/play-only). A null result
+ * means there is no catalog view — not "drop every slug". Callers that need the full
+ * published set should wrap this with `createCombinedPublishedSlugGate`, which still
+ * admits store-published self-build games when the catalog gate is absent.
  *
  * In local development (no token, not production/test) the gate reads the same
  * fixture/checkout catalog the browse surface serves — otherwise every vote and
@@ -133,8 +135,14 @@ export function createCombinedPublishedSlugGate(options: CombinedPublishedSlugGa
   return {
     async isPublished(slug: string): Promise<boolean> {
       if (repoGate && (await repoGate.isPublished(slug))) return true;
-      const publication = await store.getPublication(slug);
-      return publication?.state === 'published';
+      try {
+        const publication = await store.getPublication(slug);
+        return publication?.state === 'published';
+      } catch {
+        // A transient store failure must not turn into a rejected play session or a
+        // 500 on vote/telemetry. Fail closed: dropping a signal beats inventing one.
+        return false;
+      }
     },
   };
 }
