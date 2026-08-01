@@ -76,8 +76,12 @@ export function parseKitSidecar(raw: string): KitSidecar {
 /** Tarball member root from games-repo pack-kit (`KIT_NAME`). */
 export const KIT_ROOT_DIR = 'gamedevpl-creator-kit';
 
-/** Path relative to {@link KIT_ROOT_DIR} — read after the unpack one-liner cds there. */
-export const KIT_ENTRY = 'SKILL.md';
+/**
+ * Path to open after unpack, relative to the directory where the unpack one-liner ran.
+ * Not a post-`cd` basename: coding-agent shells often start each command in a fresh
+ * process, so a trailing `cd` does not persist for `cat SKILL.md` / `npm ci`.
+ */
+export const KIT_ENTRY = `${KIT_ROOT_DIR}/SKILL.md`;
 
 /** Shell-escape a URL for single-quoted use in an unpack one-liner. */
 function shellSingleQuote(url: string): string {
@@ -86,12 +90,13 @@ function shellSingleQuote(url: string): string {
 
 /**
  * One-liner an agent can shell after get_kit — URL is substituted by the route.
- * Tarball roots at {@link KIT_ROOT_DIR}/, so the command cds there for the next step
- * (`cat SKILL.md`, `npm ci`, …).
+ * Extracts into {@link KIT_ROOT_DIR}/ under the current working directory. Follow
+ * {@link KIT_ENTRY} from that same cwd; do not rely on the shell remaining inside
+ * the kit directory after this process exits.
  */
 export function kitUnpackCommand(kitUrl: string): string {
   // Single-quoted URL so shell metacharacters in the signed query string stay inert.
-  return `curl -fsSL '${shellSingleQuote(kitUrl)}' | tar -xz && cd ${KIT_ROOT_DIR}`;
+  return `curl -fsSL '${shellSingleQuote(kitUrl)}' | tar -xz`;
 }
 
 /**
