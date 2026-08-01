@@ -312,7 +312,7 @@ describe('POST /api/waitlist', () => {
     expect(notes[0]).toMatchObject({
       id: 'op-waitlist-g:20010',
       type: 'operator.waitlist_joined',
-      link: '/admin/telemetry',
+      link: '/admin/waitlist',
       params: { title: 'Newbie', email: 'newbie@example.com' },
     });
 

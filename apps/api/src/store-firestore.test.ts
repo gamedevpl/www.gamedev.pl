@@ -95,6 +95,12 @@ function fakeFirestore() {
       const previous = options?.merge ? (docs.get(key(collection, id)) ?? {}) : {};
       docs.set(key(collection, id), { ...previous, ...data });
     },
+    update: async (data: Record<string, unknown>) => {
+      rejectUndefined(data);
+      rejectNestedArrays(data);
+      if (!docs.has(key(collection, id))) throw new Error('no document to update');
+      docs.set(key(collection, id), { ...docs.get(key(collection, id))!, ...data });
+    },
     delete: async () => {
       docs.delete(key(collection, id));
     },
@@ -107,18 +113,21 @@ function fakeFirestore() {
       path.endsWith(`/${group}`),
     );
 
-  const makeQuery = (paths: string[], filter: ((data: Record<string, unknown>) => boolean) | null) => {
-    const rows = () =>
-      paths.flatMap((path) =>
+  const makeQuery = (paths: string[], filter: ((data: Record<string, unknown>) => boolean) | null, max?: number) => {
+    const rows = () => {
+      const found = paths.flatMap((path) =>
         idsUnder(path)
           .map((id) => ({ path, id, data: docs.get(key(path, id)) ?? {} }))
           .filter((row) => (filter ? filter(row.data) : true)),
       );
+      return max === undefined ? found : found.slice(0, max);
+    };
     const query = {
       where: (field: string, op: string, value: unknown) => {
         if (op !== '==') throw new Error(`fake supports == only, got ${op}`);
-        return makeQuery(paths, (data) => (filter ? filter(data) : true) && data[field] === value);
+        return makeQuery(paths, (data) => (filter ? filter(data) : true) && data[field] === value, max);
       },
+      limit: (n: number) => makeQuery(paths, filter, n),
       count: () => ({ get: async () => ({ data: () => ({ count: rows().length }) }) }),
       get: async () => {
         const found = rows();

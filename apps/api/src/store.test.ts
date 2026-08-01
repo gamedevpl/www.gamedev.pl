@@ -295,19 +295,26 @@ describe('InMemoryStore', () => {
   });
 
   it('lists waitlist entries newest first and filters by status', async () => {
-    const store = new InMemoryStore();
-    await store.upsertWaitlistEntry({ uid: 'g:old', email: 'old@example.com' });
-    await store.setWaitlistStatus('g:old', 'approved');
-    // requestedAt is stamped on upsert; a later join sorts first.
-    await store.upsertWaitlistEntry({ uid: 'g:new', email: 'new@example.com' });
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-08-01T10:00:00.000Z'));
+      const store = new InMemoryStore();
+      await store.upsertWaitlistEntry({ uid: 'g:old', email: 'old@example.com' });
+      await store.setWaitlistStatus('g:old', 'approved');
+      // requestedAt is stamped on upsert; a later join sorts first.
+      vi.setSystemTime(new Date('2026-08-01T11:00:00.000Z'));
+      await store.upsertWaitlistEntry({ uid: 'g:new', email: 'new@example.com' });
 
-    const pending = await store.listWaitlistEntries({ status: 'pending' });
-    expect(pending.map((entry) => entry.uid)).toEqual(['g:new']);
-    expect(await store.countWaitlistEntries('pending')).toBe(1);
-    expect(await store.countWaitlistEntries('approved')).toBe(1);
+      const pending = await store.listWaitlistEntries({ status: 'pending' });
+      expect(pending.map((entry) => entry.uid)).toEqual(['g:new']);
+      expect(await store.countWaitlistEntries('pending')).toBe(1);
+      expect(await store.countWaitlistEntries('approved')).toBe(1);
 
-    const all = await store.listWaitlistEntries();
-    expect(all.map((entry) => entry.uid)).toEqual(['g:new', 'g:old']);
+      const all = await store.listWaitlistEntries();
+      expect(all.map((entry) => entry.uid)).toEqual(['g:new', 'g:old']);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('pre-approves by email when no waitlist row exists yet', async () => {
