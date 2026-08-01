@@ -206,9 +206,9 @@ describe('agent build reads (BY-04)', () => {
       engineRef: ENGINE,
       kitUrl: `https://signed.example/kits/${ENGINE}.tgz?sig=1`,
       sha256: SHA,
-      entry: 'SKILL.md',
+      entry: 'gamedevpl-creator-kit/SKILL.md',
     });
-    expect(res.json().unpack).toContain(`kits/${ENGINE}.tgz`);
+    expect(res.json().unpack).toBe(`curl -fsSL 'https://signed.example/kits/${ENGINE}.tgz?sig=1' | tar -xz`);
     expect(signReadUrl).toHaveBeenCalledWith(`kits/${ENGINE}.tgz`, expect.any(Number));
   });
 

@@ -21,7 +21,14 @@ import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from './gcs-sign.
 import { InvalidUploadError, MAX_UPLOAD_FILES, type GamesStore } from './games-store.js';
 import { parseSpecTitle } from './github-client.js';
 import { canTransition, resolveJobState, type JobState } from './job-state.js';
-import { KIT_ENTRY, KitRegistryError, kitUnpackCommand, parseKitRegistry, parseKitSidecar } from './kit-registry.js';
+import {
+  KIT_ENTRY,
+  KitRegistryError,
+  exampleUnpackCommand,
+  kitUnpackCommand,
+  parseKitRegistry,
+  parseKitSidecar,
+} from './kit-registry.js';
 import { type CreatorMessage, type Store, type SubmissionRecord } from './store.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from './submission-status.js';
 
@@ -1195,7 +1202,7 @@ export async function registerAgentChannelRoutes(
         title: example.title,
         tarballUrl,
         ...(sha256 ? { sha256 } : {}),
-        unpack: kitUnpackCommand(tarballUrl),
+        unpack: exampleUnpackCommand(tarballUrl),
       });
     },
   );
