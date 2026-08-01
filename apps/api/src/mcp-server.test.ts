@@ -217,6 +217,16 @@ describe('POST /api/mcp (BY-05)', () => {
     const tools = listed.json().result.tools as Array<{ name: string; description: string }>;
     const start = tools.find((t) => t.name === 'start');
     expect(start?.description).toMatch(/screenshot|Honour stop|sessionKey/i);
+    // start advertises the returned workflow / inbox policy / refusal guidance.
+    expect(start?.description).toMatch(/workflow/i);
+
+    // The behavioural contract (on every tool description) now folds in the loop-critical
+    // rules: pendingMessages on write replies, one final read_inbox, no scheduled polling,
+    // and that a green verdict ends the round.
+    expect(start?.description).toMatch(/pendingMessages/);
+    expect(start?.description).toMatch(/one final read_inbox/i);
+    expect(start?.description).toMatch(/do not schedule background/i);
+    expect(start?.description).toMatch(/green gate verdict ends the round/i);
 
     const getKit = tools.find((t) => t.name === 'get_kit');
     expect(getKit?.description).toMatch(/gamedevpl-creator-kit/);
@@ -257,6 +267,96 @@ describe('POST /api/mcp (BY-05)', () => {
       slug: 'comet-courier',
       seedAvailable: true,
     });
+  });
+
+  it('start returns the session workflow in both structuredContent and the text body', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+
+    const res = await mcpCall(
+      app,
+      'tools/call',
+      { name: 'start', arguments: { key: roundKey() } },
+      {
+        'mcp-session-id': sessionId,
+      },
+    );
+    expect(res.statusCode).toBe(200);
+    const result = res.json().result as {
+      content: Array<{ type: string; text: string }>;
+      structuredContent: {
+        workflow?: unknown;
+        inboxPolicy?: string;
+        whenRefused?: string;
+      };
+    };
+
+    // Structured: ordered workflow covering the full loop, plus the inbox policy and the
+    // retired-key etiquette an agent relays.
+    const workflow = result.structuredContent.workflow as string[];
+    expect(Array.isArray(workflow)).toBe(true);
+    expect(workflow.length).toBeGreaterThanOrEqual(6);
+    const joined = workflow.join('\n');
+    expect(joined).toMatch(/get_brief/);
+    expect(joined).toMatch(/get_seed/);
+    expect(joined).toMatch(/get_kit/);
+    expect(joined).toMatch(/send_screenshot/);
+    expect(joined).toMatch(/submit_sources/);
+    expect(joined).toMatch(/get_gate_verdict/);
+    // The stop condition is explicit: green means done, then end the session.
+    expect(joined).toMatch(/green: the round is complete/i);
+    expect(joined).toMatch(/END the session/i);
+    // Both failure branches are covered.
+    expect(joined).toMatch(/red:.*resubmit on the SAME key/i);
+    expect(joined).toMatch(/kit_outdated: re-run get_kit/i);
+
+    // Inbox policy: no scheduled polling; pendingMessages rides writes; one final read.
+    expect(result.structuredContent.inboxPolicy).toMatch(/do not schedule background or recurring inbox checks/i);
+    expect(result.structuredContent.inboxPolicy).toMatch(/pendingMessages/);
+    expect(result.structuredContent.inboxPolicy).toMatch(/one final read_inbox/i);
+    expect(result.structuredContent.inboxPolicy).toMatch(/fresh kickoff/i);
+
+    // The text body mirrors the loop so an agent reading either channel knows it.
+    const body = result.content.map((c) => c.text).join('\n');
+    expect(body).toMatch(/Session workflow/i);
+    expect(body).toMatch(/get_gate_verdict/);
+    expect(body).toMatch(/END the session/i);
+    expect(body).toMatch(/Inbox:/);
+    expect(body).toMatch(/If a call is refused:/i);
+  });
+
+  it('retired-key etiquette in start matches the error agents relay on a refused call', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+
+    // The guidance start hands the agent: point the creator at the Studio thread, do not
+    // call it an outage, note the MCP connection is unchanged.
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const whenRefused = (started.structured as { whenRefused: string }).whenRefused;
+    expect(whenRefused).toMatch(/Studio thread/i);
+    expect(whenRefused).toMatch(/current kickoff prompt/i);
+    expect(whenRefused).toMatch(/MCP connection/i);
+    expect(whenRefused).toMatch(/do not retry|do not report an outage/i);
+
+    // The actual refusal an agent hits when the key is stale names the same fix (Studio
+    // thread + fresh prompt), so what the agent relays lines up with what the server says.
+    const stale = mintAgentToken(ISSUE, secret, { roundGeneration: 1, now: Date.parse('2020-01-01T00:00:00.000Z') });
+    const refused = await callTool(
+      app,
+      'get_brief',
+      {},
+      { 'mcp-session-id': sessionId, authorization: `Bearer ${stale}` },
+    );
+    expect(refused.isError).toBe(true);
+    const errorText = JSON.stringify(refused.structured);
+    expect(errorText).toContain(STALE_AGENT_TOKEN_REASON);
+    expect(STALE_AGENT_TOKEN_REASON).toMatch(/finished/i);
+    expect(STALE_AGENT_TOKEN_REASON).toMatch(/Studio thread/i);
+    expect(STALE_AGENT_TOKEN_REASON).toMatch(/fresh prompt/i);
   });
 
   it('rejects a call bearing a valid Mcp-Session-Id but no or a forged sessionKey', async () => {

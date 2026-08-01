@@ -171,7 +171,58 @@ const BEHAVIOURAL_CONTRACT = [
   'Run kit checks green (at least check:static) before submit_sources.',
   'Honour stop immediately — do not continue after stop:true.',
   'When get_brief.seedAvailable is true, continue the seed (get_seed) rather than scaffolding from scratch.',
+  'Every write reply carries pendingMessages — when it is non-empty, read_inbox and apply before continuing.',
+  'Do not schedule background or recurring inbox polls; do one final read_inbox before you end.',
+  'A green gate verdict ends the round — the key then retires and new work arrives as a fresh kickoff.',
 ].join(' ');
+
+/**
+ * The explicit session loop, start → done, returned by `start` so an agent never has to
+ * guess what happens after submit, whether to poll the inbox on a schedule, or what a
+ * refused key means. Kept short and ordered; the prose body of `start` renders these plus
+ * the inbox policy and the retired-key etiquette.
+ */
+const SESSION_WORKFLOW: readonly string[] = [
+  'get_brief — read the brief; if seedAvailable, get_seed and continue that draft rather than scaffolding from scratch.',
+  'get_kit — unpack the tarball, open entry (gamedevpl-creator-kit/SKILL.md), and follow it. Keep the engineRef it returns for submit_sources.',
+  'Build the game from the kit; report_progress before and after long steps.',
+  'send_screenshot as soon as the game draws anything playable.',
+  'Run the kit checks green (at least check:static) before delivering.',
+  'submit_sources with the kitEngineRef get_kit returned.',
+  'Poll get_gate_verdict about every 30s until it is green, red, or kit_outdated.',
+  'red: read the report, fix, and resubmit on the SAME key.',
+  'kit_outdated: re-run get_kit, rebuild against the new kit, and resubmit.',
+  'green: the round is complete — send a final report_progress, do one read_inbox and ack, then END the session.',
+];
+
+/**
+ * Inbox policy, stated flat so agents stop asking whether to poll: no scheduled checks;
+ * pendingMessages rides every write; one final read before ending; nothing to poll after close.
+ */
+const INBOX_POLICY =
+  'Do not schedule background or recurring inbox checks. While working, every mutating reply carries ' +
+  '{ stop, pendingMessages } — when pendingMessages > 0, read_inbox and apply the notes before continuing. ' +
+  'Do exactly one final read_inbox before you end the session. After the round closes there is nothing left ' +
+  'to poll — the next round arrives as a fresh kickoff prompt.';
+
+/**
+ * What to tell the creator when a call is refused because the build finished / the key is
+ * stale. Matches STALE_AGENT_TOKEN_REASON so the agent relays the same fix the error names.
+ */
+const RETIRED_KEY_ETIQUETTE =
+  'If a call is refused because the build is finished or the key is stale, do not retry and do not report an ' +
+  "outage. Tell the creator to open the game's Studio thread and copy the current kickoff prompt; the gamedev.pl " +
+  'MCP connection itself is unchanged.';
+
+/** Human-readable session loop for the text body of `start`. */
+const SESSION_WORKFLOW_TEXT = [
+  'Session workflow (start → done):',
+  ...SESSION_WORKFLOW.map((step, index) => `${index + 1}. ${step}`),
+  '',
+  `Inbox: ${INBOX_POLICY}`,
+  '',
+  `If a call is refused: ${RETIRED_KEY_ETIQUETTE}`,
+].join('\n');
 
 const SESSION_KEY_PROP = {
   type: 'string' as const,
@@ -361,7 +412,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     start: {
       description:
         "Bind this MCP client to a build round using the key from the creator's Studio kickoff prompt. " +
-        'Returns a short-lived sessionKey — pass it as sessionKey on every later tool call. ' +
+        'Returns a short-lived sessionKey — pass it as sessionKey on every later tool call — plus a workflow ' +
+        '(the ordered start→done loop), an inbox policy, and what to relay if a later call is refused. ' +
         'Does not treat Mcp-Session-Id as authority. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
@@ -438,7 +490,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const cap = record.builder === 'self' ? selfBuildDeliveryCap() : null;
         const used = record.roundDeliveryCount ?? 0;
 
-        return toolOk({
+        const structured = {
           sessionKey,
           sessionId,
           jobId: claims.jobId,
@@ -449,7 +501,19 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           locales: record.locale ? [record.locale, 'en'] : ['en'],
           deliveriesRemaining: cap === null ? null : Math.max(0, cap - used),
           expiresAt: sessionClaims.exp,
-        });
+          workflow: SESSION_WORKFLOW,
+          inboxPolicy: INBOX_POLICY,
+          whenRefused: RETIRED_KEY_ETIQUETTE,
+        };
+        // Both the structured payload and a readable text body carry the loop — an agent
+        // reading either one knows the full start→done sequence, including when to stop.
+        return {
+          content: [
+            { type: 'text', text: JSON.stringify(structured) },
+            { type: 'text', text: SESSION_WORKFLOW_TEXT },
+          ],
+          structuredContent: structured,
+        };
       },
     },
 
@@ -1010,7 +1074,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           },
           instructions:
             "Install is URL-only. Start with the gamedevpl start tool using the key from the creator's Studio kickoff prompt; " +
-            'pass the returned sessionKey on every later tool call. Honour stop; screenshot early; kit-check before submit.',
+            'pass the returned sessionKey on every later tool call. start returns your workflow (the ordered start→done ' +
+            'loop) — follow it: honour stop; screenshot early; kit-check before submit; poll get_gate_verdict until green, ' +
+            'then finish. Do not poll the inbox on a schedule; a green verdict ends the round and the key retires.',
         }),
       );
     }
