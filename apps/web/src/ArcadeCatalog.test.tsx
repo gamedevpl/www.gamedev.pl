@@ -166,14 +166,13 @@ describe('ArcadeCatalog lazy media', () => {
     // player. See the note on `previewRequested` in ArcadeCatalog.tsx: a card that is
     // merely on screen used to mount a `<video>`, and sixty of those is what made
     // scrolling stutter.
+    // Entering the viewport buys one poster and nothing else. Neither the media player
+    // nor the moment strip is on the scroll path any more — see the notes on
+    // `previewRequested` and `engaged` in ArcadeCatalog.tsx.
     const poster = container.querySelector<HTMLImageElement>('img.catalog-preview');
-    expect(poster?.getAttribute('src')).toBe('/api/games/above-fold/media/opening.png');
+    expect(poster?.getAttribute('src')).toBe('/api/games/above-fold/media/opening.png?w=640');
     expect(container.querySelectorAll('video')).toHaveLength(0);
-    expect(container.querySelectorAll('.catalog-moment')).toHaveLength(2);
-
-    expect(container.querySelectorAll('.catalog-moment img')).toHaveLength(2);
-    const momentSrcs = [...container.querySelectorAll<HTMLImageElement>('.catalog-moment img')].map((img) => img.src);
-    expect(momentSrcs.every((src) => src.includes('/api/games/above-fold/'))).toBe(true);
+    expect(container.querySelectorAll('.catalog-moment')).toHaveLength(0);
 
     await act(async () => {
       root.unmount();
@@ -219,10 +218,15 @@ describe('ArcadeCatalog lazy media', () => {
 
     const preview = container.querySelector<HTMLVideoElement>('video.catalog-preview');
     expect(preview?.getAttribute('src')).toBe('/api/games/above-fold/media/gameplay.mp4');
-    expect(preview?.getAttribute('poster')).toBe('/api/games/above-fold/media/opening.png');
+    expect(preview?.getAttribute('poster')).toBe('/api/games/above-fold/media/opening.png?w=640');
     // Fetching the whole clip is the point once it has been asked for; it is also what
     // pays back the round trip the deferral costs.
     expect(preview?.getAttribute('preload')).toBe('auto');
+
+    // Engaging reveals the strip as well, at thumbnail size rather than full.
+    const moments = [...container.querySelectorAll<HTMLImageElement>('.catalog-moment img')];
+    expect(moments).toHaveLength(2);
+    expect(moments.every((img) => img.getAttribute('src')?.endsWith('?w=96'))).toBe(true);
 
     // The card nobody touched still has none.
     expect(container.querySelectorAll('video')).toHaveLength(1);
@@ -279,6 +283,58 @@ describe('ArcadeCatalog lazy media', () => {
       await flushEffects();
     });
     expect(toggle.getAttribute('aria-pressed')).toBe('false');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  /**
+   * The engagement handlers used to be attached only when a card had a video. Gating
+   * the moment strip on them without fixing that would have left every screenshots-only
+   * game without a strip for good — a silent feature loss on exactly the cards where
+   * the strip is the only thing to look at.
+   */
+  it('reveals the strip on a card that has screenshots but no video', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ items: [] })));
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const silent: CatalogEntry[] = [{ ...entries[0]!, media: { ...entries[0]!.media!, video: null } }];
+
+    await act(async () => {
+      root.render(
+        createElement(ArcadeCatalog, {
+          catalogStatus: 'ready',
+          catalogError: null,
+          catalogEntries: silent,
+          onPlayGame: vi.fn(),
+          onPlayTogether: vi.fn(),
+          onRetryCatalog: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    const media = container.querySelectorAll<HTMLElement>('.catalog-media')[0]!;
+    await act(async () => {
+      intersect(observers[0]!, media, true);
+      await flushEffects();
+    });
+    expect(container.querySelectorAll('.catalog-moment')).toHaveLength(0);
+    // Reachable by keyboard even with no preview to play, because there is now
+    // something behind the focus.
+    expect(media.getAttribute('tabindex')).toBe('0');
+
+    await act(async () => {
+      media.focus();
+      await flushEffects();
+    });
+
+    expect(container.querySelectorAll('.catalog-moment')).toHaveLength(2);
+    expect(container.querySelector('video')).toBeNull();
 
     await act(async () => {
       root.unmount();

@@ -87,8 +87,18 @@ export interface PublishedGame {
 // only access boundary is the app's own gate. Same origin in production.
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
-export function catalogMediaUrl(slug: string, filename: string): string {
-  return `${API_BASE}/api/games/${encodeURIComponent(slug)}/media/${encodeURIComponent(filename)}`;
+/**
+ * `width` asks the API for a baked size variant instead of the original screenshot.
+ *
+ * Worth asking for: the arcade shows the same PNG at ~48 CSS px in the moment strip
+ * and a few hundred as a card poster, and a PNG cannot be decoded partially — so
+ * without this the browser decodes a full screenshot four times per card, on the
+ * scroll path, for thumbnails nobody has clicked. An API that has no variant serves
+ * the original, so this is safe to ask for against any deploy.
+ */
+export function catalogMediaUrl(slug: string, filename: string, width?: number): string {
+  const base = `${API_BASE}/api/games/${encodeURIComponent(slug)}/media/${encodeURIComponent(filename)}`;
+  return width === undefined ? base : `${base}?w=${width}`;
 }
 
 function parseCatalogMedia(value: unknown): CatalogMedia | null {

@@ -90,9 +90,11 @@ describe('catalog playback', () => {
     // A card that is merely on screen shows its poster and no media player — see the
     // note on `previewRequested` in ArcadeCatalog.tsx.
     const poster = container.querySelector<HTMLImageElement>('img.catalog-preview');
-    expect(poster?.getAttribute('src')).toBe('/api/games/sky-dodge/media/opening.png');
+    expect(poster?.getAttribute('src')).toBe('/api/games/sky-dodge/media/opening.png?w=640');
     expect(container.querySelector('video')).toBeNull();
-    expect(container.querySelectorAll('.catalog-moment')).toHaveLength(2);
+    // The moment strip waits for engagement too — 240 extra elements across a sixty-game
+    // arcade is what the scroll was paying for.
+    expect(container.querySelectorAll('.catalog-moment')).toHaveLength(0);
 
     const previewButton = container.querySelector<HTMLButtonElement>('.preview-toggle');
     await act(async () => {
@@ -105,7 +107,8 @@ describe('catalog playback', () => {
     // showing so the swap is invisible.
     const preview = container.querySelector<HTMLVideoElement>('video.catalog-preview');
     expect(preview?.getAttribute('src')).toBe('/api/games/sky-dodge/media/gameplay.mp4');
-    expect(preview?.getAttribute('poster')).toBe('/api/games/sky-dodge/media/opening.png');
+    expect(preview?.getAttribute('poster')).toBe('/api/games/sky-dodge/media/opening.png?w=640');
+    expect(container.querySelectorAll('.catalog-moment')).toHaveLength(2);
     expect(previewButton?.textContent).toContain('Pause preview');
 
     // history.pushState fires nothing, so in-app navigation is announced explicitly
