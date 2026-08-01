@@ -62,6 +62,7 @@ survives only in this repo's early history.
 | [`notifications-plan.md`](./notifications-plan.md)                 | Notify creators/players of transitions: detection sweep, per-user storage, in-app → email → push       |
 | [`creator-qa-plan.md`](./creator-qa-plan.md)                       | Clarifying-questions pass before spec freeze — raises the hit rate of the one-shot agent run           |
 | [`improvement-loop-plan.md`](./improvement-loop-plan.md)           | After publish: player signals → per-game scorecard → agent-assisted fixes and suggestions              |
+| [`how-to-play-plan.md`](./how-to-play-plan.md)                     | Richer How to play (Goal / Scoring in `.legend-keys`) — decision, schema, phased catalog seal          |
 | [`path-routing-plan.md`](./path-routing-plan.md)                   | ✅ Path URLs for deep links (`/play/<slug>`, …) — History API, no hashbang                             |
 | [`recommendations.md`](./recommendations.md)                       | ✅ Home arcade sort from scorecards + signed-in play affinity                                          |
 | [`runbooks/`](./runbooks/README.md)                                | ✅ Incident procedures: site-down triage, deploy rollback, Firestore restore, secret rotation          |
