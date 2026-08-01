@@ -20,7 +20,7 @@ import { selfBuildDeliveryCap } from './builder.js';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from './gcs-sign.js';
 import { InvalidUploadError, MAX_UPLOAD_FILES, type GamesStore } from './games-store.js';
 import { parseSpecTitle } from './github-client.js';
-import { canTransition, resolveJobState } from './job-state.js';
+import { canTransition, resolveJobState, type JobState } from './job-state.js';
 import { KIT_ENTRY, KitRegistryError, kitUnpackCommand, parseKitRegistry, parseKitSidecar } from './kit-registry.js';
 import { type CreatorMessage, type Store, type SubmissionRecord } from './store.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from './submission-status.js';
@@ -380,17 +380,31 @@ export async function registerAgentChannelRoutes(
    * For self rounds this is the entire state advance — there is no external task to
    * observe. Harmless for platform rounds that are already `building` via the
    * reconciler: `canTransition` refuses a no-op.
+   *
+   * Returns the effective state after the call. Callers that continue the walk
+   * (notably sources → `submitted`) must use this rather than the request-local
+   * `record.state`, which is stale the moment we write — a delivery that raced
+   * background dispatch while still `queued` used to skip `submitted`, leave the
+   * job in `building`, and let the reconciler close the round a generation early.
    */
-  async function markBuildingFromChannel(issueNumber: number, record: SubmissionRecord): Promise<void> {
-    if (!store) return;
-    const current = record.state ?? 'queued';
-    if (!canTransition(current, 'building')) return;
-    await store.recordJobTransition(issueNumber, {
-      to: 'building',
-      at: new Date().toISOString(),
-      by: 'agent',
-      reason: 'channel_signal',
-    });
+  async function markBuildingFromChannel(issueNumber: number, record: SubmissionRecord): Promise<JobState> {
+    const fallback = (record.state ?? 'queued') as JobState;
+    if (!store) return fallback;
+    const current = fallback;
+    if (canTransition(current, 'building')) {
+      await store.recordJobTransition(issueNumber, {
+        to: 'building',
+        at: new Date().toISOString(),
+        by: 'agent',
+        reason: 'channel_signal',
+      });
+      return 'building';
+    }
+    // Already at/past building, or a walk that refuses — prefer the store over the
+    // request snapshot (another writer, or a prior call in this same handler, may
+    // have moved it).
+    const fresh = await store.getSubmission(issueNumber);
+    return (fresh?.state ?? current) as JobState;
   }
 
   /**
@@ -547,10 +561,14 @@ export async function registerAgentChannelRoutes(
       };
 
       const stored = await store!.appendBuildEvent(issueNumber, event);
-      await markBuildingFromChannel(issueNumber, record);
+      const stateAfterSignal = await markBuildingFromChannel(issueNumber, record);
       options.onEvent?.(issueNumber);
 
-      return reply.send({ accepted: true, event: stored, ...(await channelState(issueNumber, record)) });
+      return reply.send({
+        accepted: true,
+        event: stored,
+        ...(await channelState(issueNumber, { ...record, state: stateAfterSignal })),
+      });
     },
   );
 
@@ -795,7 +813,11 @@ export async function registerAgentChannelRoutes(
       }
 
       try {
-        await markBuildingFromChannel(issueNumber, record);
+        // Fresh walk state — not `record.state`. Delivery often races the background
+        // dispatch that flips `queued`→`dispatched`; the local snapshot stays `queued`,
+        // and `canTransition('queued','submitted')` is false, so the protective
+        // transition was skipped and the job stayed `building` (CP-1 double-close).
+        const stateAfterSignal = await markBuildingFromChannel(issueNumber, record);
         const { version } = await options.gamesStore.putCandidateSources({
           slug,
           issueNumber,
@@ -835,8 +857,7 @@ export async function registerAgentChannelRoutes(
         // whatever it might have said. `submitted` is the state the reconciler refuses
         // to move, which is exactly the protection this needs.
         if (store) {
-          const current = record.state ?? 'building';
-          if (canTransition(current, 'submitted')) {
+          if (canTransition(stateAfterSignal, 'submitted')) {
             await store.recordJobTransition(issueNumber, {
               to: 'submitted',
               at: new Date().toISOString(),
@@ -862,10 +883,11 @@ export async function registerAgentChannelRoutes(
         }
         options.onEvent?.(issueNumber);
 
+        const fresh = store ? ((await store.getSubmission(issueNumber)) ?? record) : record;
         return reply.send({
           accepted: true,
           delivery: { slug, version },
-          ...(await channelState(issueNumber, record)),
+          ...(await channelState(issueNumber, fresh)),
         });
       } catch (error) {
         // A rejected upload is the agent's to fix, so the reason goes back in full. This
