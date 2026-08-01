@@ -136,13 +136,21 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
     and `CREATE_STEPS` in `visit-funnel.ts` — the order in `CREATE_STEPS` _is_ the funnel's
     meaning. The waitlist funnel (`waitlist_step` / `WAITLIST_STEPS`) follows the same
     three-place contract beside it.
-- ~~Closed-beta waitlist funnel unmeasured~~ — **closed 2026-07-31**: `waitlist_step` on
-  the visit stream records `cta_clicked` → `joined`. Same three-place enum contract as
-  `create_step` (`visitTelemetry.ts`, `visit-telemetry.ts`, `WAITLIST_STEPS` in
-  `visit-funnel.ts`); rendered as a Waitlist block on `VisitFunnelPanel` beside Creating.
-  The Join CTA is visible before sign-in; the drop between click and join _is_ the
-  sign-in wall, so there is no separate `signin_required` rung (that name already means
-  the creation wall).
+  - ~~Closed-beta waitlist funnel unmeasured~~ — **closed 2026-07-31**: `waitlist_step` on
+    the visit stream records `cta_clicked` → `joined`. Same three-place enum contract as
+    `create_step` (`visitTelemetry.ts`, `visit-telemetry.ts`, `WAITLIST_STEPS` in
+    `visit-funnel.ts`); rendered as a Waitlist block on `VisitFunnelPanel` beside Creating.
+    The Join CTA is visible before sign-in; the drop between click and join _is_ the
+    sign-in wall, so there is no separate `signin_required` rung (that name already means
+    the creation wall).
+  - ~~BYOCA / self-build funnel unmeasured~~ — **closed 2026-08-01 (BY-08)**: `studio_step`
+    on the visit stream records `builder_chosen` → `connect_copied` → `agent_signaled` →
+    `gate_verdict`, each with a required `builder` dimension (`platform` | `self`). Optional
+    `detail` is a closed enum (`install` | `kickoff` | `green` | `red` | `kit_outdated`).
+    `create_step` may also carry optional `builder` once chosen. Same three-place contract
+    (`visitTelemetry.ts`, `visit-telemetry.ts`, `VisitEvent` in `store.ts`). Time-to-first
+    agent signal is `msSinceStart` on `agent_signaled`. No admin rollup yet — emission and
+    schema first; a VisitFunnelPanel Studio block is a follow-up.
 - ~~How-to-play opens recorded but unreadable~~ — **closed 2026-07-31** for the read
   path that [#395](https://github.com/gamedevpl/www.gamedev.pl/issues/395) needs:
   `how_to_play_opened` carries `via: 'bar' | 'more'` and optional `reopen: true` (same

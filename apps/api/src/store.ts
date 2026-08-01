@@ -547,7 +547,14 @@ export interface TelemetryEvent {
 export interface VisitEvent {
   /** Per-tab uuid from `sessionStorage`. Dies with the tab; never a uid. */
   visitId: string;
-  type: 'visit_started' | 'route_viewed' | 'play_started' | 'how_to_play_opened' | 'create_step' | 'waitlist_step';
+  type:
+    | 'visit_started'
+    | 'route_viewed'
+    | 'play_started'
+    | 'how_to_play_opened'
+    | 'create_step'
+    | 'waitlist_step'
+    | 'studio_step';
   /** Server-anchored instant, derived like `TelemetryEvent.at`. */
   at: string;
   /** Milliseconds from visit start — the trustworthy measure of within-visit timing. */
@@ -556,8 +563,18 @@ export interface VisitEvent {
   entry?: string;
   /** `route_viewed`: the route kind now shown. Never its parameters. */
   route?: string;
-  /** `create_step` / `waitlist_step`: which funnel step this visit reached. */
+  /** `create_step` / `waitlist_step` / `studio_step`: which funnel step this visit reached. */
   step?: string;
+  /**
+   * `create_step` / `studio_step`: who builds the round (`platform` | `self`).
+   * Optional on legacy create_step rows; required on studio_step. Never a game identity.
+   */
+  builder?: string;
+  /**
+   * `studio_step`: closed detail (`install` | `kickoff` | `green` | `red` | `kit_outdated`).
+   * Never free text, never a game identity.
+   */
+  detail?: string;
   /**
    * `how_to_play_opened`: which chrome surface opened the card (`bar` | `more`).
    * Absent on events recorded before the field existed; never a game identity.

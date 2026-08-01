@@ -59,6 +59,18 @@ const CreateStepSchema = z.enum([
  */
 const WaitlistStepSchema = z.enum(['cta_clicked', 'joined']);
 /**
+ * Studio / self-build funnel (BY-08). Sibling to create steps — not ordered with them.
+ * Reaches a grouping key; closed enum on an open endpoint.
+ */
+const StudioStepSchema = z.enum(['builder_chosen', 'connect_copied', 'agent_signaled', 'gate_verdict']);
+/** Platform vs creator's own agent. Optional on create_step; required on studio_step. */
+const BuilderDimensionSchema = z.enum(['platform', 'self']);
+/**
+ * Closed detail for studio steps that carry one. Optional so steps without a detail
+ * (builder choice, first agent signal) stay valid.
+ */
+const StudioStepDetailSchema = z.enum(['install', 'kickoff', 'green', 'red', 'kit_outdated']);
+/**
  * Which chrome surface opened How to play. Optional so a tab still running the previous
  * client can record the open without `via` — the aggregate treats missing as unknown
  * rather than dropping the event. Closed enum: the value reaches a grouping key.
@@ -101,8 +113,20 @@ const EventSchema = z.discriminatedUnion('type', [
     reopen: z.literal(true).optional(),
     ...offsetField,
   }),
-  z.object({ type: z.literal('create_step'), step: CreateStepSchema, ...offsetField }),
+  z.object({
+    type: z.literal('create_step'),
+    step: CreateStepSchema,
+    builder: BuilderDimensionSchema.optional(),
+    ...offsetField,
+  }),
   z.object({ type: z.literal('waitlist_step'), step: WaitlistStepSchema, ...offsetField }),
+  z.object({
+    type: z.literal('studio_step'),
+    step: StudioStepSchema,
+    builder: BuilderDimensionSchema,
+    detail: StudioStepDetailSchema.optional(),
+    ...offsetField,
+  }),
 ]);
 
 const RequestSchema = z.object({
@@ -193,8 +217,22 @@ export async function registerVisitTelemetryRoutes(
         case 'route_viewed':
           return { ...base, type: event.type, route: event.route };
         case 'create_step':
+          return {
+            ...base,
+            type: event.type,
+            step: event.step,
+            ...(event.builder === undefined ? {} : { builder: event.builder }),
+          };
         case 'waitlist_step':
           return { ...base, type: event.type, step: event.step };
+        case 'studio_step':
+          return {
+            ...base,
+            type: event.type,
+            step: event.step,
+            builder: event.builder,
+            ...(event.detail === undefined ? {} : { detail: event.detail }),
+          };
         case 'how_to_play_opened':
           return {
             ...base,

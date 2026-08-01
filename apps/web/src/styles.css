@@ -2760,6 +2760,14 @@ body.player-open {
   line-height: 1.4;
 }
 
+/* Self-build routing note: honest about whether a running agent will see the message. */
+.status-feedback-route {
+  margin: 0 0 6px;
+  color: var(--muted, #9ca3af);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
 /* MOBILE RESPONSIVENESS */
 @media (max-width: 768px) {
   /* One row, not two. A stacked header cost 102px — an eighth of a phone

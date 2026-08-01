@@ -53,10 +53,19 @@ export type VisitEvent =
    * "the card did not answer". Distinct-visit rates are derived on the read side.
    */
   | { type: 'how_to_play_opened'; via: HowToPlayVia; reopen?: true }
-  /** A step of the creation funnel was reached. Carries no prompt text, ever. */
-  | { type: 'create_step'; step: CreateStep }
+  /**
+   * A step of the creation funnel was reached. Carries no prompt text, ever.
+   * Optional `builder` dimensions platform vs self-build once the creator has chosen.
+   */
+  | { type: 'create_step'; step: CreateStep; builder?: BuilderDimension }
   /** A step of the closed-beta waitlist funnel. Carries no identity, ever. */
-  | { type: 'waitlist_step'; step: WaitlistStep };
+  | { type: 'waitlist_step'; step: WaitlistStep }
+  /**
+   * Studio / self-build funnel facts on the same visit stream as `create_step`.
+   * Always carries `builder` so BYOCA reach-to-publish is measurable without a
+   * parallel stream. No game slug, no uid — visit-scoped only.
+   */
+  | { type: 'studio_step'; step: StudioStep; builder: BuilderDimension; detail?: StudioStepDetail };
 
 /**
  * The creation funnel, in the order a creator meets it.
@@ -107,6 +116,23 @@ export type WaitlistStep =
  * Deep-link vs arcade is *not* here — that is visit `entry`, already on `visit_started`.
  */
 export type HowToPlayVia = 'bar' | 'more';
+
+/** Who builds the round — closed enum; reaches a grouping key. */
+export type BuilderDimension = 'platform' | 'self';
+
+/**
+ * Studio-side creator-funnel steps (BY-08). Sibling to `create_step`, not a rung of
+ * that ordered funnel — these answer builder choice, connect friction, time to first
+ * agent signal (`msSinceStart` on `agent_signaled`), and gate verdict per visit.
+ */
+export type StudioStep = 'builder_chosen' | 'connect_copied' | 'agent_signaled' | 'gate_verdict';
+
+/**
+ * Closed detail for studio steps that need one. `install` / `kickoff` are connect-card
+ * copies; `green` / `red` / `kit_outdated` are gate verdicts. Absent on steps that
+ * need none (builder choice, first agent signal).
+ */
+export type StudioStepDetail = 'install' | 'kickoff' | 'green' | 'red' | 'kit_outdated';
 
 const FLUSH_AT = 5;
 const MAX_BATCH = 25;
@@ -351,10 +377,14 @@ export function currentVisitId(): string | null {
  */
 let recordedSteps = new Set<CreateStep>();
 
-export function recordCreateStep(step: CreateStep): void {
+export function recordCreateStep(step: CreateStep, builder?: BuilderDimension): void {
   if (!currentSession || recordedSteps.has(step)) return;
   recordedSteps.add(step);
-  currentSession.record({ type: 'create_step', step });
+  currentSession.record({
+    type: 'create_step',
+    step,
+    ...(builder ? { builder } : {}),
+  });
 }
 
 let recordedWaitlistSteps = new Set<WaitlistStep>();
@@ -365,12 +395,39 @@ export function recordWaitlistStep(step: WaitlistStep): void {
   currentSession.record({ type: 'waitlist_step', step });
 }
 
+/**
+ * Studio steps already recorded for the live visit.
+ *
+ * Keyed by `step:builder` or `step:builder:detail` so connect install vs kickoff,
+ * gate green vs red, and platform vs self each count once without silencing
+ * unrelated steps.
+ */
+let recordedStudioSteps = new Set<string>();
+
+function studioStepKey(step: StudioStep, builder: BuilderDimension, detail?: StudioStepDetail): string {
+  return detail ? `${step}:${builder}:${detail}` : `${step}:${builder}`;
+}
+
+export function recordStudioStep(step: StudioStep, builder: BuilderDimension, detail?: StudioStepDetail): void {
+  if (!currentSession) return;
+  const key = studioStepKey(step, builder, detail);
+  if (recordedStudioSteps.has(key)) return;
+  recordedStudioSteps.add(key);
+  currentSession.record({
+    type: 'studio_step',
+    step,
+    builder,
+    ...(detail ? { detail } : {}),
+  });
+}
+
 /** Test seam: installs a session without touching the DOM. */
 export function setVisitSessionForTesting(session: VisitSession | null): void {
   currentSession = session;
   // Otherwise one test's steps would silence the next test's identical steps.
   recordedSteps = new Set();
   recordedWaitlistSteps = new Set();
+  recordedStudioSteps = new Set();
 }
 
 export interface StartVisitTrackingOptions {

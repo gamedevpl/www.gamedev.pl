@@ -98,9 +98,9 @@ describe('locale resources', () => {
     }
   });
 
-  // BYOCA connect/builder copy must never say "token" — creators see a paste-ready
-  // prompt with a "key", and the credential concept stays undescribed (BY-07).
-  it('never uses the word token in builder or connect copy', () => {
+  // BYOCA connect/builder/status copy must never say "token" — creators see a
+  // paste-ready prompt with a "key", and the credential concept stays undescribed.
+  it('never uses the word token in builder, connect, or self-build status copy', () => {
     for (const [lang, resource] of [
       ['en', en],
       ['pl', pl],
@@ -109,6 +109,13 @@ describe('locale resources', () => {
         const blob = JSON.stringify((resource as Record<string, unknown>)[section] ?? {});
         expect(blob, `${lang}.${section}`).not.toMatch(/\btoken\b/i);
       }
+      const statusView = (resource as { statusView: Record<string, unknown> }).statusView;
+      const selfBuildBlob = JSON.stringify({
+        stall: statusView.stall,
+        failure: statusView.failure,
+        feedback: statusView.feedback,
+      });
+      expect(selfBuildBlob, `${lang}.statusView self-build`).not.toMatch(/\btoken\b/i);
     }
   });
 });

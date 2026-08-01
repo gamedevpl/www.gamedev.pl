@@ -239,6 +239,81 @@ describe('POST /api/telemetry/visit', () => {
     expect(bad.statusCode).toBe(400);
   });
 
+  it('records a studio step with builder (and optional detail) and rejects bad enums', async () => {
+    const ok = await post(app, {
+      visitId,
+      flushMsSinceStart: 12_000,
+      events: [
+        { type: 'studio_step', step: 'builder_chosen', builder: 'self', msSinceStart: 100 },
+        {
+          type: 'studio_step',
+          step: 'connect_copied',
+          builder: 'self',
+          detail: 'kickoff',
+          msSinceStart: 200,
+        },
+        { type: 'studio_step', step: 'agent_signaled', builder: 'self', msSinceStart: 12_000 },
+        {
+          type: 'studio_step',
+          step: 'gate_verdict',
+          builder: 'platform',
+          detail: 'green',
+          msSinceStart: 20_000,
+        },
+        {
+          type: 'create_step',
+          step: 'submission_created',
+          builder: 'self',
+          msSinceStart: 50,
+        },
+      ],
+    });
+    expect(ok.statusCode).toBe(202);
+    const events = await store.listVisitEvents(today(), { visitId });
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'studio_step', step: 'builder_chosen', builder: 'self' }),
+        expect.objectContaining({
+          type: 'studio_step',
+          step: 'connect_copied',
+          builder: 'self',
+          detail: 'kickoff',
+        }),
+        expect.objectContaining({
+          type: 'studio_step',
+          step: 'agent_signaled',
+          builder: 'self',
+          msSinceStart: 12_000,
+        }),
+        expect.objectContaining({
+          type: 'studio_step',
+          step: 'gate_verdict',
+          builder: 'platform',
+          detail: 'green',
+        }),
+        expect.objectContaining({
+          type: 'create_step',
+          step: 'submission_created',
+          builder: 'self',
+        }),
+      ]),
+    );
+
+    const badStep = await post(app, {
+      visitId,
+      flushMsSinceStart: 0,
+      events: [{ type: 'studio_step', step: 'hacked', builder: 'self', msSinceStart: 0 }],
+    });
+    expect(badStep.statusCode).toBe(400);
+
+    const missingBuilder = await post(app, {
+      visitId,
+      flushMsSinceStart: 0,
+      events: [{ type: 'studio_step', step: 'builder_chosen', msSinceStart: 0 }],
+    });
+    expect(missingBuilder.statusCode).toBe(400);
+  });
+
   it('rejects an oversized batch', async () => {
     const response = await post(app, {
       visitId,

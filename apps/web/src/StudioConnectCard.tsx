@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
 import { CONNECT_CLIENTS, getConnectPayload, type ConnectClient, type ConnectPayload } from './connectApi.js';
+import { recordStudioStep } from './visitTelemetry.js';
 
 const CLIENT_LABEL_KEY: Record<ConnectClient, string> = {
   claudeCode: 'connect.clients.claudeCode',
@@ -72,6 +73,8 @@ export function StudioConnectCard({ token, agentConnected = false }: StudioConne
     } catch {
       // Snippet stays on screen to select by hand.
     }
+    // Count the click either way — clipboard denial still means they meant to connect.
+    recordStudioStep('connect_copied', 'self', which);
   };
 
   const expiresLabel = payload
