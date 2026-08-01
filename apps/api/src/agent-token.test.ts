@@ -37,6 +37,8 @@ describe('agent build-channel token', () => {
   it('rejects a stale generation with the fresh-prompt reason', () => {
     const token = mintAgentToken(7, secret, { roundGeneration: 2, now, ttlDays: 14 });
     const claims = verifyAgentToken(token, secret);
+    // One behind is a terminal-receipt for get_gate_verdict, but assertAgentTokenActive
+    // (writes / other reads) still refuses it.
     expect(() => assertAgentTokenActive(claims, { roundGeneration: 3 }, now)).toThrow(InvalidAgentTokenError);
     try {
       assertAgentTokenActive(claims, { roundGeneration: 3 }, now);
@@ -44,6 +46,8 @@ describe('agent build-channel token', () => {
       expect(error).toBeInstanceOf(InvalidAgentTokenError);
       expect((error as Error).message).toBe(STALE_AGENT_TOKEN_REASON);
     }
+    // Two behind is never a receipt.
+    expect(() => assertAgentTokenActive(claims, { roundGeneration: 4 }, now)).toThrow(InvalidAgentTokenError);
   });
 
   it('rejects an expired key the same way as a stale generation', () => {

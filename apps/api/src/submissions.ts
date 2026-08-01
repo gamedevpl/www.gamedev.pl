@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { splitConceptBrief } from './agent-build-brief.js';
 import { registerAgentChannelRoutes, type AgentChannelOptions } from './agent-channel.js';
 import { mintAgentToken } from './agent-token.js';
+import { registerMcpServerRoutes } from './mcp-server.js';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import { createCreationGate, CREATION_REFUSAL_CODES, type CreationGate } from './creation-limits.js';
 import { postGateScreenshotToThread } from './gate-screenshot.js';
@@ -3850,6 +3851,16 @@ export async function registerSubmissionRoutes(
     agentTokenSecret: submissionTokenSecret,
     now,
     onEvent: (issueNumber) => eventsCache.delete(issueNumber),
+  });
+
+  // Remote MCP (BY-05): streamable-HTTP tools wrapping the channel above. Same secret
+  // and store — sessionKey is derived from the round key, never a new creator credential.
+  await registerMcpServerRoutes(app, {
+    store,
+    agentTokenSecret: submissionTokenSecret,
+    now,
+    gamesStore: options.agentChannel?.gamesStore,
+    objectStore: options.agentChannel?.objectStore,
   });
 
   return { githubClient, startImprovementRound };

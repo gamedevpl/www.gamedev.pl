@@ -7,7 +7,15 @@ import {
   DEFAULT_BUILD_ORIENTATION,
 } from './agent-build-brief.js';
 import { getAgentBuildExample, listAgentBuildExamples } from './agent-build-examples.js';
-import { assertAgentTokenActive, InvalidAgentTokenError, readBearerToken, verifyAgentToken } from './agent-token.js';
+import {
+  assertAgentTokenActive,
+  classifyAgentTokenAccess,
+  InvalidAgentTokenError,
+  readBearerToken,
+  STALE_AGENT_TOKEN_REASON,
+  verifyAgentToken,
+  type AgentTokenAccess,
+} from './agent-token.js';
 import { selfBuildDeliveryCap } from './builder.js';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from './gcs-sign.js';
 import { InvalidUploadError, type GamesStore } from './games-store.js';
@@ -70,8 +78,11 @@ const AckRequestSchema = z.object({
 });
 
 const MAX_SHOT_LABEL = 120;
-/** ~300 KB decoded, which a pixel-art frame sits well inside. */
-const maxShotBytes = 300 * 1024;
+/**
+ * 2 MB decoded — the MCP `send_screenshot` contract (BY-05). Pixel-art frames sit
+ * well inside; a full-resolution capture from a kit check may not.
+ */
+const maxShotBytes = 2 * 1024 * 1024;
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 const BuildShotInputSchema = z.object({
@@ -134,7 +145,8 @@ const BuildSourcesInputSchema = z.object({
       }),
     )
     .min(1, 'files is required')
-    .max(64, 'too many files'),
+    // MCP submit_sources allows ≤200; the filename allowlist + byte budget still bite.
+    .max(200, 'too many files'),
   /**
    * Creator Kit engineRef the sources were built against. Required for self-build
    * deliveries (BY-06); the gate compares it to `kits/current.json`'s N/N−1 window.
@@ -285,11 +297,17 @@ export async function registerAgentChannelRoutes(
    * Resolves the build a request is about. The token is the whole credential: it
    * carries the issue number, so there is nothing to address in the URL and nothing
    * a caller can point at a build they were not handed.
+   *
+   * When `allowTerminalReceipt` is set, a capability whose generation is exactly one
+   * behind current is accepted as {@link AgentTokenAccess} `terminal_receipt` — used
+   * only by the gate-verdict read so an agent can observe the green that closed its
+   * round. Every other route keeps the strict active-only check.
    */
   async function resolveBuild(
     request: FastifyRequest,
     reply: FastifyReply,
-  ): Promise<{ issueNumber: number; record: SubmissionRecord } | null> {
+    options: { allowTerminalReceipt?: boolean } = {},
+  ): Promise<{ issueNumber: number; record: SubmissionRecord; access: AgentTokenAccess } | null> {
     if (!store || !agentTokenSecret) {
       reply.status(503).send({ error: 'the build channel is not configured' });
       return null;
@@ -320,7 +338,12 @@ export async function registerAgentChannelRoutes(
     }
 
     try {
+      if (options.allowTerminalReceipt) {
+        const access = classifyAgentTokenAccess(claims, record, now());
+        return { issueNumber, record, access };
+      }
       assertAgentTokenActive(claims, record, now());
+      return { issueNumber, record, access: 'active' };
     } catch (error) {
       if (!(error instanceof InvalidAgentTokenError)) throw error;
       // Stale/expired tokens are a strict 401 in every case — including terminal jobs.
@@ -328,12 +351,10 @@ export async function registerAgentChannelRoutes(
       // but generation-stale or expired key through would grant indefinite read of
       // sources/inbox plus unguarded inbox/ack writes. The 401 body already is the
       // stop signal ("this build is finished — get a fresh prompt…"). Terminal-receipt
-      // reads for a closed round's own gate verdict belong to BY-05/BY-06, not here.
+      // reads for a closed round's own gate verdict use allowTerminalReceipt above.
       reply.status(401).send({ error: error.message || 'invalid build token' });
       return null;
     }
-
-    return { issueNumber, record };
   }
 
   function stopReason(record: SubmissionRecord): 'abandoned' | 'published' | 'canceled' | null {
@@ -1146,6 +1167,68 @@ export async function registerAgentChannelRoutes(
         tarballUrl,
         ...(sha256 ? { sha256 } : {}),
         unpack: kitUnpackCommand(tarballUrl),
+      });
+    },
+  );
+
+  /**
+   * Gate verdict for the job's delivery (BY-05 terminal receipt).
+   *
+   * Unlike every other channel read, a capability whose generation is exactly one
+   * behind current is accepted — limited to this delivery's own verdict — so an agent
+   * can observe the green that closed its round. Writes and other reads still 401.
+   * Query `?version=` to name a delivery; default is the job's latest `deliveredVersion`.
+   */
+  app.get(
+    '/api/agent/build/gate',
+    { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply, { allowTerminalReceipt: true });
+      if (!resolved) return reply;
+      const { record, access } = resolved;
+
+      const query = request.query as { version?: string };
+      const requestedVersion = typeof query.version === 'string' && query.version.trim() ? query.version.trim() : null;
+      const version = requestedVersion ?? record.deliveredVersion ?? null;
+
+      if (!version || !record.slug) {
+        return reply.send({
+          status: 'pending',
+          deliveryId: null,
+          summary: 'nothing has been delivered yet',
+          access,
+        });
+      }
+
+      // Receipt mode may only read the delivery the closed round owns — the job's
+      // current pointer. Asking for any other version is not a receipt grant.
+      if (access === 'terminal_receipt' && version !== record.deliveredVersion) {
+        return reply.status(401).send({ error: STALE_AGENT_TOKEN_REASON });
+      }
+
+      const gate = await gateVerdict({ ...record, deliveredVersion: version });
+      if (!gate) {
+        return reply.send({
+          status: 'pending',
+          deliveryId: version,
+          summary: 'gate has not reported yet',
+          access,
+        });
+      }
+
+      const status = gate.green ? 'green' : gate.status === 'kit_outdated' ? 'kit_outdated' : 'red';
+      return reply.send({
+        status,
+        deliveryId: version,
+        version: gate.version,
+        green: gate.green,
+        ranAt: gate.ranAt,
+        summary: gate.green
+          ? 'gate accepted this delivery'
+          : (gate.report?.split('\n').at(-1) ?? 'gate refused this delivery'),
+        ...(gate.report ? { report: gate.report } : {}),
+        ...(gate.status ? { gateStatus: gate.status } : {}),
+        access,
       });
     },
   );
