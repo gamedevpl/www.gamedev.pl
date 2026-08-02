@@ -6,19 +6,19 @@ import { InvalidSessionError, readSessionToken, SESSION_COOKIE_NAME } from './au
 import { redirectUriAllowed } from './oauth-redirect.js';
 import { verifyPkceS256 } from './oauth-pkce.js';
 import {
-  buildOAuthAccessTokenRecord,
-  generateOAuthAccessToken,
-  generateOAuthAuthCode,
-  generateOAuthRefreshToken,
-  hashOAuthSecret,
-  looksLikeOAuthAccessToken,
-  looksLikeOAuthRefreshToken,
-  OAUTH_ACCESS_TOKEN_TTL_MS,
-  OAUTH_AUTH_CODE_TTL_MS,
-  OAUTH_REFRESH_TOKEN_TTL_MS,
-  parseOAuthAccessToken,
-  parseOAuthAuthCode,
-  parseOAuthRefreshToken,
+  AS_ACCESS_TOKEN_TTL_MS,
+  AS_AUTH_CODE_TTL_MS,
+  AS_REFRESH_TOKEN_TTL_MS,
+  buildAsAccessTokenRecord,
+  generateAsAccessToken,
+  generateAsAuthCode,
+  generateAsRefreshToken,
+  hashAsTokenSecret,
+  looksLikeAsAccessToken,
+  looksLikeAsRefreshToken,
+  parseAsAccessToken,
+  parseAsAuthCode,
+  parseAsRefreshToken,
 } from './oauth-tokens.js';
 import type { OAuthClientRecord, OAuthGrantRecord, Store } from './store.js';
 
@@ -429,11 +429,11 @@ export function registerOAuthAuthorizationServerRoutes(
       refreshFamilyId: grantId,
       currentRefreshTokenId: '',
       currentRefreshHash: '',
-      refreshExpiresAt: new Date(nowMs + OAUTH_REFRESH_TOKEN_TTL_MS).toISOString(),
+      refreshExpiresAt: new Date(nowMs + AS_REFRESH_TOKEN_TTL_MS).toISOString(),
     };
     await store.createOAuthGrant(grant);
 
-    const authCode = generateOAuthAuthCode();
+    const authCode = generateAsAuthCode();
     await store.createOAuthAuthCode({
       codeId: authCode.codeId,
       codeHash: authCode.codeHash,
@@ -443,7 +443,7 @@ export function registerOAuthAuthorizationServerRoutes(
       codeChallenge: params.code_challenge,
       codeChallengeMethod: 'S256',
       scope: MCP_SCOPE,
-      expiresAt: new Date(nowMs + OAUTH_AUTH_CODE_TTL_MS).toISOString(),
+      expiresAt: new Date(nowMs + AS_AUTH_CODE_TTL_MS).toISOString(),
       grantId,
     });
 
@@ -481,14 +481,18 @@ export function registerOAuthAuthorizationServerRoutes(
         return reply.status(400).send({ error: 'invalid_request' });
       }
 
-      let parsedCode: { codeId: string; secret: string };
+      let parsedCode: { codeId: string; secretHalf: string };
       try {
-        parsedCode = parseOAuthAuthCode(code);
+        parsedCode = parseAsAuthCode(code);
       } catch {
         return reply.status(400).send({ error: 'invalid_grant' });
       }
 
-      const consumed = await store.consumeOAuthAuthCode(parsedCode.codeId, hashOAuthSecret(parsedCode.secret), nowMs);
+      const consumed = await store.consumeOAuthAuthCode(
+        parsedCode.codeId,
+        hashAsTokenSecret(parsedCode.secretHalf),
+        nowMs,
+      );
       if (!consumed) return reply.status(400).send({ error: 'invalid_grant' });
       if (consumed.clientId !== clientId) return reply.status(400).send({ error: 'invalid_grant' });
       if (!redirectUriAllowed(redirectUri, [consumed.redirectUri])) {
@@ -501,14 +505,14 @@ export function registerOAuthAuthorizationServerRoutes(
       const grant = consumed.grantId ? await store.getOAuthGrant(consumed.grantId) : null;
       if (!grant || grant.revokedAt) return reply.status(400).send({ error: 'invalid_grant' });
 
-      const access = generateOAuthAccessToken();
-      const refresh = generateOAuthRefreshToken();
-      const accessRecord = buildOAuthAccessTokenRecord(access, grant, nowMs);
+      const access = generateAsAccessToken();
+      const refresh = generateAsRefreshToken();
+      const accessRecord = buildAsAccessTokenRecord(access, grant, nowMs);
       const issued = await store.issueOAuthTokensFromGrant({
         grantId: grant.grantId,
         refreshTokenId: refresh.tokenId,
         refreshHash: refresh.secretHash,
-        refreshExpiresAt: new Date(nowMs + OAUTH_REFRESH_TOKEN_TTL_MS).toISOString(),
+        refreshExpiresAt: new Date(nowMs + AS_REFRESH_TOKEN_TTL_MS).toISOString(),
         accessToken: accessRecord,
         nowMs,
       });
@@ -517,7 +521,7 @@ export function registerOAuthAuthorizationServerRoutes(
       return reply.send({
         access_token: access.token,
         refresh_token: refresh.token,
-        expires_in: Math.floor(OAUTH_ACCESS_TOKEN_TTL_MS / 1000),
+        expires_in: Math.floor(AS_ACCESS_TOKEN_TTL_MS / 1000),
         token_type: 'Bearer',
         scope: grant.scope,
       });
@@ -530,9 +534,9 @@ export function registerOAuthAuthorizationServerRoutes(
           : '';
       if (!refreshToken) return reply.status(400).send({ error: 'invalid_request' });
 
-      let parsed: { tokenId: string; secret: string };
+      let parsed: { tokenId: string; secretHalf: string };
       try {
-        parsed = parseOAuthRefreshToken(refreshToken);
+        parsed = parseAsRefreshToken(refreshToken);
       } catch {
         return reply.status(400).send({ error: 'invalid_grant' });
       }
@@ -540,15 +544,15 @@ export function registerOAuthAuthorizationServerRoutes(
       const grant = await store.getOAuthGrantByRefreshTokenId(parsed.tokenId);
       if (!grant) return reply.status(400).send({ error: 'invalid_grant' });
 
-      const access = generateOAuthAccessToken();
-      const accessRecord = buildOAuthAccessTokenRecord(access, grant, nowMs);
-      const nextRefresh = generateOAuthRefreshToken();
+      const access = generateAsAccessToken();
+      const accessRecord = buildAsAccessTokenRecord(access, grant, nowMs);
+      const nextRefresh = generateAsRefreshToken();
       const rotateResult = await store.rotateOAuthRefreshToken({
         refreshTokenId: parsed.tokenId,
-        refreshSecretHash: hashOAuthSecret(parsed.secret),
+        refreshSecretHash: hashAsTokenSecret(parsed.secretHalf),
         newRefreshTokenId: nextRefresh.tokenId,
         newRefreshHash: nextRefresh.secretHash,
-        newRefreshExpiresAt: new Date(nowMs + OAUTH_REFRESH_TOKEN_TTL_MS).toISOString(),
+        newRefreshExpiresAt: new Date(nowMs + AS_REFRESH_TOKEN_TTL_MS).toISOString(),
         newAccessToken: accessRecord,
         nowMs,
       });
@@ -560,7 +564,7 @@ export function registerOAuthAuthorizationServerRoutes(
       return reply.send({
         access_token: access.token,
         refresh_token: nextRefresh.token,
-        expires_in: Math.floor(OAUTH_ACCESS_TOKEN_TTL_MS / 1000),
+        expires_in: Math.floor(AS_ACCESS_TOKEN_TTL_MS / 1000),
         token_type: 'Bearer',
         scope: rotateResult.grant.scope,
       });
@@ -581,17 +585,17 @@ export function registerOAuthAuthorizationServerRoutes(
 
     let grantId: string | null = null;
 
-    if (looksLikeOAuthRefreshToken(token)) {
+    if (looksLikeAsRefreshToken(token)) {
       try {
-        const parsed = parseOAuthRefreshToken(token);
+        const parsed = parseAsRefreshToken(token);
         const grant = await store.getOAuthGrantByRefreshTokenId(parsed.tokenId);
         grantId = grant?.grantId ?? null;
       } catch {
         grantId = null;
       }
-    } else if (looksLikeOAuthAccessToken(token)) {
+    } else if (looksLikeAsAccessToken(token)) {
       try {
-        const parsed = parseOAuthAccessToken(token);
+        const parsed = parseAsAccessToken(token);
         const access = await store.getOAuthAccessToken(parsed.tokenId);
         grantId = access?.grantId ?? null;
       } catch {

@@ -37,7 +37,7 @@ import {
   sendMcpOAuthChallenge,
   shouldIssueMcpOAuthChallenge,
 } from './mcp-oauth-metadata.js';
-import { looksLikeOAuthAccessToken, verifyOAuthAccessToken } from './oauth-tokens.js';
+import { looksLikeAsAccessToken, verifyAsAccessToken } from './oauth-tokens.js';
 import { MCP_ENDPOINT_PATH } from './self-build-connect.js';
 import { BUILD_STEPS, sanitizeCreatorText } from './submission-status.js';
 import type { Store, SubmissionRecord } from './store.js';
@@ -346,7 +346,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     let channelToken: string;
 
     if (bearer) {
-      if (looksLikeOAuthAccessToken(bearer)) {
+      if (looksLikeAsAccessToken(bearer)) {
         return toolErr(
           'OAuth access proves your identity only — call start() with your game slug (Authorization: Bearer <oauth access>) to get a session key',
         );
@@ -504,9 +504,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const slugArg = typeof args.slug === 'string' ? args.slug.trim() : '';
         const bearer = ctx.bearerToken;
 
-        if (!key && bearer && looksLikeOAuthAccessToken(bearer)) {
-          const oauth = await verifyOAuthAccessToken(store, bearer, now());
-          if (!oauth) {
+        if (!key && bearer && looksLikeAsAccessToken(bearer)) {
+          const asAccess = await verifyAsAccessToken(store, bearer, now());
+          if (!asAccess) {
             noteInvalidStart(ctx.request);
             return toolErr('invalid OAuth access — sign in again from your coding agent');
           }
@@ -514,7 +514,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             return toolErr('slug is required when using OAuth — pass the game slug for your open build round');
           }
 
-          const active = await findActiveRoundForSlug(store, slugArg, oauth.ownerUid);
+          const active = await findActiveRoundForSlug(store, slugArg, asAccess.ownerUid);
           if (!active) {
             noteInvalidStart(ctx.request);
             return toolErr(NO_OPEN_ROUND_REASON);
@@ -565,7 +565,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           };
         }
 
-        if (key && looksLikeOAuthAccessToken(key)) {
+        if (key && looksLikeAsAccessToken(key)) {
           noteInvalidStart(ctx.request);
           return toolErr('OAuth access must be sent as Authorization Bearer, not as the key argument');
         }

@@ -6,7 +6,7 @@ import { mintGameAgentKey } from './agent-game-key.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { OAUTH_AS_METADATA_PATH } from './oauth-as.js';
 import { pkceChallengeS256 } from './oauth-pkce.js';
-import { generateOAuthAccessToken, generateOAuthRefreshToken, OAUTH_ACCESS_TOKEN_TTL_MS } from './oauth-tokens.js';
+import { AS_ACCESS_TOKEN_TTL_MS, generateAsAccessToken, generateAsRefreshToken } from './oauth-tokens.js';
 import { MCP_ENDPOINT_PATH } from './self-build-connect.js';
 import { InMemoryStore } from './store.js';
 import { NoopTranslator } from './translate.js';
@@ -552,7 +552,7 @@ describe('MCP OAuth integration (BY-18b)', () => {
 describe('oauth token helpers', () => {
   it('expires access credentials on schedule', async () => {
     const store = new InMemoryStore();
-    const generated = generateOAuthAccessToken();
+    const generated = generateAsAccessToken();
     const grantId = 'grant-1';
     await store.createOAuthGrant({
       grantId,
@@ -561,9 +561,9 @@ describe('oauth token helpers', () => {
       scope: 'mcp',
       createdAt: new Date().toISOString(),
       refreshFamilyId: grantId,
-      currentRefreshTokenId: generateOAuthRefreshToken().tokenId,
+      currentRefreshTokenId: generateAsRefreshToken().tokenId,
       currentRefreshHash: 'abc',
-      refreshExpiresAt: new Date(Date.now() + OAUTH_ACCESS_TOKEN_TTL_MS).toISOString(),
+      refreshExpiresAt: new Date(Date.now() + AS_ACCESS_TOKEN_TTL_MS).toISOString(),
     });
     await store.createOAuthAccessToken({
       tokenId: generated.tokenId,
@@ -573,7 +573,7 @@ describe('oauth token helpers', () => {
       expiresAt: new Date(Date.now() - 1000).toISOString(),
       createdAt: new Date().toISOString(),
     });
-    const { verifyOAuthAccessToken } = await import('./oauth-tokens.js');
-    expect(await verifyOAuthAccessToken(store, generated.token, Date.now())).toBeNull();
+    const { verifyAsAccessToken } = await import('./oauth-tokens.js');
+    expect(await verifyAsAccessToken(store, generated.token, Date.now())).toBeNull();
   });
 });
