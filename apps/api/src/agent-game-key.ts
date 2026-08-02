@@ -45,10 +45,6 @@ export const SLUG_NOT_ON_ACCOUNT_REASON =
 export const ROTATED_GAME_KEY_REASON =
   'this game key was rotated — get a fresh prompt from the Studio thread for this game';
 
-/** Per-game opt-in for MCP `open_round` is off (BY-24). */
-export const AGENT_OPEN_ROUNDS_DISABLED_REASON =
-  'the creator has not allowed their agent to start new rounds for this game — ask them to enable it in Studio';
-
 /** `open_round` only applies after the game has shipped. */
 export const GAME_NOT_PUBLISHED_REASON = 'this game is not published yet — improvement rounds open only after publish';
 

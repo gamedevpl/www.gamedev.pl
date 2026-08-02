@@ -154,7 +154,6 @@ describe('slug ownership beyond owner-list window (BY-25)', () => {
     await seedManyNewerJobs(store, 250, newerJobsStart);
     const at = new Date(now).toISOString();
     await store.ensureGameAgentKey(slug, ownerUid, at);
-    await store.setGameAgentOpenRounds(slug, ownerUid, true, at);
   }
 
   it('creatorOwnsSlug stays true when the game aged out of listSubmissionsByOwner(200)', async () => {

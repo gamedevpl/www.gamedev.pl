@@ -5,14 +5,6 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n/index.js';
 import { StudioAgentKeyPanel } from './StudioAgentKeyPanel.js';
-import { recordStudioStep } from './visitTelemetry.js';
-
-vi.mock('./visitTelemetry', async () => {
-  const actual = await vi.importActual<typeof import('./visitTelemetry')>('./visitTelemetry');
-  return { ...actual, recordStudioStep: vi.fn() };
-});
-
-const mockedRecordStudioStep = vi.mocked(recordStudioStep);
 
 async function flush() {
   await Promise.resolve();
@@ -22,7 +14,6 @@ async function flush() {
 const agentKeyPayload = {
   slug: 'sky-dodge',
   keyGeneration: 1,
-  allowAgentOpenRounds: false,
   expiresAt: Math.floor(Date.now() / 1000) + 90 * 24 * 60 * 60,
   kickoffPrompt:
     'Build "Sky Dodge" for gamedev.pl.\nStart with the gamedevpl tool, key: abc.def\nstart returns your workflow; after gate green the round is done — keep this key for the next round on this game unless the creator rotates it.',
@@ -37,7 +28,6 @@ const agentKeyPayload = {
 
 describe('StudioAgentKeyPanel', () => {
   beforeEach(() => {
-    mockedRecordStudioStep.mockClear();
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo) => {
@@ -51,12 +41,6 @@ describe('StudioAgentKeyPanel', () => {
               kickoffPrompt: agentKeyPayload.kickoffPrompt.replace('abc.def', 'rotated.key'),
               rotated: true,
             }),
-          };
-        }
-        if (url.includes('/agent-key/open-rounds')) {
-          return {
-            ok: true,
-            json: async () => ({ allowAgentOpenRounds: true }),
           };
         }
         return {
@@ -77,7 +61,7 @@ describe('StudioAgentKeyPanel', () => {
     vi.restoreAllMocks();
   });
 
-  it('shows kickoff after rotate and emits connect_copied only on copy', async () => {
+  it('loads expiry and offers rotate without an open-rounds toggle', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
 
@@ -93,35 +77,12 @@ describe('StudioAgentKeyPanel', () => {
       await flush();
     });
 
-    expect(container.textContent).not.toContain('rotated.key');
+    expect(container.textContent).toMatch(/Per-game key/i);
+    expect(container.textContent).toMatch(/legacy/i);
+    expect(container.querySelector('[role="switch"]')).toBeNull();
+    expect(container.textContent).not.toMatch(/Let my agent start new rounds/i);
+    expect(container.textContent).toContain('Rotate key');
 
-    await act(async () => {
-      container
-        .querySelector<HTMLButtonElement>('.studio-connect-skip')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      await flush();
-    });
-    await act(async () => {
-      container
-        .querySelector<HTMLButtonElement>('.studio-connect-skip.is-danger')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      await flush();
-      await flush();
-    });
-
-    expect(container.textContent).toContain('rotated.key');
-    expect(mockedRecordStudioStep).not.toHaveBeenCalledWith('connect_copied', expect.anything(), expect.anything());
-
-    await act(async () => {
-      container
-        .querySelector<HTMLButtonElement>('.status-share-copy')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      await flush();
-    });
-    expect(mockedRecordStudioStep).toHaveBeenCalledWith('connect_copied', 'self', 'kickoff');
-
-    await act(async () => {
-      root.unmount();
-    });
+    await act(async () => root.unmount());
   });
 });

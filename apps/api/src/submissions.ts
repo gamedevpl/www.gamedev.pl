@@ -48,7 +48,7 @@ import {
   type JobTransition,
 } from './job-state.js';
 import { createSelfBuildBackend } from './self-build-backend.js';
-import { mintConnectPayload } from './self-build-connect.js';
+import { mintConnectPayload, mintGameKeyKickoff } from './self-build-connect.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
@@ -2117,9 +2117,10 @@ export async function registerSubmissionRoutes(
    * Everything a creator needs to connect their own coding agent to a self-build round.
    *
    * Creator-session auth, owner only. Valid only while the active round's builder is
-   * `self`. Install snippets configure the MCP URL alone; the durable per-game opener
-   * rides the kickoff prompt. Regenerating remints a key with a new signed `exp` at the
-   * same keyGeneration — it does NOT rotate. Pending, undelivered creator inbox lines
+   * `self`. Install snippets configure the MCP URL plus a masked Authorization header
+   * for the creator-wide key (BY-27b); the kickoff prompt is keyless (slug only).
+   * Regenerating remints a creator key with a new signed `exp` at the same
+   * keyGeneration — it does NOT rotate. Pending, undelivered creator inbox lines
    * are embedded under "also apply:" so a re-copy never drops queued feedback.
    * See self-build-connect.ts for the templates.
    */
@@ -2189,15 +2190,11 @@ export async function registerSubmissionRoutes(
       }
 
       const at = new Date(now()).toISOString();
-      const keyRecord = await store.ensureGameAgentKey(slug, fresh.ownerUid, at);
-      if (!keyRecord) {
-        return reply.status(403).send({ error: 'only the creator can connect a build' });
-      }
+      // BY-27b: connect hands out the creator-wide key (config header) + a keyless
+      // slug prompt. Per-game keys remain mintable via /agent-key for legacy setups.
+      const keyRecord = await store.ensureCreatorAgentKey(fresh.ownerUid, at);
 
       const pendingMessages = await store.listPendingCreatorMessages(issueNumber);
-      // Improve handoff (BY-20): a new job for the same slug shows the same durable key —
-      // remind the creator there is nothing new to copy unless they rotated.
-      const sameKeyReminder = (fresh.roundGeneration ?? 1) > 1 || Boolean(fresh.publishedAt);
       const payload = mintConnectPayload({
         slug,
         ownerUid: fresh.ownerUid,
@@ -2206,10 +2203,9 @@ export async function registerSubmissionRoutes(
         submissionTokenSecret,
         appBaseUrl: notifyAppBaseUrl,
         pendingMessages,
-        sameKeyReminder,
         now: now(),
       });
-      // Kickoff embeds a capability — never let intermediaries cache it.
+      // Payload carries a capability for Copy — never let intermediaries cache it.
       return reply.header('Cache-Control', 'no-store').send(payload);
     },
   );
@@ -2256,7 +2252,7 @@ export async function registerSubmissionRoutes(
         return reply.status(403).send({ error: 'only the creator can manage this game key' });
       }
 
-      const payload = mintConnectPayload({
+      const payload = mintGameKeyKickoff({
         slug,
         ownerUid: record.ownerUid,
         keyGeneration: keyRecord.keyGeneration,
@@ -2270,7 +2266,6 @@ export async function registerSubmissionRoutes(
         slug,
         keyGeneration: keyRecord.keyGeneration,
         expiresAt: payload.expiresAt,
-        allowAgentOpenRounds: keyRecord.allowAgentOpenRounds === true,
         kickoffPrompt: payload.kickoffPrompt,
         installSnippets: payload.installSnippets,
       });
@@ -2317,7 +2312,7 @@ export async function registerSubmissionRoutes(
         return reply.status(403).send({ error: 'only the creator can rotate this game key' });
       }
 
-      const payload = mintConnectPayload({
+      const payload = mintGameKeyKickoff({
         slug,
         ownerUid: record.ownerUid,
         keyGeneration: rotated.keyGeneration,
@@ -2331,56 +2326,9 @@ export async function registerSubmissionRoutes(
         slug,
         keyGeneration: rotated.keyGeneration,
         expiresAt: payload.expiresAt,
-        allowAgentOpenRounds: rotated.allowAgentOpenRounds === true,
         kickoffPrompt: payload.kickoffPrompt,
         installSnippets: payload.installSnippets,
         rotated: true,
-      });
-    },
-  );
-
-  app.post(
-    '/api/submissions/:id/agent-key/open-rounds',
-    { config: { rateLimit: { max: 30, timeWindow: '1 hour' } } },
-    async (request, reply) => {
-      if (!submissionTokenSecret || !store) {
-        return reply.status(503).send({ error: 'submissions are not configured' });
-      }
-      if (!checkUserAccess(request, reply)) return;
-
-      const parsedBody = z.object({ allow: z.boolean() }).safeParse(request.body ?? {});
-      if (!parsedBody.success) {
-        return reply.status(400).send({ error: 'allow must be true or false' });
-      }
-
-      const id = z.string().parse((request.params as { id?: string }).id);
-      let issueNumber: number;
-      try {
-        issueNumber = verifyToken(id, submissionTokenSecret);
-      } catch (error) {
-        if (error instanceof InvalidTokenError) {
-          return reply.status(400).send({ error: 'invalid submission token' });
-        }
-        throw error;
-      }
-
-      const record = await store.getSubmission(issueNumber);
-      if (!record || record.ownerUid !== request.user!.uid) {
-        return reply.status(403).send({ error: 'only the creator can manage this game key' });
-      }
-      if (!record.slug) {
-        return reply.status(409).send({ error: 'game_key_unavailable', reason: 'missing_slug' });
-      }
-
-      const at = new Date(now()).toISOString();
-      const updated = await store.setGameAgentOpenRounds(record.slug, record.ownerUid, parsedBody.data.allow, at);
-      if (!updated) {
-        return reply.status(403).send({ error: 'only the creator can manage this game key' });
-      }
-
-      return reply.send({
-        slug: record.slug,
-        allowAgentOpenRounds: updated.allowAgentOpenRounds === true,
       });
     },
   );

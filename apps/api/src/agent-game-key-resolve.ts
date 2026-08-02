@@ -6,7 +6,6 @@
  */
 
 import {
-  AGENT_OPEN_ROUNDS_DISABLED_REASON,
   assertGameAgentKeyActive,
   GAME_NOT_PUBLISHED_REASON,
   looksLikeGameAgentKey,
@@ -140,8 +139,9 @@ export async function resolveGameAgentKeyForStart(
 }
 
 /**
- * Durable-key verification for `open_round`: published game, opt-in, and idempotent
- * binding when a round is already open.
+ * Durable-key verification for `open_round`: published game and idempotent binding
+ * when a round is already open. The BY-24 per-game opt-in is withdrawn (BY-27b) —
+ * `allowAgentOpenRounds` on existing records is ignored.
  */
 export async function resolveGameAgentKeyForOpenRound(
   store: Store,
@@ -151,10 +151,6 @@ export async function resolveGameAgentKeyForOpenRound(
 ): Promise<ResolveGameKeyForOpenRoundResult> {
   const verified = await verifyDurableGameAgentKey(store, key, secret, nowMs);
   if (!verified.ok) return verified;
-
-  if (verified.keyRecord.allowAgentOpenRounds !== true) {
-    return { ok: false, reason: AGENT_OPEN_ROUNDS_DISABLED_REASON };
-  }
 
   const publishedRecord = await store.getPublishedSubmissionBySlug(verified.claims.slug);
   if (!publishedRecord) {

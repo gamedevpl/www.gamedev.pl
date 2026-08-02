@@ -863,24 +863,37 @@
   },
   "connect": {
     "title": "Connect your coding agent",
-    "lead": "This round waits for your agent. Add gamedev.pl once, then paste the build prompt.",
+    "lead": "This round waits for your agent. Paste the MCP config once, then the build prompt.",
     "loading": "Preparing your connect steps…",
     "loadError": "We couldn't load the connect steps right now. Refresh in a moment.",
     "copied": "Copied",
+    "copyConfig": "Copy config",
+    "copyUrl": "Copy URL",
     "copyInstall": "Copy",
     "copyKickoff": "Copy prompt",
     "waiting": "Waiting for your agent to check in…",
+    "authMode": {
+      "label": "How to connect",
+      "key": "Paste header",
+      "oauth": "Sign in"
+    },
     "step1": {
       "title": "Add gamedev.pl to your agent",
       "clients": "Agent client",
+      "configHint": "Paste this into your agent's MCP server settings. The Authorization line is masked here — Copy puts the real header on your clipboard.",
+      "meta": "Ends in {{fingerprint}} · generation {{generation}} · expires {{when}}",
       "skip": "Already added it for another game? Skip this",
       "skipped": "Skipped — using the install you already have."
     },
     "step2": {
       "title": "Tell your agent what to build",
-      "sameConnection": "Your gamedev.pl connection stays the same — this game's key in the prompt below stays too unless you rotate it. No need to change your agent's config between rounds.",
+      "sameConnection": "Your gamedev.pl connection stays in your agent config — this prompt carries only the game slug, never a secret.",
       "sameKeyAsBefore": "Same key as before — nothing new to copy unless you rotated it.",
       "expiry": "This key works for this game and expires {{when}}."
+    },
+    "oauth": {
+      "title": "Sign in from your agent",
+      "hint": "Add this MCP URL in your agent, then sign in when it asks. Pass the game slug from the prompt below when you start."
     },
     "clients": {
       "claudeCode": "Claude Code",
@@ -899,18 +912,12 @@
     }
   },
   "agentKey": {
-    "title": "Agent connection",
+    "title": "Per-game key (legacy)",
     "loading": "Loading agent settings…",
     "loadError": "We couldn't load agent settings right now.",
-    "toggleError": "We couldn't update that setting. Try again in a moment.",
+    "legacyHint": "Prefer the coding-agent key above — paste it once in your agent's MCP config. This per-game key is for older setups only.",
     "expiry": "This game's key expires {{when}}.",
-    "rotatedKickoff": "Your key was rotated — copy this fresh kickoff for your agent:",
-    "openRounds": {
-      "title": "Let my agent start new rounds",
-      "on": "On",
-      "off": "Off",
-      "hint": "When on, your coding agent can open post-publish improvement rounds with this game's key. Uses the same daily improvement limit as starting a round here."
-    }
+    "rotatedKickoff": "Your key was rotated — copy this fresh kickoff for your agent:"
   },
   "oauthClients": {
     "title": "Connected coding agents",

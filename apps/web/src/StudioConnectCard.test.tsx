@@ -12,33 +12,56 @@ async function flush() {
   await Promise.resolve();
 }
 
+const FULL_KEY = 'YzEu' + 'b'.repeat(120);
+const MASKED = 'Authorization: Bearer ····9a10e';
+
 const payload = {
   installSnippets: {
-    claudeCode: 'claude mcp add --transport http gamedevpl https://www.gamedev.pl/api/mcp',
-    codex: '[mcp_servers.gamedevpl]\nurl = "https://www.gamedev.pl/api/mcp"',
-    cursor: '{\n  "mcpServers": {\n    "gamedevpl": {\n      "url": "https://www.gamedev.pl/api/mcp"\n    }\n  }\n}',
-    kimi: 'npx -y mcp-remote https://www.gamedev.pl/api/mcp',
-    cli: 'curl -sS -X POST https://www.gamedev.pl/api/mcp',
+    claudeCode: `claude mcp add --transport http gamedevpl https://www.gamedev.pl/api/mcp --header "${MASKED}"`,
+    codex: `[mcp_servers.gamedevpl]\nurl = "https://www.gamedev.pl/api/mcp"\nhttp_headers = { Authorization = "Bearer ····9a10e" }`,
+    cursor: JSON.stringify(
+      {
+        mcpServers: {
+          gamedevpl: {
+            url: 'https://www.gamedev.pl/api/mcp',
+            headers: { Authorization: 'Bearer ····9a10e' },
+          },
+        },
+      },
+      null,
+      2,
+    ),
+    kimi: `npx -y mcp-remote https://www.gamedev.pl/api/mcp\n# set header: ${MASKED}`,
+    cli: `curl -sS -X POST https://www.gamedev.pl/api/mcp -H "${MASKED}"`,
   },
   kickoffPrompt:
-    'Build "Sky Dodge" for gamedev.pl.\nStart with the gamedevpl tool, key: abc.def\nstart returns your workflow; after gate green the round is done — keep this key for the next round on this game unless the creator rotates it.',
+    'Build "Sky Dodge" for gamedev.pl.\nStart with the gamedevpl tool, slug: sky-dodge.\nstart returns your workflow; after gate green the round is done.',
+  mcpUrl: 'https://www.gamedev.pl/api/mcp',
+  authorizationHeader: `Authorization: Bearer ${FULL_KEY}`,
+  authorizationHeaderMasked: MASKED,
+  fingerprint: '9a10e',
   expiresAt: Math.floor(Date.now() / 1000) + 90 * 24 * 60 * 60,
   keyGeneration: 1,
+  slug: 'sky-dodge',
 };
 
 describe('StudioConnectCard', () => {
   beforeEach(() => {
+    localStorage.clear();
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo) => {
         const url = String(input);
-        if (url.includes('/agent-key/rotate')) {
+        if (url.includes('/creator-agent-key/rotate')) {
           return {
             ok: true,
             json: async () => ({
-              ...payload,
+              key: FULL_KEY + 'x',
               keyGeneration: 2,
-              kickoffPrompt: payload.kickoffPrompt.replace('abc.def', 'rotated.key'),
+              expiresAt: payload.expiresAt,
+              fingerprint: 'rotated',
+              authorizationHeader: `Authorization: Bearer ${FULL_KEY}x`,
+              authorizationHeaderMasked: 'Authorization: Bearer ····tated',
               rotated: true,
             }),
           };
@@ -61,7 +84,7 @@ describe('StudioConnectCard', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders install tabs, kickoff, expiry, and waiting state', async () => {
+  it('renders masked config + keyless kickoff and never puts the full key in markup', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
 
@@ -82,46 +105,24 @@ describe('StudioConnectCard', () => {
       expect.objectContaining({ credentials: 'include' }),
     );
     expect(container.querySelector('.studio-connect-title')?.textContent).toContain('Connect your coding agent');
-    expect(container.querySelectorAll('[role="tab"]')).toHaveLength(5);
     expect(container.textContent).toContain('Add gamedev.pl to your agent');
     expect(container.textContent).toContain('Tell your agent what to build');
-    expect(container.textContent).toContain(payload.kickoffPrompt.split('\n')[0]);
-    expect(container.textContent).toMatch(/works for this game/i);
-    expect(container.textContent).toMatch(/stays too unless you rotate/i);
+    expect(container.textContent).toContain('slug: sky-dodge');
+    expect(container.textContent).not.toContain('key:');
+    expect(container.innerHTML).toContain(MASKED);
+    expect(container.innerHTML).not.toContain(FULL_KEY);
+    expect(container.querySelector('[data-testid="connect-config-snippet"]')?.textContent).not.toContain(FULL_KEY);
+    expect(container.querySelector('[data-testid="connect-kickoff"]')?.textContent).toContain('slug: sky-dodge');
+    expect(container.textContent).toMatch(/Ends in 9a10e/);
     expect(container.textContent?.toLowerCase()).not.toMatch(/\btoken\b/);
     expect(container.querySelector('.studio-connect-waiting')).not.toBeNull();
-    expect(container.textContent).toContain('Rotate key');
-
-    const cursorTab = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((tab) =>
-      tab.textContent?.includes('Cursor'),
-    );
-    await act(async () => {
-      cursorTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      await flush();
-    });
-    expect(container.querySelector('.studio-connect-snippet')?.textContent).toContain('mcpServers');
-
-    await act(async () => {
-      container
-        .querySelector<HTMLButtonElement>('.studio-connect-skip')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      await flush();
-    });
-    expect(container.textContent).toContain('Skipped');
 
     await act(async () => root.unmount());
   });
 
-  it('shows sameKeyAsBefore reminder when the payload says so', async () => {
+  it('Copy config puts the real Authorization header on the clipboard', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => ({
-        ok: true,
-        json: async () => ({ ...payload, sameKeyAsBefore: true }),
-      })),
-    );
 
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -135,11 +136,50 @@ describe('StudioConnectCard', () => {
       await flush();
     });
 
-    expect(container.textContent).toMatch(/Same key as before/i);
+    const copyConfig = [...container.querySelectorAll<HTMLButtonElement>('.status-share-copy')].find((btn) =>
+      btn.textContent?.includes('Copy config'),
+    );
+    await act(async () => {
+      copyConfig?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flush();
+    });
+
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(expect.stringContaining(FULL_KEY));
+    expect(container.innerHTML).not.toContain(FULL_KEY);
+
     await act(async () => root.unmount());
   });
 
-  it('rotate flow confirms then refreshes the kickoff', async () => {
+  it('remembers auth mode choice between Paste header and Sign in', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(StudioConnectCard, { token: 'status-tok' }));
+      await flush();
+    });
+    await act(async () => {
+      await flush();
+    });
+
+    const oauthTab = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((tab) =>
+      tab.textContent?.includes('Sign in'),
+    );
+    await act(async () => {
+      oauthTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flush();
+    });
+    expect(localStorage.getItem('gamedev_connect_auth_mode')).toBe('oauth');
+    expect(container.textContent).toMatch(/Sign in from your agent/i);
+
+    await act(async () => root.unmount());
+  });
+
+  it('rotate uses the creator-key rotate endpoint', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
 
@@ -176,10 +216,9 @@ describe('StudioConnectCard', () => {
     });
 
     expect(fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/api/submissions/status-tok/agent-key/rotate'),
+      expect.stringContaining('/api/me/creator-agent-key/rotate'),
       expect.objectContaining({ method: 'POST', credentials: 'include' }),
     );
-    expect(container.textContent).toContain('rotated.key');
 
     await act(async () => root.unmount());
   });
