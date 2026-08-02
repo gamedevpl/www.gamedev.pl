@@ -168,6 +168,47 @@ describe('summarizeVisitFunnel', () => {
     expect(funnel.waitlist.find((row) => row.step === 'joined')?.visits).toBe(0);
   });
 
+  it('reports the editing funnel in step order, zeroes included', () => {
+    const step = (visitId: string, step: string): VisitEvent =>
+      ({ visitId, type: 'editor_step', at: '2026-07-26T10:00:00.000Z', msSinceStart: 0, step }) as VisitEvent;
+
+    const funnel = summarizeVisitFunnel([
+      started('a'),
+      step('a', 'opened'),
+      step('a', 'draft_saved'),
+      step('a', 'previewed'),
+      step('a', 'published'),
+      started('b'),
+      step('b', 'opened'),
+      // A repeated save in one visit is one visit at that rung, not two.
+      step('b', 'draft_saved'),
+      step('b', 'draft_saved'),
+      started('c'),
+    ]);
+
+    expect(funnel.editing).toEqual([
+      { step: 'opened', visits: 2 },
+      { step: 'draft_saved', visits: 2 },
+      { step: 'previewed', visits: 1 },
+      { step: 'published', visits: 1 },
+    ]);
+  });
+
+  it('keeps editor steps out of the create and waitlist funnels', () => {
+    // All three event types share the `step` field on the wire; separate Sets are what
+    // stop an editor save from ever reading as a create or waitlist rung.
+    const funnel = summarizeVisitFunnel([
+      started('a'),
+      { visitId: 'a', type: 'editor_step', at: '2026-07-26T10:00:00.000Z', msSinceStart: 0, step: 'opened' },
+      { visitId: 'a', type: 'create_step', at: '2026-07-26T10:00:00.000Z', msSinceStart: 1, step: 'prompt_started' },
+      { visitId: 'a', type: 'waitlist_step', at: '2026-07-26T10:00:00.000Z', msSinceStart: 2, step: 'cta_clicked' },
+    ]);
+    expect(funnel.editing[0]).toEqual({ step: 'opened', visits: 1 });
+    expect(funnel.editing.find((row) => row.step === 'published')?.visits).toBe(0);
+    expect(funnel.creating[0]).toEqual({ step: 'prompt_started', visits: 1 });
+    expect(funnel.waitlist[0]).toEqual({ step: 'cta_clicked', visits: 1 });
+  });
+
   it('survives a window with no events at all', () => {
     const funnel = summarizeVisitFunnel([]);
     expect(funnel).toMatchObject({ visits: 0, bounces: 0, plays: 0, medianPlaysPerPlayingVisit: 0 });

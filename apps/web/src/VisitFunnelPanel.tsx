@@ -30,6 +30,13 @@ const WAITLIST_LABELS: Record<string, string> = {
   joined: 'joined waitlist',
 };
 
+const EDITOR_LABELS: Record<string, string> = {
+  opened: 'opened the editor',
+  draft_saved: 'saved a draft',
+  previewed: 'played the draft',
+  published: 'published changes',
+};
+
 const HOW_TO_VIA_LABELS: Record<string, string> = {
   bar: 'theater bar',
   more: 'More menu',
@@ -223,6 +230,41 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
                     <td>{WAITLIST_LABELS[row.step] ?? row.step}</td>
                     <td className="num">{row.visits}</td>
                     <td className="num">{percent(row.visits, funnel.waitlist[0]?.visits ?? 0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="funnel-block">
+          <h3>Editing</h3>
+          {funnel.editing.every((row) => row.visits === 0) ? (
+            <p className="health-empty">Nobody opened a game editor in this window.</p>
+          ) : (
+            <table className="health-table">
+              <thead>
+                <tr>
+                  <th scope="col">Step</th>
+                  <th scope="col" className="num">
+                    Visits
+                  </th>
+                  <th scope="col" className="num">
+                    Of openers
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {funnel.editing.map((row) => (
+                  <tr key={row.step}>
+                    <td>{EDITOR_LABELS[row.step] ?? row.step}</td>
+                    <td className="num">{row.visits}</td>
+                    {/*
+                     * Against the first rung, like Creating: the question is how far
+                     * someone who opened the editor got, not what share of all traffic
+                     * edits — almost none of it will, and that is fine.
+                     */}
+                    <td className="num">{percent(row.visits, funnel.editing[0]?.visits ?? 0)}</td>
                   </tr>
                 ))}
               </tbody>
