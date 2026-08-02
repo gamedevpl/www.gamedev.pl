@@ -8299,10 +8299,16 @@ body.player-open {
     transform: translateX(-105%);
     transition: transform 0.2s ease;
     box-shadow: 12px 0 40px rgba(0, 0, 0, 0.45);
+    /* translateX alone leaves the drawer in the tab order. Visibility + pointer-events
+       match the inert/aria-hidden markup so a closed drawer cannot be reached. */
+    visibility: hidden;
+    pointer-events: none;
   }
 
   .studio-layout.is-game-open.is-shelf-open > .studio-shelf {
     transform: translateX(0);
+    visibility: visible;
+    pointer-events: auto;
   }
 
   .studio-layout.is-game-open .studio-shelf-open {

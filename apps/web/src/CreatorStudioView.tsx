@@ -66,6 +66,9 @@ const WINDOWS = [1, 7, 30];
  */
 const SHEET_MAX_WIDTH = 1099;
 const SHEET_QUERY = `(max-width: ${SHEET_MAX_WIDTH}px)`;
+/** Matches the phone drawer breakpoint in styles.css — shelf off-canvas when a game is open. */
+const SHELF_DRAWER_MAX_WIDTH = 800;
+const SHELF_DRAWER_QUERY = `(max-width: ${SHELF_DRAWER_MAX_WIDTH}px)`;
 
 type NavigateOptions = { replace?: boolean };
 
@@ -164,6 +167,8 @@ export function CreatorStudioView({
   const [shelfFilter, setShelfFilter] = useState<StudioShelfFilter>('all');
   /** Desktop rail expand, or mobile drawer open. Closed by default once a game is open. */
   const [shelfOpen, setShelfOpen] = useState(false);
+  /** True when the shelf is the phone drawer (off-canvas), not the desktop rail. */
+  const [shelfIsDrawer, setShelfIsDrawer] = useState(false);
   const shelfSearchId = useId();
   const shelfSearchRef = useRef<HTMLInputElement>(null!);
 
@@ -344,14 +349,22 @@ export function CreatorStudioView({
   }, [detailsIsSheet]);
 
   useEffect(() => {
+    const query = typeof window.matchMedia === 'function' ? window.matchMedia(SHELF_DRAWER_QUERY) : null;
+    const sync = () => setShelfIsDrawer(query ? query.matches : window.innerWidth <= SHELF_DRAWER_MAX_WIDTH);
+    sync();
+    query?.addEventListener('change', sync);
+    window.addEventListener('resize', sync);
+    return () => {
+      query?.removeEventListener('change', sync);
+      window.removeEventListener('resize', sync);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!shelfOpen || !activeGame) return;
     const previous = document.body.style.overflow;
     // Only the phone drawer needs to freeze the page; the desktop rail expands in flow.
-    const narrow =
-      typeof window.matchMedia === 'function'
-        ? window.matchMedia('(max-width: 800px)').matches
-        : window.innerWidth <= 800;
-    if (narrow) document.body.style.overflow = 'hidden';
+    if (shelfIsDrawer) document.body.style.overflow = 'hidden';
     const frame = window.requestAnimationFrame(() => shelfSearchRef.current?.focus());
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setShelfOpen(false);
@@ -362,7 +375,7 @@ export function CreatorStudioView({
       window.cancelAnimationFrame(frame);
       window.removeEventListener('keydown', onKey);
     };
-  }, [shelfOpen, activeGame]);
+  }, [shelfOpen, activeGame, shelfIsDrawer]);
 
   function selectGame(token: string) {
     const next = games.find((game) => game.token === token) ?? null;
@@ -460,7 +473,21 @@ export function CreatorStudioView({
             />
           ) : null}
 
-          <aside className="studio-shelf" aria-label={t('studioPanel.shelfAria')}>
+          {/* Phone drawer, closed: keep it out of the tab order and the accessibility tree.
+              Desktop compact rail stays interactive while collapsed — only the drawer is
+              off-canvas. `inert` is set via the DOM (React 18 does not wire the prop);
+              aria-hidden covers AT that skips inert. */}
+          <aside
+            className="studio-shelf"
+            aria-label={t('studioPanel.shelfAria')}
+            aria-hidden={activeGame && shelfIsDrawer && !shelfOpen ? true : undefined}
+            ref={(el) => {
+              if (!el) return;
+              const closed = Boolean(activeGame && shelfIsDrawer && !shelfOpen);
+              if (closed) el.setAttribute('inert', '');
+              else el.removeAttribute('inert');
+            }}
+          >
             <div className="studio-shelf-head">
               <h2 className="studio-shelf-heading">{t('studioPanel.shelf.heading')}</h2>
               <span className="studio-shelf-count">{t('studioPanel.shelf.count', { count: games.length })}</span>
@@ -603,7 +630,7 @@ export function CreatorStudioView({
                           type="button"
                           className="modal-close-btn"
                           onClick={() => openTab('thread')}
-                          aria-label={t('studioPanel.shelf.closePicker')}
+                          aria-label={t('studioPanel.close')}
                         >
                           <PixelIcon name="close" size={14} />
                         </button>

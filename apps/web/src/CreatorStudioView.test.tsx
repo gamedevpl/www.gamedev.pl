@@ -211,6 +211,43 @@ describe('CreatorStudioView', () => {
     root.unmount();
   });
 
+  it('locks body scroll while the phone shelf drawer is open', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue(manyGames(6));
+    // jsdom has no matchMedia; width is the same fallback the drawer uses in embedded
+    // webviews. Narrow enough that the shelf is off-canvas, not the desktop rail.
+    const width = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { value: 390, configurable: true });
+
+    const { container, root } = await renderStudio();
+
+    const shelf = container.querySelector('.studio-shelf');
+    expect(shelf?.hasAttribute('inert')).toBe(true);
+    expect(shelf?.getAttribute('aria-hidden')).toBe('true');
+
+    const openShelf = container.querySelector('.studio-shelf-open');
+    expect(openShelf).toBeTruthy();
+    await act(async () => {
+      openShelf!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.querySelector('.studio-layout')?.classList.contains('is-shelf-open')).toBe(true);
+    expect(document.body.style.overflow).toBe('hidden');
+    expect(container.querySelector('.studio-shelf')?.hasAttribute('inert')).toBe(false);
+    expect(container.querySelector('.studio-shelf')?.getAttribute('aria-hidden')).toBeNull();
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    expect(document.body.style.overflow).not.toBe('hidden');
+    expect(container.querySelector('.studio-shelf')?.hasAttribute('inert')).toBe(true);
+
+    Object.defineProperty(window, 'innerWidth', { value: width, configurable: true });
+    root.unmount();
+  });
+
   it('persists the selected tab in the URL', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');

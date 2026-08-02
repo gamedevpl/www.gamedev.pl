@@ -243,6 +243,7 @@
     "empty": "Nie zleciłeś jeszcze żadnej gry.",
     "gameNotFound": "Nie znaleźliśmy tej gry na Twojej półce. Mogła zostać zatrzymana albo link należy do kogoś innego.",
     "createFirst": "Stwórz pierwszą grę",
+    "close": "Zamknij",
     "shelfAria": "Twoje gry",
     "shelf": {
       "heading": "Twoje gry",
@@ -262,8 +263,7 @@
       "noMatches": "Żadna gra nie pasuje do tego wyszukiwania.",
       "openShelf": "Twoje gry",
       "expandShelf": "Rozwiń listę gier",
-      "collapseShelf": "Zwiń listę gier",
-      "closePicker": "Zamknij listę gier"
+      "collapseShelf": "Zwiń listę gier"
     },
     "tabs": {
       "thread": "Wątek",
