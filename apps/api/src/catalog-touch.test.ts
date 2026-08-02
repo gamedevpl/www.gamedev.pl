@@ -23,6 +23,15 @@ describe('classifyTouchSource', () => {
     expect(classifyTouchSource('const party = GameKit.createParty(canvas);')).toBe('controllers');
   });
 
+  it('keeps party ahead of createInput when both appear', () => {
+    expect(
+      classifyTouchSource(`
+        const party = GameKit.createParty(canvas);
+        const input = GameKit.createInput(canvas);
+      `),
+    ).toBe('controllers');
+  });
+
   it('returns none for keyboard-only code', () => {
     expect(classifyTouchSource('window.addEventListener("keydown", () => {});')).toBe('none');
   });

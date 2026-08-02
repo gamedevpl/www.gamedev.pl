@@ -10,7 +10,7 @@
  * - `controllers` — party game; phones are the controllers
  * - `none` — keyboard-only
  */
-export type CatalogTouchSupport = 'gamekit' | 'native' | 'controllers' | 'none';
+export type CatalogGameTouch = 'gamekit' | 'native' | 'controllers' | 'none';
 
 const OPTS_OUT = /touch\s*:\s*false/;
 const USES_GAMEKIT_INPUT = /createInput\s*\(|\bdefineGame\b/;
@@ -19,7 +19,7 @@ const HANDLES_POINTERS =
   /consumeClick\s*\(|consumePress\s*\(|\.position\s*\(|\.held\s*\(|pointerdown|pointermove|pointerup|touchstart|\.pointer\s*\(/;
 
 /** Classifies a game's concatenated TypeScript. Pure so it is directly testable. */
-export function classifyTouchSource(code: string): CatalogTouchSupport {
+export function classifyTouchSource(code: string): CatalogGameTouch {
   if (USES_PARTY.test(code)) return 'controllers';
   if (USES_GAMEKIT_INPUT.test(code) && !OPTS_OUT.test(code)) return 'gamekit';
   if (HANDLES_POINTERS.test(code)) return 'native';

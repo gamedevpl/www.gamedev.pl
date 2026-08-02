@@ -1,8 +1,10 @@
 import path from 'node:path';
 import { build, transform } from 'esbuild';
-import { classifyTouchSource } from './catalog-touch.js';
+import { classifyTouchSource, type CatalogGameTouch } from './catalog-touch.js';
 import { GAME_KIT_MODULES } from './games-repo-contract.js';
 import { isRateLimitResponse } from './github-rate-limit.js';
+
+export type { CatalogGameTouch } from './catalog-touch.js';
 
 interface CreateIssueInput {
   title: string;
@@ -254,8 +256,6 @@ export interface CatalogGameEntry {
    */
   touch?: CatalogGameTouch;
 }
-
-export type CatalogGameTouch = 'gamekit' | 'native' | 'controllers' | 'none';
 
 export type CatalogGameOrientation = 'any' | 'portrait' | 'landscape';
 
@@ -1402,18 +1402,28 @@ async function buildCatalogFromArchive(
   readRawFile: (path: string, ref: string) => Promise<string | null>,
   paths: readonly string[],
 ): Promise<CatalogGameEntry[]> {
+  // One pass over the archive listing: slug set, per-slug .ts paths, path Set for
+  // media existence. Avoids O(paths × games) rescans inside the per-game loop.
   const pathSet = new Set(paths);
-  const slugs = [
-    ...new Set(
-      paths.flatMap((filePath) => {
-        const match = /^games\/([a-z0-9][a-z0-9-]*)\/SPEC\.md$/.exec(filePath);
-        return match?.[1] ? [match[1]] : [];
-      }),
-    ),
-  ].sort();
+  const slugs = new Set<string>();
+  const tsPathsBySlug = new Map<string, string[]>();
+  for (const filePath of paths) {
+    const match = /^games\/([a-z0-9][a-z0-9-]*)\/(.+)$/.exec(filePath);
+    if (!match) continue;
+    const slug = match[1];
+    const relative = match[2];
+    if (relative === 'SPEC.md') {
+      slugs.add(slug);
+    }
+    if (relative.endsWith('.ts')) {
+      const list = tsPathsBySlug.get(slug);
+      if (list) list.push(filePath);
+      else tsPathsBySlug.set(slug, [filePath]);
+    }
+  }
 
   const entries: CatalogGameEntry[] = [];
-  for (const slug of slugs) {
+  for (const slug of [...slugs].sort()) {
     const specMd = await readRawFile(`games/${slug}/SPEC.md`, ref);
     if (specMd === null) continue;
 
@@ -1429,7 +1439,7 @@ async function buildCatalogFromArchive(
       entry.media = screenshots.length > 0 || video ? { screenshots, video } : null;
     }
 
-    const tsPaths = paths.filter((filePath) => filePath.startsWith(`games/${slug}/`) && filePath.endsWith('.ts'));
+    const tsPaths = tsPathsBySlug.get(slug) ?? [];
     const sources = await Promise.all(tsPaths.map((filePath) => readRawFile(filePath, ref)));
     entry.touch = classifyTouchSource(sources.filter((text): text is string => text !== null).join('\n'));
 
