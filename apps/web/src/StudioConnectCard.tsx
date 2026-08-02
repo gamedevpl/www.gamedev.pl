@@ -149,6 +149,12 @@ export function StudioConnectCard({ token, agentConnected = false }: StudioConne
               </span>
               <h4 className="studio-connect-step-title">{t('connect.step2.title')}</h4>
             </div>
+            {/* The split creators miss at a round boundary: the gamedev.pl connection in
+                their agent's config is set up once (step 1) and stays put; what changes
+                every round is the key inside the prompt below. Without this line, a
+                creator handed a new build thread re-runs step 1 or edits config that was
+                never stale. */}
+            <p className="studio-connect-same">{t('connect.step2.sameConnection')}</p>
             <pre className="studio-connect-snippet studio-connect-kickoff" tabIndex={0}>
               {payload.kickoffPrompt}
             </pre>
