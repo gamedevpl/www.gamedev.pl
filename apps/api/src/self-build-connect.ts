@@ -1,14 +1,15 @@
 /**
- * Connect payload for a self-build round (BY-03).
+ * Connect payload for a self-build round (BY-03 / BY-23).
  *
  * The Studio asks once for everything a creator needs to paste into their own coding
  * agent: per-client MCP install snippets (endpoint URL only — never a credential) and a
- * kickoff prompt that carries this round's key. Snippet templates live here so docs and
- * UI render from one source of truth; regenerating the prompt mints a fresh key with a
- * new signed `exp`, and any pending creator inbox lines ride along under "also apply:".
+ * kickoff prompt that carries this game's durable opener key. Snippet templates live here
+ * so docs and UI render from one source of truth. Regenerating the prompt remints a key
+ * with a fresh signed `exp` at the same keyGeneration — it does NOT rotate. Pending
+ * creator inbox lines ride along under "also apply:".
  */
 
-import { mintAgentToken, verifyAgentToken } from './agent-token.js';
+import { mintGameAgentKey, verifyGameAgentKey } from './agent-game-key.js';
 
 /** Path of the remote MCP endpoint (served by BY-05). Install snippets point here. */
 export const MCP_ENDPOINT_PATH = '/api/mcp';
@@ -29,6 +30,10 @@ export interface ConnectPayload {
    * display clock the UI could drift from.
    */
   expiresAt: number;
+  /** Current keyGeneration — display/rotate UI; not a secret. */
+  keyGeneration: number;
+  /** True when this kickoff is the same durable key the creator already pasted (BY-20 handoff). */
+  sameKeyAsBefore?: boolean;
 }
 
 export interface BuildInstallSnippetsInput {
@@ -38,19 +43,26 @@ export interface BuildInstallSnippetsInput {
 
 export interface BuildKickoffPromptInput {
   title: string;
-  /** Round-scoped build-channel key (embedded only in the kickoff, never in install). */
-  roundKey: string;
+  /** Durable per-game opener key (embedded only in the kickoff, never in install). */
+  gameKey: string;
   /** Undelivered creator inbox lines, oldest first. */
   pendingMessages?: readonly { text: string }[];
+  /**
+   * When true, append a line that nothing new needs pasting unless the creator rotated
+   * (post-publish improve handoff — BY-20 + BY-23).
+   */
+  sameKeyReminder?: boolean;
 }
 
 export interface MintConnectPayloadInput {
-  jobId: number;
+  slug: string;
+  ownerUid: string;
+  keyGeneration: number;
   title: string;
-  roundGeneration: number;
   submissionTokenSecret: string;
   appBaseUrl: string;
   pendingMessages?: readonly { text: string }[];
+  sameKeyReminder?: boolean;
   /** Epoch ms; defaults to `Date.now()`. */
   now?: number;
 }
@@ -62,7 +74,7 @@ export function mcpEndpointUrl(appBaseUrl: string): string {
 
 /**
  * Per-client install snippets. Every snippet configures the MCP endpoint URL and
- * nothing else — the round key rides the kickoff prompt, not the install.
+ * nothing else — the game key rides the kickoff prompt, not the install.
  */
 export function buildInstallSnippets(input: BuildInstallSnippetsInput): InstallSnippets {
   const url = mcpEndpointUrl(input.appBaseUrl);
@@ -90,9 +102,9 @@ export function buildInstallSnippets(input: BuildInstallSnippetsInput): InstallS
 
 /**
  * Paste-ready kickoff: build instruction + gamedevpl tool key line + one line pointing at
- * the session loop (start returns the workflow; gate green is done; the key retires with the
- * round), and any queued creator feedback as a short "also apply:" list so a regenerate never
- * drops them. The base paste stays ≤ 5 lines with the key line intact at line 2.
+ * the session loop (start returns the workflow; gate green ends the round — the game key
+ * stays valid for the next round unless rotated), and any queued creator feedback as a
+ * short "also apply:" list so a regenerate never drops them.
  *
  * User-facing copy says "key", never "token".
  */
@@ -100,9 +112,12 @@ export function buildKickoffPrompt(input: BuildKickoffPromptInput): string {
   const title = input.title.trim() || 'your game';
   const lines = [
     `Build "${title}" for gamedev.pl.`,
-    `Start with the gamedevpl tool, key: ${input.roundKey}`,
-    'start returns your workflow; after gate green you are done — this key retires with the round.',
+    `Start with the gamedevpl tool, key: ${input.gameKey}`,
+    'start returns your workflow; after gate green the round is done — keep this key for the next round on this game unless the creator rotates it.',
   ];
+  if (input.sameKeyReminder) {
+    lines.push('Same key as before — nothing new to copy unless the creator rotated it.');
+  }
   const pending = (input.pendingMessages ?? []).map((message) => message.text.trim()).filter((text) => text.length > 0);
   if (pending.length > 0) {
     lines.push('');
@@ -116,26 +131,27 @@ export function buildKickoffPrompt(input: BuildKickoffPromptInput): string {
 }
 
 /**
- * Mint a round-scoped key and assemble the connect payload. `expiresAt` is taken from
- * the key's verified `exp` claim so the UI's "expires" line cannot disagree with auth.
+ * Mint a durable per-game opener and assemble the connect payload. `expiresAt` is taken
+ * from the key's verified `exp` claim so the UI's "expires" line cannot disagree with auth.
  */
 export function mintConnectPayload(input: MintConnectPayloadInput): ConnectPayload {
-  const roundKey = mintAgentToken(input.jobId, input.submissionTokenSecret, {
-    roundGeneration: input.roundGeneration,
+  const gameKey = mintGameAgentKey(input.submissionTokenSecret, {
+    slug: input.slug,
+    creatorUid: input.ownerUid,
+    keyGeneration: input.keyGeneration,
     now: input.now,
   });
-  const claims = verifyAgentToken(roundKey, input.submissionTokenSecret);
-  if (claims.exp === undefined) {
-    // Round-scoped mint always sets exp; a missing claim would mean mint/verify drifted.
-    throw new Error('minted connect key is missing exp claim');
-  }
+  const claims = verifyGameAgentKey(gameKey, input.submissionTokenSecret);
   return {
     installSnippets: buildInstallSnippets({ appBaseUrl: input.appBaseUrl }),
     kickoffPrompt: buildKickoffPrompt({
       title: input.title,
-      roundKey,
+      gameKey,
       pendingMessages: input.pendingMessages,
+      sameKeyReminder: input.sameKeyReminder,
     }),
     expiresAt: claims.exp,
+    keyGeneration: claims.keyGeneration,
+    sameKeyAsBefore: input.sameKeyReminder,
   };
 }

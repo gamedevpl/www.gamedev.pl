@@ -864,8 +864,9 @@
     },
     "step2": {
       "title": "Powiedz agentowi, co zbudować",
-      "sameConnection": "Połączenie z gamedev.pl pozostaje bez zmian — nowy jest tylko klucz tej rundy, w prompcie poniżej. Nie musisz zmieniać konfiguracji agenta.",
-      "expiry": "Ten klucz działa tylko dla tej gry i wygasa {{when}}."
+      "sameConnection": "Połączenie z gamedev.pl pozostaje bez zmian — klucz tej gry w prompcie poniżej też zostaje, dopóki go nie obrócisz. Nie musisz zmieniać konfiguracji agenta między rundami.",
+      "sameKeyAsBefore": "Ten sam klucz co wcześniej — nic nowego do skopiowania, chyba że go obróciłeś.",
+      "expiry": "Ten klucz działa dla tej gry i wygasa {{when}}."
     },
     "clients": {
       "claudeCode": "Claude Code",
@@ -873,6 +874,14 @@
       "cursor": "Cursor",
       "kimi": "Kimi",
       "cli": "CLI"
+    },
+    "rotate": {
+      "start": "Obróć klucz",
+      "confirm": "Obrócenie zatrzyma każdego agenta, który nadal używa starego klucza. Kontynuować?",
+      "yes": "Obróć",
+      "no": "Anuluj",
+      "sending": "Obracanie…",
+      "error": "Nie udało się teraz obrócić klucza. Spróbuj za chwilę."
     }
   }
 }

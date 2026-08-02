@@ -1,8 +1,8 @@
 /**
- * Client for GET /api/submissions/:id/connect (BY-03).
+ * Client for GET /api/submissions/:id/connect and durable game key management (BY-03 / BY-23).
  *
  * Returns everything the Studio connect card needs: per-client install snippets
- * (MCP URL only) and the kickoff prompt that carries this round's key.
+ * (MCP URL only) and the kickoff prompt that carries this game's durable key.
  */
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
@@ -15,8 +15,19 @@ export type InstallSnippets = Record<ConnectClient, string>;
 export type ConnectPayload = {
   installSnippets: InstallSnippets;
   kickoffPrompt: string;
-  /** Unix seconds — identical to the round key's signed exp. */
+  /** Unix seconds — identical to the game key's signed exp. */
   expiresAt: number;
+  /** Current keyGeneration — display/rotate UI; not a secret. */
+  keyGeneration?: number;
+  /** True when this kickoff is the same durable key the creator already pasted. */
+  sameKeyAsBefore?: boolean;
+};
+
+export type AgentKeyPayload = ConnectPayload & {
+  slug: string;
+  keyGeneration: number;
+  allowAgentOpenRounds: boolean;
+  rotated?: boolean;
 };
 
 export type ConnectApiError = Error & {
@@ -59,4 +70,31 @@ export async function getConnectPayload(token: string): Promise<ConnectPayload> 
 
   const body = (await response.json()) as ConnectPayload;
   return body;
+}
+
+/** Remint the durable game key at the current generation (fresh exp, no rotate). */
+export async function getAgentKey(token: string): Promise<AgentKeyPayload> {
+  const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/agent-key`, {
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+
+  return (await response.json()) as AgentKeyPayload;
+}
+
+/** Bump keyGeneration and return a fresh kickoff — agents holding the old key are cut off. */
+export async function rotateAgentKey(token: string): Promise<AgentKeyPayload> {
+  const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/agent-key/rotate`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+
+  return (await response.json()) as AgentKeyPayload;
 }

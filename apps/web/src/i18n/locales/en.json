@@ -860,8 +860,9 @@
     },
     "step2": {
       "title": "Tell your agent what to build",
-      "sameConnection": "Your gamedev.pl connection stays the same — only this round's key, inside the prompt below, is new. No need to change your agent's config.",
-      "expiry": "This key works only for this game and expires {{when}}."
+      "sameConnection": "Your gamedev.pl connection stays the same — this game's key in the prompt below stays too unless you rotate it. No need to change your agent's config between rounds.",
+      "sameKeyAsBefore": "Same key as before — nothing new to copy unless you rotated it.",
+      "expiry": "This key works for this game and expires {{when}}."
     },
     "clients": {
       "claudeCode": "Claude Code",
@@ -869,6 +870,14 @@
       "cursor": "Cursor",
       "kimi": "Kimi",
       "cli": "CLI"
+    },
+    "rotate": {
+      "start": "Rotate key",
+      "confirm": "Rotating stops any agent still using the old key. Continue?",
+      "yes": "Rotate",
+      "no": "Cancel",
+      "sending": "Rotating…",
+      "error": "We couldn't rotate the key right now. Try again in a moment."
     }
   }
 }

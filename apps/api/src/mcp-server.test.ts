@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { classifyAgentTokenAccess, mintAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-token.js';
+import { mintGameAgentKey } from './agent-game-key.js';
 import { buildApp } from './app.js';
 import type { GamesStore } from './games-store.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
@@ -110,8 +111,34 @@ async function seedJob(store: InMemoryStore) {
   });
 }
 
+async function seedActiveSelfJob(store: InMemoryStore) {
+  await seedJob(store);
+  await store.recordJobTransition(ISSUE, {
+    to: 'dispatched',
+    at: new Date().toISOString(),
+    by: 'system',
+  });
+}
+
 function roundKey(generation = 1, now?: number) {
   return mintAgentToken(ISSUE, secret, { roundGeneration: generation, ...(now !== undefined ? { now } : {}) });
+}
+
+async function ensureGameKey(store: InMemoryStore, generation = 1) {
+  const at = new Date().toISOString();
+  await store.ensureGameAgentKey('comet-courier', 'g:owner', at);
+  for (let i = 1; i < generation; i++) {
+    await store.rotateGameAgentKey('comet-courier', 'g:owner', at);
+  }
+}
+
+function gameKey(generation = 1, now?: number) {
+  return mintGameAgentKey(secret, {
+    slug: 'comet-courier',
+    creatorUid: 'g:owner',
+    keyGeneration: generation,
+    ...(now !== undefined ? { now } : {}),
+  });
 }
 
 async function mcpCall(
@@ -294,10 +321,7 @@ describe('POST /api/mcp (BY-05)', () => {
       };
     };
 
-    // Structured: ordered workflow covering the full loop, plus the inbox policy and the
-    // retired-key etiquette an agent relays.
     const workflow = result.structuredContent.workflow as string[];
-    expect(Array.isArray(workflow)).toBe(true);
     expect(workflow.length).toBeGreaterThanOrEqual(6);
     const joined = workflow.join('\n');
     expect(joined).toMatch(/get_brief/);
@@ -341,7 +365,7 @@ describe('POST /api/mcp (BY-05)', () => {
     const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
     const whenRefused = (started.structured as { whenRefused: string }).whenRefused;
     expect(whenRefused).toMatch(/Studio thread/i);
-    expect(whenRefused).toMatch(/current kickoff prompt/i);
+    expect(whenRefused).toMatch(/current kickoff/i);
     expect(whenRefused).toMatch(/MCP connection/i);
     expect(whenRefused).toMatch(/do not retry|do not report an outage/i);
 
@@ -840,5 +864,109 @@ describe('POST /api/mcp (BY-05)', () => {
 
     const brief = await callTool(app, 'get_brief', { sessionKey }, { 'mcp-session-id': sessionId });
     expect(brief.isError).toBe(true);
+  });
+
+  it('start with a durable per-game key works', async () => {
+    const store = new InMemoryStore();
+    await seedActiveSelfJob(store);
+    await ensureGameKey(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+
+    const started = await callTool(app, 'start', { key: gameKey() }, { 'mcp-session-id': sessionId });
+    expect(started.isError).toBe(false);
+    expect(started.structured).toMatchObject({
+      jobId: ISSUE,
+      slug: 'comet-courier',
+      title: 'Comet Courier',
+    });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+    const brief = await callTool(app, 'get_brief', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(brief.isError).toBe(false);
+  });
+
+  it('durable key still starts a new active round after the previous round closes', async () => {
+    const store = new InMemoryStore();
+    await seedActiveSelfJob(store);
+    await ensureGameKey(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+    const durable = gameKey();
+
+    const first = await callTool(app, 'start', { key: durable }, { 'mcp-session-id': sessionId });
+    expect(first.isError).toBe(false);
+
+    await store.recordJobTransition(ISSUE, {
+      to: 'ready_for_review',
+      at: '2026-08-01T12:00:00.000Z',
+      by: 'gate',
+      reason: 'gate_green',
+    });
+    expect((await store.getSubmission(ISSUE))?.roundGeneration).toBe(2);
+
+    const NEXT_ISSUE = 56;
+    await store.createSubmission(NEXT_ISSUE, 'g:owner', 'Comet Courier v2');
+    await store.setSubmissionSlug(NEXT_ISSUE, 'comet-courier');
+    await store.setRoundBuilder(NEXT_ISSUE, 'self');
+    await store.recordJobTransition(NEXT_ISSUE, {
+      to: 'dispatched',
+      at: '2026-08-02T12:00:00.000Z',
+      by: 'system',
+    });
+    await store.ensureRoundGeneration(NEXT_ISSUE);
+
+    const keyRecord = await store.getGameAgentKey('comet-courier');
+    expect(keyRecord?.keyGeneration).toBe(1);
+
+    const second = await callTool(app, 'start', { key: durable }, { 'mcp-session-id': sessionId });
+    expect(second.isError).toBe(false);
+    expect(second.structured).toMatchObject({ jobId: NEXT_ISSUE, slug: 'comet-courier' });
+  });
+
+  it('rejects a durable game key on write tools', async () => {
+    const store = new InMemoryStore();
+    await seedActiveSelfJob(store);
+    await ensureGameKey(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+    const durable = gameKey();
+
+    const viaSessionKey = await callTool(
+      app,
+      'report_progress',
+      { sessionKey: durable, text: 'nope' },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(viaSessionKey.isError).toBe(true);
+    expect(JSON.stringify(viaSessionKey.structured)).toMatch(/only opens a session via start/i);
+
+    const viaBearer = await callTool(
+      app,
+      'report_progress',
+      { text: 'nope' },
+      { 'mcp-session-id': sessionId, authorization: `Bearer ${durable}` },
+    );
+    expect(viaBearer.isError).toBe(true);
+    expect(JSON.stringify(viaBearer.structured)).toMatch(/only opens a session via start/i);
+  });
+
+  it('legacy round-scoped key still works end-to-end on start', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+    const legacy = roundKey();
+
+    const started = await callTool(app, 'start', { key: legacy }, { 'mcp-session-id': sessionId });
+    expect(started.isError).toBe(false);
+    expect(started.structured).toMatchObject({ jobId: ISSUE, slug: 'comet-courier' });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+    const progress = await callTool(
+      app,
+      'report_progress',
+      { sessionKey, text: 'legacy path ok' },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(progress.isError).toBe(false);
   });
 });

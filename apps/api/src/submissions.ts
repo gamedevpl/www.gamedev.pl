@@ -2096,10 +2096,11 @@ export async function registerSubmissionRoutes(
    * Everything a creator needs to connect their own coding agent to a self-build round.
    *
    * Creator-session auth, owner only. Valid only while the active round's builder is
-   * `self`. Install snippets configure the MCP URL alone; the round key rides the
-   * kickoff prompt (and regenerating mints a fresh key with a new signed `exp`).
-   * Pending, undelivered creator inbox lines are embedded under "also apply:" so a
-   * re-copy never drops queued feedback. See self-build-connect.ts for the templates.
+   * `self`. Install snippets configure the MCP URL alone; the durable per-game opener
+   * rides the kickoff prompt. Regenerating remints a key with a new signed `exp` at the
+   * same keyGeneration — it does NOT rotate. Pending, undelivered creator inbox lines
+   * are embedded under "also apply:" so a re-copy never drops queued feedback.
+   * See self-build-connect.ts for the templates.
    */
   app.get(
     '/api/submissions/:id/connect',
@@ -2143,11 +2144,10 @@ export async function registerSubmissionRoutes(
         });
       }
 
-      const roundGeneration = (await store.ensureRoundGeneration(issueNumber)) ?? 1;
+      await store.ensureRoundGeneration(issueNumber);
       // Re-read after ensureRoundGeneration: a closing transition can race between the
-      // first snapshot and minting. Without this we could mint generation N+1 for a
-      // round that just closed to ready_for_review (Codex P1) — channel auth only
-      // compares generations, and that state is not a stopReason.
+      // first snapshot and minting. Without this we could mint against a round that just
+      // closed to ready_for_review (Codex P1).
       const fresh = await store.getSubmission(issueNumber);
       const freshBuilder = fresh?.builder ?? 'platform';
       if (!fresh || freshBuilder !== 'self' || !isActiveBuildRound(fresh)) {
@@ -2157,19 +2157,160 @@ export async function registerSubmissionRoutes(
           builder: freshBuilder,
         });
       }
-      const activeGeneration = fresh.roundGeneration ?? roundGeneration;
+      if (!fresh.slug) {
+        return reply.status(409).send({
+          error: 'connect_unavailable',
+          reason: 'missing_slug',
+          builder: freshBuilder,
+        });
+      }
+
+      const at = new Date(now()).toISOString();
+      const keyRecord = await store.ensureGameAgentKey(fresh.slug, fresh.ownerUid, at);
+      if (!keyRecord) {
+        return reply.status(403).send({ error: 'only the creator can connect a build' });
+      }
+
       const pendingMessages = await store.listPendingCreatorMessages(issueNumber);
+      // Improve handoff (BY-20): a new job for the same slug shows the same durable key —
+      // remind the creator there is nothing new to copy unless they rotated.
+      const sameKeyReminder = (fresh.roundGeneration ?? 1) > 1 || Boolean(fresh.publishedAt);
       const payload = mintConnectPayload({
-        jobId: issueNumber,
+        slug: fresh.slug,
+        ownerUid: fresh.ownerUid,
+        keyGeneration: keyRecord.keyGeneration,
         title: fresh.title,
-        roundGeneration: activeGeneration,
         submissionTokenSecret,
         appBaseUrl: notifyAppBaseUrl,
         pendingMessages,
+        sameKeyReminder,
         now: now(),
       });
-      // Kickoff embeds a round key — never let intermediaries cache it.
+      // Kickoff embeds a capability — never let intermediaries cache it.
       return reply.header('Cache-Control', 'no-store').send(payload);
+    },
+  );
+
+  /**
+   * Durable per-game opener status + rotate (BY-23). Owner session only.
+   *
+   * GET returns whether a key is active, its generation, and a display kickoff (remint
+   * with fresh exp — does NOT rotate). POST bumps keyGeneration and returns a fresh
+   * kickoff; any agent still holding the old key is cut off.
+   */
+  app.get(
+    '/api/submissions/:id/agent-key',
+    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      if (!submissionTokenSecret || !store) {
+        return reply.status(503).send({ error: 'submissions are not configured' });
+      }
+      if (!checkUserAccess(request, reply)) return;
+
+      const id = z.string().parse((request.params as { id?: string }).id);
+      let issueNumber: number;
+      try {
+        issueNumber = verifyToken(id, submissionTokenSecret);
+      } catch (error) {
+        if (error instanceof InvalidTokenError) {
+          return reply.status(400).send({ error: 'invalid submission token' });
+        }
+        throw error;
+      }
+
+      const record = await store.getSubmission(issueNumber);
+      if (!record || record.ownerUid !== request.user!.uid) {
+        return reply.status(403).send({ error: 'only the creator can manage this game key' });
+      }
+      if (!record.slug) {
+        return reply.status(409).send({ error: 'game_key_unavailable', reason: 'missing_slug' });
+      }
+
+      const at = new Date(now()).toISOString();
+      const keyRecord = await store.ensureGameAgentKey(record.slug, record.ownerUid, at);
+      if (!keyRecord) {
+        return reply.status(403).send({ error: 'only the creator can manage this game key' });
+      }
+
+      const payload = mintConnectPayload({
+        slug: record.slug,
+        ownerUid: record.ownerUid,
+        keyGeneration: keyRecord.keyGeneration,
+        title: record.title,
+        submissionTokenSecret,
+        appBaseUrl: notifyAppBaseUrl,
+        now: now(),
+      });
+
+      return reply.header('Cache-Control', 'no-store').send({
+        slug: record.slug,
+        keyGeneration: keyRecord.keyGeneration,
+        expiresAt: payload.expiresAt,
+        allowAgentOpenRounds: keyRecord.allowAgentOpenRounds === true,
+        kickoffPrompt: payload.kickoffPrompt,
+        installSnippets: payload.installSnippets,
+      });
+    },
+  );
+
+  app.post(
+    '/api/submissions/:id/agent-key/rotate',
+    { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      if (!submissionTokenSecret || !store) {
+        return reply.status(503).send({ error: 'submissions are not configured' });
+      }
+      if (!checkUserAccess(request, reply)) return;
+
+      const id = z.string().parse((request.params as { id?: string }).id);
+      let issueNumber: number;
+      try {
+        issueNumber = verifyToken(id, submissionTokenSecret);
+      } catch (error) {
+        if (error instanceof InvalidTokenError) {
+          return reply.status(400).send({ error: 'invalid submission token' });
+        }
+        throw error;
+      }
+
+      const record = await store.getSubmission(issueNumber);
+      if (!record || record.ownerUid !== request.user!.uid) {
+        return reply.status(403).send({ error: 'only the creator can rotate this game key' });
+      }
+      if (!record.slug) {
+        return reply.status(409).send({ error: 'game_key_unavailable', reason: 'missing_slug' });
+      }
+
+      const at = new Date(now()).toISOString();
+      // Ensure exists first so rotate has a generation to bump (first-time creators).
+      const ensured = await store.ensureGameAgentKey(record.slug, record.ownerUid, at);
+      if (!ensured) {
+        return reply.status(403).send({ error: 'only the creator can rotate this game key' });
+      }
+      const rotated = await store.rotateGameAgentKey(record.slug, record.ownerUid, at);
+      if (!rotated) {
+        return reply.status(403).send({ error: 'only the creator can rotate this game key' });
+      }
+
+      const payload = mintConnectPayload({
+        slug: record.slug,
+        ownerUid: record.ownerUid,
+        keyGeneration: rotated.keyGeneration,
+        title: record.title,
+        submissionTokenSecret,
+        appBaseUrl: notifyAppBaseUrl,
+        now: now(),
+      });
+
+      return reply.header('Cache-Control', 'no-store').send({
+        slug: record.slug,
+        keyGeneration: rotated.keyGeneration,
+        expiresAt: payload.expiresAt,
+        allowAgentOpenRounds: rotated.allowAgentOpenRounds === true,
+        kickoffPrompt: payload.kickoffPrompt,
+        installSnippets: payload.installSnippets,
+        rotated: true,
+      });
     },
   );
 
