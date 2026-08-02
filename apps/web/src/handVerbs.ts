@@ -2,8 +2,9 @@
  * Pure landmark → game-verb math for sensing Phase 1 (camera hand control).
  *
  * The shell runs MediaPipe (or a stub) and feeds 21 normalized hand landmarks
- * here. Only the sanitized outputs — aim in [-1,1] and pinch rising edges —
- * ever cross into the game iframe. Unit-tested without the model.
+ * here. Only the sanitized outputs — aim in [-1,1], pinch closeness in [0,1],
+ * and pinch rising edges — ever cross into the game iframe. Unit-tested without
+ * the model.
  *
  * Landmark indices match MediaPipe Hands:
  *   4  thumb tip
@@ -16,10 +17,18 @@ export type Landmark = { x: number; y: number; z?: number };
 export const HAND_AIM_HZ = 15;
 export const HAND_AIM_MIN_INTERVAL_MS = Math.ceil(1000 / HAND_AIM_HZ);
 
-/** Pinch distance (normalized image space) below this = pinched. */
-export const PINCH_ON = 0.055;
+/**
+ * Pinch distance (normalized image space) at or below this = pinched.
+ * Slightly forgiving: phone foreshortening makes a real pinch look larger in 2D.
+ */
+export const PINCH_ON = 0.08;
 /** Must open past this before another pinch can fire (hysteresis). */
-export const PINCH_OFF = 0.09;
+export const PINCH_OFF = 0.13;
+/**
+ * Distances at or above this map to pinch closeness 0 on the meter.
+ * Between PINCH_FAR and PINCH_ON the meter ramps 0→1.
+ */
+export const PINCH_FAR = 0.22;
 /** Ignore pinch edges closer than this (ms). */
 export const PINCH_REFRACTORY_MS = 280;
 
@@ -40,6 +49,11 @@ export function createHandVerbState(): HandVerbState {
 function clamp1(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.max(-1, Math.min(1, value));
+}
+
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
 }
 
 /**
@@ -64,15 +78,30 @@ export function pinchDistance(thumb: Landmark, index: Landmark): number {
   return Math.hypot(dx, dy);
 }
 
+/**
+ * How close the tips are to a pinch fire, in [0, 1].
+ * 0 = clearly open (at/above PINCH_FAR); 1 = at/below PINCH_ON (would fire).
+ */
+export function pinchCloseness(dist: number): number {
+  if (dist <= PINCH_ON) return 1;
+  if (dist >= PINCH_FAR) return 0;
+  const t = clamp01((PINCH_FAR - dist) / (PINCH_FAR - PINCH_ON));
+  // Collapse float dust so "open" reads as exactly 0 in the game meter.
+  return t < 1e-6 ? 0 : t;
+}
+
 export type HandVerbSample = {
   aim: HandAim | null;
+  /** Continuous pinch meter for the game aim ring — 0 open, 1 would-fire. */
+  pinch: number;
   /** True exactly once per pinch press (rising edge after hysteresis). */
   pinchEdge: boolean;
 };
 
 /**
  * Fold one landmark frame into verb outputs. Returns null aim when throttled
- * (caller should not post). Pinch edges always return even if aim is throttled.
+ * (caller should not post aim). Pinch closeness always returns when a hand is
+ * present so the meter can update on the same post cadence as aim.
  */
 export function sampleHandVerbs(
   state: HandVerbState,
@@ -81,11 +110,11 @@ export function sampleHandVerbs(
   opts: { mirror: boolean },
 ): HandVerbSample {
   if (!landmarks || landmarks.length < 9) {
-    return { aim: null, pinchEdge: false };
+    return { aim: null, pinch: 0, pinchEdge: false };
   }
   const thumb = landmarks[4];
   const index = landmarks[8];
-  if (!thumb || !index) return { aim: null, pinchEdge: false };
+  if (!thumb || !index) return { aim: null, pinch: 0, pinchEdge: false };
 
   const dist = pinchDistance(thumb, index);
   let pinchEdge = false;
@@ -99,6 +128,9 @@ export function sampleHandVerbs(
     state.pinched = false;
   }
 
+  // While held closed, keep the meter pegged so a refractory hold still reads "in".
+  const pinch = state.pinched ? 1 : pinchCloseness(dist);
+
   let aim: HandAim | null = null;
   if (nowMs - state.lastAimAt >= HAND_AIM_MIN_INTERVAL_MS) {
     aim = aimFromIndexTip(index, opts.mirror);
@@ -106,5 +138,5 @@ export function sampleHandVerbs(
     state.lastAimAt = nowMs;
   }
 
-  return { aim, pinchEdge };
+  return { aim, pinch, pinchEdge };
 }

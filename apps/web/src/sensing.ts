@@ -446,6 +446,8 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
     /** Sample the model ~30 Hz — verb posts are throttled further in handVerbs. */
     const DETECT_MIN_MS = 33;
     let lastDetectAt = 0;
+    /** Last pinch value posted — meter can refresh between aim ticks. */
+    let lastPostedPinch = -1;
     const verbState = createHandVerbState();
     const video = document.createElement('video');
     video.playsInline = true;
@@ -474,9 +476,18 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
             setHandTracking(true);
             postState();
           }
-          if (sample.aim) {
-            setHandAim(sample.aim);
-            postToGame({ t: 'sensing:hand', x: sample.aim.x, y: sample.aim.y });
+          if (sample.aim) setHandAim(sample.aim);
+          const aim = sample.aim ?? verbState.aim;
+          const pinchDelta = Math.abs(sample.pinch - lastPostedPinch);
+          // Aim posts on the 15 Hz budget; pinch meter may refresh between them.
+          if (aim && (sample.aim || sample.pinchEdge || pinchDelta >= 0.04)) {
+            lastPostedPinch = sample.pinch;
+            postToGame({
+              t: 'sensing:hand',
+              x: aim.x,
+              y: aim.y,
+              pinch: sample.pinch,
+            });
           }
           if (sample.pinchEdge) {
             setHandLastPinchAt(now);
