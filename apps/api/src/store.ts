@@ -1359,6 +1359,11 @@ export interface Store {
    */
   getSubmissionBySlug(slug: string): Promise<SubmissionRecord | null>;
   /**
+   * Every submission that claims this slug, newest first. A published game plus an
+   * in-flight improvement is the normal case — two jobs, one slug.
+   */
+  listSubmissionsBySlug(slug: string): Promise<SubmissionRecord[]>;
+  /**
    * The *published* submission for a slug, ignoring in-flight work on the same game.
    *
    * Separate from the lookup above because "who owns this game" and "what is the latest
@@ -2093,10 +2098,15 @@ export class InMemoryStore implements Store {
     // Newest first, matching the Firestore implementation. It used to take whatever
     // `find` reached first, which agreed with production only while a slug never had
     // more than one job — no longer true now that an improvement is a new job.
-    const match = Array.from(this.submissions.values())
+    const records = await this.listSubmissionsBySlug(slug);
+    return records[0] ?? null;
+  }
+
+  async listSubmissionsBySlug(slug: string): Promise<SubmissionRecord[]> {
+    return Array.from(this.submissions.values())
       .filter((s) => s.slug === slug)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-    return match ? { ...match } : null;
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map((s) => ({ ...s }));
   }
 
   async getPublishedSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {
@@ -3729,12 +3739,15 @@ export class FirestoreStore implements Store {
   }
 
   async getSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {
-    // Equality-only query — no composite index needed. A slug is unique per game
-    // directory, but if two submissions ever raced onto one, the newest wins.
-    const snap = await this.db.collection('submissions').where('slug', '==', slug).get();
-    const records = snap.docs.map((d) => d.data() as SubmissionRecord);
-    records.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const records = await this.listSubmissionsBySlug(slug);
     return records[0] ?? null;
+  }
+
+  async listSubmissionsBySlug(slug: string): Promise<SubmissionRecord[]> {
+    // Equality-only query — no composite index needed. Result set is bounded by how
+    // many jobs have touched one game.
+    const snap = await this.db.collection('submissions').where('slug', '==', slug).get();
+    return snap.docs.map((d) => d.data() as SubmissionRecord).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
   async getPublishedSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {
