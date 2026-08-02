@@ -23,10 +23,19 @@ function submissionMap(store: InMemoryStore): Map<number, SubmissionRecord> {
   return (store as unknown as { submissions: Map<number, SubmissionRecord> }).submissions;
 }
 
+/**
+ * Fails loudly on a missing job: every ordering assertion in this file depends on the
+ * timestamps this sets, and silently doing nothing would leave the record on its
+ * real-clock `createdAt` — so a typo'd issue number would produce a green run that
+ * proved nothing about ordering.
+ */
 function setCreatedAt(store: InMemoryStore, issueNumber: number, createdAt: string): void {
   const map = submissionMap(store);
   const sub = map.get(issueNumber);
-  if (sub) map.set(issueNumber, { ...sub, createdAt });
+  if (!sub) {
+    throw new Error(`setCreatedAt: no submission ${issueNumber} — seed it before setting createdAt`);
+  }
+  map.set(issueNumber, { ...sub, createdAt });
 }
 
 async function seedActiveSelfRound(store: InMemoryStore, issueNumber: number, builder: 'self' | 'platform' = 'self') {
