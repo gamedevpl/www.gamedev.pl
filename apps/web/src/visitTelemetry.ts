@@ -126,14 +126,14 @@ export type BuilderDimension = 'platform' | 'self';
  * that ordered funnel — these answer builder choice, connect friction, time to first
  * agent signal (`msSinceStart` on `agent_signaled`), and gate verdict per visit.
  */
-export type StudioStep = 'builder_chosen' | 'connect_copied' | 'agent_signaled' | 'gate_verdict';
+export type StudioStep = 'builder_chosen' | 'connect_copied' | 'agent_signaled' | 'gate_verdict' | 'round_opened';
 
 /**
  * Closed detail for studio steps that need one. `install` / `kickoff` are connect-card
  * copies; `green` / `red` / `kit_outdated` are gate verdicts. Absent on steps that
  * need none (builder choice, first agent signal).
  */
-export type StudioStepDetail = 'install' | 'kickoff' | 'green' | 'red' | 'kit_outdated';
+export type StudioStepDetail = 'install' | 'kickoff' | 'green' | 'red' | 'kit_outdated' | 'creator' | 'agent';
 
 /**
  * The content-editor funnel (EditorKit): did a creator who *can* edit actually

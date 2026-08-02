@@ -547,7 +547,8 @@
       "published": "Ta gra jest już opublikowana. Prześlij nowy pomysł, aby stworzyć kolejną wersję."
     },
     "handoff": {
-      "notice": "Runda ulepszeń rozpoczęta — to jest wątek nowej wersji."
+      "notice": "Runda ulepszeń rozpoczęta — to jest wątek nowej wersji.",
+      "agentOpened": "Twój agent otworzył tę rundę ulepszeń — ten sam dzienny limit co przy starcie w Studio."
     },
     "progress": {
       "checklistTitle": "Nad czym pracuje agent",
@@ -886,6 +887,20 @@
       "no": "Anuluj",
       "sending": "Obracanie…",
       "error": "Nie udało się teraz obrócić klucza. Spróbuj za chwilę."
+    }
+  },
+  "agentKey": {
+    "title": "Połączenie z agentem",
+    "loading": "Wczytywanie ustawień agenta…",
+    "loadError": "Nie udało się wczytać ustawień agenta.",
+    "toggleError": "Nie udało się zapisać tego ustawienia. Spróbuj za chwilę.",
+    "expiry": "Klucz tej gry wygasa {{when}}.",
+    "rotatedKickoff": "Klucz został obrócony — skopiuj ten nowy kickoff dla agenta:",
+    "openRounds": {
+      "title": "Niech mój agent otwiera nowe rundy",
+      "on": "Wł.",
+      "off": "Wył.",
+      "hint": "Gdy włączone, Twój agent może otwierać rundy ulepszeń po publikacji tym kluczem gry. Zużywa ten sam dzienny limit ulepszeń co start rundy w Studio."
     }
   }
 }

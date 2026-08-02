@@ -8,6 +8,7 @@ import {
   type ConnectClient,
   type ConnectPayload,
 } from './connectApi.js';
+import { AgentOpenRoundsToggle } from './StudioAgentKeyPanel.js';
 import { recordStudioStep } from './visitTelemetry.js';
 
 const CLIENT_LABEL_KEY: Record<ConnectClient, string> = {
@@ -215,6 +216,7 @@ export function StudioConnectCard({ token, agentConnected = false }: StudioConne
             </div>
             {rotateError ? <p className="error">{rotateError}</p> : null}
             <p className="studio-connect-expiry">{t('connect.step2.expiry', { when: expiresLabel })}</p>
+            <AgentOpenRoundsToggle token={token} />
           </div>
 
           <p className="studio-connect-waiting" aria-live="polite">

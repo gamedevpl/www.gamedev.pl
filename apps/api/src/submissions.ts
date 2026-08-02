@@ -387,6 +387,8 @@ export interface SubmissionRoutesHandle {
      * builder (`builder` / `defaultBuilder`), then `platform`.
      */
     builder?: BuilderKind;
+    /** Who opened this improvement — drives the queued transition and status.openedBy. */
+    openedBy?: 'creator' | 'agent';
   }) => Promise<{ route: 'job'; jobId: number } | null>;
 }
 
@@ -1014,6 +1016,8 @@ export async function registerSubmissionRoutes(
      * so omitting this used to silently route every post-publish improve to `platform`.
      */
     builder?: BuilderKind;
+    /** Who opened this improvement — drives the queued transition and status.openedBy. */
+    openedBy?: 'creator' | 'agent';
   }): Promise<{ route: 'job'; jobId: number } | null> {
     if (!store) return null;
     const source = await store.getSubmission(input.issueNumber);
@@ -1035,8 +1039,8 @@ export async function registerSubmissionRoutes(
     await store.recordJobTransition(jobId, {
       to: 'queued',
       at: new Date(now()).toISOString(),
-      by: 'creator',
-      reason: 'improvement_requested',
+      by: input.openedBy === 'agent' ? 'agent' : 'creator',
+      reason: input.openedBy === 'agent' ? 'agent_open_round' : 'improvement_requested',
     });
 
     const dispatched = await dispatchBuild({
@@ -1627,6 +1631,12 @@ export async function registerSubmissionRoutes(
     // stronger (gate_red, task_failed, …) already explains the stop.
     if (builderOf(record) === 'self' && !status.failure && (record.roundDeliveryCount ?? 0) >= selfBuildDeliveryCap()) {
       status.failure = { reason: 'self_build_delivery_cap' };
+    }
+    const queuedTransition = (record.transitions ?? []).find((transition) => transition.to === 'queued');
+    if (queuedTransition?.reason === 'agent_open_round') {
+      status.openedBy = 'agent';
+    } else if (queuedTransition?.reason === 'improvement_requested') {
+      status.openedBy = 'creator';
     }
     return status;
   }
@@ -2324,6 +2334,52 @@ export async function registerSubmissionRoutes(
         kickoffPrompt: payload.kickoffPrompt,
         installSnippets: payload.installSnippets,
         rotated: true,
+      });
+    },
+  );
+
+  app.post(
+    '/api/submissions/:id/agent-key/open-rounds',
+    { config: { rateLimit: { max: 30, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      if (!submissionTokenSecret || !store) {
+        return reply.status(503).send({ error: 'submissions are not configured' });
+      }
+      if (!checkUserAccess(request, reply)) return;
+
+      const parsedBody = z.object({ allow: z.boolean() }).safeParse(request.body ?? {});
+      if (!parsedBody.success) {
+        return reply.status(400).send({ error: 'allow must be true or false' });
+      }
+
+      const id = z.string().parse((request.params as { id?: string }).id);
+      let issueNumber: number;
+      try {
+        issueNumber = verifyToken(id, submissionTokenSecret);
+      } catch (error) {
+        if (error instanceof InvalidTokenError) {
+          return reply.status(400).send({ error: 'invalid submission token' });
+        }
+        throw error;
+      }
+
+      const record = await store.getSubmission(issueNumber);
+      if (!record || record.ownerUid !== request.user!.uid) {
+        return reply.status(403).send({ error: 'only the creator can manage this game key' });
+      }
+      if (!record.slug) {
+        return reply.status(409).send({ error: 'game_key_unavailable', reason: 'missing_slug' });
+      }
+
+      const at = new Date(now()).toISOString();
+      const updated = await store.setGameAgentOpenRounds(record.slug, record.ownerUid, parsedBody.data.allow, at);
+      if (!updated) {
+        return reply.status(403).send({ error: 'only the creator can manage this game key' });
+      }
+
+      return reply.send({
+        slug: record.slug,
+        allowAgentOpenRounds: updated.allowAgentOpenRounds === true,
       });
     },
   );
@@ -4110,6 +4166,9 @@ export async function registerSubmissionRoutes(
     now,
     gamesStore: options.agentChannel?.gamesStore,
     objectStore: options.agentChannel?.objectStore,
+    startImprovementRound,
+    contentChecker,
+    dailyImprovementQuota,
   });
 
   return { githubClient, startImprovementRound };

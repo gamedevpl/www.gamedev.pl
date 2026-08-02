@@ -1,7 +1,15 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { looksLikeGameAgentKey } from './agent-game-key.js';
-import { resolveGameAgentKeyForStart } from './agent-game-key-resolve.js';
+import {
+  looksLikeGameAgentKey,
+  IMPROVEMENT_QUOTA_EXHAUSTED_REASON,
+  OPEN_ROUND_IN_PROGRESS_REASON,
+} from './agent-game-key.js';
+import {
+  findActiveRoundForSlug,
+  resolveGameAgentKeyForOpenRound,
+  resolveGameAgentKeyForStart,
+} from './agent-game-key-resolve.js';
 import {
   classifyAgentTokenAccess,
   InvalidAgentTokenError,
@@ -13,6 +21,7 @@ import {
   type AgentTokenClaims,
 } from './agent-token.js';
 import { selfBuildDeliveryCap } from './builder.js';
+import type { BuilderKind } from './builder.js';
 import { MAX_UPLOAD_FILES, type GamesStore } from './games-store.js';
 import type { GcsObjectStore } from './gcs-sign.js';
 import {
@@ -22,8 +31,10 @@ import {
   verifyMcpSessionKey,
 } from './mcp-session-key.js';
 import { MCP_ENDPOINT_PATH } from './self-build-connect.js';
-import { BUILD_STEPS } from './submission-status.js';
+import { BUILD_STEPS, sanitizeCreatorText } from './submission-status.js';
 import type { Store, SubmissionRecord } from './store.js';
+import type { ContentChecker } from './moderation.js';
+import { logModerationRejection } from './moderation-metrics.js';
 
 /**
  * Streamable-HTTP MCP endpoint (BY-05 / BY-23).
@@ -71,6 +82,17 @@ export interface McpServerOptions {
    * mitigation). Absent Origin is allowed — coding agents are not browsers.
    */
   allowedOrigins?: string[];
+  startImprovementRound?: (input: {
+    issueNumber: number;
+    text: string;
+    title: string;
+    locale: string;
+    log: { error: (context: object, message: string) => void };
+    builder?: BuilderKind;
+    openedBy?: 'creator' | 'agent';
+  }) => Promise<{ route: 'job'; jobId: number } | null>;
+  contentChecker?: ContentChecker;
+  dailyImprovementQuota?: number;
 }
 
 interface JsonRpcRequest {
@@ -241,6 +263,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
   const agentTokenSecret = options.agentTokenSecret ?? process.env.SUBMISSION_TOKEN_SECRET;
   const now = options.now ?? Date.now;
   const allowedOrigins = options.allowedOrigins ?? parseAllowedOrigins();
+  const startImprovementRound = options.startImprovementRound;
+  const contentChecker = options.contentChecker;
+  const dailyImprovementQuota = options.dailyImprovementQuota ?? Number(process.env.DAILY_IMPROVEMENT_QUOTA ?? '2');
 
   /** Transport sessions only — never consulted for authorization. */
   const transportSessions = new Map<string, { createdAt: number }>();
@@ -549,6 +574,139 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           ...base,
           content: [...base.content, { type: 'text', text: SESSION_WORKFLOW_TEXT }],
         };
+      },
+    },
+
+    open_round: {
+      description:
+        'Open a new post-publish improvement round on a published game using the durable per-game key. ' +
+        'Requires the creator to have opted in per game. Spends the same daily improvement quota as Studio. ' +
+        'Returns jobId only — call start() next for a sessionKey. Idempotent while a round is already open.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          key: {
+            type: 'string',
+            description: 'Durable per-game key from the Studio kickoff prompt — not a sessionKey or round key.',
+          },
+          feedback: {
+            type: 'string',
+            description:
+              'Creator change request for this improvement round (≤2000 chars). Treated as untrusted creator text.',
+          },
+        },
+        required: ['key', 'feedback'],
+      },
+      handler: async (args, ctx) => {
+        if (!store || !agentTokenSecret || !startImprovementRound || !contentChecker) {
+          return toolErr('the MCP build endpoint is not configured');
+        }
+
+        const key = typeof args.key === 'string' ? args.key.trim() : '';
+        if (!key) {
+          return toolErr('key is required — pass the durable per-game key from the Studio kickoff prompt');
+        }
+        if (!looksLikeGameAgentKey(key)) {
+          return toolErr(
+            'open_round requires the durable per-game key — session keys and round keys cannot open a new round',
+          );
+        }
+
+        const feedbackRaw = typeof args.feedback === 'string' ? args.feedback.trim() : '';
+        if (!feedbackRaw) {
+          return toolErr('feedback is required — relay what the creator wants changed');
+        }
+        if (feedbackRaw.length > 2000) {
+          return toolErr('feedback is too long (max 2000 characters)');
+        }
+
+        const resolved = await resolveGameAgentKeyForOpenRound(store, key, agentTokenSecret, now());
+        if (!resolved.ok) {
+          return toolErr(resolved.reason);
+        }
+
+        const at = new Date(now()).toISOString();
+        if (resolved.activeRound) {
+          await store.finishAgentOpenRound(resolved.claims.slug, at);
+          return toolOk({
+            jobId: resolved.activeRound.issueNumber,
+            slug: resolved.claims.slug,
+            alreadyOpen: true,
+          });
+        }
+
+        const moderation = await contentChecker.checkFields([feedbackRaw]);
+        if (!moderation.allowed) {
+          logModerationRejection(ctx.request.log, {
+            surface: 'creator_feedback',
+            uid: resolved.claims.creatorUid,
+            category: moderation.category,
+          });
+          return toolErr('content_rejected', { category: moderation.category ?? 'other' });
+        }
+
+        const admitted = await store.beginAgentOpenRound(resolved.claims.slug, at);
+        if (!admitted) {
+          const again = await resolveGameAgentKeyForOpenRound(store, key, agentTokenSecret, now());
+          if (again.ok && again.activeRound) {
+            return toolOk({
+              jobId: again.activeRound.issueNumber,
+              slug: again.claims.slug,
+              alreadyOpen: true,
+            });
+          }
+          return toolErr(OPEN_ROUND_IN_PROGRESS_REASON);
+        }
+
+        try {
+          const racingRound = await findActiveRoundForSlug(store, resolved.claims.slug, resolved.claims.creatorUid);
+          if (racingRound) {
+            return toolOk({
+              jobId: racingRound.issueNumber,
+              slug: resolved.claims.slug,
+              alreadyOpen: true,
+            });
+          }
+
+          const dateStr = at.slice(0, 10);
+          const quota = await store.checkAndIncrementQuota(
+            resolved.claims.creatorUid,
+            dateStr,
+            dailyImprovementQuota,
+            'improvements',
+          );
+          if (!quota.allowed) {
+            if (quota.tier === 'blocked') {
+              return toolErr('account is blocked');
+            }
+            return toolErr(IMPROVEMENT_QUOTA_EXHAUSTED_REASON);
+          }
+
+          const sanitizedFeedback = sanitizeCreatorText(feedbackRaw, { singleLine: false });
+          const sanitizedTitle = sanitizeCreatorText(`Improve ${resolved.publishedRecord.title}`, {
+            singleLine: true,
+          });
+          const started = await startImprovementRound({
+            issueNumber: resolved.publishedRecord.issueNumber,
+            text: sanitizedFeedback,
+            title: sanitizedTitle,
+            locale: resolved.publishedRecord.locale ?? 'en',
+            log: ctx.request.log,
+            builder: 'self',
+            openedBy: 'agent',
+          });
+          if (!started) {
+            return toolErr('could not open an improvement round for this game');
+          }
+
+          return toolOk({
+            jobId: started.jobId,
+            slug: resolved.claims.slug,
+            alreadyOpen: false,
+          });
+        } finally {
+          await store.finishAgentOpenRound(resolved.claims.slug, at);
+        }
       },
     },
 

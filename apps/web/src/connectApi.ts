@@ -98,3 +98,19 @@ export async function rotateAgentKey(token: string): Promise<AgentKeyPayload> {
 
   return (await response.json()) as AgentKeyPayload;
 }
+
+/** Opt in or out of agent-opened improvement rounds for this game (BY-24). */
+export async function setAgentOpenRounds(token: string, allow: boolean): Promise<{ allowAgentOpenRounds: boolean }> {
+  const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/agent-key/open-rounds`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ allow }),
+  });
+
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+
+  return (await response.json()) as { allowAgentOpenRounds: boolean };
+}
