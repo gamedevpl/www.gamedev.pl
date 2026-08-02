@@ -89,14 +89,20 @@ export function buildInstallSnippets(input: BuildInstallSnippetsInput): InstallS
 }
 
 /**
- * Paste-ready kickoff: build instruction + gamedevpl tool key line, and any queued
- * creator feedback as a short "also apply:" list so a regenerate never drops them.
+ * Paste-ready kickoff: build instruction + gamedevpl tool key line + one line pointing at
+ * the session loop (start returns the workflow; gate green is done; the key retires with the
+ * round), and any queued creator feedback as a short "also apply:" list so a regenerate never
+ * drops them. The base paste stays ≤ 5 lines with the key line intact at line 2.
  *
  * User-facing copy says "key", never "token".
  */
 export function buildKickoffPrompt(input: BuildKickoffPromptInput): string {
   const title = input.title.trim() || 'your game';
-  const lines = [`Build "${title}" for gamedev.pl.`, `Start with the gamedevpl tool, key: ${input.roundKey}`];
+  const lines = [
+    `Build "${title}" for gamedev.pl.`,
+    `Start with the gamedevpl tool, key: ${input.roundKey}`,
+    'start returns your workflow; after gate green you are done — this key retires with the round.',
+  ];
   const pending = (input.pendingMessages ?? []).map((message) => message.text.trim()).filter((text) => text.length > 0);
   if (pending.length > 0) {
     lines.push('');
