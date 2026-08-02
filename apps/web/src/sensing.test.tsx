@@ -319,6 +319,65 @@ describe('useSensingBridge', () => {
     expect(toGame[0]).toMatchObject({ t: 'sensing:state', active: false, backdrop: false });
   });
 
+  it('ignores a second Start while getUserMedia is still settling', async () => {
+    let resolveMedia!: (stream: MediaStream) => void;
+    const pending = new Promise<MediaStream>((resolve) => {
+      resolveMedia = resolve;
+    });
+    const getUserMedia = vi.fn(() => pending);
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      mediaDevices: { getUserMedia },
+    });
+
+    const { fromGame } = mount();
+    fromGame({ t: 'sensing:hello', features: ['backdrop'] });
+    act(() => latest().backdrop.start());
+    act(() => latest().backdrop.start());
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+
+    const trackStop = vi.fn();
+    const fakeStream = {
+      getTracks: () => [{ stop: trackStop, kind: 'video' }],
+    } as unknown as MediaStream;
+    await act(async () => {
+      resolveMedia(fakeStream);
+      await Promise.resolve();
+    });
+    expect(latest().backdrop.live).toBe(true);
+  });
+
+  it('rejects a stream that resolves after the tab hides', async () => {
+    let resolveMedia!: (stream: MediaStream) => void;
+    const pending = new Promise<MediaStream>((resolve) => {
+      resolveMedia = resolve;
+    });
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      mediaDevices: { getUserMedia: vi.fn(() => pending) },
+    });
+
+    const { fromGame } = mount();
+    fromGame({ t: 'sensing:hello', features: ['backdrop'] });
+    act(() => latest().backdrop.start());
+
+    const trackStop = vi.fn();
+    act(() => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    await act(async () => {
+      resolveMedia({
+        getTracks: () => [{ stop: trackStop, kind: 'video' }],
+      } as unknown as MediaStream);
+      await Promise.resolve();
+    });
+    expect(trackStop).toHaveBeenCalled();
+    expect(latest().backdrop.live).toBe(false);
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+  });
+
   it('starts and stops a camera stream from a gesture, posting backdrop state', async () => {
     const trackStop = vi.fn();
     const fakeTrack = { stop: trackStop, kind: 'video' };

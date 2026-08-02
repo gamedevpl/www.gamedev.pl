@@ -166,6 +166,10 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
   const backdropLiveRef = useRef(false);
   const backdropFacingRef = useRef<BackdropFacing>('user');
   const streamRef = useRef<MediaStream | null>(null);
+  /** True while a getUserMedia() call is in flight — blocks double-Start races. */
+  const acquiringRef = useRef(false);
+  /** Bumped to invalidate an in-flight acquisition (hide / stop / unmount). */
+  const acquireGenRef = useRef(0);
   const wantsTiltRef = useRef(false);
   const wantsBackdropRef = useRef(false);
 
@@ -191,6 +195,9 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
   }, [frameRef]);
 
   const stopBackdropTracks = useCallback(() => {
+    // Invalidate any in-flight getUserMedia so a late resolve cannot resurrect the feed.
+    acquireGenRef.current += 1;
+    acquiringRef.current = false;
     const stream = streamRef.current;
     if (!stream) return;
     for (const track of stream.getTracks()) track.stop();
@@ -222,7 +229,9 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
 
   const startBackdrop = useCallback(() => {
     if (!wantsBackdropRef.current || !cameraSupported()) return;
-    if (streamRef.current) return;
+    if (streamRef.current || acquiringRef.current) return;
+    acquiringRef.current = true;
+    const gen = acquireGenRef.current;
     // Must stay inside the gesture's task — getUserMedia is the prompt.
     void navigator.mediaDevices
       .getUserMedia({
@@ -235,8 +244,9 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
         },
       })
       .then((stream) => {
-        // Theater may have closed while the prompt was up.
-        if (!wantsBackdropRef.current) {
+        acquiringRef.current = false;
+        // Theater closed, feature dropped, tab hidden, or a newer stop invalidated us.
+        if (gen !== acquireGenRef.current || !wantsBackdropRef.current || document.visibilityState === 'hidden') {
           for (const track of stream.getTracks()) track.stop();
           return;
         }
@@ -247,7 +257,9 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
         postState();
       })
       // Denied / no camera: the game keeps its stand-in. Do not surface an error.
-      .catch(() => undefined);
+      .catch(() => {
+        acquiringRef.current = false;
+      });
   }, [postState]);
 
   const stopBackdrop = useCallback(() => {
