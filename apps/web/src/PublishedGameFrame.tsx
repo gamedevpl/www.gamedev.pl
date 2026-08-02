@@ -43,6 +43,13 @@ export function PublishedGameFrame({ slug, title, frameRef, embed, slots, remixa
    */
   const [remixHtml, setRemixHtml] = useState<string | null>(null);
   const [remixOpen, setRemixOpen] = useState(false);
+  /**
+   * Remix is an invitation, revealed in the gaps rather than at second zero:
+   * a finished run (the "aw" beat), a reached landmark, or — failing both — a
+   * one-time gentle pulse after a minute of play. All three ride telemetry
+   * signals the game already sends; nothing new crosses the bridge.
+   */
+  const [remixRevealed, setRemixRevealed] = useState(false);
   const localFrameRef = useRef<HTMLIFrameElement | null>(null);
   const activeFrameRef = frameRef ?? localFrameRef;
   // Present only when the player arrived on a shared link; read once.
@@ -100,6 +107,24 @@ export function PublishedGameFrame({ slug, title, frameRef, embed, slots, remixa
   // `embed` describes chrome, not ownership — the theater always embeds — so the
   // gate is the explicit prop plus "this frame is one player's", which a party
   // session (slots) is not.
+  useEffect(() => {
+    if (!remixable || slots !== undefined || remixRevealed) return;
+    const frame = activeFrameRef.current;
+    function onMessage(event: MessageEvent) {
+      if (event.origin !== 'null') return;
+      if (!frame || event.source !== frame.contentWindow) return;
+      const data = event.data as { source?: string; type?: string } | null;
+      if (!data || data.source !== 'gdpl-player') return;
+      if (data.type === 'end' || data.type === 'progress') setRemixRevealed(true);
+    }
+    window.addEventListener('message', onMessage);
+    const pulse = window.setTimeout(() => setRemixRevealed(true), 60_000);
+    return () => {
+      window.removeEventListener('message', onMessage);
+      window.clearTimeout(pulse);
+    };
+  }, [remixable, slots, remixRevealed, activeFrameRef, html]);
+
   const showRemix = Boolean(remixable) && slots === undefined;
   const frame = <GameFrame title={gameTitle} html={remixHtml ?? html} frameRef={activeFrameRef} embed={embed} />;
   if (!showRemix) return frame;
@@ -115,11 +140,11 @@ export function PublishedGameFrame({ slug, title, frameRef, embed, slots, remixa
           onSwapDocument={setRemixHtml}
           onClose={() => setRemixOpen(false)}
         />
-      ) : (
-        <button type="button" className="remix-open" onClick={() => setRemixOpen(true)}>
+      ) : remixRevealed ? (
+        <button type="button" className="remix-open is-revealed" onClick={() => setRemixOpen(true)}>
           <PixelIcon name="wrench" size={13} /> {t('remix.button')}
         </button>
-      )}
+      ) : null}
     </div>
   );
 }

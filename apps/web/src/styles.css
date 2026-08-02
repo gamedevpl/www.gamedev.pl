@@ -10468,3 +10468,26 @@ body.player-open {
   font-size: 0.82rem;
   cursor: pointer;
 }
+
+/* The invitation's arrival: two gentle pulses, then stillness. Never mid-action
+   by construction — the reveal only fires on end/progress signals or the 60s
+   one-time timer, and reduced-motion users get no pulse at all. */
+.remix-open.is-revealed {
+  animation: remix-invite 1.6s ease-in-out 2;
+}
+
+@keyframes remix-invite {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .remix-open.is-revealed {
+    animation: none;
+  }
+}

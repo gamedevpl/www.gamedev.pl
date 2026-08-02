@@ -58,6 +58,16 @@ const PENDING_KEY = 'gdpl-remix-pending';
 
 type Lane = 'idle' | 'asking' | 'building';
 
+/** After this long the shimmer needs words, or it reads as broken. */
+const SLOW_AFTER_MS = 8_000;
+/**
+ * The hard ceiling on a rebuild round trip. Generous on purpose: a legitimate
+ * code-lane run with repair rounds can take half a minute, and aborting a call
+ * that was about to land is worse than a long beat with honest copy. Past this,
+ * the player gets their game back untouched.
+ */
+const CODE_TIMEOUT_MS = 45_000;
+
 type Note = { kind: 'ok' | 'info' | 'error'; text: string } | null;
 
 export function RemixPanel(props: {
@@ -79,6 +89,9 @@ export function RemixPanel(props: {
   const [utterance, setUtterance] = useState('');
   const [lane, setLane] = useState<Lane>('idle');
   const [note, setNote] = useState<Note>(null);
+  const [slow, setSlow] = useState(false);
+  /** Consecutive model-lane failures — two in a row reads as "editing is napping". */
+  const failStreakRef = useRef(0);
   const [undo, setUndo] = useState<Record<string, EditorParamValue> | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
@@ -215,10 +228,15 @@ export function RemixPanel(props: {
 
     // The pause seam. Freeze first, so nothing can land mid-jump.
     setLane('building');
+    setSlow(false);
     props.frameRef.current?.contentWindow?.postMessage({ source: 'gdpl-host', type: 'pause' }, '*');
+    const controller = new AbortController();
+    const slowTimer = window.setTimeout(() => setSlow(true), SLOW_AFTER_MS);
+    const hardTimer = window.setTimeout(() => controller.abort(), CODE_TIMEOUT_MS);
     try {
-      const result = await remixCode(active.remixId, text);
+      const result = await remixCode(active.remixId, text, controller.signal);
       if (result.ok) {
+        failStreakRef.current = 0;
         recordRemixStep('applied');
         setUtterance('');
         setNote({ kind: 'ok', text: `${label(result.summary) || t('remix.rebuilt')} ${t('remix.restarted')}` });
@@ -237,10 +255,26 @@ export function RemixPanel(props: {
         });
       }
     } catch (error) {
+      // Whatever went wrong — timeout, network, 5xx — the old document simply
+      // resumes; the player never pays for our slow afternoon with their run.
       props.frameRef.current?.contentWindow?.postMessage({ source: 'gdpl-host', type: 'resume' }, '*');
+      failStreakRef.current += 1;
       const status = (error as RemixApiError).status;
-      setNote({ kind: 'error', text: status === 429 ? t('remix.quota') : t('remix.unavailable') });
+      const timedOut = controller.signal.aborted;
+      setNote({
+        kind: timedOut ? 'info' : 'error',
+        text: timedOut
+          ? t('remix.tookTooLong')
+          : status === 429
+            ? t('remix.quota')
+            : failStreakRef.current >= 2
+              ? t('remix.napping')
+              : t('remix.unavailable'),
+      });
     } finally {
+      window.clearTimeout(slowTimer);
+      window.clearTimeout(hardTimer);
+      setSlow(false);
       setLane('idle');
     }
   }
@@ -299,7 +333,7 @@ export function RemixPanel(props: {
       {lane === 'building' ? (
         <div className="remix-working" role="status">
           <span className="remix-shimmer" aria-hidden="true" />
-          {t('remix.building')}
+          {slow ? t('remix.buildingSlow') : t('remix.building')}
         </div>
       ) : null}
 

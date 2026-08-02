@@ -954,6 +954,9 @@
     "signInToRemix": "Sign in to remix",
     "signInTitle": "Sign in to remix this game",
     "signInSubtitle": "Remixing is tied to your account while we're in closed beta.",
-    "wallSubtitle": "Your request is saved — it runs the moment you're in."
+    "wallSubtitle": "Your request is saved — it runs the moment you're in.",
+    "buildingSlow": "Still working — rebuilding your game…",
+    "tookTooLong": "That took too long — here's your game back, unchanged.",
+    "napping": "Editing is napping right now — the game still plays."
   }
 }
