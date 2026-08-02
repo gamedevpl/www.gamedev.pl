@@ -1,13 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { assertCreatorAgentKeyActive, looksLikeCreatorAgentKey, verifyCreatorAgentKey } from './agent-creator-key.js';
-import { NO_OPEN_ROUND_REASON, PLATFORM_ROUND_REASON } from './agent-game-key.js';
+import { NO_OPEN_ROUND_REASON, PLATFORM_ROUND_REASON, SLUG_NOT_ON_ACCOUNT_REASON } from './agent-game-key.js';
 import { mintGameAgentKey } from './agent-game-key.js';
 import { mintAgentToken } from './agent-token.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { buildApp } from './app.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
 import { mintMcpSessionKey } from './mcp-session-key.js';
+import { pkceChallengeS256 } from './oauth-pkce.js';
 import { InMemoryStore } from './store.js';
 import { NoopTranslator } from './translate.js';
 
@@ -176,7 +177,7 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
     expect((structured as { sessionKey: string }).sessionKey).toBeTruthy();
   });
 
-  it('refuses a slug the creator does not own', async () => {
+  it('refuses a slug the creator does not own without blaming the key', async () => {
     const store = new InMemoryStore();
     app = await createApp(store);
 
@@ -190,7 +191,97 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
 
     const { structured, isError } = await callStart(app, { slug: 'other-game' }, { authorization: `Bearer ${key}` });
     expect(isError).toBe(true);
-    expect((structured as { error: string }).error).toMatch(/rotated/i);
+    expect((structured as { error: string }).error).toBe(SLUG_NOT_ON_ACCOUNT_REASON);
+    expect((structured as { error: string }).error).not.toMatch(/rotated/i);
+  });
+
+  it('refuses a slug that does not exist with the same account-slug reason', async () => {
+    const store = new InMemoryStore();
+    app = await createApp(store);
+
+    const minted = await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
+    const key = minted.json().key as string;
+
+    const { structured, isError } = await callStart(
+      app,
+      { slug: 'no-such-game-anywhere' },
+      { authorization: `Bearer ${key}` },
+    );
+    expect(isError).toBe(true);
+    expect((structured as { error: string }).error).toBe(SLUG_NOT_ON_ACCOUNT_REASON);
+  });
+
+  it('creator-key and OAuth Bearer paths refuse the same unowned slug with the same reason', async () => {
+    const store = new InMemoryStore();
+    app = await createApp(store);
+
+    await store.createSubmission(10, OTHER, 'Other Game');
+    await store.setSubmissionSlug(10, 'other-game');
+    await store.setRoundBuilder(10, 'self');
+    await store.recordJobTransition(10, { to: 'dispatched', at: new Date().toISOString(), by: 'system' });
+
+    const minted = await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
+    const creatorKey = minted.json().key as string;
+    const viaCreator = await callStart(app, { slug: 'other-game' }, { authorization: `Bearer ${creatorKey}` });
+
+    const register = await app.inject({
+      method: 'POST',
+      url: '/oauth/register',
+      headers: { 'content-type': 'application/json' },
+      payload: {
+        redirect_uris: ['http://127.0.0.1/callback'],
+        client_name: 'Parity Agent',
+        token_endpoint_auth_method: 'none',
+      },
+    });
+    expect(register.statusCode).toBe(201);
+    const clientId = register.json().client_id as string;
+    const verifier = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
+    const challenge = pkceChallengeS256(verifier);
+    const approve = await app.inject({
+      method: 'POST',
+      url: '/oauth/authorize',
+      headers: {
+        cookie: authHeaders().cookie,
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      payload: new URLSearchParams({
+        response_type: 'code',
+        client_id: clientId,
+        redirect_uri: 'http://127.0.0.1/callback',
+        scope: 'mcp',
+        state: 'xyz',
+        code_challenge: challenge,
+        code_challenge_method: 'S256',
+        action: 'approve',
+      }).toString(),
+    });
+    expect(approve.statusCode).toBe(302);
+    const location = new URL(approve.headers.location as string);
+    const code = location.searchParams.get('code');
+    expect(code).toBeTruthy();
+    const tokenRes = await app.inject({
+      method: 'POST',
+      url: '/oauth/token',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code: code!,
+        redirect_uri: 'http://127.0.0.1/callback',
+        client_id: clientId,
+        code_verifier: verifier,
+      }).toString(),
+    });
+    expect(tokenRes.statusCode).toBe(200);
+    const accessToken = tokenRes.json().access_token as string;
+
+    const viaOAuth = await callStart(app, { slug: 'other-game' }, { authorization: `Bearer ${accessToken}` });
+
+    expect(viaCreator.isError).toBe(true);
+    expect(viaOAuth.isError).toBe(true);
+    expect((viaCreator.structured as { error: string }).error).toBe(SLUG_NOT_ON_ACCOUNT_REASON);
+    expect((viaOAuth.structured as { error: string }).error).toBe(SLUG_NOT_ON_ACCOUNT_REASON);
+    expect((viaCreator.structured as { error: string }).error).toBe((viaOAuth.structured as { error: string }).error);
   });
 
   it('reuses no-open-round and platform-round refusals', async () => {

@@ -8,8 +8,10 @@ import {
   NO_OPEN_ROUND_REASON,
   OPEN_ROUND_IN_PROGRESS_REASON,
   PLATFORM_ROUND_REASON,
+  SLUG_NOT_ON_ACCOUNT_REASON,
 } from './agent-game-key.js';
 import {
+  creatorOwnsSlug,
   findActiveRoundForSlug,
   resolveGameAgentKeyForOpenRound,
   resolveGameAgentKeyForStart,
@@ -576,6 +578,11 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           }
           if (!slugArg) {
             return toolErr('slug is required when using OAuth — pass the game slug for your open build round');
+          }
+
+          if (!(await creatorOwnsSlug(store, slugArg, asAccess.ownerUid))) {
+            noteInvalidStart(ctx.request);
+            return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
           }
 
           const active = await findActiveRoundForSlug(store, slugArg, asAccess.ownerUid);
