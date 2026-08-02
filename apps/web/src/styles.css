@@ -2761,7 +2761,9 @@ body.player-open {
 }
 
 /* Inside the composer, over the cleared field — not above it (that covered the
-   context bar) and not as a second row (that permanently grew the box). */
+   context bar) and not as a second row (that permanently grew the box).
+   Pointer events pass through so a click can still focus the textarea; only the
+   dismiss control re-enables hits. */
 .status-feedback-receipt.is-floating {
   position: absolute;
   left: 8px;
@@ -2775,7 +2777,7 @@ body.player-open {
   border: 1px solid rgba(0, 228, 172, 0.35);
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
   animation: status-receipt-in 0.2s ease-out;
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .status-feedback-receipt.is-floating .status-feedback-sent {
@@ -2799,6 +2801,7 @@ body.player-open {
   background: transparent;
   color: var(--muted);
   cursor: pointer;
+  pointer-events: auto;
 }
 
 .status-feedback-receipt-dismiss:hover {
