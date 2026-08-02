@@ -1327,8 +1327,8 @@ function FeedbackPanel({
           </button>
         </div>
         {/* Failures, in-flight, and "kept but nothing started" still need a row — they
-            ask the creator to wait or act. The plain "Sent!" receipt does not: it floats
-            above the box so the composer stays one row tall, then clears itself. */}
+            ask the creator to wait or act. The plain "Sent!" receipt does not: it overlays
+            the cleared field so the composer stays one row tall, then clears itself. */}
         {error || sending || notice ? (
           <div className="status-feedback-actions">
             {error ? (
