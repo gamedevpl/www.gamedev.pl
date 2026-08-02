@@ -273,7 +273,11 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
       .then((stream) => {
         acquiringRef.current = false;
         // Theater closed, feature dropped, tab hidden, or a newer stop invalidated us.
-        if (gen !== acquireGenRef.current || !wantsBackdropRef.current || document.visibilityState === 'hidden') {
+        if (
+          gen !== acquireGenRef.current ||
+          (!wantsBackdropRef.current && !wantsHandRef.current) ||
+          document.visibilityState === 'hidden'
+        ) {
           for (const track of stream.getTracks()) track.stop();
           return;
         }
@@ -325,7 +329,9 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
       }
 
       wantsTiltRef.current = wantsTilt;
-      wantsBackdropRef.current = wantsBackdrop;
+      // Hand tracking needs the same camera stream; keep the "camera wanted" ref true
+      // for either backdrop or hand so getUserMedia resolve does not drop the tracks.
+      wantsBackdropRef.current = wantsBackdrop || wantsHand;
       wantsHandRef.current = wantsHand;
       setTiltEngaged(wantsTilt);
       setHandEngaged(wantsHand);
@@ -438,6 +444,9 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
 
     let cancelled = false;
     let raf = 0;
+    /** Sample the model ~30 Hz — verb posts are throttled further in handVerbs. */
+    const DETECT_MIN_MS = 33;
+    let lastDetectAt = 0;
     const verbState = createHandVerbState();
     const video = document.createElement('video');
     video.playsInline = true;
@@ -457,20 +466,23 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
       const tick = () => {
         if (cancelled) return;
         const now = performance.now();
-        const landmarks = landmarksFromVideo(landmarker, video, now);
-        const sample = sampleHandVerbs(verbState, landmarks, now, { mirror });
-        if (landmarks && !handReadyRef.current) {
-          handReadyRef.current = true;
-          setHandTracking(true);
-          postState();
-        }
-        if (sample.aim) {
-          setHandAim(sample.aim);
-          postToGame({ t: 'sensing:hand', x: sample.aim.x, y: sample.aim.y });
-        }
-        if (sample.pinchEdge) {
-          setHandLastPinchAt(now);
-          postToGame({ t: 'sensing:act', name: 'banish' });
+        if (now - lastDetectAt >= DETECT_MIN_MS) {
+          lastDetectAt = now;
+          const landmarks = landmarksFromVideo(landmarker, video, now);
+          const sample = sampleHandVerbs(verbState, landmarks, now, { mirror });
+          if (landmarks && !handReadyRef.current) {
+            handReadyRef.current = true;
+            setHandTracking(true);
+            postState();
+          }
+          if (sample.aim) {
+            setHandAim(sample.aim);
+            postToGame({ t: 'sensing:hand', x: sample.aim.x, y: sample.aim.y });
+          }
+          if (sample.pinchEdge) {
+            setHandLastPinchAt(now);
+            postToGame({ t: 'sensing:act', name: 'banish' });
+          }
         }
         raf = requestAnimationFrame(tick);
       };
