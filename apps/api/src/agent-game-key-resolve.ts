@@ -1,12 +1,15 @@
 /**
- * Resolve a durable per-game opener into an active self-build round (BY-23).
+ * Resolve a durable per-game opener into an active self-build round (BY-23) or an
+ * agent-opened improvement round (BY-24).
  *
- * Shared by MCP `start` (and later `open_round`) so verification + ownership +
- * active-round selection cannot drift between callers.
+ * Shared by MCP `start` and `open_round` so verification + ownership cannot drift.
  */
 
 import {
+  AGENT_OPEN_ROUNDS_DISABLED_REASON,
   assertGameAgentKeyActive,
+  GAME_NOT_PUBLISHED_REASON,
+  looksLikeGameAgentKey,
   NO_OPEN_ROUND_REASON,
   PLATFORM_ROUND_REASON,
   ROTATED_GAME_KEY_REASON,
@@ -15,10 +18,20 @@ import {
 } from './agent-game-key.js';
 import { InvalidAgentTokenError } from './agent-token.js';
 import { isActiveBuildRound } from './builder.js';
-import type { Store, SubmissionRecord } from './store.js';
+import type { GameAgentKeyRecord, Store, SubmissionRecord } from './store.js';
 
 export type ResolveGameKeyResult =
   { ok: true; claims: GameAgentKeyClaims; record: SubmissionRecord } | { ok: false; reason: string };
+
+export type ResolveGameKeyForOpenRoundResult =
+  | {
+      ok: true;
+      claims: GameAgentKeyClaims;
+      publishedRecord: SubmissionRecord;
+      /** When set, a round is already open — callers must not stack another. */
+      activeRound: SubmissionRecord | null;
+    }
+  | { ok: false; reason: string };
 
 /**
  * Creator still "owns" the slug when they have a non-abandoned submission for it
@@ -43,15 +56,19 @@ export async function findActiveRoundForSlug(
 }
 
 /**
- * Full durable-key verification for `start`: signature, generation, expiry,
- * ownership, then bind to the active self round (or refuse with a distinct reason).
+ * Signature, generation, expiry, and slug ownership — shared by `start` and `open_round`.
+ * Does not require an open round or a published game.
  */
-export async function resolveGameAgentKeyForStart(
+export async function verifyDurableGameAgentKey(
   store: Store,
   key: string,
   secret: string,
   nowMs: number = Date.now(),
-): Promise<ResolveGameKeyResult> {
+): Promise<{ ok: true; claims: GameAgentKeyClaims; keyRecord: GameAgentKeyRecord } | { ok: false; reason: string }> {
+  if (!looksLikeGameAgentKey(key)) {
+    return { ok: false, reason: 'invalid key — ask the creator for the current prompt in their Studio thread' };
+  }
+
   let claims: GameAgentKeyClaims;
   try {
     claims = verifyGameAgentKey(key, secret);
@@ -84,7 +101,23 @@ export async function resolveGameAgentKeyForStart(
     return { ok: false, reason: ROTATED_GAME_KEY_REASON };
   }
 
-  const active = await findActiveRoundForSlug(store, claims.slug, claims.creatorUid);
+  return { ok: true, claims, keyRecord };
+}
+
+/**
+ * Full durable-key verification for `start`: shared checks, then bind to the active
+ * self round (or refuse with a distinct reason).
+ */
+export async function resolveGameAgentKeyForStart(
+  store: Store,
+  key: string,
+  secret: string,
+  nowMs: number = Date.now(),
+): Promise<ResolveGameKeyResult> {
+  const verified = await verifyDurableGameAgentKey(store, key, secret, nowMs);
+  if (!verified.ok) return verified;
+
+  const active = await findActiveRoundForSlug(store, verified.claims.slug, verified.claims.creatorUid);
   if (!active) {
     return { ok: false, reason: NO_OPEN_ROUND_REASON };
   }
@@ -94,5 +127,31 @@ export async function resolveGameAgentKeyForStart(
     return { ok: false, reason: PLATFORM_ROUND_REASON };
   }
 
-  return { ok: true, claims, record: active };
+  return { ok: true, claims: verified.claims, record: active };
+}
+
+/**
+ * Durable-key verification for `open_round`: published game, opt-in, and idempotent
+ * binding when a round is already open.
+ */
+export async function resolveGameAgentKeyForOpenRound(
+  store: Store,
+  key: string,
+  secret: string,
+  nowMs: number = Date.now(),
+): Promise<ResolveGameKeyForOpenRoundResult> {
+  const verified = await verifyDurableGameAgentKey(store, key, secret, nowMs);
+  if (!verified.ok) return verified;
+
+  if (verified.keyRecord.allowAgentOpenRounds !== true) {
+    return { ok: false, reason: AGENT_OPEN_ROUNDS_DISABLED_REASON };
+  }
+
+  const publishedRecord = await store.getPublishedSubmissionBySlug(verified.claims.slug);
+  if (!publishedRecord) {
+    return { ok: false, reason: GAME_NOT_PUBLISHED_REASON };
+  }
+
+  const activeRound = await findActiveRoundForSlug(store, verified.claims.slug, verified.claims.creatorUid);
+  return { ok: true, claims: verified.claims, publishedRecord, activeRound };
 }

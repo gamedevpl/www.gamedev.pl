@@ -543,7 +543,8 @@
       "published": "This game is already published. Submit a new idea to make another version."
     },
     "handoff": {
-      "notice": "Improvement round started — this is the new build thread."
+      "notice": "Improvement round started — this is the new build thread.",
+      "agentOpened": "Your agent opened this improvement round — same daily limit as starting one in Studio."
     },
     "progress": {
       "checklistTitle": "What the agent is doing",
@@ -878,6 +879,19 @@
       "no": "Cancel",
       "sending": "Rotating…",
       "error": "We couldn't rotate the key right now. Try again in a moment."
+    }
+  },
+  "agentKey": {
+    "title": "Agent connection",
+    "loading": "Loading agent settings…",
+    "loadError": "We couldn't load agent settings right now.",
+    "toggleError": "We couldn't update that setting. Try again in a moment.",
+    "expiry": "This game's key expires {{when}}.",
+    "openRounds": {
+      "title": "Let my agent start new rounds",
+      "on": "On",
+      "off": "Off",
+      "hint": "When on, your coding agent can open post-publish improvement rounds with this game's key. Uses the same daily improvement limit as starting a round here."
     }
   }
 }

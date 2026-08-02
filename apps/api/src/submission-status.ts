@@ -211,6 +211,12 @@ export interface SubmissionStatusResponseBase {
    * `stall`: the UI renders its own translated copy, not this string.
    */
   failure?: { reason: string };
+  /**
+   * Who opened this improvement round, when it is one. Absent on first-time builds and
+   * legacy jobs. Lets Studio distinguish a creator-started handoff from an agent-opened
+   * round the creator did not initiate in the UI (BY-24).
+   */
+  openedBy?: 'creator' | 'agent';
 }
 
 /**

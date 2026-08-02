@@ -20,6 +20,7 @@ import {
   type StudioShelfFilter,
   type StudioShelfGame,
 } from './studioShelf.js';
+import { StudioAgentKeyPanel } from './StudioAgentKeyPanel.js';
 import { SubmissionStatusView } from './SubmissionStatusView.js';
 import {
   approveSuggestion,
@@ -1015,6 +1016,8 @@ function DetailsPanel({
       {/* Draft share is for pre-catalog games. A revise tip on a live slug already has a
           public play link — offering a second "share the draft" switch would lie. */}
       {!catalogLive && game.slug && game.lastKnownStatus !== 'abandoned' ? <DraftShareControl game={game} /> : null}
+
+      {game.slug && game.lastKnownStatus !== 'abandoned' ? <StudioAgentKeyPanel token={game.token} /> : null}
 
       {/* Only once there is play to report on. Before a game is live every one of these
           numbers is zero, and a wall of zeroes reads as a verdict rather than as

@@ -132,6 +132,8 @@ export type SubmissionStatus = {
    * itself. Sending feedback starts a new round.
    */
   failure?: { reason: string };
+  /** Who opened this improvement round, when reported (BY-24). */
+  openedBy?: 'creator' | 'agent';
 };
 
 export type BuildPlayableItem = {

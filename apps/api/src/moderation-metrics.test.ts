@@ -99,6 +99,7 @@ describe('every moderating module reports its rejections', () => {
       'app.ts',
       'contact.ts',
       'editor-drafts.ts',
+      'mcp-server.ts',
       'player-feedback.ts',
       'refine.ts',
       'submissions.ts',

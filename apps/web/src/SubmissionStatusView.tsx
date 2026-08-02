@@ -401,6 +401,7 @@ export function SubmissionStatusView({
   // finished submission must not mint a fresh gate_verdict (visit stream is per-tab).
   const prevStallRef = useRef<SubmissionStatus['stall'] | undefined>(undefined);
   const prevVerdictRef = useRef<StudioStepDetail | null | undefined>(undefined);
+  const prevOpenedByRef = useRef<SubmissionStatus['openedBy'] | undefined>(undefined);
   const hasSeenStatusRef = useRef(false);
   useEffect(() => {
     if (!status) return;
@@ -426,10 +427,14 @@ export function SubmissionStatusView({
       if (hasSeenStatusRef.current && verdict && prevVerdictRef.current !== verdict) {
         recordStudioStep('gate_verdict', builder, verdict);
       }
+      if (hasSeenStatusRef.current && status.openedBy && prevOpenedByRef.current !== status.openedBy) {
+        recordStudioStep('round_opened', builder, status.openedBy);
+      }
     }
 
     prevStallRef.current = status.stall;
     prevVerdictRef.current = verdict;
+    prevOpenedByRef.current = status.openedBy;
     hasSeenStatusRef.current = true;
   }, [status]);
 
@@ -608,6 +613,10 @@ export function SubmissionStatusView({
             <p className="status-handoff-notice" role="status">
               <PixelIcon name="sparkle" size={13} /> {t('statusView.handoff.notice')}
             </p>
+          ) : status?.openedBy === 'agent' ? (
+            <p className="status-handoff-notice" role="status">
+              <PixelIcon name="sparkle" size={13} /> {t('statusView.handoff.agentOpened')}
+            </p>
           ) : null}
           {loading ? (
             <p className="catalog-state studio-thread-empty">{t('statusView.loading')}</p>
@@ -714,6 +723,10 @@ export function SubmissionStatusView({
         {justHandedOff ? (
           <p className="status-handoff-notice" role="status">
             <PixelIcon name="sparkle" size={13} /> {t('statusView.handoff.notice')}
+          </p>
+        ) : status?.openedBy === 'agent' ? (
+          <p className="status-handoff-notice" role="status">
+            <PixelIcon name="sparkle" size={13} /> {t('statusView.handoff.agentOpened')}
           </p>
         ) : null}
         {
