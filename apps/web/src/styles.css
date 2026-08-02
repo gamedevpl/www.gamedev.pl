@@ -10491,3 +10491,26 @@ body.player-open {
     animation: none;
   }
 }
+
+/* The way back when play owns the screen: a thin, always-visible pill at the
+   top edge. Deliberately quiet, deliberately generous to a thumb — hidden
+   chrome must never mean gone chrome. */
+.theater-peek-pill {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  width: 64px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 9px;
+  background: rgba(140, 170, 190, 0.28);
+  cursor: pointer;
+}
+
+.theater-peek-pill:hover,
+.theater-peek-pill:focus-visible {
+  background: rgba(140, 170, 190, 0.5);
+}
