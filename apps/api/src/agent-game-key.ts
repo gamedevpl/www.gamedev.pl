@@ -33,6 +33,14 @@ export const NO_OPEN_ROUND_REASON =
 export const PLATFORM_ROUND_REASON =
   'the open round for this game is built by the platform, not your agent — ask the creator to switch to their own agent in Studio';
 
+/**
+ * Bearer + slug identity paths: the slug is not on this creator's account.
+ * Names the slug — never the key — so a mistype does not push a destructive rotate.
+ * Same wording for "does not exist" and "belongs to someone else" (games are public).
+ */
+export const SLUG_NOT_ON_ACCOUNT_REASON =
+  'no game with that slug on your account — check the slug in your Studio thread';
+
 /** Rotated or generation-mismatched durable key. */
 export const ROTATED_GAME_KEY_REASON =
   'this game key was rotated — get a fresh prompt from the Studio thread for this game';

@@ -1,13 +1,17 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { looksLikeCreatorAgentKey } from './agent-creator-key.js';
+import { resolveCreatorAgentKeyForStart } from './agent-creator-key-resolve.js';
 import {
   looksLikeGameAgentKey,
   IMPROVEMENT_QUOTA_EXHAUSTED_REASON,
   NO_OPEN_ROUND_REASON,
   OPEN_ROUND_IN_PROGRESS_REASON,
   PLATFORM_ROUND_REASON,
+  SLUG_NOT_ON_ACCOUNT_REASON,
 } from './agent-game-key.js';
 import {
+  creatorOwnsSlug,
   findActiveRoundForSlug,
   resolveGameAgentKeyForOpenRound,
   resolveGameAgentKeyForStart,
@@ -345,18 +349,25 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     let claims: AgentTokenClaims;
     let channelToken: string;
 
-    if (bearer) {
-      if (looksLikeAsAccessToken(bearer)) {
-        return toolErr(
-          'OAuth access proves your identity only — call start() with your game slug (Authorization: Bearer <oauth access>) to get a session key',
-        );
-      }
-      // Durable per-game openers are start-only — never a write capability via Bearer.
-      if (looksLikeGameAgentKey(bearer)) {
-        return toolErr(
-          'this game key only opens a session via start() — pass the sessionKey start returned for later tools',
-        );
-      }
+    // Paste-once MCP config leaves Authorization: Bearer <opener> on every request.
+    // When the tool also passes sessionKey, prefer that — openers never authorize writes.
+    const bearerIsOpener = Boolean(bearer) && (looksLikeGameAgentKey(bearer!) || looksLikeCreatorAgentKey(bearer!));
+
+    if (bearer && looksLikeAsAccessToken(bearer)) {
+      return toolErr(
+        'OAuth access proves your identity only — call start() with your game slug (Authorization: Bearer <oauth access>) to get a session key',
+      );
+    }
+
+    if (bearerIsOpener && !sessionKeyArg) {
+      return toolErr(
+        looksLikeCreatorAgentKey(bearer!)
+          ? 'this creator key only opens a session via start() — pass the sessionKey start returned for later tools'
+          : 'this game key only opens a session via start() — pass the sessionKey start returned for later tools',
+      );
+    }
+
+    if (bearer && !bearerIsOpener) {
       try {
         claims = verifyAgentToken(bearer, agentTokenSecret);
       } catch (error) {
@@ -370,6 +381,11 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       if (looksLikeGameAgentKey(sessionKeyArg)) {
         return toolErr(
           'this game key only opens a session via start() — pass the sessionKey start returned for later tools',
+        );
+      }
+      if (looksLikeCreatorAgentKey(sessionKeyArg)) {
+        return toolErr(
+          'this creator key only opens a session via start() — pass the sessionKey start returned for later tools',
         );
       }
       let sessionClaims;
@@ -464,12 +480,11 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
   > = {
     start: {
       description:
-        "Bind this MCP client to a build round using the key from the creator's Studio kickoff prompt, " +
-        'or sign in with OAuth and pass your game slug. ' +
-        'Accepts a durable per-game key (preferred), a legacy round-scoped key, or OAuth Bearer + slug. ' +
+        'Bind this MCP client to a build round using a creator key in Authorization: Bearer plus a game slug, ' +
+        'a durable per-game key, a legacy round-scoped key, or OAuth Bearer + slug. ' +
         'Returns a short-lived sessionKey — pass it as sessionKey on every later tool call — plus a workflow ' +
         '(the ordered start→done loop), an inbox policy, and what to relay if a later call is refused. ' +
-        'The game key itself is an opener only — never a write capability. OAuth access is identity only. ' +
+        'Creator and game keys are openers only — never a write capability. OAuth access is identity only. ' +
         'Does not treat Mcp-Session-Id as authority. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
@@ -478,13 +493,13 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           key: {
             type: 'string',
             description:
-              'Game key (or legacy round key) from the Studio kickoff prompt (the line "key: …"). ' +
-              'Optional when using OAuth Bearer + slug.',
+              'Per-game key (or legacy round key) from a Studio kickoff prompt. ' +
+              'Optional when using Authorization Bearer (creator key or OAuth) + slug.',
           },
           slug: {
             type: 'string',
             description:
-              'Game slug for your open self-build round. Required with OAuth Bearer; ignored with a game key.',
+              'Game slug for your open self-build round. Required with creator-key or OAuth Bearer; ignored with a game key.',
           },
         },
         required: [],
@@ -504,27 +519,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const slugArg = typeof args.slug === 'string' ? args.slug.trim() : '';
         const bearer = ctx.bearerToken;
 
-        if (!key && bearer && looksLikeAsAccessToken(bearer)) {
-          const asAccess = await verifyAsAccessToken(store, bearer, now());
-          if (!asAccess) {
-            noteInvalidStart(ctx.request);
-            return toolErr('invalid OAuth access — sign in again from your coding agent');
-          }
-          if (!slugArg) {
-            return toolErr('slug is required when using OAuth — pass the game slug for your open build round');
-          }
-
-          const active = await findActiveRoundForSlug(store, slugArg, asAccess.ownerUid);
-          if (!active) {
-            noteInvalidStart(ctx.request);
-            return toolErr(NO_OPEN_ROUND_REASON);
-          }
-          const builder = active.builder ?? 'platform';
-          if (builder !== 'self') {
-            noteInvalidStart(ctx.request);
-            return toolErr(PLATFORM_ROUND_REASON);
-          }
-
+        const bindActiveRound = (active: SubmissionRecord): ToolResult => {
           pruneTransportSessions(now());
           pruneInvalidStartBuckets(now());
           const sessionId = ctx.sessionId && transportSessions.has(ctx.sessionId) ? ctx.sessionId : newMcpSessionId();
@@ -561,8 +556,49 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           const base = toolOk(structured);
           return {
             ...base,
-            content: [...base.content, { type: 'text', text: SESSION_WORKFLOW_TEXT }],
+            content: [...base.content, { type: 'text' as const, text: SESSION_WORKFLOW_TEXT }],
           };
+        };
+
+        if (!key && bearer && looksLikeCreatorAgentKey(bearer)) {
+          if (!slugArg) {
+            return toolErr('slug is required when using a creator key — pass the game slug for your open build round');
+          }
+          const resolved = await resolveCreatorAgentKeyForStart(store, bearer, agentTokenSecret, slugArg, now());
+          if (!resolved.ok) {
+            noteInvalidStart(ctx.request);
+            return toolErr(resolved.reason);
+          }
+          return bindActiveRound(resolved.record);
+        }
+
+        if (!key && bearer && looksLikeAsAccessToken(bearer)) {
+          const asAccess = await verifyAsAccessToken(store, bearer, now());
+          if (!asAccess) {
+            noteInvalidStart(ctx.request);
+            return toolErr('invalid OAuth access — sign in again from your coding agent');
+          }
+          if (!slugArg) {
+            return toolErr('slug is required when using OAuth — pass the game slug for your open build round');
+          }
+
+          if (!(await creatorOwnsSlug(store, slugArg, asAccess.ownerUid))) {
+            noteInvalidStart(ctx.request);
+            return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
+          }
+
+          const active = await findActiveRoundForSlug(store, slugArg, asAccess.ownerUid);
+          if (!active) {
+            noteInvalidStart(ctx.request);
+            return toolErr(NO_OPEN_ROUND_REASON);
+          }
+          const builder = active.builder ?? 'platform';
+          if (builder !== 'self') {
+            noteInvalidStart(ctx.request);
+            return toolErr(PLATFORM_ROUND_REASON);
+          }
+
+          return bindActiveRound(active);
         }
 
         if (key && looksLikeAsAccessToken(key)) {
@@ -570,10 +606,15 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           return toolErr('OAuth access must be sent as Authorization Bearer, not as the key argument');
         }
 
+        if (key && looksLikeCreatorAgentKey(key)) {
+          noteInvalidStart(ctx.request);
+          return toolErr('creator key must be sent as Authorization Bearer, not as the key argument');
+        }
+
         if (!key) {
           noteInvalidStart(ctx.request);
           return toolErr(
-            "key is required — paste the key from the creator's Studio kickoff prompt, or use OAuth Bearer + slug",
+            'key is required — paste a game key, or use Authorization Bearer (creator key or OAuth) + slug',
           );
         }
 

@@ -929,6 +929,35 @@
     "revoke": "Odłącz",
     "revoking": "Odłączanie…"
   },
+  "creatorKey": {
+    "title": "Klucz agenta kodującego",
+    "hint": "Wklej ten nagłówek raz w ustawieniach serwera MCP swojego agenta. Otwiera sesje na każdej z Twoich gier — rotacja zatrzymuje każdy agent wciąż używający starego klucza.",
+    "loading": "Wczytywanie klucza agenta…",
+    "loadError": "Nie udało się wczytać klucza agenta.",
+    "copyHeader": "Kopiuj nagłówek",
+    "copied": "Skopiowano",
+    "meta": "Końcówka {{fingerprint}} · generacja {{generation}} · wygasa {{when}}",
+    "revoked": "Klucz agenta został unieważniony. Utwórz nowy, gdy będziesz gotów połączyć się ponownie.",
+    "mint": "Utwórz klucz",
+    "minting": "Tworzenie…",
+    "mintError": "Nie udało się utworzyć klucza. Spróbuj za chwilę.",
+    "rotate": {
+      "start": "Rotuj klucz",
+      "confirm": "Rotacja zatrzymuje każdy agent wciąż używający starego klucza. Kontynuować?",
+      "yes": "Rotuj",
+      "no": "Anuluj",
+      "sending": "Rotowanie…"
+    },
+    "rotateError": "Nie udało się obrócić klucza. Spróbuj za chwilę.",
+    "revoke": {
+      "start": "Unieważnij klucz",
+      "confirm": "Unieważnienie zatrzymuje każdy agent używający tego klucza. Kontynuować?",
+      "yes": "Unieważnij",
+      "no": "Anuluj",
+      "sending": "Unieważnianie…"
+    },
+    "revokeError": "Nie udało się unieważnić klucza. Spróbuj za chwilę."
+  },
   "remix": {
     "title": "Remiks",
     "close": "Zamknij",

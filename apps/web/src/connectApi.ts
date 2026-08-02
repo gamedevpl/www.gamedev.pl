@@ -142,3 +142,67 @@ export async function revokeOAuthGrant(grantId: string): Promise<void> {
     await throwResponseError(response);
   }
 }
+
+export type CreatorAgentKeyPayload = {
+  /** Full key — hold in memory for Copy; never render into the DOM. */
+  key: string;
+  keyGeneration: number;
+  expiresAt: number;
+  fingerprint: string;
+  authorizationHeader: string;
+  authorizationHeaderMasked: string;
+  rotated?: boolean;
+  revoked?: false;
+};
+
+/** Status when the key is revoked — no secret; mint again explicitly. */
+export type CreatorAgentKeyRevokedStatus = {
+  keyGeneration: number;
+  revoked: true;
+};
+
+export type CreatorAgentKeyStatus = CreatorAgentKeyPayload | CreatorAgentKeyRevokedStatus;
+
+/** Current creator-wide MCP opener (BY-27a). Remints at current gen, or reports revoked. */
+export async function getCreatorAgentKey(): Promise<CreatorAgentKeyStatus> {
+  const response = await fetch(`${API_BASE}/api/me/creator-agent-key`, { credentials: 'include' });
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+  return (await response.json()) as CreatorAgentKeyStatus;
+}
+
+/** Mint after revoke (or first time). Does not reset generation. */
+export async function mintCreatorAgentKey(): Promise<CreatorAgentKeyPayload> {
+  const response = await fetch(`${API_BASE}/api/me/creator-agent-key`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+  return (await response.json()) as CreatorAgentKeyPayload;
+}
+
+/** Bump keyGeneration — agents holding the old key are cut off. */
+export async function rotateCreatorAgentKey(): Promise<CreatorAgentKeyPayload> {
+  const response = await fetch(`${API_BASE}/api/me/creator-agent-key/rotate`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+  return (await response.json()) as CreatorAgentKeyPayload;
+}
+
+/** Revoke the creator-wide key. Generation is preserved; remint needs an explicit mint. */
+export async function revokeCreatorAgentKey(): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/me/creator-agent-key`, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+  if (!response.ok && response.status !== 204) {
+    await throwResponseError(response);
+  }
+}
