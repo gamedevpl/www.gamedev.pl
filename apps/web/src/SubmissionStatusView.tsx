@@ -675,12 +675,7 @@ export function SubmissionStatusView({
                   {...(status.slug ? { slug: status.slug } : {})}
                   phase={t(`statusView.states.${status.status}.label`)}
                   heartbeatAt={heartbeatAt}
-                  active={
-                    status.status === 'queued' ||
-                    status.status === 'building' ||
-                    status.status === 'in_review' ||
-                    status.status === 'publishing'
-                  }
+                  active={!TERMINAL_STATUSES.has(status.status)}
                   {...(!TERMINAL_STATUSES.has(status.status) ? { stopToken: token } : {})}
                   {...(total > 0 ? { progress: { done, total } } : {})}
                   {...(playable ? { primary: playable } : {})}
