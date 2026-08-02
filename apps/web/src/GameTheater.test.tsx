@@ -417,6 +417,32 @@ describe('GameTheater how-to-play visit telemetry', () => {
     setVisitSessionForTesting(null);
   });
 
+  it('hides the bar during play and restores it from the peek pill by keyboard', async () => {
+    vi.useFakeTimers();
+    try {
+      await draw();
+      // The grace window: the bar is still there while the title registers.
+      expect(container.querySelector('.game-theater-bar')).not.toBeNull();
+      await act(async () => {
+        vi.advanceTimersByTime(3100);
+      });
+      // Play owns the screen; the pill is the way back.
+      expect(container.querySelector('.game-theater-bar')).toBeNull();
+      const pill = container.querySelector('.theater-peek-pill') as HTMLButtonElement | null;
+      expect(pill).not.toBeNull();
+
+      // Enter/Space on a focused button emit `click` and no pointer events at
+      // all — a pointerdown-only pill would strand a keyboard-only player with
+      // no route back to mute or exit.
+      await act(async () => {
+        pill!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      expect(container.querySelector('.game-theater-bar')).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('records via and same-card reopen for a published play', async () => {
     await draw({ controls: 'Arrow keys to move' });
     await click(container.querySelector('.howto-btn'));

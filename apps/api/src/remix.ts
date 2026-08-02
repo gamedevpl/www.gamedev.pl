@@ -75,6 +75,16 @@ interface RemixSession {
   definition: EditorDefinition | null;
   title: string;
   codeEdits: number;
+  /**
+   * A code rebuild is running for this session.
+   *
+   * One at a time, deliberately: two concurrent rebuilds race on `overrides`,
+   * and the loser's edit silently lands on top of a base it never saw. The
+   * client only ever has one in flight, so a second arrival is either a
+   * double-tap or a retry after a client-side timeout — both of which want to
+   * be told "still working", not to start a second paid run.
+   */
+  codeInFlight: boolean;
   expiresAt: number;
 }
 
@@ -104,6 +114,13 @@ export interface RemixRoutesOptions {
   contentChecker?: ContentChecker;
   /** The platform-wide editing spend breaker — both model lanes ride it. */
   editingGate?: EditingGate;
+  /**
+   * Whether the caller has hung up mid-rebuild. Defaults to the socket state;
+   * injectable because that is the one thing a test cannot produce through
+   * `inject()`, and the behaviour it guards — an abandoned edit must not land —
+   * is worth pinning.
+   */
+  isAbandoned?: (request: FastifyRequest) => boolean;
   now?: () => number;
 }
 
@@ -262,6 +279,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         definition,
         title: params.data.slug,
         codeEdits: 0,
+        codeInFlight: false,
         expiresAt: now() + REMIX_TTL_MS,
       });
 
@@ -373,43 +391,76 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         }
       }
 
+      if (session.codeInFlight) {
+        return reply.status(409).send({ error: 'still working on your last change' });
+      }
       if (!(await spendEditSlot(request, reply))) return;
 
-      const current = { ...session.sources, ...session.overrides };
-      const outcome = await options.codeLane.run(
-        { slug: session.slug, sources: current, utterance: body.data.utterance, game: { title: session.title } },
-        async (candidate) => {
-          // "Does it build" is answered by building the real document — the same
-          // assembler, CSP and caps the play path applies — so a green answer here
-          // means the frame can actually run it.
-          try {
-            const html = await rebuild(session, candidate);
-            return html ? { ok: true } : { ok: false, errors: ['the game could not be assembled'] };
-          } catch (error) {
-            return { ok: false, errors: [error instanceof Error ? error.message : String(error)] };
-          }
-        },
-      );
+      /**
+       * Did the player walk away while we worked?
+       *
+       * The client aborts its fetch at its own timeout and tells the player
+       * their game came back untouched. Nothing about that reaches this
+       * handler, so without this check the rebuild would finish anyway and
+       * write itself into the session — and the *next* edit would silently
+       * build on a change the player was told had been discarded. The socket
+       * closing is the only signal we get, and it is enough: an abandoned run
+       * is discarded here, which makes the client's promise true.
+       */
+      const abandoned = () =>
+        options.isAbandoned ? options.isAbandoned(request) : request.raw.destroyed || request.socket.destroyed;
 
-      if (!outcome.ok) {
+      session.codeInFlight = true;
+      try {
+        const current = { ...session.sources, ...session.overrides };
+        const outcome = await options.codeLane.run(
+          { slug: session.slug, sources: current, utterance: body.data.utterance, game: { title: session.title } },
+          async (candidate) => {
+            // "Does it build" is answered by building the real document — the same
+            // assembler, CSP and caps the play path applies — so a green answer here
+            // means the frame can actually run it.
+            try {
+              const html = await rebuild(session, candidate);
+              return html ? { ok: true } : { ok: false, errors: ['the game could not be assembled'] };
+            } catch (error) {
+              return { ok: false, errors: [error instanceof Error ? error.message : String(error)] };
+            }
+          },
+        );
+
+        if (!outcome.ok) {
+          return reply.send({
+            ok: false,
+            reason: outcome.reason,
+            ...(outcome.summary ? { summary: outcome.summary } : {}),
+          });
+        }
+
+        if (abandoned()) {
+          // The spend already happened and is not refundable — but the *edit* is,
+          // and discarding it is what the player was promised. Logged because a
+          // pattern of these is the signal that the timeout is set too tight.
+          request.log.info(
+            { slug: session.slug, region: outcome.region },
+            'remix code edit abandoned before it landed',
+          );
+          return;
+        }
+
+        session.overrides = { ...session.overrides, ...outcome.overrides };
+        session.codeEdits += 1;
+        session.expiresAt = now() + REMIX_TTL_MS;
+        const html = await rebuild(session);
+        if (!html) return reply.status(500).send({ ok: false, reason: 'error' });
         return reply.send({
-          ok: false,
-          reason: outcome.reason,
+          ok: true,
+          html,
+          region: outcome.region,
           ...(outcome.summary ? { summary: outcome.summary } : {}),
         });
+      } finally {
+        session.codeInFlight = false;
       }
-
-      session.overrides = { ...session.overrides, ...outcome.overrides };
-      session.codeEdits += 1;
-      session.expiresAt = now() + REMIX_TTL_MS;
-      const html = await rebuild(session);
-      if (!html) return reply.status(500).send({ ok: false, reason: 'error' });
-      return reply.send({
-        ok: true,
-        html,
-        region: outcome.region,
-        ...(outcome.summary ? { summary: outcome.summary } : {}),
-      });
     },
   );
 

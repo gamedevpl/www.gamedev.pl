@@ -56,6 +56,66 @@ import type { EditorLabel, EditorParamValue } from './studioApi.js';
 /** Tab-scoped stash for the request typed before the wall. Cleared on use. */
 const PENDING_KEY = 'gdpl-remix-pending';
 
+/**
+ * The stash, guarded and scoped.
+ *
+ * Guarded because `sessionStorage` *throws* in Safari private mode and hardened
+ * configurations — and the throw landed inside the send handler, so the wall
+ * never opened and the tap did nothing at all. The in-memory fallback keeps the
+ * whole flow working where storage is unavailable; it only loses the words if
+ * the tab reloads during sign-in, which is the lesser failure by a mile.
+ *
+ * Scoped because the key is tab-global: type on game A, dismiss the wall, sign
+ * in later, open Remix on game B, and B would silently run A's request — a
+ * spend on a game nobody asked about. The slug travels with the text and a
+ * mismatch clears the stash rather than firing it.
+ */
+let memoryPending: string | null = null;
+
+function stashPending(slug: string, text: string): void {
+  const payload = JSON.stringify({ slug, text });
+  memoryPending = payload;
+  try {
+    window.sessionStorage.setItem(PENDING_KEY, payload);
+  } catch {
+    // Storage refused; the in-memory copy is the fallback.
+  }
+}
+
+/** Returns the pending text when it belongs to `slug`, clearing it either way. */
+function takePending(slug: string): string | null {
+  let raw = memoryPending;
+  if (raw === null) {
+    try {
+      raw = window.sessionStorage.getItem(PENDING_KEY);
+    } catch {
+      raw = null;
+    }
+  }
+  if (raw === null) return null;
+  const clear = () => {
+    memoryPending = null;
+    try {
+      window.sessionStorage.removeItem(PENDING_KEY);
+    } catch {
+      // Nothing to do — the in-memory copy is already gone.
+    }
+  };
+  try {
+    const parsed = JSON.parse(raw) as { slug?: string; text?: string };
+    if (typeof parsed.text !== 'string' || parsed.slug !== slug) {
+      // Another game's words. Dropped rather than replayed here.
+      clear();
+      return null;
+    }
+    clear();
+    return parsed.text;
+  } catch {
+    clear();
+    return null;
+  }
+}
+
 type Lane = 'idle' | 'asking' | 'building';
 
 /** After this long the shimmer needs words, or it reads as broken. */
@@ -114,6 +174,15 @@ export function RemixPanel(props: {
     [props.frameRef],
   );
 
+  // The panel is open the moment it renders, signed in or not. Recorded here
+  // rather than on a minted session: a signed-out visitor can reach `typed` and
+  // `wall_shown`, and counting those against a denominator that only signed-in
+  // opens increment would make every rung read as a share of the wrong total —
+  // exactly the wall experiment this funnel exists to measure.
+  useEffect(() => {
+    recordRemixStep('opened');
+  }, []);
+
   useEffect(() => {
     // No session without a session: the API 401s signed out, and the composer
     // needs nothing from the server until send — so a visitor can type first.
@@ -122,7 +191,6 @@ export function RemixPanel(props: {
     startRemix(props.slug)
       .then((started) => {
         if (cancelled) return;
-        recordRemixStep('opened');
         setSession(started);
         const base = started.values ?? {};
         const merged =
@@ -148,15 +216,14 @@ export function RemixPanel(props: {
   const ranPendingRef = useRef(false);
   useEffect(() => {
     if (!session || ranPendingRef.current) return;
-    const pending = window.sessionStorage.getItem(PENDING_KEY);
+    const pending = takePending(props.slug);
     if (pending === null) return;
     ranPendingRef.current = true;
-    window.sessionStorage.removeItem(PENDING_KEY);
     recordRemixStep('signed_in');
     setUtterance(pending);
     void ask(pending, session);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per session arrival
-  }, [session]);
+  }, [session, props.slug]);
 
   function setParam(key: string, value: EditorParamValue) {
     const next = { ...valuesRef.current, [key]: value };
@@ -175,7 +242,7 @@ export function RemixPanel(props: {
       // The wall, exactly one step before anything is spent. The words survive
       // the trip: stashed for this tab only, cleared the moment they run.
       recordRemixStep('wall_shown');
-      window.sessionStorage.setItem(PENDING_KEY, text);
+      stashPending(props.slug, text);
       setAuthOpen(true);
       return;
     }

@@ -514,7 +514,12 @@ export function GameTheater({
           type="button"
           className="theater-peek-pill"
           aria-label={t('player.showControls')}
+          // Both: pointerdown for a touch that should not wait for the click,
+          // click for Enter/Space — which never emit pointer events, and this
+          // pill is the only way back to mute and exit once the bar is hidden.
+          // revealChrome is idempotent, so the pair firing together is a no-op.
           onPointerDown={() => revealChrome()}
+          onClick={() => revealChrome()}
         />
       )}
       {!fullscreen && !chromeHidden && (

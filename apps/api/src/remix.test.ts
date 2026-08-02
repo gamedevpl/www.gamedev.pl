@@ -61,7 +61,9 @@ function stubGitHubClient(seen: Array<Record<string, string> | undefined>): GitH
   } as unknown as GitHubClient;
 }
 
-async function buildTestApp(overrides: { assistant?: EditorAssistant; codeLane?: unknown } = {}) {
+async function buildTestApp(
+  overrides: { assistant?: EditorAssistant; codeLane?: unknown; isAbandoned?: () => boolean } = {},
+) {
   const store = new InMemoryStore();
   await store.setPublication({
     slug: 'dog-dash',
@@ -85,6 +87,7 @@ async function buildTestApp(overrides: { assistant?: EditorAssistant; codeLane?:
     publishedRef: 'main',
     ...(overrides.assistant ? { assistant: overrides.assistant } : {}),
     ...(overrides.codeLane ? { codeLane: overrides.codeLane as never } : {}),
+    ...(overrides.isAbandoned ? { isAbandoned: overrides.isAbandoned } : {}),
   });
   await app.ready();
   return { app, seen };
@@ -213,6 +216,83 @@ describe('remix routes', () => {
     const last = built.seen.at(-1)!;
     expect(last['game/runtime.ts']).toContain('return 0.08;');
     expect(last['index.html']).toBe(SOURCES['index.html']);
+  });
+
+  it('discards an abandoned code edit rather than letting it land later', async () => {
+    // The client aborts at its own timeout and tells the player their game came
+    // back untouched. The rebuild finishes anyway; what must not happen is that
+    // edit quietly becoming the base for the next one.
+    const sourcesSeen: Array<Record<string, string>> = [];
+    const codeLane = {
+      run: async (
+        request: { sources: Record<string, string> },
+        build: (o: Record<string, string>) => Promise<{ ok: boolean }>,
+      ) => {
+        sourcesSeen.push(request.sources);
+        const good = { 'game/runtime.ts': 'export function startGame() {\n  return 0.08;\n}\n' };
+        await build(good);
+        return {
+          ok: true,
+          overrides: good,
+          region: { file: 'game/runtime.ts', name: 'startGame' },
+          rounds: 0,
+          tokens: { input: 1, output: 1 },
+        };
+      },
+    };
+    const built = await buildTestApp({ codeLane, isAbandoned: () => true });
+    app = built.app;
+    const { remixId } = (await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix', headers: alice })).json();
+
+    await app.inject({
+      method: 'POST',
+      url: `/api/remixes/${remixId}/code`,
+      headers: alice,
+      payload: { utterance: 'make it faster' },
+    });
+
+    // The next edit must see the ORIGINAL source, not the abandoned one.
+    await app.inject({
+      method: 'POST',
+      url: `/api/remixes/${remixId}/code`,
+      headers: alice,
+      payload: { utterance: 'again' },
+    });
+    expect(sourcesSeen).toHaveLength(2);
+    expect(sourcesSeen[1]['game/runtime.ts']).toContain('return 0.16;');
+  });
+
+  it('refuses a second rebuild while one is in flight', async () => {
+    let release: (() => void) | null = null;
+    const codeLane = {
+      run: async () => {
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        return { ok: false, reason: 'did_not_compile', tokens: { input: 1, output: 1 } };
+      },
+    };
+    const built = await buildTestApp({ codeLane });
+    app = built.app;
+    const { remixId } = (await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix', headers: alice })).json();
+
+    const first = app.inject({
+      method: 'POST',
+      url: `/api/remixes/${remixId}/code`,
+      headers: alice,
+      payload: { utterance: 'one' },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const second = await app.inject({
+      method: 'POST',
+      url: `/api/remixes/${remixId}/code`,
+      headers: alice,
+      payload: { utterance: 'two' },
+    });
+    // A double-tap or a post-timeout retry is told to wait, not charged again.
+    expect(second.statusCode).toBe(409);
+    release?.();
+    await first;
   });
 
   it('reports a failed code edit without swapping anything', async () => {
