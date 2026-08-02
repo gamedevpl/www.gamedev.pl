@@ -234,6 +234,7 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
       headers: authHeaders(),
       payload: { title: 'Write Guard', concept: CONCEPT, builder: 'self' },
     });
+    expect(submit.statusCode).toBe(200);
     const record = (await store.listSubmissionsByOwner(OWNER))[0]!;
     await store.setSubmissionSlug(record.issueNumber, SLUG);
 
@@ -269,6 +270,7 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
       headers: authHeaders(),
       payload: { title: 'Legacy Keys', concept: CONCEPT, builder: 'self' },
     });
+    expect(submit.statusCode).toBe(200);
     const record = (await store.listSubmissionsByOwner(OWNER))[0]!;
     await store.setSubmissionSlug(record.issueNumber, SLUG);
     await store.ensureRoundGeneration(record.issueNumber);
