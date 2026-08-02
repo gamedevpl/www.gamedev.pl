@@ -13,6 +13,7 @@ import { profileBylineName, toPublicCreatorProfile } from './creator-profile.js'
 import {
   catalogEntryFromSpec,
   createGitHubClient,
+  parseGameMedia,
   parseSpecTitle,
   type CatalogGameEntry,
   type GitHubClient,
@@ -3353,7 +3354,11 @@ export async function registerSubmissionRoutes(
           if (record.lastStatus !== status.status) {
             await store.setSubmissionLastStatus(record.issueNumber, status.status);
           }
-          await recordDerivedJobState(record, status.status);
+          // Use the post-reconcile snapshot: the gate/agent observation above may already
+          // have moved the job, and feeding the pre-reconcile record into the derived-status
+          // planner would plan the same destination again (ready_for_review → ready_for_review)
+          // and reset `stateSince` / overwrite the reason that actually moved it.
+          await recordDerivedJobState(current, status.status);
           const statusToken = mintToken(record.issueNumber, submissionTokenSecret);
           const result = await notifyOnTransition(buildNotifyDeps(), record, status, statusToken);
           if (result.emitted) emitted += 1;
@@ -3846,6 +3851,30 @@ export async function registerSubmissionRoutes(
   }
 
   /**
+   * Gallery bytes for a store-published game, or null when this slug is not one / the
+   * filename is not on its media allowlist.
+   *
+   * Same allowlist rule as the repo path: only filenames declared by the validated
+   * `media/metadata.json` are readable. The gate stores that metadata (and the png/mp4)
+   * as derived artifacts on the published version.
+   */
+  async function readStorePublishedMedia(slug: string, filename: string): Promise<Buffer | null> {
+    const gamesStore = options.agentChannel?.gamesStore;
+    if (!store || !gamesStore) return null;
+    const publication = await store.getPublication(slug);
+    if (publication?.state !== 'published') return null;
+    const mediaMetadata = await gamesStore.getDerivedArtifact(slug, publication.currentVersion, 'media/metadata.json');
+    const media = parseGameMedia(mediaMetadata?.toString('utf8') ?? null);
+    if (!media) return null;
+    const allowed = new Set([
+      ...media.screenshots.map((screenshot) => screenshot.file),
+      ...(media.video ? [media.video] : []),
+    ]);
+    if (!allowed.has(filename)) return null;
+    return gamesStore.getDerivedArtifact(slug, publication.currentVersion, `media/${filename}`);
+  }
+
+  /**
    * The catalog entries for games published from the store rather than from the repo.
    *
    * A delivered game is never committed, so the games-repo catalog cannot see it and a
@@ -3875,7 +3904,19 @@ export async function registerSubmissionRoutes(
       for (const record of publications) {
         const spec = await gamesStore.getSourceFile(record.slug, record.currentVersion, 'SPEC.md');
         if (spec === null) continue;
-        const entry = catalogEntryFromSpec(record.slug, spec, () => null);
+        // Media lives as derived artifacts (`media/metadata.json` + png/mp4), produced by
+        // the gate — not as source. The repo path supplies a real sibling reader; stubbing
+        // it here is why every store-published card came back with `media: null` even
+        // though the bytes were already in the bucket and `/api/games/:slug/media/:file`
+        // was already wired.
+        const mediaMetadata = await gamesStore.getDerivedArtifact(
+          record.slug,
+          record.currentVersion,
+          'media/metadata.json',
+        );
+        const entry = catalogEntryFromSpec(record.slug, spec, (name) =>
+          name === 'media/metadata.json' && mediaMetadata ? mediaMetadata.toString('utf8') : null,
+        );
         // Published is a decision the operator already made and recorded here; the
         // spec's own `status` describes the repo workflow this game never went through.
         if (!entry) continue;
@@ -3962,25 +4003,31 @@ export async function registerSubmissionRoutes(
         ...(entry?.media?.screenshots.map((screenshot) => screenshot.file) ?? []),
         ...(entry?.media?.video ? [entry.media.video] : []),
       ]);
-      if (!entry || !allowedFiles.has(parsedParams.data.filename)) {
-        return reply.status(404).send({ error: 'media not found' });
-      }
 
       // The catalog allowlist above still gates every read, so the snapshot can
       // only ever answer for a filename the validated metadata already vouches for.
-      let body: Buffer;
-      if (snapshotReader) {
-        const snapshotMedia = await readSnapshotMedia(parsedParams.data.slug, parsedParams.data.filename);
-        if (!snapshotMedia) {
-          return reply.status(404).send({ error: 'media not found' });
+      let body: Buffer | null = null;
+      if (entry && allowedFiles.has(parsedParams.data.filename)) {
+        if (snapshotReader) {
+          const snapshotMedia = await readSnapshotMedia(parsedParams.data.slug, parsedParams.data.filename);
+          body = snapshotMedia?.body ?? null;
+        } else {
+          const media = await githubClient.getGameMedia(
+            publishedRef,
+            parsedParams.data.slug,
+            parsedParams.data.filename,
+          );
+          body = media ? Buffer.from(media) : null;
         }
-        body = snapshotMedia.body;
-      } else {
-        const media = await githubClient.getGameMedia(publishedRef, parsedParams.data.slug, parsedParams.data.filename);
-        if (!media) {
-          return reply.status(404).send({ error: 'media not found' });
-        }
-        body = Buffer.from(media);
+      }
+
+      // Store-published games never land in the repo catalog or the snapshot bake, so
+      // the allowlist and the bytes both come from the version the operator published.
+      if (!body) {
+        body = await readStorePublishedMedia(parsedParams.data.slug, parsedParams.data.filename);
+      }
+      if (!body) {
+        return reply.status(404).send({ error: 'media not found' });
       }
 
       const cacheEntry = {

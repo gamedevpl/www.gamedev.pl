@@ -104,6 +104,36 @@ describe('GET /api/me/studio', () => {
     await app.close();
   });
 
+  it('prefers lastStatus over lastNotifiedStatus so a just-published game is not still "building"', async () => {
+    // `in_review` shares a notification event with `building`, so lastNotifiedStatus
+    // can lag while lastStatus is current — and publish writes lastStatus immediately.
+    await store.createSubmission(20, 'g:creator', 'Just shipped');
+    await store.setSubmissionSlug(20, 'just-shipped');
+    await store.setSubmissionPublishedAt(20, `${today}T12:00:00.000Z`);
+    await store.setSubmissionNotifiedStatus(20, 'building');
+    await store.setSubmissionLastStatus(20, 'published');
+
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      submissionRoutes: { submissionTokenSecret },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/me/studio',
+      headers: authHeaders('g:creator'),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { games: CreatorStudioGame[] }).games[0]).toMatchObject({
+      title: 'Just shipped',
+      lastKnownStatus: 'published',
+    });
+
+    await app.close();
+  });
+
   it('requires a session', async () => {
     const app = await buildApp({
       store,

@@ -176,6 +176,8 @@ describe('InMemoryStore', () => {
   it('caps transition history so a flapping reconciler cannot grow the document', async () => {
     const store = new InMemoryStore();
     await store.createSubmission(2, 'g:123', 'A game');
+    // Alternate states so every write is a real move — same-state writes are refused
+    // and would otherwise leave the history short of the cap.
     for (let i = 0; i < MAX_JOB_TRANSITIONS + 10; i += 1) {
       await store.recordJobTransition(2, {
         to: i % 2 === 0 ? 'building' : 'queued',
@@ -190,6 +192,35 @@ describe('InMemoryStore', () => {
     expect(record?.transitions?.at(-1)?.at).toBe(
       new Date(Date.parse('2026-07-30T10:00:00Z') + (MAX_JOB_TRANSITIONS + 9) * 1000).toISOString(),
     );
+  });
+
+  it('refuses a same-state reconciler write so a re-observation cannot reset the state clock', async () => {
+    // Stronger than identical-reason no-op: a different reason from a non-operator
+    // must not look like a move either (ready_for_review / gate_green → ready_for_review
+    // / derived_from_github was the #398 rough edge).
+    const store = new InMemoryStore();
+    await store.createSubmission(9, 'g:123', 'A game');
+    await store.recordJobTransition(9, {
+      to: 'ready_for_review',
+      at: '2026-07-30T10:00:00Z',
+      by: 'gate',
+      reason: 'gate_green',
+    });
+
+    expect(
+      await store.recordJobTransition(9, {
+        to: 'ready_for_review',
+        at: '2026-07-30T12:30:00Z',
+        by: 'reconciler',
+        reason: 'derived_from_github',
+      }),
+    ).toBe(false);
+
+    const record = await store.getSubmission(9);
+    expect(record?.stateSince).toBe('2026-07-30T10:00:00Z');
+    expect(record?.transitions).toEqual([
+      { to: 'ready_for_review', at: '2026-07-30T10:00:00Z', by: 'gate', reason: 'gate_green' },
+    ]);
   });
 
   it('handles submission tracking', async () => {

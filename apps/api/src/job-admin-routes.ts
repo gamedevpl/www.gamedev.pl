@@ -186,6 +186,12 @@ export async function registerJobAdminRoutes(
     });
     await store.recordJobTransition(issueNumber, { to: 'published', at, by: 'operator', reason: 'published' });
     await store.setSubmissionPublishedAt(issueNumber, at);
+    // The creator rail reads `lastStatus`, not `state`. Writing it here is what stops a
+    // published game from also rendering as an in-progress "yours" card: the notify
+    // sweep that normally keeps `lastStatus` current only walks *active* submissions,
+    // and a terminal job is one sweep away from falling out of that set. `lastNotifiedStatus`
+    // is left alone so the next sweep can still emit the published notification.
+    await store.setSubmissionLastStatus(issueNumber, 'published');
 
     return reply.send({ ok: true, slug: record.slug, version: record.deliveredVersion, publishedAt: at });
   });
