@@ -165,6 +165,13 @@ export const privacyEn: LegalDocument = {
             'IP address reaches the server with it. Two opens of the same game by the same person are two unrelated ' +
             'sessions to us. We measure games, not people.',
         },
+        {
+          kind: 'p',
+          text:
+            'Some games can show your device camera behind the play surface. That feed is displayed only in your ' +
+            'browser for the session; it is never recorded, never uploaded, and never included in the gameplay ' +
+            'statistics above.',
+        },
       ],
     },
     {

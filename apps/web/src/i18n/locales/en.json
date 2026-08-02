@@ -193,6 +193,8 @@
     "worldBadge": "Shared world",
     "tiltBadge": "Tilt",
     "tiltTooltip": "On a phone this game can also be steered by tilting the device",
+    "cameraBadge": "Camera play",
+    "cameraTooltip": "This game can show your camera behind the play surface — nothing is recorded or sent",
     "savesBadge": "Saves progress",
     "sortLabel": "Sort games",
     "toolbarLabel": "Catalog filters and sort",
@@ -766,7 +768,12 @@
   "sensing": {
     "enable": "Enable tilt",
     "enableAria": "Enable tilt controls — allow motion sensor access",
-    "explain": "This game can be steered by tilting your phone. Motion readings stay in your browser and are never sent anywhere."
+    "explain": "This game can be steered by tilting your phone. Motion readings stay in your browser and are never sent anywhere.",
+    "cameraStart": "Start camera",
+    "cameraStop": "Stop camera",
+    "cameraLive": "Camera on",
+    "cameraExplain": "Nothing is recorded or sent — the camera stays in your browser and only shows behind the game.",
+    "cameraStartAria": "Start camera backdrop — allow camera access. Nothing is recorded or sent."
   },
   "pageTitle": {
     "home": "Gamedev.pl — Describe a game, play it",

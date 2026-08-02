@@ -32,11 +32,29 @@ describe('parseSensingMessage', () => {
     expect(parseSensingMessage(frame({ t: 'sensing:hello', features: ['tilt', 7, null] }))).toEqual({
       t: 'sensing:hello',
       features: ['tilt'],
+      facing: null,
     });
   });
 
   it('reads a hello with no feature list as asking for nothing', () => {
-    expect(parseSensingMessage(frame({ t: 'sensing:hello' }))).toEqual({ t: 'sensing:hello', features: [] });
+    expect(parseSensingMessage(frame({ t: 'sensing:hello' }))).toEqual({
+      t: 'sensing:hello',
+      features: [],
+      facing: null,
+    });
+  });
+
+  it('parses backdrop facing, defaulting to user', () => {
+    expect(parseSensingMessage(frame({ t: 'sensing:hello', features: ['backdrop'] }))).toEqual({
+      t: 'sensing:hello',
+      features: ['backdrop'],
+      facing: 'user',
+    });
+    expect(parseSensingMessage(frame({ t: 'sensing:hello', features: ['backdrop'], facing: 'environment' }))).toEqual({
+      t: 'sensing:hello',
+      features: ['backdrop'],
+      facing: 'environment',
+    });
   });
 
   it('drops anything outside the namespace, version, or type', () => {
@@ -71,7 +89,9 @@ describe('useSensingBridge', () => {
 
   afterEach(() => {
     if (root) act(() => root!.unmount());
+    root = null;
     container.remove();
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -112,15 +132,54 @@ describe('useSensingBridge', () => {
     expect(latest().engaged).toBe(true);
     // The opening answer says where things stand, so a game does not sit out its
     // handshake timeout: nothing is flowing yet, and that is a normal state.
-    expect(toGame[0]).toMatchObject({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, t: 'sensing:state', active: false });
+    expect(toGame[0]).toMatchObject({
+      ns: BRIDGE_NAMESPACE,
+      v: PROTOCOL_VERSION,
+      t: 'sensing:state',
+      active: false,
+      backdrop: false,
+    });
   });
 
-  it('ignores a hello that does not ask for tilt', () => {
+  it('ignores a hello that asks for neither tilt nor backdrop', () => {
     vi.stubGlobal('DeviceOrientationEvent', function DeviceOrientationEvent() {});
     const { fromGame } = mount();
     fromGame({ t: 'sensing:hello', features: ['face'] });
     expect(latest().engaged).toBe(false);
+    expect(latest().backdrop.engaged).toBe(false);
     expect(toGame).toHaveLength(0);
+  });
+
+  it('re-hello with a narrower feature set drops the omitted engagement', async () => {
+    vi.stubGlobal('DeviceOrientationEvent', function DeviceOrientationEvent() {});
+    const trackStop = vi.fn();
+    const fakeStream = {
+      getTracks: () => [{ stop: trackStop, kind: 'video' }],
+    } as unknown as MediaStream;
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      mediaDevices: { getUserMedia: vi.fn(() => Promise.resolve(fakeStream)) },
+    });
+
+    const { fromGame } = mount();
+    fromGame({ t: 'sensing:hello', features: ['tilt', 'backdrop'] });
+    expect(latest().engaged).toBe(true);
+    expect(latest().backdrop.engaged).toBe(true);
+    await act(async () => {
+      latest().backdrop.start();
+      await Promise.resolve();
+    });
+    expect(latest().backdrop.live).toBe(true);
+
+    fromGame({ t: 'sensing:hello', features: ['tilt'] });
+    expect(latest().engaged).toBe(true);
+    expect(latest().backdrop.engaged).toBe(false);
+    expect(latest().backdrop.live).toBe(false);
+    expect(trackStop).toHaveBeenCalled();
+
+    fromGame({ t: 'sensing:hello', features: ['backdrop'] });
+    expect(latest().engaged).toBe(false);
+    expect(latest().backdrop.engaged).toBe(true);
   });
 
   it('ignores gdp traffic from any window that is not the served frame', () => {
@@ -248,5 +307,152 @@ describe('useSensingBridge', () => {
     act(() => window.dispatchEvent(orientation(40, 0)));
     act(() => window.dispatchEvent(orientation(80, 14)));
     expect(tiltFrames()).toHaveLength(1);
+  });
+
+  it('engages backdrop on hello without starting the camera', () => {
+    const { fromGame } = mount();
+    fromGame({ t: 'sensing:hello', features: ['backdrop'], facing: 'environment' });
+    expect(latest().engaged).toBe(false);
+    expect(latest().backdrop.engaged).toBe(true);
+    expect(latest().backdrop.facing).toBe('environment');
+    expect(latest().backdrop.live).toBe(false);
+    expect(toGame[0]).toMatchObject({ t: 'sensing:state', active: false, backdrop: false });
+  });
+
+  it('ignores a second Start while getUserMedia is still settling', async () => {
+    let resolveMedia!: (stream: MediaStream) => void;
+    const pending = new Promise<MediaStream>((resolve) => {
+      resolveMedia = resolve;
+    });
+    const getUserMedia = vi.fn(() => pending);
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      mediaDevices: { getUserMedia },
+    });
+
+    const { fromGame } = mount();
+    fromGame({ t: 'sensing:hello', features: ['backdrop'] });
+    act(() => latest().backdrop.start());
+    act(() => latest().backdrop.start());
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+
+    const trackStop = vi.fn();
+    const fakeStream = {
+      getTracks: () => [{ stop: trackStop, kind: 'video' }],
+    } as unknown as MediaStream;
+    await act(async () => {
+      resolveMedia(fakeStream);
+      await Promise.resolve();
+    });
+    expect(latest().backdrop.live).toBe(true);
+  });
+
+  it('rejects a stream that resolves after the tab hides', async () => {
+    let resolveMedia!: (stream: MediaStream) => void;
+    const pending = new Promise<MediaStream>((resolve) => {
+      resolveMedia = resolve;
+    });
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      mediaDevices: { getUserMedia: vi.fn(() => pending) },
+    });
+
+    const { fromGame } = mount();
+    fromGame({ t: 'sensing:hello', features: ['backdrop'] });
+    act(() => latest().backdrop.start());
+
+    const trackStop = vi.fn();
+    act(() => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    await act(async () => {
+      resolveMedia({
+        getTracks: () => [{ stop: trackStop, kind: 'video' }],
+      } as unknown as MediaStream);
+      await Promise.resolve();
+    });
+    expect(trackStop).toHaveBeenCalled();
+    expect(latest().backdrop.live).toBe(false);
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+  });
+
+  it('starts and stops a camera stream from a gesture, posting backdrop state', async () => {
+    const trackStop = vi.fn();
+    const fakeTrack = { stop: trackStop, kind: 'video' };
+    const fakeStream = {
+      getTracks: () => [fakeTrack],
+    } as unknown as MediaStream;
+    const getUserMedia = vi.fn((_constraints: MediaStreamConstraints): Promise<MediaStream> =>
+      Promise.resolve(fakeStream),
+    );
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      mediaDevices: { getUserMedia },
+    });
+
+    const { fromGame } = mount();
+    fromGame({ t: 'sensing:hello', features: ['backdrop'] });
+    expect(latest().backdrop.supported).toBe(true);
+    toGame.length = 0;
+
+    await act(async () => {
+      latest().backdrop.start();
+      await Promise.resolve();
+    });
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+    const constraints = getUserMedia.mock.calls[0]?.[0];
+    const facingIdeal =
+      constraints && typeof constraints.video === 'object' && constraints.video && 'facingMode' in constraints.video
+        ? (constraints.video as { facingMode?: { ideal?: string } }).facingMode?.ideal
+        : undefined;
+    expect(facingIdeal).toBe('user');
+    expect(latest().backdrop.live).toBe(true);
+    expect(latest().backdrop.stream).toBe(fakeStream);
+    expect(toGame.some((m) => m.t === 'sensing:state' && m.backdrop === true)).toBe(true);
+
+    act(() => latest().backdrop.stop());
+    expect(trackStop).toHaveBeenCalledTimes(1);
+    expect(latest().backdrop.live).toBe(false);
+    expect(latest().backdrop.stream).toBeNull();
+    expect(toGame.some((m) => m.t === 'sensing:state' && m.backdrop === false)).toBe(true);
+  });
+
+  it('stops the camera when the tab hides and on unmount', async () => {
+    const trackStop = vi.fn();
+    const fakeStream = {
+      getTracks: () => [{ stop: trackStop, kind: 'video' }],
+    } as unknown as MediaStream;
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      mediaDevices: { getUserMedia: vi.fn(() => Promise.resolve(fakeStream)) },
+    });
+
+    const { fromGame } = mount();
+    fromGame({ t: 'sensing:hello', features: ['backdrop'] });
+    await act(async () => {
+      latest().backdrop.start();
+      await Promise.resolve();
+    });
+    expect(latest().backdrop.live).toBe(true);
+
+    act(() => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    expect(trackStop).toHaveBeenCalled();
+    expect(latest().backdrop.live).toBe(false);
+
+    // Restart and prove unmount also stops tracks.
+    trackStop.mockClear();
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+    await act(async () => {
+      latest().backdrop.start();
+      await Promise.resolve();
+    });
+    act(() => root!.unmount());
+    root = null;
+    expect(trackStop).toHaveBeenCalled();
   });
 });

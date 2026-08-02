@@ -23,8 +23,8 @@
     "voice"
   ],
   "authorBudgetBytes": 204800,
-  "platformCeilingBytes": 275387,
-  "maxProjectBytes": 480187,
+  "platformCeilingBytes": 277887,
+  "maxProjectBytes": 482687,
   "audio": {
     "musicField": "string",
     "musicCatalogRequiredKeys": ["version", "tracks"],

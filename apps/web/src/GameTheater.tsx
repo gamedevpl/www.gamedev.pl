@@ -14,11 +14,43 @@ import { useGamePlayer } from './gamePlayer.js';
 import { recordVisitEvent } from './visitTelemetry.js';
 import { useGameSaveBridge } from './gameSave.js';
 import { usePresenceBridge } from './presence.js';
-import { useSensingBridge } from './sensing.js';
+import { useSensingBridge, type BackdropFacing } from './sensing.js';
 import { useVoiceMeterBridge } from './voiceMeter.js';
 import { useWorldBridge } from './world.js';
 import { useZoneBridge } from './zone.js';
 import { useScreenWakeLock } from './useScreenWakeLock.js';
+
+/**
+ * Shell-owned camera feed under the game iframe. Kept as a tiny component so the
+ * `srcObject` attach/detach stays out of the theater's render body — swapping the
+ * MediaStream must not remount the iframe.
+ */
+function BackdropVideo({ stream, facing }: { stream: MediaStream; facing: BackdropFacing }) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.srcObject = stream;
+    // playsInline + muted is what lets iOS autoplay without a second gesture.
+    void video.play().catch(() => undefined);
+    return () => {
+      video.srcObject = null;
+    };
+  }, [stream]);
+
+  return (
+    <video
+      ref={videoRef}
+      className={`theater-camera-backdrop${facing === 'user' ? ' is-mirrored' : ''}`}
+      autoPlay
+      muted
+      playsInline
+      disablePictureInPicture
+      aria-hidden="true"
+    />
+  );
+}
 
 /** A game to run, sourced either from raw assembled HTML or a published slug. */
 export type GameTheaterSource = { html: string } | { slug: string };
@@ -470,6 +502,32 @@ export function GameTheater({
                 <span className="btn-label">{t('sensing.enable')}</span>
               </button>
             )}
+            {/* Camera backdrop: always an explicit tap — never auto-start, even where
+                the browser would not re-prompt. Stop swaps in place once live. */}
+            {sensing.backdrop.engaged && sensing.backdrop.supported && !sensing.backdrop.live && (
+              <button
+                type="button"
+                className="secondary-btn camera-btn"
+                onClick={sensing.backdrop.start}
+                title={t('sensing.cameraExplain')}
+                aria-label={t('sensing.cameraStartAria')}
+              >
+                <PixelIcon name="phone" size={13} />
+                <span className="btn-label">{t('sensing.cameraStart')}</span>
+              </button>
+            )}
+            {sensing.backdrop.engaged && sensing.backdrop.live && (
+              <button
+                type="button"
+                className="secondary-btn camera-btn is-live"
+                onClick={sensing.backdrop.stop}
+                title={t('sensing.cameraLive')}
+                aria-label={t('sensing.cameraStop')}
+              >
+                <PixelIcon name="phone" size={13} />
+                <span className="btn-label">{t('sensing.cameraStop')}</span>
+              </button>
+            )}
             {/* Desktop: sound + fullscreen sit on the bar. Phone: they move into More. */}
             {howToPlayControl('secondary-btn howto-btn howto-bar', 'bar')}
             {soundControl('secondary-btn sound-btn theater-desktop-chrome')}
@@ -519,12 +577,23 @@ export function GameTheater({
           </div>
         </div>
       )}
-      <div className="game-viewport-container">
+      <div className={`game-viewport-container${sensing.backdrop.live ? ' has-camera-backdrop' : ''}`}>
+        {/* Shell-owned camera under the sandboxed iframe. Pixels never cross the
+            bridge — the game only learns a boolean. Mirrored for front camera. */}
+        {sensing.backdrop.live && sensing.backdrop.stream ? (
+          <BackdropVideo stream={sensing.backdrop.stream} facing={sensing.backdrop.facing} />
+        ) : null}
         {'slug' in source ? (
           <PublishedGameFrame key={source.slug} slug={source.slug} title={title} frameRef={frameRef} embed />
         ) : (
           <GameFrame title={title} html={source.html} frameRef={frameRef} embed />
         )}
+        {sensing.backdrop.live ? (
+          <div className="theater-camera-indicator" role="status" aria-live="polite">
+            <span className="theater-camera-dot" aria-hidden="true" />
+            {t('sensing.cameraLive')}
+          </div>
+        ) : null}
         {/* A nudge, not a gate: the game stays playable and running underneath, and
             the hint clears itself the moment the device is turned. */}
         {rotateHint && (

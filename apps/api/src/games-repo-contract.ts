@@ -61,7 +61,7 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
  * Platform half of the serve cap — games-repo `GAMEKIT_PLATFORM_BYTES` /
  * `assemble-contract.json` `platformCeilingBytes`. Together with
  * {@link GAME_BUDGET_BYTES} this must equal games-repo `MAX_BUNDLE_BYTES`
- * (480_187, matching `maxProjectBytes`). Not a round KiB.
+ * (482_687, matching `maxProjectBytes`). Not a round KiB.
  *
  * One derived ceiling, not a sum of per-feature constants (games-repo #281). Check 4
  * over there bills each author for measured `assembled − platformBytes` against the
@@ -70,10 +70,11 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
  * `docs/platform-byte-ledger.md`. Raise this when measurement shows a passing game
  * would exceed it — do not re-split it into named allowances on this side either.
  *
- * Last numeric move before the ledger collapse: sensing capability (games-repo
- * camera-ar-platform Phase 0) +6_500, 473_687 → 480_187 total.
+ * Last moved by sensing Phase 2 (camera backdrop): sensing ledger line 6_500 → 9_000
+ * (+2_500), 480_187 → 482_687. Before the ledger collapse, Phase 0 tilt added the
+ * named sensing reserve (+6_500, 473_687 → 480_187).
  */
-export const GAMEKIT_PLATFORM_BYTES = 275_387;
+export const GAMEKIT_PLATFORM_BYTES = 277_887;
 
 /** Combined html+js+css size cap — must match games-repo `MAX_BUNDLE_BYTES`. */
 export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
