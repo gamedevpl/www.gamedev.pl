@@ -17,7 +17,7 @@ import {
   type OperatorEmailParams,
 } from './email-templates.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
-import type { OperatorAlert } from './operator-alerts.js';
+import type { JobAlert } from './operator-alerts.js';
 import { createPusherFromEnv, type Pusher } from './pusher.js';
 import type {
   NotificationType,
@@ -226,7 +226,7 @@ function digestEmailParams(
  */
 export async function emitOperatorAlert(
   deps: EmitDeps & { adminUids: Iterable<string> },
-  alert: OperatorAlert,
+  alert: JobAlert,
 ): Promise<{ created: number }> {
   const createdAt = deps.now ? new Date(deps.now()).toISOString() : new Date().toISOString();
   const type: OperatorNotificationType = `operator.${alert.kind}`;
@@ -241,7 +241,7 @@ export async function emitOperatorAlert(
       bodyKey: `notifications.${type}.body`,
       params: {
         title: alert.title,
-        ...(alert.issueNumber === undefined ? {} : { issueNumber: String(alert.issueNumber) }),
+        issueNumber: String(alert.issueNumber),
         ...(alert.stall ? { detail: alert.stall } : {}),
       },
       link: OPERATOR_ALERT_LINK,
@@ -250,7 +250,7 @@ export async function emitOperatorAlert(
     created += 1;
     await sendOperatorEmail(deps, uid, alert.id, type, OPERATOR_ALERT_LINK, {
       title: alert.title,
-      ...(alert.issueNumber === undefined ? {} : { issueNumber: alert.issueNumber }),
+      issueNumber: alert.issueNumber,
       ...(alert.stall ? { detail: alert.stall } : {}),
     });
     await maybePush(deps, uid, result.notification);

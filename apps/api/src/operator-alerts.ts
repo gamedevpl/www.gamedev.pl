@@ -51,6 +51,25 @@ export type OperatorAlertKind =
    */
   | 'seeding_degraded';
 
+/**
+ * The kinds that are about one job — everything `detectOperatorAlerts` can produce, and
+ * exactly what may be emailed to an operator.
+ *
+ * `seeding_degraded` is deliberately outside this set. It is about the platform's own
+ * plumbing and is watched by Cloud Monitoring (alert A23) rather than by the sweep, so a
+ * failure in the app cannot silence the alert about the app. Expressing that as a type
+ * rather than as a convention means `emitOperatorAlert` cannot be handed one by accident,
+ * and the compiler — not a reviewer — is what notices if the two channels ever converge.
+ */
+export type JobAlertKind = Exclude<OperatorAlertKind, 'seeding_degraded'>;
+
+/** An alert with a job behind it. What the notification path accepts. */
+export interface JobAlert extends OperatorAlert {
+  kind: JobAlertKind;
+  issueNumber: number;
+  ownerUid: string;
+}
+
 export interface OperatorAlert {
   /**
    * Stable per job and kind, so re-running the sweep does not re-notify. The cost is
@@ -125,7 +144,7 @@ export const SEEDING_DEGRADED_MIN_FAILURES = 2;
  */
 export type PendingFeedbackAges = ReadonlyMap<number, string>;
 
-function alertFor(record: SubmissionRecord, now: number, pendingFeedback?: PendingFeedbackAges): OperatorAlert | null {
+function alertFor(record: SubmissionRecord, now: number, pendingFeedback?: PendingFeedbackAges): JobAlert | null {
   if (record.abandonedAt) return null;
 
   const state = resolveJobState(record);
@@ -229,9 +248,9 @@ export function detectOperatorAlerts(
   records: SubmissionRecord[],
   now: number,
   pendingFeedback?: PendingFeedbackAges,
-): OperatorAlert[] {
+): JobAlert[] {
   return records
     .map((record) => alertFor(record, now, pendingFeedback))
-    .filter((alert): alert is OperatorAlert => alert !== null)
+    .filter((alert): alert is JobAlert => alert !== null)
     .sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || Date.parse(a.since) - Date.parse(b.since));
 }

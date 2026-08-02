@@ -47,18 +47,14 @@ import {
   type JobState,
   type JobTransition,
 } from './job-state.js';
+import { logSeedStagingFailure } from './seed-metrics.js';
 import { createSelfBuildBackend } from './self-build-backend.js';
 import { mintConnectPayload } from './self-build-connect.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { emitOperatorAlert, emitSubmissionNotification, notifyOnTransition, type EmitDeps } from './notify.js';
-import {
-  detectOperatorAlerts,
-  detectSeedingDegraded,
-  FEEDBACK_STALL_MS,
-  SEEDING_DEGRADED_WINDOW_MS,
-} from './operator-alerts.js';
+import { detectOperatorAlerts, FEEDBACK_STALL_MS } from './operator-alerts.js';
 import { pageOwnerGames } from './owner-games.js';
 import { isAdminSession } from './admin.js';
 import { peekQuota } from './quota-gate.js';
@@ -810,10 +806,15 @@ export async function registerSubmissionRoutes(
       // absence of seedWorkspace is expected and must not mute the seeder.
       if (seed && !result.seedWorkspace && builder === 'platform') {
         seedStagingMutedUntil = now() + SEED_STAGING_COOLDOWN_MS;
-        input.log.error(
-          { issueNumber: input.issueNumber, mutedForMs: SEED_STAGING_COOLDOWN_MS },
-          'the generated seed could not be staged; pausing seeding rather than generating drafts nobody can place',
-        );
+        // Through seed-metrics rather than inline, because this line is what alert A23
+        // counts: the message is a contract with infra/setup-monitoring.sh, and a prose
+        // error message is exactly the kind of thing that gets reworded.
+        logSeedStagingFailure(input.log, {
+          issueNumber: input.issueNumber,
+          compiles: draft?.compiles ?? false,
+          ms: draft?.elapsedMs ?? 0,
+          mutedForMs: SEED_STAGING_COOLDOWN_MS,
+        });
       }
       // Both halves of the seed's story are known here — what generation produced, and
       // whether dispatch could place it — so the record is written once, from the one
@@ -3438,17 +3439,12 @@ export async function registerSubmissionRoutes(
       // observable. Idempotent per job and kind, so re-running it does not re-notify.
       let alerted = 0;
       const alerts = detectOperatorAlerts(active, now(), pendingFeedback);
-      // Seeding's own alert is appended rather than derived per job: it is a claim about a
-      // run of builds, and it reads from a query of its own because the active set drops
-      // exactly the jobs whose seeds worked (see listSeedOutcomesSince). Failing to read
-      // it costs this one alert and nothing else in the sweep.
-      try {
-        const outcomes = await store.listSeedOutcomesSince(new Date(now() - SEEDING_DEGRADED_WINDOW_MS).toISOString());
-        const degraded = detectSeedingDegraded(outcomes, now());
-        if (degraded) alerts.push(degraded);
-      } catch (seedAlertError) {
-        request.log.error({ err: seedAlertError }, 'seeding health check failed');
-      }
+      // Seeding degradation is deliberately NOT emitted here. It is watched by Cloud
+      // Monitoring instead (alert A23, over the log line seed-metrics.ts emits), because
+      // an alert about the platform's own plumbing that travels through this sweep, the
+      // store, the notification table and the mail provider shares a fate with the thing
+      // it is watching. It still reaches the console badge through /api/admin/summary,
+      // which is where an operator would act on it.
       if (adminUids && adminUids.size > 0) {
         for (const alert of alerts) {
           try {

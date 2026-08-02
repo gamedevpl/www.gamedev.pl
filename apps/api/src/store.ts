@@ -740,7 +740,6 @@ export type NotificationType =
    * jobs are fine, they just built unseeded — but about a platform fault that costs a
    * paid model call per submission and shows no symptom anywhere a person looks.
    */
-  | 'operator.seeding_degraded'
   /**
    * Someone asked to join the closed beta. Not a job alert — there is no issue number —
    * but it is still an operator action: approve (or not) via the waitlist tooling.
