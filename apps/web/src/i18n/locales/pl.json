@@ -270,7 +270,35 @@
     "tabs": {
       "thread": "Wątek",
       "details": "Szczegóły",
-      "playtest": "Testuj"
+      "playtest": "Testuj",
+      "edit": "Edytuj"
+    },
+    "editor": {
+      "loading": "Wczytywanie edytora…",
+      "loadError": "Nie udało się teraz wczytać edytora tej gry.",
+      "back": "Wątek",
+      "tryDraft": "Wypróbuj szkic",
+      "publish": "Opublikuj zmiany",
+      "publishing": "Publikowanie…",
+      "published": "Twoje zmiany są sprawdzane — po zatwierdzeniu trafią na stronę.",
+      "cooldown": "Poprzednia publikacja wciąż się sprawdza. Spróbuj za kilka minut.",
+      "saving": "Zapisywanie…",
+      "saved": "Szkic zapisany",
+      "saveError": "Nie udało się zapisać szkicu",
+      "conflict": "Ten szkic zmienił się na innym urządzeniu.",
+      "conflictReload": "Wczytaj najnowszy",
+      "conflictOverwrite": "Zachowaj mój",
+      "boardAria": "Malowanie kafelków: {{name}}",
+      "tiles": "Kafelki",
+      "properties": "Właściwości",
+      "checks": "Kontrole",
+      "checksOk": "Wszystkie kontrole zaliczone",
+      "checksElsewhere": "Popraw przed publikacją: {{list}}",
+      "addItem": "Dodaj: {{name}}",
+      "removeItem": "Usuń",
+      "empty": "Nie ma jeszcze nic do edycji.",
+      "discard": "Odrzuć szkic",
+      "publishHint": "Zmiany są prywatne do czasu publikacji. Publikacja uruchamia bramkę gry (kilka minut), a operator zatwierdza wejście na stronę."
     },
     "overview": {
       "status": "Status",

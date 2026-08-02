@@ -98,6 +98,7 @@ describe('every moderating module reports its rejections', () => {
     expect(callSites.sort()).toEqual([
       'app.ts',
       'contact.ts',
+      'editor-drafts.ts',
       'player-feedback.ts',
       'refine.ts',
       'submissions.ts',

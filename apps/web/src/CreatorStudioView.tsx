@@ -8,6 +8,7 @@ import { formatRelativeTime } from './relativeTime.js';
 import { playPath, studioPath, type StudioTab } from './router.js';
 import { abandonSubmission } from './submissionApi.js';
 import { StudioPlaytestPanel } from './StudioPlaytestPanel.js';
+import { EditorPanel } from './EditorPanel.js';
 import {
   collapseStudioGames,
   filterStudioGames,
@@ -110,7 +111,11 @@ function defaultTabFor(): StudioTab {
  * always has facts to show, and playtest always has something to play or a reason it
  * does not yet.
  */
-function tabAvailable(_game: StudioGame, _tab: StudioTab): boolean {
+function tabAvailable(game: StudioGame, tab: StudioTab): boolean {
+  // The Edit surface exists only for games whose delivered version ships an
+  // editor definition. Every other game keeps exactly the three surfaces it
+  // had — an /edit URL for one of those resolves and falls back to the thread.
+  if (tab === 'edit') return Boolean(game.editable && game.slug);
   return true;
 }
 
@@ -634,6 +639,20 @@ export function CreatorStudioView({
                       when the game was made. These open things beside it and leave it
                       where it is. */}
                   <div className="studio-head-actions">
+                    {/* Rendered only for games whose delivered version ships an editor
+                        definition (EditorKit) — for every other game this row is
+                        byte-for-byte what it always was. */}
+                    {tabAvailable(activeGame, 'edit') ? (
+                      <button
+                        type="button"
+                        className={`studio-head-action${tab === 'edit' ? ' is-active' : ''}`}
+                        aria-pressed={tab === 'edit'}
+                        onClick={() => openTab(tab === 'edit' ? 'thread' : 'edit')}
+                      >
+                        <PixelIcon name="pencil" size={12} />{' '}
+                        <span className="studio-head-action-label">{t('studioPanel.tabs.edit')}</span>
+                      </button>
+                    ) : null}
                     {/* Playtest is the next action after a build — same weight as Send
                         feedback, not a peer of the Details toggle beside it. When already
                         open (empty/error keeps chrome visible), clicking again returns to
@@ -667,7 +686,16 @@ export function CreatorStudioView({
                   it on a narrow one; only playtest, which needs the whole viewport to be
                   a game, replaces it. */}
               <div className={`studio-workspace${tab === 'details' ? ' is-details-open' : ''}`}>
-                {tab !== 'playtest' ? (
+                {tab === 'edit' ? (
+                  <EditorPanel
+                    key={activeGame.token}
+                    game={activeGame}
+                    onOpenPlaytest={() => openTab('playtest')}
+                    onBack={() => openTab('thread')}
+                  />
+                ) : null}
+
+                {tab !== 'playtest' && tab !== 'edit' ? (
                   <div className="studio-build">
                     <SubmissionStatusView
                       key={threadToken ?? activeGame.token}

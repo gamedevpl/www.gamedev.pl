@@ -188,6 +188,34 @@ export async function runGate(
   try {
     await materializeCandidate(deps.store, manifest, gameDir);
 
+    // A content-only Studio publish (`origin: 'editor'`) carries a TRACE.json that
+    // was recorded against the *previous* content, so replaying it against the new
+    // maps would fail the trace stage for every honest edit. For these versions the
+    // gate re-derives the behavioural golden first — trace becomes a derived
+    // artifact, exactly like the bundle and media — and stores it on the version so
+    // provenance shows what was actually replayed. Everything downstream (capture,
+    // validate including Check 31, accept, playtest) still judges the edited
+    // content for real; `--accept` here only retires the has-it-changed question,
+    // which for a content edit is always answered "yes, that was the point".
+    if (manifest.origin === 'editor') {
+      const trace = await deps.run('npm', ['run', 'trace', '--', slug, '--accept'], harness);
+      if (trace.code !== 0) {
+        return {
+          green: false,
+          report: tail(trace.output, 4000),
+          artifacts: [],
+          durationMs: now() - startedAt,
+          ...(engineCommit ? { engineCommit } : {}),
+        };
+      }
+      const golden = await readFile(path.join(gameDir, 'TRACE.json')).catch(() => null);
+      if (golden) {
+        await deps.store
+          .putDerivedArtifact(slug, version, 'source/TRACE.json', golden, 'text/plain; charset=utf-8')
+          .catch(() => {});
+      }
+    }
+
     // Deliberately without `--accept`. That flag re-records the behavioural golden
     // instead of checking against it, which would make the trace stage unconditionally
     // pass and quietly retire the one check that can catch a game behaving differently

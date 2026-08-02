@@ -16,7 +16,119 @@ export type StudioGame = {
    * catalog is the answer instead.
    */
   draftShared?: boolean;
+  /**
+   * Whether this game's delivered version ships an editor definition. Gates the
+   * Edit surface; absent for every game that is not born-editable, and the
+   * studio must render exactly as before for those.
+   */
+  editable?: boolean;
 };
+
+/* ---------------------------------------------------------------------------
+ * Content editor (EditorKit) — the studio's Edit surface.
+ * The definition is the game's own EDITOR.json (agent-authored, gate-validated);
+ * the studio renders it with the fixed widget vocabulary and never invents
+ * structure the definition does not declare.
+ * ------------------------------------------------------------------------- */
+
+export type EditorLabel = { en: string; pl: string };
+
+export type EditorPropertySpec =
+  | { type: 'text'; max: number }
+  | { type: 'int'; min: number; max: number }
+  | { type: 'number'; min: number; max: number }
+  | { type: 'enum'; values: string[] }
+  | { type: 'bool' };
+
+export type EditorConstraint =
+  | { tile: string; min?: number; max?: number; exactly?: number }
+  | { equalCounts: [string, string] }
+  /** Every `require` tile must be reachable from `from` without crossing `blockedBy`. */
+  | { reachable: { from: string; blockedBy: string[]; require: string[] } };
+
+export type EditorTileSpec = {
+  key: string;
+  char: string;
+  label: EditorLabel;
+  /** `#rrggbb` the game declared for this tile, so the painter matches the played game. */
+  color?: string;
+};
+
+export type EditorTilemapSpec = {
+  widget: 'tilemap';
+  grid: { minCols: number; maxCols: number; minRows: number; maxRows: number };
+  tiles: EditorTileSpec[];
+  properties: Record<string, EditorPropertySpec>;
+  constraints: EditorConstraint[];
+};
+
+export type EditorCollectionSpec = {
+  widget: 'collection';
+  label: EditorLabel;
+  itemLabel: EditorLabel;
+  min: number;
+  max: number;
+  item: EditorTilemapSpec;
+  defaults: EditorItemContent[];
+};
+
+export type EditorItemContent = { properties: Record<string, unknown>; rows: string[] };
+
+export type EditorDefinition = { version: 1; content: Record<string, EditorCollectionSpec> };
+
+export type EditorContentDoc = Record<string, EditorItemContent[]>;
+
+export type GameEditorState = {
+  version: string;
+  definition: EditorDefinition;
+  /** The content the delivered version ships (its generated defaults). */
+  content: EditorContentDoc;
+  draft: { content: EditorContentDoc; revision: number; updatedAt: string } | null;
+};
+
+export async function fetchGameEditor(slug: string): Promise<GameEditorState> {
+  const response = await fetch(`${API_BASE}/api/me/games/${encodeURIComponent(slug)}/editor`, {
+    credentials: 'include',
+  });
+  if (!response.ok) await throwResponseError(response);
+  return (await response.json()) as GameEditorState;
+}
+
+export type EditorDraftSaved = { revision: number; updatedAt: string };
+
+/** Saves the whole draft snapshot. 409 (stale base) and 422 (schema/moderation) surface as errors with `status`. */
+export async function putEditorDraft(
+  slug: string,
+  content: EditorContentDoc,
+  baseRevision?: number,
+): Promise<EditorDraftSaved> {
+  const response = await fetch(`${API_BASE}/api/me/games/${encodeURIComponent(slug)}/editor/draft`, {
+    method: 'PUT',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(baseRevision === undefined ? { content } : { content, baseRevision }),
+  });
+  if (!response.ok) await throwResponseError(response);
+  return (await response.json()) as EditorDraftSaved;
+}
+
+export async function deleteEditorDraft(slug: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/me/games/${encodeURIComponent(slug)}/editor/draft`, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+  if (!response.ok) await throwResponseError(response);
+}
+
+/** Promotes the saved draft into a gated candidate version. 429 carries the cooldown. */
+export async function publishEditorContent(slug: string): Promise<{ version: string; jobId: number }> {
+  const response = await fetch(`${API_BASE}/api/me/games/${encodeURIComponent(slug)}/editor/publish`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (!response.ok) await throwResponseError(response);
+  return (await response.json()) as { version: string; jobId: number };
+}
 
 export type StudioHealthResponse = {
   days: string[];
@@ -42,17 +154,35 @@ export type StudioScorecard = {
   untrustedThemes: Array<{ theme: string; count: number }>;
 };
 
-export type StudioApiError = Error & { status?: number; category?: string };
+export type StudioApiError = Error & {
+  status?: number;
+  category?: string;
+  /** Per-problem validation detail from the editor routes (422). */
+  problems?: string[];
+  /** The revision that actually won a draft conflict (409). */
+  revision?: number;
+  /** How long the publish cooldown has left (429). */
+  retryAfterMs?: number;
+};
 
 async function readJson(response: Response): Promise<unknown> {
   return response.json().catch(() => null);
 }
 
 async function throwResponseError(response: Response): Promise<never> {
-  const body = (await readJson(response)) as { error?: string; category?: string } | null;
+  const body = (await readJson(response)) as
+    | { error?: string; category?: string; problems?: unknown; revision?: unknown; retryAfterMs?: unknown }
+    | null;
   const error = new Error(body?.error ?? `Request failed (${response.status})`) as StudioApiError;
   error.status = response.status;
   error.category = body?.category;
+  // Structured detail the editor routes send alongside `error`. Dropping it made
+  // the panel's per-problem feedback dead code and cost the cooldown its number.
+  if (Array.isArray(body?.problems) && body.problems.every((problem) => typeof problem === 'string')) {
+    error.problems = body.problems as string[];
+  }
+  if (typeof body?.revision === 'number') error.revision = body.revision;
+  if (typeof body?.retryAfterMs === 'number') error.retryAfterMs = body.retryAfterMs;
   throw error;
 }
 

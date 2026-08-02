@@ -70,6 +70,8 @@ const BuilderDimensionSchema = z.enum(['platform', 'self']);
  * (builder choice, first agent signal) stay valid.
  */
 const StudioStepDetailSchema = z.enum(['install', 'kickoff', 'green', 'red', 'kit_outdated']);
+/** EditorKit's revision funnel. No slug: the visit stream stays unjoinable. */
+const EditorStepSchema = z.enum(['opened', 'draft_saved', 'previewed', 'published']);
 /**
  * Which chrome surface opened How to play. Optional so a tab still running the previous
  * client can record the open without `via` — the aggregate treats missing as unknown
@@ -127,6 +129,7 @@ const EventSchema = z.discriminatedUnion('type', [
     detail: StudioStepDetailSchema.optional(),
     ...offsetField,
   }),
+  z.object({ type: z.literal('editor_step'), step: EditorStepSchema, ...offsetField }),
 ]);
 
 const RequestSchema = z.object({
@@ -233,6 +236,8 @@ export async function registerVisitTelemetryRoutes(
             builder: event.builder,
             ...(event.detail === undefined ? {} : { detail: event.detail }),
           };
+        case 'editor_step':
+          return { ...base, type: event.type, step: event.step };
         case 'how_to_play_opened':
           return {
             ...base,

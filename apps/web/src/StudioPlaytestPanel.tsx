@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { fetchPublishedGame } from './catalog.js';
 import { GameFrame } from './GameFrame.js';
 import { useCreatorPlaytest, useGamePlayer, type PlaytestInstrumentation } from './gamePlayer.js';
+import { useEditorDraftBridge } from './editorBridge.js';
 import { PixelIcon } from './PixelIcon.js';
 import {
   getSubmissionPreview,
@@ -128,6 +129,9 @@ export function StudioPlaytestPanel({ game, published, onExit, shelfOpen }: Stud
   }, [shelfOpen]);
   // Escape inside the sandboxed game never reaches the parent — the bridge relays it.
   useGamePlayer(frameRef, active, requestExit);
+  // An editable game asks for the creator's content draft over the bridge; this
+  // answers it, so a saved draft plays here instantly. No-op for every other game.
+  useEditorDraftBridge(frameRef, active, game.slug, Boolean(game.editable));
 
   useEffect(() => {
     let cancelled = false;

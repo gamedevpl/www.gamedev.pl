@@ -17,6 +17,7 @@ import { registerAdminRoutes } from './admin.js';
 import { parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
 import { registerCreatorStudioRoutes } from './creator-studio.js';
+import { registerEditorRoutes } from './editor-drafts.js';
 import { createGenerator } from './generator.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { registerContactRoutes, type ContactRoutesOptions } from './contact.js';
@@ -488,7 +489,17 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     (localGames ? 'local-development-submission-secret' : undefined);
   await registerCreatorStudioRoutes(app, {
     store,
+    gamesStore,
     mintStatusToken: submissionTokenSecret ? (issueNumber) => mintToken(issueNumber, submissionTokenSecret) : undefined,
+  });
+
+  // The Creator Studio content editor (EditorKit): drafts in Firestore, publish
+  // as a content-only candidate through the same gate trigger deliveries use.
+  await registerEditorRoutes(app, {
+    store,
+    gamesStore,
+    contentChecker,
+    onSourcesDelivered: gateTrigger,
   });
 
   /**

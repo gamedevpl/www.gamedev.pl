@@ -554,7 +554,8 @@ export interface VisitEvent {
     | 'how_to_play_opened'
     | 'create_step'
     | 'waitlist_step'
-    | 'studio_step';
+    | 'studio_step'
+    | 'editor_step';
   /** Server-anchored instant, derived like `TelemetryEvent.at`. */
   at: string;
   /** Milliseconds from visit start — the trustworthy measure of within-visit timing. */
@@ -563,7 +564,10 @@ export interface VisitEvent {
   entry?: string;
   /** `route_viewed`: the route kind now shown. Never its parameters. */
   route?: string;
-  /** `create_step` / `waitlist_step` / `studio_step`: which funnel step this visit reached. */
+  /**
+   * `create_step` / `waitlist_step` / `studio_step` / `editor_step`: which funnel
+   * step this visit reached.
+   */
   step?: string;
   /**
    * `create_step` / `studio_step`: who builds the round (`platform` | `self`).
@@ -795,6 +799,34 @@ export interface GameSaveRecord {
   version: number;
   updatedAt: string;
 }
+
+/**
+ * A creator's private editor draft for one of their games (EditorKit's draft
+ * tier). Unlike a save this content is *validated* before it lands here —
+ * against the game's own EDITOR.json declaration, plus moderation on declared
+ * text — but it is stored as the serialized string so the size cap measures the
+ * thing stored, same reasoning as GameSaveRecord.
+ *
+ * One mutable document per (creator, game): drafts absorb the iteration and
+ * publishing promotes them into an immutable games-store version, which is
+ * where history lives. `revision` is a monotonic counter for last-write-wins
+ * detection across two open Studio tabs — the write path refuses a stale base
+ * revision so the second tab warns instead of silently clobbering.
+ */
+export interface EditorDraftRecord {
+  slug: string;
+  /** Serialized content document ({ collection: items[] }), schema-validated on write. */
+  content: string;
+  revision: number;
+  updatedAt: string;
+}
+
+/**
+ * Ceiling on one editor draft, in bytes of UTF-8 — matches the games repo's
+ * MAX_EDITOR_JSON_BYTES (the declaration file carries the same content as its
+ * defaults, so the two caps describe the same object).
+ */
+export const MAX_EDITOR_DRAFT_BYTES = 64 * 1024;
 
 /**
  * One signed-in player's engagement with one published game — the personal half of
@@ -1429,6 +1461,30 @@ export interface Store {
   listGameSaves(uid: string): Promise<GameSaveRecord[]>;
   /** Deletes every save a person has. Returns how many went. */
   deleteGameSaves(uid: string): Promise<number>;
+  /** A creator's editor draft for one of their games, or null when none exists. */
+  getEditorDraft(uid: string, slug: string): Promise<EditorDraftRecord | null>;
+  /**
+   * Writes a creator's draft, incrementing its revision. The caller has already
+   * validated and size-checked `content`.
+   *
+   * `expectedRevision` makes the multi-tab guard real rather than advisory: the
+   * compare and the increment happen in one transaction, so two saves racing on
+   * the same base cannot both succeed. A mismatch resolves to
+   * `{ conflict: true }` with the revision that actually won — never a throw,
+   * because losing that race is an ordinary outcome the caller reports as 409.
+   * Omit it to take over deliberately (last write wins).
+   */
+  putEditorDraft(
+    uid: string,
+    slug: string,
+    content: string,
+    expectedRevision?: number,
+  ): Promise<{ conflict: false; record: EditorDraftRecord } | { conflict: true; revision: number }>;
+  deleteEditorDraft(uid: string, slug: string): Promise<void>;
+  /** Every editor draft a person has — the erase path's read, used for preview and for real. */
+  listEditorDrafts(uid: string): Promise<EditorDraftRecord[]>;
+  /** Deletes every editor draft a person has — the erase path. Returns how many went. */
+  deleteEditorDrafts(uid: string): Promise<number>;
   /**
    * Records that a signed-in player opened a published game. Upserts the affinity
    * row, bumps `openCount`, and trims the oldest rows when the per-user ceiling is
@@ -1696,6 +1752,7 @@ export class InMemoryStore implements Store {
   private playerFeedback = new Map<string, PlayerFeedbackRecord[]>();
   // uid -> (slug -> saved progress)
   private gameSaves = new Map<string, Map<string, GameSaveRecord>>();
+  private editorDrafts = new Map<string, Map<string, EditorDraftRecord>>();
   // uid -> (slug -> play affinity for recommendations)
   private playAffinity = new Map<string, Map<string, PlayAffinityRecord>>();
   /** worldId -> key -> entry. Keyed by world, not by player: a world is shared. */
@@ -2536,6 +2593,47 @@ export class InMemoryStore implements Store {
   async deleteGameSaves(uid: string): Promise<number> {
     const count = this.gameSaves.get(uid)?.size ?? 0;
     this.gameSaves.delete(uid);
+    return count;
+  }
+
+  async getEditorDraft(uid: string, slug: string): Promise<EditorDraftRecord | null> {
+    const found = this.editorDrafts.get(uid)?.get(slug);
+    return found ? { ...found } : null;
+  }
+
+  async putEditorDraft(
+    uid: string,
+    slug: string,
+    content: string,
+    expectedRevision?: number,
+  ): Promise<{ conflict: false; record: EditorDraftRecord } | { conflict: true; revision: number }> {
+    const forUser = this.editorDrafts.get(uid) ?? new Map<string, EditorDraftRecord>();
+    const current = forUser.get(slug)?.revision ?? 0;
+    if (expectedRevision !== undefined && current !== expectedRevision) {
+      return { conflict: true, revision: current };
+    }
+    const record: EditorDraftRecord = {
+      slug,
+      content,
+      revision: current + 1,
+      updatedAt: new Date().toISOString(),
+    };
+    forUser.set(slug, record);
+    this.editorDrafts.set(uid, forUser);
+    return { conflict: false, record: { ...record } };
+  }
+
+  async deleteEditorDraft(uid: string, slug: string): Promise<void> {
+    this.editorDrafts.get(uid)?.delete(slug);
+  }
+
+  async listEditorDrafts(uid: string): Promise<EditorDraftRecord[]> {
+    return [...(this.editorDrafts.get(uid)?.values() ?? [])].map((record) => ({ ...record }));
+  }
+
+  async deleteEditorDrafts(uid: string): Promise<number> {
+    const count = this.editorDrafts.get(uid)?.size ?? 0;
+    this.editorDrafts.delete(uid);
     return count;
   }
 
@@ -4013,6 +4111,82 @@ export class FirestoreStore implements Store {
     // operator has already accepted, and somebody who plays a lot of games is exactly
     // the person whose deletion would otherwise be a long sequence of round trips.
     // 400 per batch leaves headroom under Firestore's 500-write limit.
+    for (let index = 0; index < refs.length; index += 400) {
+      const batch = this.db.batch();
+      for (const ref of refs.slice(index, index + 400)) batch.delete(ref);
+      await batch.commit();
+    }
+    return refs.length;
+  }
+
+  // Under the creator, keyed by slug — one private draft per (creator, game),
+  // same placement reasoning as gameSaves.
+  private editorDraftRef(uid: string, slug: string) {
+    return this.db.collection('users').doc(uid).collection('editorDrafts').doc(slug);
+  }
+
+  async getEditorDraft(uid: string, slug: string): Promise<EditorDraftRecord | null> {
+    const snap = await this.editorDraftRef(uid, slug).get();
+    if (!snap.exists) return null;
+    const data = snap.data() ?? {};
+    return {
+      slug,
+      content: typeof data.content === 'string' ? data.content : '',
+      revision: typeof data.revision === 'number' ? data.revision : 0,
+      updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : '',
+    };
+  }
+
+  async putEditorDraft(
+    uid: string,
+    slug: string,
+    content: string,
+    expectedRevision?: number,
+  ): Promise<{ conflict: false; record: EditorDraftRecord } | { conflict: true; revision: number }> {
+    const ref = this.editorDraftRef(uid, slug);
+    // A transaction, not a read followed by a `set`: two tabs saving against the
+    // same base revision would both read it, both write, and both be told they
+    // won, with one edit silently gone. Compare and increment together or not
+    // at all.
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const data = snap.exists ? (snap.data() ?? {}) : {};
+      const current = typeof data.revision === 'number' ? data.revision : 0;
+      if (expectedRevision !== undefined && current !== expectedRevision) {
+        return { conflict: true as const, revision: current };
+      }
+      const record: EditorDraftRecord = {
+        slug,
+        content,
+        revision: current + 1,
+        updatedAt: new Date().toISOString(),
+      };
+      // `set` without merge, like saves: a draft is a whole snapshot of the content.
+      tx.set(ref, { content, revision: record.revision, updatedAt: record.updatedAt });
+      return { conflict: false as const, record };
+    });
+  }
+
+  async deleteEditorDraft(uid: string, slug: string): Promise<void> {
+    await this.editorDraftRef(uid, slug).delete();
+  }
+
+  async listEditorDrafts(uid: string): Promise<EditorDraftRecord[]> {
+    const snap = await this.db.collection('users').doc(uid).collection('editorDrafts').get();
+    return snap.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        slug: doc.id,
+        content: typeof data.content === 'string' ? data.content : '',
+        revision: typeof data.revision === 'number' ? data.revision : 0,
+        updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : '',
+      };
+    });
+  }
+
+  async deleteEditorDrafts(uid: string): Promise<number> {
+    const refs = await this.db.collection('users').doc(uid).collection('editorDrafts').listDocuments();
+    if (refs.length === 0) return 0;
     for (let index = 0; index < refs.length; index += 400) {
       const batch = this.db.batch();
       for (const ref of refs.slice(index, index + 400)) batch.delete(ref);
