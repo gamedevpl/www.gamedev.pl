@@ -12,6 +12,7 @@ import {
   startRemix,
   type RemixApiError,
   type RemixSession,
+  type RemixSuggestion,
 } from './remixApi.js';
 import type { EditorLabel, EditorParamValue } from './studioApi.js';
 
@@ -127,6 +128,10 @@ const SLOW_AFTER_MS = 8_000;
  * the player gets their game back untouched.
  */
 const CODE_TIMEOUT_MS = 45_000;
+/** Matches the server's own ceiling on an utterance. */
+const MAX_UTTERANCE = 240;
+/** Three lines, then it scrolls. Past that a request is a paragraph, not a request. */
+const MAX_INPUT_HEIGHT = 84;
 
 type Note = { kind: 'ok' | 'info' | 'error'; text: string } | null;
 
@@ -154,6 +159,11 @@ export function RemixPanel(props: {
   const failStreakRef = useRef(0);
   const [undo, setUndo] = useState<Record<string, EditorParamValue> | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+  /** The last change that landed, and whether there is anything to share of it. */
+  const [changed, setChanged] = useState<{ text: string; canShare: boolean } | null>(null);
+  /** The player's own words, echoed back while the rebuild runs. */
+  const [asked, setAsked] = useState('');
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const [failed, setFailed] = useState<'unsupported' | 'error' | null>(null);
   const valuesRef = useRef(values);
   valuesRef.current = values;
@@ -230,6 +240,16 @@ export function RemixPanel(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per session arrival
   }, [session, props.slug]);
 
+  // The field grows to the sentence rather than scrolling it out of sight: a
+  // one-line box teaches people to write search terms, and search terms are the
+  // requests the router reads worst.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, MAX_INPUT_HEIGHT)}px`;
+  }, [utterance, changed]);
+
   // A panel that opened onto nothing. Recorded against the same `opened`
   // denominator so the share of visits that met a game with no way in is a
   // number rather than an anecdote — it is the difference between "people are
@@ -237,6 +257,22 @@ export function RemixPanel(props: {
   useEffect(() => {
     if (session && !session.canAssist && !session.canCode) recordRemixStep('no_lane');
   }, [session]);
+
+  /**
+   * A suggestion, written out in the player's language.
+   *
+   * Composed here rather than on the server because this is the one line a
+   * player is about to imitate, and it has to be in the language they are about
+   * to imitate it in — a Polish panel offering an English example teaches the
+   * wrong thing twice.
+   */
+  function suggestionText(suggestion: RemixSuggestion): string {
+    if (suggestion.kind === 'starter') return t(`remix.try.${suggestion.id}`);
+    const spec = session?.params?.[suggestion.key];
+    if (!spec) return '';
+    const name = label(spec.label);
+    return name ? t(`remix.try.${suggestion.direction}`, { label: name }) : '';
+  }
 
   function setParam(key: string, value: EditorParamValue) {
     const next = { ...valuesRef.current, [key]: value };
@@ -261,6 +297,8 @@ export function RemixPanel(props: {
     }
     if (!active) return; // session still starting — the send lands a beat later
     setNote(null);
+    setChanged(null);
+    setAsked(text);
     recordRemixStep('asked');
 
     // The tuning lane first: it is cheaper, faster, and covers most of what
@@ -278,7 +316,10 @@ export function RemixPanel(props: {
           setUtterance('');
           setLane('idle');
           recordRemixStep('applied');
-          setNote({ kind: 'ok', text: label(result.summary) || t('remix.applied') });
+          // Share is offered whenever there is anything shareable — a link
+          // carries declared values, so a game with no declaration has nothing
+          // to put in one, and offering it there would be a broken promise.
+          setChanged({ text: label(result.summary) || t('remix.applied'), canShare: Boolean(active.params) });
           return;
         }
         if (result.lane === 'reject') {
@@ -321,7 +362,14 @@ export function RemixPanel(props: {
         failStreakRef.current = 0;
         recordRemixStep('applied');
         setUtterance('');
-        setNote({ kind: 'ok', text: `${label(result.summary) || t('remix.rebuilt')} ${t('remix.restarted')}` });
+        // A code change cannot travel in a link (the gate exists so generated
+        // code never reaches a stranger), but the settings can — and the share
+        // copy says exactly that rather than implying the whole remix went.
+        setChanged({
+          text: `${label(result.summary) || t('remix.rebuilt')} ${t('remix.restarted')}`,
+          canShare: Boolean(active.params),
+        });
+        setUndo(null);
         // The swap replaces the whole document, so the new build boots fresh and
         // the values the player has set are re-sent once it says hello.
         props.onSwapDocument(result.html);
@@ -367,6 +415,7 @@ export function RemixPanel(props: {
     pushToGame(undo);
     setUndo(null);
     setNote(null);
+    setChanged(null);
   }
 
   async function share() {
@@ -405,68 +454,157 @@ export function RemixPanel(props: {
   // honest answer is to accept the words and let the wall decide — so it types.
   const canType = session ? session.canAssist || session.canCode : true;
 
+  const suggestions = session?.suggestions ?? [];
+  const showSuggestions = lane === 'idle' && !changed && utterance.length === 0 && suggestions.length > 0;
+
+  /** The composer, in its two sizes: the door, and the way back for a second change. */
+  function composer(compact: boolean) {
+    return (
+      <form
+        className={`remix-ask${compact ? ' is-compact' : ''}`}
+        onSubmit={(event) => {
+          event.preventDefault();
+          void ask();
+        }}
+      >
+        <textarea
+          ref={inputRef}
+          rows={1}
+          maxLength={MAX_UTTERANCE}
+          value={utterance}
+          placeholder={compact ? t('remix.placeholderAgain') : t('remix.placeholder')}
+          aria-label={t('remix.inputLabel')}
+          onChange={(event) => setUtterance(event.target.value)}
+          onKeyDown={(event) => {
+            // Enter sends, as it does in every message box a phone has ever
+            // shown; a newline in a one-sentence request is worth the shift key.
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault();
+              void ask();
+            }
+          }}
+        />
+        {utterance.length > 0 ? (
+          <span className="remix-count" aria-hidden="true">
+            {utterance.length}/{MAX_UTTERANCE}
+          </span>
+        ) : null}
+        <button type="submit" className="remix-send" disabled={lane !== 'idle' || utterance.trim().length < 2}>
+          {lane === 'idle' ? t('remix.ask') : t('remix.asking')}
+        </button>
+      </form>
+    );
+  }
+
   return (
     <div className="remix-panel">
-      {/*
-       * The working state covers the frozen frame rather than replacing it: the
-       * game stays visible behind the shimmer, so the beat reads as the change
-       * being made and not as the game having gone away.
-       */}
-      {lane === 'building' ? (
-        <div className="remix-working" role="status">
-          <span className="remix-shimmer" aria-hidden="true" />
-          {slow ? t('remix.buildingSlow') : t('remix.building')}
-        </div>
-      ) : null}
+      {/* The sheet's own handle. Decorative — closing is the labelled button. */}
+      <span className="remix-grip" aria-hidden="true" />
 
       <div className="remix-head">
-        <strong>{t('remix.title')}</strong>
+        <span className="remix-title">{t('remix.title')}</span>
         <button type="button" className="remix-close" onClick={props.onClose} aria-label={t('remix.close')}>
           ×
         </button>
       </div>
 
-      {canType ? (
-        <form
-          className="remix-ask"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void ask();
-          }}
-        >
-          <input
-            type="text"
-            maxLength={240}
-            value={utterance}
-            placeholder={t('remix.placeholder')}
-            aria-label={t('remix.inputLabel')}
-            onChange={(event) => setUtterance(event.target.value)}
-          />
-          <button type="submit" disabled={lane !== 'idle' || utterance.trim().length < 2}>
-            {lane === 'idle' ? t('remix.ask') : t('remix.asking')}
-          </button>
-        </form>
+      {lane === 'building' ? (
+        /*
+         * The wait has a subject. The game is frozen and dimmed behind the sheet
+         * rather than replaced, and the player's own words are echoed back, so
+         * the beat reads as their change being made rather than as the game
+         * having gone away. One line of copy; after eight seconds that line
+         * changes and nothing else does.
+         */
+        <>
+          <div className="remix-working" role="status">
+            <span className="remix-spinner" aria-hidden="true" />
+            <span className="remix-working-copy">
+              <b>{t('remix.building')}</b>
+              {asked ? <span className="remix-echo">{asked}</span> : null}
+            </span>
+          </div>
+          <span className="remix-bar" aria-hidden="true">
+            <i />
+          </span>
+          <p className="remix-note">{slow ? t('remix.buildingSlow') : t('remix.buildingWait')}</p>
+        </>
+      ) : changed ? (
+        /*
+         * The reward, and it is earned: share is the loudest thing here only
+         * because a change has actually landed. Undo sits beside it, quiet, and
+         * the composer shrinks to a line and waits — the second change is the
+         * one that turns a remix into a habit.
+         */
+        <>
+          <p className="remix-result" role="status">
+            <span className="remix-tick" aria-hidden="true">
+              ✓
+            </span>
+            <span>{changed.text}</span>
+          </p>
+          {changed.canShare || undo ? (
+            <div className="remix-actions-row">
+              {changed.canShare ? (
+                <button type="button" className="remix-btn is-primary" onClick={() => void share()}>
+                  {t('remix.share')}
+                </button>
+              ) : null}
+              {undo ? (
+                <button type="button" className="remix-btn is-quiet" onClick={undoLast}>
+                  {t('remix.undo')}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {composer(true)}
+        </>
+      ) : canType ? (
+        <>
+          {composer(false)}
+          {showSuggestions ? (
+            /*
+             * Three things worth saying, derived from what this game can
+             * actually do. An empty field over a paused game is where most
+             * people close the panel; these answer "what do I even say" and
+             * teach the register at the same time. Tapping one sends it.
+             */
+            <div className="remix-tries">
+              {suggestions.map((suggestion) => {
+                const text = suggestionText(suggestion);
+                if (!text) return null;
+                return (
+                  <button
+                    key={suggestion.kind === 'param' ? `p:${suggestion.key}` : `s:${suggestion.id}`}
+                    type="button"
+                    className="remix-try"
+                    onClick={() => {
+                      setUtterance(text);
+                      void ask(text);
+                    }}
+                  >
+                    {text}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+        </>
       ) : (
         /*
-         * No lane answers here — the game declares no parameters and its code is
-         * not reachable for a rebuild. The panel has to say so: a surface whose
-         * whole promise is "say what you want" cannot open with no place to say
-         * it and no explanation, which reads as broken rather than as not-yet.
-         * The way onward stays offered below.
+         * No lane answers here — the game declares no parameters and its code
+         * cannot be assembled. The panel has to say so: a surface whose whole
+         * promise is "say what you want" cannot open with no place to say it and
+         * no explanation, which reads as broken rather than as not-yet.
          */
         <p className="remix-note is-info" role="status">
           {t('remix.notHere')}
         </p>
       )}
 
-      {note ? (
+      {note && lane !== 'building' ? (
         <p className={`remix-note is-${note.kind}`} role="status">
           {note.text}
-          {undo ? (
-            <button type="button" className="remix-undo" onClick={undoLast}>
-              {t('remix.undo')}
-            </button>
-          ) : null}
         </p>
       ) : null}
 
