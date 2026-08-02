@@ -97,11 +97,23 @@ export function shouldIssueMcpOAuthChallenge(request: FastifyRequest, message: J
   return mcpRequestLacksCredential(request, message);
 }
 
+/**
+ * What an agent must actually DO about a missing credential.
+ *
+ * The challenge replaced a tool-level error that carried this sentence, and a status
+ * code is not an instruction: an agent that drops `sessionKey` on one call needs to be
+ * told to re-send it, not pointed at an authorization server that does not exist yet.
+ * Exported so the tool-level refusal in `mcp-server.ts` and this HTTP challenge cannot
+ * drift into saying different things.
+ */
+export const MCP_MISSING_CREDENTIAL_HINT =
+  'missing credential: pass sessionKey from start(), or configure Authorization: Bearer <round key>';
+
 export function sendMcpOAuthChallenge(reply: FastifyReply): FastifyReply {
   return reply
     .status(401)
     .header('WWW-Authenticate', buildMcpOAuthAuthenticateHeader())
-    .send({ error: 'authentication required' });
+    .send({ error: 'authentication required', hint: MCP_MISSING_CREDENTIAL_HINT });
 }
 
 export function registerOAuthProtectedResourceRoutes(app: FastifyInstance): void {

@@ -6,6 +6,7 @@ import { mintGameAgentKey } from './agent-game-key.js';
 import {
   buildMcpOAuthAuthenticateHeader,
   buildOAuthProtectedResourceDocument,
+  MCP_MISSING_CREDENTIAL_HINT,
   OAUTH_PROTECTED_RESOURCE_PATH,
   oauthProtectedResourceMetadataUrl,
 } from './mcp-oauth-metadata.js';
@@ -177,7 +178,13 @@ describe('MCP OAuth 401 challenge (BY-18a)', () => {
     expect(res.headers['www-authenticate']).toBe(
       `Bearer resource_metadata="https://www.gamedev.pl${OAUTH_PROTECTED_RESOURCE_PATH}"`,
     );
-    expect(res.json()).toEqual({ error: 'authentication required' });
+    // The challenge replaced a tool error that told the agent what to do; a status code
+    // is not an instruction, so the sentence has to survive the change.
+    expect(res.json()).toEqual({
+      error: 'authentication required',
+      hint: MCP_MISSING_CREDENTIAL_HINT,
+    });
+    expect(MCP_MISSING_CREDENTIAL_HINT).toMatch(/sessionKey from start\(\)/);
   });
 
   it('returns 401 for unauthenticated GET /api/mcp', async () => {

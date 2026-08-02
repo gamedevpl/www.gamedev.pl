@@ -30,7 +30,11 @@ import {
   newMcpSessionId,
   verifyMcpSessionKey,
 } from './mcp-session-key.js';
-import { sendMcpOAuthChallenge, shouldIssueMcpOAuthChallenge } from './mcp-oauth-metadata.js';
+import {
+  MCP_MISSING_CREDENTIAL_HINT,
+  sendMcpOAuthChallenge,
+  shouldIssueMcpOAuthChallenge,
+} from './mcp-oauth-metadata.js';
 import { MCP_ENDPOINT_PATH } from './self-build-connect.js';
 import { BUILD_STEPS, sanitizeCreatorText } from './submission-status.js';
 import type { Store, SubmissionRecord } from './store.js';
@@ -389,9 +393,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       });
     } else {
       // Possession of Mcp-Session-Id alone authorizes nothing.
-      return toolErr(
-        'missing credential: pass sessionKey from start(), or configure Authorization: Bearer <round key>',
-      );
+      return toolErr(MCP_MISSING_CREDENTIAL_HINT);
     }
 
     const record = await store.getSubmission(claims.jobId);
