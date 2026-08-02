@@ -1,7 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { mintCreatorAgentKey } from './agent-creator-key.js';
-import { GAME_NOT_PUBLISHED_REASON, IMPROVEMENT_QUOTA_EXHAUSTED_REASON, mintGameAgentKey } from './agent-game-key.js';
+import {
+  GAME_NOT_PUBLISHED_REASON,
+  IMPROVEMENT_QUOTA_EXHAUSTED_REASON,
+  mintGameAgentKey,
+  SLUG_NOT_ON_ACCOUNT_REASON,
+} from './agent-game-key.js';
 import { resolveGameAgentKeyForOpenRound } from './agent-game-key-resolve.js';
 import { mintAgentToken } from './agent-token.js';
 import { buildApp } from './app.js';
@@ -206,6 +211,36 @@ describe('MCP open_round (BY-24 / BY-27b)', () => {
     });
     expect(statusRes.statusCode).toBe(200);
     expect(statusRes.json()).toMatchObject({ openedBy: 'agent' });
+  });
+
+  it('refuses creator-key open_round for an unowned slug without blaming the key', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(PUBLISHED_ISSUE, 'g:other', 'Other Game');
+    await store.setSubmissionSlug(PUBLISHED_ISSUE, 'other-game');
+    await store.setSubmissionPublishedAt(PUBLISHED_ISSUE, '2026-07-01T00:00:00.000Z');
+    await store.recordJobTransition(PUBLISHED_ISSUE, {
+      to: 'published',
+      at: '2026-07-01T00:00:00.000Z',
+      by: 'operator',
+      reason: 'published',
+    });
+    const at = new Date().toISOString();
+    await store.ensureCreatorAgentKey(OWNER, at);
+    const creatorKey = mintCreatorAgentKey(secret, {
+      creatorUid: OWNER,
+      keyGeneration: 1,
+      now: Date.parse('2026-08-01T12:00:00.000Z'),
+    });
+    app = await createApp(store);
+
+    const { structured, isError } = await callOpenRound(
+      app,
+      { slug: 'other-game', feedback: 'Do not rotate for a typo.' },
+      { authorization: `Bearer ${creatorKey}` },
+    );
+    expect(isError).toBe(true);
+    expect((structured as { error: string }).error).toBe(SLUG_NOT_ON_ACCOUNT_REASON);
+    expect((structured as { error: string }).error).not.toMatch(/rotated/i);
   });
 
   it('admits only one concurrent open_round per slug', async () => {
