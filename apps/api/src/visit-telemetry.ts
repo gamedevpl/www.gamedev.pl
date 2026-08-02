@@ -75,7 +75,19 @@ const EditorStepSchema = z.enum(['opened', 'draft_saved', 'previewed', 'publishe
 /** The NL tuning lane's outcomes — a dimension beside the editing funnel, not a rung in it. */
 const AssistStepSchema = z.enum(['asked', 'applied', 'handoff', 'rejected']);
 /** The player-side remix funnel — see visit-funnel's REMIX_STEPS for the order's meaning. */
-const RemixStepSchema = z.enum(['opened', 'tuned', 'asked', 'applied', 'handoff', 'refused', 'shared', 'keep_clicked']);
+const RemixStepSchema = z.enum([
+  'opened',
+  'typed',
+  'wall_shown',
+  'signed_in',
+  'tuned',
+  'asked',
+  'applied',
+  'handoff',
+  'refused',
+  'shared',
+  'keep_clicked',
+]);
 /**
  * Which chrome surface opened How to play. Optional so a tab still running the previous
  * client can record the open without `via` — the aggregate treats missing as unknown

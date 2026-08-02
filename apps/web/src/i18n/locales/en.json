@@ -938,7 +938,7 @@
     "applied": "Applied.",
     "undo": "Undo",
     "refused": "That request was refused.",
-    "needsCode": "That needs a real code change — make this game your own to go further.",
+    "needsCode": "That's a bigger change than a remix can do — make this game your own to go further.",
     "couldNotBuild": "That change didn't work out. Try saying it a different way.",
     "tooBig": "That's a bigger change than a remix can make.",
     "quota": "You've made a lot of changes — take a break and try later.",
@@ -953,6 +953,7 @@
     "button": "Remix",
     "signInToRemix": "Sign in to remix",
     "signInTitle": "Sign in to remix this game",
-    "signInSubtitle": "Remixing is tied to your account while we're in closed beta."
+    "signInSubtitle": "Remixing is tied to your account while we're in closed beta.",
+    "wallSubtitle": "Your request is saved — it runs the moment you're in."
   }
 }

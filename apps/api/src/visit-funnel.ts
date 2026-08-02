@@ -172,6 +172,12 @@ export type AssistStep = (typeof ASSIST_STEPS)[number];
  */
 export const REMIX_STEPS = [
   'opened',
+  // The wall triple. `typed → signed_in` is the number the product strategy
+  // turns on: desire created versus what the sign-in wall costs. `typed` fires
+  // on send regardless of auth, so the gap is measured rather than guessed.
+  'typed',
+  'wall_shown',
+  'signed_in',
   'tuned',
   'asked',
   'applied',
