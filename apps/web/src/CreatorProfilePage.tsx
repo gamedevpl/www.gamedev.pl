@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { catalogMediaUrl, isPlatformAuthor, type CatalogEntry } from './catalog.js';
+import { catalogMediaUrl, isPlatformAuthor, normalizeCatalogEntry, type CatalogEntry } from './catalog.js';
 import { fetchCreatorPage, type PublicCreatorProfile } from './creatorProfileApi.js';
 import { PixelIcon } from './PixelIcon.js';
 import { creatorPath, playPath } from './router.js';
@@ -29,28 +29,16 @@ export function CreatorProfilePage({
   useEffect(() => {
     let cancelled = false;
     setState('loading');
+    setProfile(null);
+    setGames([]);
     void fetchCreatorPage(handle)
       .then((page) => {
         if (cancelled) return;
         setProfile(page.profile);
-        onProfileLoaded?.(page.profile);
         setGames(
-          page.games.map((game) => ({
-            slug: game.slug,
-            title: game.title,
-            genre: game.genre ?? '',
-            controls: game.controls ?? '',
-            status: 'published',
-            media: null,
-            multiplayer: null,
-            saves: null,
-            world: null,
-            sensing: null,
-            orientation: 'any' as const,
-            touch: null,
-            submittedBy: game.submittedBy,
-            creatorHandle: game.creatorHandle ?? page.profile.handle,
-          })),
+          page.games
+            .map((game) => normalizeCatalogEntry(game))
+            .filter((entry): entry is CatalogEntry => entry !== null),
         );
         setState('ready');
       })
@@ -61,7 +49,11 @@ export function CreatorProfilePage({
     return () => {
       cancelled = true;
     };
-  }, [handle, onProfileLoaded]);
+  }, [handle]);
+
+  useEffect(() => {
+    if (profile) onProfileLoaded?.(profile);
+  }, [profile, onProfileLoaded]);
 
   const letter = (profile?.profileName || handle).charAt(0).toUpperCase();
 

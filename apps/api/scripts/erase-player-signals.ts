@@ -60,15 +60,19 @@ async function main(): Promise<void> {
   console.log(
     `  worlds:   ${result.worldsErased.length}${result.worldsErased.length ? ` (${result.worldsErased.join(', ')})` : ''}`,
   );
+  console.log(
+    `  handles:  ${result.handlesReleased.length}${result.handlesReleased.length ? ` (${result.handlesReleased.join(', ')})` : ''}`,
+  );
   if (
     result.votesCleared.length === 0 &&
     result.feedbackDeleted === 0 &&
     result.savesDeleted.length === 0 &&
     result.affinityCleared.length === 0 &&
-    result.worldsErased.length === 0
+    result.worldsErased.length === 0 &&
+    result.handlesReleased.length === 0
   ) {
     console.log(
-      '  nothing found — this account left no votes, feedback, saved progress, play affinity, or world entries.',
+      '  nothing found — this account left no votes, feedback, saved progress, play affinity, world entries, or creator handles.',
     );
   }
   if (result.worldsErased.length > 0) {

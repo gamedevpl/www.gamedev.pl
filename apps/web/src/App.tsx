@@ -188,6 +188,13 @@ export function App() {
 
   useDocumentTitle(documentTitle);
 
+  // Drop the previous creator's display name as soon as the handle in the URL changes,
+  // so the tab title falls back to the handle until the next profile loads.
+  const creatorRouteHandle = route.view === 'creator' ? route.handle : null;
+  useEffect(() => {
+    setCreatorName(null);
+  }, [creatorRouteHandle]);
+
   useEffect(() => {
     // popstate covers back/forward (and path changes via history API). hashchange
     // is required for hybrid join URLs: the credential lives in the fragment, and

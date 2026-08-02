@@ -1,13 +1,16 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
+  HANDLE_RENAME_COOLDOWN_MS,
   hasPublishableProfile,
+  normalizeHandle,
   PROFILE_BIO_MAX,
   PROFILE_NAME_MAX,
   profileBylineName,
   sanitizeProfileBio,
   sanitizeProfileName,
   toPublicCreatorProfile,
+  validateHandleShape,
   type AvatarMode,
   type PublicCreatorProfile,
 } from './creator-profile.js';
@@ -169,14 +172,24 @@ export async function registerCreatorProfileRoutes(
         return reply.status(400).send({ error: 'invalid handle' });
       }
 
-      const { validateHandleShape, normalizeHandle } = await import('./creator-profile.js');
       const key = normalizeHandle(params.data.handle);
       const shape = validateHandleShape(key);
       if (shape) return reply.send({ handle: key, available: false, reason: shape });
 
-      const holder = await store.getUserByHandle(key);
-      if (holder && holder.uid !== request.user!.uid) {
-        return reply.send({ handle: key, available: false, reason: 'taken' as const });
+      // Use the reservation row, not getUserByHandle — released handles stay blocked for
+      // the rename cooldown even though they no longer resolve to a public profile.
+      const reservation = await store.getHandleReservation(key);
+      if (reservation) {
+        const uid = request.user!.uid;
+        if (!reservation.releasedAt && reservation.uid !== uid) {
+          return reply.send({ handle: key, available: false, reason: 'taken' as const });
+        }
+        if (reservation.releasedAt && reservation.previousUid !== uid) {
+          const elapsed = now() - Date.parse(reservation.releasedAt);
+          if (Number.isFinite(elapsed) && elapsed < HANDLE_RENAME_COOLDOWN_MS) {
+            return reply.send({ handle: key, available: false, reason: 'taken' as const });
+          }
+        }
       }
       return reply.send({ handle: key, available: true });
     },
@@ -207,16 +220,20 @@ async function listCreatorPublishedGames(
   profile: PublicCreatorProfile,
 ): Promise<CatalogGameEntry[]> {
   const records = await store.listSubmissionsByOwner(ownerUid, { limit: 100 });
-  const published = records.filter((record) => record.publishedAt && record.slug && !record.abandonedAt);
+  const candidates = records.filter((record) => record.publishedAt && record.slug && !record.abandonedAt);
   const games: CatalogGameEntry[] = [];
 
-  for (const record of published) {
+  for (const record of candidates) {
     const slug = record.slug!;
+    // archived / disabled publications must not stay on the public profile with a
+    // dead Play button — same gate the play endpoint uses.
+    const publication = await store.getPublication(slug);
+    if (!publication || publication.state !== 'published') continue;
+
     let entry: CatalogGameEntry | null = null;
     if (gamesStore) {
       try {
-        const publication = await store.getPublication(slug);
-        const version = publication?.currentVersion ?? record.deliveredVersion;
+        const version = publication.currentVersion ?? record.deliveredVersion;
         if (version) {
           const spec = await gamesStore.getSourceFile(slug, version, 'SPEC.md');
           if (spec) entry = catalogEntryFromSpec(slug, spec, () => null);

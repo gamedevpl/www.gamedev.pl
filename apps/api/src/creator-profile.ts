@@ -97,11 +97,12 @@ export function sanitizeProfileBio(raw: string): string {
 }
 
 /**
- * Public avatar URL for a profile. Google picture only when the creator opted into
- * `avatarMode: 'google'` (the default) and one exists; never invents an external URL.
+ * Public avatar URL for a profile. Google picture only when the creator explicitly
+ * opted into `avatarMode: 'google'` and one exists. Default is lettermark — claiming a
+ * handle must not publish the Google picture until the creator chooses to.
  */
 export function resolveAvatarUrl(input: { avatarMode?: AvatarMode; picture?: string }): string | null {
-  const mode = input.avatarMode ?? 'google';
+  const mode = input.avatarMode ?? 'letter';
   if (mode !== 'google') return null;
   const picture = input.picture?.trim();
   return picture || null;

@@ -26,6 +26,10 @@ describe('creator profile routes', () => {
     return app;
   }
 
+  function daysAgo(days: number): string {
+    return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  }
+
   it('claims a handle, edits the profile, and serves the public page', async () => {
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:creator', name: 'Secret Google', picture: 'https://g/p.jpg' });
@@ -40,21 +44,22 @@ describe('creator profile routes', () => {
     expect(claim.statusCode).toBe(200);
     expect(claim.json()).toMatchObject({
       publishReady: true,
-      profile: { handle: 'ada', profileName: 'ada', avatarUrl: 'https://g/p.jpg' },
+      // Lettermark by default — Google picture stays private until opted in.
+      profile: { handle: 'ada', profileName: 'ada', avatarUrl: null },
     });
 
     const update = await app.inject({
       method: 'PUT',
       url: '/api/me/profile',
       headers: { cookie: authCookie('g:creator') },
-      payload: { profileName: 'Ada Lovelace', bio: 'Builds tiny worlds.', avatarMode: 'letter' },
+      payload: { profileName: 'Ada Lovelace', bio: 'Builds tiny worlds.', avatarMode: 'google' },
     });
     expect(update.statusCode).toBe(200);
     expect(update.json().profile).toMatchObject({
       handle: 'ada',
       profileName: 'Ada Lovelace',
       bio: 'Builds tiny worlds.',
-      avatarUrl: null,
+      avatarUrl: 'https://g/p.jpg',
     });
 
     await store.createSubmission(42, 'g:creator', 'Sky Dodge');
@@ -65,6 +70,15 @@ describe('creator profile routes', () => {
       state: 'published',
       currentVersion: 'v1',
       publishedAt: '2026-08-01T12:00:00.000Z',
+    });
+    await store.createSubmission(43, 'g:creator', 'Archived Asteroids');
+    await store.setSubmissionSlug(43, 'archived-asteroids');
+    await store.setSubmissionPublishedAt(43, '2026-07-01T12:00:00.000Z');
+    await store.setPublication({
+      slug: 'archived-asteroids',
+      state: 'archived',
+      currentVersion: 'v1',
+      publishedAt: '2026-07-01T12:00:00.000Z',
     });
 
     const publicPage = await app.inject({ method: 'GET', url: '/api/creators/ada' });
@@ -79,6 +93,8 @@ describe('creator profile routes', () => {
         creatorHandle: 'ada',
       }),
     ]);
+    // Archived / disabled publications stay off the public profile.
+    expect(body.games.map((game: { slug: string }) => game.slug)).not.toContain('archived-asteroids');
     // Never leak the Google account name on the public page.
     expect(JSON.stringify(body)).not.toContain('Secret Google');
   });
@@ -110,6 +126,24 @@ describe('creator profile routes', () => {
       headers: { cookie: authCookie('g:b') },
     });
     expect(free.json()).toMatchObject({ available: true });
+  });
+
+  it('treats rename-cooldown handles as unavailable', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:a' });
+    await store.upsertUser({ uid: 'g:b' });
+    // First claim long enough ago to allow a rename; rename yesterday so the old
+    // handle is still inside the 30-day hold for everyone else.
+    await store.claimHandle('g:a', 'old_name', daysAgo(40));
+    await store.claimHandle('g:a', 'new_name', daysAgo(1));
+    const app = await appWith(store);
+
+    const cooling = await app.inject({
+      method: 'GET',
+      url: '/api/creators/old_name/availability',
+      headers: { cookie: authCookie('g:b') },
+    });
+    expect(cooling.json()).toMatchObject({ available: false, reason: 'taken' });
   });
 
   it('404s unknown creators', async () => {

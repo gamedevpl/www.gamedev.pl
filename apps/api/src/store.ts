@@ -1220,6 +1220,11 @@ export interface Store {
   /** Public profile lookup by unique handle (case-insensitive). */
   getUserByHandle(handle: string): Promise<User | null>;
   /**
+   * Raw reservation row, including cooldown-held released handles. Availability checks
+   * need this — `getUserByHandle` deliberately hides released rows.
+   */
+  getHandleReservation(handle: string): Promise<HandleRecord | null>;
+  /**
    * Claim or rename a handle. Transactional against the `handles` reservation so two
    * creators cannot both win the same name.
    */
@@ -1229,6 +1234,12 @@ export interface Store {
     uid: string,
     patch: { profileName?: string; bio?: string; avatarMode?: AvatarMode },
   ): Promise<User | null>;
+  /**
+   * Drop every handle reservation this uid holds (active or cooldown) and clear profile
+   * fields on the user. Used by the account-erasure path so a deleted account cannot
+   * keep a handle forever.
+   */
+  releaseCreatorHandles(uid: string, at: string): Promise<string[]>;
   /**
    * Find the single account holding this email, or null.
    *
@@ -1995,6 +2006,12 @@ export class InMemoryStore implements Store {
     return this.getUser(reservation.uid);
   }
 
+  async getHandleReservation(handle: string): Promise<HandleRecord | null> {
+    const key = handle.trim().toLowerCase();
+    const reservation = this.handles.get(key);
+    return reservation ? { ...reservation } : null;
+  }
+
   async claimHandle(uid: string, handle: string, at: string): Promise<ClaimHandleResult> {
     const { normalizeHandle, validateHandleShape, HANDLE_RENAME_COOLDOWN_MS } = await import('./creator-profile.js');
     const key = normalizeHandle(handle);
@@ -2039,7 +2056,8 @@ export class InMemoryStore implements Store {
       profileCreatedAt: user.profileCreatedAt ?? at,
       handleChangedAt: at,
       profileName: user.profileName ?? key,
-      avatarMode: user.avatarMode ?? 'google',
+      // Lettermark until the creator opts into showing their Google picture.
+      avatarMode: user.avatarMode ?? 'letter',
     };
     this.users.set(uid, updated);
     return { ok: true, user: { ...updated } };
@@ -2059,6 +2077,32 @@ export class InMemoryStore implements Store {
     };
     this.users.set(uid, updated);
     return { ...updated };
+  }
+
+  async releaseCreatorHandles(uid: string, at: string): Promise<string[]> {
+    const released: string[] = [];
+    for (const [key, reservation] of [...this.handles.entries()]) {
+      const owns =
+        (!reservation.releasedAt && reservation.uid === uid) ||
+        (Boolean(reservation.releasedAt) && reservation.previousUid === uid);
+      if (!owns) continue;
+      this.handles.delete(key);
+      released.push(key);
+    }
+    const user = this.users.get(uid);
+    if (user) {
+      this.users.set(uid, {
+        ...user,
+        handle: undefined,
+        profileName: undefined,
+        bio: undefined,
+        avatarMode: undefined,
+        profileCreatedAt: undefined,
+        handleChangedAt: undefined,
+      });
+    }
+    void at;
+    return released.sort();
   }
 
   async findUserByEmail(email: string): Promise<User | null> {
@@ -3437,6 +3481,14 @@ export class FirestoreStore implements Store {
     return this.getUser(reservation.uid);
   }
 
+  async getHandleReservation(handle: string): Promise<HandleRecord | null> {
+    const key = handle.trim().toLowerCase();
+    if (!key) return null;
+    const snap = await this.db.collection('handles').doc(key).get();
+    if (!snap.exists) return null;
+    return snap.data() as HandleRecord;
+  }
+
   async claimHandle(uid: string, handle: string, at: string): Promise<ClaimHandleResult> {
     const { normalizeHandle, validateHandleShape, HANDLE_RENAME_COOLDOWN_MS } = await import('./creator-profile.js');
     const key = normalizeHandle(handle);
@@ -3495,7 +3547,8 @@ export class FirestoreStore implements Store {
           profileCreatedAt: user.profileCreatedAt ?? at,
           handleChangedAt: at,
           profileName: user.profileName ?? key,
-          avatarMode: user.avatarMode ?? 'google',
+          // Lettermark until the creator opts into showing their Google picture.
+          avatarMode: user.avatarMode ?? 'letter',
         };
         tx.set(handleRef, { uid, claimedAt: updated.profileCreatedAt ?? at } satisfies HandleRecord);
         tx.set(userRef, stripUndefined(updated), { merge: true });
@@ -3521,6 +3574,42 @@ export class FirestoreStore implements Store {
     };
     await this.db.collection('users').doc(uid).set(stripUndefined(updated), { merge: true });
     return updated;
+  }
+
+  async releaseCreatorHandles(uid: string, at: string): Promise<string[]> {
+    const released = new Set<string>();
+    const user = await this.getUser(uid);
+    if (user?.handle) released.add(user.handle);
+
+    // Cooldown-held former handles still block claims; free those too.
+    const previous = await this.db.collection('handles').where('previousUid', '==', uid).get();
+    for (const doc of previous.docs) released.add(doc.id);
+    const owned = await this.db.collection('handles').where('uid', '==', uid).get();
+    for (const doc of owned.docs) released.add(doc.id);
+
+    const batch = this.db.batch();
+    for (const key of released) {
+      batch.delete(this.db.collection('handles').doc(key));
+    }
+    if (user) {
+      batch.set(
+        this.db.collection('users').doc(uid),
+        {
+          handle: FieldValue.delete(),
+          profileName: FieldValue.delete(),
+          bio: FieldValue.delete(),
+          avatarMode: FieldValue.delete(),
+          profileCreatedAt: FieldValue.delete(),
+          handleChangedAt: FieldValue.delete(),
+        },
+        { merge: true },
+      );
+    }
+    if (released.size > 0 || user?.handle) {
+      await batch.commit();
+    }
+    void at;
+    return [...released].sort();
   }
 
   async findUserByEmail(email: string): Promise<User | null> {

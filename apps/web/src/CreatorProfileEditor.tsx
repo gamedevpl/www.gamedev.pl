@@ -25,7 +25,7 @@ export function CreatorProfileEditor({ publishNudge = false }: { publishNudge?: 
   const [handleInput, setHandleInput] = useState('');
   const [nameInput, setNameInput] = useState('');
   const [bioInput, setBioInput] = useState('');
-  const [avatarMode, setAvatarMode] = useState<AvatarMode>('google');
+  const [avatarMode, setAvatarMode] = useState<AvatarMode>('letter');
   const [availability, setAvailability] = useState<{ available: boolean; reason?: HandleClaimError } | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'saving' | 'error'>('loading');
   const [message, setMessage] = useState<string | null>(null);
@@ -39,7 +39,7 @@ export function CreatorProfileEditor({ publishNudge = false }: { publishNudge?: 
         setHandleInput(profile.handle ?? '');
         setNameInput(profile.profileName ?? profile.handle ?? '');
         setBioInput(profile.bio ?? '');
-        setAvatarMode(profile.avatarMode ?? 'google');
+        setAvatarMode(profile.avatarMode ?? 'letter');
         setStatus('ready');
       })
       .catch(() => {

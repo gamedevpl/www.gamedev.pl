@@ -37,6 +37,8 @@ describe('creator-profile validation', () => {
   it('resolves avatar from google picture only when opted in', () => {
     expect(resolveAvatarUrl({ avatarMode: 'google', picture: 'https://example/p.jpg' })).toBe('https://example/p.jpg');
     expect(resolveAvatarUrl({ avatarMode: 'letter', picture: 'https://example/p.jpg' })).toBeNull();
+    // Unset mode defaults to lettermark — a claim must not publish Google's picture.
+    expect(resolveAvatarUrl({ picture: 'https://example/p.jpg' })).toBeNull();
     expect(resolveAvatarUrl({ picture: undefined })).toBeNull();
   });
 

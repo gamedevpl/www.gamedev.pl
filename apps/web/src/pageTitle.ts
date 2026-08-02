@@ -40,7 +40,7 @@ export type DocumentTitleCopy = {
   draftNamed: string;
   /** Prefixed template when studio is deep-linked to a named game. */
   studioNamed: string;
-  /** Prefixed template for a creator profile, e.g. "{{name}}". */
+  /** Prefixed template for a creator profile, e.g. "{{title}}" (same placeholder as playNamed). */
   creatorNamed: string;
 };
 

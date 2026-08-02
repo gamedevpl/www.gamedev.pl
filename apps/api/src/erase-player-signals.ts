@@ -105,6 +105,8 @@ export interface ErasePlayerSignalsResult {
    * screens. It is still the right call — it is their contribution to withdraw.
    */
   worldsErased: string[];
+  /** Creator-profile handle reservations freed (active and cooldown-held). */
+  handlesReleased: string[];
   dryRun: boolean;
 }
 
@@ -187,5 +189,26 @@ export async function erasePlayerSignals(options: ErasePlayerSignalsOptions): Pr
 
   if (!dryRun && worldsErased.length > 0) await store.deleteWorldEntriesForUser(uid);
 
-  return { uid, votesCleared, feedbackDeleted, savesDeleted, editorDraftsDeleted, affinityCleared, worldsErased, dryRun };
+  // Public creator-profile identity is personal data shown by consent of claiming a
+  // handle. The privacy notice promises the reservation clears with the account — without
+  // this, deleting the user doc would leave handles/{handle} taken forever.
+  let handlesReleased: string[];
+  if (dryRun) {
+    const user = await store.getUser(uid);
+    handlesReleased = user?.handle ? [user.handle] : [];
+  } else {
+    handlesReleased = await store.releaseCreatorHandles(uid, new Date().toISOString());
+  }
+
+  return {
+    uid,
+    votesCleared,
+    feedbackDeleted,
+    savesDeleted,
+    editorDraftsDeleted,
+    affinityCleared,
+    worldsErased,
+    handlesReleased,
+    dryRun,
+  };
 }
