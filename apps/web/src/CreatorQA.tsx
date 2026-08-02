@@ -142,7 +142,17 @@ export function CreatorQA({
     const root = wizardRef.current;
     if (!root) return;
     const focusable = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE));
-    if (focusable.length === 0) return;
+
+    // While a submission or a relocalization is in flight every control here is
+    // disabled, so there is nothing left to cycle between — and simply returning would
+    // hand Tab back to the browser, which is the one case where it escapes into the
+    // shell behind. The overlay itself takes the focus and holds it until a control
+    // comes back. The root carries tabIndex -1 for exactly this.
+    if (focusable.length === 0) {
+      event.preventDefault();
+      root.focus?.();
+      return;
+    }
 
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
@@ -271,6 +281,8 @@ export function CreatorQA({
       aria-label={t(questions.length > 0 ? 'qa.title' : 'qa.titleNameOnly')}
       ref={wizardRef}
       onKeyDown={handleTabKey}
+      // Somewhere for focus to rest when every control is disabled mid-submission.
+      tabIndex={-1}
     >
       <header className="qa-wizard-header">
         <p className="qa-wizard-step" aria-live="polite">

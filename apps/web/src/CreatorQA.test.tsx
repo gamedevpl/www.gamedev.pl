@@ -465,6 +465,34 @@ describe('CreatorQA', () => {
     await act(async () => root.unmount());
   });
 
+  it('still holds focus when a submission has disabled every control', async () => {
+    // The trap listed the focusable controls and bailed when it found none. Mid-flight
+    // `submitting` disables all of them, so that bail was the one path where Tab was
+    // handed back to the browser and walked into the shell behind the overlay.
+    const behind = document.createElement('button');
+    document.body.appendChild(behind);
+
+    const root = await render({
+      ...baseProps,
+      onSubmitWithConcept: vi.fn(),
+      onCancel: vi.fn(),
+      submitting: true,
+    });
+
+    expect(findAll('.qa-wizard button:not([disabled]), .qa-wizard input:not([disabled])')).toHaveLength(0);
+
+    const wizard = find<HTMLElement>('.qa-wizard')!;
+    await act(async () => {
+      wizard.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+      await flushEffects();
+    });
+
+    expect(document.activeElement).toBe(wizard);
+    expect(document.activeElement).not.toBe(behind);
+
+    await act(async () => root.unmount());
+  });
+
   it('gives focus back to whatever opened it', async () => {
     const opener = document.createElement('button');
     document.body.appendChild(opener);
