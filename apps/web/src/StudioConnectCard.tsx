@@ -153,6 +153,8 @@ export function StudioConnectCard({ token, agentConnected = false }: StudioConne
     : '';
 
   const installSnippet = payload?.installSnippets[client] ?? '';
+  const installLinks = payload?.installLinks;
+  const showInstallLinks = Boolean(installLinks?.cursor && installLinks?.vscode);
 
   return (
     <section className="studio-connect" aria-labelledby={`${baseId}-title`}>
@@ -195,23 +197,27 @@ export function StudioConnectCard({ token, agentConnected = false }: StudioConne
                 </span>
                 <h4 className="studio-connect-step-title">{t('connect.step1.title')}</h4>
               </div>
-              <p className="studio-connect-same">{t('connect.installLinks.hint')}</p>
-              <div className="studio-connect-install-links" data-testid="connect-install-links">
-                <a
-                  className="studio-connect-install-link"
-                  href={payload.installLinks.cursor}
-                  data-testid="connect-install-cursor"
-                >
-                  {t('connect.installLinks.cursor')}
-                </a>
-                <a
-                  className="studio-connect-install-link"
-                  href={payload.installLinks.vscode}
-                  data-testid="connect-install-vscode"
-                >
-                  {t('connect.installLinks.vscode')}
-                </a>
-              </div>
+              {showInstallLinks && installLinks ? (
+                <>
+                  <p className="studio-connect-same">{t('connect.installLinks.hint')}</p>
+                  <div className="studio-connect-install-links" data-testid="connect-install-links">
+                    <a
+                      className="studio-connect-install-link"
+                      href={installLinks.cursor}
+                      data-testid="connect-install-cursor"
+                    >
+                      {t('connect.installLinks.cursor')}
+                    </a>
+                    <a
+                      className="studio-connect-install-link"
+                      href={installLinks.vscode}
+                      data-testid="connect-install-vscode"
+                    >
+                      {t('connect.installLinks.vscode')}
+                    </a>
+                  </div>
+                </>
+              ) : null}
               <p className="studio-connect-same">{t('connect.step1.configHint')}</p>
               <div className="studio-connect-tabs" role="tablist" aria-label={t('connect.step1.clients')}>
                 {CONNECT_CLIENTS.map((id) => (
@@ -278,23 +284,27 @@ export function StudioConnectCard({ token, agentConnected = false }: StudioConne
                 </span>
                 <h4 className="studio-connect-step-title">{t('connect.oauth.title')}</h4>
               </div>
-              <p className="studio-connect-same">{t('connect.installLinks.hint')}</p>
-              <div className="studio-connect-install-links" data-testid="connect-install-links">
-                <a
-                  className="studio-connect-install-link"
-                  href={payload.installLinks.cursor}
-                  data-testid="connect-install-cursor"
-                >
-                  {t('connect.installLinks.cursor')}
-                </a>
-                <a
-                  className="studio-connect-install-link"
-                  href={payload.installLinks.vscode}
-                  data-testid="connect-install-vscode"
-                >
-                  {t('connect.installLinks.vscode')}
-                </a>
-              </div>
+              {showInstallLinks && installLinks ? (
+                <>
+                  <p className="studio-connect-same">{t('connect.installLinks.hint')}</p>
+                  <div className="studio-connect-install-links" data-testid="connect-install-links">
+                    <a
+                      className="studio-connect-install-link"
+                      href={installLinks.cursor}
+                      data-testid="connect-install-cursor"
+                    >
+                      {t('connect.installLinks.cursor')}
+                    </a>
+                    <a
+                      className="studio-connect-install-link"
+                      href={installLinks.vscode}
+                      data-testid="connect-install-vscode"
+                    >
+                      {t('connect.installLinks.vscode')}
+                    </a>
+                  </div>
+                </>
+              ) : null}
               <p className="studio-connect-same">{t('connect.oauth.hint')}</p>
               <pre className="studio-connect-snippet" tabIndex={0}>
                 {payload.mcpUrl}

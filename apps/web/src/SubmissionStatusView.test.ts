@@ -583,6 +583,14 @@ describe('SubmissionStatusView', () => {
           kimi: 'npx mcp-remote https://example.test/api/mcp',
           cli: 'curl https://example.test/api/mcp',
         },
+        installLinks: {
+          cursor:
+            'cursor://anysphere.cursor-deeplink/mcp/install?name=gamedevpl&config=' +
+            btoa(JSON.stringify({ url: 'https://example.test/api/mcp' })),
+          vscode: `vscode:mcp/install?${encodeURIComponent(
+            JSON.stringify({ name: 'gamedevpl', type: 'http', url: 'https://example.test/api/mcp' }),
+          )}`,
+        },
         kickoffPrompt: 'Build "Await Game" for gamedev.pl.\nStart with the gamedevpl tool, slug: await-game',
         mcpUrl: 'https://example.test/api/mcp',
         authorizationHeader: 'Authorization: Bearer test-key-not-for-display',
@@ -652,6 +660,14 @@ describe('SubmissionStatusView', () => {
           cursor: '{"mcpServers":{}}',
           kimi: 'npx mcp-remote https://example.test/api/mcp',
           cli: 'curl https://example.test/api/mcp',
+        },
+        installLinks: {
+          cursor:
+            'cursor://anysphere.cursor-deeplink/mcp/install?name=gamedevpl&config=' +
+            btoa(JSON.stringify({ url: 'https://example.test/api/mcp' })),
+          vscode: `vscode:mcp/install?${encodeURIComponent(
+            JSON.stringify({ name: 'gamedevpl', type: 'http', url: 'https://example.test/api/mcp' }),
+          )}`,
         },
         kickoffPrompt: 'Build "Quiet Game" for gamedev.pl.\nStart with the gamedevpl tool, slug: quiet-game',
         mcpUrl: 'https://example.test/api/mcp',
@@ -1860,6 +1876,14 @@ describe('SubmissionStatusView stop & retry', () => {
       cursor: '{"mcpServers":{}}',
       kimi: 'npx mcp-remote https://example.test/api/mcp',
       cli: 'curl https://example.test/api/mcp',
+    },
+    installLinks: {
+      cursor:
+        'cursor://anysphere.cursor-deeplink/mcp/install?name=gamedevpl&config=' +
+        btoa(JSON.stringify({ url: 'https://example.test/api/mcp' })),
+      vscode: `vscode:mcp/install?${encodeURIComponent(
+        JSON.stringify({ name: 'gamedevpl', type: 'http', url: 'https://example.test/api/mcp' }),
+      )}`,
     },
     kickoffPrompt:
       'Build "Handoff Game" for gamedev.pl.\nStart with the gamedevpl tool, slug: handoff-game.\nstart returns your workflow; after gate green the round is done.',
