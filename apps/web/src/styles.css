@@ -2763,29 +2763,44 @@ body.player-open {
 /* Inside the composer, over the cleared field — not above it (that covered the
    context bar) and not as a second row (that permanently grew the box).
    Pointer events pass through so a click can still focus the textarea; only the
-   dismiss control re-enables hits. */
+   dismiss control re-enables hits.
+   `top` + `bottom` pin it to the composer's padding box so wrapped copy on a
+   320px phone cannot grow into the thread context bar and cover Stop. */
 .status-feedback-receipt.is-floating {
   position: absolute;
   left: 8px;
   right: 48px;
+  top: 8px;
   bottom: 8px;
   z-index: 3;
   display: flex;
-  padding: 6px 6px 6px 10px;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px 4px 10px;
   border-radius: 12px;
   background: rgba(12, 18, 28, 0.96);
   border: 1px solid rgba(0, 228, 172, 0.35);
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
   animation: status-receipt-in 0.2s ease-out;
   pointer-events: none;
+  overflow: hidden;
 }
 
 .status-feedback-receipt.is-floating .status-feedback-sent {
   flex: 1;
   min-width: 0;
+  align-items: flex-start;
   font-size: 0.82rem;
   font-weight: 600;
-  line-height: 1.35;
+  line-height: 1.3;
+}
+
+.status-feedback-receipt.is-floating .status-feedback-sent-text {
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 
 .status-feedback-receipt-dismiss {

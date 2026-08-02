@@ -1255,11 +1255,22 @@ function FeedbackPanel({
       ? 'statusView.feedback.composerHintBuilding'
       : 'statusView.feedback.composerHint';
 
+  // Compact composer uses short copy: the full "Sent! … watch the build log" sentence
+  // wraps to three lines on a 320px phone and, as an absolute overlay, used to spill
+  // into the thread context bar over the Stop control.
+  const sentMessageKey = (floating: boolean) => {
+    if (!floating) return sentSelfKey ?? 'statusView.feedback.sent';
+    if (composerRoute === 'active') return 'statusView.feedback.sentSelfActiveCompact';
+    if (composerRoute === 'waiting') return 'statusView.feedback.sentSelfWaitingCompact';
+    return 'statusView.feedback.sentCompact';
+  };
+
   const sentReceipt = (floating: boolean) =>
     state === 'sent' && !notice && !error ? (
       <div className={`status-feedback-receipt${floating ? ' is-floating' : ''}`} role="status">
         <span className="status-feedback-sent">
-          <PixelIcon name="check" size={13} /> {t(sentSelfKey ?? 'statusView.feedback.sent')}
+          <PixelIcon name="check" size={13} />
+          <span className="status-feedback-sent-text">{t(sentMessageKey(floating))}</span>
         </span>
         <button
           type="button"

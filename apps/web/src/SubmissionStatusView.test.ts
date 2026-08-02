@@ -1162,8 +1162,10 @@ describe('SubmissionStatusView', () => {
 
     expect(container.querySelector('.status-composer.is-sending')).toBeNull();
     expect(container.querySelector('.status-feedback-receipt.is-floating')).not.toBeNull();
-    expect(container.querySelector('.status-feedback-sent')).not.toBeNull();
-    // Receipt floats above the box — it must not grow a second actions row.
+    expect(container.querySelector('.status-feedback-sent-text')?.textContent).toContain(
+      'Sent — watch the build log above.',
+    );
+    // Receipt overlays the cleared field — it must not grow a second actions row.
     expect(container.querySelector('.status-feedback-actions')).toBeNull();
 
     await act(async () => {

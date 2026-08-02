@@ -86,6 +86,25 @@ describe('locale resources', () => {
     }
   });
 
+  // Compact Sent! receipts overlay the one-line composer. The full status-page sentence
+  // wraps to three lines at 320px and used to spill into the thread context bar.
+  it('keeps compact Sent receipts short enough for a phone composer', () => {
+    const MAX = 42;
+    for (const [lang, resource] of [
+      ['en', en],
+      ['pl', pl],
+    ] as const) {
+      const feedback = (resource as unknown as { statusView: { feedback: Record<string, string> } }).statusView
+        .feedback;
+      for (const key of ['sentCompact', 'sentSelfActiveCompact', 'sentSelfWaitingCompact'] as const) {
+        expect(
+          feedback[key].length,
+          `${lang}.statusView.feedback.${key} is ${feedback[key].length} chars: "${feedback[key]}"`,
+        ).toBeLessThanOrEqual(MAX);
+      }
+    }
+  });
+
   it('has no empty translation values', () => {
     for (const [lang, resource] of [
       ['en', en],
