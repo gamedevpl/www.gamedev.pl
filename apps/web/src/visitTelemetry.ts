@@ -174,7 +174,18 @@ export type AssistStep = 'asked' | 'applied' | 'handoff' | 'rejected';
  * The tail (`shared`, `keep_clicked`) is where retention turns into either a
  * visitor or a creator.
  */
-export type RemixStep = 'opened' | 'tuned' | 'asked' | 'applied' | 'handoff' | 'refused' | 'shared' | 'keep_clicked';
+export type RemixStep =
+  | 'opened'
+  | 'typed' // wrote a request and hit send — desire exists, regardless of auth
+  | 'wall_shown' // the sign-in wall dropped between typing and spending
+  | 'signed_in' // came through the wall; the stashed request runs next
+  | 'tuned'
+  | 'asked'
+  | 'applied'
+  | 'handoff'
+  | 'refused'
+  | 'shared'
+  | 'keep_clicked';
 
 const FLUSH_AT = 5;
 const MAX_BATCH = 25;

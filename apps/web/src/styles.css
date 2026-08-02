@@ -10468,3 +10468,49 @@ body.player-open {
   font-size: 0.82rem;
   cursor: pointer;
 }
+
+/* The invitation's arrival: two gentle pulses, then stillness. Never mid-action
+   by construction — the reveal only fires on end/progress signals or the 60s
+   one-time timer, and reduced-motion users get no pulse at all. */
+.remix-open.is-revealed {
+  animation: remix-invite 1.6s ease-in-out 2;
+}
+
+@keyframes remix-invite {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .remix-open.is-revealed {
+    animation: none;
+  }
+}
+
+/* The way back when play owns the screen: a thin, always-visible pill at the
+   top edge. Deliberately quiet, deliberately generous to a thumb — hidden
+   chrome must never mean gone chrome. */
+.theater-peek-pill {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  width: 64px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 9px;
+  background: rgba(140, 170, 190, 0.28);
+  cursor: pointer;
+}
+
+.theater-peek-pill:hover,
+.theater-peek-pill:focus-visible {
+  background: rgba(140, 170, 190, 0.5);
+}

@@ -39,6 +39,9 @@ const EDITOR_LABELS: Record<string, string> = {
 
 const REMIX_LABELS: Record<string, string> = {
   opened: 'opened a remix',
+  typed: 'typed a request',
+  wall_shown: 'hit the sign-in wall',
+  signed_in: 'came through the wall',
   tuned: 'moved a slider',
   asked: 'typed a request',
   applied: 'got a change applied',

@@ -163,7 +163,8 @@
     "howToPlayDismiss": "Press Escape, or click or tap anywhere outside, to close",
     "howToPlayTouch": "Touch",
     "howToPlayTouchPad": "On-screen pad on touch screens",
-    "howToPlayOther": "Control"
+    "howToPlayOther": "Control",
+    "showControls": "Show controls"
   },
   "catalog": {
     "title": "Games",
@@ -938,7 +939,7 @@
     "applied": "Applied.",
     "undo": "Undo",
     "refused": "That request was refused.",
-    "needsCode": "That needs a real code change — make this game your own to go further.",
+    "needsCode": "That's a bigger change than a remix can do — make this game your own to go further.",
     "couldNotBuild": "That change didn't work out. Try saying it a different way.",
     "tooBig": "That's a bigger change than a remix can make.",
     "quota": "You've made a lot of changes — take a break and try later.",
@@ -953,6 +954,11 @@
     "button": "Remix",
     "signInToRemix": "Sign in to remix",
     "signInTitle": "Sign in to remix this game",
-    "signInSubtitle": "Remixing is tied to your account while we're in closed beta."
+    "signInSubtitle": "Remixing is tied to your account while we're in closed beta.",
+    "wallSubtitle": "Your request is saved — it runs the moment you're in.",
+    "buildingSlow": "Still working — rebuilding your game…",
+    "tookTooLong": "That took too long — here's your game back, unchanged.",
+    "napping": "Editing is napping right now — the game still plays.",
+    "notHere": "This game can't be remixed yet — but it still plays."
   }
 }

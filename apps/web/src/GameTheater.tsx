@@ -198,6 +198,42 @@ export function GameTheater({
   // and swallows its own key events.
   const player = useGamePlayer(frameRef, true, escapeOrExit, dismissMore);
 
+  /**
+   * Chrome auto-hide (ops repo realtime plan §D.11.6): during play the screen is
+   * pure game; the bar returns at the natural pauses — a finished run, or the
+   * always-visible peek pill. One rule, shared with the remix reveal: chrome
+   * appears in the gaps, never mid-action. Hidden must never mean gone — the
+   * pill is one tap from mute and exit, and reveal fires on pointerdown so a
+   * phone gets it without the click delay.
+   */
+  const [chromeHidden, setChromeHidden] = useState(false);
+  const rehideTimerRef = useRef<number | null>(null);
+  const revealChrome = useCallback((rehideAfterMs?: number) => {
+    setChromeHidden(false);
+    if (rehideTimerRef.current !== null) window.clearTimeout(rehideTimerRef.current);
+    rehideTimerRef.current =
+      rehideAfterMs === undefined ? null : window.setTimeout(() => setChromeHidden(true), rehideAfterMs);
+  }, []);
+  useEffect(() => {
+    // Play start: a short grace so the title/author register, then the game owns
+    // the screen. A finished run hands the controls back for a while — the same
+    // beat the remix invitation uses — and then play takes over again.
+    const grace = window.setTimeout(() => setChromeHidden(true), 3000);
+    function onMessage(event: MessageEvent) {
+      if (event.origin !== 'null') return;
+      const frame = frameRef.current;
+      if (!frame || event.source !== frame.contentWindow) return;
+      const data = event.data as { source?: string; type?: string } | null;
+      if (data?.source === 'gdpl-player' && data.type === 'end') revealChrome(8000);
+    }
+    window.addEventListener('message', onMessage);
+    return () => {
+      window.clearTimeout(grace);
+      window.removeEventListener('message', onMessage);
+      if (rehideTimerRef.current !== null) window.clearTimeout(rehideTimerRef.current);
+    };
+  }, [frameRef, revealChrome]);
+
   // What the game says about itself, falling back to what the catalog says about it.
   // Derived every render rather than memoized on first value, because both sources
   // arrive late and at different times: on a deep-linked /play/<slug> the catalog never
@@ -470,9 +506,23 @@ export function GameTheater({
       aria-label={displayTitle}
       ref={stageRef}
     >
-      {/* Fullscreen hides the bar so the game owns the screen. Votes stay on the
-          bar when it's visible; secondary actions stay in More. */}
-      {!fullscreen && (
+      {/* Fullscreen hides the bar so the game owns the screen; so does play
+          itself now (chromeHidden), with the peek pill as the way back. Votes
+          stay on the bar when it's visible; secondary actions stay in More. */}
+      {!fullscreen && chromeHidden && (
+        <button
+          type="button"
+          className="theater-peek-pill"
+          aria-label={t('player.showControls')}
+          // Both: pointerdown for a touch that should not wait for the click,
+          // click for Enter/Space — which never emit pointer events, and this
+          // pill is the only way back to mute and exit once the bar is hidden.
+          // revealChrome is idempotent, so the pair firing together is a no-op.
+          onPointerDown={() => revealChrome()}
+          onClick={() => revealChrome()}
+        />
+      )}
+      {!fullscreen && !chromeHidden && (
         <div className="game-theater-bar">
           <div className="game-theater-meta">
             <span className="theater-badge" title={t('ai.generatedTooltip')}>

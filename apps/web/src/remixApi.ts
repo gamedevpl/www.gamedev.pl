@@ -40,12 +40,13 @@ export type RemixShare = {
 
 export type RemixApiError = Error & { status?: number };
 
-async function post<T>(path: string, body?: unknown): Promise<T> {
+async function post<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body ?? {}),
+    ...(signal ? { signal } : {}),
   });
   if (!response.ok) {
     const error = new Error(`request failed with ${response.status}`) as RemixApiError;
@@ -67,8 +68,8 @@ export function remixAssist(
   return post<RemixAssistResponse>(`/api/remixes/${encodeURIComponent(remixId)}/assist`, { utterance, params });
 }
 
-export function remixCode(remixId: string, utterance: string): Promise<RemixCodeResponse> {
-  return post<RemixCodeResponse>(`/api/remixes/${encodeURIComponent(remixId)}/code`, { utterance });
+export function remixCode(remixId: string, utterance: string, signal?: AbortSignal): Promise<RemixCodeResponse> {
+  return post<RemixCodeResponse>(`/api/remixes/${encodeURIComponent(remixId)}/code`, { utterance }, signal);
 }
 
 export function remixShare(remixId: string, params: Record<string, EditorParamValue>): Promise<RemixShare> {
