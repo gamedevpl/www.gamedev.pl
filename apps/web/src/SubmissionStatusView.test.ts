@@ -454,7 +454,8 @@ describe('SubmissionStatusView', () => {
     expect(mockedGetSubmissionPreview).toHaveBeenCalledWith('self-ready-token');
     expect(mockedGetChannelPlayable).not.toHaveBeenCalled();
     const playDraft = container.querySelector<HTMLButtonElement>('.studio-thread-context .status-play-cta');
-    expect(playDraft?.textContent).toContain('Play the draft');
+    // Foot uses the short play verb; phase already says this is still a draft.
+    expect(playDraft?.textContent?.trim()).toMatch(/^Play$/);
 
     await act(async () => {
       playDraft?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
