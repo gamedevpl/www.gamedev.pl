@@ -50,8 +50,18 @@ function oauthUrl(path: string): string {
 
 function pruneDcrHits(ip: string, nowMs: number): number[] {
   const hits = (dcrHitsByIp.get(ip) ?? []).filter((t) => nowMs - t < DCR_RATE_LIMIT_WINDOW_MS);
-  dcrHitsByIp.set(ip, hits);
+  if (hits.length === 0) {
+    dcrHitsByIp.delete(ip);
+  } else {
+    dcrHitsByIp.set(ip, hits);
+  }
   return hits;
+}
+
+function pruneCimdCache(nowMs: number): void {
+  for (const [key, entry] of cimdCache) {
+    if (entry.expiresAt <= nowMs) cimdCache.delete(key);
+  }
 }
 
 function isDcrRateLimited(ip: string, nowMs: number): boolean {
@@ -96,6 +106,7 @@ interface CimdDocument {
 }
 
 async function fetchCimdClient(clientIdUrl: string, nowMs: number): Promise<OAuthClientRecord | null> {
+  pruneCimdCache(nowMs);
   const cached = cimdCache.get(clientIdUrl);
   if (cached && cached.expiresAt > nowMs) return cached.client;
 

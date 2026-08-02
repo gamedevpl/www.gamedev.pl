@@ -1,6 +1,15 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { OAuthAccessTokenRecord, OAuthGrantRecord, Store } from './store.js';
 
+/**
+ * OAuth access / refresh / authorization-code secrets for the MCP authorization
+ * server (BY-18b). Same hashing discipline as personal access tokens in
+ * `access-token.ts`: secrets are 256 bits of CSPRNG output, so stored digests
+ * use SHA-256 rather than a password KDF. Stretching only protects low-entropy
+ * secrets; these formats cannot produce them. A datastore dump yields hashes
+ * that are not usable as credentials.
+ */
+
 export const OAUTH_ACCESS_TOKEN_PREFIX = 'gdpl_oat_';
 export const OAUTH_REFRESH_TOKEN_PREFIX = 'gdpl_ort_';
 
@@ -63,7 +72,13 @@ export function generateOAuthAuthCode(): { code: string; codeId: string; codeHas
 }
 
 export function hashOAuthSecret(secret: string): string {
-  return createHash('sha256').update(secret).digest('hex');
+  // High-entropy CSPRNG API credentials, not user passwords — see file header /
+  // access-token.ts. Stretching only protects low-entropy secrets.
+  return (
+    // codeql[js/insufficient-password-hash]
+    // lgtm[js/insufficient-password-hash]
+    createHash('sha256').update(secret).digest('hex')
+  );
 }
 
 export function looksLikeOAuthAccessToken(value: string): boolean {
@@ -133,10 +148,16 @@ export async function verifyOAuthAccessToken(
   const record = await store.getOAuthAccessToken(parsed.tokenId);
   if (!record) return null;
   if (!verifyOAuthSecret(parsed.secret, record.secretHash)) return null;
-  if (isOAuthAccessTokenExpired(record.expiresAt, nowMs)) return null;
+  if (isOAuthAccessTokenExpired(record.expiresAt, nowMs)) {
+    await store.deleteOAuthAccessToken(parsed.tokenId);
+    return null;
+  }
 
   const grant = await store.getOAuthGrant(record.grantId);
-  if (!grant || grant.revokedAt) return null;
+  if (!grant || grant.revokedAt) {
+    await store.deleteOAuthAccessToken(parsed.tokenId);
+    return null;
+  }
 
   return {
     tokenId: record.tokenId,

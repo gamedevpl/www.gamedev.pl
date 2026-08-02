@@ -1755,7 +1755,11 @@ export interface Store {
   getOAuthAccessToken(tokenId: string): Promise<OAuthAccessTokenRecord | null>;
   deleteOAuthAccessToken(tokenId: string): Promise<boolean>;
   createOAuthAuthCode(record: OAuthAuthCodeRecord): Promise<void>;
-  /** Single-use: marks the code used and returns the record, or null when invalid. */
+  /**
+   * Single-use: returns the record with `usedAt` set, then deletes the stored
+   * row. Already-used or expired codes are deleted and yield null. Wrong-hash
+   * presentations leave the row in place.
+   */
   consumeOAuthAuthCode(codeId: string, codeHash: string, nowMs: number): Promise<OAuthAuthCodeRecord | null>;
   /**
    * Rotate refresh credentials. When the presented refresh id is not the grant's
@@ -3173,11 +3177,17 @@ export class InMemoryStore implements Store {
   async consumeOAuthAuthCode(codeId: string, codeHash: string, nowMs: number): Promise<OAuthAuthCodeRecord | null> {
     const record = this.oauthAuthCodes.get(codeId);
     if (!record) return null;
-    if (record.usedAt) return null;
-    if (Date.parse(record.expiresAt) <= nowMs) return null;
+    if (record.usedAt) {
+      this.oauthAuthCodes.delete(codeId);
+      return null;
+    }
+    if (Date.parse(record.expiresAt) <= nowMs) {
+      this.oauthAuthCodes.delete(codeId);
+      return null;
+    }
     if (record.codeHash !== codeHash) return null;
     const used: OAuthAuthCodeRecord = { ...record, usedAt: new Date(nowMs).toISOString() };
-    this.oauthAuthCodes.set(codeId, used);
+    this.oauthAuthCodes.delete(codeId);
     return used;
   }
 
@@ -5162,11 +5172,17 @@ export class FirestoreStore implements Store {
       const snap = await tx.get(docRef);
       if (!snap.exists) return null;
       const record = snap.data() as OAuthAuthCodeRecord;
-      if (record.usedAt) return null;
-      if (Date.parse(record.expiresAt) <= nowMs) return null;
+      if (record.usedAt) {
+        tx.delete(docRef);
+        return null;
+      }
+      if (Date.parse(record.expiresAt) <= nowMs) {
+        tx.delete(docRef);
+        return null;
+      }
       if (record.codeHash !== codeHash) return null;
       const usedAt = new Date(nowMs).toISOString();
-      tx.update(docRef, { usedAt });
+      tx.delete(docRef);
       return { ...record, usedAt };
     });
   }
