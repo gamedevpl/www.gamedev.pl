@@ -8410,6 +8410,41 @@ body.player-open {
   color: var(--muted);
 }
 
+.studio-creator-agent-key {
+  margin-top: 20px;
+}
+
+.studio-creator-agent-key-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-top: 10px;
+}
+
+.studio-creator-agent-key-reveal {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.studio-creator-agent-key-value {
+  margin: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 10px 12px;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  word-break: break-all;
+  white-space: pre-wrap;
+  color: var(--text, #e2e8f0);
+  background: var(--panel, #171c20);
+  border: 1px solid var(--panel-border, #33383d);
+  border-radius: 8px;
+}
+
 .studio-share .status-share {
   margin: 12px 0 0;
 }

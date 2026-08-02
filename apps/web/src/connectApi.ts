@@ -142,3 +142,58 @@ export async function revokeOAuthGrant(grantId: string): Promise<void> {
     await throwResponseError(response);
   }
 }
+
+/** Creator-wide MCP opener status (BY-27a). Never call this a "token" in UI copy. */
+export type CreatorAgentKeyStatus = {
+  keyGeneration: number;
+  revoked: boolean;
+  key?: string;
+  expiresAt?: number;
+};
+
+export type CreatorAgentKeyPayload = {
+  key: string;
+  keyGeneration: number;
+  expiresAt: number;
+  revoked: false;
+};
+
+export async function getCreatorAgentKey(): Promise<CreatorAgentKeyStatus> {
+  const response = await fetch(`${API_BASE}/api/me/creator-agent-key`, { credentials: 'include' });
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+  return (await response.json()) as CreatorAgentKeyStatus;
+}
+
+export async function mintCreatorAgentKey(): Promise<CreatorAgentKeyPayload> {
+  const response = await fetch(`${API_BASE}/api/me/creator-agent-key`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+  return (await response.json()) as CreatorAgentKeyPayload;
+}
+
+export async function rotateCreatorAgentKey(): Promise<CreatorAgentKeyPayload> {
+  const response = await fetch(`${API_BASE}/api/me/creator-agent-key/rotate`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+  return (await response.json()) as CreatorAgentKeyPayload;
+}
+
+export async function revokeCreatorAgentKey(): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/me/creator-agent-key`, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+  if (!response.ok && response.status !== 204) {
+    await throwResponseError(response);
+  }
+}

@@ -64,6 +64,7 @@ import { isKnownSpaShellPath, looksLikeStaticAsset } from './spa-paths.js';
 import { logModerationRejection } from './moderation-metrics.js';
 import { registerOAuthProtectedResourceRoutes } from './mcp-oauth-metadata.js';
 import { registerOAuthAuthorizationServerRoutes } from './oauth-as.js';
+import { registerCreatorAgentKeyRoutes } from './creator-agent-key-routes.js';
 
 const GenerateRequestSchema = z.object({
   prompt: z.string().trim().min(1, 'prompt is required').max(500, 'prompt is too long'),
@@ -504,6 +505,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     options.submissionRoutes?.submissionTokenSecret ??
     process.env.SUBMISSION_TOKEN_SECRET ??
     (localGames ? 'local-development-submission-secret' : undefined);
+
+  // Durable creator-wide MCP opener (BY-27a). Same secret MCP uses to verify game keys.
+  if (submissionTokenSecret) {
+    registerCreatorAgentKeyRoutes(app, { store, agentTokenSecret: submissionTokenSecret });
+  }
   await registerCreatorStudioRoutes(app, {
     store,
     gamesStore,

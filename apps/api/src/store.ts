@@ -1133,6 +1133,21 @@ export interface GameAgentKeyRecord {
   agentOpenRoundPending?: boolean;
 }
 
+/**
+ * Durable creator-wide agent opener state (BY-27a), stored at `creatorAgentKeys/{uid}`.
+ *
+ * The HMAC opener itself is never stored — only the generation that revokes it.
+ * Bumped ONLY on explicit rotate/revoke — never on round close or publish.
+ */
+export interface CreatorAgentKeyRecord {
+  ownerUid: string;
+  keyGeneration: number;
+  createdAt: string;
+  updatedAt: string;
+  /** Set by revoke; cleared on the next mint/rotate. */
+  revokedAt?: string;
+}
+
 /** OAuth dynamic or CIMD-registered MCP client (BY-18b). */
 export interface OAuthClientRecord {
   clientId: string;
@@ -1760,6 +1775,27 @@ export interface Store {
   beginAgentOpenRound(slug: string, at: string): Promise<boolean>;
   /** BY-24: release the admission lock after `open_round` completes or aborts. */
   finishAgentOpenRound(slug: string, at: string): Promise<void>;
+  /**
+   * Durable creator-wide opener state (BY-27a). Returns null when no key has been
+   * issued for this creator yet.
+   */
+  getCreatorAgentKey(ownerUid: string): Promise<CreatorAgentKeyRecord | null>;
+  /**
+   * Ensures a creatorAgentKeys doc exists for ownerUid, creating generation 1 when
+   * absent. Clears `revokedAt` so a post-revoke mint can issue again at the current
+   * generation. Does not bump `keyGeneration`.
+   */
+  ensureCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord>;
+  /**
+   * Transactionally bumps `keyGeneration` and clears `revokedAt`. Returns the new
+   * record, or null when missing.
+   */
+  rotateCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null>;
+  /**
+   * Transactionally bumps `keyGeneration` and sets `revokedAt`. Returns the new
+   * record, or null when missing. Does not mint a replacement key.
+   */
+  revokeCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null>;
   /** Persist a dynamically registered or CIMD-cached OAuth client. */
   createOAuthClient(record: OAuthClientRecord): Promise<void>;
   getOAuthClient(clientId: string): Promise<OAuthClientRecord | null>;
@@ -1933,6 +1969,8 @@ export class InMemoryStore implements Store {
   private accessTokens = new Map<string, AccessTokenRecord>();
   // slug -> durable per-game agent opener state (BY-23)
   private gameAgentKeys = new Map<string, GameAgentKeyRecord>();
+  // uid -> durable creator-wide agent opener state (BY-27a)
+  private creatorAgentKeys = new Map<string, CreatorAgentKeyRecord>();
   private oauthClients = new Map<string, OAuthClientRecord>();
   private oauthGrants = new Map<string, OAuthGrantRecord>();
   private oauthAccessTokens = new Map<string, OAuthAccessTokenRecord>();
@@ -3146,6 +3184,57 @@ export class InMemoryStore implements Store {
     const next: GameAgentKeyRecord = { ...existing, updatedAt: at };
     delete next.agentOpenRoundPending;
     this.gameAgentKeys.set(slug, next);
+  }
+
+  async getCreatorAgentKey(ownerUid: string): Promise<CreatorAgentKeyRecord | null> {
+    const record = this.creatorAgentKeys.get(ownerUid);
+    return record ? { ...record } : null;
+  }
+
+  async ensureCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord> {
+    const existing = this.creatorAgentKeys.get(ownerUid);
+    if (existing) {
+      if (!existing.revokedAt) return { ...existing };
+      const cleared: CreatorAgentKeyRecord = { ...existing, updatedAt: at };
+      delete cleared.revokedAt;
+      this.creatorAgentKeys.set(ownerUid, cleared);
+      return { ...cleared };
+    }
+    const created: CreatorAgentKeyRecord = {
+      ownerUid,
+      keyGeneration: 1,
+      createdAt: at,
+      updatedAt: at,
+    };
+    this.creatorAgentKeys.set(ownerUid, created);
+    return { ...created };
+  }
+
+  async rotateCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null> {
+    const existing = this.creatorAgentKeys.get(ownerUid);
+    if (!existing) return null;
+    const next: CreatorAgentKeyRecord = {
+      ownerUid: existing.ownerUid,
+      keyGeneration: existing.keyGeneration + 1,
+      createdAt: existing.createdAt,
+      updatedAt: at,
+    };
+    this.creatorAgentKeys.set(ownerUid, next);
+    return { ...next };
+  }
+
+  async revokeCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null> {
+    const existing = this.creatorAgentKeys.get(ownerUid);
+    if (!existing) return null;
+    const next: CreatorAgentKeyRecord = {
+      ownerUid: existing.ownerUid,
+      keyGeneration: existing.keyGeneration + 1,
+      createdAt: existing.createdAt,
+      updatedAt: at,
+      revokedAt: at,
+    };
+    this.creatorAgentKeys.set(ownerUid, next);
+    return { ...next };
   }
 
   async createOAuthClient(record: OAuthClientRecord): Promise<void> {
@@ -5135,6 +5224,70 @@ export class FirestoreStore implements Store {
       const next: GameAgentKeyRecord = { ...existing, updatedAt: at };
       delete next.agentOpenRoundPending;
       tx.set(docRef, next);
+    });
+  }
+
+  async getCreatorAgentKey(ownerUid: string): Promise<CreatorAgentKeyRecord | null> {
+    const snap = await this.db.collection('creatorAgentKeys').doc(ownerUid).get();
+    if (!snap.exists) return null;
+    return snap.data() as CreatorAgentKeyRecord;
+  }
+
+  async ensureCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord> {
+    const docRef = this.db.collection('creatorAgentKeys').doc(ownerUid);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef);
+      if (snap.exists) {
+        const existing = snap.data() as CreatorAgentKeyRecord;
+        if (!existing.revokedAt) return existing;
+        const cleared: CreatorAgentKeyRecord = { ...existing, updatedAt: at };
+        delete cleared.revokedAt;
+        tx.set(docRef, cleared);
+        return cleared;
+      }
+      const created: CreatorAgentKeyRecord = {
+        ownerUid,
+        keyGeneration: 1,
+        createdAt: at,
+        updatedAt: at,
+      };
+      tx.create(docRef, created);
+      return created;
+    });
+  }
+
+  async rotateCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null> {
+    const docRef = this.db.collection('creatorAgentKeys').doc(ownerUid);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef);
+      if (!snap.exists) return null;
+      const existing = snap.data() as CreatorAgentKeyRecord;
+      const next: CreatorAgentKeyRecord = {
+        ownerUid: existing.ownerUid,
+        keyGeneration: existing.keyGeneration + 1,
+        createdAt: existing.createdAt,
+        updatedAt: at,
+      };
+      tx.set(docRef, next);
+      return next;
+    });
+  }
+
+  async revokeCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null> {
+    const docRef = this.db.collection('creatorAgentKeys').doc(ownerUid);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef);
+      if (!snap.exists) return null;
+      const existing = snap.data() as CreatorAgentKeyRecord;
+      const next: CreatorAgentKeyRecord = {
+        ownerUid: existing.ownerUid,
+        keyGeneration: existing.keyGeneration + 1,
+        createdAt: existing.createdAt,
+        updatedAt: at,
+        revokedAt: at,
+      };
+      tx.set(docRef, next);
+      return next;
     });
   }
 

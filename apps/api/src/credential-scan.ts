@@ -14,6 +14,10 @@ const CREDENTIAL_PATTERNS: Array<{ kind: string; pattern: RegExp }> = [
   { kind: 'gamedev-access-token', pattern: /\bgdpl_pat_[0-9a-f]{16}_[A-Za-z0-9_-]{43}\b/g },
   { kind: 'gamedev-oauth-access', pattern: /\bgdpl_oat_[0-9a-f]{16}_[A-Za-z0-9_-]{43}\b/g },
   { kind: 'gamedev-oauth-refresh', pattern: /\bgdpl_ort_[0-9a-f]{16}_[A-Za-z0-9_-]{43}\b/g },
+  // Durable creator agent opener (BY-27a). Wire form is base64url(`c1.…`); embeddings
+  // therefore start with the stable encoding of `c1.` (`YzEu`). Same house rule as
+  // access-token.ts — refuse assembled games that embed one.
+  { kind: 'gamedev-creator-agent-key', pattern: /\bYzEu[A-Za-z0-9_-]{80,}\b/g },
   { kind: 'google-api-key', pattern: /\bAIza[0-9A-Za-z_-]{35}\b/g },
   { kind: 'aws-access-key-id', pattern: /\bAKIA[0-9A-Z]{16}\b/g },
   { kind: 'pem-private-key', pattern: /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/g },

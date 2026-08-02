@@ -925,6 +925,38 @@
     "revoke": "Disconnect",
     "revoking": "Disconnecting…"
   },
+  "creatorAgentKey": {
+    "title": "Agent connection key",
+    "hint": "Paste this key once into your coding agent's MCP server headers (Authorization: Bearer …). Then start each round with only the game's slug — nothing secret in the prompt.",
+    "loading": "Loading your agent connection key…",
+    "loadError": "We couldn't load your agent connection key right now.",
+    "empty": "No agent connection key yet. Create one to connect your coding agent once for every game you own.",
+    "revoked": "Your agent connection key was revoked. Create a new one when you are ready to reconnect.",
+    "mint": "Create key",
+    "minting": "Creating…",
+    "mintError": "We couldn't create a key right now. Try again in a moment.",
+    "expiry": "This key expires {{when}}.",
+    "headerHint": "Put this value in your MCP client's Authorization header as Bearer …",
+    "copy": "Copy key",
+    "copied": "Copied",
+    "rotate": {
+      "start": "Rotate key",
+      "confirm": "Rotating stops any agent still holding the old key. Continue?",
+      "yes": "Rotate",
+      "no": "Cancel",
+      "sending": "Rotating…",
+      "error": "We couldn't rotate the key right now. Try again in a moment."
+    },
+    "rotateError": "We couldn't rotate the key right now. Try again in a moment.",
+    "revoke": {
+      "start": "Revoke key",
+      "confirm": "Revoking stops any agent still holding this key. You can create a new one later.",
+      "yes": "Revoke",
+      "no": "Cancel",
+      "sending": "Revoking…"
+    },
+    "revokeError": "We couldn't revoke the key right now. Try again in a moment."
+  },
   "remix": {
     "title": "Remix",
     "close": "Close",

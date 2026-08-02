@@ -21,6 +21,7 @@ import {
   type StudioShelfGame,
 } from './studioShelf.js';
 import { StudioAgentKeyPanel } from './StudioAgentKeyPanel.js';
+import { StudioCreatorAgentKeyPanel } from './StudioCreatorAgentKeyPanel.js';
 import { StudioOAuthClientsPanel } from './StudioOAuthClientsPanel.js';
 import { SubmissionStatusView } from './SubmissionStatusView.js';
 import {
@@ -1030,6 +1031,7 @@ function DetailsPanel({
 
       {game.slug && game.lastKnownStatus !== 'abandoned' ? <StudioAgentKeyPanel token={game.token} /> : null}
 
+      <StudioCreatorAgentKeyPanel />
       <StudioOAuthClientsPanel />
 
       {/* Only once there is play to report on. Before a game is live every one of these

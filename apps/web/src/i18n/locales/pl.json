@@ -929,6 +929,38 @@
     "revoke": "Odłącz",
     "revoking": "Odłączanie…"
   },
+  "creatorAgentKey": {
+    "title": "Klucz połączenia agenta",
+    "hint": "Wklej ten klucz raz w nagłówkach serwera MCP swojego agenta (Authorization: Bearer …). Potem każdą rundę zaczynaj samym slugiem gry — bez sekretów w prompcie.",
+    "loading": "Wczytywanie klucza połączenia agenta…",
+    "loadError": "Nie udało się wczytać klucza połączenia agenta.",
+    "empty": "Nie masz jeszcze klucza połączenia. Utwórz go, by raz podłączyć agenta do wszystkich swoich gier.",
+    "revoked": "Klucz połączenia został unieważniony. Utwórz nowy, gdy będziesz gotów połączyć się ponownie.",
+    "mint": "Utwórz klucz",
+    "minting": "Tworzenie…",
+    "mintError": "Nie udało się utworzyć klucza. Spróbuj za chwilę.",
+    "expiry": "Ten klucz wygasa {{when}}.",
+    "headerHint": "Wstaw tę wartość w nagłówku Authorization klienta MCP jako Bearer …",
+    "copy": "Kopiuj klucz",
+    "copied": "Skopiowano",
+    "rotate": {
+      "start": "Obróć klucz",
+      "confirm": "Obrót zatrzyma każdego agenta, który nadal trzyma stary klucz. Kontynuować?",
+      "yes": "Obróć",
+      "no": "Anuluj",
+      "sending": "Obracanie…",
+      "error": "Nie udało się obrócić klucza. Spróbuj za chwilę."
+    },
+    "rotateError": "Nie udało się obrócić klucza. Spróbuj za chwilę.",
+    "revoke": {
+      "start": "Unieważnij klucz",
+      "confirm": "Unieważnienie zatrzyma każdego agenta, który nadal trzyma ten klucz. Później możesz utworzyć nowy.",
+      "yes": "Unieważnij",
+      "no": "Anuluj",
+      "sending": "Unieważnianie…"
+    },
+    "revokeError": "Nie udało się unieważnić klucza. Spróbuj za chwilę."
+  },
   "remix": {
     "title": "Remiks",
     "close": "Zamknij",
