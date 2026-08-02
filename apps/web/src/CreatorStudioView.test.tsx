@@ -116,6 +116,56 @@ describe('CreatorStudioView', () => {
     root.unmount();
   });
 
+  it('claims the app shell while the shelf loads so the footer does not flash', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+
+    let resolveGames!: (value: StudioGame[]) => void;
+    fetchStudioGames.mockReturnValue(
+      new Promise<StudioGame[]>((resolve) => {
+        resolveGames = resolve;
+      }),
+    );
+
+    const container = document.createElement('div');
+    // The shell CSS is keyed off `.app:has(...)`, so the marker has to sit under an
+    // `.app` that also holds a footer — the real tree App mounts.
+    const app = document.createElement('div');
+    app.className = 'app';
+    const content = document.createElement('div');
+    content.className = 'content';
+    const footer = document.createElement('footer');
+    footer.className = 'site-footer';
+    app.append(content, footer);
+    document.body.appendChild(app);
+    content.appendChild(container);
+
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(createElement(CreatorStudioView, { onNavigate: vi.fn(), onPlay: vi.fn() }));
+    });
+
+    expect(container.querySelector('.studio-shell-pending')).toBeTruthy();
+    expect(container.textContent).toContain('Loading your games…');
+    // jsdom does not apply stylesheets, so assert the marker the `:has()` rule keys on
+    // rather than computed footer display — that is what keeps the flash from painting.
+    expect(app.querySelector('.studio-shell-pending')).toBeTruthy();
+
+    await act(async () => {
+      resolveGames(manyGames(2));
+      await fetchStudioGames.mock.results[0]?.value;
+      await fetchStudioHealth.mock.results[0]?.value;
+    });
+
+    expect(container.querySelector('.studio-shell-pending')).toBeFalsy();
+    expect(container.querySelector('.studio-layout.is-game-open')).toBeTruthy();
+
+    root.unmount();
+    app.remove();
+    authUser = null;
+  });
+
   it('adds search and filters once the shelf has many games', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');

@@ -480,7 +480,15 @@ export function CreatorStudioView({
         </button>
       </header>
 
-      {loading ? <p className="studio-empty">{t('studioPanel.loading')}</p> : null}
+      {loading ? (
+        <>
+          {/* Claims the app shell for the length of the shelf fetch so the marketing
+              footer (and this panel's lid) do not paint and then vanish the moment a
+              game opens — bare /studio auto-picks one without naming it in the URL. */}
+          <div className="studio-shell-pending" hidden />
+          <p className="studio-empty">{t('studioPanel.loading')}</p>
+        </>
+      ) : null}
       {error ? <p className="studio-empty studio-error">{error}</p> : null}
 
       {!loading && !error && shelfGames.length === 0 ? (

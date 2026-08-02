@@ -4580,15 +4580,20 @@ body.player-open {
    it in the URL, so a URL-driven class left exactly that case on the old broken shape.
    What matters is whether a game is open on screen, which is what this asks. Browsers
    without `:has()` drop the block and get the old scrolling page — the degradation is
-   yesterday's layout, not a broken one. */
-.app:has(.studio-layout.is-game-open) {
+   yesterday's layout, not a broken one.
+
+   `.studio-shell-pending` is the same claim during the shelf fetch. Without it, loading
+   paints the marketing footer (and the Creator Studio lid) for the length of the
+   request, then snatches both away the moment a game opens — a flash that is exactly
+   as long as the network. */
+.app:has(:is(.studio-layout.is-game-open, .studio-shell-pending)) {
   height: 100dvh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-.app:has(.studio-layout.is-game-open) > .content {
+.app:has(:is(.studio-layout.is-game-open, .studio-shell-pending)) > .content {
   flex: 1;
   min-height: 0;
   display: flex;
@@ -4602,13 +4607,13 @@ body.player-open {
 
 /* Legal links and a strapline do not belong under a live conversation, and with the page
    no longer scrolling there is nothing that could reach them anyway. */
-.app:has(.studio-layout.is-game-open) .site-footer {
+.app:has(:is(.studio-layout.is-game-open, .studio-shell-pending)) .site-footer {
   display: none;
 }
 
 /* A kicker, a page title, a strapline and a way home, above a screen whose header
    already offers the way home. On a page it introduces; in an app it is a lid. */
-.app:has(.studio-layout.is-game-open) .studio-panel-header {
+.app:has(:is(.studio-layout.is-game-open, .studio-shell-pending)) .studio-panel-header {
   display: none;
 }
 
@@ -4644,12 +4649,22 @@ body.player-open {
    control that matters. Suppressing them was the other option and a worse one: the
    update bar is how a browser finds out there is a new shell, and the studio is a screen
    people sit on for a long time. */
-.app:has(.studio-layout.is-game-open) .install-prompt,
-.app:has(.studio-layout.is-game-open) .app-update {
+.app:has(:is(.studio-layout.is-game-open, .studio-shell-pending)) .install-prompt,
+.app:has(:is(.studio-layout.is-game-open, .studio-shell-pending)) .app-update {
   position: static;
   flex: none;
   margin: 0 12px max(12px, env(safe-area-inset-bottom, 0px));
   animation: none;
+}
+
+/* The lid is gone for the fetch, so the loading line sits in the middle of the window
+   rather than under an invisible header's leftover gap. */
+.app:has(.studio-shell-pending) .studio-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 /* On a narrow screen the thread does not get a scroller of its own.
