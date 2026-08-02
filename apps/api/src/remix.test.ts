@@ -1,6 +1,7 @@
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
-import { registerRemixRoutes } from './remix.js';
+import { registerRemixRoutes, MAX_REMIX_ID_LENGTH, REMIX_TTL_MS } from './remix.js';
 import { InMemoryStore } from './store.js';
 import type { GamesStore } from './games-store.js';
 import type { GitHubClient } from './github-client.js';
@@ -62,7 +63,12 @@ function stubGitHubClient(seen: Array<Record<string, string> | undefined>): GitH
 }
 
 async function buildTestApp(
-  overrides: { assistant?: EditorAssistant; codeLane?: unknown; isAbandoned?: () => boolean } = {},
+  overrides: {
+    assistant?: EditorAssistant;
+    codeLane?: unknown;
+    isAbandoned?: () => boolean;
+    now?: () => number;
+  } = {},
 ) {
   const store = new InMemoryStore();
   await store.setPublication({
@@ -72,7 +78,10 @@ async function buildTestApp(
     publishedAt: new Date(0).toISOString(),
   });
   const seen: Array<Record<string, string> | undefined> = [];
-  const app = Fastify();
+  // Same router ceiling as buildApp: a remix id is longer than Fastify's
+  // 100-character default, and a harness that forgot it would pass while
+  // production answered 414.
+  const app = Fastify({ routerOptions: { maxParamLength: MAX_REMIX_ID_LENGTH } });
   app.decorateRequest('user', null);
   // Stands in for the auth plugin: `x-test-uid` becomes the session, absent
   // means signed out. Enough to exercise the gate without minting real cookies.
@@ -88,6 +97,7 @@ async function buildTestApp(
     ...(overrides.assistant ? { assistant: overrides.assistant } : {}),
     ...(overrides.codeLane ? { codeLane: overrides.codeLane as never } : {}),
     ...(overrides.isAbandoned ? { isAbandoned: overrides.isAbandoned } : {}),
+    ...(overrides.now ? { now: overrides.now } : {}),
   });
   await app.ready();
   return { app, seen };
@@ -398,7 +408,7 @@ describe('remix across the two catalog eras', () => {
   async function repoEraApp() {
     const store = new InMemoryStore();
     const seen: Array<Record<string, string> | undefined> = [];
-    const instance = Fastify();
+    const instance = Fastify({ routerOptions: { maxParamLength: MAX_REMIX_ID_LENGTH } });
     instance.decorateRequest('user', null);
     instance.addHook('onRequest', async (request) => {
       const uid = request.headers['x-test-uid'];
@@ -445,6 +455,102 @@ describe('remix across the two catalog eras', () => {
   it('404s a slug with no manifest — a real absence, not a swallowed failure', async () => {
     app = await repoEraApp();
     const response = await app.inject({ method: 'POST', url: '/api/games/not-a-game/remix', headers: alice });
+    expect(response.statusCode).toBe(404);
+  });
+});
+
+/*
+ * One instance is not the world. The app runs with --max-instances 4, so the
+ * request that starts a remix and the request that uses it routinely land on
+ * different containers. A remix that only exists in the memory of the first one
+ * would expire at random — the failure everyone would blame on their wifi.
+ */
+describe('remix survives an instance change', () => {
+  const apps: FastifyInstance[] = [];
+
+  beforeEach(() => {
+    process.env.EDITOR_ASSIST = 'true';
+  });
+
+  afterEach(async () => {
+    delete process.env.EDITOR_ASSIST;
+    while (apps.length) await apps.pop()!.close();
+  });
+
+  /** A container. Two of these share nothing but the catalog, like production. */
+  async function instance(now?: () => number) {
+    const built = await buildTestApp({
+      assistant: {
+        assist: async () => ({ lane: 'params', patches: [{ key: 'dogScale', value: 2 }] }),
+      } as unknown as EditorAssistant,
+      ...(now ? { now } : {}),
+    });
+    apps.push(built.app);
+    return built.app;
+  }
+
+  it('answers on a container that never saw the remix start', async () => {
+    const first = await instance();
+    const second = await instance();
+    const { remixId } = (
+      await first.inject({ method: 'POST', url: '/api/games/dog-dash/remix', headers: alice })
+    ).json();
+
+    const response = await second.inject({
+      method: 'POST',
+      url: `/api/remixes/${remixId}/assist`,
+      headers: alice,
+      payload: { utterance: 'make the dog bigger', params: { dogScale: 1, tagline: 'go!' } },
+    });
+    expect(response.statusCode).toBe(200);
+    // Rebuilt from the catalog, so it is the same session: same declaration,
+    // same clamping, same answer the first container would have given.
+    expect(response.json().values.dogScale).toBe(2);
+  });
+
+  it("still 404s another player's remix after the hop — an id is not a bearer token", async () => {
+    const first = await instance();
+    const second = await instance();
+    const { remixId } = (
+      await first.inject({ method: 'POST', url: '/api/games/dog-dash/remix', headers: alice })
+    ).json();
+
+    const stolen = await second.inject({
+      method: 'POST',
+      url: `/api/remixes/${remixId}/assist`,
+      headers: { 'x-test-uid': 'g:mallory' },
+      payload: { utterance: 'make the dog bigger' },
+    });
+    expect(stolen.statusCode).toBe(404);
+  });
+
+  it('is reachable through the real app — the router ceiling matches the minter', () => {
+    // A remix id carries the slug, so it runs past Fastify's 100-character
+    // default and the router answers 414 before any handler. That failure would
+    // be invisible in these tests, which build their own instance, so the
+    // production wiring is asserted at the source.
+    const appSource = readFileSync(new URL('./app.ts', import.meta.url), 'utf8');
+    expect(appSource).toContain('routerOptions: { maxParamLength: MAX_REMIX_ID_LENGTH }');
+    // The bound has to cover the longest id the minter can produce: the format
+    // preamble plus a slug at its schema maximum.
+    expect(MAX_REMIX_ID_LENGTH).toBeGreaterThanOrEqual('1.'.length + 12 + 1 + 10 + 1 + 6 + 1 + 80);
+  });
+
+  it('honours the original expiry rather than restarting the clock', async () => {
+    const start = 1_000_000;
+    const first = await instance(() => start);
+    const { remixId } = (
+      await first.inject({ method: 'POST', url: '/api/games/dog-dash/remix', headers: alice })
+    ).json();
+
+    // A container whose clock is past the TTL must not resurrect it.
+    const later = await instance(() => start + REMIX_TTL_MS + 1);
+    const response = await later.inject({
+      method: 'POST',
+      url: `/api/remixes/${remixId}/assist`,
+      headers: alice,
+      payload: { utterance: 'make the dog bigger' },
+    });
     expect(response.statusCode).toBe(404);
   });
 });

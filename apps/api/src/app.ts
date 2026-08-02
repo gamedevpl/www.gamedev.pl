@@ -20,7 +20,7 @@ import { registerCreatorStudioRoutes } from './creator-studio.js';
 import { registerEditorRoutes } from './editor-drafts.js';
 import { VertexEditorAssistant, type EditorAssistant } from './editor-assist.js';
 import { VertexCodeLane } from './code-lane.js';
-import { registerRemixRoutes } from './remix.js';
+import { registerRemixRoutes, MAX_REMIX_ID_LENGTH } from './remix.js';
 import { createEditingGate } from './creation-limits.js';
 import { createGenerator } from './generator.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
@@ -132,7 +132,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // hop and takes the leftmost entry — letting any caller choose their own rate
   // limit bucket. Trusting exactly one hop resolves to the rightmost entry, which
   // is the only one Cloud Run itself wrote, so spoofed prefixes are ignored.
-  const app = Fastify({ logger: options.logger ?? false, trustProxy: 1 });
+  // maxParamLength: a remix id is a self-describing token (apps/api/src/remix.ts)
+  // that carries the game's slug, so it is longer than Fastify's 100-character
+  // default allows. Over the limit the router answers 414 before any handler runs
+  // — which would read as "every remix on a long-slugged game is broken" with
+  // nothing in the logs. MAX_REMIX_ID_LENGTH is the bound the minter respects.
+  const app = Fastify({
+    logger: options.logger ?? false,
+    trustProxy: 1,
+    routerOptions: { maxParamLength: MAX_REMIX_ID_LENGTH },
+  });
   const store = options.store ?? new InMemoryStore();
   const dailyGenerationQuota = options.dailyGenerationQuota ?? Number(process.env.DAILY_GENERATION_QUOTA ?? '20');
 
