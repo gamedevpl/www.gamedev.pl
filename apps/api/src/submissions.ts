@@ -54,6 +54,7 @@ import { createMailerFromEnv, type Mailer } from './mailer.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { emitOperatorAlert, emitSubmissionNotification, notifyOnTransition, type EmitDeps } from './notify.js';
 import { detectOperatorAlerts, FEEDBACK_STALL_MS } from './operator-alerts.js';
+import { pageOwnerGames } from './owner-games.js';
 import { isAdminSession } from './admin.js';
 import { peekQuota } from './quota-gate.js';
 import { mintGameSlug } from './slug.js';
@@ -2536,27 +2537,26 @@ export async function registerSubmissionRoutes(
       return reply.send({ submissions: [] });
     }
 
-    const records = await store.listSubmissionsByOwner(request.user!.uid, { limit: 50 });
+    const records = await store.listSubmissionsByOwner(request.user!.uid);
+    const { games: shelf, truncated, total } = pageOwnerGames(records, 'shelf');
     return reply.send({
-      // Abandoned / operator-canceled builds are gone as far as the creator is
-      // concerned — they don't belong in "your games". `state === 'canceled'` heals
-      // jobs canceled before the operator path wrote `abandonedAt`.
-      submissions: records
-        .filter((record) => !record.abandonedAt && record.state !== 'canceled')
-        .map((record) => ({
-          token: mintToken(record.issueNumber, submissionTokenSecret),
-          title: record.title,
-          createdAt: record.createdAt,
-          // The last derived status, kept current by the two-minute sweep. This is
-          // what the rail renders — it used to be a hint the rail immediately went
-          // and re-derived per card, six GitHub fan-outs every thirty seconds from
-          // one open tab, which is what was rate-limiting the whole token.
-          // lastNotifiedStatus is the fallback for records written before this.
-          lastKnownStatus: record.lastStatus ?? record.lastNotifiedStatus ?? null,
-          // So a published card can offer Play without deriving the slug itself.
-          slug: record.slug ?? null,
-          ...(record.publishedAt ? { publishedAt: record.publishedAt } : {}),
-        })),
+      submissions: shelf.map(({ tip, catalogPublishedAt }) => ({
+        token: mintToken(tip.issueNumber, submissionTokenSecret),
+        title: tip.title,
+        createdAt: tip.createdAt,
+        // The last derived status, kept current by the two-minute sweep. This is
+        // what the rail renders — it used to be a hint the rail immediately went
+        // and re-derived per card, six GitHub fan-outs every thirty seconds from
+        // one open tab, which is what was rate-limiting the whole token.
+        // lastNotifiedStatus is the fallback for records written before this.
+        lastKnownStatus: tip.lastStatus ?? tip.lastNotifiedStatus ?? null,
+        // So a published card can offer Play without deriving the slug itself.
+        slug: tip.slug ?? null,
+        ...(tip.publishedAt ? { publishedAt: tip.publishedAt } : {}),
+        ...(catalogPublishedAt ? { livePublishedAt: catalogPublishedAt } : {}),
+      })),
+      truncated,
+      totalGames: total,
     });
   });
 

@@ -261,6 +261,8 @@
         "live": "Live"
       },
       "noMatches": "No games match that search.",
+      "countTruncated": "Showing {{shown}} of {{total}} games",
+      "truncated": "You have more games than we can show here. The newest fifty are listed.",
       "openShelf": "Your games",
       "expandShelf": "Expand games list",
       "collapseShelf": "Collapse games list"

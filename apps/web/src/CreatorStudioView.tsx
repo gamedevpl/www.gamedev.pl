@@ -168,6 +168,8 @@ export function CreatorStudioView({
   const [scorecards, setScorecards] = useState<StudioScorecard[]>([]);
   const [healthDays, setHealthDays] = useState<string[]>([]);
   const [truncated, setTruncated] = useState(false);
+  const [shelfTruncated, setShelfTruncated] = useState(false);
+  const [totalGames, setTotalGames] = useState(0);
   const [days, setDays] = useState(7);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -231,9 +233,12 @@ export function CreatorStudioView({
     setError(null);
 
     Promise.all([fetchStudioGames(), fetchStudioHealth(days)])
-      .then(([shelf, health]) => {
+      .then(([shelfPage, health]) => {
         if (cancelled) return;
+        const shelf = shelfPage.games;
         setGames(shelf);
+        setShelfTruncated(shelfPage.truncated);
+        setTotalGames(shelfPage.totalGames);
         setHealthRows(health.games);
         setHealthDays(health.days);
         setTruncated(health.truncated);
@@ -579,7 +584,11 @@ export function CreatorStudioView({
           >
             <div className="studio-shelf-head">
               <h2 className="studio-shelf-heading">{t('studioPanel.shelf.heading')}</h2>
-              <span className="studio-shelf-count">{t('studioPanel.shelf.count', { count: shelfGames.length })}</span>
+              <span className="studio-shelf-count">
+                {shelfTruncated
+                  ? t('studioPanel.shelf.countTruncated', { shown: shelfGames.length, total: totalGames })
+                  : t('studioPanel.shelf.count', { count: shelfGames.length })}
+              </span>
               {activeGame ? (
                 <button
                   type="button"
@@ -611,6 +620,7 @@ export function CreatorStudioView({
               onQueryChange={setShelfQuery}
               onFilterChange={setShelfFilter}
             />
+            {shelfTruncated ? <p className="studio-shelf-truncated">{t('studioPanel.shelf.truncated')}</p> : null}
             {shelfList}
           </aside>
 

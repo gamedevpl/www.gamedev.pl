@@ -44,6 +44,11 @@ export type MySubmission = {
   slug: string | null;
   /** Set when the game has published — optional on older API responses. */
   publishedAt?: string;
+  /**
+   * Catalog publish time when this row is an improvement tip — the game is still live
+   * but the open job has no `publishedAt` of its own.
+   */
+  livePublishedAt?: string;
 };
 
 /** The build steps an agent can report. Rendered from our own translated copy. */
@@ -252,15 +257,35 @@ export async function getSubmissionStatus(token: string, locale?: string): Promi
  * The signed-in creator's own games. Server-side ownership means this works on a
  * device that never saved the tracking link — the tokens come back with it.
  */
-export async function listMySubmissions(): Promise<MySubmission[]> {
+export type MySubmissionsPage = {
+  submissions: MySubmission[];
+  truncated: boolean;
+  totalGames: number;
+};
+
+export async function listMySubmissionsPage(): Promise<MySubmissionsPage> {
   const response = await fetch(`${API_BASE}/api/submissions/mine`, { credentials: 'include' });
 
   if (!response.ok) {
     await throwResponseError(response);
   }
 
-  const body = (await response.json()) as { submissions?: MySubmission[] };
-  return body.submissions ?? [];
+  const body = (await response.json()) as {
+    submissions?: MySubmission[];
+    truncated?: boolean;
+    totalGames?: number;
+  };
+  const submissions = body.submissions ?? [];
+  return {
+    submissions,
+    truncated: body.truncated ?? false,
+    totalGames: body.totalGames ?? submissions.length,
+  };
+}
+
+export async function listMySubmissions(): Promise<MySubmission[]> {
+  const page = await listMySubmissionsPage();
+  return page.submissions;
 }
 
 export async function getSubmissionPreview(token: string): Promise<SubmissionPreview> {

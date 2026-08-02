@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { pageOwnerGames } from './owner-games.js';
 import { recentPartitions, summarizeGameHealth, type GameHealth } from './telemetry-health.js';
 import type { GamesStore } from './games-store.js';
 import type { Store, TelemetryEvent } from './store.js';
@@ -20,8 +21,6 @@ const MAX_DAYS = 30;
 const DEFAULT_DAYS = 7;
 const MAX_EVENTS_PER_DAY = 1000;
 const MAX_EVENTS_PER_REQUEST = 5_000;
-/** Studio list ceiling — a creator's shelf, not a catalog. */
-const MAX_STUDIO_GAMES = 50;
 
 const QuerySchema = z.object({
   days: z.coerce.number().int().min(1).max(MAX_DAYS).optional(),
@@ -43,6 +42,11 @@ export interface CreatorStudioGame {
   lastKnownStatus: string | null;
   slug?: string;
   publishedAt?: string;
+  /**
+   * Catalog publish time when this row is an improvement tip — the game is still live
+   * but the open job has no `publishedAt` of its own.
+   */
+  livePublishedAt?: string;
   /** Whether the creator has turned on the shared link for this game's draft. */
   draftShared?: boolean;
   /**
@@ -56,7 +60,11 @@ export interface CreatorStudioGame {
 
 export interface CreatorHealthResponse {
   days: string[];
+  /** Telemetry scan hit the event budget. */
   truncated: boolean;
+  /** Published-game list hit the shelf ceiling. */
+  gamesTruncated: boolean;
+  totalGames: number;
   games: GameHealth[];
 }
 
@@ -89,6 +97,8 @@ export interface CreatorScorecardSummary {
 
 export interface CreatorScorecardsResponse {
   scorecards: CreatorScorecardSummary[];
+  truncated: boolean;
+  totalGames: number;
 }
 
 /**
@@ -170,11 +180,8 @@ export async function registerCreatorStudioRoutes(
       return reply.status(503).send({ error: 'submissions are not configured' });
     }
 
-    const records = await store.listSubmissionsByOwner(request.user!.uid, { limit: MAX_STUDIO_GAMES });
-    const shelf = records
-      // `abandonedAt` is the shelf contract; also drop `canceled` so an operator
-      // reject that predated writing `abandonedAt` does not leave a zombie row.
-      .filter((record) => !record.abandonedAt && record.state !== 'canceled');
+    const records = await store.listSubmissionsByOwner(request.user!.uid);
+    const { games: shelf, truncated, total } = pageOwnerGames(records, 'shelf');
 
     // Which delivered versions ship an editor definition. One manifest read per
     // game with a delivery, best-effort: a read that fails only costs the Edit
@@ -183,28 +190,29 @@ export async function registerCreatorStudioRoutes(
     if (options.gamesStore) {
       await Promise.all(
         shelf
-          .filter((record) => record.slug && record.deliveredVersion)
-          .map(async (record) => {
+          .filter(({ tip }) => tip.slug && tip.deliveredVersion)
+          .map(async ({ tip }) => {
             const manifest = await options
-              .gamesStore!.getManifest(record.slug as string, record.deliveredVersion as string)
+              .gamesStore!.getManifest(tip.slug as string, tip.deliveredVersion as string)
               .catch(() => null);
-            if (manifest?.sourceFiles.includes('EDITOR.json')) editableSlugs.add(record.slug as string);
+            if (manifest?.sourceFiles.includes('EDITOR.json')) editableSlugs.add(tip.slug as string);
           }),
       );
     }
 
-    const games: CreatorStudioGame[] = shelf.map((record) => ({
-      token: options.mintStatusToken!(record.issueNumber),
-      title: record.title,
-      createdAt: record.createdAt,
-      lastKnownStatus: record.lastNotifiedStatus ?? null,
-      ...(record.slug ? { slug: record.slug } : {}),
-      ...(record.publishedAt ? { publishedAt: record.publishedAt } : {}),
-      ...(record.draftSharedAt ? { draftShared: true } : {}),
-      ...(record.slug && editableSlugs.has(record.slug) ? { editable: true } : {}),
+    const games: CreatorStudioGame[] = shelf.map(({ tip, catalogPublishedAt }) => ({
+      token: options.mintStatusToken!(tip.issueNumber),
+      title: tip.title,
+      createdAt: tip.createdAt,
+      lastKnownStatus: tip.lastNotifiedStatus ?? null,
+      ...(tip.slug ? { slug: tip.slug } : {}),
+      ...(tip.publishedAt ? { publishedAt: tip.publishedAt } : {}),
+      ...(catalogPublishedAt ? { livePublishedAt: catalogPublishedAt } : {}),
+      ...(tip.draftSharedAt ? { draftShared: true } : {}),
+      ...(tip.slug && editableSlugs.has(tip.slug) ? { editable: true } : {}),
     }));
 
-    return reply.send({ games });
+    return reply.send({ games, truncated, totalGames: total });
   });
 
   /**
@@ -223,17 +231,18 @@ export async function registerCreatorStudioRoutes(
       return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid query' });
     }
 
-    const records = await store.listSubmissionsByOwner(request.user!.uid, { limit: MAX_STUDIO_GAMES });
-    const slugs = [
-      ...new Set(
-        records
-          .filter((record) => !record.abandonedAt && record.slug && record.publishedAt)
-          .map((record) => record.slug as string),
-      ),
-    ];
+    const records = await store.listSubmissionsByOwner(request.user!.uid);
+    const { games: published, truncated: gamesTruncated, total } = pageOwnerGames(records, 'published');
+    const slugs = published.map(({ tip }) => tip.slug).filter((slug): slug is string => Boolean(slug));
 
     if (slugs.length === 0) {
-      const body: CreatorHealthResponse = { days: [], truncated: false, games: [] };
+      const body: CreatorHealthResponse = {
+        days: [],
+        truncated: false,
+        gamesTruncated: gamesTruncated,
+        totalGames: total,
+        games: [],
+      };
       return reply.send(body);
     }
 
@@ -242,7 +251,13 @@ export async function registerCreatorStudioRoutes(
     const owned = new Set(slugs);
     const games = summarizeGameHealth(events).filter((game) => owned.has(game.slug));
 
-    const body: CreatorHealthResponse = { days: scanned, truncated, games };
+    const body: CreatorHealthResponse = {
+      days: scanned,
+      truncated,
+      gamesTruncated,
+      totalGames: total,
+      games,
+    };
     return reply.send(body);
   });
 
@@ -262,14 +277,9 @@ export async function registerCreatorStudioRoutes(
   app.get('/api/me/studio/scorecards', async (request, reply) => {
     if (!requireUser(request, reply)) return;
 
-    const records = await store.listSubmissionsByOwner(request.user!.uid, { limit: MAX_STUDIO_GAMES });
-    const slugs = [
-      ...new Set(
-        records
-          .filter((record) => !record.abandonedAt && record.slug && record.publishedAt)
-          .map((record) => record.slug as string),
-      ),
-    ];
+    const records = await store.listSubmissionsByOwner(request.user!.uid);
+    const { games: published, truncated, total } = pageOwnerGames(records, 'published');
+    const slugs = published.map(({ tip }) => tip.slug).filter((slug): slug is string => Boolean(slug));
 
     const cards = await Promise.all(slugs.map((slug) => store.getScorecard(slug)));
     const scorecards: CreatorScorecardSummary[] = cards
@@ -284,7 +294,7 @@ export async function registerCreatorStudioRoutes(
         untrustedThemes: card.untrusted.feedbackThemes ?? [],
       }));
 
-    const body: CreatorScorecardsResponse = { scorecards };
+    const body: CreatorScorecardsResponse = { scorecards, truncated, totalGames: total };
     return reply.send(body);
   });
 }

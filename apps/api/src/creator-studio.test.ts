@@ -68,6 +68,42 @@ describe('GET /api/me/studio', () => {
     await app.close();
   });
 
+  it('lists all distinct games even when improvement rounds exceed the job ceiling', async () => {
+    for (let game = 0; game < 3; game++) {
+      const slug = `game-${game}`;
+      for (let tip = 0; tip < 20; tip++) {
+        const issueNumber = game * 100 + tip + 1;
+        await store.createSubmission(issueNumber, 'g:creator', `Game ${game} tip ${tip}`);
+        await store.setSubmissionSlug(issueNumber, slug);
+        if (tip === 0) {
+          await store.setSubmissionPublishedAt(issueNumber, `${today}T12:00:00.000Z`);
+        }
+        if (tip < 19) await new Promise((resolve) => setTimeout(resolve, 2));
+      }
+    }
+
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      submissionRoutes: { submissionTokenSecret },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/me/studio',
+      headers: authHeaders('g:creator'),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { games: CreatorStudioGame[]; truncated: boolean; totalGames: number };
+    expect(body.totalGames).toBe(3);
+    expect(body.truncated).toBe(false);
+    expect(body.games).toHaveLength(3);
+    expect(new Set(body.games.map((game) => game.slug))).toEqual(new Set(['game-0', 'game-1', 'game-2']));
+
+    await app.close();
+  });
+
   it('requires a session', async () => {
     const app = await buildApp({
       store,
@@ -199,7 +235,41 @@ describe('GET /api/me/studio/health', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ days: [], truncated: false, games: [] });
+    expect(res.json()).toEqual({ days: [], truncated: false, gamesTruncated: false, totalGames: 0, games: [] });
+    await app.close();
+  });
+
+  it('lists all distinct published games even when improvement rounds exceed the job ceiling', async () => {
+    for (let game = 0; game < 3; game++) {
+      const slug = `game-${game}`;
+      for (let tip = 0; tip < 20; tip++) {
+        const issueNumber = game * 100 + tip + 1;
+        await store.createSubmission(issueNumber, 'g:creator', `Game ${game} tip ${tip}`);
+        await store.setSubmissionSlug(issueNumber, slug);
+        if (tip === 0) {
+          await store.setSubmissionPublishedAt(issueNumber, `${today}T12:00:00.000Z`);
+        }
+        if (tip < 19) await new Promise((resolve) => setTimeout(resolve, 2));
+      }
+    }
+
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      submissionRoutes: { submissionTokenSecret },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/me/studio/health?days=1',
+      headers: authHeaders('g:creator'),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as CreatorHealthResponse;
+    expect(body.totalGames).toBe(3);
+    expect(body.gamesTruncated).toBe(false);
+
     await app.close();
   });
 });
