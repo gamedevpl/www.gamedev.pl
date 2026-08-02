@@ -29,6 +29,19 @@ export function selfBuildDeliveryCap(): number {
 }
 
 /**
+ * Whether a coding-agent session is still the thing doing the work.
+ *
+ * Narrower than {@link isActiveBuildRound}: after delivery the round stays "active" for
+ * builder-lock / gate repair, but the Copilot (or self) session may already have ended.
+ * Creator feedback during these states must not spawn a second concurrent session — the
+ * live agent already polls the build-channel inbox.
+ */
+export function isLiveAgentSession(record: { state?: JobState }): boolean {
+  const state = record.state;
+  return state === 'queued' || state === 'dispatched' || state === 'building';
+}
+
+/**
  * Whether the current round is still live — builder must not change until it closes.
  *
  * Includes gate-red / kit_outdated `needs_changes`: those keep the round open so the

@@ -4,6 +4,7 @@ import {
   DEFAULT_SELF_BUILD_DELIVERY_CAP,
   isActiveBuildRound,
   isBuilderKind,
+  isLiveAgentSession,
   selfBuildConnectDays,
   selfBuildDeliveryCap,
 } from './builder.js';
@@ -13,6 +14,15 @@ describe('builder helpers', () => {
     expect(isBuilderKind('self')).toBe(true);
     expect(isBuilderKind('platform')).toBe(true);
     expect(isBuilderKind('copilot')).toBe(false);
+  });
+
+  it('treats only queued/dispatched/building as a live agent session', () => {
+    expect(isLiveAgentSession({ state: 'queued' })).toBe(true);
+    expect(isLiveAgentSession({ state: 'dispatched' })).toBe(true);
+    expect(isLiveAgentSession({ state: 'building' })).toBe(true);
+    expect(isLiveAgentSession({ state: 'submitted' })).toBe(false);
+    expect(isLiveAgentSession({ state: 'needs_changes' })).toBe(false);
+    expect(isLiveAgentSession({ state: 'failed' })).toBe(false);
   });
 
   it('treats gate-red / kit_outdated needs_changes as an active round', () => {
