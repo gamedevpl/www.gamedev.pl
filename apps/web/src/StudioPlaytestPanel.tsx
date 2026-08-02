@@ -51,8 +51,8 @@ type StudioPlaytestPanelProps = {
   published: boolean;
   /** Leave theater — typically returns to Overview so Studio chrome is usable again. */
   onExit: () => void;
-  /** True when the game switcher picker overlay is open above the playtest surface. */
-  pickerOpen?: boolean;
+  /** True when the games shelf drawer/rail is open above the playtest surface. */
+  shelfOpen?: boolean;
 };
 
 /**
@@ -104,7 +104,7 @@ function toContext(
   };
 }
 
-export function StudioPlaytestPanel({ game, published, onExit, pickerOpen }: StudioPlaytestPanelProps) {
+export function StudioPlaytestPanel({ game, published, onExit, shelfOpen }: StudioPlaytestPanelProps) {
   const { t } = useTranslation();
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const exitRef = useRef<HTMLButtonElement | null>(null);
@@ -123,9 +123,9 @@ export function StudioPlaytestPanel({ game, published, onExit, pickerOpen }: Stu
   const onExitRef = useRef(onExit);
   onExitRef.current = onExit;
   const requestExit = useCallback(() => {
-    if (pickerOpen) return;
+    if (shelfOpen) return;
     onExitRef.current();
-  }, [pickerOpen]);
+  }, [shelfOpen]);
   // Escape inside the sandboxed game never reaches the parent — the bridge relays it.
   useGamePlayer(frameRef, active, requestExit);
 
@@ -170,11 +170,11 @@ export function StudioPlaytestPanel({ game, published, onExit, pickerOpen }: Stu
   // theater never mounts and the Close control used to be missing entirely.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !pickerOpen) requestExit();
+      if (event.key === 'Escape' && !shelfOpen) requestExit();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [requestExit, pickerOpen]);
+  }, [requestExit, shelfOpen]);
 
   // Scroll lock + focus handoff while the theater owns the viewport.
   useEffect(() => {

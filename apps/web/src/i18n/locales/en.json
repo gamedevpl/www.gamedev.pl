@@ -243,6 +243,7 @@
     "empty": "You have not commissioned a game yet.",
     "gameNotFound": "We couldn't find that game on your shelf. It may have been stopped, or the link may belong to someone else.",
     "createFirst": "Create your first game",
+    "close": "Close",
     "shelfAria": "Your games",
     "shelf": {
       "heading": "Your games",
@@ -258,9 +259,9 @@
         "live": "Live"
       },
       "noMatches": "No games match that search.",
-      "switcher": "Switch game",
-      "pickerTitle": "Choose a game",
-      "closePicker": "Close game list"
+      "openShelf": "Your games",
+      "expandShelf": "Expand games list",
+      "collapseShelf": "Collapse games list"
     },
     "tabs": {
       "thread": "Thread",
