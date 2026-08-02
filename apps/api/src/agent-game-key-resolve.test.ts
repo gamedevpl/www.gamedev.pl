@@ -211,4 +211,58 @@ describe('slug ownership beyond owner-list window (BY-25)', () => {
     const result = await verifyDurableGameAgentKey(store, gameKey(), secret, now);
     expect(result).toEqual({ ok: false, reason: ROTATED_GAME_KEY_REASON });
   });
+
+  /**
+   * Abandoning a *round* is routine — creator cancel, operator reject, or the
+   * `no_connect` sweep. None of those unpublish the game, so none may take the key
+   * down with them.
+   */
+  describe('an abandoned newer round does not unown the published game', () => {
+    const abandonedRoundIssue = 3;
+
+    async function seedWithAbandonedNewerRound(store: InMemoryStore) {
+      await seedProlificCreatorBaseline(store);
+      await store.createSubmission(abandonedRoundIssue, ownerUid, 'Comet Courier');
+      await store.setSubmissionSlug(abandonedRoundIssue, slug);
+      await store.setRoundBuilder(abandonedRoundIssue, 'self');
+      setCreatedAt(store, abandonedRoundIssue, '2026-08-20T00:00:00.000Z');
+      await store.setSubmissionAbandoned(abandonedRoundIssue, '2026-08-21T00:00:00.000Z');
+    }
+
+    it('keeps ownership', async () => {
+      const store = new InMemoryStore();
+      await seedWithAbandonedNewerRound(store);
+      expect(await creatorOwnsSlug(store, slug, ownerUid)).toBe(true);
+    });
+
+    it('keeps the durable key working', async () => {
+      const store = new InMemoryStore();
+      await seedWithAbandonedNewerRound(store);
+      const result = await verifyDurableGameAgentKey(store, gameKey(), secret, now);
+      expect(result.ok).toBe(true);
+    });
+
+    it('leaves open_round able to open the next one', async () => {
+      const store = new InMemoryStore();
+      await seedWithAbandonedNewerRound(store);
+      const result = await resolveGameAgentKeyForOpenRound(store, gameKey(), secret, now);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.publishedRecord.issueNumber).toBe(publishedIssue);
+        // The abandoned round must not read as an in-flight one.
+        expect(result.activeRound).toBeNull();
+      }
+    });
+
+    it('still refuses once the newest live record belongs to someone else', async () => {
+      const store = new InMemoryStore();
+      await seedWithAbandonedNewerRound(store);
+      await store.createSubmission(4, 'g:someone-else', 'Comet Courier');
+      await store.setSubmissionSlug(4, slug);
+      setCreatedAt(store, 4, '2026-08-25T00:00:00.000Z');
+
+      const result = await verifyDurableGameAgentKey(store, gameKey(), secret, now);
+      expect(result).toEqual({ ok: false, reason: ROTATED_GAME_KEY_REASON });
+    });
+  });
 });
