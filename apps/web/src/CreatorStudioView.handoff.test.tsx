@@ -174,6 +174,21 @@ describe('CreatorStudioView publish→improve handoff', () => {
         expect.stringContaining('/api/submissions/new-self-job/connect'),
         expect.objectContaining({ credentials: 'include' }),
       );
+
+      // Playtest must follow the handoff token too — otherwise pause-feedback would
+      // call submitImprovement on the published job and open a second concurrent round.
+      await act(async () => {
+        const playtestTab = Array.from(container.querySelectorAll('button')).find((btn) =>
+          /playtest/i.test(btn.textContent ?? ''),
+        );
+        expect(playtestTab).toBeTruthy();
+        playtestTab!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushEffects();
+        await flushEffects();
+      });
+      // Unpublished preview path uses the new job's token (not the published slug fetch).
+      const { getSubmissionPreview } = await import('./submissionApi.js');
+      expect(vi.mocked(getSubmissionPreview)).toHaveBeenCalledWith('new-self-job');
     } finally {
       await act(async () => {
         root.unmount();

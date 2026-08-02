@@ -286,7 +286,9 @@ export function SubmissionStatusView({
    * Move the creator onto the new job an improvement just opened. Embedded, the parent
    * owns which thread is on screen, so it does the switch (and re-mounts us on the new
    * token with `justHandedOff`). Standalone, we drive the browser there ourselves — the
-   * same programmatic push App uses, announced on NAVIGATE_EVENT so the route re-reads.
+   * same programmatic push App uses. App only re-reads the route on popstate/hashchange
+   * (pushState is silent), so we fire PopStateEvent after the push; NAVIGATE_EVENT still
+   * announces for telemetry listeners.
    */
   const handleImproved = (newToken: string) => {
     if (onImproved) {
@@ -295,6 +297,7 @@ export function SubmissionStatusView({
     }
     const path = statusPath(newToken);
     window.history.pushState(null, '', path);
+    window.dispatchEvent(new PopStateEvent('popstate'));
     window.dispatchEvent(new CustomEvent(NAVIGATE_EVENT, { detail: { path } }));
   };
 

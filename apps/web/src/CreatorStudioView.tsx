@@ -275,6 +275,20 @@ export function CreatorStudioView({
   // The token the thread is actually showing: the new job's after an improvement handoff,
   // otherwise the selected game's own.
   const threadToken = handoffToken ?? activeGame?.token ?? null;
+  // Playtest must follow the same handoff: if it kept the published shelf record, pause
+  // feedback would call submitImprovement on the old token and open a second concurrent
+  // round (Codex P1). While a handoff is live, treat the surface as the unpublished new job.
+  const playtestGame = useMemo((): StudioGame | null => {
+    if (!activeGame) return null;
+    if (!handoffToken || handoffToken === activeGame.token) return activeGame;
+    return {
+      ...activeGame,
+      token: handoffToken,
+      lastKnownStatus: 'building',
+      publishedAt: undefined,
+    };
+  }, [activeGame, handoffToken]);
+  const playtestPublished = Boolean(playtestGame && isStudioGamePublished(playtestGame) && !handoffToken);
   const selectedHealth = activeGame ? healthFor(activeGame, healthRows) : null;
   const selectedScorecard = activeGame?.slug
     ? (scorecards.find((card) => card.slug === activeGame.slug) ?? null)
@@ -573,10 +587,10 @@ export function CreatorStudioView({
                   </div>
                 ) : null}
 
-                {tab === 'playtest' ? (
+                {tab === 'playtest' && playtestGame ? (
                   <StudioPlaytestPanel
-                    game={activeGame}
-                    published={isStudioGamePublished(activeGame)}
+                    game={playtestGame}
+                    published={playtestPublished}
                     onExit={() => openTab('thread')}
                     pickerOpen={pickerOpen}
                   />
