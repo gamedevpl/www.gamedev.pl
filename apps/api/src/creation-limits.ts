@@ -40,6 +40,14 @@ import { BOT_UID_PREFIX, type CreationLimits, type Store } from './store.js';
 /** Applies when no document has been written, and when one cannot be read. */
 export const DEFAULT_GLOBAL_DAILY_SUBMISSION_CAP = 50;
 
+/**
+ * The editing lanes' shared daily allowance of paid model calls (assist + code,
+ * Studio + remix together). Generous against expected use — the cost model puts
+ * a heavy day in the hundreds — while capping the worst day at a number an
+ * operator chose rather than one an incident discovers.
+ */
+export const DEFAULT_GLOBAL_DAILY_EDIT_CAP = 500;
+
 /** How long a read config is trusted. The upper bound on how long a flip takes. */
 export const DEFAULT_CREATION_LIMITS_TTL_MS = 60_000;
 
@@ -59,6 +67,17 @@ export function resolveDefaultGlobalDailyCap(override?: number, env: NodeJS.Proc
     if (Number.isFinite(parsed) && parsed >= 0) return parsed;
   }
   return DEFAULT_GLOBAL_DAILY_SUBMISSION_CAP;
+}
+
+/** Same not-configured semantics as the submission cap resolver above. */
+export function resolveDefaultGlobalDailyEditCap(override?: number, env: NodeJS.ProcessEnv = process.env): number {
+  if (typeof override === 'number' && Number.isFinite(override) && override >= 0) return override;
+  const raw = env.GLOBAL_DAILY_EDIT_CAP?.trim();
+  if (raw) {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+  }
+  return DEFAULT_GLOBAL_DAILY_EDIT_CAP;
 }
 
 export type CreationRefusal = 'paused' | 'over_capacity';
@@ -114,7 +133,12 @@ export function createCreationGate(options: CreationGateOptions): CreationGate {
   const defaultCap = resolveDefaultGlobalDailyCap(options.defaultGlobalDailyCap);
   const logWarn = options.logWarn ?? (() => {});
 
-  const defaults: CreationLimits = { paused: false, globalDailySubmissionCap: null };
+  const defaults: CreationLimits = {
+    paused: false,
+    globalDailySubmissionCap: null,
+    editingPaused: false,
+    globalDailyEditCap: null,
+  };
   let cache: { value: CreationLimits; expiresAt: number } | null = null;
 
   async function limits(): Promise<{ value: CreationLimits; source: 'stored' | 'default' }> {
@@ -180,6 +204,82 @@ export function createCreationGate(options: CreationGateOptions): CreationGate {
         logWarn({ dateStr, cap, current: spent.current }, 'global daily creation cap is over 80% spent');
       }
 
+      return { allowed: true };
+    },
+  };
+}
+
+export interface EditingGate {
+  /** Decides and spends one of the day's editing-model slots, or refuses. */
+  checkAndSpend(uid: string, dateStr: string): Promise<CreationGateOutcome>;
+}
+
+/**
+ * The editing lanes' circuit breaker — the same chassis as creation's, reading
+ * the same document (one place to look during an incident), tripping a
+ * different pair of fields. Built BEFORE the remix flags go on, deliberately:
+ * the flag-on hand test is exactly the moment a runaway loop or a probing
+ * script would first meet real spend, and the breaker is what makes that day
+ * cost a known number.
+ */
+export function createEditingGate(options: CreationGateOptions): EditingGate {
+  const { store } = options;
+  const now = options.now ?? Date.now;
+  const ttlMs = options.ttlMs ?? DEFAULT_CREATION_LIMITS_TTL_MS;
+  const defaultCap = resolveDefaultGlobalDailyEditCap(options.defaultGlobalDailyCap);
+  const logWarn = options.logWarn ?? (() => {});
+
+  const defaults: CreationLimits = {
+    paused: false,
+    globalDailySubmissionCap: null,
+    editingPaused: false,
+    globalDailyEditCap: null,
+  };
+  let cache: { value: CreationLimits; expiresAt: number } | null = null;
+
+  async function limits(): Promise<CreationLimits> {
+    if (cache && cache.expiresAt > now()) return cache.value;
+    try {
+      const stored = (await store.getCreationLimits()) ?? defaults;
+      cache = { value: stored, expiresAt: now() + ttlMs };
+      return stored;
+    } catch (error) {
+      if (cache) {
+        logWarn({ err: error }, 'creation limits unreadable; editing gate using the last known values');
+        return cache.value;
+      }
+      logWarn({ err: error }, 'creation limits unreadable and never read; editing gate using defaults');
+      return defaults;
+    }
+  }
+
+  return {
+    async checkAndSpend(uid, dateStr) {
+      if (bypassesBreaker(uid)) return { allowed: true };
+
+      const value = await limits();
+      if (value.editingPaused) return { allowed: false, reason: 'paused' };
+
+      const cap = value.globalDailyEditCap ?? defaultCap;
+      if (cap <= 0) return { allowed: false, reason: 'over_capacity' };
+
+      let spent: { allowed: boolean; current: number };
+      try {
+        spent = await store.checkAndIncrementGlobalEdits(dateStr, cap);
+      } catch (error) {
+        // Same reasoning as creation: a Firestore blip must not read as "over
+        // capacity" — per-user quotas and rate limits still hold underneath.
+        logWarn({ err: error, dateStr }, 'global edit counter unreachable; admitting the request');
+        return { allowed: true };
+      }
+
+      if (!spent.allowed) {
+        logWarn({ dateStr, cap, current: spent.current }, 'global daily edit cap reached; refusing editing calls');
+        return { allowed: false, reason: 'over_capacity' };
+      }
+      if (spent.current >= Math.ceil(cap * 0.8)) {
+        logWarn({ dateStr, cap, current: spent.current }, 'global daily edit cap is over 80% spent');
+      }
       return { allowed: true };
     },
   };

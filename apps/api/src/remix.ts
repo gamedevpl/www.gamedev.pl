@@ -11,6 +11,7 @@ import type { ContentChecker } from './moderation.js';
 import { logModerationRejection } from './moderation-metrics.js';
 import { assembleGameHtml } from './assemble.js';
 import type { GitHubClient } from './github-client.js';
+import type { EditingGate } from './creation-limits.js';
 
 /**
  * Remix: a player bends a published game while playing it.
@@ -95,12 +96,30 @@ export interface RemixRoutesOptions {
   assistant?: EditorAssistant;
   codeLane?: VertexCodeLane;
   contentChecker?: ContentChecker;
+  /** The platform-wide editing spend breaker — both model lanes ride it. */
+  editingGate?: EditingGate;
   now?: () => number;
 }
 
 export async function registerRemixRoutes(app: FastifyInstance, options: RemixRoutesOptions): Promise<void> {
   const now = options.now ?? Date.now;
   const sessions = new Map<string, RemixSession>();
+
+  /**
+   * One slot off the day's platform-wide editing allowance, or an honest 503.
+   * Runs after moderation and the per-route limits, immediately before the paid
+   * call, so a refusal never spends anything and a spend is never refused late.
+   */
+  async function spendEditSlot(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
+    if (!options.editingGate) return true;
+    const dateStr = new Date(now()).toISOString().slice(0, 10);
+    const gate = await options.editingGate.checkAndSpend(request.user!.uid, dateStr);
+    if (!gate.allowed) {
+      reply.status(503).send({ error: 'editing is resting right now — the game still plays' });
+      return false;
+    }
+    return true;
+  }
 
   function sweep(): void {
     const currentTime = now();
@@ -265,6 +284,8 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         }
       }
 
+      if (!(await spendEditSlot(request, reply))) return;
+
       const content = { [PARAMS_KEY]: body.data.params ?? {} };
       try {
         const result = await options.assistant.assist({
@@ -327,6 +348,8 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
           return reply.status(422).send({ error: 'that request was rejected' });
         }
       }
+
+      if (!(await spendEditSlot(request, reply))) return;
 
       const current = { ...session.sources, ...session.overrides };
       const outcome = await options.codeLane.run(

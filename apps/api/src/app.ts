@@ -21,6 +21,7 @@ import { registerEditorRoutes } from './editor-drafts.js';
 import { VertexEditorAssistant, type EditorAssistant } from './editor-assist.js';
 import { VertexCodeLane } from './code-lane.js';
 import { registerRemixRoutes } from './remix.js';
+import { createEditingGate } from './creation-limits.js';
 import { createGenerator } from './generator.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { registerContactRoutes, type ContactRoutesOptions } from './contact.js';
@@ -502,10 +503,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   // The Creator Studio content editor (EditorKit): drafts in Firestore, publish
   // as a content-only candidate through the same gate trigger deliveries use.
+  // The editing lanes' shared daily spend breaker. One gate instance across the
+  // Studio and remix routes, so "how much did editing cost today" is one number.
+  const editingGate = createEditingGate({ store, logWarn: (payload, msg) => app.log.warn(payload, msg) });
+
   await registerEditorRoutes(app, {
     store,
     gamesStore,
     contentChecker,
+    editingGate,
     // The natural-language tuning lane. Constructed unconditionally (building one
     // touches no GCP — the Vertex client is lazy) and gated by EDITOR_ASSIST
     // inside the route, so the flag is the only switch.
@@ -522,6 +528,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await registerRemixRoutes(app, {
     store,
     gamesStore,
+    editingGate,
     githubClient: submissionSeams.githubClient ?? undefined,
     publishedRef: process.env.GAMES_PUBLISHED_REF ?? 'main',
     assistant: options.editorAssistant ?? new VertexEditorAssistant(),

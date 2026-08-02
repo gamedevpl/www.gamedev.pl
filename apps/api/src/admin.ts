@@ -98,10 +98,17 @@ const CreationLimitsPatchSchema = z
     // null clears the stored ceiling and hands the decision back to the deployed
     // default, which is a different intent from setting a number.
     globalDailySubmissionCap: z.number().int().min(0).max(100_000).nullable().optional(),
+    // The editing lanes' breaker rides the same document — one place to look.
+    editingPaused: z.boolean().optional(),
+    globalDailyEditCap: z.number().int().min(0).max(100_000).nullable().optional(),
   })
   .refine(
-    (patch) => patch.paused !== undefined || patch.globalDailySubmissionCap !== undefined,
-    'nothing to change: send paused and/or globalDailySubmissionCap',
+    (patch) =>
+      patch.paused !== undefined ||
+      patch.globalDailySubmissionCap !== undefined ||
+      patch.editingPaused !== undefined ||
+      patch.globalDailyEditCap !== undefined,
+    'nothing to change: send paused, globalDailySubmissionCap, editingPaused and/or globalDailyEditCap',
   );
 
 export interface HealthResponse {

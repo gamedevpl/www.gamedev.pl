@@ -442,6 +442,14 @@ export interface CreationLimits {
    * must never read as "unlimited".
    */
   globalDailySubmissionCap: number | null;
+  /** Refuse the real-time editing lanes (assist + code) outright. Play is untouched. */
+  editingPaused: boolean;
+  /**
+   * Ceiling on paid editing model calls per UTC day, everyone together — the
+   * "worst day costs a known number" breaker the remix lanes require before any
+   * flag goes on. Same null semantics as the submission cap.
+   */
+  globalDailyEditCap: number | null;
   /** Who last changed this and when, so a leftover pause is legible as a leftover. */
   updatedAt?: string;
   updatedBy?: string;
@@ -1485,6 +1493,8 @@ export interface Store {
    * version is — a cap that a burst can walk past is not a cap.
    */
   checkAndIncrementGlobalSubmissions(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }>;
+  /** Same shape for the editing lanes' shared daily allowance of model calls. */
+  checkAndIncrementGlobalEdits(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }>;
   upsertWaitlistEntry(entry: { uid: string; email?: string; name?: string; locale?: string }): Promise<WaitlistEntry>;
   getWaitlistEntry(uid: string): Promise<WaitlistEntry | null>;
   isWaitlistApproved(uid: string, email?: string): Promise<boolean>;
@@ -1892,6 +1902,7 @@ export class InMemoryStore implements Store {
   private usage = new Map<string, UsageCounters>();
   // yyyy-mm-dd -> submissions accepted that day across every account
   private globalSubmissions = new Map<string, number>();
+  private globalEdits = new Map<string, number>();
   private creationLimits: CreationLimits | null = null;
   private waitlist = new Map<string, WaitlistEntry>();
   // yyyymmdd -> events recorded that day
@@ -2520,6 +2531,11 @@ export class InMemoryStore implements Store {
         patch.globalDailySubmissionCap !== undefined
           ? patch.globalDailySubmissionCap
           : (this.creationLimits?.globalDailySubmissionCap ?? null),
+      editingPaused: patch.editingPaused ?? this.creationLimits?.editingPaused ?? false,
+      globalDailyEditCap:
+        patch.globalDailyEditCap !== undefined
+          ? patch.globalDailyEditCap
+          : (this.creationLimits?.globalDailyEditCap ?? null),
       updatedAt: new Date().toISOString(),
       updatedBy,
     };
@@ -2540,6 +2556,15 @@ export class InMemoryStore implements Store {
       return { allowed: false, current };
     }
     this.globalSubmissions.set(dateStr, current + 1);
+    return { allowed: true, current: current + 1 };
+  }
+
+  async checkAndIncrementGlobalEdits(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }> {
+    const current = this.globalEdits.get(dateStr) ?? 0;
+    if (current >= limit) {
+      return { allowed: false, current };
+    }
+    this.globalEdits.set(dateStr, current + 1);
     return { allowed: true, current: current + 1 };
   }
 
@@ -4106,6 +4131,8 @@ export class FirestoreStore implements Store {
       paused: data?.paused === true,
       globalDailySubmissionCap:
         typeof data?.globalDailySubmissionCap === 'number' ? data.globalDailySubmissionCap : null,
+      editingPaused: data?.editingPaused === true,
+      globalDailyEditCap: typeof data?.globalDailyEditCap === 'number' ? data.globalDailyEditCap : null,
       ...(data?.updatedAt ? { updatedAt: data.updatedAt } : {}),
       ...(data?.updatedBy ? { updatedBy: data.updatedBy } : {}),
     };
@@ -4125,6 +4152,9 @@ export class FirestoreStore implements Store {
           patch.globalDailySubmissionCap !== undefined
             ? patch.globalDailySubmissionCap
             : (existing.globalDailySubmissionCap ?? null),
+        editingPaused: patch.editingPaused ?? existing.editingPaused ?? false,
+        globalDailyEditCap:
+          patch.globalDailyEditCap !== undefined ? patch.globalDailyEditCap : (existing.globalDailyEditCap ?? null),
         updatedAt: new Date().toISOString(),
         updatedBy,
       };
@@ -4155,6 +4185,23 @@ export class FirestoreStore implements Store {
 
       const nextVal = current + 1;
       transaction.set(ref, { submissions: nextVal }, { merge: true });
+      return { allowed: true, current: nextVal };
+    });
+  }
+
+  async checkAndIncrementGlobalEdits(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }> {
+    const ref = this.globalUsageRef(dateStr);
+    return await this.db.runTransaction(async (transaction) => {
+      const snap = await transaction.get(ref);
+      const value = snap.data()?.edits;
+      const current = typeof value === 'number' ? value : 0;
+
+      if (current >= limit) {
+        return { allowed: false, current };
+      }
+
+      const nextVal = current + 1;
+      transaction.set(ref, { edits: nextVal }, { merge: true });
       return { allowed: true, current: nextVal };
     });
   }

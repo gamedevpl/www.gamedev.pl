@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createCreationGate,
+  createEditingGate,
   DEFAULT_GLOBAL_DAILY_SUBMISSION_CAP,
   resolveDefaultGlobalDailyCap,
   type CreationGateOptions,
 } from './creation-limits.js';
-import type { CreationLimits, Store } from './store.js';
+import { InMemoryStore, type CreationLimits, type Store } from './store.js';
 
 const today = '2026-07-30';
 
@@ -195,5 +196,36 @@ describe('the creation breaker', () => {
       updatedBy: 'g:admin',
       source: 'stored',
     });
+  });
+});
+
+describe('editing gate (the remix/assist spend breaker)', () => {
+  it('spends slots until the cap, then refuses with over_capacity', async () => {
+    const store = new InMemoryStore();
+    const gate = createEditingGate({ store, ttlMs: 0, defaultGlobalDailyCap: 2 });
+    expect(await gate.checkAndSpend('g:alice', '2026-08-02')).toEqual({ allowed: true });
+    expect(await gate.checkAndSpend('g:bob', '2026-08-02')).toEqual({ allowed: true });
+    expect(await gate.checkAndSpend('g:carol', '2026-08-02')).toEqual({ allowed: false, reason: 'over_capacity' });
+    // A new day is a new allowance.
+    expect(await gate.checkAndSpend('g:carol', '2026-08-03')).toEqual({ allowed: true });
+  });
+
+  it('honours the stored editingPaused switch without touching creation', async () => {
+    const store = new InMemoryStore();
+    await store.setCreationLimits({ editingPaused: true }, 'operator');
+    const gate = createEditingGate({ store, ttlMs: 0 });
+    expect(await gate.checkAndSpend('g:alice', '2026-08-02')).toEqual({ allowed: false, reason: 'paused' });
+    // The creation side of the same document is untouched by the editing pause.
+    const creation = createCreationGate({ store, ttlMs: 0, defaultGlobalDailyCap: 5 });
+    expect(await creation.checkAndSpend('g:alice', '2026-08-02')).toEqual({ allowed: true });
+  });
+
+  it('prefers the stored cap over the default, and lets bots through uncounted', async () => {
+    const store = new InMemoryStore();
+    await store.setCreationLimits({ globalDailyEditCap: 1 }, 'operator');
+    const gate = createEditingGate({ store, ttlMs: 0, defaultGlobalDailyCap: 100 });
+    expect(await gate.checkAndSpend('bot:e2e', '2026-08-02')).toEqual({ allowed: true });
+    expect(await gate.checkAndSpend('g:alice', '2026-08-02')).toEqual({ allowed: true });
+    expect(await gate.checkAndSpend('g:alice', '2026-08-02')).toEqual({ allowed: false, reason: 'over_capacity' });
   });
 });

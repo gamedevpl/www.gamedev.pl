@@ -14,6 +14,7 @@ import { MAX_EDITOR_DRAFT_BYTES, type Store, type SubmissionRecord } from './sto
 import type { ContentChecker } from './moderation.js';
 import { logModerationRejection } from './moderation-metrics.js';
 import { MAX_UTTERANCE_LENGTH, applyAssistPatches, assistEnabled, type EditorAssistant } from './editor-assist.js';
+import type { EditingGate } from './creation-limits.js';
 
 /**
  * The Creator Studio content editor's API (EditorKit L3/L4 — the platform half
@@ -76,6 +77,8 @@ export interface EditorRoutesOptions {
   contentChecker?: ContentChecker;
   /** The natural-language tuning router. Absent (or flag off) → the route 503s. */
   assistant?: EditorAssistant;
+  /** The platform-wide editing spend breaker. Absent → per-user limits only. */
+  editingGate?: EditingGate;
   dailyAssistQuota?: number;
   /** Same seam the delivery route uses — starts the gate on a new candidate. */
   onSourcesDelivered?: (input: {
@@ -336,6 +339,16 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
       );
       if (!quota.allowed) {
         return reply.status(429).send({ error: 'daily tuning-assist quota exceeded' });
+      }
+
+      // The platform-wide breaker, after the per-user gates: a refusal here is
+      // the whole product resting, not this creator misbehaving, and the copy
+      // says so. Spends a slot only when the call is actually about to happen.
+      if (options.editingGate) {
+        const gate = await options.editingGate.checkAndSpend(request.user!.uid, dateStr);
+        if (!gate.allowed) {
+          return reply.status(503).send({ error: 'editing is resting right now — try again later' });
+        }
       }
 
       const slug = resolved.submission.slug as string;
