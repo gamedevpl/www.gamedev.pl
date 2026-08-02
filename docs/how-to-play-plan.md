@@ -35,10 +35,10 @@ as fake keys. No slug on `how_to_play_opened`; streams stay unjoinable.
 | Phase              | What                                                                                                                              | Seal                                     |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
 | **0 — Convention** | This doc; skill + copilot rule in games repo                                                                                      | Agents know the shape                    |
-| **1 — Soft seal**  | Validate Check 31: _if_ `.legend-keys` exists, Goal + i18n required                                                               | Pilots cannot ship a legend without Goal |
+| **1 — Soft seal**  | Validate Check 32: _if_ `.legend-keys` exists, Goal + i18n required                                                               | Pilots cannot ship a legend without Goal |
 | **2 — Templates**  | Land / extend [games#172](https://github.com/gamedevpl/www.gamedev.pl-games/pull/172) so `npm run create` scaffolds legend + Goal | New catalog games start rich             |
 | **3 — Catalog**    | Agent batch: add `.legend-keys` + Goal (+ Scoring where natural) to existing games                                                | Coverage grows                           |
-| **4 — Hard seal**  | Check 31 requires `.legend-keys` (and thus Goal) on every published game                                                          | Missing how-to-play fails the gate       |
+| **4 — Hard seal**  | Check 32 requires `.legend-keys` (and thus Goal) on every published game                                                          | Missing how-to-play fails the gate       |
 | **5 — Creator**    | `packages/game-generator` templates + any studio copy path emit the same markup                                                   | Creator games match catalog              |
 
 Phase 4 waits until Phase 3 is near-complete — flipping the hard seal early fails CI for
@@ -53,4 +53,4 @@ Phase 4 waits until Phase 3 is near-complete — flipping the hard seal early fa
 ## Done when
 
 Every published game has a localized Goal in `.legend-keys`, templates and the creator
-generator emit it by default, and Check 31 fails a game that ships without it.
+generator emit it by default, and Check 32 fails a game that ships without it.
