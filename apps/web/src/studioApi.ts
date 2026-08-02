@@ -119,13 +119,13 @@ export async function deleteEditorDraft(slug: string): Promise<void> {
 }
 
 /** Promotes the saved draft into a gated candidate version. 429 carries the cooldown. */
-export async function publishEditorContent(slug: string): Promise<{ version: string }> {
+export async function publishEditorContent(slug: string): Promise<{ version: string; jobId: number }> {
   const response = await fetch(`${API_BASE}/api/me/games/${encodeURIComponent(slug)}/editor/publish`, {
     method: 'POST',
     credentials: 'include',
   });
   if (!response.ok) await throwResponseError(response);
-  return (await response.json()) as { version: string };
+  return (await response.json()) as { version: string; jobId: number };
 }
 
 export type StudioHealthResponse = {
@@ -152,17 +152,35 @@ export type StudioScorecard = {
   untrustedThemes: Array<{ theme: string; count: number }>;
 };
 
-export type StudioApiError = Error & { status?: number; category?: string };
+export type StudioApiError = Error & {
+  status?: number;
+  category?: string;
+  /** Per-problem validation detail from the editor routes (422). */
+  problems?: string[];
+  /** The revision that actually won a draft conflict (409). */
+  revision?: number;
+  /** How long the publish cooldown has left (429). */
+  retryAfterMs?: number;
+};
 
 async function readJson(response: Response): Promise<unknown> {
   return response.json().catch(() => null);
 }
 
 async function throwResponseError(response: Response): Promise<never> {
-  const body = (await readJson(response)) as { error?: string; category?: string } | null;
+  const body = (await readJson(response)) as
+    | { error?: string; category?: string; problems?: unknown; revision?: unknown; retryAfterMs?: unknown }
+    | null;
   const error = new Error(body?.error ?? `Request failed (${response.status})`) as StudioApiError;
   error.status = response.status;
   error.category = body?.category;
+  // Structured detail the editor routes send alongside `error`. Dropping it made
+  // the panel's per-problem feedback dead code and cost the cooldown its number.
+  if (Array.isArray(body?.problems) && body.problems.every((problem) => typeof problem === 'string')) {
+    error.problems = body.problems as string[];
+  }
+  if (typeof body?.revision === 'number') error.revision = body.revision;
+  if (typeof body?.retryAfterMs === 'number') error.retryAfterMs = body.retryAfterMs;
   throw error;
 }
 

@@ -64,10 +64,24 @@ export type PropertySpec =
   | { type: 'enum'; values: string[] }
   | { type: 'bool' };
 
-/** A tile-count rule the Studio checks live and the gate checks on publish. */
+/**
+ * A rule the Studio checks live and the gate checks on publish.
+ *
+ * `reachable` is the one that is not about counting, and it exists because
+ * counting could not catch the failure that matters most: a map whose goal is
+ * walled off is schema-valid, gate-green, and unplayable. The pilot shipped
+ * exactly that — two seeds sealed behind hedges — and nothing in the pipeline
+ * noticed, because reachability is the one structural property of a tilemap
+ * that a game cannot express as a tile count.
+ *
+ * It stays game-agnostic: the game says which tile kind you start from, which
+ * kinds block movement, and which kinds must be reachable. The platform runs a
+ * four-way flood fill and knows nothing else about the game.
+ */
 export type EditorConstraint =
   | { tile: string; min?: number; max?: number; exactly?: number }
-  | { equalCounts: [string, string] };
+  | { equalCounts: [string, string] }
+  | { reachable: { from: string; blockedBy: string[]; require: string[] } };
 
 export interface TilemapItemSpec {
   widget: 'tilemap';
@@ -281,6 +295,24 @@ function validateTilemapSpec(owner: string, raw: unknown, errors: string[]): Til
           constraints.push({ equalCounts: [pair[0], pair[1]] });
           continue;
         }
+        if (isPlainObject(rule.reachable)) {
+          const spec = rule.reachable;
+          const keys = (value: unknown): string[] | null =>
+            Array.isArray(value) && value.length > 0 && value.every((key) => typeof key === 'string' && tileKeys.has(key))
+              ? (value as string[])
+              : null;
+          const blockedBy = keys(spec.blockedBy);
+          const require = keys(spec.require);
+          if (typeof spec.from !== 'string' || !tileKeys.has(spec.from) || !blockedBy || !require) {
+            errors.push(
+              `${owner}: "reachable" needs a declared "from" tile plus non-empty "blockedBy" and "require" ` +
+                'arrays of declared tile keys',
+            );
+            continue;
+          }
+          constraints.push({ reachable: { from: spec.from, blockedBy: [...blockedBy], require: [...require] } });
+          continue;
+        }
         if (typeof rule.tile !== 'string' || !tileKeys.has(rule.tile)) {
           errors.push(`${owner}: constraint tile "${String(rule.tile)}" is not a declared tile key`);
           continue;
@@ -406,6 +438,79 @@ export function parseEditorDefinition(source: string): { definition: EditorDefin
   return { definition: { version: 1, content }, errors };
 }
 
+/**
+ * Four-way flood fill from every `from` tile, refusing to cross `blockedBy`
+ * tiles, reporting any `require` tile it never reaches.
+ *
+ * Walking onto a required tile is what collecting it means in every game this
+ * serves, so required tiles are themselves walkable unless the game also
+ * declared them blocking — the rule reads "can the player get to it", not "can
+ * the player walk past it".
+ */
+function unreachable(
+  rule: { from: string; blockedBy: string[]; require: string[] },
+  rows: string[],
+  charToKey: Map<string, string>,
+  where: string,
+): string[] {
+  const height = rows.length;
+  const width = height > 0 ? rows[0].length : 0;
+  const keyAt = (row: number, col: number) => charToKey.get(rows[row][col]);
+  const blocked = new Set(rule.blockedBy);
+  const required = new Set(rule.require);
+
+  const seen = new Set<number>();
+  const queue: number[] = [];
+  for (let row = 0; row < height; row += 1) {
+    for (let col = 0; col < width; col += 1) {
+      if (keyAt(row, col) !== rule.from) continue;
+      const index = row * width + col;
+      seen.add(index);
+      queue.push(index);
+    }
+  }
+  // No origin at all is a separate failure the count rules already describe
+  // (`exactly 1 start`), so this rule stays quiet rather than piling on.
+  if (queue.length === 0) return [];
+
+  while (queue.length > 0) {
+    const index = queue.shift() as number;
+    const row = Math.floor(index / width);
+    const col = index % width;
+    for (const [dr, dc] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ] as const) {
+      const nextRow = row + dr;
+      const nextCol = col + dc;
+      if (nextRow < 0 || nextCol < 0 || nextRow >= height || nextCol >= width) continue;
+      if (rows[nextRow].length !== width) continue;
+      const key = keyAt(nextRow, nextCol);
+      if (key === undefined || blocked.has(key)) continue;
+      const nextIndex = nextRow * width + nextCol;
+      if (seen.has(nextIndex)) continue;
+      seen.add(nextIndex);
+      queue.push(nextIndex);
+    }
+  }
+
+  const missed: string[] = [];
+  for (let row = 0; row < height; row += 1) {
+    for (let col = 0; col < width; col += 1) {
+      const key = keyAt(row, col);
+      if (key === undefined || !required.has(key)) continue;
+      if (!seen.has(row * width + col)) missed.push(`${key} at row ${row + 1}, column ${col + 1}`);
+    }
+  }
+  if (missed.length === 0) return [];
+  return [
+    `${where}: walled off from "${rule.from}" — ${missed.join('; ')}. ` +
+      'Every required tile must be reachable, or the game cannot be finished.',
+  ];
+}
+
 function validateItemContent(spec: TilemapItemSpec, item: unknown, where: string): string[] {
   const errors: string[] = [];
   if (!isPlainObject(item)) return [`${where}: must be an object`];
@@ -446,6 +551,10 @@ function validateItemContent(spec: TilemapItemSpec, item: unknown, where: string
         if (counts.get(a) !== counts.get(b)) {
           errors.push(`${where}: needs the same number of "${a}" and "${b}" (${counts.get(a)} vs ${counts.get(b)})`);
         }
+        continue;
+      }
+      if ('reachable' in rule) {
+        errors.push(...unreachable(rule.reachable, rows as string[], charToKey, where));
         continue;
       }
       const count = counts.get(rule.tile) ?? 0;

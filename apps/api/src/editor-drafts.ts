@@ -226,19 +226,17 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
       }
 
       const slug = resolved.submission.slug as string;
-      const existing = await store.getEditorDraft(request.user!.uid, slug);
-      if (
-        body.data.baseRevision !== undefined &&
-        existing &&
-        existing.revision !== body.data.baseRevision
-      ) {
+      // The compare and the increment happen inside one store transaction: doing
+      // it here as read-then-write would let two tabs on the same base revision
+      // both succeed, with one edit lost and both told they were saved.
+      const written = await store.putEditorDraft(request.user!.uid, slug, serialized, body.data.baseRevision);
+      if (written.conflict) {
         // Another device wrote since this tab loaded. Last-write-wins is the
         // policy, but it must be the *caller's* decision — resend without a
         // baseRevision to take over deliberately.
-        return reply.status(409).send({ error: 'draft changed elsewhere', revision: existing.revision });
+        return reply.status(409).send({ error: 'draft changed elsewhere', revision: written.revision });
       }
-      const record = await store.putEditorDraft(request.user!.uid, slug, serialized, (existing?.revision ?? 0) + 1);
-      return reply.send({ ok: true, revision: record.revision, updatedAt: record.updatedAt });
+      return reply.send({ ok: true, revision: written.record.revision, updatedAt: written.record.updatedAt });
     },
   );
 
@@ -326,27 +324,56 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
       if (generated) generated.content = generatedContent;
       else files.push({ path: generatedPath, content: generatedContent });
 
-      lastPublishAt.set(slug, now());
-      const { version } = await gamesStore.putCandidateSources({
-        slug,
-        issueNumber: resolved.submission.issueNumber,
-        files,
-        backend: 'editor',
-        origin: 'editor',
-        // Pin the engine the previous version was accepted against: a content
-        // edit should be judged on the engine its game is known to work on.
-        ...(previous.engineRef ? { engineRef: previous.engineRef } : {}),
-      });
-      await store.setSubmissionDeliveredVersion(resolved.submission.issueNumber, version);
+      // A content edit gets its own job, exactly as a post-publish improvement
+      // does (`startImprovementRound`), and for the same reason: `published` is a
+      // terminal state, so hanging a new candidate off the original job would
+      // leave its gate verdict somewhere nothing reads. `reconcileGateVerdict`
+      // only walks `submitted`/`gating` records and the operator queue hides
+      // terminal ones, so the edit would have been gated and then silently
+      // stranded — green, unpublishable, and invisible to the person who
+      // approves it. The difference from an improvement is only that no agent is
+      // dispatched: the sources exist already, so the job walks straight to
+      // `submitted`.
+      const source = resolved.submission;
+      const jobId = await store.allocateJobId();
+      await store.createSubmission(jobId, source.ownerUid, source.title);
+      if (source.locale) await store.setSubmissionLocale(jobId, source.locale);
+      await store.setSubmissionSlug(jobId, slug);
+      const at = () => new Date(now()).toISOString();
+      await store.recordJobTransition(jobId, { to: 'queued', at: at(), by: 'creator', reason: 'content_edit' });
+      await store.recordJobTransition(jobId, { to: 'building', at: at(), by: 'creator', reason: 'content_edit' });
 
-      const gate = await options.onSourcesDelivered?.({
-        issueNumber: resolved.submission.issueNumber,
-        slug,
-        version,
-      });
+      let version: string;
+      try {
+        ({ version } = await gamesStore.putCandidateSources({
+          slug,
+          issueNumber: jobId,
+          files,
+          backend: 'editor',
+          origin: 'editor',
+          // Pin the engine the previous version was accepted against: a content
+          // edit should be judged on the engine its game is known to work on.
+          ...(previous.engineRef ? { engineRef: previous.engineRef } : {}),
+        }));
+      } catch (error) {
+        // Nothing was stored, so nothing should be debounced: leaving the
+        // cooldown set here would strand the creator for ten minutes over a
+        // transient failure they cannot see or retry past.
+        await store
+          .recordJobTransition(jobId, { to: 'failed', at: at(), by: 'creator', reason: 'delivery_failed' })
+          .catch(() => {});
+        throw error;
+      }
+      // Recorded only once the candidate is really in the store — the publish has
+      // happened at this point, and every write below is bookkeeping.
+      lastPublishAt.set(slug, now());
+      await store.setSubmissionDeliveredVersion(jobId, version);
+      await store.recordJobTransition(jobId, { to: 'submitted', at: at(), by: 'creator', reason: 'content_delivered' });
+
+      const gate = await options.onSourcesDelivered?.({ issueNumber: jobId, slug, version });
       if (gate?.buildId) {
         await store
-          .recordJobCost(resolved.submission.issueNumber, {
+          .recordJobCost(jobId, {
             kind: 'gate_run',
             at: new Date().toISOString(),
             by: 'cloud-build',
@@ -355,7 +382,7 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
           .catch(() => {});
       }
 
-      return reply.send({ ok: true, version });
+      return reply.send({ ok: true, version, jobId });
     },
   );
 }

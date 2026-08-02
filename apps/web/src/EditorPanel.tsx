@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
+import { recordEditorStep } from './visitTelemetry.js';
 import {
   deleteEditorDraft,
   fetchGameEditor,
@@ -37,7 +38,7 @@ type PublishState =
   | { kind: 'idle' }
   | { kind: 'publishing' }
   | { kind: 'published'; version: string }
-  | { kind: 'cooldown' }
+  | { kind: 'cooldown'; retryAfterMs?: number }
   | { kind: 'error'; message: string };
 
 function useLabel(): (label: EditorLabel) => string {
@@ -129,6 +130,8 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
     fetchGameEditor(slug)
       .then((loaded) => {
         if (cancelled) return;
+        // The revision funnel's first rung: this creator can edit and did open it.
+        recordEditorStep('opened');
         setEditor(loaded);
         setContent(loaded.draft?.content ?? loaded.content);
         setRevision(loaded.draft?.revision ?? 0);
@@ -153,8 +156,9 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
   revisionRef.current = revision;
   const timerRef = useRef<number | null>(null);
 
+  /** Returns whether the draft on the server now matches what is on screen. */
   const saveNow = useCallback(
-    async (overwrite = false) => {
+    async (overwrite = false): Promise<boolean> => {
       setSaveState('saving');
       setSaveProblems([]);
       try {
@@ -165,15 +169,18 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
         );
         setRevision(saved.revision);
         setSaveState('saved');
+        recordEditorStep('draft_saved');
+        return true;
       } catch (error) {
         const status = (error as StudioApiError).status;
         if (status === 409) {
           setSaveState('conflict');
         } else {
           setSaveState('error');
-          const problems = (error as StudioApiError & { problems?: string[] }).problems;
-          setSaveProblems(Array.isArray(problems) ? problems : [(error as Error).message]);
+          const problems = (error as StudioApiError).problems;
+          setSaveProblems(problems && problems.length > 0 ? problems : [(error as Error).message]);
         }
+        return false;
       }
     },
     [slug],
@@ -234,19 +241,27 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
   }
 
   async function publishNow() {
-    // Flush any pending edit first, so what publishes is what the creator sees.
-    if (timerRef.current !== null) {
-      window.clearTimeout(timerRef.current);
-      timerRef.current = null;
-      await saveNow();
+    // Flush any pending edit first, so what publishes is what the creator sees —
+    // and stop if that flush did not land. A rejected save (409 from another tab,
+    // 422 from moderation or the schema, or a dropped connection) leaves the
+    // server holding an older draft, and publishing it anyway would report
+    // success for content the creator is not looking at. The save's own banner
+    // already says what went wrong.
+    if (timerRef.current !== null || saveState === 'dirty') {
+      if (timerRef.current !== null) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      if (!(await saveNow())) return;
     }
     setPublish({ kind: 'publishing' });
     try {
       const result = await publishEditorContent(slug);
+      recordEditorStep('published');
       setPublish({ kind: 'published', version: result.version });
     } catch (error) {
       const status = (error as StudioApiError).status;
-      if (status === 429) setPublish({ kind: 'cooldown' });
+      if (status === 429) setPublish({ kind: 'cooldown', retryAfterMs: (error as StudioApiError).retryAfterMs });
       else setPublish({ kind: 'error', message: (error as Error).message });
     }
   }
@@ -288,7 +303,23 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
                 : ''}
         </span>
         <div className="editor-panel-actions">
-          <button type="button" className="studio-head-action" onClick={props.onOpenPlaytest}>
+          <button
+            type="button"
+            className="studio-head-action"
+            // Flush first: the panel unmounts on navigation and its cleanup cancels
+            // the debounce timer, so a click inside that window would have sent the
+            // creator to a playtest of the draft *before* their last edit.
+            onClick={() => {
+              recordEditorStep('previewed');
+              if (timerRef.current !== null) {
+                window.clearTimeout(timerRef.current);
+                timerRef.current = null;
+                void saveNow().then(() => props.onOpenPlaytest());
+                return;
+              }
+              props.onOpenPlaytest();
+            }}
+          >
             <PixelIcon name="play" size={12} /> {t('studioPanel.editor.tryDraft')}
           </button>
           <button

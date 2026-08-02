@@ -170,11 +170,17 @@ export async function erasePlayerSignals(options: ErasePlayerSignalsOptions): Pr
   if (!dryRun && savesDeleted.length > 0) await store.deleteGameSaves(uid);
 
   // A creator's private editor drafts are personal data the same way saves are.
-  // Count-only in the report: a draft names the creator's own game, which the
-  // submissions erasure already reports by name.
-  const editorDraftsDeleted = dryRun
-    ? 0
-    : await store.deleteEditorDrafts(uid).catch(() => 0);
+  // Counted the same way in both modes, so the preview an operator reads before
+  // approving an erasure describes what the real run will remove; reporting zero
+  // for a dry run made an editor-only account look empty.
+  //
+  // Deliberately not caught: an erasure that fails must fail loudly. Swallowing a
+  // Firestore error here would tell the operator the account was cleared while
+  // the creator's private content was still stored — the one outcome this path
+  // exists to prevent.
+  const draftSlugs = (await store.listEditorDrafts(uid)).map((draft) => draft.slug).sort();
+  const editorDraftsDeleted = draftSlugs.length;
+  if (!dryRun && editorDraftsDeleted > 0) await store.deleteEditorDrafts(uid);
 
   const affinityCleared = (await store.listPlayAffinity(uid)).map((entry) => entry.slug).sort();
   if (!dryRun && affinityCleared.length > 0) await store.deletePlayAffinity(uid);

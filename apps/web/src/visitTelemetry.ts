@@ -65,7 +65,8 @@ export type VisitEvent =
    * Always carries `builder` so BYOCA reach-to-publish is measurable without a
    * parallel stream. No game slug, no uid — visit-scoped only.
    */
-  | { type: 'studio_step'; step: StudioStep; builder: BuilderDimension; detail?: StudioStepDetail };
+  | { type: 'studio_step'; step: StudioStep; builder: BuilderDimension; detail?: StudioStepDetail }
+  | { type: 'editor_step'; step: EditorStep };
 
 /**
  * The creation funnel, in the order a creator meets it.
@@ -133,6 +134,20 @@ export type StudioStep = 'builder_chosen' | 'connect_copied' | 'agent_signaled' 
  * need none (builder choice, first agent signal).
  */
 export type StudioStepDetail = 'install' | 'kickoff' | 'green' | 'red' | 'kit_outdated';
+
+/**
+ * The content-editor funnel (EditorKit): did a creator who *can* edit actually
+ * open the editor, change something, try it, and ship it?
+ *
+ * This is the revision half of question 5 (creator return). Publishing a game
+ * was already measurable; editing it was not, so a creator who came back to
+ * retune their maps looked identical to one who opened the Studio and left.
+ *
+ * No slug, deliberately — the visit stream must stay unjoinable to the play
+ * stream, so this answers "how far did this sitting get" and never "which game
+ * did they edit".
+ */
+export type EditorStep = 'opened' | 'draft_saved' | 'previewed' | 'published';
 
 const FLUSH_AT = 5;
 const MAX_BATCH = 25;
@@ -421,6 +436,21 @@ export function recordStudioStep(step: StudioStep, builder: BuilderDimension, de
   });
 }
 
+/**
+ * Editor rungs already recorded this visit.
+ *
+ * A rung means "this visit got this far", so painting fifty tiles is one
+ * `draft_saved` — the same dedupe the create and waitlist funnels use.
+ */
+let recordedEditorSteps = new Set<string>();
+
+export function recordEditorStep(step: EditorStep): void {
+  if (!currentSession) return;
+  if (recordedEditorSteps.has(step)) return;
+  recordedEditorSteps.add(step);
+  currentSession.record({ type: 'editor_step', step });
+}
+
 /** Test seam: installs a session without touching the DOM. */
 export function setVisitSessionForTesting(session: VisitSession | null): void {
   currentSession = session;
@@ -428,6 +458,7 @@ export function setVisitSessionForTesting(session: VisitSession | null): void {
   recordedSteps = new Set();
   recordedWaitlistSteps = new Set();
   recordedStudioSteps = new Set();
+  recordedEditorSteps = new Set();
 }
 
 export interface StartVisitTrackingOptions {

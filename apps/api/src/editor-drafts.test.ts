@@ -84,7 +84,7 @@ function stubGamesStore(options: { hasEditor?: boolean } = {}) {
         slug: candidate.slug,
         version,
         createdAt: 'now',
-        issueNumber: 1_000_001,
+        issueNumber: sourceJob,
         engineRef: candidate.engineRef,
         origin: 'editor',
         sourceFiles: candidate.files.map((file) => file.path),
@@ -107,11 +107,15 @@ function stubGamesStore(options: { hasEditor?: boolean } = {}) {
   return { gamesStore, stored };
 }
 
+/** Seeded through the allocator so a published edit gets a genuinely new job id. */
+let sourceJob = 0;
+
 async function seedOwnedGame(store: InMemoryStore, uid: string) {
   await store.upsertUser({ uid });
-  await store.createSubmission(1_000_001, uid, 'Garden Gather');
-  await store.setSubmissionSlug(1_000_001, 'garden-gather');
-  await store.setSubmissionDeliveredVersion(1_000_001, 'v1');
+  sourceJob = await store.allocateJobId();
+  await store.createSubmission(sourceJob, uid, 'Garden Gather');
+  await store.setSubmissionSlug(sourceJob, 'garden-gather');
+  await store.setSubmissionDeliveredVersion(sourceJob, 'v1');
 }
 
 describe('editor draft routes', () => {
@@ -286,8 +290,17 @@ describe('editor draft routes', () => {
     expect(generated.content).toContain('"name": "Published"');
     expect(generated.content).toContain('export const DEFAULT_CONTENT');
 
-    // The submission now points at the candidate, and the gate was asked to run.
-    expect((await store.getSubmission(1_000_001))?.deliveredVersion).toBe('v2-editor');
+    // The edit becomes its *own* reviewable job — `published` is terminal, so
+    // hanging the candidate off the original would leave its gate verdict where
+    // neither the reconciler nor the operator queue looks.
+    const jobId = publish.json().jobId as number;
+    expect(jobId).not.toBe(sourceJob);
+    const created = await store.getSubmission(jobId);
+    expect(created?.slug).toBe('garden-gather');
+    expect(created?.deliveredVersion).toBe('v2-editor');
+    expect(created?.state).toBe('submitted');
+    // ...and the original job is left alone, still terminal.
+    expect((await store.getSubmission(sourceJob))?.deliveredVersion).toBe('v1');
     expect(gateRuns).toEqual(['v2-editor']);
 
     // A second publish inside the cooldown is debounced, not silently queued.
