@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CreatorStudioView } from './CreatorStudioView.js';
 import i18n from './i18n/index.js';
-import type { StudioGame, StudioScorecard } from './studioApi.js';
+import type { StudioGame, StudioGamesResponse, StudioScorecard } from './studioApi.js';
 
 const fetchStudioGames = vi.fn();
 const fetchStudioHealth = vi.fn();
@@ -38,6 +38,10 @@ vi.mock('./studioApi', async () => {
     submitImprovement: vi.fn(),
   };
 });
+
+function studioShelf(games: StudioGame[], truncated = false, totalGames?: number): StudioGamesResponse {
+  return { games, truncated, totalGames: totalGames ?? games.length };
+}
 
 function manyGames(count: number): StudioGame[] {
   return Array.from({ length: count }, (_, index) => ({
@@ -121,9 +125,9 @@ describe('CreatorStudioView', () => {
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
 
-    let resolveGames!: (value: StudioGame[]) => void;
+    let resolveGames!: (value: StudioGamesResponse) => void;
     fetchStudioGames.mockReturnValue(
-      new Promise<StudioGame[]>((resolve) => {
+      new Promise<StudioGamesResponse>((resolve) => {
         resolveGames = resolve;
       }),
     );
@@ -153,7 +157,7 @@ describe('CreatorStudioView', () => {
     expect(app.querySelector('.studio-shell-pending')).toBeTruthy();
 
     await act(async () => {
-      resolveGames(manyGames(2));
+      resolveGames(studioShelf(manyGames(2)));
       await fetchStudioGames.mock.results[0]?.value;
       await fetchStudioHealth.mock.results[0]?.value;
     });
@@ -170,7 +174,7 @@ describe('CreatorStudioView', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
-    fetchStudioGames.mockResolvedValue(manyGames(10));
+    fetchStudioGames.mockResolvedValue(studioShelf(manyGames(10)));
 
     const { container, root } = await renderStudio();
 
@@ -200,7 +204,7 @@ describe('CreatorStudioView', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
-    fetchStudioGames.mockResolvedValue(manyGames(6));
+    fetchStudioGames.mockResolvedValue(studioShelf(manyGames(6)));
 
     const { container, root } = await renderStudio();
 
@@ -221,46 +225,48 @@ describe('CreatorStudioView', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
-    fetchStudioGames.mockResolvedValue([
-      {
-        token: 'live-mw',
-        title: 'Miniature Warfare 2D',
-        slug: 'miniature-warfare-2d',
-        createdAt: '2026-07-01T00:00:00.000Z',
-        lastKnownStatus: 'published',
-        publishedAt: '2026-07-01T00:00:00.000Z',
-      },
-      {
-        token: 'tip-mw',
-        title: 'Miniature Warfare 2D',
-        slug: 'miniature-warfare-2d',
-        createdAt: '2026-07-20T00:00:00.000Z',
-        lastKnownStatus: 'building',
-      },
-      {
-        token: 'live-gts',
-        title: 'Global Thermonuclear Strategy',
-        slug: 'global-thermonuclear-strategy',
-        createdAt: '2026-07-02T00:00:00.000Z',
-        lastKnownStatus: 'published',
-        publishedAt: '2026-07-02T00:00:00.000Z',
-      },
-      {
-        token: 'tip-gts',
-        title: 'Global Thermonuclear Strategy',
-        slug: 'global-thermonuclear-strategy',
-        createdAt: '2026-07-21T00:00:00.000Z',
-        lastKnownStatus: 'building',
-      },
-      {
-        token: 'live-tv',
-        title: 'A game tycoon like where I run a tv busi',
-        slug: 'tv-tycoon',
-        createdAt: '2026-07-03T00:00:00.000Z',
-        lastKnownStatus: 'published',
-        publishedAt: '2026-07-03T00:00:00.000Z',
-      },
-    ]);
+    fetchStudioGames.mockResolvedValue(
+      studioShelf([
+        {
+          token: 'live-mw',
+          title: 'Miniature Warfare 2D',
+          slug: 'miniature-warfare-2d',
+          createdAt: '2026-07-01T00:00:00.000Z',
+          lastKnownStatus: 'published',
+          publishedAt: '2026-07-01T00:00:00.000Z',
+        },
+        {
+          token: 'tip-mw',
+          title: 'Miniature Warfare 2D',
+          slug: 'miniature-warfare-2d',
+          createdAt: '2026-07-20T00:00:00.000Z',
+          lastKnownStatus: 'building',
+        },
+        {
+          token: 'live-gts',
+          title: 'Global Thermonuclear Strategy',
+          slug: 'global-thermonuclear-strategy',
+          createdAt: '2026-07-02T00:00:00.000Z',
+          lastKnownStatus: 'published',
+          publishedAt: '2026-07-02T00:00:00.000Z',
+        },
+        {
+          token: 'tip-gts',
+          title: 'Global Thermonuclear Strategy',
+          slug: 'global-thermonuclear-strategy',
+          createdAt: '2026-07-21T00:00:00.000Z',
+          lastKnownStatus: 'building',
+        },
+        {
+          token: 'live-tv',
+          title: 'A game tycoon like where I run a tv busi',
+          slug: 'tv-tycoon',
+          createdAt: '2026-07-03T00:00:00.000Z',
+          lastKnownStatus: 'published',
+          publishedAt: '2026-07-03T00:00:00.000Z',
+        },
+      ]),
+    );
 
     const width = window.innerWidth;
     Object.defineProperty(window, 'innerWidth', { value: 390, configurable: true });
@@ -288,7 +294,7 @@ describe('CreatorStudioView', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
-    fetchStudioGames.mockResolvedValue(manyGames(6));
+    fetchStudioGames.mockResolvedValue(studioShelf(manyGames(6)));
 
     const { container, root } = await renderStudio({ selectedGame: 'game-2', selectedTab: 'playtest' });
 
@@ -316,7 +322,7 @@ describe('CreatorStudioView', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
-    fetchStudioGames.mockResolvedValue(manyGames(10));
+    fetchStudioGames.mockResolvedValue(studioShelf(manyGames(10)));
 
     const { container, root } = await renderStudio();
 
@@ -332,7 +338,7 @@ describe('CreatorStudioView', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
-    fetchStudioGames.mockResolvedValue(manyGames(6));
+    fetchStudioGames.mockResolvedValue(studioShelf(manyGames(6)));
     // jsdom has no matchMedia; width is the same fallback the drawer uses in embedded
     // webviews. Narrow enough that the shelf is off-canvas, not the desktop rail.
     const width = window.innerWidth;
@@ -373,7 +379,7 @@ describe('CreatorStudioView', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
-    fetchStudioGames.mockResolvedValue(manyGames(2));
+    fetchStudioGames.mockResolvedValue(studioShelf(manyGames(2)));
     window.history.replaceState(null, '', '/studio/token-0');
 
     const { container, root, onNavigate } = await renderStudio({ selectedGame: 'token-0' });
@@ -400,7 +406,7 @@ describe('CreatorStudioView', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
-    fetchStudioGames.mockResolvedValue(manyGames(2));
+    fetchStudioGames.mockResolvedValue(studioShelf(manyGames(2)));
     window.history.replaceState(null, '', '/studio/token-0');
 
     const { container, root } = await renderStudio({ selectedGame: 'token-0' });
@@ -421,7 +427,7 @@ describe('CreatorStudioView', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
-    fetchStudioGames.mockResolvedValue(manyGames(2));
+    fetchStudioGames.mockResolvedValue(studioShelf(manyGames(2)));
     window.history.replaceState(null, '', '/studio/token-0/playtest');
 
     const { container, root, onNavigate } = await renderStudio({
@@ -449,7 +455,7 @@ describe('CreatorStudioView', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
-    fetchStudioGames.mockResolvedValue(manyGames(2));
+    fetchStudioGames.mockResolvedValue(studioShelf(manyGames(2)));
     // The shape of a link from before there were three surfaces. The router resolves
     // `stats` onto Details; what is asserted here is that the address follows.
     window.history.replaceState(null, '', '/studio/token-0/stats');
@@ -475,15 +481,17 @@ describe('CreatorStudioView', () => {
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
     setDraftShared.mockResolvedValue({ shared: true, slug: 'tv-tycoon' });
-    fetchStudioGames.mockResolvedValue([
-      {
-        token: 'token-draft',
-        title: 'TV Tycoon',
-        createdAt: '2026-07-30T09:00:00.000Z',
-        lastKnownStatus: 'building',
-        slug: 'tv-tycoon',
-      },
-    ] satisfies StudioGame[]);
+    fetchStudioGames.mockResolvedValue(
+      studioShelf([
+        {
+          token: 'token-draft',
+          title: 'TV Tycoon',
+          createdAt: '2026-07-30T09:00:00.000Z',
+          lastKnownStatus: 'building',
+          slug: 'tv-tycoon',
+        },
+      ]),
+    );
     window.history.replaceState(null, '', '/studio/tv-tycoon/overview');
 
     const { container, root } = await renderStudio({ selectedGame: 'tv-tycoon', selectedTab: 'details' });
@@ -511,15 +519,17 @@ describe('CreatorStudioView', () => {
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
     setDraftShared.mockRejectedValue(new Error('nope'));
-    fetchStudioGames.mockResolvedValue([
-      {
-        token: 'token-draft',
-        title: 'TV Tycoon',
-        createdAt: '2026-07-30T09:00:00.000Z',
-        lastKnownStatus: 'building',
-        slug: 'tv-tycoon',
-      },
-    ] satisfies StudioGame[]);
+    fetchStudioGames.mockResolvedValue(
+      studioShelf([
+        {
+          token: 'token-draft',
+          title: 'TV Tycoon',
+          createdAt: '2026-07-30T09:00:00.000Z',
+          lastKnownStatus: 'building',
+          slug: 'tv-tycoon',
+        },
+      ]),
+    );
 
     const { container, root } = await renderStudio({ selectedGame: 'tv-tycoon', selectedTab: 'details' });
 
@@ -539,7 +549,7 @@ describe('CreatorStudioView', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
-    fetchStudioGames.mockResolvedValue(manyGames(2));
+    fetchStudioGames.mockResolvedValue(studioShelf(manyGames(2)));
     // jsdom has no matchMedia, which is also the fallback path in real embedded
     // webviews — the width is what decides when the query is unavailable.
     const width = window.innerWidth;
@@ -567,7 +577,7 @@ describe('CreatorStudioView', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
-    fetchStudioGames.mockResolvedValue(manyGames(2));
+    fetchStudioGames.mockResolvedValue(studioShelf(manyGames(2)));
     const width = window.innerWidth;
     Object.defineProperty(window, 'innerWidth', { value: 1440, configurable: true });
 
@@ -587,23 +597,25 @@ describe('CreatorStudioView', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
-    fetchStudioGames.mockResolvedValue([
-      {
-        token: 'token-shared',
-        title: 'TV Tycoon',
-        createdAt: '2026-07-30T09:00:00.000Z',
-        lastKnownStatus: 'building',
-        slug: 'tv-tycoon',
-        draftShared: true,
-      },
-      {
-        token: 'token-private',
-        title: 'Space Miner',
-        createdAt: '2026-07-30T09:30:00.000Z',
-        lastKnownStatus: 'building',
-        slug: 'space-miner',
-      },
-    ] satisfies StudioGame[]);
+    fetchStudioGames.mockResolvedValue(
+      studioShelf([
+        {
+          token: 'token-shared',
+          title: 'TV Tycoon',
+          createdAt: '2026-07-30T09:00:00.000Z',
+          lastKnownStatus: 'building',
+          slug: 'tv-tycoon',
+          draftShared: true,
+        },
+        {
+          token: 'token-private',
+          title: 'Space Miner',
+          createdAt: '2026-07-30T09:30:00.000Z',
+          lastKnownStatus: 'building',
+          slug: 'space-miner',
+        },
+      ]),
+    );
 
     // Two `/details` URLs in a row — a browser Back, or a link. The panel stays mounted
     // across that, so anything it seeded from the first game would still be on screen.
@@ -626,7 +638,7 @@ describe('CreatorStudioView', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
-    fetchStudioGames.mockResolvedValue(manyGames(3));
+    fetchStudioGames.mockResolvedValue(studioShelf(manyGames(3)));
     window.history.replaceState(null, '', '/studio/game-2');
 
     const { container, root } = await renderStudio({ selectedGame: 'game-2' });
@@ -640,7 +652,7 @@ describe('CreatorStudioView', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
-    fetchStudioGames.mockResolvedValue(manyGames(3));
+    fetchStudioGames.mockResolvedValue(studioShelf(manyGames(3)));
     window.history.replaceState(null, '', '/studio/token-1');
 
     // The shape of a link from a months-old notification email, minted before games
@@ -660,7 +672,7 @@ describe('CreatorStudioView', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
-    fetchStudioGames.mockResolvedValue(manyGames(3));
+    fetchStudioGames.mockResolvedValue(studioShelf(manyGames(3)));
     window.history.replaceState(null, '', '/studio/somebody-elses-game');
 
     // Slugs are public — they are in every /play/ link — so the guard cannot be that
@@ -678,7 +690,7 @@ describe('CreatorStudioView', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
-    fetchStudioGames.mockResolvedValue(manyGames(2));
+    fetchStudioGames.mockResolvedValue(studioShelf(manyGames(2)));
     window.history.replaceState(null, '', '/studio');
 
     const { container, root, onNavigate } = await renderStudio();
@@ -731,7 +743,7 @@ describe('CreatorStudioView — what players think', () => {
   beforeEach(() => {
     authUser = { uid: 'g:creator', name: 'Creator' };
     fetchStudioGames.mockReset();
-    fetchStudioGames.mockResolvedValue(published);
+    fetchStudioGames.mockResolvedValue(studioShelf(published));
     fetchStudioHealth.mockReset();
     fetchStudioHealth.mockResolvedValue({ days: [], truncated: false, games: [] });
     fetchStudioScorecards.mockReset();

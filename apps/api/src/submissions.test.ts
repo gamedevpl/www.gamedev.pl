@@ -2593,6 +2593,41 @@ describe('GET /api/submissions/mine', () => {
 
     await app.close();
   });
+
+  it('lists all distinct games even when improvement rounds exceed the job ceiling', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const store = new InMemoryStore();
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
+    const today = new Date().toISOString().slice(0, 10);
+
+    for (let game = 0; game < 3; game++) {
+      const slug = `game-${game}`;
+      for (let tip = 0; tip < 20; tip++) {
+        const issueNumber = game * 100 + tip + 1;
+        await store.createSubmission(issueNumber, 'g:test-user', `Game ${game} tip ${tip}`);
+        await store.setSubmissionSlug(issueNumber, slug);
+        if (tip === 0) {
+          await store.setSubmissionPublishedAt(issueNumber, `${today}T12:00:00.000Z`);
+        }
+        if (tip < 19) await new Promise((resolve) => setTimeout(resolve, 2));
+      }
+    }
+
+    const res = await app.inject({ method: 'GET', url: '/api/submissions/mine', headers: authHeaders });
+    expect(res.statusCode).toBe(200);
+
+    const body = res.json() as {
+      submissions: Array<{ slug: string | null }>;
+      truncated: boolean;
+      totalGames: number;
+    };
+    expect(body.totalGames).toBe(3);
+    expect(body.truncated).toBe(false);
+    expect(body.submissions).toHaveLength(3);
+    expect(new Set(body.submissions.map((item) => item.slug))).toEqual(new Set(['game-0', 'game-1', 'game-2']));
+
+    await app.close();
+  });
 });
 
 describe('GET /api/drafts/:slug (shareable, read-only)', () => {

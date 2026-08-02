@@ -11,6 +11,11 @@ export type StudioGame = {
   slug?: string;
   publishedAt?: string;
   /**
+   * Catalog publish time when this row is an improvement tip — the game is still live
+   * but the open job has no `publishedAt` of its own.
+   */
+  livePublishedAt?: string;
+  /**
    * Whether anyone holding the link may play this game before it is published. Off
    * until the creator says otherwise; irrelevant once the game is live, when the
    * catalog is the answer instead.
@@ -133,6 +138,8 @@ export async function publishEditorContent(slug: string): Promise<{ version: str
 export type StudioHealthResponse = {
   days: string[];
   truncated: boolean;
+  gamesTruncated?: boolean;
+  totalGames?: number;
   games: GameHealth[];
 };
 
@@ -170,9 +177,13 @@ async function readJson(response: Response): Promise<unknown> {
 }
 
 async function throwResponseError(response: Response): Promise<never> {
-  const body = (await readJson(response)) as
-    | { error?: string; category?: string; problems?: unknown; revision?: unknown; retryAfterMs?: unknown }
-    | null;
+  const body = (await readJson(response)) as {
+    error?: string;
+    category?: string;
+    problems?: unknown;
+    revision?: unknown;
+    retryAfterMs?: unknown;
+  } | null;
   const error = new Error(body?.error ?? `Request failed (${response.status})`) as StudioApiError;
   error.status = response.status;
   error.category = body?.category;
@@ -187,13 +198,29 @@ async function throwResponseError(response: Response): Promise<never> {
 }
 
 /** The signed-in creator's control-panel shelf (slug + publish time when known). */
-export async function fetchStudioGames(): Promise<StudioGame[]> {
+export type StudioGamesResponse = {
+  games: StudioGame[];
+  truncated: boolean;
+  totalGames: number;
+};
+
+/** The signed-in creator's control-panel shelf (slug + publish time when known). */
+export async function fetchStudioGames(): Promise<StudioGamesResponse> {
   const response = await fetch(`${API_BASE}/api/me/studio`, { credentials: 'include' });
   if (!response.ok) {
     await throwResponseError(response);
   }
-  const body = (await response.json()) as { games?: StudioGame[] };
-  return body.games ?? [];
+  const body = (await response.json()) as {
+    games?: StudioGame[];
+    truncated?: boolean;
+    totalGames?: number;
+  };
+  const games = body.games ?? [];
+  return {
+    games,
+    truncated: body.truncated ?? false,
+    totalGames: body.totalGames ?? games.length,
+  };
 }
 
 /** Play-health aggregates for the creator's own published slugs only. */

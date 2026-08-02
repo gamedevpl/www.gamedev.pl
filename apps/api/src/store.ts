@@ -1405,6 +1405,9 @@ export interface Store {
    * Every submission a creator owns, newest first. Backs the "my games" rail, so a
    * creator finds their work-in-progress without having saved the tracking link
    * (and on a device that never had it in localStorage).
+   *
+   * Omit `limit` to read the full job history; shelf endpoints collapse to distinct
+   * games before applying their own ceiling — a raw job limit is not a game limit.
    */
   listSubmissionsByOwner(ownerUid: string, opts?: { limit?: number }): Promise<SubmissionRecord[]>;
   checkAndIncrementQuota(
@@ -2358,11 +2361,11 @@ export class InMemoryStore implements Store {
   }
 
   async listSubmissionsByOwner(ownerUid: string, opts?: { limit?: number }): Promise<SubmissionRecord[]> {
-    return Array.from(this.submissions.values())
+    const sorted = Array.from(this.submissions.values())
       .filter((s) => s.ownerUid === ownerUid)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .slice(0, opts?.limit ?? 20)
       .map((s) => ({ ...s }));
+    return opts?.limit !== undefined ? sorted.slice(0, opts.limit) : sorted;
   }
 
   async checkAndIncrementQuota(
@@ -3798,10 +3801,10 @@ export class FirestoreStore implements Store {
     // Equality-only query (no orderBy) so Firestore needs no composite index; a
     // creator's submission count is small, so sorting here is cheap.
     const snap = await this.db.collection('submissions').where('ownerUid', '==', ownerUid).get();
-    return snap.docs
+    const sorted = snap.docs
       .map((d) => d.data() as SubmissionRecord)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .slice(0, opts?.limit ?? 20);
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return opts?.limit !== undefined ? sorted.slice(0, opts.limit) : sorted;
   }
 
   async checkAndIncrementQuota(

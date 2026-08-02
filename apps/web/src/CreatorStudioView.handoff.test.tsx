@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CreatorStudioView } from './CreatorStudioView.js';
 import i18n from './i18n/index.js';
-import type { StudioGame } from './studioApi.js';
+import type { StudioGame, StudioGamesResponse } from './studioApi.js';
 import { getSubmissionStatus } from './submissionApi.js';
 import { submitImprovement } from './studioApi.js';
 
@@ -59,6 +59,10 @@ vi.mock('./submissionApi', async () => {
 const mockedGetSubmissionStatus = vi.mocked(getSubmissionStatus);
 const mockedSubmitImprovement = vi.mocked(submitImprovement);
 
+function studioShelf(games: StudioGame[], truncated = false, totalGames?: number): StudioGamesResponse {
+  return { games, truncated, totalGames: totalGames ?? games.length };
+}
+
 async function flushEffects() {
   await Promise.resolve();
   await Promise.resolve();
@@ -103,16 +107,18 @@ describe('CreatorStudioView publish→improve handoff', () => {
     }));
     vi.stubGlobal('fetch', connectFetch);
 
-    fetchStudioGames.mockResolvedValue([
-      {
-        token: 'pub-self-shelf',
-        title: 'TV Tycoon',
-        createdAt: '2026-07-01T00:00:00.000Z',
-        lastKnownStatus: 'published',
-        slug: 'tv-tycoon',
-        publishedAt: '2026-07-01T00:00:00.000Z',
-      },
-    ] satisfies StudioGame[]);
+    fetchStudioGames.mockResolvedValue(
+      studioShelf([
+        {
+          token: 'pub-self-shelf',
+          title: 'TV Tycoon',
+          createdAt: '2026-07-01T00:00:00.000Z',
+          lastKnownStatus: 'published',
+          slug: 'tv-tycoon',
+          publishedAt: '2026-07-01T00:00:00.000Z',
+        },
+      ]),
+    );
 
     // The published (terminal) thread is self-built; its improvement is a new self job
     // still waiting on the creator's own agent — the state that renders the connect card.

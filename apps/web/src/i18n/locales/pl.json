@@ -263,6 +263,8 @@
         "live": "Na żywo"
       },
       "noMatches": "Żadna gra nie pasuje do tego wyszukiwania.",
+      "countTruncated": "Wyświetlam {{shown}} z {{total}} gier",
+      "truncated": "Masz więcej gier, niż możemy tu pokazać. Widać pięćdziesiąt najnowszych.",
       "openShelf": "Twoje gry",
       "expandShelf": "Rozwiń listę gier",
       "collapseShelf": "Zwiń listę gier"
