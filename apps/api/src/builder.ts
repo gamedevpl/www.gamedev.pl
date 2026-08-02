@@ -56,10 +56,13 @@ export function isActiveBuildRound(record: { state?: JobState; transitions?: Job
 /**
  * Whether creator feedback should only go to the build-channel inbox (no new dispatch).
  *
- * An in-flight round ({@link isActiveBuildRound}) that already has a dispatch ref has an
- * agent that will poll the inbox — including after delivery while the gate runs, and on
- * gate-red / kit_outdated repair, where the same session is often still alive. Starting
- * another Copilot task on top of that is what produced concurrent builds of one game.
+ * An in-flight round that already has a dispatch ref has an agent that will poll the
+ * inbox — including after delivery while the gate runs, and on gate-red / kit_outdated
+ * repair, where the same session is often still alive. Starting another Copilot task on
+ * top of that is what produced concurrent builds of one game.
+ *
+ * Excludes `publishing`: reaching it already closed the round (token generation bumped),
+ * so no session can collect inbox mail — the feedback route rejects that state instead.
  *
  * A `queued` job with **no** refs is different: dispatch never landed, so nobody will
  * read the inbox. Feedback must retry `resumeBuild` in that case.
@@ -69,6 +72,7 @@ export function shouldSteerFeedbackViaInbox(record: {
   transitions?: JobTransition[];
   dispatch?: { refs?: readonly string[] } | null;
 }): boolean {
+  if (record.state === 'publishing') return false;
   if (!isActiveBuildRound(record)) return false;
   return (record.dispatch?.refs?.length ?? 0) > 0;
 }

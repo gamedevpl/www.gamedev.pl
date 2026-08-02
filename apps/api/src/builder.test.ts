@@ -33,8 +33,9 @@ describe('builder helpers', () => {
     // Dispatch never landed — feedback must retry starting a session.
     expect(shouldSteerFeedbackViaInbox({ state: 'queued' })).toBe(false);
     expect(shouldSteerFeedbackViaInbox({ state: 'queued', dispatch: { refs: [] } })).toBe(false);
-    // Round over — a revision is a new session.
+    // Round over — a revision is a new session. Publishing has already closed the round.
     expect(shouldSteerFeedbackViaInbox({ state: 'ready_for_review', ...withRef })).toBe(false);
+    expect(shouldSteerFeedbackViaInbox({ state: 'publishing', ...withRef })).toBe(false);
     expect(shouldSteerFeedbackViaInbox({ state: 'failed', ...withRef })).toBe(false);
   });
 

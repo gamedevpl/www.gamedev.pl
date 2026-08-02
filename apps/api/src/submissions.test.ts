@@ -903,6 +903,90 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  it('does not claim success when inbox steering cannot queue the note', async () => {
+    // Inbox is the sole delivery path for an in-flight round. A silent ok:true after a
+    // queue failure would clear the composer while the agent never sees the words.
+    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { backend, briefs } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const briefsBefore = briefs.length;
+    store.appendCreatorMessage = async () => {
+      throw new Error('firestore unavailable');
+    };
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Make the parcels bigger and the asteroids slower.' },
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toMatchObject({ error: 'failed to queue feedback for the agent' });
+    expect(briefs).toHaveLength(briefsBefore);
+
+    await app.close();
+  });
+
+  it('refuses feedback while the game is publishing', async () => {
+    // Publishing already closed the round; no session can collect inbox mail, and a
+    // fresh resume would race the bake.
+    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { backend, briefs } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v1');
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'ready_for_review',
+      at: new Date().toISOString(),
+      by: 'reconciler',
+      reason: 'gate_green',
+    });
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'publishing',
+      at: new Date().toISOString(),
+      by: 'operator',
+      reason: 'publish_started',
+    });
+    const briefsBefore = briefs.length;
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Make the parcels bigger and the asteroids slower.' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error).toMatch(/publishing/i);
+    expect(briefs).toHaveLength(briefsBefore);
+
+    await app.close();
+  });
+
   it('briefs feedback on an undelivered job as recovery, not as a revision', async () => {
     // Job #1000003: first round died on quota with nothing uploaded; creator feedback
     // then opened with "revise it, do not rebuild it" and `npm run restore` against an
