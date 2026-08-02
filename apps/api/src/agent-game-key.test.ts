@@ -4,10 +4,12 @@ import {
   DEFAULT_GAME_AGENT_KEY_TTL_DAYS,
   gameAgentKeyTtlDays,
   InvalidAgentTokenError,
+  looksLikeGameAgentKey,
   mintGameAgentKey,
   ROTATED_GAME_KEY_REASON,
   verifyGameAgentKey,
 } from './agent-game-key.js';
+import { mintMcpSessionKey } from './mcp-session-key.js';
 
 describe('durable per-game agent key (BY-23)', () => {
   const secret = 'game-key-test-secret';
@@ -74,6 +76,31 @@ describe('durable per-game agent key (BY-23)', () => {
     const newClaims = verifyGameAgentKey(newKey, secret);
     expect(() => assertGameAgentKeyActive(oldClaims, { keyGeneration: 2 }, now)).toThrow(ROTATED_GAME_KEY_REASON);
     expect(() => assertGameAgentKeyActive(newClaims, { keyGeneration: 2 }, now)).not.toThrow();
+  });
+
+  it('round-trips Apple dotted subject identifiers', () => {
+    const appleUid = 'a:001234.abcdef.0000';
+    const key = mintGameAgentKey(secret, { slug, creatorUid: appleUid, keyGeneration: 1, now, ttlDays: 90 });
+    expect(verifyGameAgentKey(key, secret)).toEqual({
+      slug,
+      creatorUid: appleUid,
+      keyGeneration: 1,
+      exp: Math.floor(now / 1000) + 90 * 24 * 60 * 60,
+    });
+    const decoded = Buffer.from(key, 'base64url').toString('utf8');
+    expect(decoded.split('.')[2]).not.toContain('.');
+  });
+
+  it('does not false-positive on MCP session keys whose session id is g1', () => {
+    const sessionKey = mintMcpSessionKey(secret, {
+      sessionId: 'g1',
+      jobId: 42,
+      roundGeneration: 1,
+      now,
+    });
+    const decoded = Buffer.from(sessionKey, 'base64url').toString('utf8');
+    expect(decoded.startsWith('g1.')).toBe(true);
+    expect(looksLikeGameAgentKey(sessionKey)).toBe(false);
   });
 
   it('defaults TTL from GAME_AGENT_KEY_TTL_DAYS (90 days)', () => {

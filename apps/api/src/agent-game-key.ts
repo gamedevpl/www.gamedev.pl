@@ -13,6 +13,8 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { InvalidAgentTokenError } from './agent-token.js';
 
+export { InvalidAgentTokenError } from './agent-token.js';
+
 const SCOPE = 'agent-game-v1';
 /** Wire marker so this shape can never parse as a round-scoped key. */
 const WIRE_PREFIX = 'g1';
@@ -68,13 +70,31 @@ function safeEqualHex(actual: string, expected: string): boolean {
   return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
 }
 
-function assertSlugUid(slug: string, creatorUid: string): void {
-  // Slugs and Firebase UIDs are dot-free; the wire format relies on that.
+function assertSlug(slug: string): void {
+  // Slugs are dot-free; the wire format uses `.` as a field delimiter.
   if (!slug || slug.includes('.') || /\s/.test(slug)) {
     throw new InvalidAgentTokenError('invalid game slug');
   }
-  if (!creatorUid || creatorUid.includes('.') || /\s/.test(creatorUid)) {
+}
+
+function assertCreatorUid(creatorUid: string): void {
+  if (!creatorUid || /\s/.test(creatorUid)) {
     throw new InvalidAgentTokenError('invalid creator id');
+  }
+}
+
+function encodeCreatorUid(creatorUid: string): string {
+  assertCreatorUid(creatorUid);
+  return Buffer.from(creatorUid, 'utf8').toString('base64url');
+}
+
+function decodeCreatorUid(encoded: string): string {
+  try {
+    const creatorUid = Buffer.from(encoded, 'base64url').toString('utf8');
+    assertCreatorUid(creatorUid);
+    return creatorUid;
+  } catch {
+    throw new InvalidAgentTokenError();
   }
 }
 
@@ -83,7 +103,7 @@ function assertSlugUid(slug: string, creatorUid: string): void {
  * `(agent-game-v1, slug, creatorUid, keyGeneration, exp)`.
  */
 export function mintGameAgentKey(secret: string, options: MintGameAgentKeyOptions): string {
-  assertSlugUid(options.slug, options.creatorUid);
+  assertSlug(options.slug);
   if (!Number.isSafeInteger(options.keyGeneration) || options.keyGeneration < 1) {
     throw new InvalidAgentTokenError('invalid key generation');
   }
@@ -91,18 +111,37 @@ export function mintGameAgentKey(secret: string, options: MintGameAgentKeyOption
   const ttlDays = options.ttlDays ?? gameAgentKeyTtlDays();
   const exp = Math.floor(nowMs / 1000) + ttlDays * 24 * 60 * 60;
   const signature = signGameKey(options.slug, options.creatorUid, options.keyGeneration, exp, secret);
-  const payload = `${WIRE_PREFIX}.${options.slug}.${options.creatorUid}.${options.keyGeneration}.${exp}.${signature}`;
+  const encodedUid = encodeCreatorUid(options.creatorUid);
+  const payload = `${WIRE_PREFIX}.${options.slug}.${encodedUid}.${options.keyGeneration}.${exp}.${signature}`;
   return Buffer.from(payload, 'utf8').toString('base64url');
 }
 
 /**
- * True when the decoded wire form looks like a game opener (prefix `g1.`). Used to
+ * True when the decoded wire form matches the full durable game-key shape. Used to
  * reject these keys at sessionKey/Bearer write paths without inventing a second error.
+ * Prefix-only checks false-positive on MCP session keys whose session id is `g1`.
  */
 export function looksLikeGameAgentKey(token: string): boolean {
   try {
-    const decoded = Buffer.from(token, 'base64url').toString('utf8');
-    return decoded.startsWith(`${WIRE_PREFIX}.`);
+    const parts = Buffer.from(token, 'base64url').toString('utf8').split('.');
+    if (parts.length !== 6) return false;
+    const [prefix, slug, encodedUid, generationRaw, expRaw, signature] = parts;
+    if (
+      prefix !== WIRE_PREFIX ||
+      !slug ||
+      !encodedUid ||
+      !generationRaw ||
+      !expRaw ||
+      !signature ||
+      slug.includes('.') ||
+      !/^\d+$/.test(generationRaw) ||
+      !/^\d+$/.test(expRaw) ||
+      !/^[a-f0-9]{64}$/i.test(signature)
+    ) {
+      return false;
+    }
+    decodeCreatorUid(encodedUid);
+    return true;
   } catch {
     return false;
   }
@@ -118,11 +157,11 @@ export function verifyGameAgentKey(token: string, secret: string): GameAgentKeyC
     if (parts.length !== 6) {
       throw new InvalidAgentTokenError();
     }
-    const [prefix, slug, creatorUid, generationRaw, expRaw, signature] = parts;
+    const [prefix, slug, encodedUid, generationRaw, expRaw, signature] = parts;
     if (
       prefix !== WIRE_PREFIX ||
       !slug ||
-      !creatorUid ||
+      !encodedUid ||
       !generationRaw ||
       !expRaw ||
       !signature ||
@@ -132,7 +171,8 @@ export function verifyGameAgentKey(token: string, secret: string): GameAgentKeyC
     ) {
       throw new InvalidAgentTokenError();
     }
-    assertSlugUid(slug, creatorUid);
+    assertSlug(slug);
+    const creatorUid = decodeCreatorUid(encodedUid);
     const keyGeneration = Number.parseInt(generationRaw, 10);
     const exp = Number.parseInt(expRaw, 10);
     if (!Number.isSafeInteger(keyGeneration) || keyGeneration < 1 || !Number.isSafeInteger(exp) || exp <= 0) {

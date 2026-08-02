@@ -1462,6 +1462,16 @@ export async function registerSubmissionRoutes(
   }
 
   /**
+   * Ensures a submission has a settled slug, minting one on demand for legacy rounds
+   * that predated slug-at-submission.
+   */
+  async function ensureSubmissionSlug(issueNumber: number, record: SubmissionRecord): Promise<string | null> {
+    if (record.slug) return record.slug;
+    const wanted = await mintGameSlug(record.title, async (candidate) => isSlugClaimed(candidate, issueNumber));
+    return confirmSlugClaim(issueNumber, wanted, record.title);
+  }
+
+  /**
    * Whether this request may play the unpublished game at `slug`.
    *
    * Two ways in, and no third: you made it, or its creator turned sharing on. There is
@@ -2157,7 +2167,9 @@ export async function registerSubmissionRoutes(
           builder: freshBuilder,
         });
       }
-      if (!fresh.slug) {
+
+      const slug = await ensureSubmissionSlug(issueNumber, fresh);
+      if (!slug) {
         return reply.status(409).send({
           error: 'connect_unavailable',
           reason: 'missing_slug',
@@ -2166,7 +2178,7 @@ export async function registerSubmissionRoutes(
       }
 
       const at = new Date(now()).toISOString();
-      const keyRecord = await store.ensureGameAgentKey(fresh.slug, fresh.ownerUid, at);
+      const keyRecord = await store.ensureGameAgentKey(slug, fresh.ownerUid, at);
       if (!keyRecord) {
         return reply.status(403).send({ error: 'only the creator can connect a build' });
       }
@@ -2176,7 +2188,7 @@ export async function registerSubmissionRoutes(
       // remind the creator there is nothing new to copy unless they rotated.
       const sameKeyReminder = (fresh.roundGeneration ?? 1) > 1 || Boolean(fresh.publishedAt);
       const payload = mintConnectPayload({
-        slug: fresh.slug,
+        slug,
         ownerUid: fresh.ownerUid,
         keyGeneration: keyRecord.keyGeneration,
         title: fresh.title,
@@ -2222,18 +2234,19 @@ export async function registerSubmissionRoutes(
       if (!record || record.ownerUid !== request.user!.uid) {
         return reply.status(403).send({ error: 'only the creator can manage this game key' });
       }
-      if (!record.slug) {
+      const slug = await ensureSubmissionSlug(issueNumber, record);
+      if (!slug) {
         return reply.status(409).send({ error: 'game_key_unavailable', reason: 'missing_slug' });
       }
 
       const at = new Date(now()).toISOString();
-      const keyRecord = await store.ensureGameAgentKey(record.slug, record.ownerUid, at);
+      const keyRecord = await store.ensureGameAgentKey(slug, record.ownerUid, at);
       if (!keyRecord) {
         return reply.status(403).send({ error: 'only the creator can manage this game key' });
       }
 
       const payload = mintConnectPayload({
-        slug: record.slug,
+        slug,
         ownerUid: record.ownerUid,
         keyGeneration: keyRecord.keyGeneration,
         title: record.title,
@@ -2243,7 +2256,7 @@ export async function registerSubmissionRoutes(
       });
 
       return reply.header('Cache-Control', 'no-store').send({
-        slug: record.slug,
+        slug,
         keyGeneration: keyRecord.keyGeneration,
         expiresAt: payload.expiresAt,
         allowAgentOpenRounds: keyRecord.allowAgentOpenRounds === true,
@@ -2277,23 +2290,24 @@ export async function registerSubmissionRoutes(
       if (!record || record.ownerUid !== request.user!.uid) {
         return reply.status(403).send({ error: 'only the creator can rotate this game key' });
       }
-      if (!record.slug) {
+      const slug = await ensureSubmissionSlug(issueNumber, record);
+      if (!slug) {
         return reply.status(409).send({ error: 'game_key_unavailable', reason: 'missing_slug' });
       }
 
       const at = new Date(now()).toISOString();
       // Ensure exists first so rotate has a generation to bump (first-time creators).
-      const ensured = await store.ensureGameAgentKey(record.slug, record.ownerUid, at);
+      const ensured = await store.ensureGameAgentKey(slug, record.ownerUid, at);
       if (!ensured) {
         return reply.status(403).send({ error: 'only the creator can rotate this game key' });
       }
-      const rotated = await store.rotateGameAgentKey(record.slug, record.ownerUid, at);
+      const rotated = await store.rotateGameAgentKey(slug, record.ownerUid, at);
       if (!rotated) {
         return reply.status(403).send({ error: 'only the creator can rotate this game key' });
       }
 
       const payload = mintConnectPayload({
-        slug: record.slug,
+        slug,
         ownerUid: record.ownerUid,
         keyGeneration: rotated.keyGeneration,
         title: record.title,
@@ -2303,7 +2317,7 @@ export async function registerSubmissionRoutes(
       });
 
       return reply.header('Cache-Control', 'no-store').send({
-        slug: record.slug,
+        slug,
         keyGeneration: rotated.keyGeneration,
         expiresAt: payload.expiresAt,
         allowAgentOpenRounds: rotated.allowAgentOpenRounds === true,

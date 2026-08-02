@@ -372,6 +372,36 @@ describe('GET /api/submissions/:id/connect (BY-03)', () => {
     });
   });
 
+  it('mints a slug on demand for a legacy self round missing one', async () => {
+    const created = await createApp({ now: () => Date.parse('2026-07-31T12:00:00Z') });
+    app = created.app;
+    const { store } = created;
+
+    await store.createSubmission(66, 'g:creator', 'Legacy Slugless');
+    await store.setRoundBuilder(66, 'self');
+    await store.recordJobTransition(66, {
+      to: 'dispatched',
+      at: new Date().toISOString(),
+      by: 'system',
+    });
+    await store.ensureRoundGeneration(66);
+    const before = await store.getSubmission(66);
+    expect(before?.slug).toBeUndefined();
+
+    const id = mintToken(66, secret);
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${id}/connect`,
+      headers: authHeaders(),
+    });
+    expect(response.statusCode).toBe(200);
+    const after = await store.getSubmission(66);
+    expect(after?.slug).toBeTruthy();
+    const gameKey = (response.json().kickoffPrompt as string).match(/key: (\S+)/)![1]!;
+    const claims = verifyGameAgentKey(gameKey, secret);
+    expect(claims).toMatchObject({ slug: after!.slug, creatorUid: 'g:creator', keyGeneration: 1 });
+  });
+
   it('binds the minted key to the game keyGeneration, not the round generation', async () => {
     const created = await createApp();
     app = created.app;

@@ -2973,7 +2973,10 @@ export class InMemoryStore implements Store {
   ): Promise<GameAgentKeyRecord | null> {
     const ensured = await this.ensureGameAgentKey(slug, ownerUid, at);
     if (!ensured) return null;
-    const next: GameAgentKeyRecord = { ...ensured, allowAgentOpenRounds: allow, updatedAt: at };
+    // Re-read after ensure: a concurrent rotate may have bumped keyGeneration.
+    const current = this.gameAgentKeys.get(slug);
+    if (!current || current.ownerUid !== ownerUid) return null;
+    const next: GameAgentKeyRecord = { ...current, allowAgentOpenRounds: allow, updatedAt: at };
     this.gameAgentKeys.set(slug, next);
     return { ...next };
   }
@@ -4754,11 +4757,31 @@ export class FirestoreStore implements Store {
     allow: boolean,
     at: string,
   ): Promise<GameAgentKeyRecord | null> {
-    const ensured = await this.ensureGameAgentKey(slug, ownerUid, at);
-    if (!ensured) return null;
-    const next: GameAgentKeyRecord = { ...ensured, allowAgentOpenRounds: allow, updatedAt: at };
-    await this.db.collection('gameAgentKeys').doc(slug).set(next);
-    return next;
+    const docRef = this.db.collection('gameAgentKeys').doc(slug);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef);
+      if (!snap.exists) {
+        const created: GameAgentKeyRecord = {
+          slug,
+          ownerUid,
+          keyGeneration: 1,
+          createdAt: at,
+          updatedAt: at,
+          allowAgentOpenRounds: allow,
+        };
+        tx.create(docRef, created);
+        return created;
+      }
+      const existing = snap.data() as GameAgentKeyRecord;
+      if (existing.ownerUid !== ownerUid) return null;
+      const next: GameAgentKeyRecord = {
+        ...existing,
+        allowAgentOpenRounds: allow,
+        updatedAt: at,
+      };
+      tx.set(docRef, next);
+      return next;
+    });
   }
 
   async touchAccessToken(tokenId: string, at: string): Promise<void> {
