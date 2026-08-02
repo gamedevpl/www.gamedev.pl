@@ -4,6 +4,7 @@ import {
   DEFAULT_SELF_BUILD_DELIVERY_CAP,
   isActiveBuildRound,
   isBuilderKind,
+  shouldSteerFeedbackViaInbox,
   selfBuildConnectDays,
   selfBuildDeliveryCap,
 } from './builder.js';
@@ -13,6 +14,29 @@ describe('builder helpers', () => {
     expect(isBuilderKind('self')).toBe(true);
     expect(isBuilderKind('platform')).toBe(true);
     expect(isBuilderKind('copilot')).toBe(false);
+  });
+
+  it('steers via inbox for in-flight rounds that already have a dispatch ref', () => {
+    const withRef = { dispatch: { refs: ['task-1'] } };
+    expect(shouldSteerFeedbackViaInbox({ state: 'queued', ...withRef })).toBe(true);
+    expect(shouldSteerFeedbackViaInbox({ state: 'dispatched', ...withRef })).toBe(true);
+    expect(shouldSteerFeedbackViaInbox({ state: 'building', ...withRef })).toBe(true);
+    expect(shouldSteerFeedbackViaInbox({ state: 'submitted', ...withRef })).toBe(true);
+    expect(shouldSteerFeedbackViaInbox({ state: 'gating', ...withRef })).toBe(true);
+    expect(
+      shouldSteerFeedbackViaInbox({
+        state: 'needs_changes',
+        transitions: [{ to: 'needs_changes', at: 't', by: 'gate', reason: 'gate_red' }],
+        ...withRef,
+      }),
+    ).toBe(true);
+    // Dispatch never landed — feedback must retry starting a session.
+    expect(shouldSteerFeedbackViaInbox({ state: 'queued' })).toBe(false);
+    expect(shouldSteerFeedbackViaInbox({ state: 'queued', dispatch: { refs: [] } })).toBe(false);
+    // Round over — a revision is a new session. Publishing has already closed the round.
+    expect(shouldSteerFeedbackViaInbox({ state: 'ready_for_review', ...withRef })).toBe(false);
+    expect(shouldSteerFeedbackViaInbox({ state: 'publishing', ...withRef })).toBe(false);
+    expect(shouldSteerFeedbackViaInbox({ state: 'failed', ...withRef })).toBe(false);
   });
 
   it('treats gate-red / kit_outdated needs_changes as an active round', () => {

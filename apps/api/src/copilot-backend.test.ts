@@ -91,6 +91,14 @@ describe('buildPrompt', () => {
     expect(buildPrompt(BRIEF)).not.toContain('npm run restore');
   });
 
+  it('tells the agent creator steering is inbox-only and to poll while working', () => {
+    const prompt = buildPrompt(BRIEF);
+    expect(prompt).toContain('there will not be a second session');
+    expect(prompt).toContain('npm run progress -- --check');
+    expect(prompt).toContain('before and after every long command');
+    expect(prompt).toContain('five commands');
+  });
+
   it('does not send an undelivered round looking for a store restore that cannot exist', () => {
     // Creator feedback on a job that never delivered used to take the revision branch
     // and open with `npm run restore`. The store had nothing; the agent paid for a

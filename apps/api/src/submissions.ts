@@ -29,6 +29,7 @@ import { resolveBuilderBackend, type AgentBackendRegistry } from './agent-backen
 import {
   isActiveBuildRound,
   isBuilderKind,
+  shouldSteerFeedbackViaInbox,
   selfBuildConnectDays,
   selfBuildDeliveryCap,
   type BuilderKind,
@@ -2540,6 +2541,11 @@ export async function registerSubmissionRoutes(
       if (record?.publishedAt) {
         return reply.status(409).send({ error: 'this game is already published; submit a new idea to make changes' });
       }
+      // Publishing already closed the round (token generation bumped). No session can
+      // collect inbox mail, and starting a fresh resume mid-bake would race the bake.
+      if (record?.state === 'publishing') {
+        return reply.status(409).send({ error: 'this game is currently publishing; try again in a moment' });
+      }
 
       const sanitizedFeedback = sanitizeCreatorText(parsed.data.feedback, { singleLine: false });
       const creatorLocale = record?.locale ?? 'en';
@@ -2581,12 +2587,33 @@ export async function registerSubmissionRoutes(
       // in the request body — so a timed-out send lost the note. The inbox is the durable
       // copy; the dispatch is the head start.
       const inboxText = contextBlock ? `${sanitizedFeedback}\n\n${contextBlock}` : sanitizedFeedback;
+      let queued = false;
       if (store) {
         try {
           await store.appendCreatorMessage(issueNumber, inboxText);
+          queued = true;
         } catch (queueError) {
           request.log.error({ err: queueError }, 'failed to queue feedback for the agent');
         }
+      }
+
+      // An in-flight round that already has a dispatch ref steers via the inbox (every
+      // progress reply carries pending messages) — including gate-wait and gate-red
+      // repair, where the same session is often still alive. Starting another Copilot
+      // task on top is what produced concurrent Subaru sessions, and the agent-tasks
+      // API cannot steer or cancel the first one. Queue only — and only after a successful
+      // append: with the inbox as the sole path, a queue failure must not look like a send.
+      //
+      // A queued job with no refs is the opposite: dispatch never landed, so nobody
+      // will poll — fall through to resumeBuild so feedback can still start a session.
+      if (record && shouldSteerFeedbackViaInbox(record)) {
+        if (!queued) {
+          return reply.status(503).send({ error: 'failed to queue feedback for the agent' });
+        }
+        return reply.send({
+          ok: true,
+          ...(shotId ? { shotId } : {}),
+        });
       }
 
       const outcome = await resumeBuild({
