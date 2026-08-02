@@ -3,12 +3,13 @@ import {
   checksumState,
   MAX_STATE_BYTES,
   MAX_TICK_MS,
+  MAX_WAKE_MS,
   ZONE_SNAPSHOT_VERSION,
   type TickHz,
   type ZoneEvent,
   type ZoneSnapshot,
 } from './contract.js';
-import type { SimCage, SimInstance } from './cage.js';
+import { isSimTimeoutError, type SimCage, type SimInstance } from './cage.js';
 import { validateZoneInput, type ZoneSchema } from './schema.js';
 
 /**
@@ -58,6 +59,22 @@ const OVERRUN_LIMIT = 20;
  *  a tick's event list is meant to be a handful of intents, not a queue to flush. */
 const MAX_PENDING_PER_SLOT = 8;
 
+/**
+ * Interrupt ceiling for init / tick / restore. Headroom over `MAX_TICK_MS` so one GC
+ * pause is not a zone death; still short enough that a runaway tick cannot eat the core.
+ */
+const SIM_CALL_TIMEOUT_MS = Math.max(MAX_TICK_MS * 8, 200);
+
+/**
+ * Interrupt ceiling for `wake` alone.
+ *
+ * Wake is once per hibernation and may catch up hundreds of ticks. Pinning it to the
+ * per-tick budget is what turned a cold `gamedev-world` start into A6 on 2026-08-02
+ * (`biplane-skirmish`, `Script execution timed out` inside `terrainHeight`/`sin`). A
+ * second join four seconds later succeeded — the sim was fine; the budget was not.
+ */
+const SIM_WAKE_TIMEOUT_MS = Math.max(MAX_WAKE_MS * 20, 1_000);
+
 export type ZoneStatus = 'sleeping' | 'live' | 'closed';
 
 export interface ZoneSnapshotStore {
@@ -74,6 +91,14 @@ export type ZoneOutboundFrame =
   | { t: 'snap'; tick: number; seed: number; draws: number; state: string }
   | { t: 'delta'; tick: number; ev: ZoneEvent[]; h?: string }
   | { t: 'closed'; reason: string };
+
+export type ZoneWarnEvent = {
+  kind: 'wake_catchup_skipped';
+  slug: string;
+  zoneId: string;
+  elapsedMs: number;
+  error: unknown;
+};
 
 export interface ZoneOptions {
   id: string;
@@ -100,6 +125,12 @@ export interface ZoneOptions {
   /** Seed for a zone that has never existed. Injected so a test can pin a world. */
   newSeed?: () => number;
   memoryMb?: number;
+  /**
+   * Soft faults the zone chose to survive. Wake catch-up that blows its budget is the
+   * current one: refusing the join would fall the shell back to solo play and fire A6,
+   * which is worse than opening on the last snapshot without the missed minutes.
+   */
+  onWarn?: (event: ZoneWarnEvent) => void;
 }
 
 export class ZoneFullError extends Error {}
@@ -376,13 +407,16 @@ export class Zone {
     const sources = await this.options.source.load(this.slug);
     if (!sources) throw new ZoneUnavailableError(`no simulation is published for ${this.slug}`);
 
-    const sim = await this.options.cage.load({
-      bundleJs: sources.bundleJs,
-      simMathJs: sources.simMathJs,
-      timeoutMs: Math.max(MAX_TICK_MS * 8, 200),
-      memoryMb: this.options.memoryMb ?? 64,
-    });
+    const loadSim = () =>
+      this.options.cage.load({
+        bundleJs: sources.bundleJs,
+        simMathJs: sources.simMathJs,
+        timeoutMs: SIM_CALL_TIMEOUT_MS,
+        wakeTimeoutMs: SIM_WAKE_TIMEOUT_MS,
+        memoryMb: this.options.memoryMb ?? 64,
+      });
 
+    let sim = await loadSim();
     const stored = await this.options.store.load(this.id);
     const now = this.now();
 
@@ -394,7 +428,26 @@ export class Zone {
       // of the elapsed time actually applies is the *game's* decision — the platform
       // hands over real milliseconds and bounds only how long deciding may take.
       const elapsed = Math.max(0, now - stored.savedAt);
-      if (elapsed > 0) sim.wake(elapsed);
+      if (elapsed > 0) {
+        try {
+          sim.wake(elapsed);
+        } catch (error) {
+          if (!isSimTimeoutError(error)) throw error;
+          // A timed-out wake may have left the isolate mid-mutation. Rebuild from the
+          // same snapshot and open without catch-up rather than refuse the join: the
+          // shell's fallback is silent solo play, which looks healthy and is wrong.
+          sim.dispose();
+          sim = await loadSim();
+          sim.restore(stored.seed, stored.state, stored.draws);
+          this.options.onWarn?.({
+            kind: 'wake_catchup_skipped',
+            slug: this.slug,
+            zoneId: this.id,
+            elapsedMs: elapsed,
+            error,
+          });
+        }
+      }
     } else {
       this.seed = (this.options.newSeed ?? defaultSeed)();
       this.tick = 0;

@@ -2,7 +2,8 @@
 
 Entry point for alerts **A6** (zone admission failing) and **A7** (world service 5xx).
 
-**Last drilled: never.**
+**Last drilled: never.** (A6 wake-timeout path diagnosed from prod logs 2026-08-02; degrade
+fix covered by unit test, not a live drill.)
 
 Read this first, because it changes what "working" looks like: when the zone host refuses
 a join, the shell falls back to solo play **without telling the player**. That is correct
@@ -42,8 +43,16 @@ would otherwise tell someone holding a stolen ticket which part they got wrong. 
 cause is only in this log.** A6 fires on the line `zone admission failed`; the `err`
 attached to it is the diagnosis.
 
-Two causes have happened before and are worth checking by eye first:
+Three causes have happened before and are worth checking by eye first:
 
+- **`Script execution timed out` inside `wake` / `tick` / `terrainHeight`** — catch-up
+  after hibernation blew the isolate budget. Seen on a cold `gamedev-world` start with
+  `biplane-skirmish` (A6 `0.oayobzkv6oet`, 2026-08-02 10:36Z): instance AUTOSCALING →
+  first `/zone/ws` failed in ~3s → retry four seconds later succeeded. Since the
+  wake-timeout degrade path landed, this should log
+  `zone wake catch-up skipped after timeout` at warn and **still admit** the player on
+  the last snapshot. If A6 is still firing on this message, the degrade path is not
+  deployed or a non-timeout error is wrapping it — check the revision.
 - **`not a constructor` / anything about `Isolate`** — the isolate cage loaded but is not
   usable. The host boots, passes its own cage assertion, serves `/health`, and fails
   every join. Fixed once in `packages/zone-core/src/cage.ts`; a recurrence most likely

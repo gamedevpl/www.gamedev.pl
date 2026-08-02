@@ -64,6 +64,14 @@ export interface ZoneHostOptions {
   secret: string;
   now?: () => number;
   maxZones?: number;
+  /** Soft faults a zone chose to survive (e.g. wake catch-up skipped after a timeout). */
+  onWarn?: (event: {
+    kind: 'wake_catchup_skipped';
+    slug: string;
+    zoneId: string;
+    elapsedMs: number;
+    error: unknown;
+  }) => void;
 }
 
 interface Seated {
@@ -153,6 +161,7 @@ export class ZoneHost {
         broadcast: (frame) => this.broadcast(claims.zone, frame),
         sendTo: (slot, frame) => this.sendTo(claims.zone, slot, frame),
         now: this.now,
+        onWarn: this.options.onWarn,
       });
       this.zones.set(claims.zone, zone);
       this.members.set(claims.zone, new Set());

@@ -83,7 +83,21 @@ export async function buildWorldApp(options: WorldAppOptions): Promise<WorldApp>
   // trusting exactly one hop resolves to the entry Cloud Run itself wrote. `true` would
   // take the leftmost and let any caller pick their own rate-limit bucket.
   const app = Fastify({ logger: options.logger ?? false, trustProxy: 1 });
-  const host = new ZoneHost({ ...options, secret });
+  const host = new ZoneHost({
+    ...options,
+    secret,
+    onWarn:
+      options.onWarn ??
+      ((event) => {
+        // Not an admission failure — the join proceeds on the last snapshot. Still worth
+        // a warn: skipped catch-up is how a world looks "frozen in time" after a cold
+        // start, and A6 used to fire before this path existed (2026-08-02).
+        app.log.warn(
+          { err: event.error, slug: event.slug, zoneId: event.zoneId, elapsedMs: event.elapsedMs },
+          'zone wake catch-up skipped after timeout',
+        );
+      }),
+  });
   const maxSocketsPerIp = options.maxSocketsPerIp ?? DEFAULT_MAX_SOCKETS_PER_IP;
   const socketsByIp = new Map<string, number>();
 

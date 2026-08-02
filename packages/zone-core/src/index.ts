@@ -40,6 +40,7 @@ export {
   assertProductionCage,
   createIsolatedVmCage,
   createNodeVmCage,
+  isSimTimeoutError,
   SimCageUnavailableError,
   SimLoadError,
   type LoadSimOptions,
@@ -78,4 +79,5 @@ export {
   type ZoneOutboundFrame,
   type ZoneSnapshotStore,
   type ZoneStatus,
+  type ZoneWarnEvent,
 } from './zone.js';
