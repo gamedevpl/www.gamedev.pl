@@ -30,6 +30,11 @@ import {
   newMcpSessionId,
   verifyMcpSessionKey,
 } from './mcp-session-key.js';
+import {
+  MCP_MISSING_CREDENTIAL_HINT,
+  sendMcpOAuthChallenge,
+  shouldIssueMcpOAuthChallenge,
+} from './mcp-oauth-metadata.js';
 import { MCP_ENDPOINT_PATH } from './self-build-connect.js';
 import { BUILD_STEPS, sanitizeCreatorText } from './submission-status.js';
 import type { Store, SubmissionRecord } from './store.js';
@@ -388,9 +393,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       });
     } else {
       // Possession of Mcp-Session-Id alone authorizes nothing.
-      return toolErr(
-        'missing credential: pass sessionKey from start(), or configure Authorization: Bearer <round key>',
-      );
+      return toolErr(MCP_MISSING_CREDENTIAL_HINT);
     }
 
     const record = await store.getSubmission(claims.jobId);
@@ -1357,13 +1360,21 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       return reply.status(400).send(jsonRpcError(null, -32600, 'invalid JSON-RPC body'));
     }
 
+    const message = body as JsonRpcRequest;
+    if (shouldIssueMcpOAuthChallenge(request, message)) {
+      return sendMcpOAuthChallenge(reply);
+    }
+
     // Single message only (streamable HTTP 2025-11-25 dropped batching).
-    return handleJsonRpc(request, reply, body as JsonRpcRequest);
+    return handleJsonRpc(request, reply, message);
   });
 
   app.get(MCP_ENDPOINT_PATH, { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (request, reply) => {
     if (!originAllowed(request)) {
       return reply.status(403).send({ error: 'forbidden origin' });
+    }
+    if (!readBearerToken(request.headers.authorization)) {
+      return sendMcpOAuthChallenge(reply);
     }
     // No server-initiated SSE in v1 — clients drive via POST tools/call.
     return reply.status(405).send({ error: 'SSE listen not offered; use POST for JSON-RPC' });

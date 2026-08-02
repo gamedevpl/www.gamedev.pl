@@ -395,9 +395,22 @@ describe('POST /api/mcp (BY-05)', () => {
     const started = await callTool(app, 'start', { key }, { 'mcp-session-id': sessionId });
     const realKey = (started.structured as { sessionKey: string }).sessionKey;
 
-    const missing = await callTool(app, 'get_brief', {}, { 'mcp-session-id': sessionId });
-    expect(missing.isError).toBe(true);
-    expect(JSON.stringify(missing.structured)).toMatch(/missing credential|sessionKey/i);
+    const missing = await app.inject({
+      method: 'POST',
+      url: '/api/mcp',
+      headers: {
+        'content-type': 'application/json',
+        'mcp-session-id': sessionId,
+      },
+      payload: {
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/call',
+        params: { name: 'get_brief', arguments: {} },
+      },
+    });
+    expect(missing.statusCode).toBe(401);
+    expect(missing.headers['www-authenticate']).toMatch(/resource_metadata="/);
 
     const forged = mintMcpSessionKey(secret, {
       sessionId,

@@ -58,6 +58,7 @@ import { peekQuota } from './quota-gate.js';
 import { registerRateLimit } from './rate-limit.js';
 import { isKnownSpaShellPath, looksLikeStaticAsset } from './spa-paths.js';
 import { logModerationRejection } from './moderation-metrics.js';
+import { registerOAuthProtectedResourceRoutes } from './mcp-oauth-metadata.js';
 
 const GenerateRequestSchema = z.object({
   prompt: z.string().trim().min(1, 'prompt is required').max(500, 'prompt is too long'),
@@ -518,6 +519,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   app.get('/api/version', async () => ({ name: 'gamedev-pl', version: '0.0.0' }));
 
+  // RFC 9728 protected-resource metadata for the MCP endpoint (BY-18a). Public,
+  // cacheable, no auth — advertises where an authorization server will live.
+  registerOAuthProtectedResourceRoutes(app);
+
   // Apex → www canonical-host redirect. Cloud Run domain mappings can't emit a
   // 301, and both www.gamedev.pl and gamedev.pl terminate at this same service,
   // so we canonicalize here. When CANONICAL_HOST=www.gamedev.pl, a request whose
@@ -542,6 +547,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // flow, and the waitlist — which by definition serves people who just failed sign-in).
   app.addHook('onRequest', async (request, reply) => {
     if (!privateBeta) return;
+    // No entry here for the OAuth protected-resource document: it is served outside
+    // `/api/`, so the next line already passes it through. An exemption that never fires
+    // would imply this wall covers that route, and a bypass list has to be read as exact.
     if (!request.url.startsWith('/api/')) return; // static shell always passes through
     if (request.url === '/api/health' || request.url.startsWith('/api/auth')) return;
     if (request.url.startsWith('/api/waitlist')) return;
