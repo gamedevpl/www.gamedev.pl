@@ -592,7 +592,23 @@ export function GameTheater({
           <div className="theater-camera-indicator" role="status" aria-live="polite">
             <span className="theater-camera-dot" aria-hidden="true" />
             {t('sensing.cameraLive')}
+            {sensing.hand.engaged
+              ? sensing.hand.tracking
+                ? ` · ${t('sensing.handTracking')}`
+                : ` · ${t('sensing.handLoading')}`
+              : null}
           </div>
+        ) : null}
+        {/* Phase 1 spike: shell-side aim crosshair so we can judge tracking before GameKit consumes it. */}
+        {sensing.hand.engaged && sensing.hand.tracking && sensing.hand.aim ? (
+          <div
+            className="theater-hand-aim"
+            style={{
+              left: `${((sensing.hand.aim.x + 1) / 2) * 100}%`,
+              top: `${((1 - sensing.hand.aim.y) / 2) * 100}%`,
+            }}
+            aria-hidden="true"
+          />
         ) : null}
         {/* A nudge, not a gate: the game stays playable and running underneath, and
             the hint clears itself the moment the device is turned. */}

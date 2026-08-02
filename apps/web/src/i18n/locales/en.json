@@ -773,7 +773,9 @@
     "cameraStop": "Stop camera",
     "cameraLive": "Camera on",
     "cameraExplain": "Nothing is recorded or sent — the camera stays in your browser and only shows behind the game.",
-    "cameraStartAria": "Start camera backdrop — allow camera access. Nothing is recorded or sent."
+    "cameraStartAria": "Start camera backdrop — allow camera access. Nothing is recorded or sent.",
+    "handLoading": "Hand…",
+    "handTracking": "Hand"
   },
   "pageTitle": {
     "home": "Gamedev.pl — Describe a game, play it",

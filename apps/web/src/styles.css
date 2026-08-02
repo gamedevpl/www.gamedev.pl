@@ -2114,6 +2114,41 @@ body.player-open {
   }
 }
 
+/* Phase 1 hand-verb spike — shell debug crosshair (not game chrome). */
+.theater-hand-aim {
+  position: absolute;
+  z-index: 3;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  border: 2px solid #9ef7b8;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  transform: translate(0, 0);
+}
+
+.theater-hand-aim::before,
+.theater-hand-aim::after {
+  content: '';
+  position: absolute;
+  background: #9ef7b8;
+  left: 50%;
+  top: 50%;
+}
+
+.theater-hand-aim::before {
+  width: 2px;
+  height: 12px;
+  margin: -6px 0 0 -1px;
+}
+
+.theater-hand-aim::after {
+  width: 12px;
+  height: 2px;
+  margin: -1px 0 0 -6px;
+}
+
 .is-playing-full-viewport .game-frame {
   width: 100%;
   height: 100%;
