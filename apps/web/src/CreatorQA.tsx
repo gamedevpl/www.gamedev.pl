@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { BuilderChoice } from './BuilderChoice.js';
 import { isBuilderKind, type BuilderKind } from './builderKind.js';
@@ -32,7 +33,7 @@ interface CreatorQAProps {
   /** Fires on every edit so the caller can park the name with the rest of the session. */
   onTitleChange?: (title: string) => void;
   onCancel?: () => void;
-  /** The submission is in flight; the panel stays up rather than vanishing into a gap. */
+  /** The submission is in flight; the wizard stays up rather than vanishing into a gap. */
   submitting?: boolean;
   /** Shown here as well as in the hero, because this is where the creator is looking. */
   error?: string | null;
@@ -46,6 +47,26 @@ interface CreatorQAProps {
   onBuilderChange?: (builder: BuilderKind) => void;
 }
 
+/**
+ * One screen of the wizard. The questions come from the refiner, so how many there are
+ * — and whether there are any — is only known at render time.
+ */
+type Stage = { kind: 'name' } | { kind: 'question'; question: QAQuestion } | { kind: 'builder' } | { kind: 'review' };
+
+/**
+ * The confirm step, as a full-screen wizard: one decision per screen.
+ *
+ * It was a single long panel below the hero, which put four questions, a name field, a
+ * builder choice and a submit button on one page — and left the hero's own "Build my
+ * game" button live above it, so two green CTAs competed for the same click. A
+ * full-screen overlay is what removes that competition rather than restyling around it,
+ * and one-decision-per-screen is what a phone can show without the creator scrolling
+ * past the thing they were asked to answer.
+ *
+ * Nothing here advances on its own. Selecting an option selects it; moving on is always
+ * an explicit Next (or Skip), because a screen that changes under a tap costs more in
+ * second-guessing than it saves in clicks.
+ */
 export function CreatorQA({
   questions,
   initialConcept,
@@ -65,7 +86,46 @@ export function CreatorQA({
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string[]>>(initialAnswers?.selected ?? {});
   const [customText, setCustomText] = useState<Record<string, string>>(initialAnswers?.custom ?? {});
   const [builder, setBuilder] = useState<BuilderKind>(isBuilderKind(initialBuilder) ? initialBuilder : 'platform');
+  const [step, setStep] = useState(0);
   const titleReady = isSubmittableTitle(title);
+
+  const stages = useMemo<Stage[]>(
+    () => [
+      { kind: 'name' },
+      ...questions.map((question) => ({ kind: 'question' as const, question })),
+      { kind: 'builder' as const },
+      { kind: 'review' as const },
+    ],
+    [questions],
+  );
+
+  // Guards against a restored session pointing past the end of a shorter question list.
+  const stepIndex = Math.min(step, stages.length - 1);
+  const stage = stages[stepIndex];
+  const reviewIndex = stages.length - 1;
+
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const headingRef = useRef<HTMLHeadingElement | null>(null);
+  const nameInputRef = useRef<HTMLInputElement | null>(null);
+
+  // The page behind the overlay must not scroll with it; same approach as the studio's
+  // sheet so there is one way this is done in the app.
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, []);
+
+  // Every stage starts at its own top, and the new heading takes focus so a screen
+  // reader announces the question rather than leaving the caret on the button that
+  // moved us here. Escape is deliberately *not* bound to close: the only exit drops
+  // the pending spec, and that is too destructive for a stray keypress.
+  useEffect(() => {
+    if (scrollerRef.current) scrollerRef.current.scrollTop = 0;
+    headingRef.current?.focus?.();
+  }, [stepIndex]);
 
   const handleBuilderChange = (next: BuilderKind) => {
     setBuilder(next);
@@ -81,7 +141,7 @@ export function CreatorQA({
       const current = prev[question.id] ?? [];
       const isOn = current.includes(label);
       // Single-choice questions replace; multi-choice accumulate. Either way clicking
-      // a chosen chip clears it, so there is always a way back to "no opinion".
+      // a chosen option clears it, so there is always a way back to "no opinion".
       const next = question.multiple
         ? isOn
           ? current.filter((item) => item !== label)
@@ -104,10 +164,10 @@ export function CreatorQA({
   };
 
   /**
-   * A chip and free text are one answer, not two competing ones.
+   * An option and free text are one answer, not two competing ones.
    *
-   * Free text used to *replace* the chip, so clicking "Pixel Art" and then typing
-   * "but with an Amiga palette" threw the chip away and sent only the qualifier —
+   * Free text used to *replace* the selection, so choosing "Pixel Art" and then typing
+   * "but with an Amiga palette" threw the choice away and sent only the qualifier —
    * silently, since the creator had already seen their choice highlighted. Typing a
    * refinement is the commonest way to answer these questions, so the two combine.
    */
@@ -145,128 +205,278 @@ export function CreatorQA({
     onSubmitWithConcept(buildMergedConcept(), title.trim(), builder);
   };
 
-  return (
-    <div className="qa-container panel">
-      <div className="qa-header">
-        {/* Two jobs, two headings: naming the game is the one that always happens, and
-            the questions only exist when the refiner found something underspecified. */}
-        <h3 className="qa-title">{t(questions.length > 0 ? 'qa.title' : 'qa.titleNameOnly')}</h3>
-        <p className="qa-subtitle">{t(questions.length > 0 ? 'qa.subtitle' : 'qa.subtitleNameOnly')}</p>
-      </div>
+  const goTo = (next: number) => {
+    if (submitting) return;
+    // The name gates the build, so it also gates leaving the screen that sets it.
+    if (stage.kind === 'name' && next > stepIndex && !titleReady) return;
+    setStep(Math.max(0, Math.min(next, reviewIndex)));
+  };
 
-      {/* The name goes first because it is the prerequisite, not a detail: nothing is
-          built until the creator has confirmed one, which is what stops a game being
-          named after the first 40 characters of the prompt that asked for it. */}
-      <div className="qa-name">
-        <label className="qa-name-label" htmlFor="qa-game-title">
-          {t('qa.nameLabel')}
-        </label>
-        <input
-          id="qa-game-title"
-          type="text"
-          className="input-text qa-name-input"
-          value={title}
-          maxLength={MAX_TITLE_LENGTH}
-          placeholder={t('qa.namePlaceholder')}
-          onChange={(e) => handleTitleChange(e.target.value)}
-          disabled={submitting}
-        />
-        <p className="qa-name-hint">{t('qa.nameHint')}</p>
-      </div>
+  const currentAnswer = stage.kind === 'question' ? answerFor(stage.question.id) : '';
+  // The shortcut only earns its place while there are questions left to skip; from the
+  // builder step onward Next already leads straight to review.
+  const showShortcut = questions.length > 0 && (stage.kind === 'name' || stage.kind === 'question');
 
-      {/* Questions directly under the header that announces them: the subtitle says
-          "click any proposed options", so the options must be the next thing on
-          screen — not parked below a green button that looks like the end of the
-          panel. The builder choice and the actions follow, in the order they are
-          decided: what the game is, who builds it, go. */}
-      {questions.length > 0 && (
-        <div className="qa-questions-list">
-          {questions.map((q) => {
-            const selected = selectedAnswers[q.id] ?? [];
-            const custom = customText[q.id] ?? '';
+  const nextLabel = () => {
+    if (stage.kind === 'name') return t('qa.continue');
+    if (stage.kind === 'question') return currentAnswer ? t('qa.next') : t('qa.skip');
+    return t('qa.reviewAction');
+  };
 
-            return (
-              <div key={q.id} className="qa-card">
-                <h4 className="qa-card__question">
-                  {q.question}
-                  {q.multiple && <span className="qa-card__hint"> {t('qa.pickSeveral')}</span>}
-                </h4>
-                <div className="qa-chips">
-                  {q.options.map((opt) => {
-                    // Stays lit while free text is typed: the two are now one answer,
-                    // and un-highlighting the chip was how the old behaviour hid itself.
-                    const isSelected = selected.includes(opt.label);
-                    return (
-                      <button
-                        key={opt.label}
-                        type="button"
-                        // Selection lived only in a class, so a screen reader announced
-                        // every chip identically whether or not it was chosen.
-                        aria-pressed={isSelected}
-                        className={`qa-chip ${isSelected ? 'qa-chip--selected' : ''}`}
-                        disabled={submitting}
-                        onClick={() => handleSelectOption(q, opt.label)}
-                      >
-                        <span className="qa-chip__label">{opt.label}</span>
-                        {opt.detail && <span className="qa-chip__detail">{opt.detail}</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {q.allowFreeText !== false && (
-                  <div className="qa-custom-input">
-                    <input
-                      type="text"
-                      className="input-text"
-                      placeholder={t('qa.otherPlaceholder')}
-                      // The placeholder is the only visible cue, and placeholders are
-                      // not names — without this the field is announced unlabelled.
-                      aria-label={`${q.question} — ${t('qa.otherPlaceholder')}`}
-                      value={custom}
-                      disabled={submitting}
-                      onChange={(e) => handleCustomTextChange(q.id, e.target.value)}
-                    />
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {Object.values(selectedAnswers).some(Boolean) || Object.values(customText).some((s) => s.trim().length > 0) ? (
-        <div className="qa-preview">
-          <h5>{t('qa.clarificationsTitle')}</h5>
-          <pre className="qa-preview__code">{buildMergedConcept().slice(initialConcept.trim().length).trim()}</pre>
-        </div>
-      ) : null}
-
-      <BuilderChoice value={builder} onChange={handleBuilderChange} disabled={submitting} />
-
-      {error && <p className="error qa-error">{error}</p>}
-
-      {/* One action bar, after everything it submits. It sticks to the bottom of the
-          viewport while the panel is taller than the screen, so "Create Now" is always
-          in reach without printing the same green button twice. */}
-      <div className="qa-actions">
-        <button
-          type="button"
-          className="btn btn-primary btn-create-now"
-          onClick={handleSubmit}
-          disabled={submitting || !titleReady}
-        >
-          <PixelIcon name="rocket" size={14} /> {submitting ? t('submit.submitting') : t('qa.createNow')}
-        </button>
-        {/* This dismisses the panel and drops the pending spec — it does *not* submit.
-            It was labelled "skip clarifications", which reads as "create without
-            answering"; that is what the primary button next to it already does. */}
+  return createPortal(
+    <div
+      className="qa-wizard"
+      role="dialog"
+      aria-modal="true"
+      aria-label={t(questions.length > 0 ? 'qa.title' : 'qa.titleNameOnly')}
+    >
+      <header className="qa-wizard-header">
+        <p className="qa-wizard-step" aria-live="polite">
+          {t('qa.stepOf', { current: stepIndex + 1, total: stages.length })}
+        </p>
         {onCancel && (
-          <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={submitting}>
-            {t('qa.backToEditing')}
+          // This dismisses the wizard and drops the pending spec — it does *not* submit.
+          <button type="button" className="btn-secondary qa-wizard-exit" onClick={onCancel} disabled={submitting}>
+            <PixelIcon name="close" size={12} />
+            <span>{t('qa.backToEditing')}</span>
           </button>
         )}
+      </header>
+
+      <div className="qa-wizard-progress" aria-hidden="true">
+        {stages.map((_, index) => (
+          <span key={index} className={index < stepIndex ? 'is-done' : index === stepIndex ? 'is-now' : undefined} />
+        ))}
       </div>
-    </div>
+
+      <div className="qa-wizard-scroller" ref={scrollerRef}>
+        <div className="qa-stage" key={stepIndex}>
+          {stage.kind === 'name' && (
+            <>
+              <p className="qa-stage-eyebrow">{t('qa.eyebrowIdea')}</p>
+              <h2 className="qa-title" ref={headingRef} tabIndex={-1}>
+                {t(questions.length > 0 ? 'qa.nameStageTitle' : 'qa.titleNameOnly')}
+              </h2>
+              {/* Grounding: the wizard opens on top of the idea they typed, so it shows
+                  the idea it is about to build rather than asking them to remember it. */}
+              <blockquote className="qa-idea-quote">{initialConcept.trim()}</blockquote>
+              <div className="qa-name">
+                <label className="qa-name-label" htmlFor="qa-game-title">
+                  {t('qa.nameLabel')}
+                </label>
+                <input
+                  id="qa-game-title"
+                  ref={nameInputRef}
+                  type="text"
+                  className="input-text qa-name-input"
+                  value={title}
+                  maxLength={MAX_TITLE_LENGTH}
+                  placeholder={t('qa.namePlaceholder')}
+                  onChange={(e) => handleTitleChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      goTo(stepIndex + 1);
+                    }
+                  }}
+                  disabled={submitting}
+                />
+                <p className="qa-name-hint">{t('qa.nameHint')}</p>
+              </div>
+            </>
+          )}
+
+          {stage.kind === 'question' && (
+            <>
+              <p className="qa-stage-eyebrow">
+                {t('qa.questionCount', { current: stepIndex, total: questions.length })}
+              </p>
+              <h2 className="qa-title" ref={headingRef} tabIndex={-1}>
+                {stage.question.question}
+              </h2>
+              <p className="qa-stage-lede">{stage.question.multiple ? t('qa.pickSeveral') : t('qa.pickOneOrSkip')}</p>
+
+              <div className="qa-options">
+                {stage.question.options.map((opt) => {
+                  // Stays lit while free text is typed: the two are now one answer,
+                  // and un-highlighting the option was how the old behaviour hid itself.
+                  const isSelected = (selectedAnswers[stage.question.id] ?? []).includes(opt.label);
+                  return (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      // Selection lived only in a class, so a screen reader announced
+                      // every option identically whether or not it was chosen.
+                      aria-pressed={isSelected}
+                      className={`qa-option${isSelected ? ' qa-option--selected' : ''}${
+                        stage.question.multiple ? ' qa-option--multi' : ''
+                      }`}
+                      disabled={submitting}
+                      onClick={() => handleSelectOption(stage.question, opt.label)}
+                    >
+                      <span className="qa-option__tick" aria-hidden="true" />
+                      <span className="qa-option__text">
+                        <span className="qa-option__label">{opt.label}</span>
+                        {opt.detail && <span className="qa-option__detail">{opt.detail}</span>}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {stage.question.allowFreeText !== false && (
+                <div className="qa-custom-input">
+                  <input
+                    type="text"
+                    className="input-text"
+                    placeholder={t('qa.otherPlaceholder')}
+                    // The placeholder is the only visible cue, and placeholders are
+                    // not names — without this the field is announced unlabelled.
+                    aria-label={`${stage.question.question} — ${t('qa.otherPlaceholder')}`}
+                    value={customText[stage.question.id] ?? ''}
+                    disabled={submitting}
+                    onChange={(e) => handleCustomTextChange(stage.question.id, e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        goTo(stepIndex + 1);
+                      }
+                    }}
+                  />
+                </div>
+              )}
+            </>
+          )}
+
+          {stage.kind === 'builder' && (
+            <>
+              <p className="qa-stage-eyebrow">{t('qa.eyebrowBuilder')}</p>
+              <h2 className="qa-title" ref={headingRef} tabIndex={-1}>
+                {t('builder.legend')}
+              </h2>
+              <p className="qa-stage-lede">{t('qa.builderLede')}</p>
+              <BuilderChoice value={builder} onChange={handleBuilderChange} disabled={submitting} hideLegend />
+            </>
+          )}
+
+          {stage.kind === 'review' && (
+            <>
+              <p className="qa-stage-eyebrow">{t('qa.reviewEyebrow')}</p>
+              <h2 className="qa-title" ref={headingRef} tabIndex={-1}>
+                {t('qa.reviewTitle')}
+              </h2>
+              <p className="qa-stage-lede">{t('qa.reviewSubtitle')}</p>
+
+              <dl className="qa-review">
+                <div className="qa-review-row">
+                  <dt className="qa-review-label">{t('qa.nameLabel')}</dt>
+                  <dd className="qa-review-value">
+                    <span>{title.trim()}</span>
+                    <button
+                      type="button"
+                      className="qa-review-edit"
+                      disabled={submitting}
+                      onClick={() => goTo(0)}
+                      aria-label={`${t('qa.edit')}: ${t('qa.nameLabel')}`}
+                    >
+                      {t('qa.edit')}
+                    </button>
+                  </dd>
+                </div>
+
+                {questions.map((q, index) => {
+                  const answer = answerFor(q.id);
+                  return (
+                    <div className="qa-review-row" key={q.id}>
+                      <dt className="qa-review-label">{q.question}</dt>
+                      <dd className="qa-review-value">
+                        <span className={answer ? undefined : 'qa-review-unset'}>{answer || t('qa.aiDecides')}</span>
+                        <button
+                          type="button"
+                          className="qa-review-edit"
+                          disabled={submitting}
+                          onClick={() => goTo(index + 1)}
+                          aria-label={`${t('qa.edit')}: ${q.question}`}
+                        >
+                          {t('qa.edit')}
+                        </button>
+                      </dd>
+                    </div>
+                  );
+                })}
+
+                <div className="qa-review-row">
+                  <dt className="qa-review-label">{t('builder.legend')}</dt>
+                  <dd className="qa-review-value">
+                    <span>{t(builder === 'self' ? 'builder.self.title' : 'builder.platform.title')}</span>
+                    <button
+                      type="button"
+                      className="qa-review-edit"
+                      disabled={submitting}
+                      onClick={() => goTo(reviewIndex - 1)}
+                      aria-label={`${t('qa.edit')}: ${t('builder.legend')}`}
+                    >
+                      {t('qa.edit')}
+                    </button>
+                  </dd>
+                </div>
+              </dl>
+
+              {error && <p className="error qa-error">{error}</p>}
+            </>
+          )}
+        </div>
+      </div>
+
+      <footer className="qa-wizard-footer">
+        {stepIndex > 0 && (
+          <button
+            type="button"
+            className="btn btn-secondary qa-back"
+            onClick={() => goTo(stepIndex - 1)}
+            disabled={submitting}
+          >
+            <PixelIcon name="arrowLeft" size={12} /> {t('qa.back')}
+          </button>
+        )}
+
+        {showShortcut && (
+          // The impatience escape hatch: straight to review, where Create Now is. It
+          // lands on the summary rather than submitting blind, so skipping the rest
+          // still shows what is about to be built.
+          <button
+            type="button"
+            className="qa-shortcut"
+            onClick={() => goTo(reviewIndex)}
+            disabled={submitting || !titleReady}
+          >
+            {t('qa.startBuilding')}
+          </button>
+        )}
+
+        {stage.kind === 'review' ? (
+          <button
+            type="button"
+            className="btn btn-primary qa-primary btn-create-now"
+            onClick={handleSubmit}
+            disabled={submitting || !titleReady}
+          >
+            <PixelIcon name="rocket" size={14} /> {submitting ? t('submit.submitting') : t('qa.createNow')}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={`btn btn-primary qa-primary qa-next${
+              stage.kind === 'question' && !currentAnswer ? ' qa-next--skip' : ''
+            }`}
+            onClick={() => goTo(stepIndex + 1)}
+            disabled={submitting || (stage.kind === 'name' && !titleReady)}
+          >
+            {nextLabel()} <PixelIcon name="arrowRight" size={12} />
+          </button>
+        )}
+      </footer>
+    </div>,
+    document.body,
   );
 }

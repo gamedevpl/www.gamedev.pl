@@ -530,7 +530,7 @@ describe('SubmissionStatusView', () => {
 
     // Routed from the state the server reported, not from a mode the creator picked.
     // Published starts a new round, so the builder choice travels with the request
-    // (default: platform — "Our AI dev team").
+    // (default: platform — the Gamedev.pl coding agent).
     expect(mockedSubmitImprovement).toHaveBeenCalledWith(
       'live-token',
       'The second level is far too hard, please add a checkpoint.',

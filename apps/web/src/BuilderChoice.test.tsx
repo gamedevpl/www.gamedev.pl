@@ -45,7 +45,7 @@ describe('BuilderChoice', () => {
     const options = container.querySelectorAll<HTMLButtonElement>('.builder-choice-option');
     expect(options).toHaveLength(2);
     expect(options[0].getAttribute('aria-checked')).toBe('true');
-    expect(options[0].textContent).toContain('Our AI dev team');
+    expect(options[0].textContent).toContain('Gamedev.pl coding agent');
     expect(options[1].textContent).toContain('My own coding agent');
 
     await act(async () => {
@@ -74,7 +74,7 @@ describe('BuilderChoice', () => {
     });
 
     const text = container.textContent ?? '';
-    expect(text).toMatch(/Nasz zespół AI|Mój własny agent/);
+    expect(text).toMatch(/Agent Gamedev.pl|Mój własny agent/);
     expect(text.toLowerCase()).not.toMatch(/\btoken\b/);
 
     await act(async () => root.unmount());

@@ -127,7 +127,6 @@ export function App() {
   // with empty answers — English chip labels must not survive as "selected" under
   // Polish options that no longer match.
   const [qaFormKey, setQaFormKey] = useState(0);
-  const qaRef = useRef<HTMLDivElement | null>(null);
   // Kept next to the QA state so the language-switch effect can clear it too.
   const latestAnswersRef = useRef<PendingQaAnswers>(restoredQa.current?.answers ?? { selected: {}, custom: {} });
 
@@ -333,14 +332,6 @@ export function App() {
       window.setTimeout(resolve, 450);
     });
   }, []);
-
-  // Bring the confirm panel into view when it opens. Keyed on the spec rather than on
-  // the questions: the panel now appears for a clean concept too, to be named.
-  useEffect(() => {
-    if (pendingSpec) {
-      qaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-    }
-  }, [pendingSpec]);
 
   // The static chrome follows the language switcher instantly; the AI questions do
   // not — they were authored in whatever language the refine call used. Re-ask when
@@ -908,26 +899,25 @@ export function App() {
               />
             </div>
 
-            {/* Gated on the pending spec alone: the panel is the naming step, which
-                always happens, and the questions are the part that is sometimes empty. */}
+            {/* Gated on the pending spec alone: the wizard is the naming step, which
+                always happens, and the questions are the part that is sometimes empty.
+                It portals itself to a full-screen overlay, so nothing here positions it. */}
             {pendingSpec && (
-              <div ref={qaRef}>
-                <CreatorQA
-                  key={qaFormKey}
-                  questions={qaQuestions}
-                  initialConcept={pendingSpec.concept}
-                  initialTitle={pendingSpec.title}
-                  onSubmitWithConcept={handleQaComplete}
-                  onTitleChange={handleQaTitleChange}
-                  onCancel={handleQaCancel}
-                  submitting={submissionStatus === 'loading' || submissionStatus === 'refining'}
-                  error={submissionError}
-                  initialAnswers={latestAnswersRef.current}
-                  onAnswersChange={handleQaAnswersChange}
-                  initialBuilder={qaBuilder}
-                  onBuilderChange={handleQaBuilderChange}
-                />
-              </div>
+              <CreatorQA
+                key={qaFormKey}
+                questions={qaQuestions}
+                initialConcept={pendingSpec.concept}
+                initialTitle={pendingSpec.title}
+                onSubmitWithConcept={handleQaComplete}
+                onTitleChange={handleQaTitleChange}
+                onCancel={handleQaCancel}
+                submitting={submissionStatus === 'loading' || submissionStatus === 'refining'}
+                error={submissionError}
+                initialAnswers={latestAnswersRef.current}
+                onAnswersChange={handleQaAnswersChange}
+                initialBuilder={qaBuilder}
+                onBuilderChange={handleQaBuilderChange}
+              />
             )}
 
             {stageContent?.type === 'party' && (
