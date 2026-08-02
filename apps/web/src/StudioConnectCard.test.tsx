@@ -365,4 +365,65 @@ describe('StudioConnectCard', () => {
       await act(async () => root.unmount());
     }
   });
+
+  it('emits connect_deeplink studio telemetry for one-click install clicks', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    const events: WireVisitEvent[] = [];
+    const session = new VisitSession('v-deeplink', 0, (body) => {
+      events.push(...body.events);
+    });
+    setVisitSessionForTesting(session);
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    try {
+      await act(async () => {
+        root.render(createElement(StudioConnectCard, { token: 'status-tok' }));
+        await flush();
+      });
+      await act(async () => {
+        await flush();
+      });
+
+      const cursor = container.querySelector<HTMLAnchorElement>('[data-testid="connect-install-cursor"]');
+      const vscode = container.querySelector<HTMLAnchorElement>('[data-testid="connect-install-vscode"]');
+      expect(cursor).toBeTruthy();
+      expect(vscode).toBeTruthy();
+
+      await act(async () => {
+        cursor?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flush();
+      });
+      await act(async () => {
+        vscode?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flush();
+      });
+      session.flush();
+
+      expect(events).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'studio_step',
+            step: 'connect_deeplink',
+            builder: 'self',
+            detail: 'cursor',
+          }),
+          expect.objectContaining({
+            type: 'studio_step',
+            step: 'connect_deeplink',
+            builder: 'self',
+            detail: 'vscode',
+          }),
+        ]),
+      );
+      // Deeplink clicks must not be recorded as connect_copied.
+      expect(events.some((event) => event.type === 'studio_step' && event.step === 'connect_copied')).toBe(false);
+    } finally {
+      setVisitSessionForTesting(null);
+      await act(async () => root.unmount());
+    }
+  });
 });

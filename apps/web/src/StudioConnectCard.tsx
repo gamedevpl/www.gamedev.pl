@@ -130,6 +130,11 @@ export function StudioConnectCard({ token, agentConnected = false }: StudioConne
     await copyText(realSnippet, 'config');
   };
 
+  /** One-click install — URL only; never a credential. Separate from connect_copied. */
+  const recordDeeplinkClick = (clientId: 'cursor' | 'vscode') => {
+    recordStudioStep('connect_deeplink', 'self', clientId);
+  };
+
   const handleRotate = async () => {
     setRotating(true);
     setRotateError(null);
@@ -205,6 +210,7 @@ export function StudioConnectCard({ token, agentConnected = false }: StudioConne
                       className="studio-connect-install-link"
                       href={installLinks.cursor}
                       data-testid="connect-install-cursor"
+                      onClick={() => recordDeeplinkClick('cursor')}
                     >
                       {t('connect.installLinks.cursor')}
                     </a>
@@ -212,6 +218,7 @@ export function StudioConnectCard({ token, agentConnected = false }: StudioConne
                       className="studio-connect-install-link"
                       href={installLinks.vscode}
                       data-testid="connect-install-vscode"
+                      onClick={() => recordDeeplinkClick('vscode')}
                     >
                       {t('connect.installLinks.vscode')}
                     </a>
@@ -292,6 +299,7 @@ export function StudioConnectCard({ token, agentConnected = false }: StudioConne
                       className="studio-connect-install-link"
                       href={installLinks.cursor}
                       data-testid="connect-install-cursor"
+                      onClick={() => recordDeeplinkClick('cursor')}
                     >
                       {t('connect.installLinks.cursor')}
                     </a>
@@ -299,6 +307,7 @@ export function StudioConnectCard({ token, agentConnected = false }: StudioConne
                       className="studio-connect-install-link"
                       href={installLinks.vscode}
                       data-testid="connect-install-vscode"
+                      onClick={() => recordDeeplinkClick('vscode')}
                     >
                       {t('connect.installLinks.vscode')}
                     </a>

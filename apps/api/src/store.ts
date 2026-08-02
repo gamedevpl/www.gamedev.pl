@@ -587,8 +587,8 @@ export interface VisitEvent {
    */
   builder?: string;
   /**
-   * `studio_step`: closed detail (`install` | `kickoff` | `green` | `red` | `kit_outdated` |
-   * `creator` | `agent` for `round_opened`).
+   * `studio_step`: closed detail (`install` | `kickoff` | `header` | `cursor` | `vscode` |
+   * `green` | `red` | `kit_outdated` | `creator` | `agent` for `round_opened`).
    * Never free text, never a game identity.
    */
   detail?: string;

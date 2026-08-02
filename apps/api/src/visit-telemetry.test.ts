@@ -252,6 +252,20 @@ describe('POST /api/telemetry/visit', () => {
           detail: 'kickoff',
           msSinceStart: 200,
         },
+        {
+          type: 'studio_step',
+          step: 'connect_deeplink',
+          builder: 'self',
+          detail: 'cursor',
+          msSinceStart: 250,
+        },
+        {
+          type: 'studio_step',
+          step: 'connect_copied',
+          builder: 'self',
+          detail: 'header',
+          msSinceStart: 260,
+        },
         { type: 'studio_step', step: 'agent_signaled', builder: 'self', msSinceStart: 12_000 },
         {
           type: 'studio_step',
@@ -278,6 +292,18 @@ describe('POST /api/telemetry/visit', () => {
           step: 'connect_copied',
           builder: 'self',
           detail: 'kickoff',
+        }),
+        expect.objectContaining({
+          type: 'studio_step',
+          step: 'connect_deeplink',
+          builder: 'self',
+          detail: 'cursor',
+        }),
+        expect.objectContaining({
+          type: 'studio_step',
+          step: 'connect_copied',
+          builder: 'self',
+          detail: 'header',
         }),
         expect.objectContaining({
           type: 'studio_step',

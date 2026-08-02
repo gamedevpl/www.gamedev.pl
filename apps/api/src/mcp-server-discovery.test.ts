@@ -87,7 +87,9 @@ describe(`GET ${MCP_SERVER_JSON_PATH} (BY-18c)`, () => {
     expect(JSON.stringify(body)).not.toContain('evil.test');
   });
 
-  it('reaches the discovery route through the private-beta wall without a site session', async () => {
+  // Well-known paths sit outside `/api/`, so the private-beta wall never sees them —
+  // this asserts the document stays public under beta, not that an exemption list admits it.
+  it('serves the discovery document without a site session when private beta is on', async () => {
     process.env.CANONICAL_HOST = 'www.gamedev.pl';
     process.env.PRIVATE_BETA = 'true';
     app = await buildApp({ store: new InMemoryStore(), sessionSecret: 'dev-session-secret-change-me' });
