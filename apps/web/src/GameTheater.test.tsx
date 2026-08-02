@@ -438,6 +438,10 @@ describe('GameTheater how-to-play visit telemetry', () => {
         pill!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       });
       expect(container.querySelector('.game-theater-bar')).not.toBeNull();
+      // And the bar it brings back is the whole bar: the report path (DSA art.
+      // 16) lives in the More panel, so an auto-hide is only allowed to make it
+      // one tap deeper — never to make it unreachable.
+      expect(container.querySelector('a.report-btn')).not.toBeNull();
     } finally {
       vi.useRealTimers();
     }
