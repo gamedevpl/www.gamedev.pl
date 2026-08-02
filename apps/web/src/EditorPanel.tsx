@@ -352,7 +352,11 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
                         key={`${row}-${col}`}
                         type="button"
                         role="gridcell"
-                        className={`editor-cell tile-${tile?.key ?? 'unknown'}`}
+                        // A declared color wins and suppresses the fallback tile
+                        // class, so the painter shows the game's own palette; the
+                        // class-based look is for definitions that declare none.
+                        className={`editor-cell${tile?.color ? '' : ` tile-${tile?.key ?? 'unknown'}`}`}
+                        {...(tile?.color ? { style: { background: tile.color } } : {})}
                         aria-label={`${row + 1},${col + 1}: ${tile ? name(tile.label) : char}`}
                         onClick={() => {
                           const selected = spec.item.tiles.find((entry) => entry.key === tileKey);
@@ -370,10 +374,14 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
                     type="button"
                     role="radio"
                     aria-checked={tileKey === tile.key}
-                    className={`editor-tile tile-${tile.key}${tileKey === tile.key ? ' is-selected' : ''}`}
+                    className={`editor-tile${tileKey === tile.key ? ' is-selected' : ''}`}
                     onClick={() => setTileKey(tile.key)}
                   >
-                    <span className={`editor-tile-swatch tile-${tile.key}`} aria-hidden="true" />
+                    <span
+                      className={`editor-tile-swatch${tile.color ? '' : ` tile-${tile.key}`}`}
+                      {...(tile.color ? { style: { background: tile.color } } : {})}
+                      aria-hidden="true"
+                    />
                     {name(tile.label)}
                   </button>
                 ))}

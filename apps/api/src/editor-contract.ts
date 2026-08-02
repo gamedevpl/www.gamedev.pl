@@ -31,6 +31,7 @@ export const MAX_GRID_ROWS = 64;
 
 const KEY_PATTERN = /^[a-z][a-zA-Z0-9]{0,23}$/;
 const TILE_KEY_PATTERN = /^[a-z][a-z0-9-]{0,15}$/;
+const HEX_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
 const PROPERTY_TYPES = ['text', 'int', 'number', 'enum', 'bool'] as const;
 
 export interface EditorLabel {
@@ -43,6 +44,17 @@ export interface TileSpec {
   /** Single printable ASCII character used in a map's `rows` strings. */
   char: string;
   label: EditorLabel;
+  /**
+   * How this tile looks in the Studio's painter, as `#rrggbb`.
+   *
+   * Optional, and the reason it exists: without it the editor invents a generic
+   * palette, so a creator paints in one set of colors and plays in another —
+   * and two tiles the *game* draws distinctly can land on near-identical greys.
+   * The game already knows its own art direction, so it declares it here and
+   * the painter matches what the player will see. The platform still owns the
+   * chrome; this is the one piece of look the game is authoritative about.
+   */
+  color?: string;
 }
 
 export type PropertySpec =
@@ -225,9 +237,18 @@ function validateTilemapSpec(owner: string, raw: unknown, errors: string[]): Til
         errors.push(`${owner}: tile keys and chars must be unique ("${tile.key}" / "${tile.char}")`);
         continue;
       }
+      if (tile.color !== undefined && (typeof tile.color !== 'string' || !HEX_COLOR_PATTERN.test(tile.color))) {
+        errors.push(`${owner}: tile "${tile.key}" color must be a #rrggbb string`);
+        continue;
+      }
       keys.add(tile.key);
       chars.add(tile.char);
-      tiles.push({ key: tile.key, char: tile.char, label: { en: tile.label.en, pl: tile.label.pl } });
+      tiles.push({
+        key: tile.key,
+        char: tile.char,
+        label: { en: tile.label.en, pl: tile.label.pl },
+        ...(typeof tile.color === 'string' ? { color: tile.color.toLowerCase() } : {}),
+      });
     }
   }
 

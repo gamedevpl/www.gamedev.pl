@@ -44,7 +44,13 @@ export type EditorConstraint =
   | { tile: string; min?: number; max?: number; exactly?: number }
   | { equalCounts: [string, string] };
 
-export type EditorTileSpec = { key: string; char: string; label: EditorLabel };
+export type EditorTileSpec = {
+  key: string;
+  char: string;
+  label: EditorLabel;
+  /** `#rrggbb` the game declared for this tile, so the painter matches the played game. */
+  color?: string;
+};
 
 export type EditorTilemapSpec = {
   widget: 'tilemap';
