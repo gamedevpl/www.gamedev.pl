@@ -183,10 +183,15 @@ export function RemixPanel(props: {
     recordRemixStep('opened');
   }, []);
 
+  // Identity, not the object: this effect mints a session and the only thing
+  // about the viewer it depends on is which account they are. Keying on the
+  // object would re-run — and re-mint — on any render that hands back a fresh
+  // one, and a game that declares no values makes that loop self-sustaining.
+  const uid = user?.uid ?? null;
   useEffect(() => {
     // No session without a session: the API 401s signed out, and the composer
     // needs nothing from the server until send — so a visitor can type first.
-    if (!user) return;
+    if (!uid) return;
     let cancelled = false;
     startRemix(props.slug)
       .then((started) => {
@@ -209,7 +214,7 @@ export function RemixPanel(props: {
     return () => {
       cancelled = true;
     };
-  }, [props.slug, props.initialParams, pushToGame, user]);
+  }, [props.slug, props.initialParams, pushToGame, uid]);
 
   // The reward lands the second they're through the wall: once the session
   // exists and a stashed request is waiting, run it with no further taps.
@@ -224,6 +229,14 @@ export function RemixPanel(props: {
     void ask(pending, session);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per session arrival
   }, [session, props.slug]);
+
+  // A panel that opened onto nothing. Recorded against the same `opened`
+  // denominator so the share of visits that met a game with no way in is a
+  // number rather than an anecdote — it is the difference between "people are
+  // not interested" and "we showed them a door that does not open".
+  useEffect(() => {
+    if (session && !session.canAssist && !session.canCode) recordRemixStep('no_lane');
+  }, [session]);
 
   function setParam(key: string, value: EditorParamValue) {
     const next = { ...valuesRef.current, [key]: value };
@@ -433,7 +446,18 @@ export function RemixPanel(props: {
             {lane === 'idle' ? t('remix.ask') : t('remix.asking')}
           </button>
         </form>
-      ) : null}
+      ) : (
+        /*
+         * No lane answers here — the game declares no parameters and its code is
+         * not reachable for a rebuild. The panel has to say so: a surface whose
+         * whole promise is "say what you want" cannot open with no place to say
+         * it and no explanation, which reads as broken rather than as not-yet.
+         * The way onward stays offered below.
+         */
+        <p className="remix-note is-info" role="status">
+          {t('remix.notHere')}
+        </p>
+      )}
 
       {note ? (
         <p className={`remix-note is-${note.kind}`} role="status">
@@ -516,24 +540,21 @@ export function RemixPanel(props: {
       ) : null}
 
       {/*
-       * The two upgrade triggers, side by side and never a wall. "Make it yours"
-       * hands the remix to the ordinary creation flow as a prefilled concept —
-       * the honest version of keeping it, since a remix itself never publishes.
+       * No standing "make this yours" (owner decision, 2026-08-02). It sat under
+       * the composer from the first frame — before anything had been changed —
+       * so it read as the panel's purpose rather than as a next step, and it was
+       * the only thing on screen whenever no lane could answer. The intended
+       * shape is earned and sequential: change something, share it, and forking
+       * follows from the share. Until that sequence exists, the panel offers
+       * nothing it has not earned.
        */}
-      <div className="remix-actions">
-        {expert && specs ? (
+      {expert && specs ? (
+        <div className="remix-actions">
           <button type="button" className="remix-action" onClick={() => void share()}>
             {t('remix.share')}
           </button>
-        ) : null}
-        <a
-          className="remix-action is-primary"
-          href={`/?concept=${encodeURIComponent(t('remix.conceptSeed', { slug: props.slug }))}`}
-          onClick={() => recordRemixStep('keep_clicked')}
-        >
-          {t('remix.makeItYours')}
-        </a>
-      </div>
+        </div>
+      ) : null}
       {shareUrl ? <p className="remix-share-url">{shareUrl}</p> : null}
       <AuthModal
         isOpen={authOpen}

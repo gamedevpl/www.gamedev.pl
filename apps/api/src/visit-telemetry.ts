@@ -77,6 +77,7 @@ const AssistStepSchema = z.enum(['asked', 'applied', 'handoff', 'rejected']);
 /** The player-side remix funnel — see visit-funnel's REMIX_STEPS for the order's meaning. */
 const RemixStepSchema = z.enum([
   'opened',
+  'no_lane',
   'typed',
   'wall_shown',
   'signed_in',

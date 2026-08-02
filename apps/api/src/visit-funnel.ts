@@ -172,6 +172,14 @@ export type AssistStep = (typeof ASSIST_STEPS)[number];
  */
 export const REMIX_STEPS = [
   'opened',
+  // Opened onto nothing: the game declares no parameters and its code is not
+  // reachable, so there was no composer to type into. Sits directly under
+  // `opened` because it is the reason a visit never reaches `typed` — without
+  // it, "curious but silent" and "shown a dead panel" are the same number, and
+  // the first is a product problem while the second is a coverage one. It names
+  // no game: the visit stream never carries a slug, and how many games can
+  // answer is a question for the catalog, not for this stream.
+  'no_lane',
   // The wall triple. `typed → signed_in` is the number the product strategy
   // turns on: desire created versus what the sign-in wall costs. `typed` fires
   // on send regardless of auth, so the gap is measured rather than guessed.

@@ -78,11 +78,20 @@ interface RemixSession {
   /** Accumulated edits, newest wins. Applied over `sources` on every rebuild. */
   overrides: Record<string, string>;
   /**
-   * Whether every source is in hand. Only a store-era delivery hands over its
-   * files, and the code lane needs them to map regions — a repo-era game gets
-   * the params lane and an honest "not that deep, here" for the rest.
+   * Whether the game's authoritative copy is the store's. It decides where a
+   * rebuild's base comes from: a store game's files replace the ref's entirely,
+   * a repo game keeps the ref as its base and carries only the edit.
    */
   fromStore: boolean;
+  /**
+   * Whether the game's own sources are in hand for the code lane to map.
+   *
+   * True from the start for a store-era game, which hands over its files at
+   * publish. A repo-era game keeps them on the ref, and fetching them costs a
+   * walk of its whole import graph — so it happens on the first request that
+   * actually needs it, and once.
+   */
+  sourcesLoaded: boolean;
   definition: EditorDefinition | null;
   title: string;
   codeEdits: number;
@@ -273,6 +282,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       ref: loaded.ref,
       sources: loaded.sources,
       fromStore: loaded.fromStore,
+      sourcesLoaded: loaded.fromStore,
       overrides: {},
       definition: editorJson ? parseEditorDefinition(editorJson).definition : null,
       title: claims.slug,
@@ -375,6 +385,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         ref: loaded.ref,
         sources: loaded.sources,
         fromStore: loaded.fromStore,
+        sourcesLoaded: loaded.fromStore,
         overrides: {},
         definition,
         title: params.data.slug,
@@ -391,7 +402,11 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
           ? Object.fromEntries(Object.entries(definition.params).map(([key, spec]) => [key, spec.default]))
           : null,
         canAssist: Boolean(options.assistant && assistEnabled() && definition?.params),
-        canCode: Boolean(options.codeLane && codeLaneEnabled() && loaded.fromStore),
+        // Every era, now: a repo-era game's sources are reachable through the
+        // bundler's own walk, so the deep lane is no longer a store-only
+        // privilege. Whether *this* game can actually be assembled is answered
+        // on the first request that needs it rather than paid for here.
+        canCode: Boolean(options.codeLane && codeLaneEnabled()),
         expiresInMs: REMIX_TTL_MS,
       });
     },
@@ -466,12 +481,24 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       if (!options.codeLane || !codeLaneEnabled()) {
         return reply.status(503).send({ error: 'code changes are not available here' });
       }
-      if (!session.fromStore) {
-        // Repo-era games keep their sources on the ref; the lane needs them in
-        // hand to map regions, so this is honestly "not here", not a failure.
-        // Checked on `fromStore` rather than on the source count, because such a
-        // session now legitimately carries one file — its declaration.
-        return reply.status(409).send({ error: 'this game cannot be remixed that deeply yet' });
+      // A repo-era game keeps its code on the ref, so the lane has nothing to map
+      // regions in until the sources are in hand. Fetched here rather than at
+      // `start` because it costs a full walk of the game's import graph, and the
+      // overwhelming majority of remixes never ask for a rebuild — the cost lands
+      // on the request that needs it, once per session.
+      if (!session.fromStore && !session.sourcesLoaded) {
+        const sources = options.githubClient
+          ? await options.githubClient.getGameSourceMap(session.ref, session.slug)
+          : null;
+        if (!sources) {
+          // A game whose sources cannot be assembled cannot be edited; that is a
+          // fact about this game, not a failure of the request.
+          return reply.status(409).send({ error: 'this game cannot be remixed that deeply yet' });
+        }
+        // The declaration already in hand stays: it is not part of the import
+        // graph, and the params lane is still reading it.
+        session.sources = { ...session.sources, ...sources };
+        session.sourcesLoaded = true;
       }
       if (session.codeEdits >= MAX_CODE_EDITS) {
         return reply.status(429).send({ error: "that's as far as this remix goes — start a new one" });
