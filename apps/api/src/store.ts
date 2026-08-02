@@ -3001,8 +3001,9 @@ export class InMemoryStore implements Store {
   async finishAgentOpenRound(slug: string, at: string): Promise<void> {
     const existing = this.gameAgentKeys.get(slug);
     if (!existing?.agentOpenRoundPending) return;
-    const { agentOpenRoundPending: _pending, ...rest } = existing;
-    this.gameAgentKeys.set(slug, { ...rest, updatedAt: at });
+    const next: GameAgentKeyRecord = { ...existing, updatedAt: at };
+    delete next.agentOpenRoundPending;
+    this.gameAgentKeys.set(slug, next);
   }
 
   // Test/inspection only — production reads go through `listWaitlistEntries`.
@@ -4828,8 +4829,9 @@ export class FirestoreStore implements Store {
       if (!snap.exists) return;
       const existing = snap.data() as GameAgentKeyRecord;
       if (!existing.agentOpenRoundPending) return;
-      const { agentOpenRoundPending: _pending, ...rest } = existing;
-      tx.set(docRef, { ...rest, updatedAt: at });
+      const next: GameAgentKeyRecord = { ...existing, updatedAt: at };
+      delete next.agentOpenRoundPending;
+      tx.set(docRef, next);
     });
   }
 
