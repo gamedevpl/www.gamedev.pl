@@ -2,7 +2,16 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-const css = readFileSync(fileURLToPath(new URL('./styles.css', import.meta.url)), 'utf8');
+/**
+ * Comments are stripped up front so these assertions read declarations rather than
+ * prose. The rules below are commented heavily, and a comment that *names* the thing
+ * it is explaining — "not `inset: 0`", "below the 1000 tier" — otherwise satisfies or
+ * defeats the very pattern meant to check the declaration underneath it.
+ */
+const css = readFileSync(fileURLToPath(new URL('./styles.css', import.meta.url)), 'utf8').replace(
+  /\/\*[\s\S]*?\*\//g,
+  '',
+);
 
 /**
  * The declarations of the first block whose selector list includes `selector` — the
@@ -70,5 +79,19 @@ describe('the creator confirm wizard as a full-screen overlay', () => {
   it('pays both safe-area insets, because it replaces the chrome that used to', () => {
     expect(rule('.qa-wizard-header')).toMatch(/padding-top:\s*max\(12px, env\(safe-area-inset-top\)\)/);
     expect(rule('.qa-wizard-footer')).toMatch(/env\(safe-area-inset-bottom\)/);
+  });
+
+  /**
+   * Two stages are a text field, so the keyboard is up for much of this flow. A
+   * bottom-anchored `inset: 0` box resolves against iOS's large viewport and puts the
+   * footer — Back, Skip, Next — behind Safari's own bar. dvh tracks what is visible,
+   * with the vh line kept underneath it for browsers that lack dvh.
+   */
+  it('is sized against the visible viewport, not the large one', () => {
+    const wizard = rule('.qa-wizard');
+
+    expect(wizard).not.toMatch(/inset:\s*0/);
+    expect(wizard).toMatch(/height:\s*100vh/);
+    expect(wizard).toMatch(/height:\s*100dvh/);
   });
 });

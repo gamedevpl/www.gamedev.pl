@@ -4077,7 +4077,16 @@ body.player-open {
 /* Creator confirm wizard — see CreatorQA.tsx for why this is full-screen. */
 .qa-wizard {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  /* Not `inset: 0`. Two of these stages are a text field, so the keyboard is up for
+     much of this flow, and iOS resolves a bottom-anchored 100vh box against the LARGE
+     viewport — the one with the toolbars retracted — which puts the footer's Back and
+     Next behind Safari's own bar. dvh tracks the visible viewport. Kept as a second
+     declaration so browsers without dvh keep the vh line. */
+  height: 100vh;
+  height: 100dvh;
   /* Wedged deliberately between two groups. Above the sticky .app-header (100), which
      otherwise paints over this wizard's own header and swallows its step label and exit
      control, and above the install/update banners (900), which are fixed to the bottom
