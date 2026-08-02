@@ -165,6 +165,28 @@ jobs:
             ENV_VARS="${ENV_VARS}|SEED_DISPATCH=${SEED_DISPATCH_VAL}"
           fi
 
+          # The editor's natural-language tuning lane: one Vertex call turns "make the
+          # dog a bit bigger" into a patch against the game's own declared params. Same
+          # threading rule as SEED_DISPATCH above — a hand-set value would vanish on the
+          # next deploy and the composer would go quiet with nothing to explain it.
+          # Absent or not "true" leaves the route answering 503, which is the state
+          # every deployment was in before it existed.
+          EDITOR_ASSIST_VAL="${{ vars.EDITOR_ASSIST }}"
+          if [ -n "$EDITOR_ASSIST_VAL" ]; then
+            ENV_VARS="${ENV_VARS}|EDITOR_ASSIST=${EDITOR_ASSIST_VAL}"
+          fi
+
+          # The code lane: a request that no setting can express becomes one scoped
+          # source edit, rebuilt server-side and swapped into the player's own frame.
+          # Separate from EDITOR_ASSIST because it is a different cost and a different
+          # blast radius — model-written code, even though it is ephemeral and never
+          # published — so it must be switchable on its own. Threaded, not hand-set,
+          # for the same reason as everything above.
+          CODE_LANE_VAL="${{ vars.CODE_LANE }}"
+          if [ -n "$CODE_LANE_VAL" ]; then
+            ENV_VARS="${ENV_VARS}|CODE_LANE=${CODE_LANE_VAL}"
+          fi
+
           # Threaded through the same way as ZONE_HOST_URL, and for the same reason:
           # --set-env-vars replaces the whole map, so a value set by hand on the service
           # would be wiped by the next deploy — here that would silently pull room

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   EDITOR_FILE,
   GENERATED_CONTENT_PATH,
+  PARAMS_KEY,
   generateEditorContentModule,
   parseEditorDefinition,
   validateEditorContent,
@@ -12,6 +13,8 @@ import type { GamesStore } from './games-store.js';
 import { MAX_EDITOR_DRAFT_BYTES, type Store, type SubmissionRecord } from './store.js';
 import type { ContentChecker } from './moderation.js';
 import { logModerationRejection } from './moderation-metrics.js';
+import { MAX_UTTERANCE_LENGTH, applyAssistPatches, assistEnabled, type EditorAssistant } from './editor-assist.js';
+import type { EditingGate } from './creation-limits.js';
 
 /**
  * The Creator Studio content editor's API (EditorKit L3/L4 — the platform half
@@ -56,10 +59,27 @@ const DraftSchema = z.object({
 /** Publishes are a real gate run each — debounce, not quota (research doc §7). */
 export const PUBLISH_COOLDOWN_MS = 10 * 60_000;
 
+const AssistSchema = z.object({
+  utterance: z.string().trim().min(2).max(MAX_UTTERANCE_LENGTH),
+  /** The document the creator is looking at, so relative requests move live values. */
+  content: z.record(z.string(), z.unknown()),
+});
+
+/**
+ * Each assist is one paid Vertex call. Bounded per creator per day for the same
+ * reason refines are: the ceiling should be a decision, not the invite count.
+ */
+export const DEFAULT_DAILY_ASSIST_QUOTA = 60;
+
 export interface EditorRoutesOptions {
   store: Store;
   gamesStore?: GamesStore;
   contentChecker?: ContentChecker;
+  /** The natural-language tuning router. Absent (or flag off) → the route 503s. */
+  assistant?: EditorAssistant;
+  /** The platform-wide editing spend breaker. Absent → per-user limits only. */
+  editingGate?: EditingGate;
+  dailyAssistQuota?: number;
   /** Same seam the delivery route uses — starts the gate on a new candidate. */
   onSourcesDelivered?: (input: {
     issueNumber: number;
@@ -140,12 +160,28 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
 
   /** The definition's own defaults, shaped as a content document. */
   function defaultContent(definition: EditorDefinition): Record<string, unknown> {
-    return Object.fromEntries(Object.entries(definition.content).map(([key, spec]) => [key, spec.defaults]));
+    const content: Record<string, unknown> = Object.fromEntries(
+      Object.entries(definition.content).map(([key, spec]) => [key, spec.defaults]),
+    );
+    if (definition.params) {
+      content[PARAMS_KEY] = Object.fromEntries(
+        Object.entries(definition.params).map(([key, spec]) => [key, spec.default]),
+      );
+    }
+    return content;
   }
 
   /** Every declared-text value in a content document, for moderation. */
   function textFields(definition: EditorDefinition, content: Record<string, unknown>): string[] {
     const texts: string[] = [];
+    if (definition.params) {
+      const values = content[PARAMS_KEY];
+      for (const [name, spec] of Object.entries(definition.params)) {
+        if (spec.type !== 'text' || !values || typeof values !== 'object') continue;
+        const value = (values as Record<string, unknown>)[name];
+        if (typeof value === 'string' && value.trim().length > 0) texts.push(value);
+      }
+    }
     for (const [key, spec] of Object.entries(definition.content)) {
       const textProps = Object.entries(spec.item.properties)
         .filter(([, propertySpec]) => propertySpec.type === 'text')
@@ -182,7 +218,8 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
       version: resolved.version,
       definition: resolved.definition,
       content: defaultContent(resolved.definition),
-      draft: draft && draftContent ? { content: draftContent, revision: draft.revision, updatedAt: draft.updatedAt } : null,
+      draft:
+        draft && draftContent ? { content: draftContent, revision: draft.revision, updatedAt: draft.updatedAt } : null,
     });
   });
 
@@ -207,7 +244,9 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
       // draft that saves is a draft that can eventually pass the gate.
       const problems = validateEditorContent(resolved.definition, body.data.content);
       if (problems.length > 0) {
-        return reply.status(422).send({ error: 'draft does not fit this game\'s content schema', problems: problems.slice(0, 20) });
+        return reply
+          .status(422)
+          .send({ error: "draft does not fit this game's content schema", problems: problems.slice(0, 20) });
       }
 
       // Declared text is shown to players once published, so it is moderated at
@@ -248,6 +287,123 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
     return reply.send({ ok: true });
   });
 
+  /**
+   * Natural language → a validated params patch.
+   *
+   * Deliberately *returns* a document instead of writing one: the creator's
+   * draft is still saved by the ordinary `PUT …/draft` path, so validation,
+   * moderation, revision conflicts and autosave behave identically whether a
+   * value came from a slider or a sentence. This route's own guarantees are
+   * narrower and mechanical — the model can only name declared params, values
+   * are clamped into declared ranges, and a patch set that would not validate
+   * is dropped whole.
+   */
+  app.post(
+    '/api/me/games/:slug/editor/assist',
+    { config: { rateLimit: { max: 20, timeWindow: 60_000 } } },
+    async (request, reply) => {
+      if (!requireUser(request, reply)) return;
+      if (!options.assistant || !assistEnabled()) {
+        return reply.status(503).send({ error: 'assist is not enabled on this deployment' });
+      }
+      const resolved = await resolveEditable(request, reply);
+      if (!resolved) return;
+      const body = AssistSchema.safeParse(request.body);
+      if (!body.success) {
+        return reply.status(400).send({ error: body.error.issues[0]?.message ?? 'invalid request' });
+      }
+      if (!resolved.definition.params) {
+        return reply.status(409).send({ error: 'this game has no tunable settings' });
+      }
+
+      // Moderation first, before a paid call and before the text reaches a model
+      // — same fail-closed posture as every other creator-text path.
+      if (options.contentChecker) {
+        const verdict = await options.contentChecker.check(body.data.utterance);
+        if (!verdict.allowed) {
+          logModerationRejection(request.log, {
+            surface: 'editor_assist',
+            uid: request.user?.uid,
+            category: verdict.category,
+          });
+          return reply.status(422).send({ error: 'that request was rejected', category: verdict.category ?? 'other' });
+        }
+      }
+
+      const dateStr = new Date(now()).toISOString().slice(0, 10);
+      const quota = await store.checkAndIncrementQuota(
+        request.user!.uid,
+        dateStr,
+        options.dailyAssistQuota ?? Number(process.env.DAILY_ASSIST_QUOTA ?? DEFAULT_DAILY_ASSIST_QUOTA),
+        'assists',
+      );
+      if (!quota.allowed) {
+        return reply.status(429).send({ error: 'daily tuning-assist quota exceeded' });
+      }
+
+      // The platform-wide breaker, after the per-user gates: a refusal here is
+      // the whole product resting, not this creator misbehaving, and the copy
+      // says so. Spends a slot only when the call is actually about to happen.
+      if (options.editingGate) {
+        const gate = await options.editingGate.checkAndSpend(request.user!.uid, dateStr);
+        if (!gate.allowed) {
+          return reply.status(503).send({ error: 'editing is resting right now — try again later' });
+        }
+      }
+
+      const slug = resolved.submission.slug as string;
+      let result;
+      try {
+        result = await options.assistant.assist({
+          definition: resolved.definition,
+          content: body.data.content,
+          utterance: body.data.utterance,
+          game: resolved.submission.title ? { title: resolved.submission.title } : {},
+          ...(resolved.submission.locale ? { locale: resolved.submission.locale } : {}),
+        });
+      } catch (error) {
+        // Never fail open into a *write*: with no answer there is nothing to
+        // apply, so the honest reply is that the router did not answer.
+        request.log.warn({ slug, err: error }, 'editor assist call failed');
+        return reply.status(503).send({ error: 'the assistant did not answer — try again' });
+      }
+
+      // Cost lands on the game's own job, beside gate runs and seeds, so a
+      // creator's tuning spend is visible in the same report as everything else.
+      if (result.tokens) {
+        await store
+          .recordJobCost(resolved.submission.issueNumber, {
+            kind: 'assist',
+            at: new Date(now()).toISOString(),
+            by: result.model ?? 'vertex',
+            tokens: result.tokens,
+          })
+          .catch(() => {});
+      }
+
+      if (result.lane !== 'params' || !result.patches || result.patches.length === 0) {
+        // Every non-acting lane returns the same shape, so the panel can say
+        // what happened rather than showing a silent no-op.
+        return reply.send({
+          lane: result.lane === 'params' ? 'code' : result.lane,
+          ...(result.summary ? { summary: result.summary } : {}),
+        });
+      }
+
+      const applied = applyAssistPatches(resolved.definition, body.data.content, result.patches);
+      if (applied.patches.length === 0) {
+        return reply.send({ lane: 'code', ...(result.summary ? { summary: result.summary } : {}) });
+      }
+      request.log.info({ slug, lane: result.lane, patches: applied.patches.length }, 'editor assist applied');
+      return reply.send({
+        lane: 'params',
+        patches: applied.patches,
+        content: applied.content,
+        ...(result.summary ? { summary: result.summary } : {}),
+      });
+    },
+  );
+
   app.post(
     '/api/me/games/:slug/editor/publish',
     { config: { rateLimit: { max: 6, timeWindow: 60 * 60_000 } } },
@@ -275,7 +431,7 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
       if (problems.length > 0) {
         return reply
           .status(422)
-          .send({ error: 'the draft no longer fits this game\'s content schema', problems: problems.slice(0, 20) });
+          .send({ error: "the draft no longer fits this game's content schema", problems: problems.slice(0, 20) });
       }
 
       const last = lastPublishAt.get(slug) ?? 0;
@@ -284,7 +440,9 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
         // A publish is a real gate run (Cloud Build, Chrome, ffmpeg). The
         // cooldown is debounce, not a quota — drafts stay unmetered.
         reply.header('retry-after', String(Math.ceil(wait / 1000)));
-        return reply.status(429).send({ error: 'a publish is already checking — try again shortly', retryAfterMs: wait });
+        return reply
+          .status(429)
+          .send({ error: 'a publish is already checking — try again shortly', retryAfterMs: wait });
       }
 
       const gamesStore = options.gamesStore!;
@@ -306,17 +464,28 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
       }
 
       const editorFile = files.find((file) => file.path === EDITOR_FILE)!;
-      const raw = JSON.parse(editorFile.content) as { content: Record<string, { defaults?: unknown }> };
-      for (const [key, spec] of Object.entries(raw.content)) {
+      const raw = JSON.parse(editorFile.content) as {
+        params?: Record<string, { default?: unknown }>;
+        content?: Record<string, { defaults?: unknown }>;
+      };
+      for (const [key, spec] of Object.entries(raw.content ?? {})) {
         if (content[key] !== undefined) spec.defaults = content[key];
+      }
+      const paramValues = content[PARAMS_KEY];
+      if (raw.params && paramValues && typeof paramValues === 'object') {
+        for (const [key, spec] of Object.entries(raw.params)) {
+          const value = (paramValues as Record<string, unknown>)[key];
+          if (value !== undefined) spec.default = value;
+        }
       }
       editorFile.content = `${JSON.stringify(raw, null, 2)}\n`;
 
       const reparsed = parseEditorDefinition(editorFile.content);
       if (!reparsed.definition) {
-        return reply
-          .status(422)
-          .send({ error: 'the draft does not produce a valid editor definition', problems: reparsed.errors.slice(0, 20) });
+        return reply.status(422).send({
+          error: 'the draft does not produce a valid editor definition',
+          problems: reparsed.errors.slice(0, 20),
+        });
       }
       const generatedPath = GENERATED_CONTENT_PATH;
       const generated = files.find((file) => file.path === generatedPath);

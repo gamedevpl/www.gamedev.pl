@@ -72,6 +72,10 @@ const BuilderDimensionSchema = z.enum(['platform', 'self']);
 const StudioStepDetailSchema = z.enum(['install', 'kickoff', 'green', 'red', 'kit_outdated', 'creator', 'agent']);
 /** EditorKit's revision funnel. No slug: the visit stream stays unjoinable. */
 const EditorStepSchema = z.enum(['opened', 'draft_saved', 'previewed', 'published']);
+/** The NL tuning lane's outcomes — a dimension beside the editing funnel, not a rung in it. */
+const AssistStepSchema = z.enum(['asked', 'applied', 'handoff', 'rejected']);
+/** The player-side remix funnel — see visit-funnel's REMIX_STEPS for the order's meaning. */
+const RemixStepSchema = z.enum(['opened', 'tuned', 'asked', 'applied', 'handoff', 'refused', 'shared', 'keep_clicked']);
 /**
  * Which chrome surface opened How to play. Optional so a tab still running the previous
  * client can record the open without `via` — the aggregate treats missing as unknown
@@ -130,6 +134,8 @@ const EventSchema = z.discriminatedUnion('type', [
     ...offsetField,
   }),
   z.object({ type: z.literal('editor_step'), step: EditorStepSchema, ...offsetField }),
+  z.object({ type: z.literal('assist_step'), step: AssistStepSchema, ...offsetField }),
+  z.object({ type: z.literal('remix_step'), step: RemixStepSchema, ...offsetField }),
 ]);
 
 const RequestSchema = z.object({
@@ -237,6 +243,10 @@ export async function registerVisitTelemetryRoutes(
             ...(event.detail === undefined ? {} : { detail: event.detail }),
           };
         case 'editor_step':
+          return { ...base, type: event.type, step: event.step };
+        case 'assist_step':
+          return { ...base, type: event.type, step: event.step };
+        case 'remix_step':
           return { ...base, type: event.type, step: event.step };
         case 'how_to_play_opened':
           return {

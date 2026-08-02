@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
-import { recordEditorStep } from './visitTelemetry.js';
+import { recordAssistStep, recordEditorStep } from './visitTelemetry.js';
 import {
   deleteEditorDraft,
   fetchGameEditor,
   publishEditorContent,
   putEditorDraft,
+  requestEditorAssist,
   type EditorCollectionSpec,
   type EditorContentDoc,
   type EditorItemContent,
   type EditorLabel,
+  type EditorParamValue,
   type GameEditorState,
   type StudioApiError,
   type StudioGame,
@@ -34,6 +36,20 @@ import {
 const AUTOSAVE_MS = 1500;
 
 type SaveState = 'clean' | 'dirty' | 'saving' | 'saved' | 'conflict' | 'error';
+/**
+ * What the composer is doing, and what it last said.
+ *
+ * `undo` holds the document from *before* the patch — the panel's whole undo
+ * story, per the plan's "apply immediately, one tap back" rule. It is one step
+ * and in memory only: the draft tier is a single mutable document, so promising
+ * more than one step back would be a lie.
+ */
+type AssistState =
+  | { kind: 'idle' }
+  | { kind: 'asking' }
+  | { kind: 'applied'; message: string; undo: EditorContentDoc }
+  | { kind: 'note'; message: string }
+  | { kind: 'error'; message: string };
 type PublishState =
   | { kind: 'idle' }
   | { kind: 'publishing' }
@@ -107,7 +123,11 @@ function unreachableCount(
 }
 
 /** Client-side mirror of the constraint arithmetic — hints only; the server re-checks. */
-function itemProblems(spec: EditorCollectionSpec['item'], item: EditorItemContent, name: (label: EditorLabel) => string) {
+function itemProblems(
+  spec: EditorCollectionSpec['item'],
+  item: EditorItemContent,
+  name: (label: EditorLabel) => string,
+) {
   const counts = new Map<string, number>(spec.tiles.map((tile) => [tile.key, 0]));
   const charToKey = new Map(spec.tiles.map((tile) => [tile.char, tile.key]));
   for (const row of item.rows) {
@@ -158,6 +178,29 @@ function setCell(item: EditorItemContent, row: number, col: number, char: string
   return { ...item, rows };
 }
 
+/**
+ * A saved draft with the game's current defaults underneath. The point is
+ * params added *after* the draft was saved: the server refuses a document
+ * missing a declared param, so a pre-params draft must not resurface without
+ * the new defaults filled in.
+ */
+function mergeDraft(loaded: GameEditorState): EditorContentDoc {
+  if (!loaded.draft) return loaded.content;
+  const merged: EditorContentDoc = { ...loaded.content, ...loaded.draft.content };
+  if (loaded.definition.params) {
+    merged.params = {
+      ...((loaded.content.params ?? {}) as Record<string, EditorParamValue>),
+      ...((loaded.draft.content.params ?? {}) as Record<string, EditorParamValue>),
+    };
+  }
+  return merged;
+}
+
+/** A collection's items out of the mixed content document (params ride beside them). */
+function itemsOf(doc: EditorContentDoc, key: string): EditorItemContent[] {
+  return (doc[key] ?? []) as EditorItemContent[];
+}
+
 function blankItem(spec: EditorCollectionSpec['item']): EditorItemContent {
   // A fresh item starts as the smallest legal grid, all first-tile — the
   // creator paints from there; constraints show what is still missing.
@@ -173,7 +216,7 @@ function blankItem(spec: EditorCollectionSpec['item']): EditorItemContent {
 }
 
 export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => void; onBack: () => void }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const name = useLabel();
   const slug = props.game.slug as string;
 
@@ -186,12 +229,16 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
   const [publish, setPublish] = useState<PublishState>({ kind: 'idle' });
   const [itemIndex, setItemIndex] = useState(0);
   const [tileKey, setTileKey] = useState<string | null>(null);
+  const [utterance, setUtterance] = useState('');
+  const [assist, setAssist] = useState<AssistState>({ kind: 'idle' });
 
   // One collection is the pilot vocabulary's reality; the first is the surface.
-  const collectionKey = editor ? Object.keys(editor.definition.content)[0] : null;
+  const collectionKey = editor ? (Object.keys(editor.definition.content)[0] ?? null) : null;
   const spec = collectionKey ? editor!.definition.content[collectionKey] : null;
-  const items = collectionKey ? (content[collectionKey] ?? []) : [];
+  const items = collectionKey ? ((content[collectionKey] ?? []) as EditorItemContent[]) : [];
   const item = items[itemIndex] ?? null;
+  const paramSpecs = editor?.definition.params ?? null;
+  const paramValues = (content.params ?? {}) as Record<string, EditorParamValue>;
 
   useEffect(() => {
     let cancelled = false;
@@ -202,7 +249,7 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
         // The revision funnel's first rung: this creator can edit and did open it.
         recordEditorStep('opened');
         setEditor(loaded);
-        setContent(loaded.draft?.content ?? loaded.content);
+        setContent(mergeDraft(loaded));
         setRevision(loaded.draft?.revision ?? 0);
         setSaveState('clean');
         const firstCollection = Object.keys(loaded.definition.content)[0];
@@ -231,11 +278,7 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
       setSaveState('saving');
       setSaveProblems([]);
       try {
-        const saved = await putEditorDraft(
-          slug,
-          contentRef.current,
-          overwrite ? undefined : revisionRef.current,
-        );
+        const saved = await putEditorDraft(slug, contentRef.current, overwrite ? undefined : revisionRef.current);
         setRevision(saved.revision);
         setSaveState('saved');
         recordEditorStep('draft_saved');
@@ -275,18 +318,91 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
   function updateItem(next: EditorItemContent) {
     if (!collectionKey) return;
     setContent((current) => {
-      const list = (current[collectionKey] ?? []).slice();
+      const list = itemsOf(current, collectionKey).slice();
       list[itemIndex] = next;
       return { ...current, [collectionKey]: list };
     });
     scheduleSave();
   }
 
+  function updateParam(paramName: string, value: EditorParamValue) {
+    setContent((current) => ({
+      ...current,
+      params: { ...((current.params ?? {}) as Record<string, EditorParamValue>), [paramName]: value },
+    }));
+    scheduleSave();
+  }
+
+  /**
+   * Send the sentence, apply what comes back, keep one step of undo.
+   *
+   * The patch is applied exactly the way a slider drag is — into draft state,
+   * then through the ordinary autosave — because the server only ever *proposed*
+   * a document. There is no confirm step by design: confirming every tweak kills
+   * the "say it, see it" feel, and the sliders plus this undo are the safety net.
+   */
+  async function askAssist() {
+    const text = utterance.trim();
+    if (text.length < 2 || assist.kind === 'asking') return;
+    setAssist({ kind: 'asking' });
+    recordAssistStep('asked');
+    const before = contentRef.current;
+    try {
+      const result = await requestEditorAssist(slug, text, before);
+      const message = result.summary ? (i18n.language?.startsWith('pl') ? result.summary.pl : result.summary.en) : '';
+      if (result.lane === 'params' && result.content && result.patches && result.patches.length > 0) {
+        setContent(result.content);
+        scheduleSave();
+        setUtterance('');
+        recordAssistStep('applied');
+        setAssist({
+          kind: 'applied',
+          message: message || t('studioPanel.editor.assistApplied', { count: result.patches.length }),
+          undo: before,
+        });
+        return;
+      }
+      // Every non-acting lane says so out loud. A code-lane request is a real
+      // answer — this game cannot express it as a setting — not a failure, and
+      // it must never look like the composer silently did nothing.
+      recordAssistStep(result.lane === 'reject' ? 'rejected' : 'handoff');
+      setAssist({
+        kind: 'note',
+        message:
+          message ||
+          (result.lane === 'code'
+            ? t('studioPanel.editor.assistNeedsCode')
+            : result.lane === 'content'
+              ? t('studioPanel.editor.assistNeedsContent')
+              : t('studioPanel.editor.assistRejected')),
+      });
+    } catch (error) {
+      const status = (error as StudioApiError).status;
+      recordAssistStep('rejected');
+      setAssist({
+        kind: 'error',
+        message:
+          status === 429
+            ? t('studioPanel.editor.assistQuota')
+            : status === 422
+              ? t('studioPanel.editor.assistRejected')
+              : t('studioPanel.editor.assistUnavailable'),
+      });
+    }
+  }
+
+  function undoAssist() {
+    if (assist.kind !== 'applied') return;
+    setContent(assist.undo);
+    scheduleSave();
+    setAssist({ kind: 'idle' });
+  }
+
   async function reloadNewest() {
     try {
       const loaded = await fetchGameEditor(slug);
       setEditor(loaded);
-      setContent(loaded.draft?.content ?? loaded.content);
+      setContent(mergeDraft(loaded));
       setRevision(loaded.draft?.revision ?? 0);
       setItemIndex(0);
       setSaveState('clean');
@@ -338,7 +454,9 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
   if (state === 'loading') {
     return <div className="editor-panel editor-panel-note">{t('studioPanel.editor.loading')}</div>;
   }
-  if (state === 'error' || !editor || !spec || !collectionKey) {
+  // A definition may declare only tunables (no collections) — that renders as a
+  // Tuning-only panel, not an error. Nothing at all to edit is the error case.
+  if (state === 'error' || !editor || (!spec && !paramSpecs)) {
     return (
       <div className="editor-panel editor-panel-note">
         {t('studioPanel.editor.loadError')}
@@ -349,11 +467,13 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
     );
   }
 
-  const problems = item ? itemProblems(spec.item, item, name) : [];
-  const allProblems = items.flatMap((entry, index) => {
-    const found = itemProblems(spec.item, entry, name);
-    return found.length > 0 ? [`${name(spec.itemLabel)} ${index + 1}`] : [];
-  });
+  const problems = item && spec ? itemProblems(spec.item, item, name) : [];
+  const allProblems = spec
+    ? items.flatMap((entry, index) => {
+        const found = itemProblems(spec.item, entry, name);
+        return found.length > 0 ? [`${name(spec.itemLabel)} ${index + 1}`] : [];
+      })
+    : [];
   const width = item ? (item.rows[0]?.length ?? 0) : 0;
 
   return (
@@ -435,119 +555,243 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
       ) : null}
 
       <div className="editor-body">
-        <div className="editor-board-col">
-          {item ? (
-            <>
-              <div
-                className="editor-board"
-                role="grid"
-                aria-label={t('studioPanel.editor.boardAria', { name: name(spec.itemLabel) })}
-                style={{ gridTemplateColumns: `repeat(${width}, var(--editor-cell))` }}
-              >
-                {item.rows.map((rowChars, row) =>
-                  Array.from(rowChars).map((char, col) => {
-                    const tile = spec.item.tiles.find((entry) => entry.char === char);
-                    return (
-                      <button
-                        key={`${row}-${col}`}
-                        type="button"
-                        role="gridcell"
-                        // A declared color wins and suppresses the fallback tile
-                        // class, so the painter shows the game's own palette; the
-                        // class-based look is for definitions that declare none.
-                        className={`editor-cell${tile?.color ? '' : ` tile-${tile?.key ?? 'unknown'}`}`}
-                        {...(tile?.color ? { style: { background: tile.color } } : {})}
-                        aria-label={`${row + 1},${col + 1}: ${tile ? name(tile.label) : char}`}
-                        onClick={() => {
-                          const selected = spec.item.tiles.find((entry) => entry.key === tileKey);
-                          if (selected) updateItem(setCell(item, row, col, selected.char));
-                        }}
+        {spec ? (
+          <div className="editor-board-col">
+            {item ? (
+              <>
+                <div
+                  className="editor-board"
+                  role="grid"
+                  aria-label={t('studioPanel.editor.boardAria', { name: name(spec.itemLabel) })}
+                  style={{ gridTemplateColumns: `repeat(${width}, var(--editor-cell))` }}
+                >
+                  {item.rows.map((rowChars, row) =>
+                    Array.from(rowChars).map((char, col) => {
+                      const tile = spec.item.tiles.find((entry) => entry.char === char);
+                      return (
+                        <button
+                          key={`${row}-${col}`}
+                          type="button"
+                          role="gridcell"
+                          // A declared color wins and suppresses the fallback tile
+                          // class, so the painter shows the game's own palette; the
+                          // class-based look is for definitions that declare none.
+                          className={`editor-cell${tile?.color ? '' : ` tile-${tile?.key ?? 'unknown'}`}`}
+                          {...(tile?.color ? { style: { background: tile.color } } : {})}
+                          aria-label={`${row + 1},${col + 1}: ${tile ? name(tile.label) : char}`}
+                          onClick={() => {
+                            const selected = spec.item.tiles.find((entry) => entry.key === tileKey);
+                            if (selected) updateItem(setCell(item, row, col, selected.char));
+                          }}
+                        />
+                      );
+                    }),
+                  )}
+                </div>
+                <div className="editor-palette" role="radiogroup" aria-label={t('studioPanel.editor.tiles')}>
+                  {spec.item.tiles.map((tile) => (
+                    <button
+                      key={tile.key}
+                      type="button"
+                      role="radio"
+                      aria-checked={tileKey === tile.key}
+                      className={`editor-tile${tileKey === tile.key ? ' is-selected' : ''}`}
+                      onClick={() => setTileKey(tile.key)}
+                    >
+                      <span
+                        className={`editor-tile-swatch${tile.color ? '' : ` tile-${tile.key}`}`}
+                        {...(tile.color ? { style: { background: tile.color } } : {})}
+                        aria-hidden="true"
                       />
-                    );
-                  }),
-                )}
-              </div>
-              <div className="editor-palette" role="radiogroup" aria-label={t('studioPanel.editor.tiles')}>
-                {spec.item.tiles.map((tile) => (
-                  <button
-                    key={tile.key}
-                    type="button"
-                    role="radio"
-                    aria-checked={tileKey === tile.key}
-                    className={`editor-tile${tileKey === tile.key ? ' is-selected' : ''}`}
-                    onClick={() => setTileKey(tile.key)}
-                  >
-                    <span
-                      className={`editor-tile-swatch${tile.color ? '' : ` tile-${tile.key}`}`}
-                      {...(tile.color ? { style: { background: tile.color } } : {})}
-                      aria-hidden="true"
-                    />
-                    {name(tile.label)}
-                  </button>
-                ))}
-              </div>
-            </>
-          ) : (
-            <div className="editor-panel-note">{t('studioPanel.editor.empty')}</div>
-          )}
-        </div>
+                      {name(tile.label)}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="editor-panel-note">{t('studioPanel.editor.empty')}</div>
+            )}
+          </div>
+        ) : null}
 
         <aside className="editor-side">
-          <div className="editor-side-group">
-            <h4>
-              {name(spec.label)} <span className="editor-count">{items.length} / {spec.max}</span>
-            </h4>
-            <ul className="editor-item-list">
-              {items.map((entry, index) => (
-                <li key={index}>
-                  <button
-                    type="button"
-                    className={index === itemIndex ? 'is-active' : ''}
-                    onClick={() => setItemIndex(index)}
-                  >
-                    {typeof entry.properties.name === 'string' && entry.properties.name
-                      ? entry.properties.name
-                      : `${name(spec.itemLabel)} ${index + 1}`}
-                  </button>
-                  {items.length > spec.min ? (
-                    <button
-                      type="button"
-                      className="editor-item-remove"
-                      aria-label={t('studioPanel.editor.removeItem')}
-                      onClick={() => {
-                        setContent((current) => {
-                          const list = (current[collectionKey] ?? []).filter((_, i) => i !== index);
-                          return { ...current, [collectionKey]: list };
-                        });
-                        setItemIndex((current) => Math.max(0, current > index ? current - 1 : Math.min(current, items.length - 2)));
-                        scheduleSave();
-                      }}
-                    >
-                      ×
-                    </button>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-            {items.length < spec.max ? (
-              <button
-                type="button"
-                className="editor-add"
-                onClick={() => {
-                  setContent((current) => ({
-                    ...current,
-                    [collectionKey]: [...(current[collectionKey] ?? []), blankItem(spec.item)],
-                  }));
-                  setItemIndex(items.length);
-                  scheduleSave();
+          {paramSpecs ? (
+            <div className="editor-side-group">
+              <h4>{t('studioPanel.editor.tuning')}</h4>
+              {/*
+               * The composer sits above the sliders on purpose: it is the fast
+               * path when the creator knows what they want in words, and the
+               * sliders directly beneath are both the fallback when the router
+               * misreads and the way to nudge whatever it just set.
+               */}
+              <form
+                className="editor-assist"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void askAssist();
                 }}
               >
-                ＋ {t('studioPanel.editor.addItem', { name: name(spec.itemLabel) })}
-              </button>
-            ) : null}
-          </div>
+                <input
+                  type="text"
+                  className="editor-assist-input"
+                  maxLength={240}
+                  value={utterance}
+                  placeholder={t('studioPanel.editor.assistPlaceholder')}
+                  aria-label={t('studioPanel.editor.assistLabel')}
+                  onChange={(event) => setUtterance(event.target.value)}
+                />
+                <button
+                  type="submit"
+                  className="editor-assist-send"
+                  disabled={assist.kind === 'asking' || utterance.trim().length < 2}
+                >
+                  {assist.kind === 'asking' ? t('studioPanel.editor.assistAsking') : t('studioPanel.editor.assistSend')}
+                </button>
+              </form>
+              {assist.kind === 'applied' ? (
+                <p className="editor-assist-note is-ok" role="status">
+                  {assist.message}{' '}
+                  <button type="button" className="editor-assist-undo" onClick={undoAssist}>
+                    {t('studioPanel.editor.assistUndo')}
+                  </button>
+                </p>
+              ) : null}
+              {assist.kind === 'note' || assist.kind === 'error' ? (
+                <p className="editor-assist-note" role="status">
+                  {assist.message}
+                </p>
+              ) : null}
+              {Object.entries(paramSpecs).map(([paramName, paramSpec]) => {
+                const value = paramValues[paramName] ?? paramSpec.default;
+                if (paramSpec.type === 'int' || paramSpec.type === 'number') {
+                  const step = paramSpec.type === 'int' ? 1 : (paramSpec.max - paramSpec.min) / 100;
+                  const shown = typeof value === 'number' ? value : paramSpec.min;
+                  return (
+                    <label key={paramName} className="editor-prop editor-tuning-row">
+                      <span>
+                        {name(paramSpec.label)} <em>{Math.round(shown * 100) / 100}</em>
+                      </span>
+                      <input
+                        type="range"
+                        min={paramSpec.min}
+                        max={paramSpec.max}
+                        step={step}
+                        value={shown}
+                        onChange={(event) => {
+                          const parsed = Number(event.target.value);
+                          if (!Number.isFinite(parsed)) return;
+                          updateParam(paramName, paramSpec.type === 'int' ? Math.round(parsed) : parsed);
+                        }}
+                      />
+                    </label>
+                  );
+                }
+                if (paramSpec.type === 'enum') {
+                  return (
+                    <label key={paramName} className="editor-prop">
+                      <span>{name(paramSpec.label)}</span>
+                      <select
+                        value={typeof value === 'string' ? value : paramSpec.values[0]}
+                        onChange={(event) => updateParam(paramName, event.target.value)}
+                      >
+                        {paramSpec.values.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  );
+                }
+                if (paramSpec.type === 'text') {
+                  return (
+                    <label key={paramName} className="editor-prop">
+                      <span>{name(paramSpec.label)}</span>
+                      <input
+                        type="text"
+                        maxLength={paramSpec.max}
+                        value={typeof value === 'string' ? value : ''}
+                        onChange={(event) => updateParam(paramName, event.target.value)}
+                      />
+                    </label>
+                  );
+                }
+                return (
+                  <label key={paramName} className="editor-prop">
+                    <span>{name(paramSpec.label)}</span>
+                    <input
+                      type="checkbox"
+                      checked={value === true}
+                      onChange={(event) => updateParam(paramName, event.target.checked)}
+                    />
+                  </label>
+                );
+              })}
+            </div>
+          ) : null}
 
-          {item ? (
+          {spec && collectionKey ? (
+            <div className="editor-side-group">
+              <h4>
+                {name(spec.label)}{' '}
+                <span className="editor-count">
+                  {items.length} / {spec.max}
+                </span>
+              </h4>
+              <ul className="editor-item-list">
+                {items.map((entry, index) => (
+                  <li key={index}>
+                    <button
+                      type="button"
+                      className={index === itemIndex ? 'is-active' : ''}
+                      onClick={() => setItemIndex(index)}
+                    >
+                      {typeof entry.properties.name === 'string' && entry.properties.name
+                        ? entry.properties.name
+                        : `${name(spec.itemLabel)} ${index + 1}`}
+                    </button>
+                    {items.length > spec.min ? (
+                      <button
+                        type="button"
+                        className="editor-item-remove"
+                        aria-label={t('studioPanel.editor.removeItem')}
+                        onClick={() => {
+                          setContent((current) => {
+                            const list = itemsOf(current, collectionKey).filter((_, i) => i !== index);
+                            return { ...current, [collectionKey]: list };
+                          });
+                          setItemIndex((current) =>
+                            Math.max(0, current > index ? current - 1 : Math.min(current, items.length - 2)),
+                          );
+                          scheduleSave();
+                        }}
+                      >
+                        ×
+                      </button>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+              {items.length < spec.max ? (
+                <button
+                  type="button"
+                  className="editor-add"
+                  onClick={() => {
+                    setContent((current) => ({
+                      ...current,
+                      [collectionKey]: [...itemsOf(current, collectionKey), blankItem(spec.item)],
+                    }));
+                    setItemIndex(items.length);
+                    scheduleSave();
+                  }}
+                >
+                  ＋ {t('studioPanel.editor.addItem', { name: name(spec.itemLabel) })}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {item && spec ? (
             <div className="editor-side-group">
               <h4>{t('studioPanel.editor.properties')}</h4>
               {Object.entries(spec.item.properties).map(([propertyName, propertySpec]) => {
@@ -561,7 +805,10 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
                         maxLength={propertySpec.max}
                         value={typeof value === 'string' ? value : ''}
                         onChange={(event) =>
-                          updateItem({ ...item, properties: { ...item.properties, [propertyName]: event.target.value } })
+                          updateItem({
+                            ...item,
+                            properties: { ...item.properties, [propertyName]: event.target.value },
+                          })
                         }
                       />
                     </label>
@@ -571,7 +818,10 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
                   return (
                     <label key={propertyName} className="editor-prop">
                       <span>
-                        {propertyName} <em>{propertySpec.min}–{propertySpec.max}</em>
+                        {propertyName}{' '}
+                        <em>
+                          {propertySpec.min}–{propertySpec.max}
+                        </em>
                       </span>
                       <input
                         type="number"
@@ -595,7 +845,10 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
                       <select
                         value={typeof value === 'string' ? value : propertySpec.values[0]}
                         onChange={(event) =>
-                          updateItem({ ...item, properties: { ...item.properties, [propertyName]: event.target.value } })
+                          updateItem({
+                            ...item,
+                            properties: { ...item.properties, [propertyName]: event.target.value },
+                          })
                         }
                       >
                         {propertySpec.values.map((option) => (
@@ -614,7 +867,10 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
                       type="checkbox"
                       checked={value === true}
                       onChange={(event) =>
-                        updateItem({ ...item, properties: { ...item.properties, [propertyName]: event.target.checked } })
+                        updateItem({
+                          ...item,
+                          properties: { ...item.properties, [propertyName]: event.target.checked },
+                        })
                       }
                     />
                   </label>
@@ -635,7 +891,9 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
               ))
             )}
             {allProblems.length > 0 ? (
-              <p className="editor-check is-bad">{t('studioPanel.editor.checksElsewhere', { list: allProblems.join(', ') })}</p>
+              <p className="editor-check is-bad">
+                {t('studioPanel.editor.checksElsewhere', { list: allProblems.join(', ') })}
+              </p>
             ) : null}
           </div>
 

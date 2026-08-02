@@ -10094,6 +10094,70 @@ body.player-open {
   cursor: pointer;
 }
 
+/* The natural-language composer above the tuning sliders. */
+.editor-assist {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.editor-assist-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 34px;
+  padding: 6px 8px;
+  background: #0c1116;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  color: inherit;
+  font-size: 0.8rem;
+}
+
+.editor-assist-send {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: #131b23;
+  color: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.editor-assist-send:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.editor-assist-note {
+  margin: 0 0 10px;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.editor-assist-note.is-ok {
+  color: #9fd8b4;
+}
+
+.editor-assist-undo {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Tuning sliders must be draggable with a thumb, not just clickable. */
+.editor-tuning-row input[type='range'] {
+  width: 100%;
+  min-height: 28px;
+  accent-color: var(--accent, #62dcff);
+  touch-action: pan-y;
+}
+
 .editor-prop {
   display: flex;
   flex-direction: column;
@@ -10152,4 +10216,255 @@ body.player-open {
   .editor-side {
     width: auto;
   }
+}
+
+/* --- Remix: the player-facing live-editing panel --------------------------- */
+
+.remix-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--panel, #0f151b);
+  border: 1px solid var(--panel-border, #24313d);
+  border-radius: 10px;
+  font-size: 0.82rem;
+}
+
+.remix-panel-note {
+  color: var(--muted);
+}
+
+.remix-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.remix-close {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.remix-ask {
+  display: flex;
+  gap: 6px;
+}
+
+.remix-ask input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 36px;
+  padding: 6px 8px;
+  background: #0c1116;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  color: inherit;
+  font-size: 0.82rem;
+}
+
+.remix-ask button {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: #131b23;
+  color: inherit;
+  cursor: pointer;
+}
+
+.remix-ask button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.remix-note {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.remix-note.is-ok {
+  color: #9fd8b4;
+}
+
+.remix-note.is-error {
+  color: #f2a2a2;
+}
+
+.remix-undo {
+  margin-left: 6px;
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.remix-sliders {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.remix-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--muted);
+}
+
+.remix-row.is-toggle {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.remix-row em {
+  font-style: normal;
+  font-family: ui-monospace, monospace;
+  opacity: 0.7;
+}
+
+/* Thumb-sized on purpose: players are on phones. */
+.remix-row input[type='range'] {
+  width: 100%;
+  min-height: 30px;
+  accent-color: var(--accent, #62dcff);
+  touch-action: pan-y;
+}
+
+.remix-row input[type='text'],
+.remix-row select {
+  min-height: 32px;
+  background: #0c1116;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  color: inherit;
+  padding: 4px 6px;
+}
+
+.remix-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.remix-action {
+  flex: 1 1 0;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: #131b23;
+  color: inherit;
+  text-decoration: none;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.remix-action.is-primary {
+  background: #17323f;
+}
+
+.remix-share-url {
+  margin: 0;
+  font-size: 0.7rem;
+  font-family: ui-monospace, monospace;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+/*
+ * The working state sits over the panel while a rebuild is in flight. The game
+ * itself stays visible and frozen behind it — the beat should read as the change
+ * being made, never as the game having gone away.
+ */
+.remix-working {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 10px;
+  background: rgba(10, 15, 20, 0.82);
+  font-size: 0.8rem;
+}
+
+.remix-shimmer {
+  width: 44px;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent, #62dcff), transparent);
+  background-size: 200% 100%;
+  animation: remix-shimmer 1.1s linear infinite;
+}
+
+@keyframes remix-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .remix-shimmer {
+    animation: none;
+  }
+}
+
+/*
+ * `display: contents` on purpose: the frame must stay exactly where it was in
+ * the theater's layout, so the wrapper contributes no box of its own and the
+ * remix UI overlays the viewport instead of resizing it.
+ */
+.remix-host {
+  display: contents;
+}
+
+.remix-host .remix-panel {
+  position: absolute;
+  z-index: 4;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  max-height: 60%;
+  overflow-y: auto;
+}
+
+@media (min-width: 720px) {
+  .remix-host .remix-panel {
+    left: auto;
+    width: 320px;
+  }
+}
+
+.remix-open {
+  position: absolute;
+  z-index: 4;
+  right: 8px;
+  bottom: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border, #24313d);
+  background: #131b23;
+  color: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
 }

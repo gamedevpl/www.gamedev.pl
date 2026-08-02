@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  generateEditorContentModule,
-  parseEditorDefinition,
-  validateEditorContent,
-} from './editor-contract.js';
+import { generateEditorContentModule, parseEditorDefinition, validateEditorContent } from './editor-contract.js';
 
 /*
  * This file mirrors the games repo's tools/lib/editor-contract.ts (the
@@ -74,6 +70,61 @@ describe('editor-contract mirror', () => {
       gardens: [{ properties: { name: 'Edited', parSteps: 20 }, rows: ['########', '#.*....#', '########'] }],
     });
     expect(errors.some((message) => message.includes('exactly 1 "start"'))).toBe(true);
+  });
+
+  it('accepts declared params, refuses bad defaults, and validates values', () => {
+    const withParams = JSON.parse(JSON.stringify(DEFINITION));
+    withParams.params = {
+      walkSpeed: { type: 'number', min: 2, max: 12, default: 6, label: { en: 'Walking speed', pl: 'Prędkość' } },
+      showSteps: { type: 'bool', default: true, label: { en: 'Show steps', pl: 'Licznik kroków' } },
+    };
+    const { definition, errors } = parseEditorDefinition(JSON.stringify(withParams));
+    expect(errors).toEqual([]);
+    expect(definition?.params?.walkSpeed).toEqual({
+      type: 'number',
+      min: 2,
+      max: 12,
+      default: 6,
+      label: { en: 'Walking speed', pl: 'Prędkość' },
+    });
+
+    // An out-of-range default is refused at declaration time, not discovered live.
+    const bad = JSON.parse(JSON.stringify(withParams));
+    bad.params.walkSpeed.default = 99;
+    expect(parseEditorDefinition(JSON.stringify(bad)).errors.some((m) => m.includes('default'))).toBe(true);
+
+    // Content documents carry values under the reserved key and are clamped by validation.
+    const content = {
+      params: { walkSpeed: 8, showSteps: false },
+      gardens: [{ properties: { name: 'Edited', parSteps: 20 }, rows: ['########', '#.*..@.#', '########'] }],
+    };
+    expect(validateEditorContent(definition!, content)).toEqual([]);
+    expect(
+      validateEditorContent(definition!, { ...content, params: { walkSpeed: 99, showSteps: false } }).some((m) =>
+        m.includes('walkSpeed'),
+      ),
+    ).toBe(true);
+    expect(validateEditorContent(definition!, { gardens: content.gardens }).some((m) => m.includes('params'))).toBe(
+      true,
+    );
+
+    // A tunables-only definition (no collections) is legal; "params" is reserved.
+    const paramsOnly = { version: 1, params: withParams.params };
+    expect(parseEditorDefinition(JSON.stringify(paramsOnly)).definition).not.toBeNull();
+    const reserved = JSON.parse(JSON.stringify(DEFINITION));
+    reserved.content.params = reserved.content.gardens;
+    expect(parseEditorDefinition(JSON.stringify(reserved)).errors.some((m) => m.includes('reserved'))).toBe(true);
+  });
+
+  it('generates params into the L1 module and keeps param-less output unchanged', () => {
+    const withParams = JSON.parse(JSON.stringify(DEFINITION));
+    withParams.params = {
+      walkSpeed: { type: 'number', min: 2, max: 12, default: 6, label: { en: 'Walking speed', pl: 'Prędkość' } },
+    };
+    const generated = generateEditorContentModule(parseEditorDefinition(JSON.stringify(withParams)).definition!);
+    expect(generated).toContain('export interface EditorParams {\n  walkSpeed: number;\n}');
+    expect(generated).toContain('  params: EditorParams;');
+    expect(generated).toContain('"walkSpeed": 6');
   });
 
   it('generates the L1 module deterministically, matching the games-repo shape', () => {

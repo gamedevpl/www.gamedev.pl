@@ -79,9 +79,22 @@ export type EditorCollectionSpec = {
 
 export type EditorItemContent = { properties: Record<string, unknown>; rows: string[] };
 
-export type EditorDefinition = { version: 1; content: Record<string, EditorCollectionSpec> };
+export type EditorParamValue = string | number | boolean;
 
-export type EditorContentDoc = Record<string, EditorItemContent[]>;
+/** A game-wide scalar tunable; the label names the Tuning slider. */
+export type EditorParamSpec = EditorPropertySpec & { label: EditorLabel; default: EditorParamValue };
+
+export type EditorDefinition = {
+  version: 1;
+  params?: Record<string, EditorParamSpec>;
+  content: Record<string, EditorCollectionSpec>;
+};
+
+/**
+ * A whole content document: collections keyed by name, plus param values under
+ * the reserved `params` key when the game declares tunables.
+ */
+export type EditorContentDoc = Record<string, EditorItemContent[] | Record<string, EditorParamValue> | undefined>;
 
 export type GameEditorState = {
   version: string;
@@ -133,6 +146,39 @@ export async function publishEditorContent(slug: string): Promise<{ version: str
   });
   if (!response.ok) await throwResponseError(response);
   return (await response.json()) as { version: string; jobId: number };
+}
+
+export type AssistLane = 'params' | 'content' | 'code' | 'reject';
+
+export type AssistResponse = {
+  lane: AssistLane;
+  /** Only on the `params` lane: what changed, and the document to save. */
+  patches?: Array<{ key: string; value: EditorParamValue }>;
+  content?: EditorContentDoc;
+  summary?: { en: string; pl: string };
+};
+
+/**
+ * Ask the tuning router to turn a sentence into a params patch.
+ *
+ * Returns a *proposal*: the caller applies it by saving the returned document
+ * through `putEditorDraft`, so validation and moderation run on exactly the same
+ * path a slider drag takes. 503 means the lane is switched off for this
+ * deployment; 429 is the daily cap.
+ */
+export async function requestEditorAssist(
+  slug: string,
+  utterance: string,
+  content: EditorContentDoc,
+): Promise<AssistResponse> {
+  const response = await fetch(`${API_BASE}/api/me/games/${encodeURIComponent(slug)}/editor/assist`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ utterance, content }),
+  });
+  if (!response.ok) await throwResponseError(response);
+  return (await response.json()) as AssistResponse;
 }
 
 export type StudioHealthResponse = {

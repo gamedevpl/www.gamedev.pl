@@ -84,6 +84,13 @@ export interface VisitFunnel {
   waitlist: Array<{ step: string; visits: number }>;
   /** EditorKit revision funnel in step order, every step present even at zero. */
   editing: Array<{ step: string; visits: number }>;
+  /**
+   * The NL tuning lane's outcomes. Optional: a client can outlive the deploy that
+   * added it, and the panel renders an empty block rather than crashing.
+   */
+  assisting?: Array<{ step: string; visits: number }>;
+  /** The player-side remix loop. Optional for the same client-outlives-deploy reason. */
+  remixing?: Array<{ step: string; visits: number }>;
   /** How to play card usage — open rate, repeats, and where it was opened. */
   howToPlay: HowToPlayFunnel;
 }

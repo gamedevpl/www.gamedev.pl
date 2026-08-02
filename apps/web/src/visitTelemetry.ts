@@ -66,7 +66,9 @@ export type VisitEvent =
    * parallel stream. No game slug, no uid — visit-scoped only.
    */
   | { type: 'studio_step'; step: StudioStep; builder: BuilderDimension; detail?: StudioStepDetail }
-  | { type: 'editor_step'; step: EditorStep };
+  | { type: 'editor_step'; step: EditorStep }
+  | { type: 'assist_step'; step: AssistStep }
+  | { type: 'remix_step'; step: RemixStep };
 
 /**
  * The creation funnel, in the order a creator meets it.
@@ -148,6 +150,31 @@ export type StudioStepDetail = 'install' | 'kickoff' | 'green' | 'red' | 'kit_ou
  * did they edit".
  */
 export type EditorStep = 'opened' | 'draft_saved' | 'previewed' | 'published';
+
+/**
+ * The natural-language tuning lane, as a dimension beside the editing funnel
+ * rather than a rung inside it.
+ *
+ * A funnel's rungs must each be a superset of the next, and most creators tune
+ * with the sliders and never type a word — so an `asked` rung wedged between
+ * `opened` and `draft_saved` would read as a cliff in a healthy loop and make
+ * the ladder lie. These four answer their own questions instead: how many
+ * editing sittings try the composer at all, and of those, how often the router
+ * acts (`applied`), admits the request needs code (`handoff`), or refuses
+ * (`rejected` — moderation, quota, or a router that did not answer).
+ */
+export type AssistStep = 'asked' | 'applied' | 'handoff' | 'rejected';
+
+/**
+ * The player-side remix loop.
+ *
+ * A real funnel this time, and the first two rungs are the whole thesis: of the
+ * people who open a remix, how many touch anything at all. `tuned` is that
+ * number — the one metric the plan says validates or falsifies the bet for free.
+ * The tail (`shared`, `keep_clicked`) is where retention turns into either a
+ * visitor or a creator.
+ */
+export type RemixStep = 'opened' | 'tuned' | 'asked' | 'applied' | 'handoff' | 'refused' | 'shared' | 'keep_clicked';
 
 const FLUSH_AT = 5;
 const MAX_BATCH = 25;
@@ -451,6 +478,29 @@ export function recordEditorStep(step: EditorStep): void {
   currentSession.record({ type: 'editor_step', step });
 }
 
+/**
+ * Assist outcomes already recorded this visit. Deduped like every other step
+ * vocabulary: a creator who asks five things and gets five patches is one
+ * `asked` and one `applied`.
+ */
+let recordedAssistSteps = new Set<string>();
+
+export function recordAssistStep(step: AssistStep): void {
+  if (!currentSession) return;
+  if (recordedAssistSteps.has(step)) return;
+  recordedAssistSteps.add(step);
+  currentSession.record({ type: 'assist_step', step });
+}
+
+let recordedRemixSteps = new Set<string>();
+
+export function recordRemixStep(step: RemixStep): void {
+  if (!currentSession) return;
+  if (recordedRemixSteps.has(step)) return;
+  recordedRemixSteps.add(step);
+  currentSession.record({ type: 'remix_step', step });
+}
+
 /** Test seam: installs a session without touching the DOM. */
 export function setVisitSessionForTesting(session: VisitSession | null): void {
   currentSession = session;
@@ -459,6 +509,8 @@ export function setVisitSessionForTesting(session: VisitSession | null): void {
   recordedWaitlistSteps = new Set();
   recordedStudioSteps = new Set();
   recordedEditorSteps = new Set();
+  recordedAssistSteps = new Set();
+  recordedRemixSteps = new Set();
 }
 
 export interface StartVisitTrackingOptions {

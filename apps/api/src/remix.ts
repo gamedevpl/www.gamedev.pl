@@ -1,0 +1,447 @@
+import { randomUUID } from 'node:crypto';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { z } from 'zod';
+import { PARAMS_KEY, parseEditorDefinition, type EditorDefinition } from './editor-contract.js';
+import { EDITOR_FILE } from './editor-contract.js';
+import { applyAssistPatches, assistEnabled, MAX_UTTERANCE_LENGTH, type EditorAssistant } from './editor-assist.js';
+import { codeLaneEnabled, type VertexCodeLane } from './code-lane.js';
+import type { GamesStore } from './games-store.js';
+import type { Store } from './store.js';
+import type { ContentChecker } from './moderation.js';
+import { logModerationRejection } from './moderation-metrics.js';
+import { assembleGameHtml } from './assemble.js';
+import type { GitHubClient } from './github-client.js';
+import type { EditingGate } from './creation-limits.js';
+
+/**
+ * Remix: a player bends a published game while playing it.
+ *
+ * The product shape (ops repo: realtime-game-editing-plan §D) is that this is
+ * play-first — retention and shares, with creator conversion as upside — so the
+ * rules here follow from "ephemeral" rather than from "draft":
+ *
+ * **Signed-in only, for now** (owner decision, 2026-08-02). The design supports
+ * anonymous remixing and the surface was built for it, but every route here
+ * spends model calls on behalf of whoever asks, and during the closed beta a
+ * session is what makes that spend attributable and rate-limitable per person
+ * rather than per IP. Nothing else about the shape changes, so lifting this is
+ * deleting a guard, not rebuilding a surface.
+ *
+ *  - **A remix never publishes.** There is no path from here into the games
+ *    store, the catalog, or the gate. The only durable things it can produce are
+ *    a share link of *declared parameter values* and a prefilled game concept —
+ *    both of which go through the ordinary front doors.
+ *  - **Params never touch this server.** A slider moves the running game over
+ *    the existing `editor:content` bridge, client-side, in under a frame. Only
+ *    natural language and code need a round trip, which is why those are the
+ *    only routes here.
+ *  - **The player never supplies code.** The session holds the accumulated
+ *    source overrides server-side and the client holds only an id, so nothing a
+ *    browser sends is ever compiled. What comes back is a whole document for the
+ *    frame to swap in, built by the same assembler the play path uses.
+ *
+ * Sessions live in this instance's memory with a TTL. Deliberately not
+ * Firestore: a remix is explicitly disposable, a document per tweak would be
+ * write traffic for something nobody may ever look at again, and the failure
+ * mode is mild — an instance change loses the code edits, the client re-creates
+ * the session and re-applies its params, which it holds itself. If remixes ever
+ * become durable (the "save this as yours" path growing teeth), that is the
+ * moment to give them a real home.
+ */
+
+export const REMIX_TTL_MS = 60 * 60_000;
+/** Sessions per instance. A remix is small; this is a memory ceiling, not a policy. */
+export const MAX_REMIX_SESSIONS = 500;
+/** Code edits per session — a bound on spend, and on how far a remix can drift. */
+export const MAX_CODE_EDITS = 12;
+
+interface RemixSession {
+  id: string;
+  /** Who started it. A remix id is not a bearer token — it is scoped to its owner. */
+  ownerUid: string;
+  slug: string;
+  /** Engine ref the rebuild pins to. */
+  ref: string;
+  /** Every game-relative source, as delivered — the base every edit applies to. */
+  sources: Record<string, string>;
+  /** Accumulated edits, newest wins. Applied over `sources` on every rebuild. */
+  overrides: Record<string, string>;
+  definition: EditorDefinition | null;
+  title: string;
+  codeEdits: number;
+  expiresAt: number;
+}
+
+const StartSchema = z.object({
+  slug: z
+    .string()
+    .min(1)
+    .max(80)
+    .regex(/^[a-z0-9][a-z0-9-]*$/),
+});
+const AssistSchema = z.object({
+  utterance: z.string().trim().min(2).max(MAX_UTTERANCE_LENGTH),
+  params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+});
+const ShareSchema = z.object({
+  params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+});
+
+export interface RemixRoutesOptions {
+  store?: Store;
+  gamesStore?: GamesStore;
+  githubClient?: GitHubClient;
+  /** Ref the repo-published games are served from — the rebuild pins to it. */
+  publishedRef?: string;
+  assistant?: EditorAssistant;
+  codeLane?: VertexCodeLane;
+  contentChecker?: ContentChecker;
+  /** The platform-wide editing spend breaker — both model lanes ride it. */
+  editingGate?: EditingGate;
+  now?: () => number;
+}
+
+export async function registerRemixRoutes(app: FastifyInstance, options: RemixRoutesOptions): Promise<void> {
+  const now = options.now ?? Date.now;
+  const sessions = new Map<string, RemixSession>();
+
+  /**
+   * One slot off the day's platform-wide editing allowance, or an honest 503.
+   * Runs after moderation and the per-route limits, immediately before the paid
+   * call, so a refusal never spends anything and a spend is never refused late.
+   */
+  async function spendEditSlot(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
+    if (!options.editingGate) return true;
+    const dateStr = new Date(now()).toISOString().slice(0, 10);
+    const gate = await options.editingGate.checkAndSpend(request.user!.uid, dateStr);
+    if (!gate.allowed) {
+      reply.status(503).send({ error: 'editing is resting right now — the game still plays' });
+      return false;
+    }
+    return true;
+  }
+
+  function sweep(): void {
+    const currentTime = now();
+    for (const [id, session] of sessions) {
+      if (session.expiresAt <= currentTime) sessions.delete(id);
+    }
+    // A hard ceiling as well as a TTL: an hour of heavy traffic should not be
+    // able to hold more than this instance can carry.
+    while (sessions.size > MAX_REMIX_SESSIONS) {
+      const oldest = sessions.keys().next().value;
+      if (oldest === undefined) break;
+      sessions.delete(oldest);
+    }
+  }
+
+  /**
+   * The beta gate. 401 rather than a silent no-op so the client can offer the
+   * sign-in prompt instead of a button that does nothing.
+   */
+  function requireUser(request: FastifyRequest, reply: FastifyReply): boolean {
+    if (!request.user) {
+      reply.status(401).send({ error: 'sign in to remix' });
+      return false;
+    }
+    if (request.user.tier === 'blocked') {
+      reply.status(403).send({ error: 'account is blocked' });
+      return false;
+    }
+    return true;
+  }
+
+  function getSession(request: FastifyRequest): RemixSession | null {
+    sweep();
+    const id = (request.params as { id?: string }).id;
+    if (!id) return null;
+    const session = sessions.get(id);
+    if (!session || session.expiresAt <= now()) return null;
+    // Someone else's remix is indistinguishable from an expired one, which is
+    // the honest answer as well as the safe one.
+    if (session.ownerUid !== request.user?.uid) return null;
+    return session;
+  }
+
+  /**
+   * Every source file of the published version, whichever side of the migration
+   * the game lives on. Store games are authoritative in GCS; repo games are read
+   * from the published ref by the assembler itself, so only their editor
+   * declaration is fetched here.
+   */
+  async function loadSources(
+    slug: string,
+  ): Promise<{ sources: Record<string, string>; ref: string; fromStore: boolean } | null> {
+    const gamesStore = options.gamesStore;
+    const publication = options.store ? await options.store.getPublication(slug) : null;
+    if (gamesStore && publication?.state === 'published') {
+      const manifest = await gamesStore.getManifest(slug, publication.currentVersion);
+      if (!manifest) return null;
+      const entries = await Promise.all(
+        manifest.sourceFiles.map(async (path) => {
+          const content = await gamesStore.getSourceFile(slug, publication.currentVersion, path);
+          return content === null ? null : ([path, content] as const);
+        }),
+      );
+      const sources = Object.fromEntries(entries.filter((entry): entry is [string, string] => entry !== null));
+      return { sources, ref: manifest.engineRef ?? options.publishedRef ?? 'main', fromStore: true };
+    }
+    if (!options.githubClient || !options.publishedRef) return null;
+    // Prove the game exists before minting a session for it: without the store's
+    // publication record, "is this a real published game" is a question only the
+    // assembler can answer, and answering it here keeps a typo'd slug from
+    // becoming a remix that fails on its first action instead of at the door.
+    const probe = await options.githubClient.getGameSources(options.publishedRef, slug).catch(() => null);
+    if (!probe) return null;
+    // A repo game's sources stay on the ref and the assembler reads them there.
+    // Nothing is loaded up front: without the store's file list there is no way
+    // to map regions, so such a game gets the params lane only — and its
+    // declaration, if it has one, arrives with the sources at rebuild time.
+    return { sources: {}, ref: options.publishedRef, fromStore: false };
+  }
+
+  /** Rebuild the whole document with the session's edits applied. */
+  async function rebuild(session: RemixSession, extra: Record<string, string> = {}): Promise<string | null> {
+    if (!options.githubClient) return null;
+    const overrides = { ...session.overrides, ...extra };
+    const sources = await options.githubClient.getGameSources(session.ref, session.slug, {
+      // Store games carry every file; repo games carry only what was edited.
+      ...session.sources,
+      ...overrides,
+    });
+    if (!sources) return null;
+    return assembleGameHtml(
+      { title: session.title, description: '', html: sources.indexHtml, js: sources.gameJs, css: sources.styleCss },
+      { restrictNetwork: true },
+    );
+  }
+
+  app.post(
+    '/api/games/:slug/remix',
+    { config: { rateLimit: { max: 20, timeWindow: 60_000 } } },
+    async (request, reply) => {
+      if (!requireUser(request, reply)) return;
+      const params = StartSchema.safeParse(request.params);
+      if (!params.success) return reply.status(400).send({ error: 'invalid game id' });
+      const loaded = await loadSources(params.data.slug);
+      if (!loaded) return reply.status(404).send({ error: 'game not found' });
+
+      const editorJson = loaded.sources[EDITOR_FILE];
+      const definition = editorJson ? parseEditorDefinition(editorJson).definition : null;
+      const id = randomUUID();
+      sweep();
+      sessions.set(id, {
+        id,
+        ownerUid: request.user!.uid,
+        slug: params.data.slug,
+        ref: loaded.ref,
+        sources: loaded.fromStore ? loaded.sources : {},
+        overrides: {},
+        definition,
+        title: params.data.slug,
+        codeEdits: 0,
+        expiresAt: now() + REMIX_TTL_MS,
+      });
+
+      return reply.send({
+        remixId: id,
+        // The declaration drives the sliders; its defaults are the starting values.
+        params: definition?.params ?? null,
+        values: definition?.params
+          ? Object.fromEntries(Object.entries(definition.params).map(([key, spec]) => [key, spec.default]))
+          : null,
+        canAssist: Boolean(options.assistant && assistEnabled() && definition?.params),
+        canCode: Boolean(options.codeLane && codeLaneEnabled() && loaded.fromStore),
+        expiresInMs: REMIX_TTL_MS,
+      });
+    },
+  );
+
+  app.post(
+    '/api/remixes/:id/assist',
+    { config: { rateLimit: { max: 20, timeWindow: 60_000 } } },
+    async (request, reply) => {
+      if (!requireUser(request, reply)) return;
+      const session = getSession(request);
+      if (!session) return reply.status(404).send({ error: 'this remix has expired — start a new one' });
+      if (!options.assistant || !assistEnabled() || !session.definition?.params) {
+        return reply.status(503).send({ error: 'tuning by request is not available here' });
+      }
+      const body = AssistSchema.safeParse(request.body);
+      if (!body.success) return reply.status(400).send({ error: 'invalid request' });
+
+      // Anonymous players reach a model here, so the same fail-closed check every
+      // other creator-text path uses runs first, before a paid call.
+      if (options.contentChecker) {
+        const verdict = await options.contentChecker.check(body.data.utterance);
+        if (!verdict.allowed) {
+          logModerationRejection(request.log, {
+            surface: 'remix_assist',
+            uid: request.user?.uid,
+            category: verdict.category,
+          });
+          return reply.status(422).send({ error: 'that request was rejected' });
+        }
+      }
+
+      if (!(await spendEditSlot(request, reply))) return;
+
+      const content = { [PARAMS_KEY]: body.data.params ?? {} };
+      try {
+        const result = await options.assistant.assist({
+          definition: session.definition,
+          content,
+          utterance: body.data.utterance,
+          game: { title: session.title },
+        });
+        if (result.lane !== 'params' || !result.patches?.length) {
+          return reply.send({
+            lane: result.lane === 'params' ? 'code' : result.lane,
+            ...(result.summary ? { summary: result.summary } : {}),
+          });
+        }
+        const applied = applyAssistPatches(session.definition, content, result.patches);
+        if (applied.patches.length === 0) {
+          return reply.send({ lane: 'code', ...(result.summary ? { summary: result.summary } : {}) });
+        }
+        return reply.send({
+          lane: 'params',
+          patches: applied.patches,
+          values: applied.content[PARAMS_KEY],
+          ...(result.summary ? { summary: result.summary } : {}),
+        });
+      } catch {
+        return reply.status(503).send({ error: 'the assistant did not answer — try again' });
+      }
+    },
+  );
+
+  app.post(
+    '/api/remixes/:id/code',
+    { config: { rateLimit: { max: 6, timeWindow: 60_000 } } },
+    async (request, reply) => {
+      if (!requireUser(request, reply)) return;
+      const session = getSession(request);
+      if (!session) return reply.status(404).send({ error: 'this remix has expired — start a new one' });
+      if (!options.codeLane || !codeLaneEnabled()) {
+        return reply.status(503).send({ error: 'code changes are not available here' });
+      }
+      if (Object.keys(session.sources).length === 0) {
+        // Repo-era games keep their sources on the ref; the lane needs them in hand
+        // to map regions, so this is honestly "not here", not a failure.
+        return reply.status(409).send({ error: 'this game cannot be remixed that deeply yet' });
+      }
+      if (session.codeEdits >= MAX_CODE_EDITS) {
+        return reply.status(429).send({ error: "that's as far as this remix goes — start a new one" });
+      }
+      const body = AssistSchema.safeParse(request.body);
+      if (!body.success) return reply.status(400).send({ error: 'invalid request' });
+
+      if (options.contentChecker) {
+        const verdict = await options.contentChecker.check(body.data.utterance);
+        if (!verdict.allowed) {
+          logModerationRejection(request.log, {
+            surface: 'remix_code',
+            uid: request.user?.uid,
+            category: verdict.category,
+          });
+          return reply.status(422).send({ error: 'that request was rejected' });
+        }
+      }
+
+      if (!(await spendEditSlot(request, reply))) return;
+
+      const current = { ...session.sources, ...session.overrides };
+      const outcome = await options.codeLane.run(
+        { slug: session.slug, sources: current, utterance: body.data.utterance, game: { title: session.title } },
+        async (candidate) => {
+          // "Does it build" is answered by building the real document — the same
+          // assembler, CSP and caps the play path applies — so a green answer here
+          // means the frame can actually run it.
+          try {
+            const html = await rebuild(session, candidate);
+            return html ? { ok: true } : { ok: false, errors: ['the game could not be assembled'] };
+          } catch (error) {
+            return { ok: false, errors: [error instanceof Error ? error.message : String(error)] };
+          }
+        },
+      );
+
+      if (!outcome.ok) {
+        return reply.send({
+          ok: false,
+          reason: outcome.reason,
+          ...(outcome.summary ? { summary: outcome.summary } : {}),
+        });
+      }
+
+      session.overrides = { ...session.overrides, ...outcome.overrides };
+      session.codeEdits += 1;
+      session.expiresAt = now() + REMIX_TTL_MS;
+      const html = await rebuild(session);
+      if (!html) return reply.status(500).send({ ok: false, reason: 'error' });
+      return reply.send({
+        ok: true,
+        html,
+        region: outcome.region,
+        ...(outcome.summary ? { summary: outcome.summary } : {}),
+      });
+    },
+  );
+
+  /**
+   * The share gate.
+   *
+   * Only *declared parameter values* travel: they are bounded by the game's own
+   * schema, so a link cannot carry anything the sliders could not have produced.
+   * Code edits deliberately do not travel — sharing generated code would put
+   * ungated, unreviewed JavaScript in front of strangers, which is the one thing
+   * the gate exists to prevent. Text parameters are the only free-form surface
+   * and go through moderation before a link exists.
+   */
+  app.post(
+    '/api/remixes/:id/share',
+    { config: { rateLimit: { max: 10, timeWindow: 60_000 } } },
+    async (request, reply) => {
+      if (!requireUser(request, reply)) return;
+      const session = getSession(request);
+      if (!session) return reply.status(404).send({ error: 'this remix has expired — start a new one' });
+      const body = ShareSchema.safeParse(request.body);
+      if (!body.success) return reply.status(400).send({ error: 'invalid request' });
+      const specs = session.definition?.params;
+      if (!specs) return reply.status(409).send({ error: 'there is nothing to share yet' });
+
+      const values = body.data.params ?? {};
+      const texts = Object.entries(specs)
+        .filter(([name, spec]) => spec.type === 'text' && typeof values[name] === 'string')
+        .map(([name]) => values[name] as string)
+        .filter((text) => text.trim().length > 0);
+      if (texts.length > 0 && options.contentChecker) {
+        const verdict = await options.contentChecker.checkFields(texts);
+        if (!verdict.allowed) {
+          logModerationRejection(request.log, {
+            surface: 'remix_share',
+            uid: request.user?.uid,
+            category: verdict.category,
+          });
+          return reply.status(422).send({ error: 'that text was rejected' });
+        }
+      }
+      // Validated against the declaration, so a hand-edited link cannot smuggle a
+      // value the game never allowed.
+      const { patches } = applyAssistPatches(
+        session.definition!,
+        { [PARAMS_KEY]: Object.fromEntries(Object.entries(specs).map(([key, spec]) => [key, spec.default])) },
+        Object.entries(values).map(([key, value]) => ({ key, value })),
+      );
+      const shared = Object.fromEntries(patches.map((patch) => [patch.key, patch.value]));
+      return reply.send({
+        slug: session.slug,
+        params: shared,
+        /** Compact enough for a URL; the play page validates it again on arrival. */
+        code: Buffer.from(JSON.stringify(shared), 'utf8').toString('base64url'),
+        codeEditsExcluded: session.codeEdits > 0,
+      });
+    },
+  );
+}

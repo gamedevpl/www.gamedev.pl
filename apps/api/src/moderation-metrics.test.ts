@@ -102,6 +102,7 @@ describe('every moderating module reports its rejections', () => {
       'mcp-server.ts',
       'player-feedback.ts',
       'refine.ts',
+      'remix.ts',
       'submissions.ts',
       'worlds.ts',
     ]);

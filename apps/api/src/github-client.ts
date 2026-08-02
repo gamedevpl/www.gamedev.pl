@@ -403,7 +403,18 @@ export interface GitHubClient {
    * Reads a game's source files from a branch (typically an unmerged PR head).
    * Returns null if the game directory or a required file is missing on that ref.
    */
-  getGameSources(ref: string, slug: string): Promise<GameSources | null>;
+  /**
+   * Assemble a game's playable sources.
+   *
+   * `overrides` replaces individual game-relative TypeScript files (e.g.
+   * `game/runtime.ts`) with in-memory text instead of what the ref holds. It is
+   * how the remix code lane rebuilds a game around one edited region without
+   * forking the assembler: the engine, CSP, provenance marking, credential scan
+   * and byte caps all stay exactly where serve policy is owned. Only paths
+   * inside the game directory are consultable — an override for anything else is
+   * never looked at, because the bundler only ever asks for game-root paths.
+   */
+  getGameSources(ref: string, slug: string, overrides?: Record<string, string>): Promise<GameSources | null>;
   /**
    * Reads the agent's own progress journal for a game on `ref`
    * (`games/<slug>/PROGRESS.md`). This is how the coding agent narrates what it is
@@ -721,7 +732,12 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
     return (await response.json()) as T;
   }
 
-  async function bundleGameTypeScript(entrySource: string, ref: string, slug: string): Promise<string> {
+  async function bundleGameTypeScript(
+    entrySource: string,
+    ref: string,
+    slug: string,
+    overrides?: Record<string, string>,
+  ): Promise<string> {
     const gameRoot = `/games/${slug}`;
     const loadedPaths = new Set([`${gameRoot}/game.ts`]);
     let sourceBytes = Buffer.byteLength(entrySource, 'utf8');
@@ -770,11 +786,18 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
               // plus `dir/index.ts` — so directory imports don't burn two slots
               // toward MAX_GAME_MODULES.
               let loadedPath = args.path;
-              let source = await readRawFile(loadedPath.slice(1), ref);
+              // An override shadows the ref's copy of the same file. Keyed by the
+              // game-relative path, which is what a source edit names.
+              const overrideOf = (absolutePath: string): string | null => {
+                if (!overrides || !absolutePath.startsWith(`${gameRoot}/`)) return null;
+                const relative = absolutePath.slice(gameRoot.length + 1);
+                return Object.hasOwn(overrides, relative) ? overrides[relative] : null;
+              };
+              let source = overrideOf(loadedPath) ?? (await readRawFile(loadedPath.slice(1), ref));
               if (source === null && loadedPath.endsWith('.ts')) {
                 const indexPath = `${loadedPath.slice(0, -'.ts'.length)}/index.ts`;
                 if (indexPath.startsWith(`${gameRoot}/`)) {
-                  const indexSource = await readRawFile(indexPath.slice(1), ref);
+                  const indexSource = overrideOf(indexPath) ?? (await readRawFile(indexPath.slice(1), ref));
                   if (indexSource !== null) {
                     loadedPath = indexPath;
                     source = indexSource;
@@ -1074,19 +1097,29 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       return raw === null ? null : raw.slice(0, 4096);
     },
 
-    async getGameSources(ref, slug) {
+    async getGameSources(ref, slug, overrides) {
       // Only well-formed slugs address a game directory; reject anything that could
       // escape it (path traversal, nested paths) before it reaches the contents API.
       if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) {
         return null;
       }
 
+      // A game file comes from `overrides` when one was supplied and from the ref
+      // otherwise. That is what lets a caller assemble a game whose content lives
+      // somewhere else entirely — the games store, or a remix's edited copy —
+      // while the *engine* half below still comes from the pinned ref, so serve
+      // policy and the kit are never the caller's to substitute.
+      const gameFile = async (relative: string): Promise<string | null> =>
+        overrides && Object.hasOwn(overrides, relative)
+          ? overrides[relative]
+          : await readRawFile(`games/${slug}/${relative}`, ref);
+
       const [indexHtml, gameTs, styleCss, specMd, manifestSource, gameShellCss, coreTs] = await Promise.all([
-        readRawFile(`games/${slug}/index.html`, ref),
-        readRawFile(`games/${slug}/game.ts`, ref),
-        readRawFile(`games/${slug}/style.css`, ref),
-        readRawFile(`games/${slug}/SPEC.md`, ref),
-        readRawFile(`games/${slug}/GAME.json`, ref),
+        gameFile('index.html'),
+        gameFile('game.ts'),
+        gameFile('style.css'),
+        gameFile('SPEC.md'),
+        gameFile('GAME.json'),
         readRawFile('shared/game-shell.css', ref),
         readRawFile('shared/modules/core.ts', ref),
       ]);
@@ -1159,7 +1192,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
           return result.code;
         }),
       );
-      const gameJs = await bundleGameTypeScript(gameTs, ref, slug);
+      const gameJs = await bundleGameTypeScript(gameTs, ref, slug, overrides);
       const bundledJs = `${assetsJs}${transpiledSources.join('\n')}
 Object.freeze(window.GameKit);
 ${gameJs}`;
