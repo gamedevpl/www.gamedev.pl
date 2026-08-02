@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   EDITOR_FILE,
   GENERATED_CONTENT_PATH,
+  PARAMS_KEY,
   generateEditorContentModule,
   parseEditorDefinition,
   validateEditorContent,
@@ -140,12 +141,28 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
 
   /** The definition's own defaults, shaped as a content document. */
   function defaultContent(definition: EditorDefinition): Record<string, unknown> {
-    return Object.fromEntries(Object.entries(definition.content).map(([key, spec]) => [key, spec.defaults]));
+    const content: Record<string, unknown> = Object.fromEntries(
+      Object.entries(definition.content).map(([key, spec]) => [key, spec.defaults]),
+    );
+    if (definition.params) {
+      content[PARAMS_KEY] = Object.fromEntries(
+        Object.entries(definition.params).map(([key, spec]) => [key, spec.default]),
+      );
+    }
+    return content;
   }
 
   /** Every declared-text value in a content document, for moderation. */
   function textFields(definition: EditorDefinition, content: Record<string, unknown>): string[] {
     const texts: string[] = [];
+    if (definition.params) {
+      const values = content[PARAMS_KEY];
+      for (const [name, spec] of Object.entries(definition.params)) {
+        if (spec.type !== 'text' || !values || typeof values !== 'object') continue;
+        const value = (values as Record<string, unknown>)[name];
+        if (typeof value === 'string' && value.trim().length > 0) texts.push(value);
+      }
+    }
     for (const [key, spec] of Object.entries(definition.content)) {
       const textProps = Object.entries(spec.item.properties)
         .filter(([, propertySpec]) => propertySpec.type === 'text')
@@ -182,7 +199,8 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
       version: resolved.version,
       definition: resolved.definition,
       content: defaultContent(resolved.definition),
-      draft: draft && draftContent ? { content: draftContent, revision: draft.revision, updatedAt: draft.updatedAt } : null,
+      draft:
+        draft && draftContent ? { content: draftContent, revision: draft.revision, updatedAt: draft.updatedAt } : null,
     });
   });
 
@@ -207,7 +225,9 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
       // draft that saves is a draft that can eventually pass the gate.
       const problems = validateEditorContent(resolved.definition, body.data.content);
       if (problems.length > 0) {
-        return reply.status(422).send({ error: 'draft does not fit this game\'s content schema', problems: problems.slice(0, 20) });
+        return reply
+          .status(422)
+          .send({ error: "draft does not fit this game's content schema", problems: problems.slice(0, 20) });
       }
 
       // Declared text is shown to players once published, so it is moderated at
@@ -275,7 +295,7 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
       if (problems.length > 0) {
         return reply
           .status(422)
-          .send({ error: 'the draft no longer fits this game\'s content schema', problems: problems.slice(0, 20) });
+          .send({ error: "the draft no longer fits this game's content schema", problems: problems.slice(0, 20) });
       }
 
       const last = lastPublishAt.get(slug) ?? 0;
@@ -284,7 +304,9 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
         // A publish is a real gate run (Cloud Build, Chrome, ffmpeg). The
         // cooldown is debounce, not a quota — drafts stay unmetered.
         reply.header('retry-after', String(Math.ceil(wait / 1000)));
-        return reply.status(429).send({ error: 'a publish is already checking — try again shortly', retryAfterMs: wait });
+        return reply
+          .status(429)
+          .send({ error: 'a publish is already checking — try again shortly', retryAfterMs: wait });
       }
 
       const gamesStore = options.gamesStore!;
@@ -306,9 +328,19 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
       }
 
       const editorFile = files.find((file) => file.path === EDITOR_FILE)!;
-      const raw = JSON.parse(editorFile.content) as { content: Record<string, { defaults?: unknown }> };
-      for (const [key, spec] of Object.entries(raw.content)) {
+      const raw = JSON.parse(editorFile.content) as {
+        params?: Record<string, { default?: unknown }>;
+        content?: Record<string, { defaults?: unknown }>;
+      };
+      for (const [key, spec] of Object.entries(raw.content ?? {})) {
         if (content[key] !== undefined) spec.defaults = content[key];
+      }
+      const paramValues = content[PARAMS_KEY];
+      if (raw.params && paramValues && typeof paramValues === 'object') {
+        for (const [key, spec] of Object.entries(raw.params)) {
+          const value = (paramValues as Record<string, unknown>)[key];
+          if (value !== undefined) spec.default = value;
+        }
       }
       editorFile.content = `${JSON.stringify(raw, null, 2)}\n`;
 
@@ -316,7 +348,10 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
       if (!reparsed.definition) {
         return reply
           .status(422)
-          .send({ error: 'the draft does not produce a valid editor definition', problems: reparsed.errors.slice(0, 20) });
+          .send({
+            error: 'the draft does not produce a valid editor definition',
+            problems: reparsed.errors.slice(0, 20),
+          });
       }
       const generatedPath = GENERATED_CONTENT_PATH;
       const generated = files.find((file) => file.path === generatedPath);

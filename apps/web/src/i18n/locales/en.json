@@ -278,6 +278,7 @@
       "loadError": "This game's editor could not be loaded right now.",
       "back": "Thread",
       "tryDraft": "Try this draft",
+      "tuning": "Tuning",
       "publish": "Publish changes",
       "publishing": "Publishing…",
       "published": "Your changes are being checked — they go live after review.",

@@ -79,9 +79,22 @@ export type EditorCollectionSpec = {
 
 export type EditorItemContent = { properties: Record<string, unknown>; rows: string[] };
 
-export type EditorDefinition = { version: 1; content: Record<string, EditorCollectionSpec> };
+export type EditorParamValue = string | number | boolean;
 
-export type EditorContentDoc = Record<string, EditorItemContent[]>;
+/** A game-wide scalar tunable; the label names the Tuning slider. */
+export type EditorParamSpec = EditorPropertySpec & { label: EditorLabel; default: EditorParamValue };
+
+export type EditorDefinition = {
+  version: 1;
+  params?: Record<string, EditorParamSpec>;
+  content: Record<string, EditorCollectionSpec>;
+};
+
+/**
+ * A whole content document: collections keyed by name, plus param values under
+ * the reserved `params` key when the game declares tunables.
+ */
+export type EditorContentDoc = Record<string, EditorItemContent[] | Record<string, EditorParamValue> | undefined>;
 
 export type GameEditorState = {
   version: string;

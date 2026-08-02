@@ -10094,6 +10094,14 @@ body.player-open {
   cursor: pointer;
 }
 
+/* Tuning sliders must be draggable with a thumb, not just clickable. */
+.editor-tuning-row input[type='range'] {
+  width: 100%;
+  min-height: 28px;
+  accent-color: var(--accent, #62dcff);
+  touch-action: pan-y;
+}
+
 .editor-prop {
   display: flex;
   flex-direction: column;

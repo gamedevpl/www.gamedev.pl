@@ -28,6 +28,10 @@ export const MAX_TEXT_LENGTH = 240;
 export const MAX_ENUM_VALUES = 16;
 export const MAX_GRID_COLS = 64;
 export const MAX_GRID_ROWS = 64;
+/** Game-wide scalar tunables ("params") — same property vocabulary, one value each. */
+export const MAX_PARAMS = 16;
+/** Reserved content-document key param values ride under; illegal as a collection name. */
+export const PARAMS_KEY = 'params';
 
 const KEY_PATTERN = /^[a-z][a-zA-Z0-9]{0,23}$/;
 const TILE_KEY_PATTERN = /^[a-z][a-z0-9-]{0,15}$/;
@@ -63,6 +67,16 @@ export type PropertySpec =
   | { type: 'number'; min: number; max: number }
   | { type: 'enum'; values: string[] }
   | { type: 'bool' };
+
+export type ParamValue = string | number | boolean;
+
+/**
+ * A game-wide scalar tunable: one declared property plus the default players
+ * get. The bilingual label is load-bearing, not cosmetic — it is how the
+ * Studio's Tuning panel names the slider and how the assist router resolves
+ * "the dog" to `dogScale`, so it must say what the value means in the game.
+ */
+export type ParamSpec = PropertySpec & { label: EditorLabel; default: ParamValue };
 
 /**
  * A rule the Studio checks live and the gate checks on publish.
@@ -108,6 +122,7 @@ export interface TilemapItemContent {
 
 export interface EditorDefinition {
   version: 1;
+  params?: Record<string, ParamSpec>;
   content: Record<string, CollectionSpec>;
 }
 
@@ -128,11 +143,7 @@ function isLabel(value: unknown): value is EditorLabel {
   );
 }
 
-function validateProperties(
-  owner: string,
-  raw: unknown,
-  errors: string[],
-): Record<string, PropertySpec> {
+function validateProperties(owner: string, raw: unknown, errors: string[]): Record<string, PropertySpec> {
   const out: Record<string, PropertySpec> = {};
   if (!isPlainObject(raw)) {
     errors.push(`${owner}: "properties" must be an object mapping property names to type declarations`);
@@ -188,6 +199,71 @@ function validateProperties(
     } else {
       out[name] = { type: 'bool' };
     }
+  }
+  return out;
+}
+
+/**
+ * One value against one declared property/param type. Returns the problem's
+ * tail ("must be …") or null; callers prefix who the value belongs to. Shared
+ * between item properties, param defaults, and param values so all three
+ * refuse a value with the same words.
+ */
+function valueProblem(spec: PropertySpec, value: unknown): string | null {
+  if (spec.type === 'text') {
+    if (typeof value !== 'string' || value.length > spec.max) {
+      return `must be a string of at most ${spec.max} characters`;
+    }
+  } else if (spec.type === 'int') {
+    if (!Number.isInteger(value) || (value as number) < spec.min || (value as number) > spec.max) {
+      return `must be an integer ${spec.min}-${spec.max}`;
+    }
+  } else if (spec.type === 'number') {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < spec.min || value > spec.max) {
+      return `must be a number ${spec.min}-${spec.max}`;
+    }
+  } else if (spec.type === 'enum') {
+    if (typeof value !== 'string' || !spec.values.includes(value)) {
+      return `must be one of ${spec.values.join(', ')}`;
+    }
+  } else if (typeof value !== 'boolean') {
+    return 'must be a boolean';
+  }
+  return null;
+}
+
+function validateParams(raw: unknown, errors: string[]): Record<string, ParamSpec> {
+  const out: Record<string, ParamSpec> = {};
+  if (!isPlainObject(raw)) {
+    errors.push('"params" must be an object mapping param names to declarations');
+    return out;
+  }
+  const names = Object.keys(raw);
+  if (names.length > MAX_PARAMS) {
+    errors.push(`"params" declares ${names.length} tunables (limit ${MAX_PARAMS})`);
+  }
+  // The property half rides the exact rules item properties follow, so a type
+  // that is legal on an item is legal as a tunable and vice versa.
+  const base = validateProperties('params', raw, errors);
+  for (const name of names) {
+    const spec = base[name];
+    if (!spec) continue;
+    const declared = (raw as Record<string, unknown>)[name] as Record<string, unknown>;
+    if (!isLabel(declared.label)) {
+      errors.push(`params: "${name}" needs a label with non-empty "en" and "pl" (max 32 chars)`);
+      continue;
+    }
+    if (declared.default === undefined) {
+      errors.push(`params: "${name}" needs a "default" — the value players get`);
+      continue;
+    }
+    const problem = valueProblem(spec, declared.default);
+    if (problem) {
+      errors.push(`params: "${name}" default ${problem}`);
+      continue;
+    }
+    const label = declared.label as EditorLabel;
+    out[name] = { ...spec, label: { en: label.en, pl: label.pl }, default: declared.default as ParamValue };
   }
   return out;
 }
@@ -298,7 +374,9 @@ function validateTilemapSpec(owner: string, raw: unknown, errors: string[]): Til
         if (isPlainObject(rule.reachable)) {
           const spec = rule.reachable;
           const keys = (value: unknown): string[] | null =>
-            Array.isArray(value) && value.length > 0 && value.every((key) => typeof key === 'string' && tileKeys.has(key))
+            Array.isArray(value) &&
+            value.length > 0 &&
+            value.every((key) => typeof key === 'string' && tileKeys.has(key))
               ? (value as string[])
               : null;
           const blockedBy = keys(spec.blockedBy);
@@ -367,16 +445,21 @@ export function parseEditorDefinition(source: string): { definition: EditorDefin
     errors.push('EDITOR.json "version" must be 1');
     return { definition: null, errors };
   }
-  const unknownKeys = Object.keys(parsed).filter((key) => key !== 'version' && key !== 'content');
+  const unknownKeys = Object.keys(parsed).filter((key) => key !== 'version' && key !== 'content' && key !== PARAMS_KEY);
   if (unknownKeys.length > 0) {
     errors.push(`EDITOR.json has unknown top-level keys: ${unknownKeys.join(', ')}`);
   }
-  if (!isPlainObject(parsed.content)) {
+  const params = parsed[PARAMS_KEY] === undefined ? {} : validateParams(parsed[PARAMS_KEY], errors);
+  const hasParams = Object.keys(params).length > 0;
+  // A tunables-only game (an arcade retrofit with no editable maps) may declare
+  // an empty or absent "content" — but a definition with neither params nor
+  // collections declares nothing and is refused as before.
+  if (parsed.content !== undefined && !isPlainObject(parsed.content)) {
     errors.push('EDITOR.json needs a "content" object of collections');
     return { definition: null, errors };
   }
-  const contentKeys = Object.keys(parsed.content);
-  if (contentKeys.length === 0 || contentKeys.length > MAX_COLLECTIONS) {
+  const contentKeys = isPlainObject(parsed.content) ? Object.keys(parsed.content) : [];
+  if (contentKeys.length > MAX_COLLECTIONS || (contentKeys.length === 0 && !hasParams)) {
     errors.push(`EDITOR.json "content" needs 1-${MAX_COLLECTIONS} collections`);
     return { definition: null, errors };
   }
@@ -384,6 +467,10 @@ export function parseEditorDefinition(source: string): { definition: EditorDefin
   const content: Record<string, CollectionSpec> = {};
   for (const key of contentKeys) {
     const owner = `content.${key}`;
+    if (key === PARAMS_KEY) {
+      errors.push(`EDITOR.json collection key "${PARAMS_KEY}" is reserved for tunables`);
+      continue;
+    }
     if (!KEY_PATTERN.test(key)) {
       errors.push(`EDITOR.json collection key "${key}" must be lowerCamelCase, 1-24 characters`);
       continue;
@@ -435,7 +522,7 @@ export function parseEditorDefinition(source: string): { definition: EditorDefin
   }
 
   if (errors.length > 0) return { definition: null, errors };
-  return { definition: { version: 1, content }, errors };
+  return { definition: { version: 1, ...(hasParams ? { params } : {}), content }, errors };
 }
 
 /**
@@ -585,25 +672,8 @@ function validateItemContent(spec: TilemapItemSpec, item: unknown, where: string
       errors.push(`${where}: missing property "${name}"`);
       continue;
     }
-    if (propertySpec.type === 'text') {
-      if (typeof value !== 'string' || value.length > propertySpec.max) {
-        errors.push(`${where}: property "${name}" must be a string of at most ${propertySpec.max} characters`);
-      }
-    } else if (propertySpec.type === 'int') {
-      if (!Number.isInteger(value) || (value as number) < propertySpec.min || (value as number) > propertySpec.max) {
-        errors.push(`${where}: property "${name}" must be an integer ${propertySpec.min}-${propertySpec.max}`);
-      }
-    } else if (propertySpec.type === 'number') {
-      if (typeof value !== 'number' || !Number.isFinite(value) || value < propertySpec.min || value > propertySpec.max) {
-        errors.push(`${where}: property "${name}" must be a number ${propertySpec.min}-${propertySpec.max}`);
-      }
-    } else if (propertySpec.type === 'enum') {
-      if (typeof value !== 'string' || !propertySpec.values.includes(value)) {
-        errors.push(`${where}: property "${name}" must be one of ${propertySpec.values.join(', ')}`);
-      }
-    } else if (typeof value !== 'boolean') {
-      errors.push(`${where}: property "${name}" must be a boolean`);
-    }
+    const problem = valueProblem(propertySpec, value);
+    if (problem) errors.push(`${where}: property "${name}" ${problem}`);
   }
   return errors;
 }
@@ -629,7 +699,32 @@ export function validateEditorContent(definition: EditorDefinition, content: unk
   const errors: string[] = [];
   const declared = Object.keys(definition.content);
   for (const key of Object.keys(content)) {
+    if (key === PARAMS_KEY) {
+      if (!definition.params) errors.push(`undeclared collection "${key}"`);
+      continue;
+    }
     if (!declared.includes(key)) errors.push(`undeclared collection "${key}"`);
+  }
+  if (definition.params) {
+    const values = content[PARAMS_KEY];
+    if (values === undefined) {
+      errors.push('missing "params" values');
+    } else if (!isPlainObject(values)) {
+      errors.push('params: must be an object of values');
+    } else {
+      for (const name of Object.keys(values)) {
+        if (!(name in definition.params)) errors.push(`params: undeclared param "${name}"`);
+      }
+      for (const [name, spec] of Object.entries(definition.params)) {
+        const value = values[name];
+        if (value === undefined) {
+          errors.push(`params: missing "${name}"`);
+          continue;
+        }
+        const problem = valueProblem(spec, value);
+        if (problem) errors.push(`params: "${name}" ${problem}`);
+      }
+    }
   }
   for (const key of declared) {
     const items = content[key];
@@ -668,6 +763,15 @@ export function generateEditorContentModule(definition: EditorDefinition): strin
     '',
   ];
   const contentFields: string[] = [];
+  const params = definition.params ?? {};
+  if (Object.keys(params).length > 0) {
+    lines.push('export interface EditorParams {');
+    for (const [name, spec] of Object.entries(params)) {
+      lines.push(`  ${name}: ${propertyTsType(spec)};`);
+    }
+    lines.push('}', '');
+    contentFields.push(`  ${PARAMS_KEY}: EditorParams;`);
+  }
   for (const [key, spec] of Object.entries(definition.content)) {
     const itemType = `${typeName(key)}Item`;
     lines.push(`export interface ${itemType}Properties {`);
@@ -684,7 +788,10 @@ export function generateEditorContentModule(definition: EditorDefinition): strin
   lines.push('export interface EditorContent {');
   lines.push(...contentFields);
   lines.push('}', '');
-  const defaults: Record<string, TilemapItemContent[]> = {};
+  const defaults: Record<string, unknown> = {};
+  if (Object.keys(params).length > 0) {
+    defaults[PARAMS_KEY] = Object.fromEntries(Object.entries(params).map(([name, spec]) => [name, spec.default]));
+  }
   for (const [key, spec] of Object.entries(definition.content)) {
     defaults[key] = spec.defaults;
   }
