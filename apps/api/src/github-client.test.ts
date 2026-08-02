@@ -524,6 +524,60 @@ describe('getCatalog', () => {
     expect(catalog[0].slug).toBe('bubble-pop');
     expect(catalog[0].touch).toBeUndefined();
   });
+
+  it('derives the catalog (including touch) from an archive file source without network', async () => {
+    const files = new Map<string, string>([
+      [
+        'games/bubble-pop/SPEC.md',
+        specMd({
+          title: 'Bubble Pop Rush',
+          status: 'published',
+          genre: 'arcade',
+          orientation: 'portrait',
+        }),
+      ],
+      [
+        'games/bubble-pop/media/metadata.json',
+        JSON.stringify({
+          captures: { opening: { file: 'opening.png' }, gone: { file: 'missing.png' } },
+          video: { file: 'gameplay.mp4' },
+        }),
+      ],
+      ['games/bubble-pop/media/opening.png', 'png'],
+      ['games/bubble-pop/media/gameplay.mp4', 'mp4'],
+      ['games/bubble-pop/game.ts', 'const input = GameKit.createInput(canvas);\n'],
+      ['games/arena-tag/SPEC.md', specMd({ title: 'Arena Tag', status: 'published', multiplayer: 'controllers' })],
+      ['games/arena-tag/game.ts', 'const party = GameKit.createParty(canvas);\n'],
+      // Stale committed catalog must not win over archive derivation.
+      ['catalog.json', JSON.stringify([{ slug: 'stale', title: 'Stale' }])],
+    ]);
+    const fetchImpl = vi.fn(async () => {
+      throw new Error('archive-backed getCatalog must not hit the network');
+    }) as unknown as typeof fetch;
+
+    const client = createGitHubClient({
+      token: 'test-token',
+      repo,
+      fetchImpl,
+      files: {
+        async readText(path) {
+          return files.get(path) ?? null;
+        },
+        async readBytes() {
+          return null;
+        },
+        listPaths: () => [...files.keys()],
+      },
+    });
+
+    const catalog = await client.getCatalog('main');
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(catalog.map((entry) => [entry.slug, entry.touch, entry.media?.screenshots.map((s) => s.file)])).toEqual([
+      ['arena-tag', 'controllers', undefined],
+      ['bubble-pop', 'gamekit', ['opening.png']],
+    ]);
+    expect(catalog.find((entry) => entry.slug === 'bubble-pop')?.media?.video).toBe('gameplay.mp4');
+  });
 });
 
 describe('getGameMedia', () => {
@@ -1074,12 +1128,16 @@ describe('failed request reporting', () => {
   }
 
   it('reports the permission a refused write actually wanted', async () => {
-    const fetchImpl = respondWith(403, JSON.stringify({ message: 'Resource not accessible by personal access token' }), {
-      'x-accepted-github-permissions': 'contents=write',
-      // Present and non-zero: this is a permission problem, not a throttle, and the
-      // client must not retry it as one.
-      'x-ratelimit-remaining': '4998',
-    });
+    const fetchImpl = respondWith(
+      403,
+      JSON.stringify({ message: 'Resource not accessible by personal access token' }),
+      {
+        'x-accepted-github-permissions': 'contents=write',
+        // Present and non-zero: this is a permission problem, not a throttle, and the
+        // client must not retry it as one.
+        'x-ratelimit-remaining': '4998',
+      },
+    );
     const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
 
     const error = await client.deleteBranch('copilot/spent').catch((err: unknown) => err);

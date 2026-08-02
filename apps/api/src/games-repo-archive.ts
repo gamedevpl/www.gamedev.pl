@@ -49,8 +49,10 @@ export interface GamesRepoArchive extends RepoFileSource {
   listPaths(): string[];
 }
 
-/** Sources, media, and the committed catalog — everything the bake reads. */
+/** Sources and media — everything the bake needs to assemble games and derive the catalog. */
 function defaultInclude(path: string): boolean {
+  // Legacy committed catalog.json is still retained when present so older SHAs
+  // keep working; the bake prefers deriving from games/ via listPaths.
   return path === 'catalog.json' || path.startsWith('games/') || path.startsWith('shared/');
 }
 
