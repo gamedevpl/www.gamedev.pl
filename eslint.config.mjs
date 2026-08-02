@@ -45,7 +45,11 @@ export default [
     },
     plugins: { gamedev: gamedevRules },
     rules: {
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      // `ignoreRestSiblings` covers the omit-a-key idiom — `const { gone: _x, ...rest }`
+      // — which is the standard way to drop a field before a write and is not an unused
+      // variable in any meaningful sense. It is on by default in ESLint's base rule and
+      // off in the TS plugin's, which is the whole reason it has to be said here.
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', ignoreRestSiblings: true }],
       // The ESM convention copilot-instructions.md documents. Unenforced it held in
       // apps/api (where Node would crash without it) and drifted in apps/web (where
       // Vite covers for it), which left reviewers flagging it by hand forever.
