@@ -167,6 +167,12 @@ export function CreatorStudioView({
   const [shelfQuery, setShelfQuery] = useState('');
   const [shelfFilter, setShelfFilter] = useState<StudioShelfFilter>('all');
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Publishing is terminal, so an improvement on a live game opens a *new* job with its
+  // own token — one not on the shelf yet. When that happens the open thread moves onto
+  // it while the shelf selection stays on the source game (the new job inherits its slug,
+  // so the chrome beside the thread is still right). Cleared whenever the selected game
+  // changes, so switching games or following a link always lands on that game's own tip.
+  const [handoffToken, setHandoffToken] = useState<string | null>(null);
   const shelfSearchId = useId();
   const pickerSearchId = useId();
   const pickerSearchRef = useRef<HTMLInputElement>(null!);
@@ -283,7 +289,34 @@ export function CreatorStudioView({
     };
   }, [user]);
 
+  // A handoff belongs to the game the creator was on when they asked for the improvement.
+  // The moment the selected game changes — a shelf pick, a deep link, an Up — that thread
+  // is no longer on screen, so drop the override and let the newly selected game show its
+  // own current tip.
+  useEffect(() => {
+    setHandoffToken(null);
+  }, [selected]);
+
   const activeGame = useMemo(() => shelfGames.find((game) => game.token === selected) ?? null, [shelfGames, selected]);
+  // The token the thread is actually showing: the new job's after an improvement handoff,
+  // otherwise the selected game's own.
+  const threadToken = handoffToken ?? activeGame?.token ?? null;
+  // Playtest must follow the same handoff: if it kept the published shelf record, pause
+  // feedback would call submitImprovement on the old token and open a second concurrent
+  // round (Codex P1). While a handoff is live, treat the surface as the unpublished new job.
+  const playtestGame = useMemo((): StudioShelfGame | null => {
+    if (!activeGame) return null;
+    if (!handoffToken || handoffToken === activeGame.token) return activeGame;
+    return {
+      ...activeGame,
+      token: handoffToken,
+      lastKnownStatus: 'building',
+      publishedAt: undefined,
+      // Tip is not catalog-published; drop any sibling stamp so playtest routes to feedback.
+      livePublishedAt: undefined,
+    };
+  }, [activeGame, handoffToken]);
+  const playtestPublished = Boolean(playtestGame && isStudioGamePublished(playtestGame) && !handoffToken);
   const selectedHealth = activeGame ? healthFor(activeGame, healthRows) : null;
   const selectedScorecard = activeGame?.slug
     ? (scorecards.find((card) => card.slug === activeGame.slug) ?? null)
@@ -564,9 +597,11 @@ export function CreatorStudioView({
                 {tab !== 'playtest' ? (
                   <div className="studio-build">
                     <SubmissionStatusView
-                      key={activeGame.token}
-                      token={activeGame.token}
+                      key={threadToken ?? activeGame.token}
+                      token={threadToken ?? activeGame.token}
                       embedded
+                      justHandedOff={handoffToken != null}
+                      onImproved={(newToken) => setHandoffToken(newToken)}
                       onPlaytest={() => openTab('playtest')}
                       onRetry={
                         onRetryConcept
@@ -580,10 +615,10 @@ export function CreatorStudioView({
                   </div>
                 ) : null}
 
-                {tab === 'playtest' ? (
+                {tab === 'playtest' && playtestGame ? (
                   <StudioPlaytestPanel
-                    game={activeGame}
-                    published={isStudioGamePublished(activeGame)}
+                    game={playtestGame}
+                    published={playtestPublished}
                     onExit={() => openTab('thread')}
                     pickerOpen={pickerOpen}
                   />

@@ -89,18 +89,37 @@ describe('self-build-connect templates', () => {
     }
   });
 
-  it('builds a kickoff prompt with the round key and pending feedback', () => {
+  it('builds a kickoff prompt with the round key, a loop pointer, and pending feedback', () => {
     const bare = buildKickoffPrompt({ title: 'Asteroids', roundKey: 'round-key-abc' });
     expect(bare).toBe(
-      ['Build "Asteroids" for gamedev.pl.', 'Start with the gamedevpl tool, key: round-key-abc'].join('\n'),
+      [
+        'Build "Asteroids" for gamedev.pl.',
+        'Start with the gamedevpl tool, key: round-key-abc',
+        'start returns your workflow; after gate green you are done — this key retires with the round.',
+      ].join('\n'),
     );
     expect(bare).not.toMatch(/\btoken\b/i);
+
+    // Base paste stays within the 5-line cap, with the key line intact at line 2 and the
+    // single loop pointer at line 3.
+    const bareLines = bare.split('\n');
+    expect(bareLines.length).toBeLessThanOrEqual(5);
+    expect(bareLines).toHaveLength(3);
+    expect(bareLines[1]).toBe('Start with the gamedevpl tool, key: round-key-abc');
+    expect(bareLines[2]).toMatch(/after gate green you are done/);
+    // Exactly one loop pointer line — not one per tool call.
+    expect(bare.match(/your workflow/g)).toHaveLength(1);
 
     const withPending = buildKickoffPrompt({
       title: 'Asteroids',
       roundKey: 'round-key-abc',
       pendingMessages: [{ text: 'make the ship faster' }, { text: 'add a pause button' }],
     });
+    // The loop line survives; "also apply:" bullets still append below, in order.
+    const pendingLines = withPending.split('\n');
+    expect(pendingLines[1]).toBe('Start with the gamedevpl tool, key: round-key-abc');
+    expect(pendingLines[2]).toMatch(/after gate green you are done/);
+    expect(withPending.indexOf('- make the ship faster')).toBeLessThan(withPending.indexOf('- add a pause button'));
     expect(withPending).toContain('also apply:');
     expect(withPending).toContain('- make the ship faster');
     expect(withPending).toContain('- add a pause button');
