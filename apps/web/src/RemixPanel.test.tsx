@@ -89,8 +89,9 @@ describe('RemixPanel', () => {
     expect(container.querySelector('.remix-note')?.textContent).toBe(
       "This game can't be remixed yet — but it still plays.",
     );
-    // The way onward is still offered rather than the panel being a dead end.
-    expect(container.textContent).toContain('Make it mine');
+    // And nothing else: no standing call to action under a panel that has not
+    // done anything yet.
+    expect(container.textContent).not.toContain('Make it mine');
     // And it is counted: without this rung, a visit that met a dead panel is
     // indistinguishable from one that opened the panel and lost interest.
     expect(telemetry.recordRemixStep).toHaveBeenCalledWith('no_lane');

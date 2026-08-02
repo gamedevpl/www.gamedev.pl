@@ -47,10 +47,21 @@ function stubGamesStore(): GamesStore {
 }
 
 /** Records what the assembler was asked to build, so overrides can be asserted. */
-function stubGitHubClient(seen: Array<Record<string, string> | undefined>): GitHubClient {
+function stubGitHubClient(
+  seen: Array<Record<string, string> | undefined>,
+  sourceMapCalls: string[] = [],
+): GitHubClient {
   return {
     getGameFile: async (_ref: string, slug: string, path: string) =>
       slug === 'dog-dash' || slug === 'repo-game' ? (SOURCES[path] ?? null) : null,
+    // The bundler's walk, stubbed: the game's own TypeScript, keyed relatively.
+    getGameSourceMap: async (_ref: string, slug: string) => {
+      sourceMapCalls.push(slug);
+      // `repo-game` deliberately has none: a game that declares itself but whose
+      // code will not assemble is the case the deep lane has to decline.
+      if (slug !== 'dog-dash') return null;
+      return { 'game.ts': SOURCES['game.ts'], 'game/runtime.ts': SOURCES['game/runtime.ts'] };
+    },
     getGameSources: async (_ref: string, slug: string, overrides?: Record<string, string>) => {
       // Like the real client: a slug with no game directory on the ref is null.
       if (slug !== 'dog-dash') return null;
@@ -405,7 +416,7 @@ describe('remix across the two catalog eras', () => {
   });
 
   /** No publication record → the repo-era path, exactly like a catalog game. */
-  async function repoEraApp() {
+  async function repoEraApp(overrides: { sourceMapCalls?: string[]; codeLane?: unknown } = {}) {
     const store = new InMemoryStore();
     const seen: Array<Record<string, string> | undefined> = [];
     const instance = Fastify({ routerOptions: { maxParamLength: MAX_REMIX_ID_LENGTH } });
@@ -417,10 +428,10 @@ describe('remix across the two catalog eras', () => {
     await registerRemixRoutes(instance, {
       store,
       gamesStore: stubGamesStore(),
-      githubClient: stubGitHubClient(seen),
+      githubClient: stubGitHubClient(seen, overrides.sourceMapCalls ?? []),
       publishedRef: 'main',
       assistant: { assist: async () => ({ lane: 'params' }) } as EditorAssistant,
-      codeLane: { run: async () => ({ ok: true }) } as never,
+      codeLane: (overrides.codeLane ?? { run: async () => ({ ok: true }) }) as never,
     });
     await instance.ready();
     return instance;
@@ -434,12 +445,50 @@ describe('remix across the two catalog eras', () => {
     // The declaration came from a file read, not from an assembly.
     expect(body.params.dogScale.max).toBe(3);
     expect(body.canAssist).toBe(true);
-    // ...but its code is still on the ref, so the deep lane says so honestly.
-    expect(body.canCode).toBe(false);
+    // ...and the deep lane is offered too: a repo game's sources are reachable
+    // through the bundler's walk. Whether this particular game assembles is
+    // answered on the first request that needs it, not paid for at open.
+    expect(body.canCode).toBe(true);
   });
 
-  it('refuses the code lane on a repo-era game rather than mapping nothing', async () => {
-    app = await repoEraApp();
+  it('edits a repo-era game by fetching its sources on the first request that needs them', async () => {
+    const mapCalls: string[] = [];
+    const seenSources: Array<Record<string, string>> = [];
+    app = await repoEraApp({
+      sourceMapCalls: mapCalls,
+      codeLane: {
+        run: async (
+          request: { sources: Record<string, string> },
+          build: (o: Record<string, string>) => Promise<{ ok: boolean }>,
+        ) => {
+          seenSources.push(request.sources);
+          const good = { 'game/runtime.ts': 'export function startGame() {\n  return 0.08;\n}\n' };
+          await build(good);
+          return { ok: true, overrides: good, region: { file: 'game/runtime.ts', name: 'startGame' } };
+        },
+      },
+    });
+    const { remixId } = (await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix', headers: alice })).json();
+
+    // Opening cost nothing: the walk is not run until a rebuild is asked for.
+    expect(mapCalls).toEqual([]);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/remixes/${remixId}/code`,
+      headers: alice,
+      payload: { utterance: 'add a double jump' },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().ok).toBe(true);
+    // The lane saw the game's real code, not just its declaration.
+    expect(seenSources[0]['game/runtime.ts']).toContain('return 0.16;');
+    expect(mapCalls).toEqual(['dog-dash']);
+  });
+
+  it('declines the deep lane for a game whose sources will not assemble', async () => {
+    app = await repoEraApp({ codeLane: { run: async () => ({ ok: true }) } });
+    // `no-sources` has a manifest and a declaration but no assemblable code.
     const { remixId } = (
       await app.inject({ method: 'POST', url: '/api/games/repo-game/remix', headers: alice })
     ).json();
@@ -449,6 +498,7 @@ describe('remix across the two catalog eras', () => {
       headers: alice,
       payload: { utterance: 'add a double jump' },
     });
+    // A fact about this game, not a failure of the request.
     expect(response.statusCode).toBe(409);
   });
 

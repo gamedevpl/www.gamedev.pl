@@ -430,6 +430,22 @@ export interface GitHubClient {
    */
   getGameFile(ref: string, slug: string, path: string): Promise<string | null>;
   /**
+   * Every TypeScript source a game actually uses, keyed by its game-relative
+   * path — the game's own code, never the engine's.
+   *
+   * The set comes from the bundler's own walk of the import graph rather than
+   * from a directory listing, which makes it exactly the files that end up in
+   * the running game: a stale module nobody imports is not part of the game and
+   * should not be offered to an editor as if it were. The same caps that bound
+   * an assembly bound this, because it *is* an assembly — the output is thrown
+   * away and only the sources are kept.
+   *
+   * Exists so a repo-era game can be edited at all. A store-era game hands over
+   * its files at publish; a repo-era one keeps them on the ref, and without this
+   * the whole catalog could only be tuned through declared parameters.
+   */
+  getGameSourceMap(ref: string, slug: string): Promise<Record<string, string> | null>;
+  /**
    * Reads the agent's own progress journal for a game on `ref`
    * (`games/<slug>/PROGRESS.md`). This is how the coding agent narrates what it is
    * doing in words a creator understands, instead of us inferring it from commit
@@ -751,6 +767,8 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
     ref: string,
     slug: string,
     overrides?: Record<string, string>,
+    /** When given, every module the walk loads is recorded here by game-relative path. */
+    collect?: Map<string, string>,
   ): Promise<string> {
     const gameRoot = `/games/${slug}`;
     const loadedPaths = new Set([`${gameRoot}/game.ts`]);
@@ -821,6 +839,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
               if (source === null) {
                 return { errors: [{ text: `game module not found: ${args.path}` }] };
               }
+              collect?.set(loadedPath.slice(gameRoot.length + 1), source);
               if (!loadedPaths.has(loadedPath)) {
                 if (loadedPaths.size >= MAX_GAME_MODULES) {
                   return { errors: [{ text: `game exceeds ${MAX_GAME_MODULES} TypeScript modules` }] };
@@ -1109,6 +1128,26 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       const raw = await readRawFile(`games/${slug}/PROGRESS.md`, ref);
       // Cap the read: this is agent-authored and only its newest lines are shown.
       return raw === null ? null : raw.slice(0, 4096);
+    },
+
+    async getGameSourceMap(ref, slug) {
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) return null;
+      const entry = await readRawFile(`games/${slug}/game.ts`, ref);
+      if (entry === null) return null;
+      const collected = new Map<string, string>([['game.ts', entry]]);
+      try {
+        // The bundle output is discarded — this runs the walk for its trail. Doing
+        // it any other way (a directory listing, a hand-rolled import parser)
+        // would be a second, quietly different answer to "what is this game made
+        // of", and the two would drift the first time an import convention moved.
+        await bundleGameTypeScript(entry, ref, slug, undefined, collected);
+      } catch {
+        // A game that cannot be bundled cannot be edited either — the lane needs
+        // a baseline that builds, and saying so here keeps the caller's answer
+        // "not this game" rather than a failure halfway through an edit.
+        return null;
+      }
+      return Object.fromEntries(collected);
     },
 
     async getGameFile(ref, slug, path) {

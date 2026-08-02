@@ -540,24 +540,21 @@ export function RemixPanel(props: {
       ) : null}
 
       {/*
-       * The two upgrade triggers, side by side and never a wall. "Make it yours"
-       * hands the remix to the ordinary creation flow as a prefilled concept —
-       * the honest version of keeping it, since a remix itself never publishes.
+       * No standing "make this yours" (owner decision, 2026-08-02). It sat under
+       * the composer from the first frame — before anything had been changed —
+       * so it read as the panel's purpose rather than as a next step, and it was
+       * the only thing on screen whenever no lane could answer. The intended
+       * shape is earned and sequential: change something, share it, and forking
+       * follows from the share. Until that sequence exists, the panel offers
+       * nothing it has not earned.
        */}
-      <div className="remix-actions">
-        {expert && specs ? (
+      {expert && specs ? (
+        <div className="remix-actions">
           <button type="button" className="remix-action" onClick={() => void share()}>
             {t('remix.share')}
           </button>
-        ) : null}
-        <a
-          className="remix-action is-primary"
-          href={`/?concept=${encodeURIComponent(t('remix.conceptSeed', { slug: props.slug }))}`}
-          onClick={() => recordRemixStep('keep_clicked')}
-        >
-          {t('remix.makeItYours')}
-        </a>
-      </div>
+        </div>
+      ) : null}
       {shareUrl ? <p className="remix-share-url">{shareUrl}</p> : null}
       <AuthModal
         isOpen={authOpen}
