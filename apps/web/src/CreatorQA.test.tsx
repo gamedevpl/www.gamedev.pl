@@ -421,6 +421,76 @@ describe('CreatorQA', () => {
     expect(document.body.style.overflow).not.toBe('hidden');
   });
 
+  /**
+   * jsdom has no visual viewport, so this is the keyboard as the browser reports it:
+   * an object whose height shrinks and whose offsetTop moves, emitting resize/scroll.
+   */
+  function stubVisualViewport(height: number, offsetTop = 0) {
+    const listeners = new Map<string, Set<() => void>>();
+    const viewport = {
+      height,
+      offsetTop,
+      addEventListener: (type: string, fn: () => void) => {
+        if (!listeners.has(type)) listeners.set(type, new Set());
+        listeners.get(type)!.add(fn);
+      },
+      removeEventListener: (type: string, fn: () => void) => listeners.get(type)?.delete(fn),
+    };
+    Object.defineProperty(window, 'visualViewport', { value: viewport, configurable: true, writable: true });
+    return {
+      viewport,
+      /** The keyboard opening: the visible area shrinks and everything is told. */
+      async emit(type: 'resize' | 'scroll', next: { height?: number; offsetTop?: number }) {
+        if (next.height !== undefined) viewport.height = next.height;
+        if (next.offsetTop !== undefined) viewport.offsetTop = next.offsetTop;
+        await act(async () => {
+          listeners.get(type)?.forEach((fn) => fn());
+          await flushEffects();
+        });
+      },
+      listenerCount: () => (listeners.get('resize')?.size ?? 0) + (listeners.get('scroll')?.size ?? 0),
+      restore: () => Reflect.deleteProperty(window, 'visualViewport'),
+    };
+  }
+
+  it('sizes itself to the visual viewport, so the keyboard cannot bury the footer', async () => {
+    // dvh tracks the address bar and stops there: iOS shrinks only the visual viewport
+    // for the keyboard, leaving the layout viewport — what a fixed box is sized
+    // against — at full height, with Back and Next underneath the keys.
+    const vv = stubVisualViewport(844);
+    const root = await render({ ...baseProps, onSubmitWithConcept: vi.fn() });
+
+    const wizard = find<HTMLElement>('.qa-wizard')!;
+    expect(wizard.classList.contains('is-viewport-tracked')).toBe(true);
+    expect(wizard.style.getPropertyValue('--qa-viewport-height')).toBe('844px');
+
+    // Keyboard up: the shell follows the visible area rather than the layout viewport.
+    await vv.emit('resize', { height: 508 });
+    expect(wizard.style.getPropertyValue('--qa-viewport-height')).toBe('508px');
+
+    // ...and iOS scrolling the visual viewport to reveal an input drags the shell with
+    // it, which a position:fixed box does not do on its own.
+    await vv.emit('scroll', { offsetTop: 62 });
+    expect(wizard.style.getPropertyValue('--qa-viewport-offset')).toBe('62px');
+
+    await act(async () => root.unmount());
+    expect(vv.listenerCount()).toBe(0);
+    vv.restore();
+  });
+
+  it('falls back to the stylesheet when the browser has no visual viewport', async () => {
+    // The class is what opts into the custom properties. Without the API there is
+    // nothing to write into them, so it must stay off and leave dvh in charge.
+    Reflect.deleteProperty(window, 'visualViewport');
+    const root = await render({ ...baseProps, onSubmitWithConcept: vi.fn() });
+
+    const wizard = find<HTMLElement>('.qa-wizard')!;
+    expect(wizard.classList.contains('is-viewport-tracked')).toBe(false);
+    expect(wizard.style.getPropertyValue('--qa-viewport-height')).toBe('');
+
+    await act(async () => root.unmount());
+  });
+
   it('names the exit even when its label is hidden on a narrow screen', async () => {
     // Below 560px the CSS hides the span, and the icon is decorative — without an
     // explicit label that leaves a phone user with an unnamed button as the only
