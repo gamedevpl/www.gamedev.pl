@@ -67,10 +67,18 @@ export const privacyEn: LegalDocument = {
             ],
             [
               'Content you create: game description, title, answers to clarifying questions, feedback on a finished ' +
-                'game, optional creator name, uploaded sketches and images',
+                'game, uploaded sketches and images',
               'Having an AI agent build your game and publishing it',
               'Art. 6(1)(b) — performance of a contract',
               'Indefinitely for published games (they are part of the project record); unpublished submissions — 24 months',
+            ],
+            [
+              'Public creator profile you claim before publishing: unique handle, display name, short bio, and ' +
+                'whether to show your Google profile picture or a lettermark (we never invent an avatar URL)',
+              'Attributing published games to you on the catalog and player, and hosting your public profile page',
+              'Art. 6(1)(b) — performance of a contract (publishing requires a profile); shown publicly by your ' +
+                'choice to claim a handle',
+              'Until you delete your account (the handle reservation is cleared with the account)',
             ],
             [
               'Your reactions to games you play: a thumbs up/down, and any written feedback you leave — each stored ' +
@@ -326,15 +334,17 @@ export const privacyEn: LegalDocument = {
             'We then remove your account data, email address, notification subscriptions, the votes and written ' +
             'feedback you left on games, the record of which games you opened for recommendations, your saved ' +
             'progress in games that keep it, anything you built in a ' +
-            'game’s shared world, and the link between your submissions and you. Removing what you built ' +
+            'game’s shared world, your public creator profile (handle, display name, bio, avatar preference) and ' +
+            'the handle reservation, and the link between your submissions and you. Removing what you built ' +
             'from a shared world also removes it from what other players see there.',
         },
         {
           kind: 'p',
           text:
             'Games already published in the arcade stay available but are no longer linked to your account — other ' +
-            'players can keep playing them, and we cannot withdraw code that has become part of the project. If you ' +
-            'want a specific game taken down, say so explicitly in your request and we will consider it separately.',
+            'players can keep playing them, and we cannot withdraw code that has become part of the project. After ' +
+            'deletion the byline falls back to the platform name. If you want a specific game taken down, say so ' +
+            'explicitly in your request and we will consider it separately.',
         },
       ],
     },

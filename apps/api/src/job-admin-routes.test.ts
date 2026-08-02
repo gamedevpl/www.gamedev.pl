@@ -167,9 +167,13 @@ describe('POST /api/admin/jobs/:issueNumber/publish', () => {
     } as unknown as GamesStore;
   }
 
-  async function appWithJob(gamesStore: GamesStore) {
+  async function appWithJob(gamesStore: GamesStore, opts?: { claimProfile?: boolean }) {
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:boss' });
+    // Publish requires a creator profile unless the owner is a bot account.
+    if (opts?.claimProfile !== false) {
+      await store.claimHandle('g:boss', 'boss', '2026-07-01T00:00:00.000Z');
+    }
     await store.createSubmission(1_000_001, 'g:boss', 'Comet Courier');
     await store.setSubmissionSlug(1_000_001, 'comet-courier');
     await store.setSubmissionDeliveredVersion(1_000_001, 'v1');
@@ -203,6 +207,22 @@ describe('POST /api/admin/jobs/:issueNumber/publish', () => {
     expect(record?.state).toBe('published');
     expect(record?.transitions?.map((entry) => entry.to)).toEqual(['publishing', 'published']);
     expect(record?.publishedAt).toBeTruthy();
+
+    await app.close();
+  });
+
+  it('refuses to publish when the creator has no profile', async () => {
+    const { app, store } = await appWithJob(gamesStoreWith({ green: true }), { claimProfile: false });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/jobs/1000001/publish',
+      headers: adminHeaders,
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error).toBe('profile_required');
+    expect(await store.getPublication('comet-courier')).toBeNull();
 
     await app.close();
   });

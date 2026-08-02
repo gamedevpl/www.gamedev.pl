@@ -97,6 +97,9 @@ export type AppRoute =
   // Public contact form. Same early-exit posture as legal: a contact point behind
   // sign-in is not a published contact point.
   | { view: 'contact' }
+  // Public creator profile. Reachable without a session — the byline destination for
+  // published games. Handle shape matches the API (`^[a-z][a-z0-9_]{2,23}$`).
+  | { view: 'creator'; handle: string }
   // Unknown / invalid path. Kept as its own view so a typo or stale bookmark shows a
   // real 404 instead of silently dumping the visitor on the home catalog.
   | { view: 'notFound' };
@@ -104,6 +107,9 @@ export type AppRoute =
 // Game slugs are lowercase kebab-case (matches the games-repo catalog); keep the
 // route pattern strict so arbitrary path segments can't masquerade as a play route.
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/** Creator handles — keep aligned with apps/api/src/creator-profile.ts HANDLE_PATTERN. */
+const CREATOR_HANDLE_PATTERN = /^[a-z][a-z0-9_]{2,23}$/;
 
 // Canonical play prefix is `/play`. `/ay` and `/ai` are accepted aliases (same view);
 // the app rewrites them to `/play/<slug>` so shared URLs stay consistent.
@@ -149,6 +155,15 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
 
   if (normalizedPath === '/contact') {
     return { view: 'contact' };
+  }
+
+  const creatorMatch = normalizedPath.match(/^\/creators\/([^/]+)$/);
+  if (creatorMatch?.[1]) {
+    const handle = decodeSegment(creatorMatch[1]);
+    if (handle && CREATOR_HANDLE_PATTERN.test(handle)) {
+      return { view: 'creator', handle };
+    }
+    return { view: 'notFound' };
   }
 
   const statusMatch = normalizedPath.match(/^\/status\/([^/]+)$/);
@@ -355,6 +370,7 @@ export function navUpTarget(route: AppRoute): NavUpTarget | null {
     case 'admin':
     case 'legal':
     case 'contact':
+    case 'creator':
     case 'notFound':
       return { path: '/', labelKey: 'upHome' };
   }
@@ -397,6 +413,11 @@ export function legalPath(doc: LegalDocId, sectionId?: string): string {
 /** URL for the public contact form. */
 export function contactPath(): string {
   return '/contact';
+}
+
+/** URL for a public creator profile. */
+export function creatorPath(handle: string): string {
+  return `/creators/${handle}`;
 }
 
 /**

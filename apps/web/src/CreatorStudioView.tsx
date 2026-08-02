@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState, type RefObject } from 'rea
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
 import { AuthModal } from './AuthModal.js';
+import { CreatorProfileEditor } from './CreatorProfileEditor.js';
 import type { GameHealth } from './healthApi.js';
 import { PixelIcon } from './PixelIcon.js';
 import { formatRelativeTime } from './relativeTime.js';
@@ -527,6 +528,14 @@ export function CreatorStudioView({
           <PixelIcon name="undo" size={12} /> {t('studioPanel.backHome')}
         </button>
       </header>
+
+      {!loading && user ? (
+        <CreatorProfileEditor
+          publishNudge={shelfGames.some(
+            (game) => game.lastKnownStatus === 'in_review' || game.lastKnownStatus === 'publishing',
+          )}
+        />
+      ) : null}
 
       {loading ? (
         <>

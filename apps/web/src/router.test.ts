@@ -126,6 +126,13 @@ describe('parsePathRoute', () => {
     expect(parsePathRoute('/contact')).toEqual({ view: 'contact' });
   });
 
+  it('parses public creator profile routes', () => {
+    expect(parsePathRoute('/creators/ada')).toEqual({ view: 'creator', handle: 'ada' });
+    expect(parsePathRoute('/creators/ada_lovelace')).toEqual({ view: 'creator', handle: 'ada_lovelace' });
+    expect(parsePathRoute('/creators/ab')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/creators/Ada')).toEqual({ view: 'notFound' });
+  });
+
   // A cited clause has to survive the trip: `/terms#zglaszanie` is what goes into a
   // reply telling someone how to report content, and if the fragment knocked the
   // route back to home it would land them on the front page instead.
@@ -280,6 +287,7 @@ describe('navUpTarget', () => {
     expect(navUpTarget({ view: 'admin', section: 'queue' })).toEqual({ path: '/', labelKey: 'upHome' });
     expect(navUpTarget({ view: 'legal', doc: 'privacy' })).toEqual({ path: '/', labelKey: 'upHome' });
     expect(navUpTarget({ view: 'contact' })).toEqual({ path: '/', labelKey: 'upHome' });
+    expect(navUpTarget({ view: 'creator', handle: 'ada' })).toEqual({ path: '/', labelKey: 'upHome' });
     expect(navUpTarget({ view: 'notFound' })).toEqual({ path: '/', labelKey: 'upHome' });
   });
 });

@@ -175,8 +175,21 @@ describe('erasePlayerSignals', () => {
     expect(result.feedbackDeleted).toBe(0);
     expect(result.savesDeleted).toEqual([]);
     expect(result.affinityCleared).toEqual([]);
+    expect(result.handlesReleased).toEqual([]);
     // And nobody else was disturbed by the attempt.
     expect(await store.getVoteCounts('brick-storm')).toEqual({ up: 2, down: 0 });
+  });
+
+  it('releases creator-profile handle reservations with the account', async () => {
+    await store.upsertUser({ uid: 'g:leaver' });
+    await store.claimHandle('g:leaver', 'leaver_handle', new Date().toISOString());
+
+    const result = await erasePlayerSignals({ store, uid: 'g:leaver' });
+
+    expect(result.handlesReleased).toEqual(['leaver_handle']);
+    expect(await store.getUserByHandle('leaver_handle')).toBeNull();
+    expect(await store.getHandleReservation('leaver_handle')).toBeNull();
+    expect((await store.getUser('g:leaver'))?.handle).toBeUndefined();
   });
 
   it('previews exactly what it then deletes', async () => {

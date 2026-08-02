@@ -9,6 +9,7 @@ import { registerMcpServerRoutes } from './mcp-server.js';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import { createCreationGate, CREATION_REFUSAL_CODES, type CreationGate } from './creation-limits.js';
 import { postGateScreenshotToThread } from './gate-screenshot.js';
+import { profileBylineName, toPublicCreatorProfile } from './creator-profile.js';
 import {
   catalogEntryFromSpec,
   createGitHubClient,
@@ -3877,7 +3878,18 @@ export async function registerSubmissionRoutes(
         const entry = catalogEntryFromSpec(record.slug, spec, () => null);
         // Published is a decision the operator already made and recorded here; the
         // spec's own `status` describes the repo workflow this game never went through.
-        if (entry) entries.push({ ...entry, status: 'published' });
+        if (!entry) continue;
+        // Attribution joins at read time from the owner's profile — never from SPEC.
+        // Missing profile → platform byline (same as seed games).
+        const submission = await store.getSubmissionBySlug(record.slug);
+        const owner = submission ? await store.getUser(submission.ownerUid) : null;
+        const profile = owner ? toPublicCreatorProfile(owner) : null;
+        entries.push({
+          ...entry,
+          status: 'published',
+          submittedBy: profile ? profileBylineName(profile) : entry.submittedBy,
+          creatorHandle: profile?.handle ?? null,
+        });
       }
       storeCatalogCache = { value: entries, expiresAt: now() + storeCatalogTtlMs };
       return entries;
