@@ -34,12 +34,12 @@ export type ResolveGameKeyForOpenRoundResult =
   | { ok: false; reason: string };
 
 /**
- * Creator still "owns" the slug when they have a non-abandoned submission for it
- * whose ownerUid matches the claims. Newest non-abandoned job decides ownership.
+ * Creator still "owns" the slug when the newest submission for it is non-abandoned
+ * and its ownerUid matches. Resolved by slug, not by paging the owner's job list.
  */
 export async function creatorOwnsSlug(store: Store, slug: string, creatorUid: string): Promise<boolean> {
-  const owned = await store.listSubmissionsByOwner(creatorUid, { limit: 200 });
-  return owned.some((job) => job.slug === slug && !job.abandonedAt);
+  const record = await store.getSubmissionBySlug(slug);
+  return record !== null && record.ownerUid === creatorUid && !record.abandonedAt;
 }
 
 /** Newest active build round for this slug owned by the creator, or null. */
@@ -48,11 +48,8 @@ export async function findActiveRoundForSlug(
   slug: string,
   creatorUid: string,
 ): Promise<SubmissionRecord | null> {
-  const owned = await store.listSubmissionsByOwner(creatorUid, { limit: 200 });
-  const active = owned
-    .filter((job) => job.slug === slug && !job.abandonedAt && isActiveBuildRound(job))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  return active[0] ?? null;
+  const bySlug = await store.listSubmissionsBySlug(slug);
+  return bySlug.find((job) => job.ownerUid === creatorUid && !job.abandonedAt && isActiveBuildRound(job)) ?? null;
 }
 
 /**

@@ -1,12 +1,33 @@
 import { describe, expect, it } from 'vitest';
-import { NO_OPEN_ROUND_REASON, PLATFORM_ROUND_REASON, mintGameAgentKey } from './agent-game-key.js';
-import { resolveGameAgentKeyForStart } from './agent-game-key-resolve.js';
+import {
+  NO_OPEN_ROUND_REASON,
+  PLATFORM_ROUND_REASON,
+  ROTATED_GAME_KEY_REASON,
+  mintGameAgentKey,
+} from './agent-game-key.js';
+import {
+  creatorOwnsSlug,
+  resolveGameAgentKeyForOpenRound,
+  resolveGameAgentKeyForStart,
+  verifyDurableGameAgentKey,
+} from './agent-game-key-resolve.js';
+import type { SubmissionRecord } from './store.js';
 import { InMemoryStore } from './store.js';
 
 const secret = 'resolve-game-key-secret';
 const slug = 'comet-courier';
 const ownerUid = 'g:owner';
 const now = Date.parse('2026-07-31T12:00:00.000Z');
+
+function submissionMap(store: InMemoryStore): Map<number, SubmissionRecord> {
+  return (store as unknown as { submissions: Map<number, SubmissionRecord> }).submissions;
+}
+
+function setCreatedAt(store: InMemoryStore, issueNumber: number, createdAt: string): void {
+  const map = submissionMap(store);
+  const sub = map.get(issueNumber);
+  if (sub) map.set(issueNumber, { ...sub, createdAt });
+}
 
 async function seedActiveSelfRound(store: InMemoryStore, issueNumber: number, builder: 'self' | 'platform' = 'self') {
   await store.createSubmission(issueNumber, ownerUid, 'Comet Courier');
@@ -18,6 +39,35 @@ async function seedActiveSelfRound(store: InMemoryStore, issueNumber: number, bu
     by: 'system',
   });
   await store.ensureRoundGeneration(issueNumber);
+}
+
+async function seedPublishedGame(store: InMemoryStore, issueNumber: number, createdAt = '2026-07-01T00:00:00.000Z') {
+  await store.createSubmission(issueNumber, ownerUid, 'Comet Courier');
+  await store.setSubmissionSlug(issueNumber, slug);
+  await store.setRoundBuilder(issueNumber, 'self');
+  setCreatedAt(store, issueNumber, createdAt);
+  await store.setSubmissionPublishedAt(issueNumber, createdAt);
+  await store.recordJobTransition(issueNumber, {
+    to: 'published',
+    at: createdAt,
+    by: 'operator',
+    reason: 'published',
+  });
+}
+
+/** 250 newer jobs on other slugs — pushes an older game past the owner-list window. */
+async function seedManyNewerJobs(store: InMemoryStore, count: number, startIssue: number) {
+  const map = submissionMap(store);
+  for (let i = 0; i < count; i++) {
+    const issue = startIssue + i;
+    await store.createSubmission(issue, ownerUid, `Other game ${issue}`);
+    await store.setSubmissionSlug(issue, `other-game-${issue}`);
+    const sub = map.get(issue)!;
+    map.set(issue, {
+      ...sub,
+      createdAt: `2026-08-${String((i % 28) + 1).padStart(2, '0')}T12:00:00.000Z`,
+    });
+  }
 }
 
 function gameKey(generation = 1) {
@@ -82,5 +132,83 @@ describe('resolveGameAgentKeyForStart', () => {
       expect(result.record.issueNumber).toBe(13);
       expect(result.record.builder).toBe('self');
     }
+  });
+});
+
+describe('slug ownership beyond owner-list window (BY-25)', () => {
+  const publishedIssue = 1;
+  const activeRoundIssue = 2;
+  const newerJobsStart = 100;
+
+  async function seedProlificCreatorBaseline(store: InMemoryStore) {
+    await seedPublishedGame(store, publishedIssue, '2026-06-01T00:00:00.000Z');
+    await seedManyNewerJobs(store, 250, newerJobsStart);
+    const at = new Date(now).toISOString();
+    await store.ensureGameAgentKey(slug, ownerUid, at);
+    await store.setGameAgentOpenRounds(slug, ownerUid, true, at);
+  }
+
+  it('creatorOwnsSlug stays true when the game aged out of listSubmissionsByOwner(200)', async () => {
+    const store = new InMemoryStore();
+    await seedProlificCreatorBaseline(store);
+
+    expect(await creatorOwnsSlug(store, slug, ownerUid)).toBe(true);
+
+    const windowed = await store.listSubmissionsByOwner(ownerUid, { limit: 200 });
+    expect(windowed.some((job) => job.slug === slug)).toBe(false);
+  });
+
+  it('verifyDurableGameAgentKey accepts a key for an old owned slug', async () => {
+    const store = new InMemoryStore();
+    await seedProlificCreatorBaseline(store);
+
+    const result = await verifyDurableGameAgentKey(store, gameKey(), secret, now);
+    expect(result.ok).toBe(true);
+  });
+
+  it('start binds when a self round is open on an old slug', async () => {
+    const store = new InMemoryStore();
+    await seedProlificCreatorBaseline(store);
+    await seedActiveSelfRound(store, activeRoundIssue, 'self');
+    setCreatedAt(store, activeRoundIssue, '2026-08-15T12:00:00.000Z');
+
+    const result = await resolveGameAgentKeyForStart(store, gameKey(), secret, now);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.record.issueNumber).toBe(activeRoundIssue);
+    }
+  });
+
+  it('open_round resolves a published game that aged out of the owner list', async () => {
+    const store = new InMemoryStore();
+    await seedProlificCreatorBaseline(store);
+
+    const result = await resolveGameAgentKeyForOpenRound(store, gameKey(), secret, now);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.publishedRecord.issueNumber).toBe(publishedIssue);
+      expect(result.activeRound).toBeNull();
+    }
+  });
+
+  it('still refuses when the newest slug record is owned by someone else', async () => {
+    const store = new InMemoryStore();
+    await seedProlificCreatorBaseline(store);
+    const transferIssue = 3;
+    await store.createSubmission(transferIssue, 'g:stranger', 'Transferred');
+    await store.setSubmissionSlug(transferIssue, slug);
+    setCreatedAt(store, transferIssue, '2026-09-01T12:00:00.000Z');
+
+    const result = await verifyDurableGameAgentKey(store, gameKey(), secret, now);
+    expect(result).toEqual({ ok: false, reason: ROTATED_GAME_KEY_REASON });
+  });
+
+  it('still refuses when the newest slug record is abandoned', async () => {
+    const store = new InMemoryStore();
+    await seedProlificCreatorBaseline(store);
+    await store.setSubmissionAbandoned(publishedIssue, '2026-09-01T12:00:00.000Z');
+
+    const result = await verifyDurableGameAgentKey(store, gameKey(), secret, now);
+    expect(result).toEqual({ ok: false, reason: ROTATED_GAME_KEY_REASON });
   });
 });
