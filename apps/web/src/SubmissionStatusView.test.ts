@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 
-import { act, createElement } from 'react';
+import { act, createElement, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n/index.js';
+import { statusPath } from './router.js';
 import { ACTIVE_POLL_MS, SubmissionStatusView } from './SubmissionStatusView.js';
 import {
   abandonSubmission,
@@ -1704,5 +1705,238 @@ describe('SubmissionStatusView stop & retry', () => {
       liveRoot.unmount();
     });
     vi.useRealTimers();
+  });
+
+  /**
+   * Publishing is terminal: a post-publish improvement opens a *new* job on its own
+   * thread. These lock the handoff — the creator moving onto the new build thread rather
+   * than being left on the published (dead) one while its connect card sits unnoticed.
+   *
+   * The harness stands in for CreatorStudioView: it owns which thread is on screen and
+   * switches it to the new token when the child reports the improvement, marking the new
+   * mount as the handoff destination — exactly what the studio does via `onImproved`.
+   */
+  function HandoffHarness({ initialToken }: { initialToken: string }) {
+    const [threadToken, setThreadToken] = useState(initialToken);
+    const [handedOff, setHandedOff] = useState(false);
+    return createElement(SubmissionStatusView, {
+      key: threadToken,
+      token: threadToken,
+      embedded: true,
+      justHandedOff: handedOff,
+      onImproved: (next: string) => {
+        setThreadToken(next);
+        setHandedOff(true);
+      },
+    });
+  }
+
+  const CONNECT_PAYLOAD = {
+    installSnippets: {
+      claudeCode: 'claude mcp add gamedevpl https://example.test/api/mcp',
+      codex: 'url = "https://example.test/api/mcp"',
+      cursor: '{"mcpServers":{}}',
+      kimi: 'npx mcp-remote https://example.test/api/mcp',
+      cli: 'curl https://example.test/api/mcp',
+    },
+    kickoffPrompt: 'Build "Handoff Game" for gamedev.pl.\nStart with the gamedevpl tool, key: round.key',
+  };
+
+  it('standalone: a published improve navigates the browser to the new job’s thread', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({ status: 'published', slug: 'tv-tycoon' });
+    mockedSubmitImprovement.mockResolvedValue({ ok: true, jobId: 42, token: 'new-standalone-job', slug: 'tv-tycoon' });
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/status/live-token');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      // Standalone: no `embedded`, no `onImproved` — the view drives the browser itself.
+      root.render(createElement(SubmissionStatusView, { token: 'live-token' }));
+      await flushEffects();
+    });
+
+    const box = container.querySelector<HTMLTextAreaElement>('.status-feedback-input');
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+      setter?.call(box, 'Please add a checkpoint before the hard second level jump.');
+      box!.dispatchEvent(new Event('input', { bubbles: true }));
+      await flushEffects();
+    });
+    await act(async () => {
+      container
+        .querySelector('.status-feedback .primary-btn')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+
+    expect(mockedSubmitImprovement).toHaveBeenCalled();
+    // The old (published) token cannot address the new round — the browser is on the new one.
+    expect(window.location.pathname).toBe(statusPath('new-standalone-job'));
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('embedded: a published self-improve switches the thread and surfaces the new round’s connect card', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const connectFetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ ...CONNECT_PAYLOAD, expiresAt: Math.floor(Date.now() / 1000) + 3600 }),
+    }));
+    vi.stubGlobal('fetch', connectFetch);
+
+    // The published job is self-built; its improvement is a new self job still waiting
+    // on the creator's own agent — the state that renders the connect card.
+    mockedGetSubmissionStatus.mockImplementation(async (token: string) =>
+      token === 'new-self-job'
+        ? { status: 'queued', stall: 'no_agent_yet', builder: 'self' }
+        : { status: 'published', slug: 'tv-tycoon', defaultBuilder: 'self' },
+    );
+    mockedSubmitImprovement.mockResolvedValue({ ok: true, jobId: 77, token: 'new-self-job', slug: 'tv-tycoon' });
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/studio/pub-self');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    try {
+      await act(async () => {
+        root.render(createElement(HandoffHarness, { initialToken: 'pub-self' }));
+        await flushEffects();
+        await flushEffects();
+      });
+
+      // The published thread has no connect card of its own — it is terminal.
+      expect(container.querySelector('.studio-connect')).toBeNull();
+
+      const box = container.querySelector<HTMLTextAreaElement>('.status-feedback-input');
+      await act(async () => {
+        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+        setter?.call(box, 'Give the second level a checkpoint so it is not so punishing.');
+        box!.dispatchEvent(new Event('input', { bubbles: true }));
+        await flushEffects();
+      });
+      await act(async () => {
+        container.querySelector('.status-composer-send')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushEffects();
+        await flushEffects();
+        await flushEffects();
+      });
+
+      // The default builder came from the status payload (self), so the new round is self.
+      expect(mockedSubmitImprovement).toHaveBeenCalledWith('pub-self', expect.any(String), undefined, 'self');
+      // The thread moved onto the new job, announced itself, and shows that job's connect card.
+      expect(container.querySelector('.status-handoff-notice')?.textContent).toContain('new build thread');
+      expect(container.querySelector('.studio-connect')).not.toBeNull();
+      expect(container.textContent).toContain('Connect your coding agent');
+    } finally {
+      await act(async () => {
+        root.unmount();
+      });
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('embedded: a published platform-improve hands off with no connect card', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockImplementation(async (token: string) =>
+      token === 'new-plat-job'
+        ? { status: 'building', builder: 'platform', events: [] }
+        : { status: 'published', slug: 'tv-tycoon', defaultBuilder: 'platform' },
+    );
+    mockedSubmitImprovement.mockResolvedValue({ ok: true, jobId: 88, token: 'new-plat-job', slug: 'tv-tycoon' });
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/studio/pub-plat');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(HandoffHarness, { initialToken: 'pub-plat' }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    const box = container.querySelector<HTMLTextAreaElement>('.status-feedback-input');
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+      setter?.call(box, 'Please tune the difficulty curve on the later levels.');
+      box!.dispatchEvent(new Event('input', { bubbles: true }));
+      await flushEffects();
+    });
+    await act(async () => {
+      container.querySelector('.status-composer-send')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+      await flushEffects();
+      await flushEffects();
+    });
+
+    // Handed over to the new build thread, but a platform round connects nothing.
+    expect(container.querySelector('.status-handoff-notice')?.textContent).toContain('new build thread');
+    expect(container.querySelector('.studio-connect')).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('published composer defaults its builder chooser to the status defaultBuilder, over stale local memory', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    // Memory is keyed by token in localStorage, and a new job has a new token — so the
+    // remembered choice is gone at exactly this boundary. The status payload's
+    // defaultBuilder is the continuity, and it wins even over a stale local value.
+    localStorage.setItem('gamedev_last_builder:pub-def', 'platform');
+    mockedGetSubmissionStatus.mockResolvedValue({ status: 'published', slug: 'tv-tycoon', defaultBuilder: 'self' });
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/studio/pub-def');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'pub-def', embedded: true }));
+      await flushEffects();
+    });
+
+    const selected = container.querySelector('.builder-choice-option[aria-checked="true"]');
+    expect(selected?.textContent).toContain(i18n.t('builder.self.title'));
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it.each(['en', 'pl'])('announces the handoff on the destination thread (%s)', async (lang) => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({ status: 'building', builder: 'platform', events: [] });
+    await i18n.changeLanguage(lang);
+    window.history.pushState(null, '', '/studio/handed-token');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'handed-token', embedded: true, justHandedOff: true }));
+      await flushEffects();
+    });
+
+    const notice = container.querySelector('.status-handoff-notice');
+    expect(notice).not.toBeNull();
+    expect(notice?.textContent).toContain(i18n.t('statusView.handoff.notice'));
+    // The copy carries a real sentence in each locale, not a leaked key.
+    expect(notice?.textContent).not.toContain('statusView.handoff');
+
+    await act(async () => {
+      root.unmount();
+    });
   });
 });
