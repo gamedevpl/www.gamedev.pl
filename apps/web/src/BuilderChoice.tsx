@@ -8,6 +8,12 @@ type BuilderChoiceProps = {
   disabled?: boolean;
   /** Quieter presentation for the thread composer; full for the confirm screen. */
   compact?: boolean;
+  /**
+   * Drops the legend visually where the surrounding screen already asks the question —
+   * the confirm wizard gives it a whole stage heading. It stays in the accessibility
+   * tree, because a fieldset without a legend is a group a screen reader can't name.
+   */
+  hideLegend?: boolean;
 };
 
 /**
@@ -16,7 +22,13 @@ type BuilderChoiceProps = {
  * Shown on the creation confirm screen and again whenever a new round is about to
  * start. Selection is a pair of pressed options, not a settings dig.
  */
-export function BuilderChoice({ value, onChange, disabled = false, compact = false }: BuilderChoiceProps) {
+export function BuilderChoice({
+  value,
+  onChange,
+  disabled = false,
+  compact = false,
+  hideLegend = false,
+}: BuilderChoiceProps) {
   const { t } = useTranslation();
 
   const select = (next: BuilderKind) => {
@@ -26,7 +38,9 @@ export function BuilderChoice({ value, onChange, disabled = false, compact = fal
 
   return (
     <fieldset className={`builder-choice${compact ? ' is-compact' : ''}`} disabled={disabled}>
-      <legend className="builder-choice-legend">{t('builder.legend')}</legend>
+      <legend className={`builder-choice-legend${hideLegend ? ' is-visually-hidden' : ''}`}>
+        {t('builder.legend')}
+      </legend>
       <div className="builder-choice-options" role="radiogroup" aria-label={t('builder.legend')}>
         <button
           type="button"

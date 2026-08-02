@@ -402,19 +402,34 @@
     "demoHide": "Hide local mock generator"
   },
   "qa": {
-    "title": "Refine Your Game Idea (Optional)",
-    "subtitle": "Click any proposed options to clarify your spec, or hit 'Create Now' to submit immediately.",
+    "title": "Refine your game idea",
     "titleNameOnly": "Name your game",
-    "subtitleNameOnly": "Your idea is clear enough to build. Give it a name and we'll get started.",
+    "nameStageTitle": "First, name your game",
     "nameLabel": "Game name",
     "namePlaceholder": "e.g. TV Tycoon",
     "nameHint": "This is what your game will be called everywhere. You can change it now — not later.",
     "createNow": "Create Now",
     "analyzing": "Analyzing your idea…",
-    "otherPlaceholder": "Other / Custom answer…",
-    "clarificationsTitle": "Creator Clarifications",
-    "pickSeveral": "(pick any that apply)",
-    "backToEditing": "Back to Editing"
+    "otherPlaceholder": "Other — describe it your way…",
+    "pickSeveral": "Pick any that apply — these stack.",
+    "pickOneOrSkip": "Pick the one that matches what you imagined, or skip and we decide.",
+    "backToEditing": "Back to editing",
+    "stepOf": "Step {{current}} of {{total}}",
+    "questionCount": "Question {{current}} of {{total}}",
+    "eyebrowIdea": "Your idea",
+    "eyebrowBuilder": "Last choice",
+    "builderLede": "Either way you watch progress live in the studio.",
+    "back": "Back",
+    "continue": "Continue",
+    "next": "Next",
+    "skip": "Skip — AI decides",
+    "skipToReview": "Skip the rest — review & create",
+    "reviewAction": "Review",
+    "reviewEyebrow": "Ready when you are",
+    "reviewTitle": "Review & create",
+    "reviewSubtitle": "Anything left unset is a creative call we make for you.",
+    "aiDecides": "AI decides",
+    "edit": "Edit"
   },
   "transparency": {
     "title": "Agent Stream & Transparency",
@@ -780,7 +795,7 @@
   "builder": {
     "legend": "Who builds this round?",
     "platform": {
-      "title": "Our AI dev team",
+      "title": "Gamedev.pl coding agent",
       "detail": "We assign a coding agent and you watch progress here."
     },
     "self": {

@@ -406,19 +406,34 @@
     "demoHide": "Ukryj podgląd demo"
   },
   "qa": {
-    "title": "Doprecyzuj swój pomysł (Opcjonalnie)",
-    "subtitle": "Kliknij sugerowane opcje, aby doprecyzować specyfikację, lub naciśnij 'Stwórz teraz', aby natychmiast wysłać.",
+    "title": "Doprecyzuj swój pomysł",
     "titleNameOnly": "Nazwij swoją grę",
-    "subtitleNameOnly": "Twój pomysł jest wystarczająco jasny. Nadaj mu nazwę, a zaczynamy.",
+    "nameStageTitle": "Najpierw nazwij swoją grę",
     "nameLabel": "Nazwa gry",
     "namePlaceholder": "np. Telewizyjny Potentat",
     "nameHint": "Tak Twoja gra będzie się nazywać wszędzie. Możesz to zmienić teraz — później już nie.",
     "createNow": "Stwórz teraz",
     "analyzing": "Analizuję Twój pomysł…",
-    "otherPlaceholder": "Inna / Własna odpowiedź…",
-    "clarificationsTitle": "Doprecyzowania Twórcy",
-    "pickSeveral": "(wybierz dowolne pasujące)",
-    "backToEditing": "Wróć do edycji"
+    "otherPlaceholder": "Inaczej — opisz to po swojemu…",
+    "pickSeveral": "Wybierz dowolne pasujące — mogą się łączyć.",
+    "pickOneOrSkip": "Wybierz to, co sobie wyobrażasz, albo pomiń — wtedy my zdecydujemy.",
+    "backToEditing": "Wróć do edycji",
+    "stepOf": "Krok {{current}} z {{total}}",
+    "questionCount": "Pytanie {{current}} z {{total}}",
+    "eyebrowIdea": "Twój pomysł",
+    "eyebrowBuilder": "Ostatni wybór",
+    "builderLede": "Tak czy inaczej postęp śledzisz na żywo w studiu.",
+    "back": "Wstecz",
+    "continue": "Dalej",
+    "next": "Dalej",
+    "skip": "Pomiń — AI zdecyduje",
+    "skipToReview": "Pomiń resztę — sprawdź i stwórz",
+    "reviewAction": "Podsumowanie",
+    "reviewEyebrow": "Gotowe, gdy tylko zechcesz",
+    "reviewTitle": "Sprawdź i stwórz",
+    "reviewSubtitle": "Wszystko, czego nie ustawisz, jest decyzją twórczą, którą podejmiemy za Ciebie.",
+    "aiDecides": "AI zdecyduje",
+    "edit": "Zmień"
   },
   "transparency": {
     "title": "Strumień Agentów i Przejrzystość",
@@ -784,7 +799,7 @@
   "builder": {
     "legend": "Kto buduje tę rundę?",
     "platform": {
-      "title": "Nasz zespół AI",
+      "title": "Agent Gamedev.pl",
       "detail": "Przypisujemy agenta i postęp widać tutaj."
     },
     "self": {

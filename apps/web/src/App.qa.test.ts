@@ -130,9 +130,31 @@ async function submitIdea(container: HTMLElement) {
   });
 }
 
+/**
+ * The confirm wizard portals itself to document.body, so it is never under the
+ * container the app was mounted into — everything about it is queried document-wide.
+ */
+const inWizard = <T extends Element>(selector: string): T | null => document.querySelector<T>(selector);
+const wizardOptions = () => document.querySelectorAll<HTMLButtonElement>('.qa-option');
+
+/** One progress cell per stage: the name, one per question, the builder, the review. */
+const stageCount = () => document.querySelectorAll('.qa-wizard-progress span').length;
+
+/** Advance one stage with the footer's primary button. */
+async function advance() {
+  await act(async () => {
+    inWizard('.qa-next')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flushEffects();
+  });
+}
+
+/** The wizard opens on the name stage; the questions are one step in. */
+const gotoFirstQuestion = advance;
+
 describe('the QA gate in App', () => {
   afterEach(() => {
     document.body.innerHTML = '';
+    document.body.style.overflow = '';
     localStorage.clear();
     window.history.pushState(null, '', '/');
     vi.restoreAllMocks();
@@ -147,13 +169,14 @@ describe('the QA gate in App', () => {
     const first = await renderApp();
     await submitIdea(first.container);
 
-    expect(first.container.querySelector('.qa-container')).not.toBeNull();
-    expect(first.container.querySelectorAll('.qa-card')).toHaveLength(2);
+    expect(inWizard('.qa-wizard')).not.toBeNull();
+    // Name, the two questions, the builder, the review.
+    expect(stageCount()).toBe(5);
 
     // Answer one question, then throw the whole app away — the reload.
-    const chips = first.container.querySelectorAll<HTMLButtonElement>('.qa-chip');
+    await gotoFirstQuestion();
     await act(async () => {
-      chips[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      wizardOptions()[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushEffects();
     });
     await act(async () => first.root.unmount());
@@ -162,9 +185,9 @@ describe('the QA gate in App', () => {
     const second = await renderApp();
 
     // Back with the questions *and* the answer, without a second refine call.
-    expect(second.container.querySelectorAll('.qa-card')).toHaveLength(2);
-    const restoredChips = second.container.querySelectorAll<HTMLButtonElement>('.qa-chip');
-    expect(restoredChips[0].getAttribute('aria-pressed')).toBe('true');
+    expect(stageCount()).toBe(5);
+    await gotoFirstQuestion();
+    expect(wizardOptions()[0].getAttribute('aria-pressed')).toBe('true');
     expect(refineCalls).toBe(1);
 
     await act(async () => second.root.unmount());
@@ -206,7 +229,7 @@ describe('the QA gate in App', () => {
       await flushEffects();
     });
 
-    expect(container.querySelector('.qa-container')).not.toBeNull();
+    expect(inWizard('.qa-wizard')).not.toBeNull();
     expect(container.querySelector<HTMLButtonElement>('.build-btn')?.textContent).toContain('Build My Game');
     await act(async () => root.unmount());
   });
@@ -221,13 +244,11 @@ describe('the QA gate in App', () => {
     expect(localStorage.getItem('gamedev_pending_qa')).not.toBeNull();
 
     await act(async () => {
-      container
-        .querySelector('.qa-container .btn-secondary')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      inWizard('.qa-wizard-exit')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushEffects();
     });
 
-    expect(container.querySelector('.qa-container')).toBeNull();
+    expect(inWizard('.qa-wizard')).toBeNull();
     // Left behind, it would resurrect the abandoned idea on the next visit.
     expect(localStorage.getItem('gamedev_pending_qa')).toBeNull();
 
@@ -246,11 +267,15 @@ describe('the QA gate in App', () => {
     // A clean concept used to go straight to the agent, and the name it was built
     // under was the prompt's first 40 characters. Now it waits here.
     expect(submitted).toHaveLength(0);
-    expect(container.querySelector('.qa-container')).not.toBeNull();
-    expect(container.querySelector<HTMLInputElement>('.qa-name-input')?.value).toBe('Castaway Craft');
+    expect(inWizard('.qa-wizard')).not.toBeNull();
+    expect(inWizard<HTMLInputElement>('.qa-name-input')?.value).toBe('Castaway Craft');
+    // Nothing to clarify, so the round is name, builder, review — no question stages.
+    expect(stageCount()).toBe(3);
 
+    await advance(); // builder
+    await advance(); // review
     await act(async () => {
-      container.querySelector('.btn-create-now')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      inWizard('.btn-create-now')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushEffects();
       await flushEffects();
     });
@@ -273,9 +298,10 @@ describe('the QA gate in App', () => {
     // Failing open must not mean skipping the step — that is how truncated prompts
     // became titles in the first place. The suggestion degrades; the gate does not.
     expect(submitted).toHaveLength(0);
-    const name = container.querySelector<HTMLInputElement>('.qa-name-input');
+    const name = inWizard<HTMLInputElement>('.qa-name-input');
     expect(name?.value).toBe('A survival game on a desert island with');
-    expect(container.querySelectorAll('.qa-card')).toHaveLength(0);
+    // No questions came back, so there are no question stages to walk.
+    expect(stageCount()).toBe(3);
 
     await act(async () => root.unmount());
   });
@@ -302,16 +328,17 @@ describe('the QA gate in App', () => {
     const { container, root } = await renderApp();
     await submitIdea(container);
 
-    expect(container.querySelector('.qa-card__question')?.textContent).toContain('What visual style');
+    await gotoFirstQuestion();
+    expect(inWizard('.qa-title')?.textContent).toContain('What visual style');
     expect(locales).toEqual(['en']);
 
-    // Pick a chip so we can prove the language switch clears English selections —
+    // Pick an option so we can prove the language switch clears English selections —
     // those labels would no longer match the Polish options.
     await act(async () => {
-      container.querySelector('.qa-chip')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      wizardOptions()[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushEffects();
     });
-    expect(container.querySelector('.qa-chip')?.getAttribute('aria-pressed')).toBe('true');
+    expect(wizardOptions()[0].getAttribute('aria-pressed')).toBe('true');
 
     await act(async () => {
       await i18n.changeLanguage('pl');
@@ -321,10 +348,12 @@ describe('the QA gate in App', () => {
     });
 
     expect(locales).toEqual(['en', 'pl']);
-    expect(container.querySelector('.qa-card__question')?.textContent).toContain('Jaki styl wizualny');
-    expect(container.querySelectorAll('.qa-card')).toHaveLength(1);
-    // Old English selection must not linger under the new chips.
-    expect(container.querySelector('.qa-chip')?.getAttribute('aria-pressed')).toBe('false');
+    // New questions remount the wizard, which restarts it on the name stage.
+    expect(stageCount()).toBe(4);
+    await gotoFirstQuestion();
+    expect(inWizard('.qa-title')?.textContent).toContain('Jaki styl wizualny');
+    // Old English selection must not linger under the new options.
+    expect(wizardOptions()[0].getAttribute('aria-pressed')).toBe('false');
     expect(JSON.parse(localStorage.getItem('gamedev_pending_qa')!).locale).toBe('pl');
 
     await act(async () => root.unmount());
@@ -356,11 +385,9 @@ describe('the QA gate in App', () => {
     const { container, root } = await renderApp();
     await submitIdea(container);
 
-    const createBtn = container.querySelector<HTMLButtonElement>('.qa-container .btn-create-now')!;
-    const chipBtn = container.querySelector<HTMLButtonElement>('.qa-chip')!;
-    expect(createBtn).not.toBeNull();
-    expect(createBtn.disabled).toBe(false);
-    expect(chipBtn.disabled).toBe(false);
+    await gotoFirstQuestion();
+    expect(inWizard<HTMLButtonElement>('.qa-next')?.disabled).toBe(false);
+    expect(wizardOptions()[0].disabled).toBe(false);
 
     // Switch language to trigger relocalization (which is the 2nd refine call, paused on `gate.promise`)
     await act(async () => {
@@ -369,8 +396,9 @@ describe('the QA gate in App', () => {
     });
 
     // While relocalization is in flight, controls in CreatorQA must be disabled
-    expect(container.querySelector<HTMLButtonElement>('.qa-container .btn-create-now')?.disabled).toBe(true);
-    expect(container.querySelector<HTMLButtonElement>('.qa-chip')?.disabled).toBe(true);
+    expect(inWizard<HTMLButtonElement>('.qa-next')?.disabled).toBe(true);
+    expect(wizardOptions()[0].disabled).toBe(true);
+    expect(inWizard<HTMLButtonElement>('.qa-wizard-exit')?.disabled).toBe(true);
 
     // Resolve relocalization call
     await act(async () => {
@@ -379,8 +407,10 @@ describe('the QA gate in App', () => {
       await flushEffects();
     });
 
-    expect(container.querySelector<HTMLButtonElement>('.btn-create-now')?.disabled).toBe(false);
-    expect(container.querySelector<HTMLButtonElement>('.qa-chip')?.disabled).toBe(false);
+    // The new questions remount the wizard back on the name stage, live again.
+    expect(inWizard<HTMLButtonElement>('.qa-next')?.disabled).toBe(false);
+    await gotoFirstQuestion();
+    expect(wizardOptions()[0].disabled).toBe(false);
     await act(async () => root.unmount());
   });
 
@@ -397,7 +427,7 @@ describe('the QA gate in App', () => {
     const { container, root } = await renderApp();
     await submitIdea(container);
 
-    expect(container.querySelectorAll('.qa-card')).toHaveLength(2);
+    expect(stageCount()).toBe(5);
 
     await act(async () => {
       await i18n.changeLanguage('pl');
@@ -405,9 +435,10 @@ describe('the QA gate in App', () => {
       await flushEffects();
     });
 
-    // The 2 English questions must be retained, not erased into a name-only panel
-    expect(container.querySelectorAll('.qa-card')).toHaveLength(2);
-    expect(container.querySelector('.qa-card__question')?.textContent).toContain('What visual style');
+    // The 2 English questions must be retained, not erased into a name-only round
+    expect(stageCount()).toBe(5);
+    await gotoFirstQuestion();
+    expect(inWizard('.qa-title')?.textContent).toContain('What visual style');
     await act(async () => root.unmount());
   });
 
@@ -431,7 +462,8 @@ describe('the QA gate in App', () => {
     const { container, root } = await renderApp();
     await submitIdea(container);
 
-    const customInput = container.querySelector<HTMLInputElement>('.qa-custom-input input')!;
+    await gotoFirstQuestion();
+    const customInput = inWizard<HTMLInputElement>('.qa-custom-input input')!;
     await act(async () => {
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
       setter?.call(customInput, 'with Amiga palette');
@@ -447,8 +479,8 @@ describe('the QA gate in App', () => {
       await flushEffects();
     });
 
-    const plCustomInput = container.querySelector<HTMLInputElement>('.qa-custom-input input');
-    expect(plCustomInput?.value).toBe('with Amiga palette');
+    await gotoFirstQuestion();
+    expect(inWizard<HTMLInputElement>('.qa-custom-input input')?.value).toBe('with Amiga palette');
     await act(async () => root.unmount());
   });
 });
