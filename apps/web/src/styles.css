@@ -4633,6 +4633,16 @@ body.player-open {
   position: static;
 }
 
+/* A bordered card around two words of status, directly above a bordered composer, reads
+   as two controls stacked — and on a desktop its right edge was a stray vertical line
+   floating in the shell padding. It is a caption; it can look like one. Shared with the
+   phone rules for the same reason the rest of the shell is shared. */
+.app:has(.studio-layout.is-game-open) .studio-thread-context {
+  border: 0;
+  background: none;
+  padding: 0 2px;
+}
+
 /* The install nudge and the update bar are fixed to the bottom of the viewport at
    z-index 900, which is exactly where this shell pins the composer. On the old scrolling
    page a reader could push the composer up past them; here there is nothing to scroll,
@@ -4776,14 +4786,6 @@ body.player-open {
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;
     border: 0;
-  }
-
-  /* A bordered card around two words of status, directly above a bordered composer, read
-     as two controls stacked. It is a caption; it can look like one. */
-  .app:has(.studio-layout.is-game-open) .studio-thread-context {
-    border: 0;
-    background: none;
-    padding: 0 2px;
   }
 
   /* 126px of page padding — 60 on the content, 48 on the panel, 18 on the detail — was
