@@ -40,6 +40,8 @@ export type DocumentTitleCopy = {
   draftNamed: string;
   /** Prefixed template when studio is deep-linked to a named game. */
   studioNamed: string;
+  /** Prefixed template for a creator profile, e.g. "{{name}}". */
+  creatorNamed: string;
 };
 
 export type DocumentTitleContext = {
@@ -52,6 +54,8 @@ export type DocumentTitleContext = {
   draftTitle?: string | null;
   /** Title of an ephemeral theater open on the home route (generated / party). */
   stageTitle?: string | null;
+  /** Display name for `/creators/:handle` once the profile loads. */
+  creatorName?: string | null;
 };
 
 /**
@@ -80,6 +84,8 @@ export function resolveDocumentTitle(route: AppRoute, ctx: DocumentTitleContext)
       return brandedPageTitle(route.doc === 'privacy' ? ctx.copy.privacy : ctx.copy.terms);
     case 'contact':
       return brandedPageTitle(ctx.copy.contact);
+    case 'creator':
+      return brandedNamedTitle(ctx.copy.creatorNamed, ctx.creatorName?.trim() || route.handle);
     case 'notFound':
       return brandedPageTitle(ctx.copy.notFound);
     default: {

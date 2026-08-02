@@ -70,10 +70,18 @@ export const privacyPl: LegalDocument = {
             ],
             [
               'Treści, które tworzysz: opis gry, tytuł, odpowiedzi na pytania doprecyzowujące, uwagi do gotowej gry, ' +
-                'opcjonalna nazwa twórcy, przesłane szkice i obrazy',
+                'przesłane szkice i obrazy',
               'Zbudowanie gry przez agenta AI i jej opublikowanie',
               'art. 6 ust. 1 lit. b — wykonanie umowy',
               'Bezterminowo dla gier opublikowanych (są częścią historii projektu); zgłoszenia nieopublikowane — 24 miesiące',
+            ],
+            [
+              'Publiczny profil twórcy, który zajmujesz przed publikacją: unikalny handle, nazwa wyświetlana, krótkie ' +
+                'bio oraz wybór, czy pokazać zdjęcie z Google, czy inicjał (nie tworzymy własnego adresu avatara)',
+              'Przypisanie opublikowanych gier do Ciebie w katalogu i playerze oraz prowadzenie publicznej strony profilu',
+              'art. 6 ust. 1 lit. b — wykonanie umowy (publikacja wymaga profilu); dane są publiczne przez Twój ' +
+                'wybór zajęcia handle',
+              'Do usunięcia konta (rezerwacja handle jest kasowana razem z kontem)',
             ],
             [
               'Twoje reakcje na gry, w które grasz: ocena kciukiem w górę/w dół oraz wpisane uwagi — zapisywane wraz ' +
@@ -336,14 +344,16 @@ export const privacyPl: LegalDocument = {
             `Możesz w każdej chwili poprosić o usunięcie konta, pisząc na [${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL}). ` +
             'Usuwamy wtedy dane Twojego konta, adres e-mail, subskrypcje powiadomień, oddane przez Ciebie głosy i ' +
             'wpisane uwagi do gier, zapis tego, które gry otwierałeś na potrzeby rekomendacji, zapisane postępy w grach, które je przechowują, wszystko, co zbudowałeś we ' +
-            'wspólnych światach gier, oraz powiązanie zgłoszeń z Twoją osobą. Usunięcie tego, co ' +
+            'wspólnych światach gier, Twój publiczny profil twórcy (handle, nazwę wyświetlaną, bio, preferencję avatara) ' +
+            'oraz rezerwację handle, i powiązanie zgłoszeń z Twoją osobą. Usunięcie tego, co ' +
             'zbudowałeś we wspólnym świecie, usuwa to również z widoku innych graczy.',
         },
         {
           kind: 'p',
           text:
             'Gry, które zostały już opublikowane w arkadzie, pozostają dostępne, ale bez powiązania z Twoim kontem — ' +
-            'inni gracze mogą z nich korzystać, a my nie możemy wycofać kodu, który stał się częścią projektu. Jeśli ' +
+            'inni gracze mogą z nich korzystać, a my nie możemy wycofać kodu, który stał się częścią projektu. Po ' +
+            'usunięciu podpis w katalogu wraca do nazwy platformy. Jeśli ' +
             'chcesz, żeby konkretna gra została zdjęta z arkady, napisz o tym wprost w zgłoszeniu, a rozpatrzymy je ' +
             'osobno.',
         },

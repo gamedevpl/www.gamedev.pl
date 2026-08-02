@@ -246,8 +246,17 @@ export interface CatalogGameEntry {
    * catalog). Unverified free text — a GitHub handle, a display name, or the
    * platform sentinel `gamedev-platform`. null when absent or explicitly null.
    * The player surfaces this as a byline; it is never a trust or identity claim.
+   *
+   * For store-published games with a creator profile, the catalog join overwrites
+   * this with the profile display name (never the Google/Apple account name).
    */
   submittedBy: string | null;
+  /**
+   * Unique creator handle when the catalog join resolved a publishable profile for
+   * the job owner. Present → byline links to `/creators/:handle`. Absent for
+   * platform/repo games and unpublished drafts.
+   */
+  creatorHandle?: string | null;
   /**
    * Touch playability class, derived from each game's *code* (createInput /
    * defineGame / party / pointer polls). Present when the catalog was built from

@@ -22,8 +22,10 @@ import {
   studioPath,
   type AppRoute,
 } from './router.js';
+import type { PublicCreatorProfile } from './creatorProfileApi.js';
 import { LegalPage } from './LegalPage.js';
 import { ContactPage } from './ContactPage.js';
+import { CreatorProfilePage } from './CreatorProfilePage.js';
 import { NotFoundPage } from './NotFoundPage.js';
 import { AppUpdateBanner } from './AppUpdateBanner.js';
 import { InstallPrompt } from './InstallPrompt.js';
@@ -139,6 +141,8 @@ export function App() {
   // Draft's real name, reported by DraftView once the preview loads. Cleared on
   // unmount / slug change so the generic draft label returns while the next one loads.
   const [draftTitle, setDraftTitle] = useState<string | null>(null);
+  /** Display name for `/creators/:handle` once the public profile loads. */
+  const [creatorName, setCreatorName] = useState<string | null>(null);
 
   // Tab title follows the route (and any known game/submission/draft name). App is
   // the single writer — children report names upward rather than touching document.title.
@@ -170,15 +174,17 @@ export function App() {
         playNamed: t('pageTitle.playNamed'),
         draftNamed: t('pageTitle.draftNamed'),
         studioNamed: t('pageTitle.studioNamed'),
+        creatorNamed: t('pageTitle.creatorNamed'),
       },
       playTitle,
       studioTitle,
       draftTitle: route.view === 'draft' ? draftTitle : null,
+      creatorName: route.view === 'creator' ? creatorName : null,
       // Only surface ephemeral theaters while still on home — `/play/<slug>` already
       // carries its own title via playTitle, and leaving home must restore the home title.
       stageTitle: route.view === 'home' ? stageTitle : null,
     });
-  }, [route, stageContent, catalogEntries, savedSpecs, draftTitle, t]);
+  }, [route, stageContent, catalogEntries, savedSpecs, draftTitle, creatorName, t]);
 
   useDocumentTitle(documentTitle);
 
@@ -817,6 +823,32 @@ export function App() {
     );
   }
 
+  // Public creator profiles — same open-chrome posture as contact/legal.
+  if (route.view === 'creator') {
+    return (
+      <div className="app app--creator">
+        <NavHeader
+          activeBuildCount={activeBuildCount}
+          onNavigate={handleNavigateSection}
+          onHome={() => navigate('/')}
+          onStudio={() => navigate(studioPath())}
+          onAdmin={() => navigate(adminPath())}
+          upTarget={headerUp}
+          onUp={navigate}
+        />
+        <main className="content">
+          <CreatorProfilePage
+            handle={route.handle}
+            onBack={() => navigate('/')}
+            onPlay={(slug) => navigate(playPath(slug))}
+            onProfileLoaded={(profile: PublicCreatorProfile) => setCreatorName(profile.profileName)}
+          />
+        </main>
+        <SiteFooter />
+      </div>
+    );
+  }
+
   // Same early exit as legal: a typo'd URL should not bounce anonymous visitors into
   // the closed-beta splash (or the home catalog) and pretend the path was valid.
   if (route.view === 'notFound') {
@@ -963,6 +995,7 @@ export function App() {
                 orientation={stageContent.game.orientation}
                 reportSlug={stageContent.game.slug}
                 submittedBy={stageContent.game.submittedBy}
+                creatorHandle={stageContent.game.creatorHandle}
                 controls={stageContent.game.controls}
                 touch={stageContent.game.touch}
               />

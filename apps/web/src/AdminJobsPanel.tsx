@@ -34,6 +34,7 @@ const REFUSAL_COPY: Record<PublishRefusal, string> = {
   gate_red: 'the gate failed this version — read its report before publishing',
   not_gated: 'the gate has not run against this version yet',
   nothing_delivered: 'this build has never delivered a version',
+  profile_required: 'the creator has not claimed a public profile — ask them to claim a handle in Studio',
   store_unavailable: 'the games store is not configured on this deployment',
   unknown: 'refused, and the reason was not one this console knows',
 };

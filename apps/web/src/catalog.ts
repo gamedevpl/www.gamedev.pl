@@ -60,8 +60,14 @@ export interface CatalogEntry {
   /**
    * Who commissioned the game (`submitted_by` in the games-repo SPEC). Unverified —
    * a handle, a display name, or the platform sentinel. null when unknown.
+   * For store games with a creator profile, this is the profile display name.
    */
   submittedBy: string | null;
+  /**
+   * Unique creator handle when the catalog join resolved a profile. Present → the
+   * byline links to `/creators/:handle`.
+   */
+  creatorHandle?: string | null;
 }
 
 /** Platform sentinel used in fixture / seed SPECs for games with no human creator. */
@@ -203,7 +209,15 @@ export async function fetchCatalog(): Promise<CatalogEntry[]> {
         (entry as { submittedBy?: unknown; submitted_by?: unknown }).submittedBy ??
           (entry as { submitted_by?: unknown }).submitted_by,
       ),
+      creatorHandle: parseCatalogCreatorHandle((entry as { creatorHandle?: unknown }).creatorHandle),
     }));
+}
+
+function parseCatalogCreatorHandle(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim().toLowerCase();
+  if (!/^[a-z][a-z0-9_]{2,23}$/.test(trimmed)) return null;
+  return trimmed;
 }
 
 /** Same rules as the API: null / "null" / missing → null; otherwise length-capped text. */

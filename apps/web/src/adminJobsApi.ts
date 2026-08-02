@@ -70,7 +70,8 @@ export interface PublishResult {
  * `nothing_delivered` is "this build never uploaded anything". A single "could not
  * publish" would collapse three different next steps into one shrug.
  */
-export type PublishRefusal = 'gate_red' | 'not_gated' | 'nothing_delivered' | 'store_unavailable' | 'unknown';
+export type PublishRefusal =
+  'gate_red' | 'not_gated' | 'nothing_delivered' | 'profile_required' | 'store_unavailable' | 'unknown';
 
 export async function publishJob(issueNumber: number): Promise<PublishResult | { refused: PublishRefusal }> {
   const response = await fetch(`/api/admin/jobs/${issueNumber}/publish`, {
@@ -79,7 +80,13 @@ export async function publishJob(issueNumber: number): Promise<PublishResult | {
   });
   if (response.ok) return (await response.json()) as PublishResult;
   const body = (await response.json().catch(() => ({}))) as { error?: string };
-  const known: PublishRefusal[] = ['gate_red', 'not_gated', 'nothing_delivered', 'store_unavailable'];
+  const known: PublishRefusal[] = [
+    'gate_red',
+    'not_gated',
+    'nothing_delivered',
+    'profile_required',
+    'store_unavailable',
+  ];
   const refusal = known.find((code) => code === body.error) ?? 'unknown';
   return { refused: refusal };
 }

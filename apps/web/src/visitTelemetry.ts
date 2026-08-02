@@ -298,6 +298,10 @@ export function routeKind(view: string): VisitRouteKind {
     // visit vocabulary stable without inventing a new funnel bucket for a form.
     case 'contact':
       return 'legal';
+    // Public creator profiles share the open-chrome posture of legal/contact; fold
+    // into `legal` so the visit vocabulary stays stable without a new funnel bucket.
+    case 'creator':
+      return 'legal';
     default:
       return 'home';
   }

@@ -4,6 +4,7 @@ import type { AgentTaskState } from './agent-tasks.js';
 import type { SeedFiles } from './agent-backend.js';
 import type { BuilderKind } from './builder.js';
 import type { PublicationHealthCheck, PublicationRecord } from './games-store.js';
+import type { AvatarMode } from './creator-profile.js';
 import { nextRoundGeneration, transitionClosesRound, type JobState, type JobTransition } from './job-state.js';
 import type { BuildEvent, SubmissionStatus } from './submission-status.js';
 
@@ -51,7 +52,35 @@ export interface User {
    * one write per account per day instead of one per request.
    */
   activeDays?: string[];
+  /**
+   * Unique public handle (`/creators/:handle`). Required to publish a game; never the
+   * Google/Apple account name. Absent until the creator claims one.
+   */
+  handle?: string;
+  /** Human byline on catalog cards; may differ from the handle. */
+  profileName?: string;
+  /** Short plain-text bio on the public profile page. */
+  bio?: string;
+  /** Whether the public avatar is the Google picture or a lettermark. */
+  avatarMode?: AvatarMode;
+  /** When the creator first claimed a handle. */
+  profileCreatedAt?: string;
+  /** When the handle last changed (rename cooldown). */
+  handleChangedAt?: string;
 }
+
+/** Reservation row for a lowercase handle → owning uid. */
+export interface HandleRecord {
+  uid: string;
+  claimedAt: string;
+  /** Set while the previous owner still holds the rename cooldown. */
+  releasedAt?: string;
+  previousUid?: string;
+}
+
+export type ClaimHandleResult =
+  | { ok: true; user: User }
+  | { ok: false; reason: 'invalid' | 'reserved' | 'taken' | 'unchanged' | 'cooldown' | 'not_found' };
 
 /** How much return history a user document carries. Two weeks covers a D7 question. */
 export const ACTIVE_DAYS_KEPT = 14;
@@ -1188,6 +1217,18 @@ export type RotateRefreshTokenResult =
 
 export interface Store {
   getUser(uid: string): Promise<User | null>;
+  /** Public profile lookup by unique handle (case-insensitive). */
+  getUserByHandle(handle: string): Promise<User | null>;
+  /**
+   * Claim or rename a handle. Transactional against the `handles` reservation so two
+   * creators cannot both win the same name.
+   */
+  claimHandle(uid: string, handle: string, at: string): Promise<ClaimHandleResult>;
+  /** Update profileName / bio / avatarMode. Does not touch the handle. */
+  updateCreatorProfile(
+    uid: string,
+    patch: { profileName?: string; bio?: string; avatarMode?: AvatarMode },
+  ): Promise<User | null>;
   /**
    * Find the single account holding this email, or null.
    *
@@ -1939,10 +1980,85 @@ export class InMemoryStore implements Store {
   private oauthAuthCodes = new Map<string, OAuthAuthCodeRecord>();
   /** refresh token id -> grant id — enables reuse detection after rotation. */
   private oauthRefreshTokenIndex = new Map<string, string>();
+  // lowercase handle -> reservation
+  private handles = new Map<string, HandleRecord>();
 
   async getUser(uid: string): Promise<User | null> {
     const user = this.users.get(uid);
     return user ? { ...user } : null;
+  }
+
+  async getUserByHandle(handle: string): Promise<User | null> {
+    const key = handle.trim().toLowerCase();
+    const reservation = this.handles.get(key);
+    if (!reservation || reservation.releasedAt) return null;
+    return this.getUser(reservation.uid);
+  }
+
+  async claimHandle(uid: string, handle: string, at: string): Promise<ClaimHandleResult> {
+    const { normalizeHandle, validateHandleShape, HANDLE_RENAME_COOLDOWN_MS } = await import('./creator-profile.js');
+    const key = normalizeHandle(handle);
+    const shape = validateHandleShape(key);
+    if (shape) return { ok: false, reason: shape };
+
+    const user = this.users.get(uid);
+    if (!user) return { ok: false, reason: 'not_found' };
+    if (user.handle === key) return { ok: false, reason: 'unchanged' };
+
+    if (user.handle && user.handleChangedAt) {
+      const elapsed = Date.parse(at) - Date.parse(user.handleChangedAt);
+      if (Number.isFinite(elapsed) && elapsed < HANDLE_RENAME_COOLDOWN_MS) {
+        return { ok: false, reason: 'cooldown' };
+      }
+    }
+
+    const existing = this.handles.get(key);
+    if (existing && !existing.releasedAt && existing.uid !== uid) {
+      return { ok: false, reason: 'taken' };
+    }
+    if (existing?.releasedAt && existing.previousUid !== uid) {
+      const elapsed = Date.parse(at) - Date.parse(existing.releasedAt);
+      if (Number.isFinite(elapsed) && elapsed < HANDLE_RENAME_COOLDOWN_MS) {
+        return { ok: false, reason: 'taken' };
+      }
+    }
+
+    if (user.handle) {
+      this.handles.set(user.handle, {
+        uid: user.uid,
+        claimedAt: user.profileCreatedAt ?? at,
+        releasedAt: at,
+        previousUid: user.uid,
+      });
+    }
+
+    this.handles.set(key, { uid, claimedAt: user.profileCreatedAt ?? at });
+    const updated: User = {
+      ...user,
+      handle: key,
+      profileCreatedAt: user.profileCreatedAt ?? at,
+      handleChangedAt: at,
+      profileName: user.profileName ?? key,
+      avatarMode: user.avatarMode ?? 'google',
+    };
+    this.users.set(uid, updated);
+    return { ok: true, user: { ...updated } };
+  }
+
+  async updateCreatorProfile(
+    uid: string,
+    patch: { profileName?: string; bio?: string; avatarMode?: AvatarMode },
+  ): Promise<User | null> {
+    const user = this.users.get(uid);
+    if (!user) return null;
+    const updated: User = {
+      ...user,
+      ...(patch.profileName !== undefined ? { profileName: patch.profileName } : {}),
+      ...(patch.bio !== undefined ? { bio: patch.bio } : {}),
+      ...(patch.avatarMode !== undefined ? { avatarMode: patch.avatarMode } : {}),
+    };
+    this.users.set(uid, updated);
+    return { ...updated };
   }
 
   async findUserByEmail(email: string): Promise<User | null> {
@@ -1972,6 +2088,13 @@ export class InMemoryStore implements Store {
       // Carried explicitly. Omitting it silently discarded every write from the
       // activity hook in `auth.ts`, whose only purpose is to persist this field.
       activeDays: userData.activeDays ?? existing?.activeDays,
+      // Profile fields are never set by sign-in — only claim/update routes touch them.
+      handle: existing?.handle,
+      profileName: existing?.profileName,
+      bio: existing?.bio,
+      avatarMode: existing?.avatarMode,
+      profileCreatedAt: existing?.profileCreatedAt,
+      handleChangedAt: existing?.handleChangedAt,
     };
 
     this.users.set(userData.uid, updated);
@@ -3302,6 +3425,102 @@ export class FirestoreStore implements Store {
     const snap = await docRef.get();
     if (!snap.exists) return null;
     return snap.data() as User;
+  }
+
+  async getUserByHandle(handle: string): Promise<User | null> {
+    const key = handle.trim().toLowerCase();
+    if (!key) return null;
+    const snap = await this.db.collection('handles').doc(key).get();
+    if (!snap.exists) return null;
+    const reservation = snap.data() as HandleRecord;
+    if (reservation.releasedAt) return null;
+    return this.getUser(reservation.uid);
+  }
+
+  async claimHandle(uid: string, handle: string, at: string): Promise<ClaimHandleResult> {
+    const { normalizeHandle, validateHandleShape, HANDLE_RENAME_COOLDOWN_MS } = await import('./creator-profile.js');
+    const key = normalizeHandle(handle);
+    const shape = validateHandleShape(key);
+    if (shape) return { ok: false, reason: shape };
+
+    const users = this.db.collection('users');
+    const handles = this.db.collection('handles');
+
+    try {
+      return await this.db.runTransaction(async (tx) => {
+        const userRef = users.doc(uid);
+        const userSnap = await tx.get(userRef);
+        if (!userSnap.exists) return { ok: false, reason: 'not_found' };
+        const user = userSnap.data() as User;
+        if (user.handle === key) return { ok: false, reason: 'unchanged' };
+
+        if (user.handle && user.handleChangedAt) {
+          const elapsed = Date.parse(at) - Date.parse(user.handleChangedAt);
+          if (Number.isFinite(elapsed) && elapsed < HANDLE_RENAME_COOLDOWN_MS) {
+            return { ok: false, reason: 'cooldown' };
+          }
+        }
+
+        const handleRef = handles.doc(key);
+        const handleSnap = await tx.get(handleRef);
+        if (handleSnap.exists) {
+          const existing = handleSnap.data() as HandleRecord;
+          if (!existing.releasedAt && existing.uid !== uid) {
+            return { ok: false, reason: 'taken' };
+          }
+          if (existing.releasedAt && existing.previousUid !== uid) {
+            const elapsed = Date.parse(at) - Date.parse(existing.releasedAt);
+            if (Number.isFinite(elapsed) && elapsed < HANDLE_RENAME_COOLDOWN_MS) {
+              return { ok: false, reason: 'taken' };
+            }
+          }
+        }
+
+        // Firestore requires every read before every write in a transaction.
+        const oldHandleRef = user.handle && user.handle !== key ? handles.doc(user.handle) : null;
+        if (oldHandleRef) await tx.get(oldHandleRef);
+
+        if (oldHandleRef) {
+          tx.set(oldHandleRef, {
+            uid: user.uid,
+            claimedAt: user.profileCreatedAt ?? at,
+            releasedAt: at,
+            previousUid: user.uid,
+          } satisfies HandleRecord);
+        }
+
+        const updated: User = {
+          ...user,
+          handle: key,
+          profileCreatedAt: user.profileCreatedAt ?? at,
+          handleChangedAt: at,
+          profileName: user.profileName ?? key,
+          avatarMode: user.avatarMode ?? 'google',
+        };
+        tx.set(handleRef, { uid, claimedAt: updated.profileCreatedAt ?? at } satisfies HandleRecord);
+        tx.set(userRef, stripUndefined(updated), { merge: true });
+        return { ok: true, user: updated };
+      });
+    } catch (err) {
+      console.error('claimHandle transaction failed', err);
+      return { ok: false, reason: 'taken' };
+    }
+  }
+
+  async updateCreatorProfile(
+    uid: string,
+    patch: { profileName?: string; bio?: string; avatarMode?: AvatarMode },
+  ): Promise<User | null> {
+    const user = await this.getUser(uid);
+    if (!user) return null;
+    const updated: User = {
+      ...user,
+      ...(patch.profileName !== undefined ? { profileName: patch.profileName } : {}),
+      ...(patch.bio !== undefined ? { bio: patch.bio } : {}),
+      ...(patch.avatarMode !== undefined ? { avatarMode: patch.avatarMode } : {}),
+    };
+    await this.db.collection('users').doc(uid).set(stripUndefined(updated), { merge: true });
+    return updated;
   }
 
   async findUserByEmail(email: string): Promise<User | null> {

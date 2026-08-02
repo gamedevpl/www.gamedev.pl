@@ -14,6 +14,8 @@ const PLAY_PREFIX_PATTERN = /^\/(play|ay|ai)\/([^/]+)$/;
 const DRAFT_PATTERN = /^\/draft\/([^/]+)$/;
 const STATUS_PATTERN = /^\/status\/([^/]+)$/;
 const JOIN_PATTERN = /^\/join\/([A-Z0-9]{6})$/;
+/** Public creator profile — same grammar as `creatorPath` in apps/web/src/router.ts. */
+const CREATOR_PATTERN = /^\/creators\/([a-z][a-z0-9_]{2,23})$/;
 /**
  * `/studio`, `/studio/:token`, `/studio/:token/:tab` — keep aligned with
  * `STUDIO_TAB_ALIASES` in apps/web/src/router.ts.
@@ -89,6 +91,8 @@ export function isKnownSpaShellPath(urlOrPath: string): boolean {
 
   // Fragment is not on the request line; `/join/ABC123` alone must still 200.
   if (JOIN_PATTERN.test(pathname)) return true;
+
+  if (CREATOR_PATTERN.test(pathname)) return true;
 
   return false;
 }

@@ -28,6 +28,7 @@ import {
 import { MascotMoment } from './Mascot.js';
 import { PixelIcon } from './PixelIcon.js';
 import { getRecentPlays } from './recentPlays.js';
+import { creatorPath } from './router.js';
 import {
   fetchCatalogSortSignals,
   readCachedCatalogSortPayload,
@@ -302,9 +303,18 @@ function CatalogCard({
             )}
           </h3>
           <p className="card-author">
-            {t('player.byAuthor', {
-              author: isPlatformAuthor(entry.submittedBy) ? t('catalog.platformAuthor') : entry.submittedBy,
-            })}
+            {entry.creatorHandle && !isPlatformAuthor(entry.submittedBy) ? (
+              <>
+                {t('player.byAuthorPrefix')}
+                <a className="card-author-link" href={creatorPath(entry.creatorHandle)}>
+                  {entry.submittedBy}
+                </a>
+              </>
+            ) : (
+              t('player.byAuthor', {
+                author: isPlatformAuthor(entry.submittedBy) ? t('catalog.platformAuthor') : entry.submittedBy,
+              })
+            )}
           </p>
           <div className="card-actions">
             <button className="primary-btn" onClick={() => onPlayGame(entry)}>

@@ -20,6 +20,7 @@ const copy: DocumentTitleCopy = {
   playNamed: 'Play {{title}}',
   draftNamed: 'Draft {{title}}',
   studioNamed: 'Studio · {{title}}',
+  creatorNamed: '{{title}}',
 };
 
 describe('brandedPageTitle', () => {
@@ -87,6 +88,10 @@ describe('resolveDocumentTitle', () => {
     expect(resolveDocumentTitle({ view: 'legal', doc: 'privacy' }, { copy })).toBe('Privacy Policy — Gamedev.pl');
     expect(resolveDocumentTitle({ view: 'legal', doc: 'terms' }, { copy })).toBe('Terms of Service — Gamedev.pl');
     expect(resolveDocumentTitle({ view: 'contact' }, { copy })).toBe('Contact — Gamedev.pl');
+    expect(resolveDocumentTitle({ view: 'creator', handle: 'ada' }, { copy, creatorName: 'Ada Lovelace' })).toBe(
+      'Ada Lovelace — Gamedev.pl',
+    );
+    expect(resolveDocumentTitle({ view: 'creator', handle: 'ada' }, { copy })).toBe('ada — Gamedev.pl');
     expect(resolveDocumentTitle({ view: 'notFound' }, { copy })).toBe('Page not found — Gamedev.pl');
   });
 });

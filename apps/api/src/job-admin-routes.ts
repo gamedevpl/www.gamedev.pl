@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { isAdminSession } from './admin.js';
+import { hasPublishableProfile } from './creator-profile.js';
 import {
   detectStall,
   isTerminal,
@@ -9,7 +10,7 @@ import {
   type JobState,
 } from './job-state.js';
 import type { GamesStore } from './games-store.js';
-import type { Store, SubmissionRecord } from './store.js';
+import { BOT_UID_PREFIX, type Store, type SubmissionRecord } from './store.js';
 
 /**
  * The operator's view of the build queue.
@@ -157,6 +158,15 @@ export async function registerJobAdminRoutes(
     if (!record) return reply.code(404).send({ error: 'not_found' });
     if (!record.slug || !record.deliveredVersion) {
       return reply.code(409).send({ error: 'nothing_delivered' });
+    }
+
+    // Platform/bot-authored jobs may publish without a human profile. Creator-owned
+    // jobs cannot — catalog attribution has nowhere to point otherwise.
+    if (!record.ownerUid.startsWith(BOT_UID_PREFIX)) {
+      const owner = await store.getUser(record.ownerUid);
+      if (!hasPublishableProfile(owner)) {
+        return reply.code(409).send({ error: 'profile_required' });
+      }
     }
 
     const manifest = await gamesStore.getManifest(record.slug, record.deliveredVersion);
