@@ -390,6 +390,8 @@ export interface SubmissionRoutesHandle {
     builder?: BuilderKind;
     /** Who opened this improvement — drives the queued transition and status.openedBy. */
     openedBy?: 'creator' | 'agent';
+    /** When set, the new job is owned by this uid (slug-transfer safe). */
+    ownerUid?: string;
   }) => Promise<{ route: 'job'; jobId: number } | null>;
 }
 
@@ -1019,6 +1021,11 @@ export async function registerSubmissionRoutes(
     builder?: BuilderKind;
     /** Who opened this improvement — drives the queued transition and status.openedBy. */
     openedBy?: 'creator' | 'agent';
+    /**
+     * Owner of the new job. Defaults to the published source's ownerUid. Pass the
+     * authorized creator after a slug transfer so quota and Studio stay aligned.
+     */
+    ownerUid?: string;
   }): Promise<{ route: 'job'; jobId: number } | null> {
     if (!store) return null;
     const source = await store.getSubmission(input.issueNumber);
@@ -1031,7 +1038,7 @@ export async function registerSubmissionRoutes(
     const builder = input.builder ?? builderOf(source);
 
     const jobId = await store.allocateJobId();
-    await store.createSubmission(jobId, source.ownerUid, source.title);
+    await store.createSubmission(jobId, input.ownerUid ?? source.ownerUid, source.title);
     await store.setSubmissionLocale(jobId, input.locale);
     // Set before dispatch: the slug is what makes this an improvement rather than a new
     // game, and a job that dispatched without one has already told the agent the wrong

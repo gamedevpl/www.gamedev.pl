@@ -243,6 +243,70 @@ describe('MCP open_round (BY-24 / BY-27b)', () => {
     expect((structured as { error: string }).error).not.toMatch(/rotated/i);
   });
 
+  it('refuses open_round when gameAgentKeys/{slug} is owned by someone else', async () => {
+    const store = new InMemoryStore();
+    await seedPublishedGame(store);
+    // Lock doc belongs to another account — ensure for OWNER must return null.
+    await store.ensureGameAgentKey(SLUG, 'g:other', '2026-07-01T00:00:00.000Z');
+    const at = new Date().toISOString();
+    await store.ensureCreatorAgentKey(OWNER, at);
+    const creatorKey = mintCreatorAgentKey(secret, {
+      creatorUid: OWNER,
+      keyGeneration: 1,
+      now: Date.parse('2026-08-01T12:00:00.000Z'),
+    });
+    app = await createApp(store);
+
+    const { structured, isError } = await callOpenRound(
+      app,
+      { slug: SLUG, feedback: 'Do not touch another account lock.' },
+      { authorization: `Bearer ${creatorKey}` },
+    );
+    expect(isError).toBe(true);
+    expect((structured as { error: string }).error).toBe(SLUG_NOT_ON_ACCOUNT_REASON);
+  });
+
+  it('assigns an agent-opened round to the authorized creator after a slug transfer', async () => {
+    const store = new InMemoryStore();
+    // Previous owner published; current owner has a newer live (non-active) job.
+    await store.createSubmission(PUBLISHED_ISSUE, 'g:previous', 'Comet Courier');
+    await store.setSubmissionSlug(PUBLISHED_ISSUE, SLUG);
+    await store.setSubmissionPublishedAt(PUBLISHED_ISSUE, '2026-07-01T00:00:00.000Z');
+    await store.recordJobTransition(PUBLISHED_ISSUE, {
+      to: 'published',
+      at: '2026-07-01T00:00:00.000Z',
+      by: 'operator',
+      reason: 'published',
+    });
+    await store.createSubmission(11, OWNER, 'Comet Courier');
+    await store.setSubmissionSlug(11, SLUG);
+    const map = (store as unknown as { submissions: Map<number, { createdAt: string }> }).submissions;
+    const published = map.get(PUBLISHED_ISSUE)!;
+    const live = map.get(11)!;
+    map.set(PUBLISHED_ISSUE, { ...published, createdAt: '2026-07-01T00:00:00.000Z' });
+    map.set(11, { ...live, createdAt: '2026-09-01T12:00:00.000Z' });
+
+    const at = new Date().toISOString();
+    await store.ensureCreatorAgentKey(OWNER, at);
+    const creatorKey = mintCreatorAgentKey(secret, {
+      creatorUid: OWNER,
+      keyGeneration: 1,
+      now: Date.parse('2026-08-01T12:00:00.000Z'),
+    });
+    app = await createApp(store);
+
+    const { structured, isError } = await callOpenRound(
+      app,
+      { slug: SLUG, feedback: 'Keep the round on the new owner.' },
+      { authorization: `Bearer ${creatorKey}` },
+    );
+    expect(isError).toBe(false);
+    const jobId = (structured as { jobId: number }).jobId;
+    const job = await store.getSubmission(jobId);
+    expect(job?.ownerUid).toBe(OWNER);
+    expect(job?.ownerUid).not.toBe('g:previous');
+  });
+
   it('admits only one concurrent open_round per slug', async () => {
     const store = new InMemoryStore();
     await seedPublishedGame(store);

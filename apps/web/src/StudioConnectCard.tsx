@@ -117,8 +117,15 @@ export function StudioConnectCard({ token, agentConnected = false }: StudioConne
     const header = authHeaderRef.current;
     if (!payload || !header) return;
     // Rebuild the active client's snippet with the real Authorization value.
+    // Claude/Kimi/CLI embed the full "Authorization: Bearer …" line; Codex/Cursor
+    // embed only "Bearer …" — replace both forms so Copy never leaves the mask.
     const masked = payload.authorizationHeaderMasked;
-    const realSnippet = payload.installSnippets[client].split(masked).join(header);
+    const maskedBearer = masked.replace(/^Authorization:\s*/i, '').trim();
+    const realBearer = header.replace(/^Authorization:\s*/i, '').trim();
+    let realSnippet = payload.installSnippets[client].split(masked).join(header);
+    if (maskedBearer && maskedBearer !== masked) {
+      realSnippet = realSnippet.split(maskedBearer).join(realBearer);
+    }
     await copyText(realSnippet, 'config');
   };
 

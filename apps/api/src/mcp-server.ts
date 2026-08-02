@@ -102,6 +102,8 @@ export interface McpServerOptions {
     log: { error: (context: object, message: string) => void };
     builder?: BuilderKind;
     openedBy?: 'creator' | 'agent';
+    /** When set, the new job is owned by this uid (slug-transfer safe). */
+    ownerUid?: string;
   }) => Promise<{ route: 'job'; jobId: number } | null>;
   contentChecker?: ContentChecker;
   dailyImprovementQuota?: number;
@@ -802,7 +804,11 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
         const at = new Date(now()).toISOString();
         // Admission lock lives on gameAgentKeys/{slug}; ensure the doc exists for creator-key path.
-        await store.ensureGameAgentKey(resolved.slug, resolved.creatorUid, at);
+        const lockRecord = await store.ensureGameAgentKey(resolved.slug, resolved.creatorUid, at);
+        if (!lockRecord) {
+          // Existing doc owned by someone else — do not touch their admission lock.
+          return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
+        }
 
         if (resolved.activeRound) {
           await store.finishAgentOpenRound(resolved.slug, at);
@@ -872,6 +878,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             log: ctx.request.log,
             builder: 'self',
             openedBy: 'agent',
+            // Authorized creator wins over the published record's owner after a transfer.
+            ownerUid: resolved.creatorUid,
           });
           if (!started) {
             return toolErr('could not open an improvement round for this game');

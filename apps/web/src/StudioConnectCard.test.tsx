@@ -150,6 +150,54 @@ describe('StudioConnectCard', () => {
     await act(async () => root.unmount());
   });
 
+  it('Copy config replaces Bearer-only masks in Codex and Cursor snippets', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(StudioConnectCard, { token: 'status-tok' }));
+      await flush();
+    });
+    await act(async () => {
+      await flush();
+    });
+
+    const clientTabs = container.querySelector('[aria-label="Agent client"]');
+    expect(clientTabs).toBeTruthy();
+
+    for (const clientLabel of ['Codex', 'Cursor']) {
+      const tab = [...(clientTabs?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? [])].find((btn) =>
+        btn.textContent?.includes(clientLabel),
+      );
+      expect(tab).toBeTruthy();
+      await act(async () => {
+        tab?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flush();
+      });
+
+      vi.mocked(navigator.clipboard.writeText).mockClear();
+      // First share-copy in the config step (label toggles to "Copied" after click).
+      const copyConfig = container.querySelector<HTMLButtonElement>('.studio-connect-step .status-share-copy');
+      expect(copyConfig).toBeTruthy();
+      await act(async () => {
+        copyConfig?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flush();
+      });
+
+      const written = String(vi.mocked(navigator.clipboard.writeText).mock.calls.at(-1)?.[0] ?? '');
+      expect(written).toContain(FULL_KEY);
+      expect(written).toContain(`Bearer ${FULL_KEY}`);
+      expect(written).not.toContain('····9a10e');
+      expect(container.innerHTML).not.toContain(FULL_KEY);
+    }
+
+    await act(async () => root.unmount());
+  });
+
   it('remembers auth mode choice between Paste header and Sign in', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
