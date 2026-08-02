@@ -29,6 +29,7 @@ function funnel(overrides: Partial<VisitFunnel> = {}): VisitFunnel {
     campaigns: [],
     creating: [],
     waitlist: [],
+    editing: [],
     howToPlay: {
       opens: 0,
       visits: 0,
@@ -185,6 +186,41 @@ describe('VisitFunnelPanel', () => {
       }),
     );
     expect(text).toContain('Nobody clicked Join waitlist');
+  });
+
+  it('renders the editing funnel as a share of openers, not of all visits', () => {
+    const text = render(
+      response({
+        visits: 400,
+        editing: [
+          { step: 'opened', visits: 8 },
+          { step: 'draft_saved', visits: 6 },
+          { step: 'previewed', visits: 4 },
+          { step: 'published', visits: 2 },
+        ],
+      }),
+    );
+    expect(text).toContain('Editing');
+    expect(text).toContain('opened the editor');
+    expect(text).toContain('published changes');
+    // 2 of 8 openers published — 25%. Against all 400 visits it would round to 1%,
+    // which is the number that makes an editing loop look dead when it is working.
+    expect(text).toContain('25%');
+  });
+
+  it('says so when nobody opened an editor', () => {
+    const text = render(
+      response({
+        visits: 3,
+        editing: [
+          { step: 'opened', visits: 0 },
+          { step: 'draft_saved', visits: 0 },
+          { step: 'previewed', visits: 0 },
+          { step: 'published', visits: 0 },
+        ],
+      }),
+    );
+    expect(text).toContain('Nobody opened a game editor');
   });
 
   it('reports how-to-play open rate against playing visits, not against all visits', () => {

@@ -68,6 +68,16 @@ export interface VisitFunnel {
    */
   waitlist: Array<{ step: WaitlistStep; visits: number }>;
   /**
+   * EditorKit's revision funnel — opened → saved a draft → played it → published.
+   * Same posture as `creating`: every step, in order, zeroes included.
+   *
+   * This is the read half of the question EditorKit was built to answer: does content
+   * editing bring creators back, and how far along the loop do they actually get. The
+   * events carry no slug (the visit stream stays unjoinable to the game stream), so
+   * this is a per-visit funnel and deliberately not a per-game one.
+   */
+  editing: Array<{ step: EditorStep; visits: number }>;
+  /**
    * How to play card usage — the numbers that decide whether a richer per-game format
    * is worth building (github.com/gamedevpl/www.gamedev.pl/issues/395).
    *
@@ -128,12 +138,18 @@ export const WAITLIST_STEPS = ['cta_clicked', 'joined'] as const;
 
 export type WaitlistStep = (typeof WAITLIST_STEPS)[number];
 
+export const EDITOR_STEPS = ['opened', 'draft_saved', 'previewed', 'published'] as const;
+
+export type EditorStep = (typeof EDITOR_STEPS)[number];
+
 interface VisitRollup {
   started: boolean;
   /** Creation steps this visit reached. A Set, so a repeated step counts once. */
   steps: Set<string>;
   /** Waitlist steps this visit reached. Separate from create so the two funnels cannot collide. */
   waitlistSteps: Set<string>;
+  /** Editor steps this visit reached. Separate again, for the same reason. */
+  editorSteps: Set<string>;
   entry?: string;
   referrer?: string;
   utmSource?: string;
@@ -173,6 +189,7 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       plays: 0,
       steps: new Set<string>(),
       waitlistSteps: new Set<string>(),
+      editorSteps: new Set<string>(),
       howToPlayOpens: 0,
       howToPlayVias: new Set<string>(),
       howToPlayReopened: false,
@@ -191,6 +208,8 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       if (event.step) rollup.steps.add(event.step);
     } else if (event.type === 'waitlist_step') {
       if (event.step) rollup.waitlistSteps.add(event.step);
+    } else if (event.type === 'editor_step') {
+      if (event.step) rollup.editorSteps.add(event.step);
     } else if (event.type === 'play_started') {
       rollup.plays += 1;
       // Earliest wins: a flush can deliver events out of order, and "time to first
@@ -344,6 +363,10 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
     waitlist: WAITLIST_STEPS.map((step) => ({
       step,
       visits: rollups.filter((rollup) => rollup.waitlistSteps.has(step)).length,
+    })),
+    editing: EDITOR_STEPS.map((step) => ({
+      step,
+      visits: rollups.filter((rollup) => rollup.editorSteps.has(step)).length,
     })),
     howToPlay: {
       opens: howToOpens,
