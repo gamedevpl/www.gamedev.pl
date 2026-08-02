@@ -221,12 +221,13 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(start?.description).toMatch(/workflow/i);
 
     // The behavioural contract (on every tool description) now folds in the loop-critical
-    // rules: pendingMessages on write replies, one final read_inbox, no scheduled polling,
-    // and that a green verdict ends the round.
+    // rules: pendingMessages as a non-empty array, no scheduled polling, and that a green
+    // verdict ends the round immediately (no post-green tools — key retires).
     expect(start?.description).toMatch(/pendingMessages/);
-    expect(start?.description).toMatch(/one final read_inbox/i);
+    expect(start?.description).toMatch(/array is non-empty/i);
     expect(start?.description).toMatch(/do not schedule background/i);
     expect(start?.description).toMatch(/green gate verdict ends the round/i);
+    expect(start?.description).toMatch(/END immediately/i);
 
     const getKit = tools.find((t) => t.name === 'get_kit');
     expect(getKit?.description).toMatch(/gamedevpl-creator-kit/);
@@ -305,17 +306,19 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(joined).toMatch(/send_screenshot/);
     expect(joined).toMatch(/submit_sources/);
     expect(joined).toMatch(/get_gate_verdict/);
-    // The stop condition is explicit: green means done, then end the session.
+    // The stop condition is explicit: green means done — END immediately; no post-green
+    // tools (key retires; get_gate_verdict may still answer via terminal receipt).
     expect(joined).toMatch(/green: the round is complete/i);
-    expect(joined).toMatch(/END the session/i);
+    expect(joined).toMatch(/END the session immediately/i);
+    expect(joined).toMatch(/Do not report_progress, read_inbox, or ack after green/i);
+    expect(joined).toMatch(/terminal receipt/i);
     // Both failure branches are covered.
     expect(joined).toMatch(/red:.*resubmit on the SAME key/i);
     expect(joined).toMatch(/kit_outdated: re-run get_kit/i);
 
-    // Inbox policy: no scheduled polling; pendingMessages rides writes; one final read.
+    // Inbox policy: no scheduled polling; drain non-empty pendingMessages from write replies.
     expect(result.structuredContent.inboxPolicy).toMatch(/do not schedule background or recurring inbox checks/i);
-    expect(result.structuredContent.inboxPolicy).toMatch(/pendingMessages/);
-    expect(result.structuredContent.inboxPolicy).toMatch(/one final read_inbox/i);
+    expect(result.structuredContent.inboxPolicy).toMatch(/pendingMessages array is non-empty/i);
     expect(result.structuredContent.inboxPolicy).toMatch(/fresh kickoff/i);
 
     // The text body mirrors the loop so an agent reading either channel knows it.

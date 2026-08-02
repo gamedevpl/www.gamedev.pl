@@ -171,9 +171,9 @@ const BEHAVIOURAL_CONTRACT = [
   'Run kit checks green (at least check:static) before submit_sources.',
   'Honour stop immediately — do not continue after stop:true.',
   'When get_brief.seedAvailable is true, continue the seed (get_seed) rather than scaffolding from scratch.',
-  'Every write reply carries pendingMessages — when it is non-empty, read_inbox and apply before continuing.',
-  'Do not schedule background or recurring inbox polls; do one final read_inbox before you end.',
-  'A green gate verdict ends the round — the key then retires and new work arrives as a fresh kickoff.',
+  'Every write reply carries pendingMessages — when that array is non-empty, read_inbox and apply before continuing.',
+  'Do not schedule background or recurring inbox polls; drain pendingMessages from write replies as you go.',
+  'A green gate verdict ends the round — END immediately; the key retires and new work arrives as a fresh kickoff.',
 ].join(' ');
 
 /**
@@ -192,18 +192,21 @@ const SESSION_WORKFLOW: readonly string[] = [
   'Poll get_gate_verdict about every 30s until it is green, red, or kit_outdated.',
   'red: read the report, fix, and resubmit on the SAME key.',
   'kit_outdated: re-run get_kit, rebuild against the new kit, and resubmit.',
-  'green: the round is complete — send a final report_progress, do one read_inbox and ack, then END the session.',
+  // Green closes the round before the next tool call; writes and non-receipt reads then
+  // reject the retired key (terminal-receipt tests). Any final progress/inbox work must
+  // happen on earlier write replies — do not instruct post-green tools (Codex P1).
+  'green: the round is complete — END the session immediately. Do not report_progress, read_inbox, or ack after green; the key retired with that transition (get_gate_verdict may still answer via terminal receipt).',
 ];
 
 /**
  * Inbox policy, stated flat so agents stop asking whether to poll: no scheduled checks;
- * pendingMessages rides every write; one final read before ending; nothing to poll after close.
+ * pendingMessages (an array) rides every write; nothing to poll after close.
  */
 const INBOX_POLICY =
   'Do not schedule background or recurring inbox checks. While working, every mutating reply carries ' +
-  '{ stop, pendingMessages } — when pendingMessages > 0, read_inbox and apply the notes before continuing. ' +
-  'Do exactly one final read_inbox before you end the session. After the round closes there is nothing left ' +
-  'to poll — the next round arrives as a fresh kickoff prompt.';
+  '{ stop, pendingMessages } — when the pendingMessages array is non-empty, read_inbox and apply the notes ' +
+  'before continuing. After the round closes there is nothing left to poll — the next round arrives as a ' +
+  'fresh kickoff prompt.';
 
 /**
  * What to tell the creator when a call is refused because the build finished / the key is
@@ -505,14 +508,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           inboxPolicy: INBOX_POLICY,
           whenRefused: RETIRED_KEY_ETIQUETTE,
         };
-        // Both the structured payload and a readable text body carry the loop — an agent
-        // reading either one knows the full start→done sequence, including when to stop.
+        // Base shape via toolOk so we do not drift from other tools; append the human-
+        // readable loop so an agent reading either form knows when to stop.
+        const base = toolOk(structured);
         return {
-          content: [
-            { type: 'text', text: JSON.stringify(structured) },
-            { type: 'text', text: SESSION_WORKFLOW_TEXT },
-          ],
-          structuredContent: structured,
+          ...base,
+          content: [...base.content, { type: 'text', text: SESSION_WORKFLOW_TEXT }],
         };
       },
     },
