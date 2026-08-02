@@ -10,7 +10,7 @@ import type { LegalDocId } from './legal/types.js';
  * state they had to know to find it. Now: the thread, the things beside the thread, and
  * the one surface that genuinely takes over the screen.
  */
-export type StudioTab = 'thread' | 'details' | 'playtest';
+export type StudioTab = 'thread' | 'details' | 'playtest' | 'edit';
 
 /**
  * Every name a surface has answered to, including the five-tab vocabulary that came
@@ -26,6 +26,11 @@ const STUDIO_TAB_ALIASES: Record<string, StudioTab> = {
   overview: 'details',
   stats: 'details',
   playtest: 'playtest',
+  // The content editor (EditorKit). Only games whose delivered version ships an
+  // editor definition render the surface; for every other game the studio
+  // resolves the URL and falls back to the thread.
+  edit: 'edit',
+  editor: 'edit',
 };
 
 /** The surface this URL segment names, or null when it names nothing. */

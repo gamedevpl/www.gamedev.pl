@@ -268,7 +268,35 @@
     "tabs": {
       "thread": "Thread",
       "details": "Details",
-      "playtest": "Playtest"
+      "playtest": "Playtest",
+      "edit": "Edit"
+    },
+    "editor": {
+      "loading": "Loading the editor…",
+      "loadError": "This game's editor could not be loaded right now.",
+      "back": "Thread",
+      "tryDraft": "Try this draft",
+      "publish": "Publish changes",
+      "publishing": "Publishing…",
+      "published": "Your changes are being checked — they go live after review.",
+      "cooldown": "A publish is already checking. Try again in a few minutes.",
+      "saving": "Saving…",
+      "saved": "Draft saved",
+      "saveError": "Could not save the draft",
+      "conflict": "This draft changed on another device.",
+      "conflictReload": "Load newest",
+      "conflictOverwrite": "Keep mine",
+      "boardAria": "{{name}} tile painter",
+      "tiles": "Tiles",
+      "properties": "Properties",
+      "checks": "Checks",
+      "checksOk": "All checks pass",
+      "checksElsewhere": "Fix before publishing: {{list}}",
+      "addItem": "Add {{name}}",
+      "removeItem": "Remove",
+      "empty": "Nothing to edit yet.",
+      "discard": "Discard draft",
+      "publishHint": "Edits are private until you publish. Publishing runs the game gate (a few minutes) and an operator approves it going live."
     },
     "overview": {
       "status": "Status",
