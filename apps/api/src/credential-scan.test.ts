@@ -54,4 +54,13 @@ describe('findCredentialLikeStrings', () => {
     expect(findings.length).toBeGreaterThan(0);
     expect(JSON.stringify(findings)).not.toContain(secret);
   });
+
+  it('detects a creator-wide agent key (base64url of c1.…)', () => {
+    const secret = Buffer.from(`c1.u.${'x'.repeat(20)}.1.9999999999.${'ab'.repeat(32)}`, 'utf8').toString('base64url');
+    expect(secret.startsWith('YzEu')).toBe(true);
+    const bundle = `const key = "${secret}";`;
+    expect(findCredentialLikeStrings(bundle)).toEqual([
+      { kind: 'gamedev-creator-agent-key', index: bundle.indexOf(secret) },
+    ]);
+  });
 });

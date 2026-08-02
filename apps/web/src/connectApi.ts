@@ -142,3 +142,46 @@ export async function revokeOAuthGrant(grantId: string): Promise<void> {
     await throwResponseError(response);
   }
 }
+
+export type CreatorAgentKeyPayload = {
+  /** Full key — hold in memory for Copy; never render into the DOM. */
+  key: string;
+  keyGeneration: number;
+  expiresAt: number;
+  fingerprint: string;
+  authorizationHeader: string;
+  authorizationHeaderMasked: string;
+  rotated?: boolean;
+};
+
+/** Mint or remint the creator-wide MCP opener (BY-27a). Fresh exp; no rotate. */
+export async function getCreatorAgentKey(): Promise<CreatorAgentKeyPayload> {
+  const response = await fetch(`${API_BASE}/api/me/creator-agent-key`, { credentials: 'include' });
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+  return (await response.json()) as CreatorAgentKeyPayload;
+}
+
+/** Bump keyGeneration — agents holding the old key are cut off. */
+export async function rotateCreatorAgentKey(): Promise<CreatorAgentKeyPayload> {
+  const response = await fetch(`${API_BASE}/api/me/creator-agent-key/rotate`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+  return (await response.json()) as CreatorAgentKeyPayload;
+}
+
+/** Revoke the creator-wide key. A later mint starts at generation 1. */
+export async function revokeCreatorAgentKey(): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/me/creator-agent-key`, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+  if (!response.ok && response.status !== 204) {
+    await throwResponseError(response);
+  }
+}

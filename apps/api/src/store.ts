@@ -1119,7 +1119,7 @@ export interface AccessTokenRecord {
  *
  * The HMAC opener itself is never stored — only the generation that revokes it.
  * Round close does not bump `keyGeneration`; only an explicit creator rotate does.
- * `allowAgentOpenRounds` is reserved for BY-24 (default off).
+ * `allowAgentOpenRounds` was the BY-24 opt-in; BY-27b ignores it (no migration).
  */
 export interface GameAgentKeyRecord {
   slug: string;
@@ -1127,10 +1127,26 @@ export interface GameAgentKeyRecord {
   keyGeneration: number;
   createdAt: string;
   updatedAt: string;
-  /** BY-24: when true, the creator's agent may call `open_round`. Default false. */
+  /**
+   * Legacy BY-24 opt-in. Ignored by `open_round` after BY-27b — existing documents may
+   * still carry the field; readers must not require it.
+   */
   allowAgentOpenRounds?: boolean;
   /** BY-24: admission lock while `open_round` is creating a job — cleared in finally. */
   agentOpenRoundPending?: boolean;
+}
+
+/**
+ * Durable creator-wide agent opener state (BY-27a), stored at `creatorAgentKeys/{uid}`.
+ *
+ * The HMAC opener itself is never stored — only the generation that revokes it.
+ * Bumped only by an explicit creator rotate/revoke; never on round close or publish.
+ */
+export interface CreatorAgentKeyRecord {
+  ownerUid: string;
+  keyGeneration: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /** OAuth dynamic or CIMD-registered MCP client (BY-18b). */
@@ -1760,6 +1776,23 @@ export interface Store {
   beginAgentOpenRound(slug: string, at: string): Promise<boolean>;
   /** BY-24: release the admission lock after `open_round` completes or aborts. */
   finishAgentOpenRound(slug: string, at: string): Promise<void>;
+  /** Creator-wide opener record, or null when the creator has never minted one. */
+  getCreatorAgentKey(ownerUid: string): Promise<CreatorAgentKeyRecord | null>;
+  /**
+   * Ensures a creatorAgentKeys doc exists for ownerUid, creating generation 1 when
+   * absent. Remint (fresh exp) reuses the current generation.
+   */
+  ensureCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord>;
+  /**
+   * Transactionally bumps `keyGeneration`. Returns the new record, or null when the
+   * creator has no key yet (caller should ensure first).
+   */
+  rotateCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null>;
+  /**
+   * Deletes the creatorAgentKeys doc (revoke). Returns false when nothing to delete.
+   * A subsequent ensure starts again at generation 1.
+   */
+  revokeCreatorAgentKey(ownerUid: string): Promise<boolean>;
   /** Persist a dynamically registered or CIMD-cached OAuth client. */
   createOAuthClient(record: OAuthClientRecord): Promise<void>;
   getOAuthClient(clientId: string): Promise<OAuthClientRecord | null>;
@@ -1933,6 +1966,7 @@ export class InMemoryStore implements Store {
   private accessTokens = new Map<string, AccessTokenRecord>();
   // slug -> durable per-game agent opener state (BY-23)
   private gameAgentKeys = new Map<string, GameAgentKeyRecord>();
+  private creatorAgentKeys = new Map<string, CreatorAgentKeyRecord>();
   private oauthClients = new Map<string, OAuthClientRecord>();
   private oauthGrants = new Map<string, OAuthGrantRecord>();
   private oauthAccessTokens = new Map<string, OAuthAccessTokenRecord>();
@@ -3146,6 +3180,40 @@ export class InMemoryStore implements Store {
     const next: GameAgentKeyRecord = { ...existing, updatedAt: at };
     delete next.agentOpenRoundPending;
     this.gameAgentKeys.set(slug, next);
+  }
+
+  async getCreatorAgentKey(ownerUid: string): Promise<CreatorAgentKeyRecord | null> {
+    const record = this.creatorAgentKeys.get(ownerUid);
+    return record ? { ...record } : null;
+  }
+
+  async ensureCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord> {
+    const existing = this.creatorAgentKeys.get(ownerUid);
+    if (existing) return { ...existing };
+    const created: CreatorAgentKeyRecord = {
+      ownerUid,
+      keyGeneration: 1,
+      createdAt: at,
+      updatedAt: at,
+    };
+    this.creatorAgentKeys.set(ownerUid, created);
+    return { ...created };
+  }
+
+  async rotateCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null> {
+    const existing = this.creatorAgentKeys.get(ownerUid);
+    if (!existing) return null;
+    const next: CreatorAgentKeyRecord = {
+      ...existing,
+      keyGeneration: existing.keyGeneration + 1,
+      updatedAt: at,
+    };
+    this.creatorAgentKeys.set(ownerUid, next);
+    return { ...next };
+  }
+
+  async revokeCreatorAgentKey(ownerUid: string): Promise<boolean> {
+    return this.creatorAgentKeys.delete(ownerUid);
   }
 
   async createOAuthClient(record: OAuthClientRecord): Promise<void> {
@@ -5136,6 +5204,54 @@ export class FirestoreStore implements Store {
       delete next.agentOpenRoundPending;
       tx.set(docRef, next);
     });
+  }
+
+  async getCreatorAgentKey(ownerUid: string): Promise<CreatorAgentKeyRecord | null> {
+    const snap = await this.db.collection('creatorAgentKeys').doc(ownerUid).get();
+    if (!snap.exists) return null;
+    return snap.data() as CreatorAgentKeyRecord;
+  }
+
+  async ensureCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord> {
+    const docRef = this.db.collection('creatorAgentKeys').doc(ownerUid);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef);
+      if (snap.exists) {
+        return snap.data() as CreatorAgentKeyRecord;
+      }
+      const created: CreatorAgentKeyRecord = {
+        ownerUid,
+        keyGeneration: 1,
+        createdAt: at,
+        updatedAt: at,
+      };
+      tx.create(docRef, created);
+      return created;
+    });
+  }
+
+  async rotateCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null> {
+    const docRef = this.db.collection('creatorAgentKeys').doc(ownerUid);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef);
+      if (!snap.exists) return null;
+      const existing = snap.data() as CreatorAgentKeyRecord;
+      const next: CreatorAgentKeyRecord = {
+        ...existing,
+        keyGeneration: existing.keyGeneration + 1,
+        updatedAt: at,
+      };
+      tx.set(docRef, next);
+      return next;
+    });
+  }
+
+  async revokeCreatorAgentKey(ownerUid: string): Promise<boolean> {
+    const docRef = this.db.collection('creatorAgentKeys').doc(ownerUid);
+    const snap = await docRef.get();
+    if (!snap.exists) return false;
+    await docRef.delete();
+    return true;
   }
 
   async touchAccessToken(tokenId: string, at: string): Promise<void> {

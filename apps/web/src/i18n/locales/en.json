@@ -925,6 +925,32 @@
     "revoke": "Disconnect",
     "revoking": "Disconnecting…"
   },
+  "creatorKey": {
+    "title": "Coding-agent key",
+    "hint": "Paste this header once into your agent's MCP server settings. It opens sessions on any of your games — rotating stops every agent still using the old key.",
+    "loading": "Loading your coding-agent key…",
+    "loadError": "We couldn't load your coding-agent key right now.",
+    "copyHeader": "Copy header",
+    "copied": "Copied",
+    "meta": "Ends in {{fingerprint}} · generation {{generation}} · expires {{when}}",
+    "rotate": {
+      "start": "Rotate key",
+      "confirm": "Rotating stops any agent still using the old key. Continue?",
+      "yes": "Rotate",
+      "no": "Cancel",
+      "sending": "Rotating…",
+      "error": "We couldn't rotate the key right now. Try again in a moment."
+    },
+    "rotateError": "We couldn't rotate the key right now. Try again in a moment.",
+    "revoke": {
+      "start": "Revoke key",
+      "confirm": "Revoking stops every agent using this key. Continue?",
+      "yes": "Revoke",
+      "no": "Cancel",
+      "sending": "Revoking…"
+    },
+    "revokeError": "We couldn't revoke the key right now. Try again in a moment."
+  },
   "remix": {
     "title": "Remix",
     "close": "Close",
