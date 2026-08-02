@@ -108,9 +108,130 @@ describe('RemixPanel', () => {
     });
     await draw();
 
-    expect(container.querySelector('.remix-ask input')).not.toBeNull();
+    expect(container.querySelector('.remix-ask textarea')).not.toBeNull();
     // Prompt-only: the declaration drives the lane, never the player's surface.
     expect(container.querySelector('.remix-sliders')).toBeNull();
     expect(telemetry.recordRemixStep).not.toHaveBeenCalledWith('no_lane');
   });
+
+  it('offers the suggestions the game can act on, and sends one on tap', async () => {
+    remixApi.startRemix.mockResolvedValue({
+      remixId: 'r1',
+      params: { dogScale: { type: 'number', min: 0.5, max: 3, default: 1, label: { en: 'dog size' } } },
+      values: { dogScale: 1 },
+      canAssist: true,
+      canCode: false,
+      suggestions: [
+        { kind: 'param', key: 'dogScale', direction: 'more' },
+        // A key the game does not declare: written by nobody, so rendered by
+        // nobody. A suggestion the game cannot act on is a broken promise.
+        { kind: 'param', key: 'ghost', direction: 'more' },
+      ],
+      expiresInMs: 3_600_000,
+    });
+    remixApi.remixAssist.mockResolvedValue({ lane: 'params', values: { dogScale: 2 } });
+    await draw();
+
+    const tries = container.querySelectorAll('.remix-try');
+    expect(tries.length).toBe(1);
+    expect(tries[0].textContent).toBe('more dog size');
+
+    await act(async () => {
+      tries[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    // Tapping is saying it: one tap, no second step.
+    expect(remixApi.remixAssist).toHaveBeenCalledWith('r1', 'more dog size', expect.anything());
+  });
+
+  it('offers share only once a change has landed', async () => {
+    remixApi.startRemix.mockResolvedValue({
+      remixId: 'r1',
+      params: { dogScale: { type: 'number', min: 0.5, max: 3, default: 1, label: { en: 'dog size' } } },
+      values: { dogScale: 1 },
+      canAssist: true,
+      canCode: false,
+      suggestions: [],
+      expiresInMs: 3_600_000,
+    });
+    remixApi.remixAssist.mockResolvedValue({ lane: 'params', values: { dogScale: 2 } });
+    await draw();
+
+    // Nothing to share before anything has happened.
+    expect(container.querySelector('.remix-btn.is-primary')).toBeNull();
+
+    const input = container.querySelector('.remix-ask textarea') as HTMLTextAreaElement;
+    await act(async () => {
+      nativeSetValue(input, 'bigger dog');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      container.querySelector('.remix-ask')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+
+    // Earned: share is now the loudest thing on the panel, undo beside it.
+    expect(container.querySelector('.remix-btn.is-primary')?.textContent).toBe('Share my version');
+    expect(container.querySelector('.remix-btn.is-quiet')?.textContent).toBe('Undo');
+    // And the way to a second change is still there, shrunk to a line.
+    expect(container.querySelector('.remix-ask.is-compact')).not.toBeNull();
+  });
+
+  it('keeps the last change undoable when the follow-up fails', async () => {
+    remixApi.startRemix.mockResolvedValue({
+      remixId: 'r1',
+      params: { dogScale: { type: 'number', min: 0.5, max: 3, default: 1, label: { en: 'dog size' } } },
+      values: { dogScale: 1 },
+      canAssist: true,
+      canCode: false,
+      suggestions: [],
+      expiresInMs: 3_600_000,
+    });
+    remixApi.remixAssist.mockResolvedValueOnce({ lane: 'params', values: { dogScale: 2 } });
+    await draw();
+    await send('bigger dog');
+    expect(container.querySelector('.remix-btn.is-quiet')?.textContent).toBe('Undo');
+
+    // The follow-up misses. The player's way back to the state they liked must
+    // survive it — that is the moment they want it most.
+    remixApi.remixAssist.mockRejectedValueOnce(Object.assign(new Error('nope'), { status: 503 }));
+    await send('something impossible');
+
+    expect(container.querySelector('.remix-note.is-error')).not.toBeNull();
+    expect(container.querySelector('.remix-btn.is-quiet')?.textContent).toBe('Undo');
+  });
+
+  it('offers a toggle the way the running game is not currently set', async () => {
+    // Arrived on a shared link that flipped a default-off toggle on. The server
+    // derived "turn on" from the declaration; offering that here would be a
+    // suggestion that does nothing — expensively, since a no-op patch falls
+    // through to a rebuild.
+    remixApi.startRemix.mockResolvedValue({
+      remixId: 'r1',
+      params: { rain: { type: 'bool', default: false, label: { en: 'rain' } } },
+      values: { rain: true },
+      canAssist: true,
+      canCode: false,
+      suggestions: [{ kind: 'param', key: 'rain', direction: 'on' }],
+      expiresInMs: 3_600_000,
+    });
+    await draw();
+
+    expect(container.querySelector('.remix-try')?.textContent).toBe('turn off rain');
+  });
+
+  async function send(text: string) {
+    const input = container.querySelector('.remix-ask textarea') as HTMLTextAreaElement;
+    await act(async () => {
+      nativeSetValue(input, text);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      container.querySelector('.remix-ask')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+  }
 });
+
+/** React tracks the value on the node, so a bare `.value =` is not seen. */
+function nativeSetValue(el: HTMLTextAreaElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+  setter?.call(el, value);
+}

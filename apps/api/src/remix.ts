@@ -5,6 +5,7 @@ import { PARAMS_KEY, parseEditorDefinition, type EditorDefinition } from './edit
 import { EDITOR_FILE } from './editor-contract.js';
 import { applyAssistPatches, assistEnabled, MAX_UTTERANCE_LENGTH, type EditorAssistant } from './editor-assist.js';
 import { codeLaneEnabled, type VertexCodeLane } from './code-lane.js';
+import { buildSuggestions } from './remix-suggestions.js';
 import type { GamesStore } from './games-store.js';
 import type { Store } from './store.js';
 import type { ContentChecker } from './moderation.js';
@@ -394,6 +395,12 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         expiresAt,
       });
 
+      const canAssist = Boolean(options.assistant && assistEnabled() && definition?.params);
+      // Every era, now: a repo-era game's sources are reachable through the
+      // bundler's own walk, so the deep lane is no longer a store-only
+      // privilege. Whether *this* game can actually be assembled is answered
+      // on the first request that needs it rather than paid for here.
+      const canCode = Boolean(options.codeLane && codeLaneEnabled());
       return reply.send({
         remixId: id,
         // The declaration drives the sliders; its defaults are the starting values.
@@ -401,12 +408,10 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         values: definition?.params
           ? Object.fromEntries(Object.entries(definition.params).map(([key, spec]) => [key, spec.default]))
           : null,
-        canAssist: Boolean(options.assistant && assistEnabled() && definition?.params),
-        // Every era, now: a repo-era game's sources are reachable through the
-        // bundler's own walk, so the deep lane is no longer a store-only
-        // privilege. Whether *this* game can actually be assembled is answered
-        // on the first request that needs it rather than paid for here.
-        canCode: Boolean(options.codeLane && codeLaneEnabled()),
+        canAssist,
+        canCode,
+        // What is worth saying here, derived from what this game can do.
+        suggestions: buildSuggestions(definition, { canAssist, canCode }),
         expiresInMs: REMIX_TTL_MS,
       });
     },
