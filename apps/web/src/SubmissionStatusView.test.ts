@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n/index.js';
 import { statusPath } from './router.js';
-import { ACTIVE_POLL_MS, SENT_RECEIPT_MS, SubmissionStatusView } from './SubmissionStatusView.js';
+import { ACTIVE_POLL_MS, SubmissionStatusView } from './SubmissionStatusView.js';
 import {
   abandonSubmission,
   getChannelPlayable,
@@ -142,7 +142,7 @@ describe('SubmissionStatusView', () => {
     });
   });
 
-  it('offers playtesting next to playing, once there is something to play', async () => {
+  it('offers playtesting as a quiet link next to Play, once there is something to play', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'building',
@@ -163,11 +163,12 @@ describe('SubmissionStatusView', () => {
       await flushEffects();
     });
 
-    // The delivered moment used to have exactly one call to action — Play — and the
-    // surface that turns playing into a message to the agent was a tab you had to
-    // think of. It now sits on the card, next to the game it is about.
+    // One play verb in the foot; playtest is a quieter path, not a peer button.
+    const play = container.querySelector<HTMLButtonElement>('.status-play-cta');
+    expect(play?.textContent?.trim()).toMatch(/^Play$/);
     const playtest = container.querySelector<HTMLButtonElement>('.status-playtest-cta');
-    expect(playtest?.textContent).toContain('Playtest');
+    expect(playtest?.classList.contains('studio-context-link')).toBe(true);
+    expect(playtest?.textContent).toContain('Play with a note');
 
     await act(async () => {
       playtest?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -1161,100 +1162,14 @@ describe('SubmissionStatusView', () => {
     });
 
     expect(container.querySelector('.status-composer.is-sending')).toBeNull();
-    expect(container.querySelector('.status-feedback-receipt.is-floating')).not.toBeNull();
-    expect(container.querySelector('.status-feedback-sent-text')?.textContent).toContain(
-      'Sent — watch the build log above.',
-    );
-    // Receipt overlays the cleared field — it must not grow a second actions row.
+    // Studio composer: no Sent! receipt — the thread already echoes the message.
+    expect(container.querySelector('.status-feedback-receipt')).toBeNull();
     expect(container.querySelector('.status-feedback-actions')).toBeNull();
+    expect(container.textContent).toContain('Please make the car faster and add a boost pad.');
 
     await act(async () => {
       root.unmount();
     });
-  });
-
-  it('auto-dismisses and lets the creator dismiss the compact Sent! receipt', async () => {
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-    vi.useFakeTimers();
-    mockedGetSubmissionStatus.mockResolvedValue({
-      status: 'building',
-      preview: { slug: 'space-runner' },
-      progress: { headSha: 'sha-1', commits: [], checklist: [] },
-    });
-    mockedGetSubmissionPreview.mockResolvedValue({
-      slug: 'space-runner',
-      title: 'Space Runner',
-      html: '<canvas></canvas>',
-    });
-    mockedSubmitFeedback.mockResolvedValue({ ok: true, target: 'pull_request' });
-    await i18n.changeLanguage('en');
-    window.history.pushState(null, '', '/studio/feedback-token/thread');
-
-    const container = document.createElement('div');
-    document.body.appendChild(container);
-    const root = createRoot(container);
-
-    await act(async () => {
-      root.render(createElement(SubmissionStatusView, { token: 'feedback-token', embedded: true }));
-      await flushEffects();
-      await flushEffects();
-    });
-
-    const textarea = container.querySelector<HTMLTextAreaElement>('.status-feedback-input');
-    await act(async () => {
-      if (textarea) {
-        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
-        setter?.call(textarea, 'Please make the car faster and add a boost pad.');
-        textarea.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-      await flushEffects();
-    });
-    await act(async () => {
-      container
-        .querySelector<HTMLButtonElement>('.status-composer-send')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      await flushEffects();
-      await flushEffects();
-    });
-
-    expect(container.querySelector('.status-feedback-receipt.is-floating')).not.toBeNull();
-
-    await act(async () => {
-      container
-        .querySelector<HTMLButtonElement>('.status-feedback-receipt-dismiss')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      await flushEffects();
-    });
-    expect(container.querySelector('.status-feedback-receipt')).toBeNull();
-
-    // Send again, then let the timer clear it without a click.
-    await act(async () => {
-      if (textarea) {
-        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
-        setter?.call(textarea, 'Please make the car faster and add a boost pad.');
-        textarea.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-      await flushEffects();
-    });
-    await act(async () => {
-      container
-        .querySelector<HTMLButtonElement>('.status-composer-send')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      await flushEffects();
-      await flushEffects();
-    });
-    expect(container.querySelector('.status-feedback-receipt.is-floating')).not.toBeNull();
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(SENT_RECEIPT_MS);
-      await flushEffects();
-    });
-    expect(container.querySelector('.status-feedback-receipt')).toBeNull();
-
-    await act(async () => {
-      root.unmount();
-    });
-    vi.useRealTimers();
   });
 
   it('shows a build pulse and a stop control on the studio thread bar while building', async () => {
@@ -1291,6 +1206,45 @@ describe('SubmissionStatusView', () => {
     expect(container.querySelector('.studio-thread-context.is-active')).not.toBeNull();
     expect(container.querySelector('.studio-context-phase-spinner')).not.toBeNull();
     expect(container.querySelector('.studio-context-stop')?.textContent).toContain('Stop');
+    // Incomplete checklist still shows; slug does not (header owns identity).
+    expect(container.querySelector('.studio-context-progress')?.textContent).toContain('4 of 6 done');
+    expect(container.querySelector('.studio-thread-context .studio-slug')).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('hides the checklist fraction on the thread bar once every item is done', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'published',
+      slug: 'global-thermonuclear-strategy',
+      progress: {
+        headSha: 'sha-1',
+        commits: [],
+        checklist: [
+          { text: 'A', checked: true },
+          { text: 'B', checked: true },
+        ],
+      },
+    });
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/studio/done-bar/thread');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'done-bar', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.studio-context-progress')).toBeNull();
+    expect(container.querySelector('.studio-thread-context .studio-slug')).toBeNull();
+    expect(container.querySelector('.status-play-cta')?.textContent?.trim()).toMatch(/Play$/);
 
     await act(async () => {
       root.unmount();

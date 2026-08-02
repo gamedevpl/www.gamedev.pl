@@ -592,13 +592,15 @@ export function SubmissionStatusView({
     const done = reported?.done ?? checklist.filter((item) => item.checked).length;
     const total = reported?.total ?? checklist.length;
 
+    // Short play verb in the foot — the phase already says live vs draft, so
+    // "Play your game" / "Play the draft" were two long peers of the quieter playtest path.
     const playable =
       status?.status === 'published' && status.slug
-        ? { label: t('statusView.play'), onClick: () => setPlaying('published') }
+        ? { label: t('statusView.playShort'), onClick: () => setPlaying('published') }
         : preview
-          ? { label: t('statusView.playDraft'), onClick: openDraft }
+          ? { label: t('statusView.playShort'), onClick: openDraft }
           : channelHtml
-            ? { label: t('statusView.playDraft'), onClick: openChannel }
+            ? { label: t('statusView.playShort'), onClick: openChannel }
             : undefined;
 
     return (
@@ -671,13 +673,15 @@ export function SubmissionStatusView({
                   </button>
                 ) : null}
 
+                {/* Checklist fraction earns its keep while work remains; once every
+                    item is checked it only restates the phase. Slug lives in the studio
+                    header — repeating it here is infra chrome. */}
                 <ThreadContextBar
-                  {...(status.slug ? { slug: status.slug } : {})}
                   phase={t(`statusView.states.${status.status}.label`)}
                   heartbeatAt={heartbeatAt}
                   active={!TERMINAL_STATUSES.has(status.status)}
                   {...(!TERMINAL_STATUSES.has(status.status) ? { stopToken: token } : {})}
-                  {...(total > 0 ? { progress: { done, total } } : {})}
+                  {...(total > 0 && done < total ? { progress: { done, total } } : {})}
                   {...(playable ? { primary: playable } : {})}
                   {...(onPlaytest && playable
                     ? { secondary: { label: t('statusView.playtestCta'), onClick: onPlaytest } }
@@ -1250,22 +1254,15 @@ function FeedbackPanel({
       ? 'statusView.feedback.composerHintBuilding'
       : 'statusView.feedback.composerHint';
 
-  // Compact composer uses short copy: the full "Sent! … watch the build log" sentence
-  // wraps to three lines on a 320px phone and, as an absolute overlay, used to spill
-  // into the thread context bar over the Stop control.
-  const sentMessageKey = (floating: boolean) => {
-    if (!floating) return sentSelfKey ?? 'statusView.feedback.sent';
-    if (composerRoute === 'active') return 'statusView.feedback.sentSelfActiveCompact';
-    if (composerRoute === 'waiting') return 'statusView.feedback.sentSelfWaitingCompact';
-    return 'statusView.feedback.sentCompact';
-  };
-
-  const sentReceipt = (floating: boolean) =>
+  // Standalone status page still shows a brief receipt next to Send. The studio
+  // composer does not: the message is echoed into the thread immediately, so a
+  // second "Sent!" under the box is the same confirmation twice.
+  const sentReceipt =
     state === 'sent' && !notice && !error ? (
-      <div className={`status-feedback-receipt${floating ? ' is-floating' : ''}`} role="status">
+      <div className="status-feedback-receipt" role="status">
         <span className="status-feedback-sent">
           <PixelIcon name="check" size={13} />
-          <span className="status-feedback-sent-text">{t(sentMessageKey(floating))}</span>
+          <span className="status-feedback-sent-text">{t(sentSelfKey ?? 'statusView.feedback.sent')}</span>
         </span>
         <button
           type="button"
@@ -1333,8 +1330,8 @@ function FeedbackPanel({
           </button>
         </div>
         {/* Failures, in-flight, and "kept but nothing started" still need a row — they
-            ask the creator to wait or act. The plain "Sent!" receipt does not: it overlays
-            the cleared field so the composer stays one row tall, then clears itself. */}
+            ask the creator to wait or act. A plain Sent receipt does not: the thread
+            already shows the message the moment send succeeds. */}
         {error || sending || notice ? (
           <div className="status-feedback-actions">
             {error ? (
@@ -1349,7 +1346,6 @@ function FeedbackPanel({
             )}
           </div>
         ) : null}
-        {sentReceipt(true)}
       </div>
     );
   }
@@ -1383,7 +1379,7 @@ function FeedbackPanel({
         >
           {state === 'sending' ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
         </button>
-        {sentReceipt(false)}
+        {sentReceipt}
       </div>
       {error ? <p className="error">{error}</p> : null}
       {notice && !error ? <p className="status-feedback-notice">{notice}</p> : null}
@@ -1490,7 +1486,6 @@ function ThreadStream({ token, entries, emptyLabel }: { token: string; entries: 
  * directly underneath.
  */
 function ThreadContextBar({
-  slug,
   phase,
   heartbeatAt,
   progress,
@@ -1499,7 +1494,6 @@ function ThreadContextBar({
   active = false,
   stopToken,
 }: {
-  slug?: string;
   phase: string;
   heartbeatAt: number | null;
   progress?: { done: number; total: number };
@@ -1515,7 +1509,6 @@ function ThreadContextBar({
   return (
     <div className={`studio-thread-context${active ? ' is-active' : ''}`}>
       <span className="studio-context-state">
-        {slug ? <code className="studio-slug">{slug}</code> : null}
         <span className="studio-context-phase">
           {active ? <span className="studio-context-phase-spinner" aria-hidden="true" /> : null}
           {phase}
@@ -1534,8 +1527,8 @@ function ThreadContextBar({
         ) : null}
         {stopToken ? <AbandonControl token={stopToken} compact /> : null}
         {secondary ? (
-          <button type="button" className="secondary-btn status-playtest-cta" onClick={secondary.onClick}>
-            <PixelIcon name="wrench" size={13} /> {secondary.label}
+          <button type="button" className="studio-context-link status-playtest-cta" onClick={secondary.onClick}>
+            {secondary.label}
           </button>
         ) : null}
         {primary ? (
