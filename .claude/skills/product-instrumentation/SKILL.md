@@ -158,7 +158,10 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
   published plays (`reportSlug`, same population as `play_started`), and
   `summarizeVisitFunnel` exposes `howToPlay` (opens/visits among playing visits, same-
   card repeat visits, via, byEntry with `playingVisits` denominators). Rendered on
-  `VisitFunnelPanel`. The product decision in #395 still waits on those numbers.
+  `VisitFunnelPanel`. The product decision in #395 is to ship the richer How to play
+  tone (Goal required; Scoring / Mode optional) via game `.legend-keys` — see
+  [`docs/how-to-play-plan.md`](../../../docs/how-to-play-plan.md). Funnel numbers still
+  inform discoverability; they no longer gate whether to ship the format.
 - ~~Creator return is under-measured~~ — **closed 2026-07-26**: `User.activeDays` (a
   capped list of `yyyy-mm-dd`, touched once per account per day from the auth hook)
   plus `summarizeCreatorMetrics` behind `GET /api/admin/telemetry/creators`. Use a list
