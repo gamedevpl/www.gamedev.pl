@@ -29,19 +29,6 @@ export function selfBuildDeliveryCap(): number {
 }
 
 /**
- * Whether a coding-agent session is still the thing doing the work.
- *
- * Narrower than {@link isActiveBuildRound}: after delivery the round stays "active" for
- * builder-lock / gate repair, but the Copilot (or self) session may already have ended.
- * Creator feedback during these states must not spawn a second concurrent session — the
- * live agent already polls the build-channel inbox.
- */
-export function isLiveAgentSession(record: { state?: JobState }): boolean {
-  const state = record.state;
-  return state === 'queued' || state === 'dispatched' || state === 'building';
-}
-
-/**
  * Whether the current round is still live — builder must not change until it closes.
  *
  * Includes gate-red / kit_outdated `needs_changes`: those keep the round open so the
@@ -64,4 +51,24 @@ export function isActiveBuildRound(record: { state?: JobState; transitions?: Job
     default:
       return false;
   }
+}
+
+/**
+ * Whether creator feedback should only go to the build-channel inbox (no new dispatch).
+ *
+ * An in-flight round ({@link isActiveBuildRound}) that already has a dispatch ref has an
+ * agent that will poll the inbox — including after delivery while the gate runs, and on
+ * gate-red / kit_outdated repair, where the same session is often still alive. Starting
+ * another Copilot task on top of that is what produced concurrent builds of one game.
+ *
+ * A `queued` job with **no** refs is different: dispatch never landed, so nobody will
+ * read the inbox. Feedback must retry `resumeBuild` in that case.
+ */
+export function shouldSteerFeedbackViaInbox(record: {
+  state?: JobState;
+  transitions?: JobTransition[];
+  dispatch?: { refs?: readonly string[] } | null;
+}): boolean {
+  if (!isActiveBuildRound(record)) return false;
+  return (record.dispatch?.refs?.length ?? 0) > 0;
 }

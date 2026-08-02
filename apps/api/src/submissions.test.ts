@@ -775,10 +775,10 @@ describe('submission routes', () => {
     await app.close();
   });
 
-  it('queues feedback to the inbox without starting a second session while one is live', async () => {
+  it('queues feedback to the inbox without starting a second session on an in-flight round', async () => {
     // The agent-tasks API cannot steer or cancel a running Copilot session. Spawning a
-    // second task on top of a live one is what produced concurrent builds of the same
-    // game; the inbox is the steering path the brief already tells the agent to poll.
+    // second task on top of an in-flight round is what produced concurrent builds of the
+    // same game; the inbox is the steering path the brief already tells the agent to poll.
     const { githubClient, createIssueComment } = createGithubClientStub({ issueNumber: 77 });
     const { backend, briefs } = createBackendStub();
     const { app, authHeaders, store } = await createApp({
@@ -794,6 +794,7 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
+    expect(job.dispatch?.refs?.length).toBeGreaterThan(0);
     const briefsBefore = briefs.length;
 
     const response = await app.inject({
@@ -810,6 +811,94 @@ describe('submission routes', () => {
     expect(briefs).toHaveLength(briefsBefore);
     const pending = await store.listPendingCreatorMessages(job.issueNumber);
     expect(pending.some((message) => message.text.includes('Make the parcels bigger'))).toBe(true);
+
+    await app.close();
+  });
+
+  it('keeps gate-wait and gate-red rounds on inbox steering rather than a new session', async () => {
+    // After submit the job is `submitted` while the same session waits on the gate; a
+    // red verdict moves it to `needs_changes` with mustFixGate. Both must stay inbox-only.
+    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { backend, briefs } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v1');
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'submitted',
+      at: new Date().toISOString(),
+      by: 'agent',
+      reason: 'sources_uploaded',
+    });
+    const briefsAfterSubmit = briefs.length;
+
+    const duringGate = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Make the parcels bigger while the gate is still running.' },
+    });
+    expect(duringGate.statusCode).toBe(200);
+    expect(briefs).toHaveLength(briefsAfterSubmit);
+
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'needs_changes',
+      at: new Date().toISOString(),
+      by: 'gate',
+      reason: 'gate_red',
+    });
+    const briefsAfterRed = briefs.length;
+
+    const duringRepair = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Also slow the asteroids down while you fix the gate.' },
+    });
+    expect(duringRepair.statusCode).toBe(200);
+    expect(briefs).toHaveLength(briefsAfterRed);
+
+    await app.close();
+  });
+
+  it('still resumes when feedback arrives on a queued job that was never dispatched', async () => {
+    // dispatchBuild leaves the job queued when startTask throws. Nobody will poll the
+    // inbox — feedback has to be the retry that starts a session.
+    const store = new InMemoryStore();
+    const jobId = JOB_ID_FLOOR + 77;
+    await store.upsertUser({ uid: 'g:test-user' });
+    await store.createSubmission(jobId, 'g:test-user', 'A game');
+    expect((await store.getSubmission(jobId))?.dispatch?.refs).toBeUndefined();
+
+    const { githubClient } = createGithubClientStub({ issueNumber: jobId });
+    const { backend, briefs } = createBackendStub();
+    const { app, authHeaders } = await createApp({
+      store,
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(jobId, secret)}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Please start this build — nothing has happened yet.' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(briefs.at(-1)?.feedback).toContain('nothing has happened yet');
+    expect((await store.getSubmission(jobId))?.dispatch?.refs?.length).toBeGreaterThan(0);
 
     await app.close();
   });

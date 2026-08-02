@@ -95,7 +95,8 @@ describe('buildPrompt', () => {
     const prompt = buildPrompt(BRIEF);
     expect(prompt).toContain('there will not be a second session');
     expect(prompt).toContain('npm run progress -- --check');
-    expect(prompt).toContain('every few minutes');
+    expect(prompt).toContain('before and after every long command');
+    expect(prompt).toContain('five commands');
   });
 
   it('does not send an undelivered round looking for a store restore that cannot exist', () => {

@@ -28,8 +28,8 @@ import type { AgentBackend, SeedFiles } from './agent-backend.js';
 import { resolveBuilderBackend, type AgentBackendRegistry } from './agent-backend-env.js';
 import {
   isActiveBuildRound,
-  isLiveAgentSession,
   isBuilderKind,
+  shouldSteerFeedbackViaInbox,
   selfBuildConnectDays,
   selfBuildDeliveryCap,
   type BuilderKind,
@@ -2590,11 +2590,15 @@ export async function registerSubmissionRoutes(
         }
       }
 
-      // A live session already polls this inbox (every progress reply carries pending
-      // messages). Starting another Copilot task on top of it is what produced two
-      // concurrent Subaru sessions — and the agent-tasks API cannot steer or cancel the
-      // first one. Queue only; the running agent is the delivery path.
-      if (record && isLiveAgentSession(record)) {
+      // An in-flight round that already has a dispatch ref steers via the inbox (every
+      // progress reply carries pending messages) — including gate-wait and gate-red
+      // repair, where the same session is often still alive. Starting another Copilot
+      // task on top is what produced concurrent Subaru sessions, and the agent-tasks
+      // API cannot steer or cancel the first one. Queue only.
+      //
+      // A queued job with no refs is the opposite: dispatch never landed, so nobody
+      // will poll — fall through to resumeBuild so feedback can still start a session.
+      if (record && shouldSteerFeedbackViaInbox(record)) {
         return reply.send({
           ok: true,
           ...(shotId ? { shotId } : {}),
