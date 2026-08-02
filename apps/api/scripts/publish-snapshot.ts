@@ -55,13 +55,13 @@ const commitSha = readFlag('commit-sha')?.trim() || null;
 /**
  * What the bake actually reads.
  *
- * A branch name is a moving target. The games repo pushes its refreshed
- * `catalog.json` and dispatches this job seconds later, so resolving `main`
- * here can still land on the pre-push tree — and it did: a merge that added a
- * game published a snapshot of the previous 92 while recording the newer
+ * A branch name is a moving target. The games repo used to push a refreshed
+ * `catalog.json` and dispatch this job seconds later, so resolving `main`
+ * here could still land on the pre-push tree — and it did: a merge that added
+ * a game published a snapshot of the previous 92 while recording the newer
  * commit in the pointer. Green run, correct-looking metadata, missing game,
  * and nothing else retires that snapshot until the next merge or the nightly
- * re-bake.
+ * re-bake. The bake now derives the catalog from the pinned archive itself.
  *
  * The dispatch already tells us the exact commit, so bake that. `ref` stays
  * the fallback for callers that cannot name one (a manual bake, the nightly).

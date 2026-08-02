@@ -5,8 +5,9 @@ name: Publish games snapshot
 # the request path (apps/api/src/game-snapshot.ts).
 #
 # Fires on a repository_dispatch from the games repo's validate workflow, right
-# after a merge to main regenerates catalog.json — see
-# gamedevpl/www.gamedev.pl-games/.github/workflows/validate.yml. The
+# after a merge to main passes the games-repo gate — see
+# gamedevpl/www.gamedev.pl-games/.github/workflows/validate.yml. The bake derives
+# the snapshot catalog from that SHA's archive (no committed catalog.json). The
 # workflow_dispatch entry point is the manual escape hatch: re-baking after an
 # assembler change here, or recovering from a failed publish.
 #

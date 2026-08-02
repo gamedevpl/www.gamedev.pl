@@ -108,9 +108,10 @@ still in flight.
 ```
 merge to games-repo main
   → validate.yml: npm run check
-  → validate.yml: regenerate + commit catalog.json
-  → validate.yml: repository_dispatch → this repo
+  → validate.yml: repository_dispatch → this repo (pinned SHA)
   → publish-games.yml: npm run snapshot:publish
+      (derives catalog.json from the games archive — including code-derived touch —
+       and writes it into the snapshot; the games repo does not commit catalog.json)
   → objects written, then current.json moves (only if every game baked cleanly)
   → running instances pick it up within the pointer TTL (~1 min)
 ```

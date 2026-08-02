@@ -1,7 +1,10 @@
 import path from 'node:path';
 import { build, transform } from 'esbuild';
+import { classifyTouchSource, type CatalogGameTouch } from './catalog-touch.js';
 import { GAME_KIT_MODULES } from './games-repo-contract.js';
 import { isRateLimitResponse } from './github-rate-limit.js';
+
+export type { CatalogGameTouch } from './catalog-touch.js';
 
 interface CreateIssueInput {
   title: string;
@@ -246,15 +249,13 @@ export interface CatalogGameEntry {
    */
   submittedBy: string | null;
   /**
-   * Touch playability class, derived from each game's *code* by the games repo's
-   * own build (it runs inferTouchSupport over the sources). Nothing readable from
-   * SPEC.md can reproduce it, so it is present only when the catalog came from the
-   * committed catalog.json artifact — the GraphQL fallback below leaves it absent.
+   * Touch playability class, derived from each game's *code* (createInput /
+   * defineGame / party / pointer polls). Present when the catalog was built from
+   * a games-repo archive (snapshot bake) or from a legacy committed catalog.json.
+   * The GraphQL SPEC-only fallback leaves it absent.
    */
   touch?: CatalogGameTouch;
 }
-
-export type CatalogGameTouch = 'gamekit' | 'native' | 'controllers' | 'none';
 
 export type CatalogGameOrientation = 'any' | 'portrait' | 'landscape';
 
@@ -466,12 +467,13 @@ export interface GitHubClient {
    */
   getGameMediaManifest(ref: string, slug: string): Promise<CatalogGameMedia | null>;
   /**
-   * Builds the game catalog straight from the repo: lists `games/` directories
-   * on `ref`, then reads each game's SPEC.md (and media metadata) in a small
-   * number of GraphQL round-trips. Replaces both the old public Pages
-   * `catalog.json` and the previous per-file Contents-API fan-out, so the games
-   * repo can stay private without a rate-limit storm. Games with a missing or
-   * unparseable SPEC.md are skipped.
+   * Builds the game catalog for `ref`. Prefer, in order:
+   * 1. Derive from an archive file source (`listPaths`) — used by the snapshot
+   *    bake; includes code-derived `touch` and does not need a committed
+   *    `catalog.json` in the games repo.
+   * 2. A legacy committed `catalog.json` (older SHAs / non-archive callers).
+   * 3. GraphQL SPEC + media fan-out (no `touch`).
+   * Games with a missing or unparseable SPEC.md are skipped.
    */
   getCatalog(ref: string): Promise<CatalogGameEntry[]>;
   /**
@@ -506,10 +508,15 @@ export interface GitHubClient {
  * (`fetchGamesRepoArchive`) instead, which is the same files at 1/1000th the
  * request count. Reads that are not plain file reads — GraphQL, issues, PRs —
  * always go to the API.
+ *
+ * `listPaths` is present on archive sources and lets `getCatalog` derive the
+ * website catalog (including code-derived `touch`) without a committed
+ * `catalog.json` in the games repo.
  */
 export interface RepoFileSource {
   readText(path: string, ref: string): Promise<string | null>;
   readBytes(path: string, ref: string): Promise<Uint8Array | null>;
+  listPaths?(): string[];
 }
 
 export interface GitHubClientOptions {
@@ -1323,12 +1330,14 @@ ${gameJs}`;
         throw new Error(`invalid published ref "${ref}"`);
       }
 
-      // Fast path: the games repo commits a website-ready catalog.json at its root,
-      // held fresh by its own validate gate. One read answers the whole catalog, and
-      // it is the only source that can carry `touch` — a value derived from each
-      // game's code, which no amount of SPEC.md reading here can reproduce.
-      // The GraphQL fan-out below stays as the fallback for refs without the
-      // artifact (older commits, and PR branches during a build).
+      // Snapshot bake supplies an archive with listPaths — derive there so the
+      // games repo no longer has to commit catalog.json onto a protected main.
+      const listPaths = options.files?.listPaths;
+      if (typeof listPaths === 'function') {
+        return buildCatalogFromArchive(ref, readRawFile, listPaths());
+      }
+
+      // Legacy fast path: older SHAs still carry a committed catalog.json.
       const committed = await readRawFile('catalog.json', ref);
       if (committed !== null) {
         const entries = parseCommittedCatalog(committed);
@@ -1420,6 +1429,63 @@ const SAFE_MEDIA_NAME = /^[a-z0-9][a-z0-9-]*$/;
 const SAFE_MEDIA_PNG = /^[a-z0-9][a-z0-9-]*\.png$/;
 const SAFE_MEDIA_MP4 = /^[a-z0-9][a-z0-9-]*\.mp4$/;
 const CATALOG_TOUCH_VALUES = new Set<CatalogGameTouch>(['gamekit', 'native', 'controllers', 'none']);
+
+/**
+ * Builds the website catalog from a games-repo archive listing. Same fields as
+ * the old committed catalog.json (including code-derived `touch`), but computed
+ * at bake time from the tree being published — so a merge never has to push a
+ * regenerated aggregate onto protected `main` first.
+ */
+async function buildCatalogFromArchive(
+  ref: string,
+  readRawFile: (path: string, ref: string) => Promise<string | null>,
+  paths: readonly string[],
+): Promise<CatalogGameEntry[]> {
+  // One pass over the archive listing: slug set, per-slug .ts paths, path Set for
+  // media existence. Avoids O(paths × games) rescans inside the per-game loop.
+  const pathSet = new Set(paths);
+  const slugs = new Set<string>();
+  const tsPathsBySlug = new Map<string, string[]>();
+  for (const filePath of paths) {
+    const match = /^games\/([a-z0-9][a-z0-9-]*)\/(.+)$/.exec(filePath);
+    if (!match) continue;
+    const slug = match[1];
+    const relative = match[2];
+    if (relative === 'SPEC.md') {
+      slugs.add(slug);
+    }
+    if (relative.endsWith('.ts')) {
+      const list = tsPathsBySlug.get(slug);
+      if (list) list.push(filePath);
+      else tsPathsBySlug.set(slug, [filePath]);
+    }
+  }
+
+  const entries: CatalogGameEntry[] = [];
+  for (const slug of [...slugs].sort()) {
+    const specMd = await readRawFile(`games/${slug}/SPEC.md`, ref);
+    if (specMd === null) continue;
+
+    const mediaPath = `games/${slug}/media/metadata.json`;
+    const mediaJson = pathSet.has(mediaPath) ? await readRawFile(mediaPath, ref) : null;
+    const entry = catalogEntryFromSpec(slug, specMd, (name) => (name === 'media/metadata.json' ? mediaJson : null));
+    if (!entry) continue;
+
+    if (entry.media) {
+      const screenshots = entry.media.screenshots.filter((shot) => pathSet.has(`games/${slug}/media/${shot.file}`));
+      const video =
+        entry.media.video && pathSet.has(`games/${slug}/media/${entry.media.video}`) ? entry.media.video : null;
+      entry.media = screenshots.length > 0 || video ? { screenshots, video } : null;
+    }
+
+    const tsPaths = tsPathsBySlug.get(slug) ?? [];
+    const sources = await Promise.all(tsPaths.map((filePath) => readRawFile(filePath, ref)));
+    entry.touch = classifyTouchSource(sources.filter((text): text is string => text !== null).join('\n'));
+
+    entries.push(entry);
+  }
+  return entries;
+}
 
 /**
  * Parses the games repo's committed catalog.json into catalog entries. The file
