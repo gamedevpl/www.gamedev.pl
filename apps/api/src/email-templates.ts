@@ -344,6 +344,11 @@ const operatorCopy: Record<OperatorNotificationType, { subject: string; lead: st
     lead: 'no longer passes the check on the current engine. It still serves — the creator has been nudged to refresh it.',
     cta: 'Open the queue',
   },
+  'operator.seeding_degraded': {
+    subject: 'Seeded builds cannot place their drafts',
+    lead: 'generated a first draft that could not be committed. Builds still run unseeded, but each one pays for a draft it then discards — most likely the dispatch credential lost its write scope on the games repo.',
+    cta: 'Open the queue',
+  },
   'operator.waitlist_joined': {
     subject: 'Someone joined the beta waitlist',
     lead: 'asked to join the closed beta.',

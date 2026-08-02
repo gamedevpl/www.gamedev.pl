@@ -53,7 +53,12 @@ import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo
 import { createMailerFromEnv, type Mailer } from './mailer.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { emitOperatorAlert, emitSubmissionNotification, notifyOnTransition, type EmitDeps } from './notify.js';
-import { detectOperatorAlerts, FEEDBACK_STALL_MS } from './operator-alerts.js';
+import {
+  detectOperatorAlerts,
+  detectSeedingDegraded,
+  FEEDBACK_STALL_MS,
+  SEEDING_DEGRADED_WINDOW_MS,
+} from './operator-alerts.js';
 import { pageOwnerGames } from './owner-games.js';
 import { isAdminSession } from './admin.js';
 import { peekQuota } from './quota-gate.js';
@@ -809,6 +814,24 @@ export async function registerSubmissionRoutes(
           { issueNumber: input.issueNumber, mutedForMs: SEED_STAGING_COOLDOWN_MS },
           'the generated seed could not be staged; pausing seeding rather than generating drafts nobody can place',
         );
+      }
+      // Both halves of the seed's story are known here — what generation produced, and
+      // whether dispatch could place it — so the record is written once, from the one
+      // place that has both. Without this the only trace a seed ever left was a log line,
+      // which is exactly why the first live failure could only be diagnosed by hand.
+      if (draft) {
+        try {
+          await store.recordSeedOutcome(input.issueNumber, {
+            at: new Date(now()).toISOString(),
+            references: draft.references,
+            ms: draft.elapsedMs,
+            compiles: draft.compiles,
+            repaired: draft.repaired,
+            staged: Boolean(result.seedWorkspace),
+          });
+        } catch (error) {
+          input.log.error({ err: error, issueNumber: input.issueNumber }, 'could not record the seed outcome');
+        }
       }
       await store.recordDispatch(input.issueNumber, {
         backend: selected.name,
@@ -3415,6 +3438,17 @@ export async function registerSubmissionRoutes(
       // observable. Idempotent per job and kind, so re-running it does not re-notify.
       let alerted = 0;
       const alerts = detectOperatorAlerts(active, now(), pendingFeedback);
+      // Seeding's own alert is appended rather than derived per job: it is a claim about a
+      // run of builds, and it reads from a query of its own because the active set drops
+      // exactly the jobs whose seeds worked (see listSeedOutcomesSince). Failing to read
+      // it costs this one alert and nothing else in the sweep.
+      try {
+        const outcomes = await store.listSeedOutcomesSince(new Date(now() - SEEDING_DEGRADED_WINDOW_MS).toISOString());
+        const degraded = detectSeedingDegraded(outcomes, now());
+        if (degraded) alerts.push(degraded);
+      } catch (seedAlertError) {
+        request.log.error({ err: seedAlertError }, 'seeding health check failed');
+      }
       if (adminUids && adminUids.size > 0) {
         for (const alert of alerts) {
           try {

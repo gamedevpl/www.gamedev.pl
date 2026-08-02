@@ -11,7 +11,12 @@ import { routeAll, type Suggestion } from './suggestions.js';
 import { buildJobQueue } from './job-admin-routes.js';
 import type { JobState } from './job-state.js';
 import { buildCostReport } from './job-costs.js';
-import { detectOperatorAlerts, type OperatorAlert } from './operator-alerts.js';
+import {
+  detectOperatorAlerts,
+  detectSeedingDegraded,
+  SEEDING_DEGRADED_WINDOW_MS,
+  type OperatorAlert,
+} from './operator-alerts.js';
 import { summarizeVisitFunnel, type VisitFunnel } from './visit-funnel.js';
 import { summarizeCreatorMetrics, type CreatorMetrics } from './creator-metrics.js';
 import { DEFAULT_CREATION_LIMITS_TTL_MS, resolveDefaultGlobalDailyCap } from './creation-limits.js';
@@ -301,15 +306,20 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
       return reply.status(404).send({ error: 'not found' });
     }
 
-    const [records, limits, pendingWaitlist] = await Promise.all([
+    const at = now();
+    const [records, limits, pendingWaitlist, seedOutcomes] = await Promise.all([
       store.listActiveSubmissions(),
       readCreationLimits(),
       store.countWaitlistEntries('pending'),
+      // Same read the sweep does. The badge and the inbox have to agree about what is
+      // wrong, or the number on the badge stops meaning anything — so the seeding alert
+      // is derived here too rather than only where it is emailed.
+      store.listSeedOutcomesSince(new Date(at - SEEDING_DEGRADED_WINDOW_MS).toISOString()).catch(() => []),
     ]);
-    const at = now();
     const queue = buildJobQueue(records, at);
+    const seeding = detectSeedingDegraded(seedOutcomes, at);
     const body: AdminSummaryResponse = {
-      alerts: detectOperatorAlerts(records, at, await pendingFeedbackAges(records)),
+      alerts: [...detectOperatorAlerts(records, at, await pendingFeedbackAges(records)), ...(seeding ? [seeding] : [])],
       queue: { active: queue.jobs.length, stalled: queue.stalled, byState: queue.byState },
       limits: {
         paused: limits.effective.paused,

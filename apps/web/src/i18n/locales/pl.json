@@ -59,6 +59,10 @@
         "title": "Opublikowana gra nie przeszła kontroli",
         "body": "„{{title}}” nie przechodzi już testów na aktualnym silniku. Twórca dostał zachętę do odświeżenia."
       },
+      "seeding_degraded": {
+        "title": "Buildy nie mogą zapisać wygenerowanego szkicu",
+        "body": "Ostatnie buildy wygenerowały szkic, którego nie dało się zapisać. Buildy nadal działają — sprawdź uprawnienia zapisu poświadczenia dyspozytora."
+      },
       "waitlist_joined": {
         "title": "Ktoś dołączył do listy oczekujących",
         "body": "„{{title}}” chce dołączyć do zamkniętej bety."

@@ -241,7 +241,7 @@ export async function emitOperatorAlert(
       bodyKey: `notifications.${type}.body`,
       params: {
         title: alert.title,
-        issueNumber: String(alert.issueNumber),
+        ...(alert.issueNumber === undefined ? {} : { issueNumber: String(alert.issueNumber) }),
         ...(alert.stall ? { detail: alert.stall } : {}),
       },
       link: OPERATOR_ALERT_LINK,
@@ -250,7 +250,7 @@ export async function emitOperatorAlert(
     created += 1;
     await sendOperatorEmail(deps, uid, alert.id, type, OPERATOR_ALERT_LINK, {
       title: alert.title,
-      issueNumber: alert.issueNumber,
+      ...(alert.issueNumber === undefined ? {} : { issueNumber: alert.issueNumber }),
       ...(alert.stall ? { detail: alert.stall } : {}),
     });
     await maybePush(deps, uid, result.notification);

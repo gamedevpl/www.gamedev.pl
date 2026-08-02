@@ -40,6 +40,9 @@ const ALERT_COPY: Record<OperatorAlert['kind'], string> = {
   // and the relay that wakes an agent for it did not fire.
   feedback_undelivered: 'change request never collected — check the relay',
   game_unhealthy: 'live game failing on the current engine — creator nudged',
+  // The only kind that is about the platform rather than a game: seeding fails open, so
+  // the builds themselves are fine and the cost is silent.
+  seeding_degraded: 'generated drafts nobody could commit — check the dispatch credential',
 };
 
 /** The same kinds again, short enough to sit several to a line in the summary. */
@@ -49,6 +52,7 @@ const ALERT_SHORT: Record<OperatorAlert['kind'], string> = {
   build_stalled: 'stopped',
   feedback_undelivered: 'undelivered feedback',
   game_unhealthy: 'unhealthy live game',
+  seeding_degraded: 'seeds not landing',
 };
 
 /** Rough age, in the same vocabulary the queue uses. */
@@ -126,7 +130,8 @@ function AlertBanner({
                   {alert.stall ? ` (${alert.stall})` : ''}
                 </span>{' '}
                 <span className="admin-alert-age">
-                  #{alert.issueNumber} · {since(alert.since, now)}
+                  {alert.issueNumber === undefined ? '' : `#${alert.issueNumber} · `}
+                  {since(alert.since, now)}
                 </span>
               </button>
             </li>

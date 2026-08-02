@@ -11,7 +11,7 @@
 // alert, because the number stops meaning anything.
 
 import { detectStall, isTerminal, resolveJobState, type JobStall } from './job-state.js';
-import type { SubmissionRecord } from './store.js';
+import type { JobSeedOutcome, SubmissionRecord } from './store.js';
 
 export type OperatorAlertKind =
   /** Gate green, waiting for the publish decision — the one thing only a human does. */
@@ -37,7 +37,19 @@ export type OperatorAlertKind =
    * the verdict off the manifest. The game keeps serving either way; the creator has
    * been nudged, and this is the operator's copy of that fact.
    */
-  | 'game_unhealthy';
+  | 'game_unhealthy'
+  /**
+   * Seeded builds are generating drafts that cannot be placed.
+   *
+   * The odd one out here in two ways, both deliberate. It is not about a job — every
+   * affected build ran fine, unseeded, and no creator is waiting on anything — and it is
+   * not produced by walking one record, because "this keeps happening" is the whole
+   * claim. It exists because the failure it names has no other symptom: seeding fails
+   * open, so a broken write credential shows up as builds that are quietly a bit slower
+   * and a Vertex bill that is quietly larger. The first time it happened, it was found
+   * by a person noticing a slow button.
+   */
+  | 'seeding_degraded';
 
 export interface OperatorAlert {
   /**
@@ -47,9 +59,14 @@ export interface OperatorAlert {
    */
   id: string;
   kind: OperatorAlertKind;
-  issueNumber: number;
+  /**
+   * The job this is about. Absent on the kinds that are about the platform rather than
+   * about one job (`seeding_degraded`) — rendering `#0` for those would send an operator
+   * looking for a job that does not exist.
+   */
+  issueNumber?: number;
   title: string;
-  ownerUid: string;
+  ownerUid?: string;
   slug?: string;
   /** When the job entered the situation being alerted about. */
   since: string;
@@ -84,7 +101,20 @@ const KIND_ORDER: Record<OperatorAlertKind, number> = {
   // Last because it is the least urgent thing here: the game still serves, and the
   // creator — not the operator — holds the fix.
   game_unhealthy: 4,
+  // Last: nothing is broken for any creator, and it is the operator's own plumbing.
+  seeding_degraded: 5,
 };
+
+/** How far back a staging failure still counts toward "this is still happening". */
+export const SEEDING_DEGRADED_WINDOW_MS = 24 * 60 * 60_000;
+
+/**
+ * At least this many seeded attempts in the window, all of them unplaced, before saying
+ * so. One failure is a bad minute — GitHub has those — and paging on it would teach the
+ * operator to ignore this channel. Two in a day is a configuration fact, and because a
+ * broken write scope fails every attempt, the second one arrives with the next build.
+ */
+export const SEEDING_DEGRADED_MIN_FAILURES = 2;
 
 /**
  * When the oldest uncollected change request for a job arrived, per job.
@@ -152,6 +182,41 @@ function alertFor(record: SubmissionRecord, now: number, pendingFeedback?: Pendi
   });
   if (!stall) return null;
   return { id: `op-${record.issueNumber}-build_stalled`, kind: 'build_stalled', ...base, stall };
+}
+
+/**
+ * Whether seeded builds are paying for drafts nobody can place.
+ *
+ * Separate from `detectOperatorAlerts` because it is a judgement about a *set* of jobs
+ * rather than about each one, and because its alert has no job to point at. Returns null
+ * when seeding is healthy, off, or simply has not run — absence of evidence is not a
+ * fault, and a platform with no seeded builds must not page anyone.
+ */
+export function detectSeedingDegraded(outcomes: JobSeedOutcome[], at: number): OperatorAlert | null {
+  const since = at - SEEDING_DEGRADED_WINDOW_MS;
+  // Re-filtered here even though the caller queries by the same window: the window is
+  // this module's decision, and a caller that reads a little wide must not widen it.
+  const recent = outcomes.filter((outcome) => {
+    const stamped = Date.parse(outcome.at);
+    return Number.isFinite(stamped) && stamped >= since;
+  });
+
+  const unplaced = recent.filter((outcome) => !outcome.staged);
+  // Every recent attempt has to have failed. A mix means placing works and something
+  // about one draft did not, which is a different problem and not this alert's.
+  if (unplaced.length < SEEDING_DEGRADED_MIN_FAILURES || unplaced.length !== recent.length) return null;
+
+  const oldest = unplaced.reduce((earliest, outcome) => (outcome.at < earliest.at ? outcome : earliest));
+  return {
+    // Per day, not per occurrence: this nags once a day while it is broken rather than
+    // once ever (which a job-scoped id would give) or once per build (which is a pager).
+    id: `op-seeding-degraded-${new Date(at).toISOString().slice(0, 10)}`,
+    kind: 'seeding_degraded',
+    // Phrased as a noun the copy can predicate on: every surface renders an alert as
+    // “{title}” followed by what happened to it.
+    title: `The last ${unplaced.length} seeded builds`,
+    since: oldest.at,
+  };
 }
 
 /**

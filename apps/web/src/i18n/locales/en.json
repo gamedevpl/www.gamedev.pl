@@ -59,6 +59,10 @@
         "title": "A live game failed its health check",
         "body": "“{{title}}” no longer passes on the current engine. The creator has been nudged."
       },
+      "seeding_degraded": {
+        "title": "Seeded builds cannot place their drafts",
+        "body": "{{title}} generated a first draft that could not be committed. Builds still run — check the dispatch credential's write scope."
+      },
       "waitlist_joined": {
         "title": "Someone joined the beta waitlist",
         "body": "“{{title}}” asked to join the closed beta."
