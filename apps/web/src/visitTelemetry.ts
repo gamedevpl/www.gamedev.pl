@@ -67,7 +67,8 @@ export type VisitEvent =
    */
   | { type: 'studio_step'; step: StudioStep; builder: BuilderDimension; detail?: StudioStepDetail }
   | { type: 'editor_step'; step: EditorStep }
-  | { type: 'assist_step'; step: AssistStep };
+  | { type: 'assist_step'; step: AssistStep }
+  | { type: 'remix_step'; step: RemixStep };
 
 /**
  * The creation funnel, in the order a creator meets it.
@@ -163,6 +164,17 @@ export type EditorStep = 'opened' | 'draft_saved' | 'previewed' | 'published';
  * (`rejected` — moderation, quota, or a router that did not answer).
  */
 export type AssistStep = 'asked' | 'applied' | 'handoff' | 'rejected';
+
+/**
+ * The player-side remix loop.
+ *
+ * A real funnel this time, and the first two rungs are the whole thesis: of the
+ * people who open a remix, how many touch anything at all. `tuned` is that
+ * number — the one metric the plan says validates or falsifies the bet for free.
+ * The tail (`shared`, `keep_clicked`) is where retention turns into either a
+ * visitor or a creator.
+ */
+export type RemixStep = 'opened' | 'tuned' | 'asked' | 'applied' | 'handoff' | 'refused' | 'shared' | 'keep_clicked';
 
 const FLUSH_AT = 5;
 const MAX_BATCH = 25;
@@ -480,6 +492,15 @@ export function recordAssistStep(step: AssistStep): void {
   currentSession.record({ type: 'assist_step', step });
 }
 
+let recordedRemixSteps = new Set<string>();
+
+export function recordRemixStep(step: RemixStep): void {
+  if (!currentSession) return;
+  if (recordedRemixSteps.has(step)) return;
+  recordedRemixSteps.add(step);
+  currentSession.record({ type: 'remix_step', step });
+}
+
 /** Test seam: installs a session without touching the DOM. */
 export function setVisitSessionForTesting(session: VisitSession | null): void {
   currentSession = session;
@@ -489,6 +510,7 @@ export function setVisitSessionForTesting(session: VisitSession | null): void {
   recordedStudioSteps = new Set();
   recordedEditorSteps = new Set();
   recordedAssistSteps = new Set();
+  recordedRemixSteps = new Set();
 }
 
 export interface StartVisitTrackingOptions {

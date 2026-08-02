@@ -89,6 +89,8 @@ export interface VisitFunnel {
    * added it, and the panel renders an empty block rather than crashing.
    */
   assisting?: Array<{ step: string; visits: number }>;
+  /** The player-side remix loop. Optional for the same client-outlives-deploy reason. */
+  remixing?: Array<{ step: string; visits: number }>;
   /** How to play card usage — open rate, repeats, and where it was opened. */
   howToPlay: HowToPlayFunnel;
 }

@@ -558,7 +558,8 @@ export interface VisitEvent {
     | 'waitlist_step'
     | 'studio_step'
     | 'editor_step'
-    | 'assist_step';
+    | 'assist_step'
+    | 'remix_step';
   /** Server-anchored instant, derived like `TelemetryEvent.at`. */
   at: string;
   /** Milliseconds from visit start — the trustworthy measure of within-visit timing. */

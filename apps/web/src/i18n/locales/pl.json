@@ -927,5 +927,33 @@
     "neverUsed": "jeszcze nie",
     "revoke": "Odłącz",
     "revoking": "Odłączanie…"
+  },
+  "remix": {
+    "title": "Remiks",
+    "close": "Zamknij",
+    "starting": "Przygotowuję remiks…",
+    "placeholder": "Poproś o zmianę — „niech pies będzie większy”",
+    "inputLabel": "Opisz zmianę w tej grze",
+    "ask": "Poproś",
+    "asking": "Pracuję…",
+    "building": "Wprowadzam zmianę…",
+    "rebuilt": "Gotowe.",
+    "restarted": "Rozgrywka zaczyna się od nowa w nowej wersji.",
+    "applied": "Zastosowano.",
+    "undo": "Cofnij",
+    "refused": "Ta prośba została odrzucona.",
+    "needsCode": "To wymaga zmiany w kodzie — stwórz własną wersję tej gry, żeby pójść dalej.",
+    "couldNotBuild": "Ta zmiana się nie udała. Spróbuj powiedzieć to inaczej.",
+    "tooBig": "To większa zmiana, niż remiks potrafi zrobić.",
+    "quota": "Sporo już zmian — zrób przerwę i wróć później.",
+    "unavailable": "Nie udało się teraz. Suwaki nadal działają.",
+    "nothingTunable": "Ta gra nie ma jeszcze suwaków — ale możesz w nią zagrać.",
+    "share": "Udostępnij moją wersję",
+    "shared": "Skopiowano link.",
+    "sharedWithoutCode": "Skopiowano link — zawiera Twoje ustawienia, ale nie zmianę kodu.",
+    "shareFailed": "Nie udało się utworzyć linku.",
+    "makeItYours": "Zrób ją moją",
+    "conceptSeed": "Gra jak {{slug}}, ale moja własna wersja",
+    "button": "Remiks"
   }
 }

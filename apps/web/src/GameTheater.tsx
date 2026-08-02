@@ -584,7 +584,7 @@ export function GameTheater({
           <BackdropVideo stream={sensing.backdrop.stream} facing={sensing.backdrop.facing} />
         ) : null}
         {'slug' in source ? (
-          <PublishedGameFrame key={source.slug} slug={source.slug} title={title} frameRef={frameRef} embed />
+          <PublishedGameFrame key={source.slug} slug={source.slug} title={title} frameRef={frameRef} embed remixable />
         ) : (
           <GameFrame title={title} html={source.html} frameRef={frameRef} embed />
         )}

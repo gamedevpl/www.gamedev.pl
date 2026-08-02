@@ -37,6 +37,17 @@ const EDITOR_LABELS: Record<string, string> = {
   published: 'published changes',
 };
 
+const REMIX_LABELS: Record<string, string> = {
+  opened: 'opened a remix',
+  tuned: 'moved a slider',
+  asked: 'typed a request',
+  applied: 'got a change applied',
+  handoff: 'told it needs more',
+  refused: 'was refused',
+  shared: 'shared their version',
+  keep_clicked: 'clicked "make it mine"',
+};
+
 const ASSIST_LABELS: Record<string, string> = {
   asked: 'typed a tuning request',
   applied: 'got a change applied',
@@ -237,6 +248,42 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
                     <td>{WAITLIST_LABELS[row.step] ?? row.step}</td>
                     <td className="num">{row.visits}</td>
                     <td className="num">{percent(row.visits, funnel.waitlist[0]?.visits ?? 0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="funnel-block">
+          <h3>Remix</h3>
+          {(funnel.remixing ?? []).every((row) => row.visits === 0) ? (
+            <p className="health-empty">Nobody opened a remix in this window.</p>
+          ) : (
+            <table className="health-table">
+              <thead>
+                <tr>
+                  <th scope="col">Step</th>
+                  <th scope="col" className="num">
+                    Visits
+                  </th>
+                  <th scope="col" className="num">
+                    Of openers
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {(funnel.remixing ?? []).map((row) => (
+                  <tr key={row.step}>
+                    <td>{REMIX_LABELS[row.step] ?? row.step}</td>
+                    <td className="num">{row.visits}</td>
+                    {/*
+                     * The second row against the first is the whole thesis: of the
+                     * players handed a slider, how many touch it. Everything below
+                     * is read the same way rather than as a strict ladder — sharing
+                     * without typing is a normal path, not a leak.
+                     */}
+                    <td className="num">{percent(row.visits, funnel.remixing?.[0]?.visits ?? 0)}</td>
                   </tr>
                 ))}
               </tbody>

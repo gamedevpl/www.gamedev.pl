@@ -19,6 +19,8 @@ import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
 import { registerCreatorStudioRoutes } from './creator-studio.js';
 import { registerEditorRoutes } from './editor-drafts.js';
 import { VertexEditorAssistant, type EditorAssistant } from './editor-assist.js';
+import { VertexCodeLane } from './code-lane.js';
+import { registerRemixRoutes } from './remix.js';
 import { createGenerator } from './generator.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { registerContactRoutes, type ContactRoutesOptions } from './contact.js';
@@ -509,6 +511,22 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // inside the route, so the flag is the only switch.
     assistant: options.editorAssistant ?? new VertexEditorAssistant(),
     onSourcesDelivered: gateTrigger,
+  });
+
+  /**
+   * Remix — the player-facing half of live editing. Anonymous by design (no
+   * session required to bend a game), ephemeral by design (nothing here can
+   * publish), and gated by its own two flags: EDITOR_ASSIST for the tuning
+   * router it shares with the Studio, CODE_LANE for real source edits.
+   */
+  await registerRemixRoutes(app, {
+    store,
+    gamesStore,
+    githubClient: submissionSeams.githubClient ?? undefined,
+    publishedRef: process.env.GAMES_PUBLISHED_REF ?? 'main',
+    assistant: options.editorAssistant ?? new VertexEditorAssistant(),
+    codeLane: new VertexCodeLane(),
+    contentChecker,
   });
 
   /**

@@ -923,5 +923,33 @@
     "neverUsed": "not yet",
     "revoke": "Disconnect",
     "revoking": "Disconnecting…"
+  },
+  "remix": {
+    "title": "Remix",
+    "close": "Close",
+    "starting": "Starting your remix…",
+    "placeholder": "Ask for a change — “make the dog bigger”",
+    "inputLabel": "Describe a change to this game",
+    "ask": "Ask",
+    "asking": "Working…",
+    "building": "Applying your change…",
+    "rebuilt": "Done.",
+    "restarted": "The run starts again on the new version.",
+    "applied": "Applied.",
+    "undo": "Undo",
+    "refused": "That request was refused.",
+    "needsCode": "That needs a real code change — make this game your own to go further.",
+    "couldNotBuild": "That change didn't work out. Try saying it a different way.",
+    "tooBig": "That's a bigger change than a remix can make.",
+    "quota": "You've made a lot of changes — take a break and try later.",
+    "unavailable": "Couldn't do that right now. The sliders still work.",
+    "nothingTunable": "This game has no sliders yet — but you can still play it.",
+    "share": "Share my version",
+    "shared": "Link copied.",
+    "sharedWithoutCode": "Link copied — it carries your settings, not the code change.",
+    "shareFailed": "Couldn't make a link for that.",
+    "makeItYours": "Make it mine",
+    "conceptSeed": "A game like {{slug}}, but my own version",
+    "button": "Remix"
   }
 }
