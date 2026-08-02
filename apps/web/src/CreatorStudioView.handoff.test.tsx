@@ -101,6 +101,14 @@ describe('CreatorStudioView publish→improve handoff', () => {
           kimi: 'npx mcp-remote https://example.test/api/mcp',
           cli: 'curl https://example.test/api/mcp',
         },
+        installLinks: {
+          cursor:
+            'cursor://anysphere.cursor-deeplink/mcp/install?name=gamedevpl&config=' +
+            btoa(JSON.stringify({ url: 'https://example.test/api/mcp' })),
+          vscode: `vscode:mcp/install?${encodeURIComponent(
+            JSON.stringify({ name: 'gamedevpl', type: 'http', url: 'https://example.test/api/mcp' }),
+          )}`,
+        },
         kickoffPrompt:
           'Build "TV Tycoon" for gamedev.pl.\nStart with the gamedevpl tool, slug: tv-tycoon.\nstart returns your workflow; after gate green the round is done.',
         mcpUrl: 'https://example.test/api/mcp',

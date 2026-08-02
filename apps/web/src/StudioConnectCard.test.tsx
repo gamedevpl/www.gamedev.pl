@@ -14,16 +14,23 @@ async function flush() {
 
 const FULL_KEY = 'YzEu' + 'b'.repeat(120);
 const MASKED = 'Authorization: Bearer ····9a10e';
+const MCP_URL = 'https://www.gamedev.pl/api/mcp';
+/** Credential-free deep links — server URL only (mirrors apps/api mcp-install-links). */
+const INSTALL_LINKS = {
+  cursor:
+    'cursor://anysphere.cursor-deeplink/mcp/install?name=gamedevpl&config=' + btoa(JSON.stringify({ url: MCP_URL })),
+  vscode: `vscode:mcp/install?${encodeURIComponent(JSON.stringify({ name: 'gamedevpl', type: 'http', url: MCP_URL }))}`,
+};
 
 const payload = {
   installSnippets: {
-    claudeCode: `claude mcp add --transport http gamedevpl https://www.gamedev.pl/api/mcp --header "${MASKED}"`,
-    codex: `[mcp_servers.gamedevpl]\nurl = "https://www.gamedev.pl/api/mcp"\nhttp_headers = { Authorization = "Bearer ····9a10e" }`,
+    claudeCode: `claude mcp add --transport http gamedevpl ${MCP_URL} --header "${MASKED}"`,
+    codex: `[mcp_servers.gamedevpl]\nurl = "${MCP_URL}"\nhttp_headers = { Authorization = "Bearer ····9a10e" }`,
     cursor: JSON.stringify(
       {
         mcpServers: {
           gamedevpl: {
-            url: 'https://www.gamedev.pl/api/mcp',
+            url: MCP_URL,
             headers: { Authorization: 'Bearer ····9a10e' },
           },
         },
@@ -31,12 +38,13 @@ const payload = {
       null,
       2,
     ),
-    kimi: `npx -y mcp-remote https://www.gamedev.pl/api/mcp\n# set header: ${MASKED}`,
-    cli: `curl -sS -X POST https://www.gamedev.pl/api/mcp -H "${MASKED}"`,
+    kimi: `npx -y mcp-remote ${MCP_URL}\n# set header: ${MASKED}`,
+    cli: `curl -sS -X POST ${MCP_URL} -H "${MASKED}"`,
   },
+  installLinks: INSTALL_LINKS,
   kickoffPrompt:
     'Build "Sky Dodge" for gamedev.pl.\nStart with the gamedevpl tool, slug: sky-dodge.\nstart returns your workflow; after gate green the round is done.',
-  mcpUrl: 'https://www.gamedev.pl/api/mcp',
+  mcpUrl: MCP_URL,
   authorizationHeader: `Authorization: Bearer ${FULL_KEY}`,
   authorizationHeaderMasked: MASKED,
   fingerprint: '9a10e',
@@ -116,6 +124,19 @@ describe('StudioConnectCard', () => {
     expect(container.textContent).toMatch(/Ends in 9a10e/);
     expect(container.textContent?.toLowerCase()).not.toMatch(/\btoken\b/);
     expect(container.querySelector('.studio-connect-waiting')).not.toBeNull();
+
+    const cursorLink = container.querySelector<HTMLAnchorElement>('[data-testid="connect-install-cursor"]');
+    const vscodeLink = container.querySelector<HTMLAnchorElement>('[data-testid="connect-install-vscode"]');
+    expect(cursorLink?.getAttribute('href')).toBe(INSTALL_LINKS.cursor);
+    expect(vscodeLink?.getAttribute('href')).toBe(INSTALL_LINKS.vscode);
+    // REGRESSION: deep-link hrefs must never embed the creator key (or any Authorization material).
+    expect(cursorLink?.getAttribute('href')).not.toContain(FULL_KEY);
+    expect(vscodeLink?.getAttribute('href')).not.toContain(FULL_KEY);
+    expect(cursorLink?.getAttribute('href')).not.toMatch(/Authorization|Bearer|headers/i);
+    expect(vscodeLink?.getAttribute('href')).not.toMatch(/Authorization|Bearer|headers/i);
+    // Hand-copy config path stays for clients without a deep link.
+    expect(container.querySelector('[data-testid="connect-config-snippet"]')).not.toBeNull();
+    expect(container.textContent).toContain('Claude Code');
 
     await act(async () => root.unmount());
   });
@@ -339,6 +360,67 @@ describe('StudioConnectCard', () => {
           }),
         ]),
       );
+    } finally {
+      setVisitSessionForTesting(null);
+      await act(async () => root.unmount());
+    }
+  });
+
+  it('emits connect_deeplink studio telemetry for one-click install clicks', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    const events: WireVisitEvent[] = [];
+    const session = new VisitSession('v-deeplink', 0, (body) => {
+      events.push(...body.events);
+    });
+    setVisitSessionForTesting(session);
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    try {
+      await act(async () => {
+        root.render(createElement(StudioConnectCard, { token: 'status-tok' }));
+        await flush();
+      });
+      await act(async () => {
+        await flush();
+      });
+
+      const cursor = container.querySelector<HTMLAnchorElement>('[data-testid="connect-install-cursor"]');
+      const vscode = container.querySelector<HTMLAnchorElement>('[data-testid="connect-install-vscode"]');
+      expect(cursor).toBeTruthy();
+      expect(vscode).toBeTruthy();
+
+      await act(async () => {
+        cursor?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flush();
+      });
+      await act(async () => {
+        vscode?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flush();
+      });
+      session.flush();
+
+      expect(events).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'studio_step',
+            step: 'connect_deeplink',
+            builder: 'self',
+            detail: 'cursor',
+          }),
+          expect.objectContaining({
+            type: 'studio_step',
+            step: 'connect_deeplink',
+            builder: 'self',
+            detail: 'vscode',
+          }),
+        ]),
+      );
+      // Deeplink clicks must not be recorded as connect_copied.
+      expect(events.some((event) => event.type === 'studio_step' && event.step === 'connect_copied')).toBe(false);
     } finally {
       setVisitSessionForTesting(null);
       await act(async () => root.unmount());

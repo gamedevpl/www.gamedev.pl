@@ -350,6 +350,8 @@ describe('recordStudioStep', () => {
     recordStudioStep('builder_chosen', 'platform');
     recordStudioStep('connect_copied', 'self', 'install');
     recordStudioStep('connect_copied', 'self', 'kickoff');
+    recordStudioStep('connect_deeplink', 'self', 'cursor');
+    recordStudioStep('connect_deeplink', 'self', 'vscode');
     now = 12_000;
     recordStudioStep('agent_signaled', 'self');
     recordStudioStep('agent_signaled', 'self');
@@ -373,6 +375,18 @@ describe('recordStudioStep', () => {
         step: 'connect_copied',
         builder: 'self',
         detail: 'kickoff',
+      }),
+      expect.objectContaining({
+        type: 'studio_step',
+        step: 'connect_deeplink',
+        builder: 'self',
+        detail: 'cursor',
+      }),
+      expect.objectContaining({
+        type: 'studio_step',
+        step: 'connect_deeplink',
+        builder: 'self',
+        detail: 'vscode',
       }),
       expect.objectContaining({
         type: 'studio_step',

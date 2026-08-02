@@ -62,14 +62,33 @@ const WaitlistStepSchema = z.enum(['cta_clicked', 'joined']);
  * Studio / self-build funnel (BY-08). Sibling to create steps — not ordered with them.
  * Reaches a grouping key; closed enum on an open endpoint.
  */
-const StudioStepSchema = z.enum(['builder_chosen', 'connect_copied', 'agent_signaled', 'gate_verdict', 'round_opened']);
+const StudioStepSchema = z.enum([
+  'builder_chosen',
+  'connect_copied',
+  'connect_deeplink',
+  'agent_signaled',
+  'gate_verdict',
+  'round_opened',
+]);
 /** Platform vs creator's own agent. Optional on create_step; required on studio_step. */
 const BuilderDimensionSchema = z.enum(['platform', 'self']);
 /**
  * Closed detail for studio steps that carry one. Optional so steps without a detail
  * (builder choice, first agent signal) stay valid.
+ * `header` = creator-key copy (BY-27a); `cursor` / `vscode` = one-click install (BY-18c).
  */
-const StudioStepDetailSchema = z.enum(['install', 'kickoff', 'green', 'red', 'kit_outdated', 'creator', 'agent']);
+const StudioStepDetailSchema = z.enum([
+  'install',
+  'kickoff',
+  'header',
+  'cursor',
+  'vscode',
+  'green',
+  'red',
+  'kit_outdated',
+  'creator',
+  'agent',
+]);
 /** EditorKit's revision funnel. No slug: the visit stream stays unjoinable. */
 const EditorStepSchema = z.enum(['opened', 'draft_saved', 'previewed', 'published']);
 /** The NL tuning lane's outcomes — a dimension beside the editing funnel, not a rung in it. */
