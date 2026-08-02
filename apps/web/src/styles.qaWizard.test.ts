@@ -94,4 +94,18 @@ describe('the creator confirm wizard as a full-screen overlay', () => {
     expect(wizard).toMatch(/height:\s*100vh/);
     expect(wizard).toMatch(/height:\s*100dvh/);
   });
+
+  /**
+   * dvh above covers the address bar; it does not cover the on-screen keyboard, which
+   * shrinks only the visual viewport. CreatorQA adds this class when the browser
+   * exposes that API and writes the measurements in. The `var()` fallbacks are the
+   * contract with the effect: the rule has to be inert until values arrive, or the
+   * first paint collapses the overlay to nothing.
+   */
+  it('hands over to the measured viewport when the browser reports one', () => {
+    const tracked = rule('.qa-wizard.is-viewport-tracked');
+
+    expect(tracked).toMatch(/height:\s*var\(--qa-viewport-height,\s*100dvh\)/);
+    expect(tracked).toMatch(/transform:\s*translateY\(var\(--qa-viewport-offset,\s*0px\)\)/);
+  });
 });

@@ -4183,6 +4183,18 @@ body.player-open {
   background: var(--bg, #0d1117);
 }
 
+/* Added by CreatorQA once it finds `window.visualViewport`, which is the only thing
+   that measures the on-screen keyboard — dvh above tracks the address bar and stops
+   there. The custom properties are written straight to the node on every viewport
+   event; the fallbacks in `var()` keep this rule harmless if one has yet to land. */
+.qa-wizard.is-viewport-tracked {
+  height: var(--qa-viewport-height, 100dvh);
+  /* iOS scrolls the visual viewport to reveal a focused input even with the body
+     locked, and a fixed box does not follow it. This puts the shell back over the part
+     of the screen the creator can actually see. */
+  transform: translateY(var(--qa-viewport-offset, 0px));
+}
+
 .qa-wizard-header {
   flex: none;
   display: flex;

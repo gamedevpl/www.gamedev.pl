@@ -130,6 +130,46 @@ export function CreatorQA({
   }, []);
 
   /**
+   * Size the shell against the visual viewport, the only one that knows about the
+   * on-screen keyboard.
+   *
+   * The `100dvh` in the stylesheet tracks browser chrome — the retracting address bar —
+   * and stops there. iOS shrinks only the *visual* viewport for the keyboard and leaves
+   * the layout viewport, which is what a `position: fixed` box is sized against, at full
+   * height. Two of these stages are a text field, so without this the footer carrying
+   * Back and Next sits behind the keyboard for much of the flow, and the creator has to
+   * dismiss it to move on.
+   *
+   * `offsetTop` matters as much as height: iOS scrolls the visual viewport to reveal a
+   * focused input even with the body locked, and a fixed box does not follow it.
+   *
+   * Written straight to the node rather than through state — `scroll` fires per frame
+   * while the keyboard animates, and re-rendering the whole wizard on each one would
+   * trade a layout bug for a jank bug. dvh stays in the stylesheet as the fallback for
+   * browsers without the API.
+   */
+  const [tracksViewport, setTracksViewport] = useState(false);
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const root = wizardRef.current;
+    if (!viewport || !root) return;
+
+    const sync = () => {
+      root.style.setProperty('--qa-viewport-height', `${viewport.height}px`);
+      root.style.setProperty('--qa-viewport-offset', `${viewport.offsetTop}px`);
+    };
+
+    sync();
+    setTracksViewport(true);
+    viewport.addEventListener('resize', sync);
+    viewport.addEventListener('scroll', sync);
+    return () => {
+      viewport.removeEventListener('resize', sync);
+      viewport.removeEventListener('scroll', sync);
+    };
+  }, []);
+
+  /**
    * Keeps Tab inside the overlay.
    *
    * `aria-modal` tells assistive tech this is modal; it does not stop the browser
@@ -275,7 +315,7 @@ export function CreatorQA({
 
   return createPortal(
     <div
-      className="qa-wizard"
+      className={`qa-wizard${tracksViewport ? ' is-viewport-tracked' : ''}`}
       role="dialog"
       aria-modal="true"
       aria-label={t(questions.length > 0 ? 'qa.title' : 'qa.titleNameOnly')}
