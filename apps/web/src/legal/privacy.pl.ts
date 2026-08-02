@@ -173,9 +173,9 @@ export const privacyPl: LegalDocument = {
         {
           kind: 'p',
           text:
-            'Niektóre gry mogą pokazać obraz z kamery urządzenia pod powierzchnią gry. Ten obraz jest wyświetlany ' +
-            'tylko w przeglądarce na czas sesji; nigdy nie jest nagrywany, nigdy nie jest przesyłany i nigdy nie ' +
-            'trafia do powyższych statystyk rozgrywki.',
+            'Niektóre gry mogą pokazać obraz z kamery urządzenia pod powierzchnią gry, a niektóre mogą oszacować ' +
+            'pozycję dłoni do sterowania. To przetwarzanie odbywa się tylko w przeglądarce na czas sesji; klatki ' +
+            'i punkty dłoni nigdy nie są nagrywane, przesyłane ani włączane do powyższych statystyk rozgrywki.',
         },
       ],
     },

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
+import { landmarksFromVideo, loadHandLandmarker } from './handLandmarker.js';
+import { createHandVerbState, sampleHandVerbs, type HandAim } from './handVerbs.js';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
 import { tiltFromOrientation } from './useDeviceTilt.js';
 
@@ -15,6 +17,10 @@ import { tiltFromOrientation } from './useDeviceTilt.js';
  * boolean `backdrop` on `sensing:state`. The game paints a stand-in when false and
  * clears transparent when true. Camera never auto-starts; a theater chrome tap is
  * required every session.
+ *
+ * Phase 1 — hand verbs: when a game asks for `hand`, the shell runs MediaPipe on that
+ * same camera stream and posts clamped `sensing:hand` aim + `sensing:act` pinch edges.
+ * Landmarks never enter the iframe.
  *
  * Shared properties of both phases:
  *
@@ -121,6 +127,17 @@ export type SensingBackdrop = {
   stop: () => void;
 };
 
+export type SensingHand = {
+  /** Game asked for hand verbs. */
+  engaged: boolean;
+  /** Landmarker loaded and at least one hand frame decoded. */
+  tracking: boolean;
+  /** Last aim posted to the game — theater debug overlay only. */
+  aim: HandAim | null;
+  /** Millis of the last pinch edge (0 if none). */
+  lastPinchAt: number;
+};
+
 export type SensingBridge = {
   /** A game in the frame has asked for tilt. Until then, render nothing tilt-related. */
   engaged: boolean;
@@ -134,6 +151,8 @@ export type SensingBridge = {
   request: () => void;
   /** Camera-backdrop half; `engaged` is false until a game asks for it. */
   backdrop: SensingBackdrop;
+  /** Hand-verb half (Phase 1 spike). */
+  hand: SensingHand;
 };
 
 function cameraSupported(): boolean {
@@ -161,6 +180,10 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
   const [backdropLive, setBackdropLive] = useState(false);
   const [backdropFacing, setBackdropFacing] = useState<BackdropFacing>('user');
   const [backdropStream, setBackdropStream] = useState<MediaStream | null>(null);
+  const [handEngaged, setHandEngaged] = useState(false);
+  const [handTracking, setHandTracking] = useState(false);
+  const [handAim, setHandAim] = useState<HandAim | null>(null);
+  const [handLastPinchAt, setHandLastPinchAt] = useState(0);
 
   const tiltActiveRef = useRef(false);
   const backdropLiveRef = useRef(false);
@@ -172,6 +195,8 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
   const acquireGenRef = useRef(0);
   const wantsTiltRef = useRef(false);
   const wantsBackdropRef = useRef(false);
+  const wantsHandRef = useRef(false);
+  const handReadyRef = useRef(false);
 
   useEffect(() => {
     const ctor = orientationCtor();
@@ -189,6 +214,7 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
         t: 'sensing:state',
         active: tiltActiveRef.current,
         backdrop: backdropLiveRef.current,
+        hand: handReadyRef.current,
       },
       '*',
     );
@@ -228,7 +254,8 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
   }, []);
 
   const startBackdrop = useCallback(() => {
-    if (!wantsBackdropRef.current || !cameraSupported()) return;
+    // Backdrop chrome and/or hand verbs both need the same camera stream.
+    if ((!wantsBackdropRef.current && !wantsHandRef.current) || !cameraSupported()) return;
     if (streamRef.current || acquiringRef.current) return;
     acquiringRef.current = true;
     const gen = acquireGenRef.current;
@@ -246,7 +273,11 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
       .then((stream) => {
         acquiringRef.current = false;
         // Theater closed, feature dropped, tab hidden, or a newer stop invalidated us.
-        if (gen !== acquireGenRef.current || !wantsBackdropRef.current || document.visibilityState === 'hidden') {
+        if (
+          gen !== acquireGenRef.current ||
+          (!wantsBackdropRef.current && !wantsHandRef.current) ||
+          document.visibilityState === 'hidden'
+        ) {
           for (const track of stream.getTracks()) track.stop();
           return;
         }
@@ -282,16 +313,29 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
 
       const wantsTilt = message.features.includes('tilt');
       const wantsBackdrop = message.features.includes('backdrop');
+      const wantsHand = message.features.includes('hand');
       // Unknown-only hellos are noise before any engagement. Once a game has said
-      // hello, a later hello is authoritative — including one that drops tilt/backdrop.
-      if (!wantsTilt && !wantsBackdrop && !wantsTiltRef.current && !wantsBackdropRef.current) {
+      // hello, a later hello is authoritative — including one that drops features.
+      if (
+        !wantsTilt &&
+        !wantsBackdrop &&
+        !wantsHand &&
+        !wantsTiltRef.current &&
+        !wantsBackdropRef.current &&
+        !wantsHandRef.current
+      ) {
         return;
       }
 
       wantsTiltRef.current = wantsTilt;
-      wantsBackdropRef.current = wantsBackdrop;
+      // Hand tracking needs the same camera stream; keep the "camera wanted" ref true
+      // for either backdrop or hand so getUserMedia resolve does not drop the tracks.
+      wantsBackdropRef.current = wantsBackdrop || wantsHand;
+      wantsHandRef.current = wantsHand;
       setTiltEngaged(wantsTilt);
-      if (wantsBackdrop) {
+      setHandEngaged(wantsHand);
+      // Hand control needs a camera stream; engage backdrop chrome when hand asks alone.
+      if (wantsBackdrop || wantsHand) {
         const facing = message.facing ?? 'user';
         backdropFacingRef.current = facing;
         setBackdropFacing(facing);
@@ -388,6 +432,74 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
     };
   }, [listening, frameRef, postState]);
 
+  // Phase 1 spike: Hand Landmarker on the live backdrop stream → aim + pinch verbs.
+  useEffect(() => {
+    if (!handEngaged || !backdropLive || !backdropStream) {
+      handReadyRef.current = false;
+      setHandTracking(false);
+      setHandAim(null);
+      return;
+    }
+
+    let cancelled = false;
+    let raf = 0;
+    /** Sample the model ~30 Hz — verb posts are throttled further in handVerbs. */
+    const DETECT_MIN_MS = 33;
+    let lastDetectAt = 0;
+    const verbState = createHandVerbState();
+    const video = document.createElement('video');
+    video.playsInline = true;
+    video.muted = true;
+    video.setAttribute('playsinline', 'true');
+    video.srcObject = backdropStream;
+    void video.play().catch(() => undefined);
+
+    function postToGame(payload: Record<string, unknown>) {
+      frameRef.current?.contentWindow?.postMessage({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload }, '*');
+    }
+
+    void loadHandLandmarker().then((landmarker) => {
+      if (cancelled || !landmarker) return;
+      const mirror = backdropFacingRef.current === 'user';
+
+      const tick = () => {
+        if (cancelled) return;
+        const now = performance.now();
+        if (now - lastDetectAt >= DETECT_MIN_MS) {
+          lastDetectAt = now;
+          const landmarks = landmarksFromVideo(landmarker, video, now);
+          const sample = sampleHandVerbs(verbState, landmarks, now, { mirror });
+          if (landmarks && !handReadyRef.current) {
+            handReadyRef.current = true;
+            setHandTracking(true);
+            postState();
+          }
+          if (sample.aim) {
+            setHandAim(sample.aim);
+            postToGame({ t: 'sensing:hand', x: sample.aim.x, y: sample.aim.y });
+          }
+          if (sample.pinchEdge) {
+            setHandLastPinchAt(now);
+            postToGame({ t: 'sensing:act', name: 'banish' });
+          }
+        }
+        raf = requestAnimationFrame(tick);
+      };
+      raf = requestAnimationFrame(tick);
+    });
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      video.pause();
+      video.srcObject = null;
+      handReadyRef.current = false;
+      setHandTracking(false);
+      setHandAim(null);
+      postState();
+    };
+  }, [handEngaged, backdropLive, backdropStream, frameRef, postState]);
+
   return {
     engaged: tiltEngaged,
     supported,
@@ -402,6 +514,12 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
       stream: backdropStream,
       start: startBackdrop,
       stop: stopBackdrop,
+    },
+    hand: {
+      engaged: handEngaged,
+      tracking: handTracking,
+      aim: handAim,
+      lastPinchAt: handLastPinchAt,
     },
   };
 }
