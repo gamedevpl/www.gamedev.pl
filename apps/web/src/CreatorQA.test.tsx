@@ -420,4 +420,60 @@ describe('CreatorQA', () => {
     await act(async () => root.unmount());
     expect(document.body.style.overflow).not.toBe('hidden');
   });
+
+  it('names the exit even when its label is hidden on a narrow screen', async () => {
+    // Below 560px the CSS hides the span, and the icon is decorative — without an
+    // explicit label that leaves a phone user with an unnamed button as the only
+    // way back to editing.
+    const root = await render({ ...baseProps, onSubmitWithConcept: vi.fn(), onCancel: vi.fn() });
+
+    expect(find('.qa-wizard-exit')?.getAttribute('aria-label')).toBe('Back to editing');
+
+    await act(async () => root.unmount());
+  });
+
+  it('keeps Tab inside the overlay', async () => {
+    // aria-modal tells assistive tech this is modal; it does not stop the browser
+    // tabbing on into the app shell, which is still focusable behind the overlay.
+    const outside = document.createElement('button');
+    outside.id = 'behind-the-wizard';
+    document.body.appendChild(outside);
+
+    const root = await render({ ...baseProps, onSubmitWithConcept: vi.fn(), onCancel: vi.fn() });
+
+    const focusable = findAll<HTMLElement>(
+      '.qa-wizard a[href], .qa-wizard button:not([disabled]), .qa-wizard input:not([disabled])',
+    );
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+
+    // Forward off the end wraps to the top rather than escaping to the page behind.
+    last.focus();
+    await act(async () => {
+      last.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+      await flushEffects();
+    });
+    expect(document.activeElement).toBe(first);
+
+    // And backwards off the front wraps to the end.
+    await act(async () => {
+      first.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true }));
+      await flushEffects();
+    });
+    expect(document.activeElement).toBe(last);
+
+    await act(async () => root.unmount());
+  });
+
+  it('gives focus back to whatever opened it', async () => {
+    const opener = document.createElement('button');
+    document.body.appendChild(opener);
+    opener.focus();
+
+    const root = await render({ ...baseProps, onSubmitWithConcept: vi.fn() });
+    expect(document.activeElement).not.toBe(opener);
+
+    await act(async () => root.unmount());
+    expect(document.activeElement).toBe(opener);
+  });
 });

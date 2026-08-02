@@ -53,6 +53,9 @@ interface CreatorQAProps {
  */
 type Stage = { kind: 'name' } | { kind: 'question'; question: QAQuestion } | { kind: 'builder' } | { kind: 'review' };
 
+/** Tab stops the wizard is allowed to cycle between; the stage heading (tabindex -1) is not one. */
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 /**
  * The confirm step, as a full-screen wizard: one decision per screen.
  *
@@ -104,6 +107,7 @@ export function CreatorQA({
   const stage = stages[stepIndex];
   const reviewIndex = stages.length - 1;
 
+  const wizardRef = useRef<HTMLDivElement | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const headingRef = useRef<HTMLHeadingElement | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
@@ -117,6 +121,42 @@ export function CreatorQA({
       document.body.style.overflow = previous;
     };
   }, []);
+
+  // Whatever had focus when the wizard opened gets it back when the wizard closes,
+  // rather than dropping the caret at the top of a page the creator did not move to.
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    return () => opener?.focus?.();
+  }, []);
+
+  /**
+   * Keeps Tab inside the overlay.
+   *
+   * `aria-modal` tells assistive tech this is modal; it does not stop the browser
+   * tabbing on into the app shell underneath, which is still fully focusable behind a
+   * covering element. Without this, tabbing past the last control lands on the hero's
+   * own prompt box and build button — the ones this screen exists to take over from.
+   */
+  const handleTabKey = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Tab') return;
+    const root = wizardRef.current;
+    if (!root) return;
+    const focusable = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE));
+    if (focusable.length === 0) return;
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = document.activeElement;
+    const outside = !root.contains(active);
+
+    if (event.shiftKey && (active === first || outside)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && (active === last || outside)) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
 
   // Every stage starts at its own top, and the new heading takes focus so a screen
   // reader announces the question rather than leaving the caret on the button that
@@ -229,6 +269,8 @@ export function CreatorQA({
       role="dialog"
       aria-modal="true"
       aria-label={t(questions.length > 0 ? 'qa.title' : 'qa.titleNameOnly')}
+      ref={wizardRef}
+      onKeyDown={handleTabKey}
     >
       <header className="qa-wizard-header">
         <p className="qa-wizard-step" aria-live="polite">
@@ -236,7 +278,15 @@ export function CreatorQA({
         </p>
         {onCancel && (
           // This dismisses the wizard and drops the pending spec — it does *not* submit.
-          <button type="button" className="btn-secondary qa-wizard-exit" onClick={onCancel} disabled={submitting}>
+          <button
+            type="button"
+            className="btn-secondary qa-wizard-exit"
+            onClick={onCancel}
+            disabled={submitting}
+            // The label is hidden on narrow screens and the icon is decorative, which
+            // left the only way back to editing as an unnamed button on a phone.
+            aria-label={t('qa.backToEditing')}
+          >
             <PixelIcon name="close" size={12} />
             <span>{t('qa.backToEditing')}</span>
           </button>

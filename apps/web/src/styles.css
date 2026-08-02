@@ -4078,7 +4078,12 @@ body.player-open {
 .qa-wizard {
   position: fixed;
   inset: 0;
-  z-index: 90;
+  /* Above the sticky .app-header (100), which otherwise paints over this wizard's own
+     header and swallows its step label and exit control, and above the install and
+     update banners (900), which are fixed to the bottom and would cover the footer
+     navigation. Still below .modal-backdrop (10000), so a sign-in prompt can appear
+     over the wizard rather than under it. */
+  z-index: 1200;
   display: flex;
   flex-direction: column;
   background: var(--bg, #0d1117);
@@ -5435,8 +5440,10 @@ body.player-open {
 }
 
 .qa-wizard-footer .qa-primary {
-  /* Both auto margins: the shortcut sits centered between Back and the primary, and
-     with either neighbour absent the primary still lands hard right. */
+  /* This and .qa-shortcut both take an auto left margin, so flexbox splits the free
+     space equally between them: the shortcut lands midway between Back and the
+     primary rather than against either. With the shortcut absent — or Back, on the
+     first stage — the primary still ends up hard right. */
   margin-left: auto;
 }
 
