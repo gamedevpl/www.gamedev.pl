@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { parseControls, readReportedControls, resolveControlRows } from './howToPlay.js';
+import { isMetaControlRow, parseControls, readReportedControls, resolveControlRows } from './howToPlay.js';
+
+describe('isMetaControlRow', () => {
+  it('recognizes reserved Goal / Scoring / Mode labels in EN and PL', () => {
+    expect(isMetaControlRow({ keys: 'Goal', action: 'Survive' })).toBe(true);
+    expect(isMetaControlRow({ keys: 'Cel', action: 'Przetrwaj' })).toBe(true);
+    expect(isMetaControlRow({ keys: 'Scoring', action: 'Points' })).toBe(true);
+    expect(isMetaControlRow({ keys: 'Punkty', action: 'Punkty' })).toBe(true);
+    expect(isMetaControlRow({ keys: 'Mode: Race', action: 'Lap' })).toBe(true);
+    expect(isMetaControlRow({ keys: 'Tryb: Wyścig', action: 'Okrążenie' })).toBe(true);
+    expect(isMetaControlRow({ keys: '← →', action: 'Move' })).toBe(false);
+    expect(isMetaControlRow({ keys: 'M', action: 'Mute' })).toBe(false);
+  });
+});
 
 describe('parseControls', () => {
   it('splits on the semicolon when there is one, keeping commas inside a clause', () => {

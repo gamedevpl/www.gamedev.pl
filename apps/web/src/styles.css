@@ -3698,6 +3698,20 @@ body.player-open {
   text-transform: uppercase;
 }
 
+/* Goal / Scoring / Mode rows — reserved legend labels, not keycaps. */
+.howto-row.is-meta dt {
+  color: var(--turquoise);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+}
+
+.howto-row.is-meta dd {
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
 /* A clause with no "X to Y" shape keeps its own line rather than being guessed apart. */
 .howto-row.is-wide dt {
   position: absolute;

@@ -35,6 +35,20 @@ export interface ControlRow {
   action: string;
 }
 
+/**
+ * Reserved legend labels (EN + PL) that are not keys — Goal, Scoring, Mode:….
+ *
+ * Matched on the already-localized `keys` string the bridge scraped, so either locale
+ * still gets the meta treatment on the host card. Keep in sync with the games-repo
+ * convention in docs/how-to-play-plan.md.
+ */
+const META_LABEL = /^(goal|cel|scoring|punkty|mode\s*:|tryb\s*:)/i;
+
+/** True when a row's term is a reserved how-to-play label, not a keycap. */
+export function isMetaControlRow(row: ControlRow): boolean {
+  return META_LABEL.test(row.keys.trim());
+}
+
 const SEPARATORS = [' to ', ' for '];
 
 function splitClause(clause: string): ControlRow {

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import type { CatalogTouch } from './catalog.js';
 import { PixelIcon } from './PixelIcon.js';
-import type { ControlRow } from './howToPlay.js';
+import { isMetaControlRow, type ControlRow } from './howToPlay.js';
 
 type HowToPlayPanelProps = {
   open: boolean;
@@ -138,7 +138,10 @@ export function HowToPlayPanel({
           {rows.map((row, index) => (
             // Keyed by index on purpose: a controls string may repeat a clause, and two
             // long clauses can truncate to the same text, so the row text is not unique.
-            <div className={row.keys ? 'howto-row' : 'howto-row is-wide'} key={index}>
+            <div
+              className={!row.keys ? 'howto-row is-wide' : isMetaControlRow(row) ? 'howto-row is-meta' : 'howto-row'}
+              key={index}
+            >
               {/* A clause with no key/action shape still gets a term, hidden visually but
                   read aloud: a `dl` group that is a definition with nothing being defined
                   is invalid, and a screen reader announces it orphaned. */}
