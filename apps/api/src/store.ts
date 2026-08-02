@@ -1119,7 +1119,8 @@ export interface AccessTokenRecord {
  *
  * The HMAC opener itself is never stored — only the generation that revokes it.
  * Round close does not bump `keyGeneration`; only an explicit creator rotate does.
- * `allowAgentOpenRounds` was the BY-24 opt-in; BY-27b ignores it (no migration).
+ * `allowAgentOpenRounds` was the BY-24 opt-in. Retained on the record type for existing
+ * Firestore documents only — BY-27b dropped the writer and all readers (no migration).
  */
 export interface GameAgentKeyRecord {
   slug: string;
@@ -1128,8 +1129,7 @@ export interface GameAgentKeyRecord {
   createdAt: string;
   updatedAt: string;
   /**
-   * Legacy BY-24 opt-in. Ignored by `open_round` after BY-27b — existing documents may
-   * still carry the field; readers must not require it.
+   * Legacy BY-24 opt-in. Retained for existing records; nothing reads or writes it after BY-27b.
    */
   allowAgentOpenRounds?: boolean;
   /** BY-24: admission lock while `open_round` is creating a job — cleared in finally. */
@@ -1766,13 +1766,6 @@ export interface Store {
    * or null when missing / not owned by `ownerUid`.
    */
   rotateGameAgentKey(slug: string, ownerUid: string, at: string): Promise<GameAgentKeyRecord | null>;
-  /** BY-24: set whether the creator's agent may open improvement rounds. */
-  setGameAgentOpenRounds(
-    slug: string,
-    ownerUid: string,
-    allow: boolean,
-    at: string,
-  ): Promise<GameAgentKeyRecord | null>;
   /**
    * BY-24: admit at most one in-flight `open_round` per slug. Returns false when another
    * caller already holds the lock.
@@ -3142,7 +3135,6 @@ export class InMemoryStore implements Store {
       keyGeneration: 1,
       createdAt: at,
       updatedAt: at,
-      allowAgentOpenRounds: false,
     };
     this.gameAgentKeys.set(slug, created);
     return { ...created };
@@ -3156,22 +3148,6 @@ export class InMemoryStore implements Store {
       keyGeneration: existing.keyGeneration + 1,
       updatedAt: at,
     };
-    this.gameAgentKeys.set(slug, next);
-    return { ...next };
-  }
-
-  async setGameAgentOpenRounds(
-    slug: string,
-    ownerUid: string,
-    allow: boolean,
-    at: string,
-  ): Promise<GameAgentKeyRecord | null> {
-    const ensured = await this.ensureGameAgentKey(slug, ownerUid, at);
-    if (!ensured) return null;
-    // Re-read after ensure: a concurrent rotate may have bumped keyGeneration.
-    const current = this.gameAgentKeys.get(slug);
-    if (!current || current.ownerUid !== ownerUid) return null;
-    const next: GameAgentKeyRecord = { ...current, allowAgentOpenRounds: allow, updatedAt: at };
     this.gameAgentKeys.set(slug, next);
     return { ...next };
   }
@@ -5159,7 +5135,6 @@ export class FirestoreStore implements Store {
         keyGeneration: 1,
         createdAt: at,
         updatedAt: at,
-        allowAgentOpenRounds: false,
       };
       tx.create(docRef, created);
       return created;
@@ -5176,39 +5151,6 @@ export class FirestoreStore implements Store {
       const next: GameAgentKeyRecord = {
         ...existing,
         keyGeneration: existing.keyGeneration + 1,
-        updatedAt: at,
-      };
-      tx.set(docRef, next);
-      return next;
-    });
-  }
-
-  async setGameAgentOpenRounds(
-    slug: string,
-    ownerUid: string,
-    allow: boolean,
-    at: string,
-  ): Promise<GameAgentKeyRecord | null> {
-    const docRef = this.db.collection('gameAgentKeys').doc(slug);
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(docRef);
-      if (!snap.exists) {
-        const created: GameAgentKeyRecord = {
-          slug,
-          ownerUid,
-          keyGeneration: 1,
-          createdAt: at,
-          updatedAt: at,
-          allowAgentOpenRounds: allow,
-        };
-        tx.create(docRef, created);
-        return created;
-      }
-      const existing = snap.data() as GameAgentKeyRecord;
-      if (existing.ownerUid !== ownerUid) return null;
-      const next: GameAgentKeyRecord = {
-        ...existing,
-        allowAgentOpenRounds: allow,
         updatedAt: at,
       };
       tx.set(docRef, next);

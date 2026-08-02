@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { looksLikeCreatorAgentKey } from './agent-creator-key.js';
-import { resolveCreatorAgentKeyForStart } from './agent-creator-key-resolve.js';
+import { resolveCreatorAgentKeyForOpenRound, resolveCreatorAgentKeyForStart } from './agent-creator-key-resolve.js';
 import {
   looksLikeGameAgentKey,
   IMPROVEMENT_QUOTA_EXHAUSTED_REASON,
@@ -102,6 +102,8 @@ export interface McpServerOptions {
     log: { error: (context: object, message: string) => void };
     builder?: BuilderKind;
     openedBy?: 'creator' | 'agent';
+    /** When set, the new job is owned by this uid (slug-transfer safe). */
+    ownerUid?: string;
   }) => Promise<{ route: 'job'; jobId: number } | null>;
   contentChecker?: ContentChecker;
   dailyImprovementQuota?: number;
@@ -710,15 +712,20 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
     open_round: {
       description:
-        'Open a new post-publish improvement round on a published game using the durable per-game key. ' +
-        'Requires the creator to have opted in per game. Spends the same daily improvement quota as Studio. ' +
+        'Open a new post-publish improvement round on a published game. ' +
+        'Accepts a durable per-game key, or Authorization: Bearer <creator key> + slug. ' +
+        'Spends the same daily improvement quota as Studio. ' +
         'Returns jobId only — call start() next for a sessionKey. Idempotent while a round is already open.',
       inputSchema: {
         type: 'object',
         properties: {
           key: {
             type: 'string',
-            description: 'Durable per-game key from the Studio kickoff prompt — not a sessionKey or round key.',
+            description: 'Durable per-game key. Optional when using Authorization Bearer with a creator key + slug.',
+          },
+          slug: {
+            type: 'string',
+            description: 'Game slug. Required with a creator-key Bearer; ignored with a per-game key.',
           },
           feedback: {
             type: 'string',
@@ -726,7 +733,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
               'Creator change request for this improvement round (≤2000 chars). Treated as untrusted creator text.',
           },
         },
-        required: ['key', 'feedback'],
+        required: ['feedback'],
       },
       handler: async (args, ctx) => {
         if (!store || !agentTokenSecret || !startImprovementRound || !contentChecker) {
@@ -734,14 +741,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         }
 
         const key = typeof args.key === 'string' ? args.key.trim() : '';
-        if (!key) {
-          return toolErr('key is required — pass the durable per-game key from the Studio kickoff prompt');
-        }
-        if (!looksLikeGameAgentKey(key)) {
-          return toolErr(
-            'open_round requires the durable per-game key — session keys and round keys cannot open a new round',
-          );
-        }
+        const slugArg = typeof args.slug === 'string' ? args.slug.trim() : '';
+        const bearer = ctx.bearerToken;
 
         const feedbackRaw = typeof args.feedback === 'string' ? args.feedback.trim() : '';
         if (!feedbackRaw) {
@@ -751,17 +752,69 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           return toolErr('feedback is too long (max 2000 characters)');
         }
 
-        const resolved = await resolveGameAgentKeyForOpenRound(store, key, agentTokenSecret, now());
-        if (!resolved.ok) {
-          return toolErr(resolved.reason);
+        type OpenResolved = {
+          creatorUid: string;
+          slug: string;
+          publishedRecord: SubmissionRecord;
+          activeRound: SubmissionRecord | null;
+        };
+
+        let resolved: OpenResolved;
+
+        if (!key && bearer && looksLikeCreatorAgentKey(bearer)) {
+          if (!slugArg) {
+            return toolErr('slug is required when using a creator key — pass the game slug to improve');
+          }
+          const creatorResolved = await resolveCreatorAgentKeyForOpenRound(
+            store,
+            bearer,
+            agentTokenSecret,
+            slugArg,
+            now(),
+          );
+          if (!creatorResolved.ok) {
+            return toolErr(creatorResolved.reason);
+          }
+          resolved = {
+            creatorUid: creatorResolved.claims.creatorUid,
+            slug: creatorResolved.slug,
+            publishedRecord: creatorResolved.publishedRecord,
+            activeRound: creatorResolved.activeRound,
+          };
+        } else if (key && looksLikeGameAgentKey(key)) {
+          const gameResolved = await resolveGameAgentKeyForOpenRound(store, key, agentTokenSecret, now());
+          if (!gameResolved.ok) {
+            return toolErr(gameResolved.reason);
+          }
+          resolved = {
+            creatorUid: gameResolved.claims.creatorUid,
+            slug: gameResolved.claims.slug,
+            publishedRecord: gameResolved.publishedRecord,
+            activeRound: gameResolved.activeRound,
+          };
+        } else if (key && looksLikeCreatorAgentKey(key)) {
+          return toolErr('creator key must be sent as Authorization Bearer, not as the key argument');
+        } else if (key) {
+          return toolErr(
+            'open_round requires a durable per-game key or Authorization Bearer with a creator key + slug',
+          );
+        } else {
+          return toolErr('pass a durable per-game key, or Authorization Bearer with a creator key + slug');
         }
 
         const at = new Date(now()).toISOString();
+        // Admission lock lives on gameAgentKeys/{slug}; ensure the doc exists for creator-key path.
+        const lockRecord = await store.ensureGameAgentKey(resolved.slug, resolved.creatorUid, at);
+        if (!lockRecord) {
+          // Existing doc owned by someone else — do not touch their admission lock.
+          return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
+        }
+
         if (resolved.activeRound) {
-          await store.finishAgentOpenRound(resolved.claims.slug, at);
+          await store.finishAgentOpenRound(resolved.slug, at);
           return toolOk({
             jobId: resolved.activeRound.issueNumber,
-            slug: resolved.claims.slug,
+            slug: resolved.slug,
             alreadyOpen: true,
           });
         }
@@ -770,19 +823,19 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         if (!moderation.allowed) {
           logModerationRejection(ctx.request.log, {
             surface: 'creator_feedback',
-            uid: resolved.claims.creatorUid,
+            uid: resolved.creatorUid,
             category: moderation.category,
           });
           return toolErr('content_rejected', { category: moderation.category ?? 'other' });
         }
 
-        const admitted = await store.beginAgentOpenRound(resolved.claims.slug, at);
+        const admitted = await store.beginAgentOpenRound(resolved.slug, at);
         if (!admitted) {
-          const again = await resolveGameAgentKeyForOpenRound(store, key, agentTokenSecret, now());
-          if (again.ok && again.activeRound) {
+          const again = await findActiveRoundForSlug(store, resolved.slug, resolved.creatorUid);
+          if (again) {
             return toolOk({
-              jobId: again.activeRound.issueNumber,
-              slug: again.claims.slug,
+              jobId: again.issueNumber,
+              slug: resolved.slug,
               alreadyOpen: true,
             });
           }
@@ -790,18 +843,18 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         }
 
         try {
-          const racingRound = await findActiveRoundForSlug(store, resolved.claims.slug, resolved.claims.creatorUid);
+          const racingRound = await findActiveRoundForSlug(store, resolved.slug, resolved.creatorUid);
           if (racingRound) {
             return toolOk({
               jobId: racingRound.issueNumber,
-              slug: resolved.claims.slug,
+              slug: resolved.slug,
               alreadyOpen: true,
             });
           }
 
           const dateStr = at.slice(0, 10);
           const quota = await store.checkAndIncrementQuota(
-            resolved.claims.creatorUid,
+            resolved.creatorUid,
             dateStr,
             dailyImprovementQuota,
             'improvements',
@@ -825,6 +878,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             log: ctx.request.log,
             builder: 'self',
             openedBy: 'agent',
+            // Authorized creator wins over the published record's owner after a transfer.
+            ownerUid: resolved.creatorUid,
           });
           if (!started) {
             return toolErr('could not open an improvement round for this game');
@@ -832,11 +887,11 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
           return toolOk({
             jobId: started.jobId,
-            slug: resolved.claims.slug,
+            slug: resolved.slug,
             alreadyOpen: false,
           });
         } finally {
-          await store.finishAgentOpenRound(resolved.claims.slug, at);
+          await store.finishAgentOpenRound(resolved.slug, at);
         }
       },
     },

@@ -1,9 +1,8 @@
 /**
  * Resolve a durable creator-wide opener into an active self-build round (BY-27a).
  *
- * Shared by MCP `start` so verification cannot drift from the OAuth Bearer + slug
- * path after uid resolution. `open_round` wiring lands with BY-27b — do not add an
- * unreachable resolver here ahead of that work.
+ * Shared by MCP `start` and BY-27b `open_round` so verification cannot drift from
+ * the OAuth Bearer + slug path after uid resolution.
  */
 
 import {
@@ -13,7 +12,12 @@ import {
   verifyCreatorAgentKey,
   type CreatorAgentKeyClaims,
 } from './agent-creator-key.js';
-import { NO_OPEN_ROUND_REASON, PLATFORM_ROUND_REASON, SLUG_NOT_ON_ACCOUNT_REASON } from './agent-game-key.js';
+import {
+  GAME_NOT_PUBLISHED_REASON,
+  NO_OPEN_ROUND_REASON,
+  PLATFORM_ROUND_REASON,
+  SLUG_NOT_ON_ACCOUNT_REASON,
+} from './agent-game-key.js';
 import { creatorOwnsSlug, findActiveRoundForSlug } from './agent-game-key-resolve.js';
 import { InvalidAgentTokenError } from './agent-token.js';
 import type { CreatorAgentKeyRecord, Store, SubmissionRecord } from './store.js';
@@ -24,8 +28,18 @@ export type VerifyCreatorAgentKeyResult =
 export type ResolveCreatorKeyForStartResult =
   { ok: true; claims: CreatorAgentKeyClaims; record: SubmissionRecord } | { ok: false; reason: string };
 
+export type ResolveCreatorKeyForOpenRoundResult =
+  | {
+      ok: true;
+      claims: CreatorAgentKeyClaims;
+      publishedRecord: SubmissionRecord;
+      activeRound: SubmissionRecord | null;
+      slug: string;
+    }
+  | { ok: false; reason: string };
+
 /**
- * Signature, generation, and expiry — shared by `start`.
+ * Signature, generation, and expiry — shared by `start` and `open_round`.
  * Does not require an open round or a published game.
  */
 export async function verifyDurableCreatorAgentKey(
@@ -98,4 +112,31 @@ export async function resolveCreatorAgentKeyForStart(
   }
 
   return { ok: true, claims: verified.claims, record: active };
+}
+
+/**
+ * Creator-key verification for `open_round`: published game owned by the creator,
+ * and idempotent binding when a round is already open. No per-game opt-in (BY-27b).
+ */
+export async function resolveCreatorAgentKeyForOpenRound(
+  store: Store,
+  key: string,
+  secret: string,
+  slug: string,
+  nowMs: number = Date.now(),
+): Promise<ResolveCreatorKeyForOpenRoundResult> {
+  const verified = await verifyDurableCreatorAgentKey(store, key, secret, nowMs);
+  if (!verified.ok) return verified;
+
+  if (!(await creatorOwnsSlug(store, slug, verified.claims.creatorUid))) {
+    return { ok: false, reason: SLUG_NOT_ON_ACCOUNT_REASON };
+  }
+
+  const publishedRecord = await store.getPublishedSubmissionBySlug(slug);
+  if (!publishedRecord) {
+    return { ok: false, reason: GAME_NOT_PUBLISHED_REASON };
+  }
+
+  const activeRound = await findActiveRoundForSlug(store, slug, verified.claims.creatorUid);
+  return { ok: true, claims: verified.claims, publishedRecord, activeRound, slug };
 }

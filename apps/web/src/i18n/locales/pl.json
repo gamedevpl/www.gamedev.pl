@@ -867,24 +867,37 @@
   },
   "connect": {
     "title": "Podłącz swojego agenta",
-    "lead": "Ta runda czeka na Twojego agenta. Dodaj gamedev.pl raz, potem wklej prompt budowy.",
+    "lead": "Ta runda czeka na Twojego agenta. Wklej raz konfigurację MCP, potem prompt budowy.",
     "loading": "Przygotowujemy kroki połączenia…",
     "loadError": "Nie udało się wczytać kroków połączenia. Odśwież za chwilę.",
     "copied": "Skopiowano",
+    "copyConfig": "Kopiuj konfigurację",
+    "copyUrl": "Kopiuj URL",
     "copyInstall": "Kopiuj",
     "copyKickoff": "Kopiuj prompt",
     "waiting": "Czekamy, aż Twój agent się odezwie…",
+    "authMode": {
+      "label": "Jak się połączyć",
+      "key": "Wklej nagłówek",
+      "oauth": "Zaloguj się"
+    },
     "step1": {
       "title": "Dodaj gamedev.pl do swojego agenta",
       "clients": "Klient agenta",
+      "configHint": "Wklej to w ustawieniach serwera MCP swojego agenta. Linia Authorization jest tu zamaskowana — Kopiuj wstawia prawdziwy nagłówek do schowka.",
+      "meta": "Końcówka {{fingerprint}} · generacja {{generation}} · wygasa {{when}}",
       "skip": "Już dodałeś to przy innej grze? Pomiń",
       "skipped": "Pominięte — używasz wcześniejszej instalacji."
     },
     "step2": {
       "title": "Powiedz agentowi, co zbudować",
-      "sameConnection": "Połączenie z gamedev.pl pozostaje bez zmian — klucz tej gry w prompcie poniżej też zostaje, dopóki go nie obrócisz. Nie musisz zmieniać konfiguracji agenta między rundami.",
+      "sameConnection": "Połączenie z gamedev.pl zostaje w konfiguracji agenta — ten prompt niesie tylko slug gry, nigdy sekretu.",
       "sameKeyAsBefore": "Ten sam klucz co wcześniej — nic nowego do skopiowania, chyba że go obróciłeś.",
       "expiry": "Ten klucz działa dla tej gry i wygasa {{when}}."
+    },
+    "oauth": {
+      "title": "Zaloguj się z poziomu agenta",
+      "hint": "Dodaj ten URL MCP w agencie, a potem zaloguj się, gdy zapyta. Przy starcie podaj slug gry z promptu poniżej."
     },
     "clients": {
       "claudeCode": "Claude Code",
@@ -903,18 +916,12 @@
     }
   },
   "agentKey": {
-    "title": "Połączenie z agentem",
+    "title": "Klucz per-gra (legacy)",
     "loading": "Wczytywanie ustawień agenta…",
     "loadError": "Nie udało się wczytać ustawień agenta.",
-    "toggleError": "Nie udało się zapisać tego ustawienia. Spróbuj za chwilę.",
+    "legacyHint": "Preferuj klucz agenta kodującego powyżej — wklej go raz w konfiguracji MCP. Ten klucz per-gra jest tylko dla starszych ustawień.",
     "expiry": "Klucz tej gry wygasa {{when}}.",
-    "rotatedKickoff": "Klucz został obrócony — skopiuj ten nowy kickoff dla agenta:",
-    "openRounds": {
-      "title": "Niech mój agent otwiera nowe rundy",
-      "on": "Wł.",
-      "off": "Wył.",
-      "hint": "Gdy włączone, Twój agent może otwierać rundy ulepszeń po publikacji tym kluczem gry. Zużywa ten sam dzienny limit ulepszeń co start rundy w Studio."
-    }
+    "rotatedKickoff": "Klucz został obrócony — skopiuj ten nowy kickoff dla agenta:"
   },
   "oauthClients": {
     "title": "Podłączone agenty kodujące",

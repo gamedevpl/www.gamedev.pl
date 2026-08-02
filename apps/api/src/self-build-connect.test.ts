@@ -1,6 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
-import { assertGameAgentKeyActive, DEFAULT_GAME_AGENT_KEY_TTL_DAYS, verifyGameAgentKey } from './agent-game-key.js';
+import {
+  assertCreatorAgentKeyActive,
+  DEFAULT_CREATOR_AGENT_KEY_TTL_DAYS,
+  verifyCreatorAgentKey,
+} from './agent-creator-key.js';
+import { assertGameAgentKeyActive, verifyGameAgentKey } from './agent-game-key.js';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
@@ -9,6 +14,7 @@ import {
   buildKickoffPrompt,
   mcpEndpointUrl,
   mintConnectPayload,
+  mintGameKeyKickoff,
   MCP_ENDPOINT_PATH,
 } from './self-build-connect.js';
 import { InMemoryStore } from './store.js';
@@ -19,6 +25,7 @@ const secret = 'self-build-connect-test-secret';
 const sessionSecret = 'dev-session-secret-change-me';
 const CONCEPT = 'A squad tactics game about clearing rooms with careful timing and cover.';
 const APP_BASE = 'https://www.gamedev.pl';
+const MASKED_AUTH = 'Authorization: Bearer ····9a10e';
 
 function stubGitHub(): GitHubClient {
   return {
@@ -62,8 +69,11 @@ function authHeaders(uid = 'g:creator') {
 }
 
 describe('self-build-connect templates', () => {
-  it('builds install snippets that configure only the MCP URL', () => {
-    const snippets = buildInstallSnippets({ appBaseUrl: APP_BASE });
+  it('builds install snippets that embed the Authorization header with the MCP URL', () => {
+    const snippets = buildInstallSnippets({
+      appBaseUrl: APP_BASE,
+      authorizationBearer: MASKED_AUTH,
+    });
     const url = mcpEndpointUrl(APP_BASE);
     expect(url).toBe(`${APP_BASE}${MCP_ENDPOINT_PATH}`);
 
@@ -75,21 +85,62 @@ describe('self-build-connect templates', () => {
       cli: expect.stringContaining(url),
     });
     expect(snippets.claudeCode).toMatch(/^claude mcp add --transport http gamedevpl /);
+    expect(snippets.claudeCode).toContain(MASKED_AUTH);
     expect(snippets.codex).toContain('[mcp_servers.gamedevpl]');
+    expect(snippets.codex).toContain('Bearer ····9a10e');
     expect(JSON.parse(snippets.cursor)).toEqual({
-      mcpServers: { gamedevpl: { url } },
+      mcpServers: {
+        gamedevpl: {
+          url,
+          headers: { Authorization: 'Bearer ····9a10e' },
+        },
+      },
     });
     expect(snippets.kimi).toMatch(/^npx -y mcp-remote /);
+    expect(snippets.kimi).toContain(MASKED_AUTH);
     expect(snippets.cli).toMatch(/^curl -sS -X POST /);
+    expect(snippets.cli).toContain(MASKED_AUTH);
 
-    // No credential in any install snippet — only the URL.
+    // Masked Authorization is expected; full raw secrets / kickoff-style key: lines are not.
     for (const value of Object.values(snippets)) {
-      expect(value).not.toMatch(/key:|Bearer|token|Authorization/i);
+      expect(value).toMatch(/Authorization|Bearer/i);
+      expect(value).not.toMatch(/\bkey:\s*\S+/);
       expect(value).toContain(url);
     }
   });
 
-  it('builds a kickoff prompt with the game key, a loop pointer, and pending feedback', () => {
+  it('builds a keyless kickoff prompt with the game slug', () => {
+    const bare = buildKickoffPrompt({ title: 'Asteroids', slug: 'asteroids' });
+    expect(bare).toBe(
+      [
+        'Build "Asteroids" for gamedev.pl.',
+        'Start with the gamedevpl tool, slug: asteroids',
+        'start returns your workflow; after gate green the round is done.',
+      ].join('\n'),
+    );
+    expect(bare).not.toMatch(/\bkey:/);
+    expect(bare).not.toMatch(/\btoken\b/i);
+
+    const bareLines = bare.split('\n');
+    expect(bareLines.length).toBeLessThanOrEqual(5);
+    expect(bareLines).toHaveLength(3);
+    expect(bareLines[1]).toBe('Start with the gamedevpl tool, slug: asteroids');
+    expect(bare.match(/your workflow/g)).toHaveLength(1);
+
+    const withPending = buildKickoffPrompt({
+      title: 'Asteroids',
+      slug: 'asteroids',
+      pendingMessages: [{ text: 'make the ship faster' }, { text: 'add a pause button' }],
+    });
+    const pendingLines = withPending.split('\n');
+    expect(pendingLines[1]).toBe('Start with the gamedevpl tool, slug: asteroids');
+    expect(withPending.indexOf('- make the ship faster')).toBeLessThan(withPending.indexOf('- add a pause button'));
+    expect(withPending).toContain('also apply:');
+    expect(withPending).toContain('- make the ship faster');
+    expect(withPending).toContain('- add a pause button');
+  });
+
+  it('builds a keyed kickoff prompt with the game key (legacy / per-game path)', () => {
     const bare = buildKickoffPrompt({ title: 'Asteroids', gameKey: 'game-key-abc' });
     expect(bare).toBe(
       [
@@ -99,13 +150,7 @@ describe('self-build-connect templates', () => {
       ].join('\n'),
     );
     expect(bare).not.toMatch(/\btoken\b/i);
-
-    const bareLines = bare.split('\n');
-    expect(bareLines.length).toBeLessThanOrEqual(5);
-    expect(bareLines).toHaveLength(3);
-    expect(bareLines[1]).toBe('Start with the gamedevpl tool, key: game-key-abc');
-    expect(bareLines[2]).toMatch(/keep this key for the next round/i);
-    expect(bare.match(/your workflow/g)).toHaveLength(1);
+    expect(bare).not.toMatch(/\bslug:/);
 
     const withReminder = buildKickoffPrompt({
       title: 'Asteroids',
@@ -114,21 +159,13 @@ describe('self-build-connect templates', () => {
     });
     expect(withReminder).toContain('Same key as before — nothing new to copy unless the creator rotated it.');
 
-    const withPending = buildKickoffPrompt({
-      title: 'Asteroids',
-      gameKey: 'game-key-abc',
-      pendingMessages: [{ text: 'make the ship faster' }, { text: 'add a pause button' }],
-    });
-    const pendingLines = withPending.split('\n');
-    expect(pendingLines[1]).toBe('Start with the gamedevpl tool, key: game-key-abc');
-    expect(pendingLines[2]).toMatch(/keep this key for the next round/i);
-    expect(withPending.indexOf('- make the ship faster')).toBeLessThan(withPending.indexOf('- add a pause button'));
-    expect(withPending).toContain('also apply:');
-    expect(withPending).toContain('- make the ship faster');
-    expect(withPending).toContain('- add a pause button');
+    expect(() => buildKickoffPrompt({ title: 'Asteroids' })).toThrow(/exactly one of gameKey or slug/);
+    expect(() => buildKickoffPrompt({ title: 'Asteroids', gameKey: 'k', slug: 's' })).toThrow(
+      /exactly one of gameKey or slug/,
+    );
   });
 
-  it('mints a payload whose expiresAt equals the key signed exp claim', () => {
+  it('mints a keyless payload whose expiresAt equals the creator key signed exp claim', () => {
     const now = Date.parse('2026-07-31T12:00:00Z');
     const payload = mintConnectPayload({
       slug: 'nebula',
@@ -139,19 +176,53 @@ describe('self-build-connect templates', () => {
       appBaseUrl: APP_BASE,
       now,
     });
+
+    expect(payload.slug).toBe('nebula');
+    expect(payload.kickoffPrompt).toContain('slug: nebula');
+    expect(payload.kickoffPrompt).not.toMatch(/\bkey:\s*\S+/);
+    expect(payload.authorizationHeader).toMatch(/^Authorization: Bearer /);
+    expect(payload.authorizationHeaderMasked).toMatch(/^Authorization: Bearer ····/);
+    expect(payload.authorizationHeaderMasked).not.toBe(payload.authorizationHeader);
+
+    const creatorKey = payload.authorizationHeader.replace(/^Authorization: Bearer /, '');
+    expect(payload.kickoffPrompt).not.toContain(creatorKey);
+    for (const snippet of Object.values(payload.installSnippets)) {
+      expect(snippet).toContain(payload.authorizationHeaderMasked.replace(/^Authorization: /, ''));
+      expect(snippet).not.toContain(creatorKey);
+    }
+
+    const claims = verifyCreatorAgentKey(creatorKey, secret);
+    expect(claims).toMatchObject({ creatorUid: 'g:creator', keyGeneration: 3 });
+    expect(payload.expiresAt).toBe(claims.exp);
+    expect(payload.expiresAt).toBe(Math.floor(now / 1000) + DEFAULT_CREATOR_AGENT_KEY_TTL_DAYS * 24 * 60 * 60);
+    expect(payload.keyGeneration).toBe(3);
+    expect(payload.fingerprint).toBe(creatorKey.slice(-5));
+    expect(() => assertCreatorAgentKeyActive(claims, { keyGeneration: 3 }, now)).not.toThrow();
+  });
+
+  it('mints a keyed per-game kickoff via mintGameKeyKickoff', () => {
+    const now = Date.parse('2026-07-31T12:00:00Z');
+    const payload = mintGameKeyKickoff({
+      slug: 'nebula',
+      ownerUid: 'g:creator',
+      keyGeneration: 2,
+      title: 'Nebula',
+      submissionTokenSecret: secret,
+      appBaseUrl: APP_BASE,
+      now,
+    });
     const keyMatch = payload.kickoffPrompt.match(/key: (\S+)/);
     expect(keyMatch).toBeTruthy();
     const gameKey = keyMatch![1]!;
     const claims = verifyGameAgentKey(gameKey, secret);
-    expect(claims).toMatchObject({ slug: 'nebula', creatorUid: 'g:creator', keyGeneration: 3 });
+    expect(claims).toMatchObject({ slug: 'nebula', creatorUid: 'g:creator', keyGeneration: 2 });
     expect(payload.expiresAt).toBe(claims.exp);
-    expect(payload.expiresAt).toBe(Math.floor(now / 1000) + DEFAULT_GAME_AGENT_KEY_TTL_DAYS * 24 * 60 * 60);
-    expect(payload.keyGeneration).toBe(3);
-    expect(() => assertGameAgentKeyActive(claims, { keyGeneration: 3 }, now)).not.toThrow();
+    expect(payload.keyGeneration).toBe(2);
+    expect(payload.kickoffPrompt).not.toMatch(/\bslug:/);
   });
 });
 
-describe('GET /api/submissions/:id/connect (BY-03)', () => {
+describe('GET /api/submissions/:id/connect (BY-03 / BY-27b)', () => {
   let app: FastifyInstance | null = null;
 
   afterEach(async () => {
@@ -159,7 +230,7 @@ describe('GET /api/submissions/:id/connect (BY-03)', () => {
     app = null;
   });
 
-  it('returns snippets, kickoff, and expiresAt for the owner of an active self round', async () => {
+  it('returns snippets, keyless kickoff, and creator-key fields for the owner of an active self round', async () => {
     const created = await createApp({ now: () => Date.parse('2026-07-31T12:00:00Z') });
     app = created.app;
     const { store } = created;
@@ -187,29 +258,85 @@ describe('GET /api/submissions/:id/connect (BY-03)', () => {
       kickoffPrompt: string;
       expiresAt: number;
       keyGeneration: number;
+      authorizationHeader: string;
+      authorizationHeaderMasked: string;
+      fingerprint: string;
+      mcpUrl: string;
+      slug: string;
     };
 
     expect(Object.keys(body.installSnippets).sort()).toEqual(['claudeCode', 'cli', 'codex', 'cursor', 'kimi'].sort());
     const mcpUrl = `${APP_BASE}${MCP_ENDPOINT_PATH}`;
+    expect(body.mcpUrl).toBe(mcpUrl);
+    expect(record.slug).toBeTruthy();
+    expect(body.slug).toBe(record.slug);
+
+    const creatorKey = body.authorizationHeader.replace(/^Authorization: Bearer /, '');
+    expect(body.authorizationHeaderMasked).toBe(`Authorization: Bearer ····${body.fingerprint}`);
+    expect(body.authorizationHeaderMasked).not.toContain(creatorKey);
+
     for (const snippet of Object.values(body.installSnippets)) {
       expect(snippet).toContain(mcpUrl);
-      expect(snippet).not.toMatch(/key:|Bearer |\btoken\b/i);
+      expect(snippet).toMatch(/Authorization|Bearer/i);
+      expect(snippet).toContain(body.fingerprint);
+      expect(snippet).not.toContain(creatorKey);
+      expect(snippet).not.toMatch(/\bkey:\s*\S+/);
     }
 
     expect(body.kickoffPrompt).toContain('Build "Connect Game" for gamedev.pl.');
-    expect(body.kickoffPrompt).toMatch(/Start with the gamedevpl tool, key: \S+/);
+    expect(body.kickoffPrompt).toContain(`slug: ${record.slug}`);
+    expect(body.kickoffPrompt).not.toMatch(/\bkey:\s*\S+/);
+    expect(body.kickoffPrompt).not.toContain(creatorKey);
     expect(body.kickoffPrompt).not.toMatch(/\btoken\b/i);
 
-    expect(record.slug).toBeTruthy();
-    const gameKey = body.kickoffPrompt.match(/key: (\S+)/)![1]!;
-    const claims = verifyGameAgentKey(gameKey, secret);
-    expect(claims.slug).toBe(record.slug);
+    const claims = verifyCreatorAgentKey(creatorKey, secret);
     expect(claims.creatorUid).toBe(record.ownerUid);
-    const keyRecord = await store.getGameAgentKey(record.slug!);
+    const keyRecord = await store.getCreatorAgentKey(record.ownerUid);
     expect(keyRecord).toBeTruthy();
     expect(body.keyGeneration).toBe(keyRecord!.keyGeneration);
     expect(body.expiresAt).toBe(claims.exp);
-    expect(() => assertGameAgentKeyActive(claims, keyRecord!, Date.parse('2026-07-31T12:00:00Z'))).not.toThrow();
+    expect(() => assertCreatorAgentKeyActive(claims, keyRecord!, Date.parse('2026-07-31T12:00:00Z'))).not.toThrow();
+
+    // Creator key from connect can bind start via Bearer + slug.
+    const init = await app.inject({
+      method: 'POST',
+      url: '/api/mcp',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+      },
+      payload: {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'test', version: '0' } },
+      },
+    });
+    const sessionId = init.headers['mcp-session-id'] as string;
+    const start = await app.inject({
+      method: 'POST',
+      url: '/api/mcp',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+        'mcp-session-id': sessionId,
+        authorization: `Bearer ${creatorKey}`,
+      },
+      payload: {
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/call',
+        params: { name: 'start', arguments: { slug: record.slug } },
+      },
+    });
+    const startBody = start.json() as {
+      result?: { isError?: boolean; structuredContent?: { sessionKey?: string }; content?: Array<{ text: string }> };
+    };
+    expect(startBody.result?.isError).toBeFalsy();
+    const startStructured =
+      startBody.result?.structuredContent ??
+      (startBody.result?.content?.[0]?.text ? JSON.parse(startBody.result.content[0].text) : undefined);
+    expect((startStructured as { sessionKey?: string })?.sessionKey).toBeTruthy();
   });
 
   it('rejects a stranger with 403', async () => {
@@ -397,12 +524,16 @@ describe('GET /api/submissions/:id/connect (BY-03)', () => {
     expect(response.statusCode).toBe(200);
     const after = await store.getSubmission(66);
     expect(after?.slug).toBeTruthy();
-    const gameKey = (response.json().kickoffPrompt as string).match(/key: (\S+)/)![1]!;
-    const claims = verifyGameAgentKey(gameKey, secret);
-    expect(claims).toMatchObject({ slug: after!.slug, creatorUid: 'g:creator', keyGeneration: 1 });
+    const body = response.json() as { kickoffPrompt: string; slug: string; authorizationHeader: string };
+    expect(body.slug).toBe(after!.slug);
+    expect(body.kickoffPrompt).toContain(`slug: ${after!.slug}`);
+    expect(body.kickoffPrompt).not.toMatch(/\bkey:\s*\S+/);
+    const creatorKey = body.authorizationHeader.replace(/^Authorization: Bearer /, '');
+    const claims = verifyCreatorAgentKey(creatorKey, secret);
+    expect(claims).toMatchObject({ creatorUid: 'g:creator', keyGeneration: 1 });
   });
 
-  it('binds the minted key to the game keyGeneration, not the round generation', async () => {
+  it('agent-key binds the minted key to the game keyGeneration, not the round generation', async () => {
     const created = await createApp();
     app = created.app;
     const { store } = created;
@@ -425,7 +556,7 @@ describe('GET /api/submissions/:id/connect (BY-03)', () => {
     const id = mintToken(77, secret);
     const response = await app.inject({
       method: 'GET',
-      url: `/api/submissions/${id}/connect`,
+      url: `/api/submissions/${id}/agent-key`,
       headers: authHeaders(),
     });
     expect(response.statusCode).toBe(200);
@@ -464,6 +595,8 @@ describe('GET /api/submissions/:id/connect (BY-03)', () => {
     expect(prompt).toContain('also apply:');
     expect(prompt).toContain('- add a pause button');
     expect(prompt).not.toContain('make the ship faster');
+    expect(prompt).toMatch(/slug: \S+/);
+    expect(prompt).not.toMatch(/\bkey:\s*\S+/);
   });
 });
 
@@ -545,12 +678,13 @@ describe('game agent key API (BY-23)', () => {
     const { store } = created;
     const { id, record } = await submitSelfRound(store);
 
-    const connect = await app.inject({
+    const agentKey = await app.inject({
       method: 'GET',
-      url: `/api/submissions/${id}/connect`,
+      url: `/api/submissions/${id}/agent-key`,
       headers: authHeaders(),
     });
-    const oldKey = extractGameKey(connect.json().kickoffPrompt as string);
+    expect(agentKey.statusCode).toBe(200);
+    const oldKey = extractGameKey(agentKey.json().kickoffPrompt as string);
 
     const rotated = await app.inject({
       method: 'POST',
@@ -605,7 +739,7 @@ describe('game agent key API (BY-23)', () => {
 
     await app.inject({
       method: 'GET',
-      url: `/api/submissions/${id}/connect`,
+      url: `/api/submissions/${id}/agent-key`,
       headers: authHeaders(),
     });
     const beforeClose = await store.getGameAgentKey(record.slug!);

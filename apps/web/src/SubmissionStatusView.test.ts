@@ -583,7 +583,13 @@ describe('SubmissionStatusView', () => {
           kimi: 'npx mcp-remote https://example.test/api/mcp',
           cli: 'curl https://example.test/api/mcp',
         },
-        kickoffPrompt: 'Build "Await Game" for gamedev.pl.\nStart with the gamedevpl tool, key: round.key',
+        kickoffPrompt: 'Build "Await Game" for gamedev.pl.\nStart with the gamedevpl tool, slug: await-game',
+        mcpUrl: 'https://example.test/api/mcp',
+        authorizationHeader: 'Authorization: Bearer test-key-not-for-display',
+        authorizationHeaderMasked: 'Authorization: Bearer ····play',
+        fingerprint: 'play',
+        keyGeneration: 1,
+        slug: 'await-game',
         expiresAt: Math.floor(Date.now() / 1000) + 3600,
       }),
     }));
@@ -647,7 +653,13 @@ describe('SubmissionStatusView', () => {
           kimi: 'npx mcp-remote https://example.test/api/mcp',
           cli: 'curl https://example.test/api/mcp',
         },
-        kickoffPrompt: 'Build "Quiet Game" for gamedev.pl.\nStart with the gamedevpl tool, key: quiet.key',
+        kickoffPrompt: 'Build "Quiet Game" for gamedev.pl.\nStart with the gamedevpl tool, slug: quiet-game',
+        mcpUrl: 'https://example.test/api/mcp',
+        authorizationHeader: 'Authorization: Bearer test-key-not-for-display',
+        authorizationHeaderMasked: 'Authorization: Bearer ····play',
+        fingerprint: 'play',
+        keyGeneration: 1,
+        slug: 'quiet-game',
         expiresAt: Math.floor(Date.now() / 1000) + 3600,
       }),
     }));
@@ -1849,7 +1861,14 @@ describe('SubmissionStatusView stop & retry', () => {
       kimi: 'npx mcp-remote https://example.test/api/mcp',
       cli: 'curl https://example.test/api/mcp',
     },
-    kickoffPrompt: 'Build "Handoff Game" for gamedev.pl.\nStart with the gamedevpl tool, key: round.key',
+    kickoffPrompt:
+      'Build "Handoff Game" for gamedev.pl.\nStart with the gamedevpl tool, slug: handoff-game.\nstart returns your workflow; after gate green the round is done.',
+    mcpUrl: 'https://example.test/api/mcp',
+    authorizationHeader: 'Authorization: Bearer test-key-not-for-display',
+    authorizationHeaderMasked: 'Authorization: Bearer ····play',
+    fingerprint: 'play',
+    keyGeneration: 1,
+    slug: 'handoff-game',
   };
 
   it('standalone: a published improve navigates the browser to the new job’s thread', async () => {

@@ -1,8 +1,9 @@
 /**
- * Client for GET /api/submissions/:id/connect and durable game key management (BY-03 / BY-23).
+ * Client for GET /api/submissions/:id/connect and creator/game key management
+ * (BY-03 / BY-23 / BY-27a / BY-27b).
  *
- * Returns everything the Studio connect card needs: per-client install snippets
- * (MCP URL only) and the kickoff prompt that carries this game's durable key.
+ * Connect returns a config block (MCP URL + Authorization header) and a keyless
+ * kickoff prompt (slug only). The full Authorization value is for Copy only.
  */
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
@@ -13,20 +14,27 @@ export type ConnectClient = (typeof CONNECT_CLIENTS)[number];
 export type InstallSnippets = Record<ConnectClient, string>;
 
 export type ConnectPayload = {
+  /** Display snippets — Authorization header is masked. */
   installSnippets: InstallSnippets;
+  /** Keyless kickoff — slug only, never a key. */
   kickoffPrompt: string;
-  /** Unix seconds — identical to the game key's signed exp. */
+  mcpUrl: string;
+  /** Full Authorization header — hold in memory for Copy; never render. */
+  authorizationHeader: string;
+  authorizationHeaderMasked: string;
+  fingerprint: string;
+  /** Unix seconds — identical to the creator key's signed exp. */
   expiresAt: number;
-  /** Current keyGeneration — display/rotate UI; not a secret. */
-  keyGeneration?: number;
-  /** True when this kickoff is the same durable key the creator already pasted. */
-  sameKeyAsBefore?: boolean;
+  keyGeneration: number;
+  slug: string;
 };
 
-export type AgentKeyPayload = ConnectPayload & {
+export type AgentKeyPayload = {
   slug: string;
   keyGeneration: number;
-  allowAgentOpenRounds: boolean;
+  expiresAt: number;
+  kickoffPrompt: string;
+  installSnippets: InstallSnippets;
   rotated?: boolean;
 };
 
@@ -72,7 +80,7 @@ export async function getConnectPayload(token: string): Promise<ConnectPayload> 
   return body;
 }
 
-/** Remint the durable game key at the current generation (fresh exp, no rotate). */
+/** Remint the durable per-game key at the current generation (fresh exp, no rotate). */
 export async function getAgentKey(token: string): Promise<AgentKeyPayload> {
   const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/agent-key`, {
     credentials: 'include',
@@ -85,7 +93,7 @@ export async function getAgentKey(token: string): Promise<AgentKeyPayload> {
   return (await response.json()) as AgentKeyPayload;
 }
 
-/** Bump keyGeneration and return a fresh kickoff — agents holding the old key are cut off. */
+/** Bump per-game keyGeneration and return a fresh keyed kickoff. */
 export async function rotateAgentKey(token: string): Promise<AgentKeyPayload> {
   const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/agent-key/rotate`, {
     method: 'POST',
@@ -97,22 +105,6 @@ export async function rotateAgentKey(token: string): Promise<AgentKeyPayload> {
   }
 
   return (await response.json()) as AgentKeyPayload;
-}
-
-/** Opt in or out of agent-opened improvement rounds for this game (BY-24). */
-export async function setAgentOpenRounds(token: string, allow: boolean): Promise<{ allowAgentOpenRounds: boolean }> {
-  const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/agent-key/open-rounds`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ allow }),
-  });
-
-  if (!response.ok) {
-    await throwResponseError(response);
-  }
-
-  return (await response.json()) as { allowAgentOpenRounds: boolean };
 }
 
 export type OAuthGrantSummary = {

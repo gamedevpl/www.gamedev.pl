@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mintCreatorAgentKey } from './agent-creator-key.js';
-import { resolveCreatorAgentKeyForStart } from './agent-creator-key-resolve.js';
+import { resolveCreatorAgentKeyForOpenRound, resolveCreatorAgentKeyForStart } from './agent-creator-key-resolve.js';
 import { NO_OPEN_ROUND_REASON, PLATFORM_ROUND_REASON, SLUG_NOT_ON_ACCOUNT_REASON } from './agent-game-key.js';
 import { InMemoryStore } from './store.js';
 
@@ -84,5 +84,30 @@ describe('resolveCreatorAgentKeyForStart (BY-27a)', () => {
 
     const platform = await resolveCreatorAgentKeyForStart(store, key, secret, slug);
     expect(platform).toEqual({ ok: false, reason: PLATFORM_ROUND_REASON });
+  });
+});
+
+describe('resolveCreatorAgentKeyForOpenRound (BY-27b)', () => {
+  it('refuses an unowned slug with the same account-slug reason as start', async () => {
+    const store = new InMemoryStore();
+    await seedSelfRound(store, 1, other, slug);
+    await store.setSubmissionPublishedAt(1, '2026-07-01T00:00:00.000Z');
+    await store.ensureCreatorAgentKey(owner, new Date().toISOString());
+    const key = mintCreatorAgentKey(secret, { creatorUid: owner, keyGeneration: 1 });
+
+    const forStart = await resolveCreatorAgentKeyForStart(store, key, secret, slug);
+    const forOpen = await resolveCreatorAgentKeyForOpenRound(store, key, secret, slug);
+    expect(forStart).toEqual({ ok: false, reason: SLUG_NOT_ON_ACCOUNT_REASON });
+    expect(forOpen).toEqual({ ok: false, reason: SLUG_NOT_ON_ACCOUNT_REASON });
+    expect(forOpen.ok === false && forOpen.reason).not.toMatch(/rotated/i);
+  });
+
+  it('refuses a missing slug without blaming the key', async () => {
+    const store = new InMemoryStore();
+    await store.ensureCreatorAgentKey(owner, new Date().toISOString());
+    const key = mintCreatorAgentKey(secret, { creatorUid: owner, keyGeneration: 1 });
+
+    const result = await resolveCreatorAgentKeyForOpenRound(store, key, secret, 'does-not-exist');
+    expect(result).toEqual({ ok: false, reason: SLUG_NOT_ON_ACCOUNT_REASON });
   });
 });

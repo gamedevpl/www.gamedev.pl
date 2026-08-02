@@ -1,10 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
+import { mintCreatorAgentKey } from './agent-creator-key.js';
 import {
-  AGENT_OPEN_ROUNDS_DISABLED_REASON,
   GAME_NOT_PUBLISHED_REASON,
   IMPROVEMENT_QUOTA_EXHAUSTED_REASON,
   mintGameAgentKey,
+  SLUG_NOT_ON_ACCOUNT_REASON,
 } from './agent-game-key.js';
 import { resolveGameAgentKeyForOpenRound } from './agent-game-key-resolve.js';
 import { mintAgentToken } from './agent-token.js';
@@ -14,6 +15,7 @@ import type { GamesStore } from './games-store.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
 import { mintMcpSessionKey } from './mcp-session-key.js';
 import { InMemoryStore } from './store.js';
+import { mintToken } from './submission-token.js';
 import { NoopTranslator } from './translate.js';
 
 const secret = 'open-round-test-secret';
@@ -84,6 +86,10 @@ function gameKey(generation = 1) {
   });
 }
 
+async function ensureGameKey(store: InMemoryStore) {
+  await store.ensureGameAgentKey(SLUG, OWNER, new Date().toISOString());
+}
+
 async function mcpCall(
   app: FastifyInstance,
   method: string,
@@ -120,29 +126,33 @@ async function callOpenRound(
 }
 
 describe('resolveGameAgentKeyForOpenRound', () => {
-  it('refuses when opt-in is off', async () => {
-    const store = new InMemoryStore();
-    const at = '2026-08-01T12:00:00.000Z';
-    await store.ensureGameAgentKey(SLUG, OWNER, at);
-    await seedPublishedGame(store);
-
-    const result = await resolveGameAgentKeyForOpenRound(store, gameKey(), secret);
-    expect(result).toEqual({ ok: false, reason: AGENT_OPEN_ROUNDS_DISABLED_REASON });
-  });
-
   it('refuses when the game is not published', async () => {
     const store = new InMemoryStore();
     const at = '2026-08-01T12:00:00.000Z';
-    await store.setGameAgentOpenRounds(SLUG, OWNER, true, at);
+    await store.ensureGameAgentKey(SLUG, OWNER, at);
     await store.createSubmission(20, OWNER, 'Draft');
     await store.setSubmissionSlug(20, SLUG);
 
     const result = await resolveGameAgentKeyForOpenRound(store, gameKey(), secret);
     expect(result).toEqual({ ok: false, reason: GAME_NOT_PUBLISHED_REASON });
   });
+
+  it('succeeds for a published game with no opt-in flag', async () => {
+    const store = new InMemoryStore();
+    const at = '2026-08-01T12:00:00.000Z';
+    await store.ensureGameAgentKey(SLUG, OWNER, at);
+    await seedPublishedGame(store);
+
+    const result = await resolveGameAgentKeyForOpenRound(store, gameKey(), secret);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.publishedRecord.issueNumber).toBe(PUBLISHED_ISSUE);
+      expect(result.activeRound).toBeNull();
+    }
+  });
 });
 
-describe('MCP open_round (BY-24)', () => {
+describe('MCP open_round (BY-24 / BY-27b)', () => {
   let app: FastifyInstance | null = null;
 
   afterEach(async () => {
@@ -150,25 +160,10 @@ describe('MCP open_round (BY-24)', () => {
     app = null;
   });
 
-  it('refuses when opt-in is off', async () => {
+  it('opens exactly one self improvement round with no flag set', async () => {
     const store = new InMemoryStore();
     await seedPublishedGame(store);
-    await store.ensureGameAgentKey(SLUG, OWNER, new Date().toISOString());
-    app = await createApp(store);
-
-    const { structured, isError } = await callOpenRound(app, {
-      key: gameKey(),
-      feedback: 'Add a checkpoint.',
-    });
-    expect(isError).toBe(true);
-    expect(structured).toMatchObject({ error: AGENT_OPEN_ROUNDS_DISABLED_REASON });
-  });
-
-  it('opens exactly one self improvement round when opt-in is on', async () => {
-    const store = new InMemoryStore();
-    await seedPublishedGame(store);
-    const at = new Date().toISOString();
-    await store.setGameAgentOpenRounds(SLUG, OWNER, true, at);
+    await ensureGameKey(store);
     app = await createApp(store);
 
     const { structured, isError } = await callOpenRound(app, {
@@ -185,11 +180,137 @@ describe('MCP open_round (BY-24)', () => {
     expect(job?.transitions?.[0]).toMatchObject({ to: 'queued', by: 'agent', reason: 'agent_open_round' });
   });
 
-  it('admits only one concurrent open_round per slug', async () => {
+  it('opens a round via creator key Bearer + slug and surfaces openedBy agent on status', async () => {
     const store = new InMemoryStore();
     await seedPublishedGame(store);
     const at = new Date().toISOString();
-    await store.setGameAgentOpenRounds(SLUG, OWNER, true, at);
+    await store.ensureCreatorAgentKey(OWNER, at);
+    const creatorKey = mintCreatorAgentKey(secret, {
+      creatorUid: OWNER,
+      keyGeneration: 1,
+      now: Date.parse('2026-08-01T12:00:00.000Z'),
+    });
+    app = await createApp(store);
+
+    const { structured, isError } = await callOpenRound(
+      app,
+      { slug: SLUG, feedback: 'Tighten the jump arc.' },
+      { authorization: `Bearer ${creatorKey}` },
+    );
+    expect(isError).toBe(false);
+    expect(structured).toMatchObject({ slug: SLUG, alreadyOpen: false });
+    const jobId = (structured as { jobId: number }).jobId;
+    expect(jobId).not.toBe(PUBLISHED_ISSUE);
+
+    const job = await store.getSubmission(jobId);
+    expect(job?.transitions?.[0]).toMatchObject({ to: 'queued', by: 'agent', reason: 'agent_open_round' });
+
+    const statusRes = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(jobId, secret)}`,
+    });
+    expect(statusRes.statusCode).toBe(200);
+    expect(statusRes.json()).toMatchObject({ openedBy: 'agent' });
+  });
+
+  it('refuses creator-key open_round for an unowned slug without blaming the key', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(PUBLISHED_ISSUE, 'g:other', 'Other Game');
+    await store.setSubmissionSlug(PUBLISHED_ISSUE, 'other-game');
+    await store.setSubmissionPublishedAt(PUBLISHED_ISSUE, '2026-07-01T00:00:00.000Z');
+    await store.recordJobTransition(PUBLISHED_ISSUE, {
+      to: 'published',
+      at: '2026-07-01T00:00:00.000Z',
+      by: 'operator',
+      reason: 'published',
+    });
+    const at = new Date().toISOString();
+    await store.ensureCreatorAgentKey(OWNER, at);
+    const creatorKey = mintCreatorAgentKey(secret, {
+      creatorUid: OWNER,
+      keyGeneration: 1,
+      now: Date.parse('2026-08-01T12:00:00.000Z'),
+    });
+    app = await createApp(store);
+
+    const { structured, isError } = await callOpenRound(
+      app,
+      { slug: 'other-game', feedback: 'Do not rotate for a typo.' },
+      { authorization: `Bearer ${creatorKey}` },
+    );
+    expect(isError).toBe(true);
+    expect((structured as { error: string }).error).toBe(SLUG_NOT_ON_ACCOUNT_REASON);
+    expect((structured as { error: string }).error).not.toMatch(/rotated/i);
+  });
+
+  it('refuses open_round when gameAgentKeys/{slug} is owned by someone else', async () => {
+    const store = new InMemoryStore();
+    await seedPublishedGame(store);
+    // Lock doc belongs to another account — ensure for OWNER must return null.
+    await store.ensureGameAgentKey(SLUG, 'g:other', '2026-07-01T00:00:00.000Z');
+    const at = new Date().toISOString();
+    await store.ensureCreatorAgentKey(OWNER, at);
+    const creatorKey = mintCreatorAgentKey(secret, {
+      creatorUid: OWNER,
+      keyGeneration: 1,
+      now: Date.parse('2026-08-01T12:00:00.000Z'),
+    });
+    app = await createApp(store);
+
+    const { structured, isError } = await callOpenRound(
+      app,
+      { slug: SLUG, feedback: 'Do not touch another account lock.' },
+      { authorization: `Bearer ${creatorKey}` },
+    );
+    expect(isError).toBe(true);
+    expect((structured as { error: string }).error).toBe(SLUG_NOT_ON_ACCOUNT_REASON);
+  });
+
+  it('assigns an agent-opened round to the authorized creator after a slug transfer', async () => {
+    const store = new InMemoryStore();
+    // Previous owner published; current owner has a newer live (non-active) job.
+    await store.createSubmission(PUBLISHED_ISSUE, 'g:previous', 'Comet Courier');
+    await store.setSubmissionSlug(PUBLISHED_ISSUE, SLUG);
+    await store.setSubmissionPublishedAt(PUBLISHED_ISSUE, '2026-07-01T00:00:00.000Z');
+    await store.recordJobTransition(PUBLISHED_ISSUE, {
+      to: 'published',
+      at: '2026-07-01T00:00:00.000Z',
+      by: 'operator',
+      reason: 'published',
+    });
+    await store.createSubmission(11, OWNER, 'Comet Courier');
+    await store.setSubmissionSlug(11, SLUG);
+    const map = (store as unknown as { submissions: Map<number, { createdAt: string }> }).submissions;
+    const published = map.get(PUBLISHED_ISSUE)!;
+    const live = map.get(11)!;
+    map.set(PUBLISHED_ISSUE, { ...published, createdAt: '2026-07-01T00:00:00.000Z' });
+    map.set(11, { ...live, createdAt: '2026-09-01T12:00:00.000Z' });
+
+    const at = new Date().toISOString();
+    await store.ensureCreatorAgentKey(OWNER, at);
+    const creatorKey = mintCreatorAgentKey(secret, {
+      creatorUid: OWNER,
+      keyGeneration: 1,
+      now: Date.parse('2026-08-01T12:00:00.000Z'),
+    });
+    app = await createApp(store);
+
+    const { structured, isError } = await callOpenRound(
+      app,
+      { slug: SLUG, feedback: 'Keep the round on the new owner.' },
+      { authorization: `Bearer ${creatorKey}` },
+    );
+    expect(isError).toBe(false);
+    const jobId = (structured as { jobId: number }).jobId;
+    const job = await store.getSubmission(jobId);
+    expect(job?.ownerUid).toBe(OWNER);
+    expect(job?.ownerUid).not.toBe('g:previous');
+  });
+
+  it('admits only one concurrent open_round per slug', async () => {
+    const store = new InMemoryStore();
+    await seedPublishedGame(store);
+    await ensureGameKey(store);
     app = await createApp(store);
 
     const results = await Promise.all([
@@ -215,8 +336,7 @@ describe('MCP open_round (BY-24)', () => {
   it('is idempotent while a round is open and does not stack', async () => {
     const store = new InMemoryStore();
     await seedPublishedGame(store);
-    const at = new Date().toISOString();
-    await store.setGameAgentOpenRounds(SLUG, OWNER, true, at);
+    await ensureGameKey(store);
     app = await createApp(store);
 
     const first = await callOpenRound(app, { key: gameKey(), feedback: 'First change.' });
@@ -235,8 +355,7 @@ describe('MCP open_round (BY-24)', () => {
   it('refuses when improvement quota is exhausted', async () => {
     const store = new InMemoryStore();
     await seedPublishedGame(store);
-    const at = new Date().toISOString();
-    await store.setGameAgentOpenRounds(SLUG, OWNER, true, at);
+    await ensureGameKey(store);
     const dateStr = new Date().toISOString().slice(0, 10);
     await store.checkAndIncrementQuota(OWNER, dateStr, 2, 'improvements');
     await store.checkAndIncrementQuota(OWNER, dateStr, 2, 'improvements');
@@ -253,7 +372,7 @@ describe('MCP open_round (BY-24)', () => {
   it('moderates feedback on this path', async () => {
     const store = new InMemoryStore();
     await seedPublishedGame(store);
-    await store.setGameAgentOpenRounds(SLUG, OWNER, true, new Date().toISOString());
+    await ensureGameKey(store);
     app = await createApp(store, rejectingChecker());
 
     const { structured, isError } = await callOpenRound(app, {
@@ -267,7 +386,6 @@ describe('MCP open_round (BY-24)', () => {
   it('rejects a round key where the durable key is required', async () => {
     const store = new InMemoryStore();
     await seedPublishedGame(store);
-    await store.setGameAgentOpenRounds(SLUG, OWNER, true, new Date().toISOString());
     app = await createApp(store);
 
     const roundKey = mintAgentToken(PUBLISHED_ISSUE, secret, { roundGeneration: 1 });
@@ -282,7 +400,6 @@ describe('MCP open_round (BY-24)', () => {
   it('rejects a sessionKey where the durable key is required', async () => {
     const store = new InMemoryStore();
     await seedPublishedGame(store);
-    await store.setGameAgentOpenRounds(SLUG, OWNER, true, new Date().toISOString());
     app = await createApp(store);
 
     const sessionKey = mintMcpSessionKey(secret, {
@@ -301,7 +418,6 @@ describe('MCP open_round (BY-24)', () => {
   it('refuses an unpublished game', async () => {
     const store = new InMemoryStore();
     const at = new Date().toISOString();
-    await store.setGameAgentOpenRounds(SLUG, OWNER, true, at);
     await store.createSubmission(30, OWNER, 'Unpublished');
     await store.setSubmissionSlug(30, SLUG);
     await store.ensureGameAgentKey(SLUG, OWNER, at);
@@ -320,7 +436,7 @@ describe('MCP open_round (BY-24)', () => {
     const at = new Date().toISOString();
     await store.createSubmission(35, OWNER, 'Unpublished comet');
     await store.setSubmissionSlug(35, SLUG);
-    await store.setGameAgentOpenRounds(SLUG, OWNER, true, at);
+    await store.ensureGameAgentKey(SLUG, OWNER, at);
 
     const otherSlug = 'other-game';
     await store.createSubmission(40, OWNER, 'Other');

@@ -101,7 +101,14 @@ describe('CreatorStudioView publish→improve handoff', () => {
           kimi: 'npx mcp-remote https://example.test/api/mcp',
           cli: 'curl https://example.test/api/mcp',
         },
-        kickoffPrompt: 'Build "TV Tycoon" for gamedev.pl.\nStart with the gamedevpl tool, key: round.key',
+        kickoffPrompt:
+          'Build "TV Tycoon" for gamedev.pl.\nStart with the gamedevpl tool, slug: tv-tycoon.\nstart returns your workflow; after gate green the round is done.',
+        mcpUrl: 'https://example.test/api/mcp',
+        authorizationHeader: 'Authorization: Bearer test-key-not-for-display',
+        authorizationHeaderMasked: 'Authorization: Bearer ····play',
+        fingerprint: 'play',
+        keyGeneration: 1,
+        slug: 'tv-tycoon',
         expiresAt: Math.floor(Date.now() / 1000) + 3600,
       }),
     }));
