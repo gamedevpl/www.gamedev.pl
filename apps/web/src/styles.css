@@ -5483,6 +5483,32 @@ body.player-open {
   color: var(--text-heading, #fff);
 }
 
+.studio-connect-install-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.studio-connect-install-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--turquoise, #00e4ac) 55%, var(--panel-border, #33383d));
+  background: color-mix(in srgb, var(--turquoise, #00e4ac) 14%, transparent);
+  color: var(--text-heading, #fff);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.studio-connect-install-link:hover {
+  border-color: var(--turquoise, #00e4ac);
+  background: color-mix(in srgb, var(--turquoise, #00e4ac) 22%, transparent);
+}
+
 .studio-connect-tabs {
   display: flex;
   flex-wrap: wrap;

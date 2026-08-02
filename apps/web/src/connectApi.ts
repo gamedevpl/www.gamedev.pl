@@ -13,9 +13,21 @@ export type ConnectClient = (typeof CONNECT_CLIENTS)[number];
 
 export type InstallSnippets = Record<ConnectClient, string>;
 
+export type McpInstallLinks = {
+  /** Credential-free Cursor deeplink (server URL only). */
+  cursor: string;
+  /** Credential-free VS Code deeplink (server URL only). */
+  vscode: string;
+};
+
 export type ConnectPayload = {
   /** Display snippets — Authorization header is masked. */
   installSnippets: InstallSnippets;
+  /**
+   * One-click install deep links (BY-18c). Server URL only — never a credential.
+   * Hand-copy snippets remain the universal path for every client.
+   */
+  installLinks: McpInstallLinks;
   /** Keyless kickoff — slug only, never a key. */
   kickoffPrompt: string;
   mcpUrl: string;

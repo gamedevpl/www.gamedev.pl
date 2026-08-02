@@ -863,7 +863,7 @@
   },
   "connect": {
     "title": "Connect your coding agent",
-    "lead": "This round waits for your agent. Paste the MCP config once, then the build prompt.",
+    "lead": "This round waits for your agent. Add gamedev.pl in one click when you can, or paste the config, then the build prompt.",
     "loading": "Preparing your connect steps…",
     "loadError": "We couldn't load the connect steps right now. Refresh in a moment.",
     "copied": "Copied",
@@ -877,10 +877,15 @@
       "key": "Paste header",
       "oauth": "Sign in"
     },
+    "installLinks": {
+      "hint": "One click adds the gamedev.pl server URL only — sign in or paste your Authorization header afterwards. No secret rides in the link.",
+      "cursor": "Add to Cursor",
+      "vscode": "Add to VS Code"
+    },
     "step1": {
       "title": "Add gamedev.pl to your agent",
       "clients": "Agent client",
-      "configHint": "Paste this into your agent's MCP server settings. The Authorization line is masked here — Copy puts the real header on your clipboard.",
+      "configHint": "Or paste this into your agent's MCP server settings. The Authorization line is masked here — Copy puts the real header on your clipboard.",
       "meta": "Ends in {{fingerprint}} · generation {{generation}} · expires {{when}}",
       "skip": "Already added it for another game? Skip this",
       "skipped": "Skipped — using the install you already have."
@@ -893,7 +898,7 @@
     },
     "oauth": {
       "title": "Sign in from your agent",
-      "hint": "Add this MCP URL in your agent, then sign in when it asks. Pass the game slug from the prompt below when you start."
+      "hint": "Or copy this MCP URL into any other agent, then sign in when it asks. Pass the game slug from the prompt below when you start."
     },
     "clients": {
       "claudeCode": "Claude Code",

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "pl.gamedev/creator",
+  "title": "gamedev.pl",
+  "description": "Build and improve browser games on gamedev.pl from your coding agent.",
+  "version": "1.0.0",
+  "websiteUrl": "https://www.gamedev.pl/studio",
+  "repository": {
+    "url": "https://github.com/gamedevpl/www.gamedev.pl",
+    "source": "github",
+    "id": "40428353"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://www.gamedev.pl/api/mcp"
+    }
+  ],
+  "_meta": {
+    "pl.gamedev/auth": {
+      "oauth_protected_resource": "https://www.gamedev.pl/.well-known/oauth-protected-resource"
+    },
+    "pl.gamedev/listing": {
+      "status": "draft-not-submitted",
+      "note": "Do not publish until the owner clears terms and consent. Live copy is served at /.well-known/mcp/server.json."
+    }
+  }
+}

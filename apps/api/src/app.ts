@@ -63,6 +63,7 @@ import { registerRateLimit } from './rate-limit.js';
 import { isKnownSpaShellPath, looksLikeStaticAsset } from './spa-paths.js';
 import { logModerationRejection } from './moderation-metrics.js';
 import { registerOAuthProtectedResourceRoutes } from './mcp-oauth-metadata.js';
+import { registerMcpServerDiscoveryRoutes } from './mcp-server-discovery.js';
 import { registerOAuthAuthorizationServerRoutes } from './oauth-as.js';
 import { registerCreatorAgentKeyRoutes } from './creator-agent-key-routes.js';
 
@@ -565,6 +566,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // RFC 9728 protected-resource metadata for the MCP endpoint (BY-18a). Public,
   // cacheable, no auth — advertises where an authorization server will live.
   registerOAuthProtectedResourceRoutes(app);
+
+  // Registry-shaped server.json for remote discovery (BY-18c). Public, cacheable;
+  // auth facts stay in the PRM document above — this only links to it.
+  registerMcpServerDiscoveryRoutes(app);
 
   const oauthSessionSecret = options.sessionSecret ?? process.env.SESSION_SECRET ?? 'dev-session-secret-change-me';
   const oauthSessionSecretPrev = options.sessionSecretPrev ?? process.env.SESSION_SECRET_PREV;

@@ -10,6 +10,11 @@ import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
 import {
+  assertInstallLinksHaveNoCredentials,
+  decodeCursorInstallConfig,
+  decodeVscodeInstallConfig,
+} from './mcp-install-links.js';
+import {
   buildInstallSnippets,
   buildKickoffPrompt,
   mcpEndpointUrl,
@@ -191,6 +196,14 @@ describe('self-build-connect templates', () => {
       expect(snippet).not.toContain(creatorKey);
     }
 
+    // BY-18c: deep links are URL-only — never the creator key or any header material.
+    expect(Object.keys(payload.installLinks).sort()).toEqual(['cursor', 'vscode']);
+    expect(() => assertInstallLinksHaveNoCredentials(payload.installLinks)).not.toThrow();
+    expect(decodeCursorInstallConfig(payload.installLinks.cursor)).toEqual({ url: payload.mcpUrl });
+    expect(decodeVscodeInstallConfig(payload.installLinks.vscode)).toMatchObject({ url: payload.mcpUrl });
+    expect(payload.installLinks.cursor).not.toContain(creatorKey);
+    expect(payload.installLinks.vscode).not.toContain(creatorKey);
+
     const claims = verifyCreatorAgentKey(creatorKey, secret);
     expect(claims).toMatchObject({ creatorUid: 'g:creator', keyGeneration: 3 });
     expect(payload.expiresAt).toBe(claims.exp);
@@ -255,6 +268,7 @@ describe('GET /api/submissions/:id/connect (BY-03 / BY-27b)', () => {
     expect(response.headers['cache-control']).toBe('no-store');
     const body = response.json() as {
       installSnippets: Record<string, string>;
+      installLinks: { cursor: string; vscode: string };
       kickoffPrompt: string;
       expiresAt: number;
       keyGeneration: number;
@@ -282,6 +296,12 @@ describe('GET /api/submissions/:id/connect (BY-03 / BY-27b)', () => {
       expect(snippet).not.toContain(creatorKey);
       expect(snippet).not.toMatch(/\bkey:\s*\S+/);
     }
+
+    // Hand-copy paths unchanged; deep links are a parallel, credential-free affordance.
+    expect(() => assertInstallLinksHaveNoCredentials(body.installLinks)).not.toThrow();
+    expect(body.installLinks.cursor).not.toContain(creatorKey);
+    expect(body.installLinks.vscode).not.toContain(creatorKey);
+    expect(decodeCursorInstallConfig(body.installLinks.cursor)).toEqual({ url: mcpUrl });
 
     expect(body.kickoffPrompt).toContain('Build "Connect Game" for gamedev.pl.');
     expect(body.kickoffPrompt).toContain(`slug: ${record.slug}`);

@@ -16,6 +16,7 @@ import {
   verifyCreatorAgentKey,
 } from './agent-creator-key.js';
 import { mintGameAgentKey, verifyGameAgentKey } from './agent-game-key.js';
+import { buildMcpInstallLinks, type McpInstallLinks } from './mcp-install-links.js';
 
 /** Path of the remote MCP endpoint (served by BY-05). Install snippets point here. */
 export const MCP_ENDPOINT_PATH = '/api/mcp';
@@ -30,6 +31,11 @@ export interface InstallSnippets {
 
 export interface ConnectPayload {
   installSnippets: InstallSnippets;
+  /**
+   * Credential-free one-click install deep links (BY-18c). Server URL only —
+   * never an Authorization header or key. Hand-copy snippets remain the universal path.
+   */
+  installLinks: McpInstallLinks;
   /** Keyless kickoff — slug only, never a key. */
   kickoffPrompt: string;
   /** Absolute MCP endpoint URL. */
@@ -256,6 +262,8 @@ export function mintConnectPayload(input: MintConnectPayloadInput): ConnectPaylo
       appBaseUrl: input.appBaseUrl,
       authorizationBearer: authorizationHeaderMasked,
     }),
+    // Deep links are built from the URL alone — never from authorizationHeader.
+    installLinks: buildMcpInstallLinks(mcpUrl),
     kickoffPrompt: buildKickoffPrompt({
       title: input.title,
       slug: input.slug,

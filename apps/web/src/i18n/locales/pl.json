@@ -867,7 +867,7 @@
   },
   "connect": {
     "title": "Podłącz swojego agenta",
-    "lead": "Ta runda czeka na Twojego agenta. Wklej raz konfigurację MCP, potem prompt budowy.",
+    "lead": "Ta runda czeka na Twojego agenta. Dodaj gamedev.pl jednym kliknięciem, gdy możesz, albo wklej konfigurację, potem prompt budowy.",
     "loading": "Przygotowujemy kroki połączenia…",
     "loadError": "Nie udało się wczytać kroków połączenia. Odśwież za chwilę.",
     "copied": "Skopiowano",
@@ -881,10 +881,15 @@
       "key": "Wklej nagłówek",
       "oauth": "Zaloguj się"
     },
+    "installLinks": {
+      "hint": "Jedno kliknięcie dodaje tylko URL serwera gamedev.pl — potem zaloguj się albo wklej nagłówek Authorization. Żaden sekret nie jedzie w linku.",
+      "cursor": "Dodaj do Cursora",
+      "vscode": "Dodaj do VS Code"
+    },
     "step1": {
       "title": "Dodaj gamedev.pl do swojego agenta",
       "clients": "Klient agenta",
-      "configHint": "Wklej to w ustawieniach serwera MCP swojego agenta. Linia Authorization jest tu zamaskowana — Kopiuj wstawia prawdziwy nagłówek do schowka.",
+      "configHint": "Albo wklej to w ustawieniach serwera MCP swojego agenta. Linia Authorization jest tu zamaskowana — Kopiuj wstawia prawdziwy nagłówek do schowka.",
       "meta": "Końcówka {{fingerprint}} · generacja {{generation}} · wygasa {{when}}",
       "skip": "Już dodałeś to przy innej grze? Pomiń",
       "skipped": "Pominięte — używasz wcześniejszej instalacji."
@@ -897,7 +902,7 @@
     },
     "oauth": {
       "title": "Zaloguj się z poziomu agenta",
-      "hint": "Dodaj ten URL MCP w agencie, a potem zaloguj się, gdy zapyta. Przy starcie podaj slug gry z promptu poniżej."
+      "hint": "Albo skopiuj ten URL MCP do innego agenta, a potem zaloguj się, gdy zapyta. Przy starcie podaj slug gry z promptu poniżej."
     },
     "clients": {
       "claudeCode": "Claude Code",

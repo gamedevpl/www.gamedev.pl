@@ -50,9 +50,10 @@ type StudioConnectCardProps = {
 };
 
 /**
- * Connect card for a self-build round waiting on the creator's own coding agent (BY-27b).
+ * Connect card for a self-build round waiting on the creator's own coding agent (BY-27b / BY-18c).
  *
- * Step 1: paste MCP config (URL + Authorization header) — or choose OAuth sign-in.
+ * Step 1: one-click install (Cursor / VS Code, credential-free) and/or paste MCP config —
+ * or choose OAuth sign-in. Deep links carry the server URL only; never a credential.
  * Step 2: paste the keyless kickoff prompt (slug only; never a secret).
  * The full Authorization value is held in memory for Copy and never rendered.
  */
@@ -194,6 +195,23 @@ export function StudioConnectCard({ token, agentConnected = false }: StudioConne
                 </span>
                 <h4 className="studio-connect-step-title">{t('connect.step1.title')}</h4>
               </div>
+              <p className="studio-connect-same">{t('connect.installLinks.hint')}</p>
+              <div className="studio-connect-install-links" data-testid="connect-install-links">
+                <a
+                  className="studio-connect-install-link"
+                  href={payload.installLinks.cursor}
+                  data-testid="connect-install-cursor"
+                >
+                  {t('connect.installLinks.cursor')}
+                </a>
+                <a
+                  className="studio-connect-install-link"
+                  href={payload.installLinks.vscode}
+                  data-testid="connect-install-vscode"
+                >
+                  {t('connect.installLinks.vscode')}
+                </a>
+              </div>
               <p className="studio-connect-same">{t('connect.step1.configHint')}</p>
               <div className="studio-connect-tabs" role="tablist" aria-label={t('connect.step1.clients')}>
                 {CONNECT_CLIENTS.map((id) => (
@@ -259,6 +277,23 @@ export function StudioConnectCard({ token, agentConnected = false }: StudioConne
                   1
                 </span>
                 <h4 className="studio-connect-step-title">{t('connect.oauth.title')}</h4>
+              </div>
+              <p className="studio-connect-same">{t('connect.installLinks.hint')}</p>
+              <div className="studio-connect-install-links" data-testid="connect-install-links">
+                <a
+                  className="studio-connect-install-link"
+                  href={payload.installLinks.cursor}
+                  data-testid="connect-install-cursor"
+                >
+                  {t('connect.installLinks.cursor')}
+                </a>
+                <a
+                  className="studio-connect-install-link"
+                  href={payload.installLinks.vscode}
+                  data-testid="connect-install-vscode"
+                >
+                  {t('connect.installLinks.vscode')}
+                </a>
               </div>
               <p className="studio-connect-same">{t('connect.oauth.hint')}</p>
               <pre className="studio-connect-snippet" tabIndex={0}>
