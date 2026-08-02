@@ -3,7 +3,9 @@ import { z } from 'zod';
 import {
   looksLikeGameAgentKey,
   IMPROVEMENT_QUOTA_EXHAUSTED_REASON,
+  NO_OPEN_ROUND_REASON,
   OPEN_ROUND_IN_PROGRESS_REASON,
+  PLATFORM_ROUND_REASON,
 } from './agent-game-key.js';
 import {
   findActiveRoundForSlug,
@@ -35,6 +37,7 @@ import {
   sendMcpOAuthChallenge,
   shouldIssueMcpOAuthChallenge,
 } from './mcp-oauth-metadata.js';
+import { looksLikeAsAccessToken, verifyAsAccessToken } from './oauth-tokens.js';
 import { MCP_ENDPOINT_PATH } from './self-build-connect.js';
 import { BUILD_STEPS, sanitizeCreatorText } from './submission-status.js';
 import type { Store, SubmissionRecord } from './store.js';
@@ -343,6 +346,11 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     let channelToken: string;
 
     if (bearer) {
+      if (looksLikeAsAccessToken(bearer)) {
+        return toolErr(
+          'OAuth access proves your identity only — call start() with your game slug (Authorization: Bearer <oauth access>) to get a session key',
+        );
+      }
       // Durable per-game openers are start-only — never a write capability via Bearer.
       if (looksLikeGameAgentKey(bearer)) {
         return toolErr(
@@ -456,11 +464,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
   > = {
     start: {
       description:
-        "Bind this MCP client to a build round using the key from the creator's Studio kickoff prompt. " +
-        'Accepts a durable per-game key (preferred) or a legacy round-scoped key. ' +
+        "Bind this MCP client to a build round using the key from the creator's Studio kickoff prompt, " +
+        'or sign in with OAuth and pass your game slug. ' +
+        'Accepts a durable per-game key (preferred), a legacy round-scoped key, or OAuth Bearer + slug. ' +
         'Returns a short-lived sessionKey — pass it as sessionKey on every later tool call — plus a workflow ' +
         '(the ordered start→done loop), an inbox policy, and what to relay if a later call is refused. ' +
-        'The game key itself is an opener only — never a write capability. ' +
+        'The game key itself is an opener only — never a write capability. OAuth access is identity only. ' +
         'Does not treat Mcp-Session-Id as authority. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
@@ -468,10 +477,17 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         properties: {
           key: {
             type: 'string',
-            description: 'Game key (or legacy round key) from the Studio kickoff prompt (the line "key: …").',
+            description:
+              'Game key (or legacy round key) from the Studio kickoff prompt (the line "key: …"). ' +
+              'Optional when using OAuth Bearer + slug.',
+          },
+          slug: {
+            type: 'string',
+            description:
+              'Game slug for your open self-build round. Required with OAuth Bearer; ignored with a game key.',
           },
         },
-        required: ['key'],
+        required: [],
       },
       handler: async (args, ctx) => {
         if (!store || !agentTokenSecret) {
@@ -485,9 +501,80 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         }
 
         const key = typeof args.key === 'string' ? args.key.trim() : '';
+        const slugArg = typeof args.slug === 'string' ? args.slug.trim() : '';
+        const bearer = ctx.bearerToken;
+
+        if (!key && bearer && looksLikeAsAccessToken(bearer)) {
+          const asAccess = await verifyAsAccessToken(store, bearer, now());
+          if (!asAccess) {
+            noteInvalidStart(ctx.request);
+            return toolErr('invalid OAuth access — sign in again from your coding agent');
+          }
+          if (!slugArg) {
+            return toolErr('slug is required when using OAuth — pass the game slug for your open build round');
+          }
+
+          const active = await findActiveRoundForSlug(store, slugArg, asAccess.ownerUid);
+          if (!active) {
+            noteInvalidStart(ctx.request);
+            return toolErr(NO_OPEN_ROUND_REASON);
+          }
+          const builder = active.builder ?? 'platform';
+          if (builder !== 'self') {
+            noteInvalidStart(ctx.request);
+            return toolErr(PLATFORM_ROUND_REASON);
+          }
+
+          pruneTransportSessions(now());
+          pruneInvalidStartBuckets(now());
+          const sessionId = ctx.sessionId && transportSessions.has(ctx.sessionId) ? ctx.sessionId : newMcpSessionId();
+          transportSessions.set(sessionId, { createdAt: now() });
+
+          const jobId = active.issueNumber;
+          const roundGeneration = active.roundGeneration ?? 1;
+          const sessionKey = mintMcpSessionKey(agentTokenSecret, {
+            sessionId,
+            jobId,
+            roundGeneration,
+            now: now(),
+          });
+          const sessionClaims = verifyMcpSessionKey(sessionKey, agentTokenSecret);
+
+          const cap = active.builder === 'self' ? selfBuildDeliveryCap() : null;
+          const used = active.roundDeliveryCount ?? 0;
+
+          const structured = {
+            sessionKey,
+            sessionId,
+            jobId,
+            slug: active.slug ?? null,
+            title: active.title,
+            state: active.state ?? 'queued',
+            round: roundGeneration,
+            locales: active.locale ? [active.locale, 'en'] : ['en'],
+            deliveriesRemaining: cap === null ? null : Math.max(0, cap - used),
+            expiresAt: sessionClaims.exp,
+            workflow: SESSION_WORKFLOW,
+            inboxPolicy: INBOX_POLICY,
+            whenRefused: RETIRED_KEY_ETIQUETTE,
+          };
+          const base = toolOk(structured);
+          return {
+            ...base,
+            content: [...base.content, { type: 'text', text: SESSION_WORKFLOW_TEXT }],
+          };
+        }
+
+        if (key && looksLikeAsAccessToken(key)) {
+          noteInvalidStart(ctx.request);
+          return toolErr('OAuth access must be sent as Authorization Bearer, not as the key argument');
+        }
+
         if (!key) {
           noteInvalidStart(ctx.request);
-          return toolErr("key is required — paste the key from the creator's Studio kickoff prompt");
+          return toolErr(
+            "key is required — paste the key from the creator's Studio kickoff prompt, or use OAuth Bearer + slug",
+          );
         }
 
         let record: SubmissionRecord;

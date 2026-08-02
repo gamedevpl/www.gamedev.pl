@@ -59,6 +59,7 @@ import { registerRateLimit } from './rate-limit.js';
 import { isKnownSpaShellPath, looksLikeStaticAsset } from './spa-paths.js';
 import { logModerationRejection } from './moderation-metrics.js';
 import { registerOAuthProtectedResourceRoutes } from './mcp-oauth-metadata.js';
+import { registerOAuthAuthorizationServerRoutes } from './oauth-as.js';
 
 const GenerateRequestSchema = z.object({
   prompt: z.string().trim().min(1, 'prompt is required').max(500, 'prompt is too long'),
@@ -522,6 +523,14 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // RFC 9728 protected-resource metadata for the MCP endpoint (BY-18a). Public,
   // cacheable, no auth — advertises where an authorization server will live.
   registerOAuthProtectedResourceRoutes(app);
+
+  const oauthSessionSecret = options.sessionSecret ?? process.env.SESSION_SECRET ?? 'dev-session-secret-change-me';
+  const oauthSessionSecretPrev = options.sessionSecretPrev ?? process.env.SESSION_SECRET_PREV;
+  registerOAuthAuthorizationServerRoutes(app, {
+    store,
+    sessionSecret: oauthSessionSecret,
+    sessionSecretPrev: oauthSessionSecretPrev,
+  });
 
   // Apex → www canonical-host redirect. Cloud Run domain mappings can't emit a
   // 301, and both www.gamedev.pl and gamedev.pl terminate at this same service,

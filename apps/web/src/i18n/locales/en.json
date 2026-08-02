@@ -898,5 +898,18 @@
       "off": "Off",
       "hint": "When on, your coding agent can open post-publish improvement rounds with this game's key. Uses the same daily improvement limit as starting a round here."
     }
+  },
+  "oauthClients": {
+    "title": "Connected coding agents",
+    "hint": "Agents you approved to sign in as you. Revoking disconnects them — they will need your approval again.",
+    "loading": "Loading connected clients…",
+    "loadError": "We couldn't load connected clients right now.",
+    "revokeError": "We couldn't disconnect that client. Try again in a moment.",
+    "empty": "No coding agents are connected to your account.",
+    "connected": "Connected {{when}}",
+    "lastUsed": "Last used {{when}}",
+    "neverUsed": "not yet",
+    "revoke": "Disconnect",
+    "revoking": "Disconnecting…"
   }
 }

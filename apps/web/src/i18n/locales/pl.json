@@ -902,5 +902,18 @@
       "off": "Wył.",
       "hint": "Gdy włączone, Twój agent może otwierać rundy ulepszeń po publikacji tym kluczem gry. Zużywa ten sam dzienny limit ulepszeń co start rundy w Studio."
     }
+  },
+  "oauthClients": {
+    "title": "Podłączone agenty kodujące",
+    "hint": "Agenty, którym zatwierdziłeś logowanie na Twoje konto. Odłączenie wymaga ponownej zgody.",
+    "loading": "Wczytywanie podłączonych klientów…",
+    "loadError": "Nie udało się wczytać podłączonych klientów.",
+    "revokeError": "Nie udało się odłączyć tego klienta. Spróbuj za chwilę.",
+    "empty": "Żaden agent kodujący nie jest podłączony do Twojego konta.",
+    "connected": "Podłączono {{when}}",
+    "lastUsed": "Ostatnio użyto {{when}}",
+    "neverUsed": "jeszcze nie",
+    "revoke": "Odłącz",
+    "revoking": "Odłączanie…"
   }
 }
