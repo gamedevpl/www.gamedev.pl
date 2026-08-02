@@ -2755,6 +2755,90 @@ body.player-open {
   font-weight: 600;
 }
 
+/* "Sent!" confirmation: dismissable, and in the compact composer it floats above the
+   box instead of growing a second row that stays until the creator types again. */
+.status-feedback-receipt {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Inside the composer, over the cleared field — not above it (that covered the
+   context bar) and not as a second row (that permanently grew the box).
+   Pointer events pass through so a click can still focus the textarea; only the
+   dismiss control re-enables hits.
+   `top` + `bottom` pin it to the composer's padding box so wrapped copy on a
+   320px phone cannot grow into the thread context bar and cover Stop. */
+.status-feedback-receipt.is-floating {
+  position: absolute;
+  left: 8px;
+  right: 48px;
+  top: 8px;
+  bottom: 8px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px 4px 10px;
+  border-radius: 12px;
+  background: rgba(12, 18, 28, 0.96);
+  border: 1px solid rgba(0, 228, 172, 0.35);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
+  animation: status-receipt-in 0.2s ease-out;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.status-feedback-receipt.is-floating .status-feedback-sent {
+  flex: 1;
+  min-width: 0;
+  align-items: flex-start;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.status-feedback-receipt.is-floating .status-feedback-sent-text {
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.status-feedback-receipt-dismiss {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.status-feedback-receipt-dismiss:hover {
+  color: var(--text);
+  background: rgba(148, 163, 184, 0.12);
+}
+
+@keyframes status-receipt-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Kept, but nothing started behind it. Amber rather than the error red: the creator did
    nothing wrong and has nothing to redo — this is a caveat on "sent", not a failure. */
 .status-feedback-notice {
@@ -4591,15 +4675,63 @@ body.player-open {
   flex-wrap: wrap;
 }
 
+.studio-thread-context.is-active {
+  border-color: rgba(0, 228, 172, 0.32);
+  background: linear-gradient(90deg, rgba(0, 228, 172, 0.06), var(--panel-card) 40%);
+}
+
 .studio-context-phase {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   font-weight: 700;
   color: var(--text);
+}
+
+.studio-context-phase-spinner {
+  width: 11px;
+  height: 11px;
+  flex: none;
+  border-radius: 50%;
+  border: 1.5px solid rgba(0, 228, 172, 0.22);
+  border-top-color: var(--turquoise);
+  animation: status-spin 0.8s linear infinite;
 }
 
 .studio-context-beat,
 .studio-context-progress {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+}
+
+/* Quiet stop control on the thread bar — same two-step abandon, sized for the row. */
+.studio-context-stop {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.studio-context-stop:hover {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.4);
+}
+
+.studio-context-stop.is-danger {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.45);
+  font-weight: 600;
+}
+
+.status-abandon-confirm.is-compact {
+  gap: 6px;
 }
 
 .studio-thread-context .primary-btn,
@@ -4614,6 +4746,7 @@ body.player-open {
    you focus and the button something inside it — and the focus ring, now on the box,
    covers both. */
 .status-composer.is-compact {
+  position: relative;
   margin: 0;
   padding: 5px 5px 5px 12px;
   border: 1px solid var(--panel-border);
