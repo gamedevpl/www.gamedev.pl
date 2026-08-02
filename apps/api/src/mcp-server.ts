@@ -1,5 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { looksLikeGameAgentKey } from './agent-game-key.js';
+import { resolveGameAgentKeyForStart } from './agent-game-key-resolve.js';
 import {
   classifyAgentTokenAccess,
   InvalidAgentTokenError,
@@ -24,12 +26,13 @@ import { BUILD_STEPS } from './submission-status.js';
 import type { Store, SubmissionRecord } from './store.js';
 
 /**
- * Streamable-HTTP MCP endpoint (BY-05).
+ * Streamable-HTTP MCP endpoint (BY-05 / BY-23).
  *
  * Job binding is prompt-first: install configures the URL alone; `start({ key })`
- * validates the round key and returns a short-lived `sessionKey`. Every later tool
- * authenticates on that argument (or on `Authorization: Bearer <round key>`). The
- * transport `Mcp-Session-Id` correlator authorizes nothing — MCP spec forbids it.
+ * validates a durable per-game opener **or** a legacy round-scoped key and returns a
+ * short-lived `sessionKey`. Every later tool authenticates on that argument (or on
+ * `Authorization: Bearer <round key>` — never the durable game key). The transport
+ * `Mcp-Session-Id` correlator authorizes nothing — MCP spec forbids it.
  *
  * Tools wrap the existing `/api/agent/build/*` channel. Mutating replies always
  * include `{ stop, pendingMessages }`.
@@ -213,9 +216,9 @@ const INBOX_POLICY =
  * stale. Matches STALE_AGENT_TOKEN_REASON so the agent relays the same fix the error names.
  */
 const RETIRED_KEY_ETIQUETTE =
-  'If a call is refused because the build is finished or the key is stale, do not retry and do not report an ' +
-  "outage. Tell the creator to open the game's Studio thread and copy the current kickoff prompt; the gamedev.pl " +
-  'MCP connection itself is unchanged.';
+  'If a call is refused because the round finished, no round is open, or the key was rotated, do not retry and do not ' +
+  "report an outage. Tell the creator to open the game's Studio thread — start a new round if none is open, or copy " +
+  'the current kickoff only if they rotated the key; the gamedev.pl MCP connection itself is unchanged.';
 
 /** Human-readable session loop for the text body of `start`. */
 const SESSION_WORKFLOW_TEXT = [
@@ -310,6 +313,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     let channelToken: string;
 
     if (bearer) {
+      // Durable per-game openers are start-only — never a write capability via Bearer.
+      if (looksLikeGameAgentKey(bearer)) {
+        return toolErr(
+          'this game key only opens a session via start() — pass the sessionKey start returned for later tools',
+        );
+      }
       try {
         claims = verifyAgentToken(bearer, agentTokenSecret);
       } catch (error) {
@@ -320,6 +329,11 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       }
       channelToken = bearer;
     } else if (sessionKeyArg) {
+      if (looksLikeGameAgentKey(sessionKeyArg)) {
+        return toolErr(
+          'this game key only opens a session via start() — pass the sessionKey start returned for later tools',
+        );
+      }
       let sessionClaims;
       try {
         sessionClaims = verifyMcpSessionKey(sessionKeyArg, agentTokenSecret);
@@ -415,8 +429,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     start: {
       description:
         "Bind this MCP client to a build round using the key from the creator's Studio kickoff prompt. " +
+        'Accepts a durable per-game key (preferred) or a legacy round-scoped key. ' +
         'Returns a short-lived sessionKey — pass it as sessionKey on every later tool call — plus a workflow ' +
         '(the ordered start→done loop), an inbox policy, and what to relay if a later call is refused. ' +
+        'The game key itself is an opener only — never a write capability. ' +
         'Does not treat Mcp-Session-Id as authority. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
@@ -424,7 +440,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         properties: {
           key: {
             type: 'string',
-            description: 'Round key from the Studio kickoff prompt (the line "key: …").',
+            description: 'Game key (or legacy round key) from the Studio kickoff prompt (the line "key: …").',
           },
         },
         required: ['key'],
@@ -446,33 +462,52 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           return toolErr("key is required — paste the key from the creator's Studio kickoff prompt");
         }
 
-        let claims: AgentTokenClaims;
-        try {
-          claims = verifyAgentToken(key, agentTokenSecret);
-        } catch {
-          noteInvalidStart(ctx.request);
-          return toolErr('invalid key — ask the creator for the current prompt in their Studio thread');
-        }
+        let record: SubmissionRecord;
+        let jobId: number;
+        let roundGeneration: number;
 
-        const record = await store.getSubmission(claims.jobId);
-        if (!record) {
-          noteInvalidStart(ctx.request);
-          return toolErr('unknown build — ask the creator for the current prompt in their Studio thread');
-        }
-
-        let access: AgentTokenAccess;
-        try {
-          access = classifyAgentTokenAccess(claims, record, now());
-        } catch (error) {
-          noteInvalidStart(ctx.request);
-          if (error instanceof InvalidAgentTokenError) {
-            return toolErr(error.message || FINISHED_REASON);
+        if (looksLikeGameAgentKey(key)) {
+          const resolved = await resolveGameAgentKeyForStart(store, key, agentTokenSecret, now());
+          if (!resolved.ok) {
+            noteInvalidStart(ctx.request);
+            return toolErr(resolved.reason);
           }
-          throw error;
-        }
-        if (access !== 'active') {
-          noteInvalidStart(ctx.request);
-          return toolErr(FINISHED_REASON);
+          record = resolved.record;
+          jobId = record.issueNumber;
+          roundGeneration = record.roundGeneration ?? 1;
+        } else {
+          // Legacy round-scoped key — still accepted for in-flight rounds.
+          let claims: AgentTokenClaims;
+          try {
+            claims = verifyAgentToken(key, agentTokenSecret);
+          } catch {
+            noteInvalidStart(ctx.request);
+            return toolErr('invalid key — ask the creator for the current prompt in their Studio thread');
+          }
+
+          const found = await store.getSubmission(claims.jobId);
+          if (!found) {
+            noteInvalidStart(ctx.request);
+            return toolErr('unknown build — ask the creator for the current prompt in their Studio thread');
+          }
+
+          let access: AgentTokenAccess;
+          try {
+            access = classifyAgentTokenAccess(claims, found, now());
+          } catch (error) {
+            noteInvalidStart(ctx.request);
+            if (error instanceof InvalidAgentTokenError) {
+              return toolErr(error.message || FINISHED_REASON);
+            }
+            throw error;
+          }
+          if (access !== 'active') {
+            noteInvalidStart(ctx.request);
+            return toolErr(FINISHED_REASON);
+          }
+          record = found;
+          jobId = claims.jobId;
+          roundGeneration = claims.roundGeneration ?? record.roundGeneration ?? 1;
         }
 
         // Prefer the transport session id when the client already has one; otherwise mint.
@@ -481,10 +516,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const sessionId = ctx.sessionId && transportSessions.has(ctx.sessionId) ? ctx.sessionId : newMcpSessionId();
         transportSessions.set(sessionId, { createdAt: now() });
 
-        const roundGeneration = claims.roundGeneration ?? record.roundGeneration ?? 1;
         const sessionKey = mintMcpSessionKey(agentTokenSecret, {
           sessionId,
-          jobId: claims.jobId,
+          jobId,
           roundGeneration,
           now: now(),
         });
@@ -496,7 +530,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const structured = {
           sessionKey,
           sessionId,
-          jobId: claims.jobId,
+          jobId,
           slug: record.slug ?? null,
           title: record.title,
           state: record.state ?? 'queued',

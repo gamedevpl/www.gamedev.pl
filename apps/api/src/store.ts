@@ -1101,6 +1101,23 @@ export interface AccessTokenRecord {
   lastUsedAt?: string;
 }
 
+/**
+ * Durable per-game agent opener state (BY-23), stored at `gameAgentKeys/{slug}`.
+ *
+ * The HMAC opener itself is never stored — only the generation that revokes it.
+ * Round close does not bump `keyGeneration`; only an explicit creator rotate does.
+ * `allowAgentOpenRounds` is reserved for BY-24 (default off).
+ */
+export interface GameAgentKeyRecord {
+  slug: string;
+  ownerUid: string;
+  keyGeneration: number;
+  createdAt: string;
+  updatedAt: string;
+  /** BY-24: when true, the creator's agent may call `open_round`. Default false. */
+  allowAgentOpenRounds?: boolean;
+}
+
 export interface Store {
   getUser(uid: string): Promise<User | null>;
   /**
@@ -1635,6 +1652,29 @@ export interface Store {
   deleteAccessToken(tokenId: string): Promise<boolean>;
   /** Best-effort last-use stamp; callers must not let a failure fail the request. */
   touchAccessToken(tokenId: string, at: string): Promise<void>;
+  /**
+   * Durable per-game opener state (BY-23). Returns null when no key has been issued
+   * for this slug yet.
+   */
+  getGameAgentKey(slug: string): Promise<GameAgentKeyRecord | null>;
+  /**
+   * Ensures a gameAgentKeys doc exists for (slug, ownerUid), creating generation 1
+   * when absent. If the doc exists for a different owner, returns null (caller must
+   * refuse — the slug is not theirs to key).
+   */
+  ensureGameAgentKey(slug: string, ownerUid: string, at: string): Promise<GameAgentKeyRecord | null>;
+  /**
+   * Transactionally bumps `keyGeneration` for an owned slug. Returns the new record,
+   * or null when missing / not owned by `ownerUid`.
+   */
+  rotateGameAgentKey(slug: string, ownerUid: string, at: string): Promise<GameAgentKeyRecord | null>;
+  /** BY-24: set whether the creator's agent may open improvement rounds. */
+  setGameAgentOpenRounds(
+    slug: string,
+    ownerUid: string,
+    allow: boolean,
+    at: string,
+  ): Promise<GameAgentKeyRecord | null>;
 }
 
 // Stable doc id for a subscription: a hash of its endpoint URL. Endpoints are long
@@ -1764,6 +1804,8 @@ export class InMemoryStore implements Store {
   private legacyGameSuggestions = new Set<string>();
   // tokenId -> personal access token record
   private accessTokens = new Map<string, AccessTokenRecord>();
+  // slug -> durable per-game agent opener state (BY-23)
+  private gameAgentKeys = new Map<string, GameAgentKeyRecord>();
 
   async getUser(uid: string): Promise<User | null> {
     const user = this.users.get(uid);
@@ -2886,6 +2928,57 @@ export class InMemoryStore implements Store {
   async touchAccessToken(tokenId: string, at: string): Promise<void> {
     const record = this.accessTokens.get(tokenId);
     if (record) this.accessTokens.set(tokenId, { ...record, lastUsedAt: at });
+  }
+
+  async getGameAgentKey(slug: string): Promise<GameAgentKeyRecord | null> {
+    const record = this.gameAgentKeys.get(slug);
+    return record ? { ...record } : null;
+  }
+
+  async ensureGameAgentKey(slug: string, ownerUid: string, at: string): Promise<GameAgentKeyRecord | null> {
+    const existing = this.gameAgentKeys.get(slug);
+    if (existing) {
+      if (existing.ownerUid !== ownerUid) return null;
+      return { ...existing };
+    }
+    const created: GameAgentKeyRecord = {
+      slug,
+      ownerUid,
+      keyGeneration: 1,
+      createdAt: at,
+      updatedAt: at,
+      allowAgentOpenRounds: false,
+    };
+    this.gameAgentKeys.set(slug, created);
+    return { ...created };
+  }
+
+  async rotateGameAgentKey(slug: string, ownerUid: string, at: string): Promise<GameAgentKeyRecord | null> {
+    const existing = this.gameAgentKeys.get(slug);
+    if (!existing || existing.ownerUid !== ownerUid) return null;
+    const next: GameAgentKeyRecord = {
+      ...existing,
+      keyGeneration: existing.keyGeneration + 1,
+      updatedAt: at,
+    };
+    this.gameAgentKeys.set(slug, next);
+    return { ...next };
+  }
+
+  async setGameAgentOpenRounds(
+    slug: string,
+    ownerUid: string,
+    allow: boolean,
+    at: string,
+  ): Promise<GameAgentKeyRecord | null> {
+    const ensured = await this.ensureGameAgentKey(slug, ownerUid, at);
+    if (!ensured) return null;
+    // Re-read after ensure: a concurrent rotate may have bumped keyGeneration.
+    const current = this.gameAgentKeys.get(slug);
+    if (!current || current.ownerUid !== ownerUid) return null;
+    const next: GameAgentKeyRecord = { ...current, allowAgentOpenRounds: allow, updatedAt: at };
+    this.gameAgentKeys.set(slug, next);
+    return { ...next };
   }
 
   // Test/inspection only — production reads go through `listWaitlistEntries`.
@@ -4611,6 +4704,84 @@ export class FirestoreStore implements Store {
     if (!snap.exists) return false;
     await docRef.delete();
     return true;
+  }
+
+  async getGameAgentKey(slug: string): Promise<GameAgentKeyRecord | null> {
+    const snap = await this.db.collection('gameAgentKeys').doc(slug).get();
+    if (!snap.exists) return null;
+    return snap.data() as GameAgentKeyRecord;
+  }
+
+  async ensureGameAgentKey(slug: string, ownerUid: string, at: string): Promise<GameAgentKeyRecord | null> {
+    const docRef = this.db.collection('gameAgentKeys').doc(slug);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef);
+      if (snap.exists) {
+        const existing = snap.data() as GameAgentKeyRecord;
+        if (existing.ownerUid !== ownerUid) return null;
+        return existing;
+      }
+      const created: GameAgentKeyRecord = {
+        slug,
+        ownerUid,
+        keyGeneration: 1,
+        createdAt: at,
+        updatedAt: at,
+        allowAgentOpenRounds: false,
+      };
+      tx.create(docRef, created);
+      return created;
+    });
+  }
+
+  async rotateGameAgentKey(slug: string, ownerUid: string, at: string): Promise<GameAgentKeyRecord | null> {
+    const docRef = this.db.collection('gameAgentKeys').doc(slug);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef);
+      if (!snap.exists) return null;
+      const existing = snap.data() as GameAgentKeyRecord;
+      if (existing.ownerUid !== ownerUid) return null;
+      const next: GameAgentKeyRecord = {
+        ...existing,
+        keyGeneration: existing.keyGeneration + 1,
+        updatedAt: at,
+      };
+      tx.set(docRef, next);
+      return next;
+    });
+  }
+
+  async setGameAgentOpenRounds(
+    slug: string,
+    ownerUid: string,
+    allow: boolean,
+    at: string,
+  ): Promise<GameAgentKeyRecord | null> {
+    const docRef = this.db.collection('gameAgentKeys').doc(slug);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef);
+      if (!snap.exists) {
+        const created: GameAgentKeyRecord = {
+          slug,
+          ownerUid,
+          keyGeneration: 1,
+          createdAt: at,
+          updatedAt: at,
+          allowAgentOpenRounds: allow,
+        };
+        tx.create(docRef, created);
+        return created;
+      }
+      const existing = snap.data() as GameAgentKeyRecord;
+      if (existing.ownerUid !== ownerUid) return null;
+      const next: GameAgentKeyRecord = {
+        ...existing,
+        allowAgentOpenRounds: allow,
+        updatedAt: at,
+      };
+      tx.set(docRef, next);
+      return next;
+    });
   }
 
   async touchAccessToken(tokenId: string, at: string): Promise<void> {

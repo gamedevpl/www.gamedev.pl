@@ -20,18 +20,34 @@ const payload = {
     kimi: 'npx -y mcp-remote https://www.gamedev.pl/api/mcp',
     cli: 'curl -sS -X POST https://www.gamedev.pl/api/mcp',
   },
-  kickoffPrompt: 'Build "Sky Dodge" for gamedev.pl.\nStart with the gamedevpl tool, key: abc.def',
-  expiresAt: Math.floor(Date.now() / 1000) + 14 * 24 * 60 * 60,
+  kickoffPrompt:
+    'Build "Sky Dodge" for gamedev.pl.\nStart with the gamedevpl tool, key: abc.def\nstart returns your workflow; after gate green the round is done — keep this key for the next round on this game unless the creator rotates it.',
+  expiresAt: Math.floor(Date.now() / 1000) + 90 * 24 * 60 * 60,
+  keyGeneration: 1,
 };
 
 describe('StudioConnectCard', () => {
   beforeEach(() => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => ({
-        ok: true,
-        json: async () => payload,
-      })),
+      vi.fn(async (input: RequestInfo) => {
+        const url = String(input);
+        if (url.includes('/agent-key/rotate')) {
+          return {
+            ok: true,
+            json: async () => ({
+              ...payload,
+              keyGeneration: 2,
+              kickoffPrompt: payload.kickoffPrompt.replace('abc.def', 'rotated.key'),
+              rotated: true,
+            }),
+          };
+        }
+        return {
+          ok: true,
+          json: async () => payload,
+        };
+      }),
     );
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
@@ -45,7 +61,7 @@ describe('StudioConnectCard', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders install tabs, kickoff, and waiting state', async () => {
+  it('renders install tabs, kickoff, expiry, and waiting state', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
 
@@ -70,9 +86,11 @@ describe('StudioConnectCard', () => {
     expect(container.textContent).toContain('Add gamedev.pl to your agent');
     expect(container.textContent).toContain('Tell your agent what to build');
     expect(container.textContent).toContain(payload.kickoffPrompt.split('\n')[0]);
-    expect(container.textContent).toMatch(/key works only for this game/i);
+    expect(container.textContent).toMatch(/works for this game/i);
+    expect(container.textContent).toMatch(/stays too unless you rotate/i);
     expect(container.textContent?.toLowerCase()).not.toMatch(/\btoken\b/);
     expect(container.querySelector('.studio-connect-waiting')).not.toBeNull();
+    expect(container.textContent).toContain('Rotate key');
 
     const cursorTab = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((tab) =>
       tab.textContent?.includes('Cursor'),
@@ -90,6 +108,78 @@ describe('StudioConnectCard', () => {
       await flush();
     });
     expect(container.textContent).toContain('Skipped');
+
+    await act(async () => root.unmount());
+  });
+
+  it('shows sameKeyAsBefore reminder when the payload says so', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ ...payload, sameKeyAsBefore: true }),
+      })),
+    );
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(StudioConnectCard, { token: 'status-tok' }));
+      await flush();
+    });
+    await act(async () => {
+      await flush();
+    });
+
+    expect(container.textContent).toMatch(/Same key as before/i);
+    await act(async () => root.unmount());
+  });
+
+  it('rotate flow confirms then refreshes the kickoff', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(StudioConnectCard, { token: 'status-tok' }));
+      await flush();
+    });
+    await act(async () => {
+      await flush();
+    });
+
+    const rotateStart = [...container.querySelectorAll<HTMLButtonElement>('button')].find((btn) =>
+      btn.textContent?.includes('Rotate key'),
+    );
+    await act(async () => {
+      rotateStart?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flush();
+    });
+    expect(container.textContent).toMatch(/Rotating stops any agent still using the old key/i);
+
+    const confirm = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (btn) => btn.textContent?.includes('Rotate') && !btn.textContent?.includes('Rotate key'),
+    );
+    await act(async () => {
+      confirm?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flush();
+    });
+    await act(async () => {
+      await flush();
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/submissions/status-tok/agent-key/rotate'),
+      expect.objectContaining({ method: 'POST', credentials: 'include' }),
+    );
+    expect(container.textContent).toContain('rotated.key');
 
     await act(async () => root.unmount());
   });

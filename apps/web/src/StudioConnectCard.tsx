@@ -1,7 +1,13 @@
 import { useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
-import { CONNECT_CLIENTS, getConnectPayload, type ConnectClient, type ConnectPayload } from './connectApi.js';
+import {
+  CONNECT_CLIENTS,
+  getConnectPayload,
+  rotateAgentKey,
+  type ConnectClient,
+  type ConnectPayload,
+} from './connectApi.js';
 import { recordStudioStep } from './visitTelemetry.js';
 
 const CLIENT_LABEL_KEY: Record<ConnectClient, string> = {
@@ -26,7 +32,7 @@ type StudioConnectCardProps = {
  * Connect card for a self-build round waiting on the creator's own coding agent.
  *
  * Step 1: add gamedev.pl to the agent (install snippets, skip if already done).
- * Step 2: paste the kickoff prompt (round key embedded). Live waiting flips away on
+ * Step 2: paste the kickoff prompt (durable game key embedded). Live waiting flips away on
  * the first agent signal — the parent hides this when `stall` leaves `no_agent_yet`.
  */
 export function StudioConnectCard({ token, agentConnected = false }: StudioConnectCardProps) {
@@ -38,6 +44,9 @@ export function StudioConnectCard({ token, agentConnected = false }: StudioConne
   const [client, setClient] = useState<ConnectClient>('claudeCode');
   const [step1Skipped, setStep1Skipped] = useState(false);
   const [copied, setCopied] = useState<'install' | 'kickoff' | null>(null);
+  const [rotateArmed, setRotateArmed] = useState(false);
+  const [rotating, setRotating] = useState(false);
+  const [rotateError, setRotateError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,8 +82,21 @@ export function StudioConnectCard({ token, agentConnected = false }: StudioConne
     } catch {
       // Snippet stays on screen to select by hand.
     }
-    // Count the click either way — clipboard denial still means they meant to connect.
     recordStudioStep('connect_copied', 'self', which);
+  };
+
+  const handleRotate = async () => {
+    setRotating(true);
+    setRotateError(null);
+    try {
+      const next = await rotateAgentKey(token);
+      setPayload(next);
+      setRotateArmed(false);
+    } catch {
+      setRotateError(t('connect.rotate.error'));
+    } finally {
+      setRotating(false);
+    }
   };
 
   const expiresLabel = payload
@@ -149,12 +171,10 @@ export function StudioConnectCard({ token, agentConnected = false }: StudioConne
               </span>
               <h4 className="studio-connect-step-title">{t('connect.step2.title')}</h4>
             </div>
-            {/* The split creators miss at a round boundary: the gamedev.pl connection in
-                their agent's config is set up once (step 1) and stays put; what changes
-                every round is the key inside the prompt below. Without this line, a
-                creator handed a new build thread re-runs step 1 or edits config that was
-                never stale. */}
             <p className="studio-connect-same">{t('connect.step2.sameConnection')}</p>
+            {payload.sameKeyAsBefore ? (
+              <p className="studio-connect-same-key">{t('connect.step2.sameKeyAsBefore')}</p>
+            ) : null}
             <pre className="studio-connect-snippet studio-connect-kickoff" tabIndex={0}>
               {payload.kickoffPrompt}
             </pre>
@@ -167,7 +187,33 @@ export function StudioConnectCard({ token, agentConnected = false }: StudioConne
                 <PixelIcon name={copied === 'kickoff' ? 'check' : 'sparkle'} size={12} />{' '}
                 {copied === 'kickoff' ? t('connect.copied') : t('connect.copyKickoff')}
               </button>
+              {!rotateArmed ? (
+                <button type="button" className="studio-connect-skip" onClick={() => setRotateArmed(true)}>
+                  {t('connect.rotate.start')}
+                </button>
+              ) : (
+                <span className="studio-connect-rotate-confirm">
+                  <span>{t('connect.rotate.confirm')}</span>
+                  <button
+                    type="button"
+                    className="studio-connect-skip is-danger"
+                    disabled={rotating}
+                    onClick={() => void handleRotate()}
+                  >
+                    {rotating ? t('connect.rotate.sending') : t('connect.rotate.yes')}
+                  </button>
+                  <button
+                    type="button"
+                    className="studio-connect-skip"
+                    disabled={rotating}
+                    onClick={() => setRotateArmed(false)}
+                  >
+                    {t('connect.rotate.no')}
+                  </button>
+                </span>
+              )}
             </div>
+            {rotateError ? <p className="error">{rotateError}</p> : null}
             <p className="studio-connect-expiry">{t('connect.step2.expiry', { when: expiresLabel })}</p>
           </div>
 
