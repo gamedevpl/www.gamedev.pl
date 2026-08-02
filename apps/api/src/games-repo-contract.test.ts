@@ -101,7 +101,7 @@ describe('games-repo source extractors', () => {
     const source = `
       const GAME_BUDGET_BYTES = 200 * 1024;
       const GAMEKIT_TOUCH_BYTES = 7_501 + 5_560;
-      const GAMEKIT_PLATFORM_BYTES = GAMEKIT_TOUCH_BYTES + 264_826;
+      const GAMEKIT_PLATFORM_BYTES = GAMEKIT_TOUCH_BYTES + 268_526;
       const MAX_BUNDLE_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
     `;
     expect(extractMaxBundleBytes(source)).toBe(MAX_PROJECT_BYTES);
