@@ -263,9 +263,10 @@ export async function emitOperatorAlert(
  * Tell every operator someone asked to join the closed beta.
  *
  * Same fan-out as `emitOperatorAlert` (in-app + email + push, no unsubscribe), but not
- * shaped like a job: there is no issue number, and the deep link is the telemetry panel
- * where the waitlist funnel lives rather than the build queue. Idempotent per applicant
- * uid (`op-waitlist-{uid}`), so a visitor who clicks Join twice is one notification.
+ * shaped like a job: there is no issue number, and the deep link is the Waitlist panel
+ * where the applicant can be approved rather than the build queue. Idempotent per
+ * applicant uid (`op-waitlist-{uid}`), so a visitor who clicks Join twice is one
+ * notification.
  */
 export async function emitWaitlistJoined(
   deps: EmitDeps & { adminUids: Iterable<string> },
@@ -304,8 +305,8 @@ export async function emitWaitlistJoined(
 /** Where an operator notification lands: the queue, which is where the action is. */
 const OPERATOR_ALERT_LINK = '/admin/queue';
 
-/** Waitlist joins land on telemetry — that is where the waitlist funnel is measured. */
-const WAITLIST_ALERT_LINK = '/admin/telemetry';
+/** Waitlist joins land on the membership panel — that is where the applicant is acted on. */
+const WAITLIST_ALERT_LINK = '/admin/waitlist';
 
 /**
  * Best-effort, like every other send here: a failed alert email must not fail the caller.

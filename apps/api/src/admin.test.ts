@@ -564,6 +564,7 @@ describe('GET /api/admin/summary', () => {
       by: 'gate',
       reason: 'gate_green',
     });
+    await store.upsertWaitlistEntry({ uid: 'g:waiter', email: 'waiter@example.com' });
     const app = await appWith(store);
 
     const res = await app.inject({ method: 'GET', url: '/api/admin/summary', headers: authHeaders('g:boss') });
@@ -574,6 +575,7 @@ describe('GET /api/admin/summary', () => {
     expect(body.alerts[0]).toMatchObject({ kind: 'review_ready', issueNumber: 1_000_001, title: 'Comet Courier' });
     expect(body.queue).toMatchObject({ active: 1, stalled: 0, byState: { ready_for_review: 1 } });
     expect(body.limits.paused).toBe(false);
+    expect(body.waitlist.pending).toBe(1);
   });
 
   it('reports the breaker an operator just pulled', async () => {
@@ -590,6 +592,103 @@ describe('GET /api/admin/summary', () => {
     const res = await app.inject({ method: 'GET', url: '/api/admin/summary', headers: authHeaders('g:boss') });
 
     expect((res.json() as AdminSummaryResponse).limits.paused).toBe(true);
+  });
+});
+
+describe('/api/admin/waitlist', () => {
+  let store: InMemoryStore;
+
+  beforeEach(async () => {
+    store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    await store.upsertUser({ uid: 'g:player' });
+  });
+
+  it('lists pending applicants for an operator', async () => {
+    await store.upsertWaitlistEntry({ uid: 'g:waiter', email: 'waiter@example.com', name: 'Waiter' });
+    await store.upsertWaitlistEntry({ uid: 'g:in', email: 'in@example.com' });
+    await store.setWaitlistStatus('g:in', 'approved');
+    const app = await appWith(store);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/admin/waitlist?status=pending',
+      headers: authHeaders('g:boss'),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      entries: [expect.objectContaining({ uid: 'g:waiter', email: 'waiter@example.com', status: 'pending' })],
+    });
+    await app.close();
+  });
+
+  it('approves an existing applicant by uid', async () => {
+    await store.upsertWaitlistEntry({ uid: 'g:waiter', email: 'waiter@example.com' });
+    const app = await appWith(store);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/admin/waitlist/g%3Awaiter',
+      headers: authHeaders('g:boss'),
+      payload: { status: 'approved' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ uid: 'g:waiter', status: 'approved' });
+    expect(await store.isWaitlistApproved('g:waiter')).toBe(true);
+    await app.close();
+  });
+
+  it('pre-approves by email when no row exists yet', async () => {
+    const app = await appWith(store);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/admin/waitlist',
+      headers: authHeaders('g:boss'),
+      payload: { email: 'Friend@Example.com' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      uid: 'email:friend@example.com',
+      email: 'friend@example.com',
+      status: 'approved',
+    });
+    expect(await store.isWaitlistApproved('g:other', 'friend@example.com')).toBe(true);
+    await app.close();
+  });
+
+  it('is invisible to everyone else', async () => {
+    await store.upsertWaitlistEntry({ uid: 'g:waiter', email: 'waiter@example.com' });
+    const app = await appWith(store);
+
+    for (const headers of [authHeaders('g:player'), {}]) {
+      expect((await app.inject({ method: 'GET', url: '/api/admin/waitlist', headers })).statusCode).toBe(404);
+      expect(
+        (
+          await app.inject({
+            method: 'POST',
+            url: '/api/admin/waitlist',
+            headers,
+            payload: { email: 'x@y.z' },
+          })
+        ).statusCode,
+      ).toBe(404);
+      expect(
+        (
+          await app.inject({
+            method: 'POST',
+            url: '/api/admin/waitlist/g%3Awaiter',
+            headers,
+            payload: { status: 'approved' },
+          })
+        ).statusCode,
+      ).toBe(404);
+    }
+    expect(await store.isWaitlistApproved('g:waiter')).toBe(false);
+    await app.close();
   });
 });
 

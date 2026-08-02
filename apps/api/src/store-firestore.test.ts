@@ -95,6 +95,12 @@ function fakeFirestore() {
       const previous = options?.merge ? (docs.get(key(collection, id)) ?? {}) : {};
       docs.set(key(collection, id), { ...previous, ...data });
     },
+    update: async (data: Record<string, unknown>) => {
+      rejectUndefined(data);
+      rejectNestedArrays(data);
+      if (!docs.has(key(collection, id))) throw new Error('no document to update');
+      docs.set(key(collection, id), { ...docs.get(key(collection, id))!, ...data });
+    },
     delete: async () => {
       docs.delete(key(collection, id));
     },
@@ -107,18 +113,21 @@ function fakeFirestore() {
       path.endsWith(`/${group}`),
     );
 
-  const makeQuery = (paths: string[], filter: ((data: Record<string, unknown>) => boolean) | null) => {
-    const rows = () =>
-      paths.flatMap((path) =>
+  const makeQuery = (paths: string[], filter: ((data: Record<string, unknown>) => boolean) | null, max?: number) => {
+    const rows = () => {
+      const found = paths.flatMap((path) =>
         idsUnder(path)
           .map((id) => ({ path, id, data: docs.get(key(path, id)) ?? {} }))
           .filter((row) => (filter ? filter(row.data) : true)),
       );
+      return max === undefined ? found : found.slice(0, max);
+    };
     const query = {
       where: (field: string, op: string, value: unknown) => {
         if (op !== '==') throw new Error(`fake supports == only, got ${op}`);
-        return makeQuery(paths, (data) => (filter ? filter(data) : true) && data[field] === value);
+        return makeQuery(paths, (data) => (filter ? filter(data) : true) && data[field] === value, max);
       },
+      limit: (n: number) => makeQuery(paths, filter, n),
       count: () => ({ get: async () => ({ data: () => ({ count: rows().length }) }) }),
       get: async () => {
         const found = rows();
@@ -137,7 +146,11 @@ function fakeFirestore() {
     where: (field: string, op: string, value: unknown) => makeQuery([path], null).where(field, op, value),
     count: () => makeQuery([path], null).count(),
     get: async () => ({
-      docs: idsUnder(path).map((id) => ({ id, data: () => docs.get(key(path, id)) ?? {} })),
+      docs: idsUnder(path).map((id) => ({
+        id,
+        data: () => docs.get(key(path, id)) ?? {},
+        ref: makeRef(path, id),
+      })),
     }),
   });
 
@@ -253,6 +266,52 @@ describe('FirestoreStore.upsertWaitlistEntry', () => {
 
     const entry = await store.upsertWaitlistEntry({ uid: 'g:3', email: 'a@b.c' });
     expect(entry.status).toBe('approved');
+  });
+
+  it('lists, counts, and pre-approves by email', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+
+    await store.upsertWaitlistEntry({ uid: 'g:1', email: 'one@example.com' });
+    await store.upsertWaitlistEntry({ uid: 'g:2', email: 'two@example.com' });
+    await store.setWaitlistStatus('g:2', 'approved');
+
+    expect(await store.countWaitlistEntries('pending')).toBe(1);
+    expect((await store.listWaitlistEntries({ status: 'pending' })).map((row) => row.uid)).toEqual(['g:1']);
+
+    const created = await store.setWaitlistStatusByEmail('New@Example.com', 'approved');
+    expect(created).toMatchObject({
+      uid: 'email:new@example.com',
+      email: 'new@example.com',
+      status: 'approved',
+    });
+    expect(await store.isWaitlistApproved('g:other', 'new@example.com')).toBe(true);
+  });
+
+  it('lowercases emails on join and heals a legacy mixed-case row on approve', async () => {
+    const { db, docs, key } = fakeFirestore();
+    const store = new FirestoreStore(db);
+
+    const joined = await store.upsertWaitlistEntry({ uid: 'g:mix', email: 'Friend@Example.com' });
+    expect(joined.email).toBe('friend@example.com');
+    expect(docs.get(key('waitlist', 'g:mix'))?.email).toBe('friend@example.com');
+
+    // Simulate a row written before normalisation — mixed case still on disk.
+    docs.set(key('waitlist', 'g:legacy'), {
+      uid: 'g:legacy',
+      email: 'Legacy@Example.com',
+      requestedAt: '2026-07-01T00:00:00.000Z',
+      status: 'pending',
+    });
+
+    const healed = await store.setWaitlistStatusByEmail('legacy@example.com', 'approved');
+    expect(healed).toMatchObject({ uid: 'g:legacy', email: 'legacy@example.com', status: 'approved' });
+    expect(docs.get(key('waitlist', 'g:legacy'))).toMatchObject({
+      email: 'legacy@example.com',
+      status: 'approved',
+    });
+    // No duplicate email: row beside the healed join.
+    expect([...docs.keys()].filter((k) => k.startsWith('waitlist/'))).toHaveLength(2);
   });
 });
 

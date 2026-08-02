@@ -293,6 +293,54 @@ describe('InMemoryStore', () => {
     expect(await store.isWaitlistApproved('g:other', 'APPROVED@example.com')).toBe(true);
     expect(await store.isWaitlistApproved('g:other', 'unknown@example.com')).toBe(false);
   });
+
+  it('lists waitlist entries newest first and filters by status', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-08-01T10:00:00.000Z'));
+      const store = new InMemoryStore();
+      await store.upsertWaitlistEntry({ uid: 'g:old', email: 'old@example.com' });
+      await store.setWaitlistStatus('g:old', 'approved');
+      // requestedAt is stamped on upsert; a later join sorts first.
+      vi.setSystemTime(new Date('2026-08-01T11:00:00.000Z'));
+      await store.upsertWaitlistEntry({ uid: 'g:new', email: 'new@example.com' });
+
+      const pending = await store.listWaitlistEntries({ status: 'pending' });
+      expect(pending.map((entry) => entry.uid)).toEqual(['g:new']);
+      expect(await store.countWaitlistEntries('pending')).toBe(1);
+      expect(await store.countWaitlistEntries('approved')).toBe(1);
+
+      const all = await store.listWaitlistEntries();
+      expect(all.map((entry) => entry.uid)).toEqual(['g:new', 'g:old']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('pre-approves by email when no waitlist row exists yet', async () => {
+    const store = new InMemoryStore();
+    const created = await store.setWaitlistStatusByEmail('Friend@Example.com', 'approved');
+    expect(created).toMatchObject({
+      uid: 'email:friend@example.com',
+      email: 'friend@example.com',
+      status: 'approved',
+    });
+    expect(await store.isWaitlistApproved('g:whoever', 'friend@example.com')).toBe(true);
+
+    await store.upsertWaitlistEntry({ uid: 'g:joined', email: 'joined@example.com' });
+    const updated = await store.setWaitlistStatusByEmail('joined@example.com', 'rejected');
+    expect(updated).toMatchObject({ uid: 'g:joined', status: 'rejected' });
+  });
+
+  it('stores waitlist emails lowercased so approve-by-email finds a mixed-case join', async () => {
+    const store = new InMemoryStore();
+    const joined = await store.upsertWaitlistEntry({ uid: 'g:mix', email: 'Friend@Example.com' });
+    expect(joined.email).toBe('friend@example.com');
+
+    const approved = await store.setWaitlistStatusByEmail('FRIEND@example.com', 'approved');
+    expect(approved).toMatchObject({ uid: 'g:mix', status: 'approved' });
+    expect(store.waitlistEntries()).toHaveLength(1);
+  });
 });
 
 /**

@@ -56,6 +56,7 @@ describe('isKnownSpaShellPath', () => {
     '/admin/costs',
     '/admin/telemetry',
     '/admin/tokens',
+    '/admin/waitlist',
     '/join/K7M3QP',
   ])('treats %s as a known shell path (HTTP 200)', (path) => {
     expect(isKnownSpaShellPath(path)).toBe(true);

@@ -1373,6 +1373,23 @@ export interface Store {
   isWaitlistApproved(uid: string, email?: string): Promise<boolean>;
   setWaitlistStatus(uid: string, status: WaitlistStatus): Promise<WaitlistEntry | null>;
   /**
+   * Operator listing of the closed-beta waitlist.
+   *
+   * Sorted newest-request first. When `status` is set, only that status is returned.
+   * Bounded by `limit` (default 200) so a growing list cannot ship the whole collection
+   * in one console poll — at closed-beta scale the cap is generous; past that the panel
+   * filters by status rather than paging.
+   */
+  listWaitlistEntries(opts?: { status?: WaitlistStatus; limit?: number }): Promise<WaitlistEntry[]>;
+  /** Cheap count for the console tab badge. Optional status filter. */
+  countWaitlistEntries(status?: WaitlistStatus): Promise<number>;
+  /**
+   * Approve / reject / reset by email — including pre-approval before the person has
+   * ever visited. Mirrors `npm run beta:approve`: finds an existing row by email, or
+   * creates `waitlist/email:<lower>` with the requested status.
+   */
+  setWaitlistStatusByEmail(email: string, status: WaitlistStatus): Promise<WaitlistEntry>;
+  /**
    * Idempotent by notification id: a second emit for the same id is a no-op and
    * returns `created: false` (a crashed/re-run sweep can safely re-emit).
    */
@@ -2308,10 +2325,13 @@ export class InMemoryStore implements Store {
   }): Promise<WaitlistEntry> {
     const now = new Date().toISOString();
     const existing = this.waitlist.get(entry.uid);
+    // Lowercase at write so equality queries (Firestore `where email ==`) and the
+    // pre-approve path agree — mixed-case joins used to miss and mint a second row.
+    const rawEmail = entry.email ?? existing?.email;
 
     const updated: WaitlistEntry = {
       uid: entry.uid,
-      email: entry.email ?? existing?.email,
+      email: rawEmail !== undefined ? rawEmail.toLowerCase() : undefined,
       name: entry.name ?? existing?.name,
       requestedAt: now,
       locale: entry.locale ?? existing?.locale,
@@ -2347,6 +2367,44 @@ export class InMemoryStore implements Store {
     const updated: WaitlistEntry = { ...existing, status };
     this.waitlist.set(uid, updated);
     return { ...updated };
+  }
+
+  async listWaitlistEntries(opts?: { status?: WaitlistStatus; limit?: number }): Promise<WaitlistEntry[]> {
+    const limit = opts?.limit ?? 200;
+    const rows = Array.from(this.waitlist.values()).filter(
+      (entry) => opts?.status === undefined || entry.status === opts.status,
+    );
+    rows.sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
+    return rows.slice(0, limit).map((entry) => ({ ...entry }));
+  }
+
+  async countWaitlistEntries(status?: WaitlistStatus): Promise<number> {
+    if (status === undefined) return this.waitlist.size;
+    let count = 0;
+    for (const entry of this.waitlist.values()) {
+      if (entry.status === status) count += 1;
+    }
+    return count;
+  }
+
+  async setWaitlistStatusByEmail(email: string, status: WaitlistStatus): Promise<WaitlistEntry> {
+    const emailLower = email.toLowerCase();
+    for (const entry of this.waitlist.values()) {
+      if (entry.email?.toLowerCase() === emailLower) {
+        const updated: WaitlistEntry = { ...entry, status };
+        this.waitlist.set(entry.uid, updated);
+        return { ...updated };
+      }
+    }
+    const now = new Date().toISOString();
+    const created: WaitlistEntry = {
+      uid: `email:${emailLower}`,
+      email: emailLower,
+      requestedAt: now,
+      status,
+    };
+    this.waitlist.set(created.uid, created);
+    return { ...created };
   }
 
   async createNotification(
@@ -2732,8 +2790,7 @@ export class InMemoryStore implements Store {
     if (record) this.accessTokens.set(tokenId, { ...record, lastUsedAt: at });
   }
 
-  // Test/inspection only — not part of the Store interface. Production code never
-  // reads the waitlist back (v1 promotion is manual, via the Firestore console).
+  // Test/inspection only — production reads go through `listWaitlistEntries`.
   waitlistEntries(): WaitlistEntry[] {
     return Array.from(this.waitlist.values());
   }
@@ -3640,10 +3697,14 @@ export class FirestoreStore implements Store {
     const docRef = this.db.collection('waitlist').doc(entry.uid);
     const snap = await docRef.get();
     const existing = snap.exists ? (snap.data() as WaitlistEntry) : null;
+    // Same normalisation as InMemoryStore: email queries are case-sensitive in
+    // Firestore, and setWaitlistStatusByEmail / isWaitlistApproved look up the
+    // lowercased form.
+    const rawEmail = entry.email !== undefined ? entry.email : existing?.email;
 
     const record: WaitlistEntry = {
       uid: entry.uid,
-      email: entry.email,
+      email: rawEmail !== undefined ? rawEmail.toLowerCase() : undefined,
       name: entry.name,
       requestedAt: now,
       locale: entry.locale,
@@ -3684,6 +3745,55 @@ export class FirestoreStore implements Store {
     await docRef.update({ status });
     const updatedSnap = await docRef.get();
     return updatedSnap.data() as WaitlistEntry;
+  }
+
+  async listWaitlistEntries(opts?: { status?: WaitlistStatus; limit?: number }): Promise<WaitlistEntry[]> {
+    // Equality-only (no orderBy) so a status filter needs no composite index; sort and
+    // slice in memory. The waitlist stays small at closed-beta scale, and the same
+    // posture as `listAccessTokens` keeps an operator page from depending on a new
+    // index that only fails in production.
+    const limit = opts?.limit ?? 200;
+    const collection = this.db.collection('waitlist');
+    const snap =
+      opts?.status === undefined ? await collection.get() : await collection.where('status', '==', opts.status).get();
+    const rows = snap.docs.map((doc) => doc.data() as WaitlistEntry);
+    rows.sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
+    return rows.slice(0, limit);
+  }
+
+  async countWaitlistEntries(status?: WaitlistStatus): Promise<number> {
+    const collection = this.db.collection('waitlist');
+    const query = status === undefined ? collection : collection.where('status', '==', status);
+    const snap = await query.count().get();
+    return snap.data().count;
+  }
+
+  async setWaitlistStatusByEmail(email: string, status: WaitlistStatus): Promise<WaitlistEntry> {
+    const emailLower = email.toLowerCase();
+    const querySnap = await this.db.collection('waitlist').where('email', '==', emailLower).limit(1).get();
+    if (!querySnap.empty) {
+      const doc = querySnap.docs[0]!;
+      await doc.ref.update({ status });
+      return { ...(doc.data() as WaitlistEntry), status, email: emailLower };
+    }
+    // Rows written before email was normalised may still hold mixed case; find and
+    // heal them so an approve does not mint a duplicate `email:` doc beside the
+    // original join. Cheap at closed-beta scale (one collection read, operator-only).
+    const legacySnap = await this.db.collection('waitlist').get();
+    const legacy = legacySnap.docs.find((doc) => (doc.data() as WaitlistEntry).email?.toLowerCase() === emailLower);
+    if (legacy) {
+      await legacy.ref.update({ status, email: emailLower });
+      return { ...(legacy.data() as WaitlistEntry), status, email: emailLower };
+    }
+    const now = new Date().toISOString();
+    const created: WaitlistEntry = {
+      uid: `email:${emailLower}`,
+      email: emailLower,
+      requestedAt: now,
+      status,
+    };
+    await this.db.collection('waitlist').doc(created.uid).set(stripUndefined(created));
+    return created;
   }
 
   private notificationRef(uid: string, id: string) {

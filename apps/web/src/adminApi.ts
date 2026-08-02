@@ -25,6 +25,18 @@ export interface AdminSummary {
   alerts: OperatorAlert[];
   queue: { active: number; stalled: number; byState: Record<string, number> };
   limits: { paused: boolean; globalDailySubmissionCap: number; todaySubmissions: number };
+  waitlist: { pending: number };
+}
+
+export type WaitlistStatus = 'pending' | 'approved' | 'rejected';
+
+export interface WaitlistEntry {
+  uid: string;
+  email?: string;
+  name?: string;
+  requestedAt: string;
+  locale?: string;
+  status: WaitlistStatus;
 }
 
 /**
@@ -189,4 +201,46 @@ export async function revokeAccessToken(tokenId: string): Promise<{ ok: boolean 
     credentials: 'include',
   });
   return { ok: res.ok };
+}
+
+export async function fetchWaitlist(status?: WaitlistStatus | 'all'): Promise<WaitlistEntry[] | null> {
+  const query = status && status !== 'all' ? `?status=${encodeURIComponent(status)}` : '';
+  const res = await fetch(`${API_BASE}/api/admin/waitlist${query}`, { credentials: 'include' });
+  if (res.status === 404 || res.status === 401) return null;
+  if (!res.ok) throw new Error(`waitlist failed (${res.status})`);
+  return ((await res.json()) as { entries: WaitlistEntry[] }).entries;
+}
+
+export async function setWaitlistStatus(
+  uid: string,
+  status: WaitlistStatus,
+): Promise<WaitlistEntry | { error: string }> {
+  const res = await fetch(`${API_BASE}/api/admin/waitlist/${encodeURIComponent(uid)}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ status }),
+  });
+  if (res.ok) return (await res.json()) as WaitlistEntry;
+  const body = (await res.json().catch(() => ({}))) as { error?: string };
+  return { error: body.error ?? `request failed (${res.status})` };
+}
+
+/**
+ * Pre-approve (or reject / reset) by email. Creates an `email:` row when the person
+ * has never joined — same write the `beta:approve` CLI makes.
+ */
+export async function setWaitlistStatusByEmail(
+  email: string,
+  status: WaitlistStatus = 'approved',
+): Promise<WaitlistEntry | { error: string }> {
+  const res = await fetch(`${API_BASE}/api/admin/waitlist`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email, status }),
+  });
+  if (res.ok) return (await res.json()) as WaitlistEntry;
+  const body = (await res.json().catch(() => ({}))) as { error?: string };
+  return { error: body.error ?? `request failed (${res.status})` };
 }
