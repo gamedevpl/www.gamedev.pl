@@ -96,21 +96,37 @@ describe.skipIf(!prereq.ok)('signed-in walkthrough', () => {
         .then(() => true)
         .catch(() => false);
       if (booted) {
+        // A canvas that exists is not yet a canvas that is running. These games
+        // draw everything — HUD included — into it, so the frame's innerText
+        // never moves and pixels are the only readable output; a canvas still
+        // producing new frames is a game that booted and kept going, which is
+        // the failure this catches: a black or frozen theater.
+        //
+        // Inside the candidate loop, deliberately. It used to sit after it, and
+        // that is how a working game blocked a deploy: apex-sprint became a
+        // racer that idles at the start line until the player moves, sorted
+        // first in the catalog, and every deploy failed on a game that was fine.
+        // A still opening beat is a legitimate design, so it costs this game its
+        // turn as the sample rather than costing the site its release. If none
+        // of the three ever move, that is a real finding and still fails.
+        const canvas = found.locator('canvas').first();
+        const render = async () => (await canvas.screenshot()).toString('base64');
+        const before = await render();
+        const moving = await expect
+          .poll(render, { timeout: 10_000 })
+          .not.toBe(before)
+          .then(() => true)
+          .catch(() => false);
+        if (!moving) {
+          watcher.drain();
+          continue;
+        }
         frame = found;
         break;
       }
       watcher.drain(); // a candidate that never booted leaves noise that is not this test's finding
     }
-    expect(frame, 'no sampled single-player game booted a canvas').toBeTruthy();
-
-    // These games draw everything — HUD included — into the canvas, so the frame's
-    // innerText never moves and pixels are the only readable output. A canvas that
-    // keeps producing new frames is a game that booted and is still running, which
-    // is the failure this catches: a black or frozen theater.
-    const canvas = frame!.locator('canvas').first();
-    const render = async () => (await canvas.screenshot()).toString('base64');
-    const first = await render();
-    await expect.poll(render, { timeout: 20_000 }).not.toBe(first);
+    expect(frame, 'no sampled single-player game booted a canvas that kept drawing').toBeTruthy();
 
     // Deliberately *not* asserting that the picture changes in response to a
     // keystroke: most of these games animate on their own, so a pixel diff after

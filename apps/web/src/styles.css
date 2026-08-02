@@ -10775,3 +10775,243 @@ body.player-open {
 .theater-peek-pill:focus-visible {
   background: rgba(140, 170, 190, 0.5);
 }
+
+/* —— Creator profiles —— */
+.creator-profile-page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+
+.creator-profile-identity {
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+  margin-top: 1rem;
+}
+
+.creator-profile-avatar,
+.creator-profile-lettermark {
+  width: 72px;
+  height: 72px;
+  border-radius: 12px;
+  flex: 0 0 auto;
+  object-fit: cover;
+}
+
+.creator-profile-lettermark {
+  display: grid;
+  place-items: center;
+  font-size: 1.75rem;
+  font-weight: 700;
+  background: linear-gradient(145deg, #1f6b4a, #0d3d2a);
+  color: #e8fff4;
+}
+
+.creator-profile-name {
+  margin: 0;
+  font-size: 1.75rem;
+  line-height: 1.15;
+}
+
+.creator-profile-handle {
+  margin: 0.25rem 0 0;
+  opacity: 0.7;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.creator-profile-bio {
+  margin: 0.75rem 0 0;
+  max-width: 40rem;
+  line-height: 1.45;
+}
+
+.creator-profile-share {
+  margin: 0.75rem 0 0;
+  font-size: 0.85rem;
+}
+
+.creator-profile-status {
+  margin: 1rem 0;
+  opacity: 0.8;
+}
+
+.creator-profile-error {
+  color: #f5a0a0;
+}
+
+.creator-profile-games-heading {
+  margin: 2rem 0 0.75rem;
+  font-size: 1.1rem;
+}
+
+.creator-profile-game-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.creator-profile-game {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.creator-profile-game-thumb {
+  width: 160px;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  flex: 0 0 auto;
+}
+
+.creator-profile-game-thumb--empty {
+  display: block;
+}
+
+.creator-profile-game-title {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.creator-profile-game-by {
+  margin: 0.2rem 0 0.6rem;
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+
+.creator-profile-game-link {
+  display: inline-block;
+  margin-left: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.card-author-link,
+.theater-author-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.card-author-link:hover,
+.theater-author-link:hover {
+  opacity: 1;
+}
+
+.creator-profile-editor {
+  margin: 0 0 1.25rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.creator-profile-editor-title {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.creator-profile-editor-copy {
+  margin: 0.35rem 0 0;
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+.creator-profile-nudge {
+  margin: 0.65rem 0 0;
+  font-size: 0.9rem;
+  color: #b8f0d0;
+}
+
+.creator-profile-form {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.creator-profile-field {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.creator-profile-handle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.creator-profile-at {
+  opacity: 0.6;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.creator-profile-input {
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.25);
+  color: inherit;
+  font: inherit;
+}
+
+.creator-profile-bio-input {
+  resize: vertical;
+  min-height: 4.5rem;
+}
+
+.creator-profile-hint,
+.creator-profile-avail {
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+
+.creator-profile-avail.is-taken {
+  color: #f5a0a0;
+  opacity: 1;
+}
+
+.creator-profile-avail.is-free {
+  color: #9be7c0;
+  opacity: 1;
+}
+
+.creator-profile-avatar-field {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.creator-profile-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.creator-profile-message {
+  margin: 0.75rem 0 0;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 600px) {
+  .creator-profile-identity {
+    flex-direction: column;
+  }
+
+  .creator-profile-game {
+    flex-direction: column;
+  }
+
+  .creator-profile-game-thumb {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+  }
+}

@@ -16,6 +16,7 @@ import { createCloudBuildGateTrigger, gateTriggerOptionsFromEnv } from './gate-t
 import { registerAdminRoutes } from './admin.js';
 import { parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
+import { registerCreatorProfileRoutes } from './creator-profile-routes.js';
 import { registerCreatorStudioRoutes } from './creator-studio.js';
 import { registerEditorRoutes } from './editor-drafts.js';
 import { VertexEditorAssistant, type EditorAssistant } from './editor-assist.js';
@@ -547,6 +548,14 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     contentChecker,
   });
 
+  // Publish-gated public identity. Building needs none of this; catalog bylines and
+  // `/creators/:handle` need the claimed handle. gamesStore is the same instance the
+  // delivery path writes to, so a profile page never lists a game from a different bucket.
+  await registerCreatorProfileRoutes(app, {
+    store,
+    gamesStore,
+  });
+
   /**
    * `appleSignIn` tells the web app whether this server can actually verify an Apple
    * token. The button also needs a Services ID baked in at build time, so it renders only
@@ -624,6 +633,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // Contact form: same reason as legal pages being reachable without a session.
     // The handler itself is IP-rate-limited and moderated; the wall must not 401 it.
     if (request.url.startsWith('/api/contact')) return;
+    // Public creator profiles — same posture as contact/legal. Availability checks
+    // stay authed (they are under /api/creators/:handle/availability and need a session).
+    if (/^\/api\/creators\/[^/]+\/?(\?|$)/.test(request.url)) return;
     // Internal endpoints (the Cloud Scheduler notification sweep) authenticate via
     // an OIDC token in the handler, not a session — the wall would 401 them first.
     if (request.url.startsWith('/api/internal/')) return;

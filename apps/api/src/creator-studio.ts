@@ -204,7 +204,11 @@ export async function registerCreatorStudioRoutes(
       token: options.mintStatusToken!(tip.issueNumber),
       title: tip.title,
       createdAt: tip.createdAt,
-      lastKnownStatus: tip.lastNotifiedStatus ?? null,
+      // Prefer `lastStatus` (kept current on every derivation, and written at publish)
+      // over `lastNotifiedStatus` (only moves when a notification fires — `in_review`
+      // shares an event with `building`, so the studio would otherwise keep saying
+      // "building" for a game waiting on review, or for one that just went live).
+      lastKnownStatus: tip.lastStatus ?? tip.lastNotifiedStatus ?? null,
       ...(tip.slug ? { slug: tip.slug } : {}),
       ...(tip.publishedAt ? { publishedAt: tip.publishedAt } : {}),
       ...(catalogPublishedAt ? { livePublishedAt: catalogPublishedAt } : {}),

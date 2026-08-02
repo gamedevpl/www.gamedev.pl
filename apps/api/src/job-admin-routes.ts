@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { isAdminSession } from './admin.js';
+import { hasPublishableProfile } from './creator-profile.js';
 import {
   detectStall,
   isTerminal,
@@ -9,7 +10,7 @@ import {
   type JobState,
 } from './job-state.js';
 import type { GamesStore } from './games-store.js';
-import type { Store, SubmissionRecord } from './store.js';
+import { BOT_UID_PREFIX, type Store, type SubmissionRecord } from './store.js';
 
 /**
  * The operator's view of the build queue.
@@ -159,6 +160,15 @@ export async function registerJobAdminRoutes(
       return reply.code(409).send({ error: 'nothing_delivered' });
     }
 
+    // Platform/bot-authored jobs may publish without a human profile. Creator-owned
+    // jobs cannot — catalog attribution has nowhere to point otherwise.
+    if (!record.ownerUid.startsWith(BOT_UID_PREFIX)) {
+      const owner = await store.getUser(record.ownerUid);
+      if (!hasPublishableProfile(owner)) {
+        return reply.code(409).send({ error: 'profile_required' });
+      }
+    }
+
     const manifest = await gamesStore.getManifest(record.slug, record.deliveredVersion);
     if (!manifest?.gate) return reply.code(409).send({ error: 'not_gated' });
     if (!manifest.gate.green) return reply.code(409).send({ error: 'gate_red' });
@@ -176,6 +186,12 @@ export async function registerJobAdminRoutes(
     });
     await store.recordJobTransition(issueNumber, { to: 'published', at, by: 'operator', reason: 'published' });
     await store.setSubmissionPublishedAt(issueNumber, at);
+    // The creator rail reads `lastStatus`, not `state`. Writing it here is what stops a
+    // published game from also rendering as an in-progress "yours" card: the notify
+    // sweep that normally keeps `lastStatus` current only walks *active* submissions,
+    // and a terminal job is one sweep away from falling out of that set. `lastNotifiedStatus`
+    // is left alone so the next sweep can still emit the published notification.
+    await store.setSubmissionLastStatus(issueNumber, 'published');
 
     return reply.send({ ok: true, slug: record.slug, version: record.deliveredVersion, publishedAt: at });
   });

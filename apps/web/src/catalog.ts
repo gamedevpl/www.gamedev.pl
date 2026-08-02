@@ -60,8 +60,14 @@ export interface CatalogEntry {
   /**
    * Who commissioned the game (`submitted_by` in the games-repo SPEC). Unverified —
    * a handle, a display name, or the platform sentinel. null when unknown.
+   * For store games with a creator profile, this is the profile display name.
    */
   submittedBy: string | null;
+  /**
+   * Unique creator handle when the catalog join resolved a profile. Present → the
+   * byline links to `/creators/:handle`.
+   */
+  creatorHandle?: string | null;
 }
 
 /** Platform sentinel used in fixture / seed SPECs for games with no human creator. */
@@ -165,45 +171,49 @@ export async function fetchCatalog(): Promise<CatalogEntry[]> {
     throw new Error('Catalog response was not an array');
   }
 
-  return body
-    .filter(
-      (
-        entry,
-      ): entry is Omit<
-        CatalogEntry,
-        'media' | 'multiplayer' | 'saves' | 'world' | 'sensing' | 'orientation' | 'touch'
-      > & {
-        media?: unknown;
-        multiplayer?: unknown;
-        saves?: unknown;
-        world?: unknown;
-        sensing?: unknown;
-        orientation?: unknown;
-        touch?: unknown;
-      } =>
-        typeof entry === 'object' &&
-        entry !== null &&
-        typeof entry.slug === 'string' &&
-        typeof entry.title === 'string' &&
-        typeof entry.genre === 'string' &&
-        typeof entry.controls === 'string' &&
-        typeof entry.status === 'string' &&
-        entry.status === 'published',
-    )
-    .map((entry) => ({
-      ...entry,
-      media: parseCatalogMedia(entry.media),
-      multiplayer: parseCatalogMultiplayer((entry as { multiplayer?: unknown }).multiplayer),
-      saves: entry.saves === 'player' ? ('player' as const) : null,
-      world: entry.world === 'shared' ? ('shared' as const) : null,
-      sensing: entry.sensing === 'tilt' || entry.sensing === 'backdrop' ? entry.sensing : null,
-      orientation: parseCatalogOrientation(entry.orientation),
-      touch: parseCatalogTouch(entry.touch),
-      submittedBy: parseCatalogSubmittedBy(
-        (entry as { submittedBy?: unknown; submitted_by?: unknown }).submittedBy ??
-          (entry as { submitted_by?: unknown }).submitted_by,
-      ),
-    }));
+  return body.map((entry) => normalizeCatalogEntry(entry)).filter((entry): entry is CatalogEntry => entry !== null);
+}
+
+/**
+ * Coerce one catalog-shaped API object into a CatalogEntry. Used by `/api/catalog` and
+ * by the public creator profile page so media/byline fields are never dropped.
+ */
+export function normalizeCatalogEntry(value: unknown): CatalogEntry | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const entry = value as Record<string, unknown>;
+  if (
+    typeof entry.slug !== 'string' ||
+    typeof entry.title !== 'string' ||
+    typeof entry.genre !== 'string' ||
+    typeof entry.controls !== 'string' ||
+    typeof entry.status !== 'string' ||
+    entry.status !== 'published'
+  ) {
+    return null;
+  }
+  return {
+    slug: entry.slug,
+    title: entry.title,
+    genre: entry.genre,
+    controls: entry.controls,
+    status: entry.status,
+    media: parseCatalogMedia(entry.media),
+    multiplayer: parseCatalogMultiplayer(entry.multiplayer),
+    saves: entry.saves === 'player' ? 'player' : null,
+    world: entry.world === 'shared' ? 'shared' : null,
+    sensing: entry.sensing === 'tilt' || entry.sensing === 'backdrop' ? entry.sensing : null,
+    orientation: parseCatalogOrientation(entry.orientation),
+    touch: parseCatalogTouch(entry.touch),
+    submittedBy: parseCatalogSubmittedBy(entry.submittedBy ?? entry.submitted_by),
+    creatorHandle: parseCatalogCreatorHandle(entry.creatorHandle),
+  };
+}
+
+function parseCatalogCreatorHandle(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim().toLowerCase();
+  if (!/^[a-z][a-z0-9_]{2,23}$/.test(trimmed)) return null;
+  return trimmed;
 }
 
 /** Same rules as the API: null / "null" / missing → null; otherwise length-capped text. */

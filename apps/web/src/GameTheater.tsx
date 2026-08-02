@@ -19,6 +19,7 @@ import { useVoiceMeterBridge } from './voiceMeter.js';
 import { useWorldBridge } from './world.js';
 import { useZoneBridge } from './zone.js';
 import { useScreenWakeLock } from './useScreenWakeLock.js';
+import { creatorPath } from './router.js';
 
 /**
  * Shell-owned camera feed under the game iframe. Kept as a tiny component so the
@@ -79,6 +80,8 @@ type GameTheaterProps = {
    * platform sentinel read as the site itself; anything else is shown as a byline.
    */
   submittedBy?: string | null;
+  /** When set, the byline links to `/creators/:handle`. */
+  creatorHandle?: string | null;
   /**
    * The game's `controls` line from the catalog. A fallback now rather than the only
    * source: the player bridge reports the game's own control list, which is localized,
@@ -130,6 +133,7 @@ export function GameTheater({
   orientation = 'any',
   reportSlug,
   submittedBy = null,
+  creatorHandle = null,
   controls,
   touch = null,
 }: GameTheaterProps) {
@@ -289,6 +293,7 @@ export function GameTheater({
   const displayTitle = player.meta?.title?.trim() || title;
 
   const authorLabel = submittedBy && !isPlatformAuthor(submittedBy) ? submittedBy : t('catalog.platformAuthor');
+  const authorLink = creatorHandle && submittedBy && !isPlatformAuthor(submittedBy) ? creatorPath(creatorHandle) : null;
 
   // Fullscreen buys back the browser chrome — on a phone that's a third of the
   // screen. Unsupported on iPhone Safari, where `fullscreenEnabled` is false and
@@ -530,7 +535,18 @@ export function GameTheater({
             </span>
             <h2 className="theater-title">
               <span className="theater-title-text">{displayTitle}</span>
-              <span className="theater-author">{t('player.byAuthor', { author: authorLabel })}</span>
+              <span className="theater-author">
+                {authorLink ? (
+                  <>
+                    {t('player.byAuthorPrefix')}
+                    <a className="theater-author-link" href={authorLink}>
+                      {authorLabel}
+                    </a>
+                  </>
+                ) : (
+                  t('player.byAuthor', { author: authorLabel })
+                )}
+              </span>
             </h2>
             {player.meta?.desc ? <span className="theater-desc">{player.meta.desc}</span> : meta}
           </div>

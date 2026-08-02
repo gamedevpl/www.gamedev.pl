@@ -31,6 +31,8 @@ describe('isKnownSpaShellPath', () => {
     '/terms',
     '/health',
     '/contact',
+    '/creators/ada',
+    '/creators/ada_lovelace',
     '/play/sky-dodge',
     '/ay/sky-dodge',
     '/ai/sky-dodge',

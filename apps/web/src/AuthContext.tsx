@@ -16,6 +16,13 @@ export interface User {
    * else a console error on every page load.
    */
   admin?: boolean;
+  /** Public handle when claimed — required to publish, never the Google/Apple name. */
+  handle?: string;
+  profileName?: string;
+  bio?: string;
+  avatarMode?: 'google' | 'letter';
+  profileCreatedAt?: string;
+  handleChangedAt?: string;
 }
 
 export type WaitlistStatus = 'unknown' | 'not_on_list' | 'pending' | 'approved' | 'rejected';

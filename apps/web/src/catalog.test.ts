@@ -44,10 +44,48 @@ describe('catalog helpers', () => {
         orientation: 'any',
         touch: null,
         submittedBy: null,
+        creatorHandle: null,
       },
     ]);
     // The catalog is served by our own API, not public GitHub Pages.
     expect(globalThis.fetch).toHaveBeenCalledWith('/api/catalog');
+  });
+
+  it('keeps a valid creatorHandle and drops malformed ones', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          {
+            slug: 'a',
+            title: 'A',
+            genre: '',
+            controls: '',
+            status: 'published',
+            submittedBy: 'Ada',
+            creatorHandle: 'ada',
+          },
+          {
+            slug: 'b',
+            title: 'B',
+            genre: '',
+            controls: '',
+            status: 'published',
+            creatorHandle: 'Ada',
+          },
+          {
+            slug: 'c',
+            title: 'C',
+            genre: '',
+            controls: '',
+            status: 'published',
+            creatorHandle: 'nope!',
+          },
+        ]),
+      ),
+    );
+
+    const entries = await fetchCatalog();
+    expect(entries.map((entry) => entry.creatorHandle)).toEqual(['ada', 'ada', null]);
   });
 
   it('keeps a submitted_by byline and treats nullish values as absent', async () => {
