@@ -114,3 +114,31 @@ export async function setAgentOpenRounds(token: string, allow: boolean): Promise
 
   return (await response.json()) as { allowAgentOpenRounds: boolean };
 }
+
+export type OAuthGrantSummary = {
+  grantId: string;
+  clientId: string;
+  clientLabel: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+};
+
+/** Connected coding-agent clients for the signed-in creator (BY-18b). */
+export async function listOAuthGrants(): Promise<OAuthGrantSummary[]> {
+  const response = await fetch(`${API_BASE}/api/me/oauth-grants`, { credentials: 'include' });
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+  return (await response.json()) as OAuthGrantSummary[];
+}
+
+/** Revoke a connected client immediately. */
+export async function revokeOAuthGrant(grantId: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/me/oauth-grants/${encodeURIComponent(grantId)}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+  if (!response.ok && response.status !== 204) {
+    await throwResponseError(response);
+  }
+}

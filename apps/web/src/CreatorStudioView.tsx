@@ -21,6 +21,7 @@ import {
   type StudioShelfGame,
 } from './studioShelf.js';
 import { StudioAgentKeyPanel } from './StudioAgentKeyPanel.js';
+import { StudioOAuthClientsPanel } from './StudioOAuthClientsPanel.js';
 import { SubmissionStatusView } from './SubmissionStatusView.js';
 import {
   approveSuggestion,
@@ -1018,6 +1019,8 @@ function DetailsPanel({
       {!catalogLive && game.slug && game.lastKnownStatus !== 'abandoned' ? <DraftShareControl game={game} /> : null}
 
       {game.slug && game.lastKnownStatus !== 'abandoned' ? <StudioAgentKeyPanel token={game.token} /> : null}
+
+      <StudioOAuthClientsPanel />
 
       {/* Only once there is play to report on. Before a game is live every one of these
           numbers is zero, and a wall of zeroes reads as a verdict rather than as
