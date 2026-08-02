@@ -512,7 +512,7 @@ export function CreatorQA({
             onClick={() => goTo(reviewIndex)}
             disabled={submitting || !titleReady}
           >
-            {t('qa.startBuilding')}
+            {t('qa.skipToReview')}
           </button>
         )}
 

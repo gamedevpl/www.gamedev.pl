@@ -423,7 +423,7 @@
     "continue": "Continue",
     "next": "Next",
     "skip": "Skip — AI decides",
-    "startBuilding": "Skip the rest — start building",
+    "skipToReview": "Skip the rest — review & create",
     "reviewAction": "Review",
     "reviewEyebrow": "Ready when you are",
     "reviewTitle": "Review & create",
