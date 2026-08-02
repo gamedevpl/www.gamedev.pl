@@ -1117,6 +1117,8 @@ export interface GameAgentKeyRecord {
   updatedAt: string;
   /** BY-24: when true, the creator's agent may call `open_round`. Default false. */
   allowAgentOpenRounds?: boolean;
+  /** BY-24: admission lock while `open_round` is creating a job — cleared in finally. */
+  agentOpenRoundPending?: boolean;
 }
 
 export interface Store {
@@ -1676,6 +1678,13 @@ export interface Store {
     allow: boolean,
     at: string,
   ): Promise<GameAgentKeyRecord | null>;
+  /**
+   * BY-24: admit at most one in-flight `open_round` per slug. Returns false when another
+   * caller already holds the lock.
+   */
+  beginAgentOpenRound(slug: string, at: string): Promise<boolean>;
+  /** BY-24: release the admission lock after `open_round` completes or aborts. */
+  finishAgentOpenRound(slug: string, at: string): Promise<void>;
 }
 
 // Stable doc id for a subscription: a hash of its endpoint URL. Endpoints are long
@@ -2980,6 +2989,20 @@ export class InMemoryStore implements Store {
     const next: GameAgentKeyRecord = { ...current, allowAgentOpenRounds: allow, updatedAt: at };
     this.gameAgentKeys.set(slug, next);
     return { ...next };
+  }
+
+  async beginAgentOpenRound(slug: string, at: string): Promise<boolean> {
+    const existing = this.gameAgentKeys.get(slug);
+    if (!existing || existing.agentOpenRoundPending) return false;
+    this.gameAgentKeys.set(slug, { ...existing, agentOpenRoundPending: true, updatedAt: at });
+    return true;
+  }
+
+  async finishAgentOpenRound(slug: string, at: string): Promise<void> {
+    const existing = this.gameAgentKeys.get(slug);
+    if (!existing?.agentOpenRoundPending) return;
+    const { agentOpenRoundPending: _pending, ...rest } = existing;
+    this.gameAgentKeys.set(slug, { ...rest, updatedAt: at });
   }
 
   // Test/inspection only — production reads go through `listWaitlistEntries`.
@@ -4782,6 +4805,31 @@ export class FirestoreStore implements Store {
       };
       tx.set(docRef, next);
       return next;
+    });
+  }
+
+  async beginAgentOpenRound(slug: string, at: string): Promise<boolean> {
+    const docRef = this.db.collection('gameAgentKeys').doc(slug);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef);
+      if (!snap.exists) return false;
+      const existing = snap.data() as GameAgentKeyRecord;
+      if (existing.agentOpenRoundPending) return false;
+      const next: GameAgentKeyRecord = { ...existing, agentOpenRoundPending: true, updatedAt: at };
+      tx.set(docRef, next);
+      return true;
+    });
+  }
+
+  async finishAgentOpenRound(slug: string, at: string): Promise<void> {
+    const docRef = this.db.collection('gameAgentKeys').doc(slug);
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef);
+      if (!snap.exists) return;
+      const existing = snap.data() as GameAgentKeyRecord;
+      if (!existing.agentOpenRoundPending) return;
+      const { agentOpenRoundPending: _pending, ...rest } = existing;
+      tx.set(docRef, { ...rest, updatedAt: at });
     });
   }
 

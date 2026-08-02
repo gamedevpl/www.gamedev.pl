@@ -48,6 +48,10 @@ export const GAME_NOT_PUBLISHED_REASON = 'this game is not published yet — imp
 export const IMPROVEMENT_QUOTA_EXHAUSTED_REASON =
   "today's improvement limit is used up — the creator can start another round tomorrow, or from the Studio";
 
+/** Another `open_round` is already creating a job for this slug — retry shortly. */
+export const OPEN_ROUND_IN_PROGRESS_REASON =
+  'an improvement round is already being opened for this game — wait a moment and try again';
+
 export interface GameAgentKeyClaims {
   slug: string;
   creatorUid: string;

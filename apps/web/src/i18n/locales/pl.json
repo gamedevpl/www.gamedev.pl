@@ -891,6 +891,7 @@
     "loadError": "Nie udało się wczytać ustawień agenta.",
     "toggleError": "Nie udało się zapisać tego ustawienia. Spróbuj za chwilę.",
     "expiry": "Klucz tej gry wygasa {{when}}.",
+    "rotatedKickoff": "Klucz został obrócony — skopiuj ten nowy kickoff dla agenta:",
     "openRounds": {
       "title": "Niech mój agent otwiera nowe rundy",
       "on": "Wł.",

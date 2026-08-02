@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getAgentKey, rotateAgentKey, setAgentOpenRounds } from './connectApi.js';
+import { PixelIcon } from './PixelIcon.js';
 import { recordStudioStep } from './visitTelemetry.js';
 
 type StudioAgentKeyPanelProps = {
@@ -18,12 +19,14 @@ export function StudioAgentKeyPanel({ token, compact = false }: StudioAgentKeyPa
   const baseId = useId();
   const [allowAgentOpenRounds, setAllowAgentOpenRounds] = useState(false);
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
+  const [kickoffPrompt, setKickoffPrompt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toggleBusy, setToggleBusy] = useState(false);
   const [rotateArmed, setRotateArmed] = useState(false);
   const [rotating, setRotating] = useState(false);
   const [rotateError, setRotateError] = useState<string | null>(null);
+  const [copiedKickoff, setCopiedKickoff] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,6 +74,17 @@ export function StudioAgentKeyPanel({ token, compact = false }: StudioAgentKeyPa
     }
   };
 
+  const copyKickoff = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedKickoff(true);
+      window.setTimeout(() => setCopiedKickoff(false), 2000);
+    } catch {
+      // Snippet stays on screen to select by hand.
+    }
+    recordStudioStep('connect_copied', 'self', 'kickoff');
+  };
+
   const handleRotate = async () => {
     setRotating(true);
     setRotateError(null);
@@ -78,8 +92,8 @@ export function StudioAgentKeyPanel({ token, compact = false }: StudioAgentKeyPa
       const next = await rotateAgentKey(token);
       setExpiresAt(next.expiresAt);
       setAllowAgentOpenRounds(next.allowAgentOpenRounds);
+      setKickoffPrompt(next.kickoffPrompt);
       setRotateArmed(false);
-      recordStudioStep('connect_copied', 'self', 'kickoff');
     } catch {
       setRotateError(t('connect.rotate.error'));
     } finally {
@@ -120,6 +134,20 @@ export function StudioAgentKeyPanel({ token, compact = false }: StudioAgentKeyPa
             <>
               {expiresLabel ? (
                 <p className="studio-connect-expiry">{t('agentKey.expiry', { when: expiresLabel })}</p>
+              ) : null}
+              {kickoffPrompt ? (
+                <div className="studio-connect-step">
+                  <p className="studio-connect-same">{t('agentKey.rotatedKickoff')}</p>
+                  <pre className="studio-connect-snippet studio-connect-kickoff" tabIndex={0}>
+                    {kickoffPrompt}
+                  </pre>
+                  <div className="studio-connect-actions">
+                    <button type="button" className="status-share-copy" onClick={() => void copyKickoff(kickoffPrompt)}>
+                      <PixelIcon name={copiedKickoff ? 'check' : 'sparkle'} size={12} />{' '}
+                      {copiedKickoff ? t('connect.copied') : t('connect.copyKickoff')}
+                    </button>
+                  </div>
+                </div>
               ) : null}
               <div className="studio-connect-actions">
                 {!rotateArmed ? (

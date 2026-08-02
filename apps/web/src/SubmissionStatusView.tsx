@@ -427,8 +427,12 @@ export function SubmissionStatusView({
       if (hasSeenStatusRef.current && verdict && prevVerdictRef.current !== verdict) {
         recordStudioStep('gate_verdict', builder, verdict);
       }
-      if (hasSeenStatusRef.current && status.openedBy && prevOpenedByRef.current !== status.openedBy) {
-        recordStudioStep('round_opened', builder, status.openedBy);
+      if (status.openedBy) {
+        if (!hasSeenStatusRef.current) {
+          recordStudioStep('round_opened', builder, status.openedBy);
+        } else if (prevOpenedByRef.current !== status.openedBy) {
+          recordStudioStep('round_opened', builder, status.openedBy);
+        }
       }
     }
 

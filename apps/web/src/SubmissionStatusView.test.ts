@@ -1836,6 +1836,32 @@ describe('SubmissionStatusView stop & retry', () => {
     vi.useRealTimers();
   });
 
+  it('emits round_opened on the first status snapshot when openedBy is set', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'queued',
+      builder: 'self',
+      openedBy: 'agent',
+    });
+    window.history.pushState(null, '', '/status/round-opened-first');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'round-opened-first', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+    expect(mockedRecordStudioStep).toHaveBeenCalledWith('round_opened', 'self', 'agent');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   /**
    * Publishing is terminal: a post-publish improvement opens a *new* job on its own
    * thread. These lock the handoff — the creator moving onto the new build thread rather

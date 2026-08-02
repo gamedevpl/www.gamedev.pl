@@ -1,7 +1,15 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { looksLikeGameAgentKey, IMPROVEMENT_QUOTA_EXHAUSTED_REASON } from './agent-game-key.js';
-import { resolveGameAgentKeyForOpenRound, resolveGameAgentKeyForStart } from './agent-game-key-resolve.js';
+import {
+  looksLikeGameAgentKey,
+  IMPROVEMENT_QUOTA_EXHAUSTED_REASON,
+  OPEN_ROUND_IN_PROGRESS_REASON,
+} from './agent-game-key.js';
+import {
+  findActiveRoundForSlug,
+  resolveGameAgentKeyForOpenRound,
+  resolveGameAgentKeyForStart,
+} from './agent-game-key-resolve.js';
 import {
   classifyAgentTokenAccess,
   InvalidAgentTokenError,
@@ -617,7 +625,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           return toolErr(resolved.reason);
         }
 
+        const at = new Date(now()).toISOString();
         if (resolved.activeRound) {
+          await store.finishAgentOpenRound(resolved.claims.slug, at);
           return toolOk({
             jobId: resolved.activeRound.issueNumber,
             slug: resolved.claims.slug,
@@ -635,42 +645,68 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           return toolErr('content_rejected', { category: moderation.category ?? 'other' });
         }
 
-        const dateStr = new Date(now()).toISOString().slice(0, 10);
-        const quota = await store.checkAndIncrementQuota(
-          resolved.claims.creatorUid,
-          dateStr,
-          dailyImprovementQuota,
-          'improvements',
-        );
-        if (!quota.allowed) {
-          if (quota.tier === 'blocked') {
-            return toolErr('account is blocked');
+        const admitted = await store.beginAgentOpenRound(resolved.claims.slug, at);
+        if (!admitted) {
+          const again = await resolveGameAgentKeyForOpenRound(store, key, agentTokenSecret, now());
+          if (again.ok && again.activeRound) {
+            return toolOk({
+              jobId: again.activeRound.issueNumber,
+              slug: again.claims.slug,
+              alreadyOpen: true,
+            });
           }
-          return toolErr(IMPROVEMENT_QUOTA_EXHAUSTED_REASON);
+          return toolErr(OPEN_ROUND_IN_PROGRESS_REASON);
         }
 
-        const sanitizedFeedback = sanitizeCreatorText(feedbackRaw, { singleLine: false });
-        const sanitizedTitle = sanitizeCreatorText(`Improve ${resolved.publishedRecord.title}`, {
-          singleLine: true,
-        });
-        const started = await startImprovementRound({
-          issueNumber: resolved.publishedRecord.issueNumber,
-          text: sanitizedFeedback,
-          title: sanitizedTitle,
-          locale: resolved.publishedRecord.locale ?? 'en',
-          log: ctx.request.log,
-          builder: 'self',
-          openedBy: 'agent',
-        });
-        if (!started) {
-          return toolErr('could not open an improvement round for this game');
-        }
+        try {
+          const racingRound = await findActiveRoundForSlug(store, resolved.claims.slug, resolved.claims.creatorUid);
+          if (racingRound) {
+            return toolOk({
+              jobId: racingRound.issueNumber,
+              slug: resolved.claims.slug,
+              alreadyOpen: true,
+            });
+          }
 
-        return toolOk({
-          jobId: started.jobId,
-          slug: resolved.claims.slug,
-          alreadyOpen: false,
-        });
+          const dateStr = at.slice(0, 10);
+          const quota = await store.checkAndIncrementQuota(
+            resolved.claims.creatorUid,
+            dateStr,
+            dailyImprovementQuota,
+            'improvements',
+          );
+          if (!quota.allowed) {
+            if (quota.tier === 'blocked') {
+              return toolErr('account is blocked');
+            }
+            return toolErr(IMPROVEMENT_QUOTA_EXHAUSTED_REASON);
+          }
+
+          const sanitizedFeedback = sanitizeCreatorText(feedbackRaw, { singleLine: false });
+          const sanitizedTitle = sanitizeCreatorText(`Improve ${resolved.publishedRecord.title}`, {
+            singleLine: true,
+          });
+          const started = await startImprovementRound({
+            issueNumber: resolved.publishedRecord.issueNumber,
+            text: sanitizedFeedback,
+            title: sanitizedTitle,
+            locale: resolved.publishedRecord.locale ?? 'en',
+            log: ctx.request.log,
+            builder: 'self',
+            openedBy: 'agent',
+          });
+          if (!started) {
+            return toolErr('could not open an improvement round for this game');
+          }
+
+          return toolOk({
+            jobId: started.jobId,
+            slug: resolved.claims.slug,
+            alreadyOpen: false,
+          });
+        } finally {
+          await store.finishAgentOpenRound(resolved.claims.slug, at);
+        }
       },
     },
 

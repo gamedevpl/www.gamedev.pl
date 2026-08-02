@@ -185,6 +185,33 @@ describe('MCP open_round (BY-24)', () => {
     expect(job?.transitions?.[0]).toMatchObject({ to: 'queued', by: 'agent', reason: 'agent_open_round' });
   });
 
+  it('admits only one concurrent open_round per slug', async () => {
+    const store = new InMemoryStore();
+    await seedPublishedGame(store);
+    const at = new Date().toISOString();
+    await store.setGameAgentOpenRounds(SLUG, OWNER, true, at);
+    app = await createApp(store);
+
+    const results = await Promise.all([
+      callOpenRound(app, { key: gameKey(), feedback: 'Concurrent A.' }),
+      callOpenRound(app, { key: gameKey(), feedback: 'Concurrent B.' }),
+      callOpenRound(app, { key: gameKey(), feedback: 'Concurrent C.' }),
+    ]);
+
+    const newOpens = results.filter(
+      (result) => !result.isError && !(result.structured as { alreadyOpen?: boolean }).alreadyOpen,
+    );
+    expect(newOpens).toHaveLength(1);
+
+    const owned = await store.listSubmissionsByOwner(OWNER, { limit: 50 });
+    const active = owned.filter((job) => job.slug === SLUG && job.issueNumber !== PUBLISHED_ISSUE);
+    expect(active).toHaveLength(1);
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const usage = await store.getUsage(OWNER, dateStr);
+    expect(usage.improvements).toBe(1);
+  });
+
   it('is idempotent while a round is open and does not stack', async () => {
     const store = new InMemoryStore();
     await seedPublishedGame(store);
