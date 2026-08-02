@@ -78,6 +78,12 @@ export interface VisitFunnel {
    */
   editing: Array<{ step: EditorStep; visits: number }>;
   /**
+   * The NL tuning lane, against `asked` as its denominator: of the sittings that
+   * typed a request, how many got a patch, were told honestly that it needs code,
+   * or were refused. This is the read half of "is the router worth its calls".
+   */
+  assisting: Array<{ step: AssistStep; visits: number }>;
+  /**
    * How to play card usage — the numbers that decide whether a richer per-game format
    * is worth building (github.com/gamedevpl/www.gamedev.pl/issues/395).
    *
@@ -142,6 +148,18 @@ export const EDITOR_STEPS = ['opened', 'draft_saved', 'previewed', 'published'] 
 
 export type EditorStep = (typeof EDITOR_STEPS)[number];
 
+/**
+ * Outcomes of the editor's natural-language tuning lane.
+ *
+ * Deliberately NOT rungs of `EDITOR_STEPS`: funnel rungs are supersets of the
+ * one below, and most creators will never open the composer, so an `asked` rung
+ * would make a healthy editing ladder look like a cliff. `asked` is the
+ * denominator for the other three.
+ */
+export const ASSIST_STEPS = ['asked', 'applied', 'handoff', 'rejected'] as const;
+
+export type AssistStep = (typeof ASSIST_STEPS)[number];
+
 interface VisitRollup {
   started: boolean;
   /** Creation steps this visit reached. A Set, so a repeated step counts once. */
@@ -150,6 +168,7 @@ interface VisitRollup {
   waitlistSteps: Set<string>;
   /** Editor steps this visit reached. Separate again, for the same reason. */
   editorSteps: Set<string>;
+  assistSteps: Set<string>;
   entry?: string;
   referrer?: string;
   utmSource?: string;
@@ -190,6 +209,7 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       steps: new Set<string>(),
       waitlistSteps: new Set<string>(),
       editorSteps: new Set<string>(),
+      assistSteps: new Set<string>(),
       howToPlayOpens: 0,
       howToPlayVias: new Set<string>(),
       howToPlayReopened: false,
@@ -210,6 +230,8 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       if (event.step) rollup.waitlistSteps.add(event.step);
     } else if (event.type === 'editor_step') {
       if (event.step) rollup.editorSteps.add(event.step);
+    } else if (event.type === 'assist_step') {
+      if (event.step) rollup.assistSteps.add(event.step);
     } else if (event.type === 'play_started') {
       rollup.plays += 1;
       // Earliest wins: a flush can deliver events out of order, and "time to first
@@ -367,6 +389,10 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
     editing: EDITOR_STEPS.map((step) => ({
       step,
       visits: rollups.filter((rollup) => rollup.editorSteps.has(step)).length,
+    })),
+    assisting: ASSIST_STEPS.map((step) => ({
+      step,
+      visits: rollups.filter((rollup) => rollup.assistSteps.has(step)).length,
     })),
     howToPlay: {
       opens: howToOpens,

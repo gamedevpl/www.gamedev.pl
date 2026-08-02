@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
-import { recordEditorStep } from './visitTelemetry.js';
+import { recordAssistStep, recordEditorStep } from './visitTelemetry.js';
 import {
   deleteEditorDraft,
   fetchGameEditor,
   publishEditorContent,
   putEditorDraft,
+  requestEditorAssist,
   type EditorCollectionSpec,
   type EditorContentDoc,
   type EditorItemContent,
@@ -35,6 +36,20 @@ import {
 const AUTOSAVE_MS = 1500;
 
 type SaveState = 'clean' | 'dirty' | 'saving' | 'saved' | 'conflict' | 'error';
+/**
+ * What the composer is doing, and what it last said.
+ *
+ * `undo` holds the document from *before* the patch — the panel's whole undo
+ * story, per the plan's "apply immediately, one tap back" rule. It is one step
+ * and in memory only: the draft tier is a single mutable document, so promising
+ * more than one step back would be a lie.
+ */
+type AssistState =
+  | { kind: 'idle' }
+  | { kind: 'asking' }
+  | { kind: 'applied'; message: string; undo: EditorContentDoc }
+  | { kind: 'note'; message: string }
+  | { kind: 'error'; message: string };
 type PublishState =
   | { kind: 'idle' }
   | { kind: 'publishing' }
@@ -201,7 +216,7 @@ function blankItem(spec: EditorCollectionSpec['item']): EditorItemContent {
 }
 
 export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => void; onBack: () => void }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const name = useLabel();
   const slug = props.game.slug as string;
 
@@ -214,6 +229,8 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
   const [publish, setPublish] = useState<PublishState>({ kind: 'idle' });
   const [itemIndex, setItemIndex] = useState(0);
   const [tileKey, setTileKey] = useState<string | null>(null);
+  const [utterance, setUtterance] = useState('');
+  const [assist, setAssist] = useState<AssistState>({ kind: 'idle' });
 
   // One collection is the pilot vocabulary's reality; the first is the surface.
   const collectionKey = editor ? (Object.keys(editor.definition.content)[0] ?? null) : null;
@@ -314,6 +331,71 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
       params: { ...((current.params ?? {}) as Record<string, EditorParamValue>), [paramName]: value },
     }));
     scheduleSave();
+  }
+
+  /**
+   * Send the sentence, apply what comes back, keep one step of undo.
+   *
+   * The patch is applied exactly the way a slider drag is — into draft state,
+   * then through the ordinary autosave — because the server only ever *proposed*
+   * a document. There is no confirm step by design: confirming every tweak kills
+   * the "say it, see it" feel, and the sliders plus this undo are the safety net.
+   */
+  async function askAssist() {
+    const text = utterance.trim();
+    if (text.length < 2 || assist.kind === 'asking') return;
+    setAssist({ kind: 'asking' });
+    recordAssistStep('asked');
+    const before = contentRef.current;
+    try {
+      const result = await requestEditorAssist(slug, text, before);
+      const message = result.summary ? (i18n.language?.startsWith('pl') ? result.summary.pl : result.summary.en) : '';
+      if (result.lane === 'params' && result.content && result.patches && result.patches.length > 0) {
+        setContent(result.content);
+        scheduleSave();
+        setUtterance('');
+        recordAssistStep('applied');
+        setAssist({
+          kind: 'applied',
+          message: message || t('studioPanel.editor.assistApplied', { count: result.patches.length }),
+          undo: before,
+        });
+        return;
+      }
+      // Every non-acting lane says so out loud. A code-lane request is a real
+      // answer — this game cannot express it as a setting — not a failure, and
+      // it must never look like the composer silently did nothing.
+      recordAssistStep(result.lane === 'reject' ? 'rejected' : 'handoff');
+      setAssist({
+        kind: 'note',
+        message:
+          message ||
+          (result.lane === 'code'
+            ? t('studioPanel.editor.assistNeedsCode')
+            : result.lane === 'content'
+              ? t('studioPanel.editor.assistNeedsContent')
+              : t('studioPanel.editor.assistRejected')),
+      });
+    } catch (error) {
+      const status = (error as StudioApiError).status;
+      recordAssistStep('rejected');
+      setAssist({
+        kind: 'error',
+        message:
+          status === 429
+            ? t('studioPanel.editor.assistQuota')
+            : status === 422
+              ? t('studioPanel.editor.assistRejected')
+              : t('studioPanel.editor.assistUnavailable'),
+      });
+    }
+  }
+
+  function undoAssist() {
+    if (assist.kind !== 'applied') return;
+    setContent(assist.undo);
+    scheduleSave();
+    setAssist({ kind: 'idle' });
   }
 
   async function reloadNewest() {
@@ -536,6 +618,49 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
           {paramSpecs ? (
             <div className="editor-side-group">
               <h4>{t('studioPanel.editor.tuning')}</h4>
+              {/*
+               * The composer sits above the sliders on purpose: it is the fast
+               * path when the creator knows what they want in words, and the
+               * sliders directly beneath are both the fallback when the router
+               * misreads and the way to nudge whatever it just set.
+               */}
+              <form
+                className="editor-assist"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void askAssist();
+                }}
+              >
+                <input
+                  type="text"
+                  className="editor-assist-input"
+                  maxLength={240}
+                  value={utterance}
+                  placeholder={t('studioPanel.editor.assistPlaceholder')}
+                  aria-label={t('studioPanel.editor.assistLabel')}
+                  onChange={(event) => setUtterance(event.target.value)}
+                />
+                <button
+                  type="submit"
+                  className="editor-assist-send"
+                  disabled={assist.kind === 'asking' || utterance.trim().length < 2}
+                >
+                  {assist.kind === 'asking' ? t('studioPanel.editor.assistAsking') : t('studioPanel.editor.assistSend')}
+                </button>
+              </form>
+              {assist.kind === 'applied' ? (
+                <p className="editor-assist-note is-ok" role="status">
+                  {assist.message}{' '}
+                  <button type="button" className="editor-assist-undo" onClick={undoAssist}>
+                    {t('studioPanel.editor.assistUndo')}
+                  </button>
+                </p>
+              ) : null}
+              {assist.kind === 'note' || assist.kind === 'error' ? (
+                <p className="editor-assist-note" role="status">
+                  {assist.message}
+                </p>
+              ) : null}
               {Object.entries(paramSpecs).map(([paramName, paramSpec]) => {
                 const value = paramValues[paramName] ?? paramSpec.default;
                 if (paramSpec.type === 'int' || paramSpec.type === 'number') {

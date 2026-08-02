@@ -10094,6 +10094,62 @@ body.player-open {
   cursor: pointer;
 }
 
+/* The natural-language composer above the tuning sliders. */
+.editor-assist {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.editor-assist-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 34px;
+  padding: 6px 8px;
+  background: #0c1116;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  color: inherit;
+  font-size: 0.8rem;
+}
+
+.editor-assist-send {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: #131b23;
+  color: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.editor-assist-send:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.editor-assist-note {
+  margin: 0 0 10px;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.editor-assist-note.is-ok {
+  color: #9fd8b4;
+}
+
+.editor-assist-undo {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 /* Tuning sliders must be draggable with a thumb, not just clickable. */
 .editor-tuning-row input[type='range'] {
   width: 100%;

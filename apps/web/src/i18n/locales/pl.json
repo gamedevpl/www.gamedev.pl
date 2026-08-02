@@ -301,7 +301,18 @@
       "removeItem": "Usuń",
       "empty": "Nie ma jeszcze nic do edycji.",
       "discard": "Odrzuć szkic",
-      "publishHint": "Zmiany są prywatne do czasu publikacji. Publikacja uruchamia bramkę gry (kilka minut), a operator zatwierdza wejście na stronę."
+      "publishHint": "Zmiany są prywatne do czasu publikacji. Publikacja uruchamia bramkę gry (kilka minut), a operator zatwierdza wejście na stronę.",
+      "assistPlaceholder": "Poproś o zmianę — „niech pies będzie trochę większy”",
+      "assistLabel": "Opisz zmianę ustawień tej gry",
+      "assistSend": "Poproś",
+      "assistAsking": "Myślę…",
+      "assistApplied": "Zastosowano zmiany: {{count}}.",
+      "assistUndo": "Cofnij",
+      "assistNeedsCode": "To wymaga zmiany w kodzie — poproś o nią jako ulepszenie gry.",
+      "assistNeedsContent": "To zmiana samych map — edytuj je poniżej.",
+      "assistRejected": "Ta prośba została odrzucona.",
+      "assistQuota": "Wykorzystano dzisiejsze prośby o strojenie. Suwaki nadal działają.",
+      "assistUnavailable": "Asystent nie odpowiedział — spróbuj ponownie lub użyj suwaków."
     },
     "overview": {
       "status": "Status",

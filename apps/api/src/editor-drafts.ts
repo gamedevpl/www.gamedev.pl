@@ -13,6 +13,7 @@ import type { GamesStore } from './games-store.js';
 import { MAX_EDITOR_DRAFT_BYTES, type Store, type SubmissionRecord } from './store.js';
 import type { ContentChecker } from './moderation.js';
 import { logModerationRejection } from './moderation-metrics.js';
+import { MAX_UTTERANCE_LENGTH, applyAssistPatches, assistEnabled, type EditorAssistant } from './editor-assist.js';
 
 /**
  * The Creator Studio content editor's API (EditorKit L3/L4 — the platform half
@@ -57,10 +58,25 @@ const DraftSchema = z.object({
 /** Publishes are a real gate run each — debounce, not quota (research doc §7). */
 export const PUBLISH_COOLDOWN_MS = 10 * 60_000;
 
+const AssistSchema = z.object({
+  utterance: z.string().trim().min(2).max(MAX_UTTERANCE_LENGTH),
+  /** The document the creator is looking at, so relative requests move live values. */
+  content: z.record(z.string(), z.unknown()),
+});
+
+/**
+ * Each assist is one paid Vertex call. Bounded per creator per day for the same
+ * reason refines are: the ceiling should be a decision, not the invite count.
+ */
+export const DEFAULT_DAILY_ASSIST_QUOTA = 60;
+
 export interface EditorRoutesOptions {
   store: Store;
   gamesStore?: GamesStore;
   contentChecker?: ContentChecker;
+  /** The natural-language tuning router. Absent (or flag off) → the route 503s. */
+  assistant?: EditorAssistant;
+  dailyAssistQuota?: number;
   /** Same seam the delivery route uses — starts the gate on a new candidate. */
   onSourcesDelivered?: (input: {
     issueNumber: number;
@@ -268,6 +284,113 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
     return reply.send({ ok: true });
   });
 
+  /**
+   * Natural language → a validated params patch.
+   *
+   * Deliberately *returns* a document instead of writing one: the creator's
+   * draft is still saved by the ordinary `PUT …/draft` path, so validation,
+   * moderation, revision conflicts and autosave behave identically whether a
+   * value came from a slider or a sentence. This route's own guarantees are
+   * narrower and mechanical — the model can only name declared params, values
+   * are clamped into declared ranges, and a patch set that would not validate
+   * is dropped whole.
+   */
+  app.post(
+    '/api/me/games/:slug/editor/assist',
+    { config: { rateLimit: { max: 20, timeWindow: 60_000 } } },
+    async (request, reply) => {
+      if (!requireUser(request, reply)) return;
+      if (!options.assistant || !assistEnabled()) {
+        return reply.status(503).send({ error: 'assist is not enabled on this deployment' });
+      }
+      const resolved = await resolveEditable(request, reply);
+      if (!resolved) return;
+      const body = AssistSchema.safeParse(request.body);
+      if (!body.success) {
+        return reply.status(400).send({ error: body.error.issues[0]?.message ?? 'invalid request' });
+      }
+      if (!resolved.definition.params) {
+        return reply.status(409).send({ error: 'this game has no tunable settings' });
+      }
+
+      // Moderation first, before a paid call and before the text reaches a model
+      // — same fail-closed posture as every other creator-text path.
+      if (options.contentChecker) {
+        const verdict = await options.contentChecker.check(body.data.utterance);
+        if (!verdict.allowed) {
+          logModerationRejection(request.log, {
+            surface: 'editor_assist',
+            uid: request.user?.uid,
+            category: verdict.category,
+          });
+          return reply.status(422).send({ error: 'that request was rejected', category: verdict.category ?? 'other' });
+        }
+      }
+
+      const dateStr = new Date(now()).toISOString().slice(0, 10);
+      const quota = await store.checkAndIncrementQuota(
+        request.user!.uid,
+        dateStr,
+        options.dailyAssistQuota ?? Number(process.env.DAILY_ASSIST_QUOTA ?? DEFAULT_DAILY_ASSIST_QUOTA),
+        'assists',
+      );
+      if (!quota.allowed) {
+        return reply.status(429).send({ error: 'daily tuning-assist quota exceeded' });
+      }
+
+      const slug = resolved.submission.slug as string;
+      let result;
+      try {
+        result = await options.assistant.assist({
+          definition: resolved.definition,
+          content: body.data.content,
+          utterance: body.data.utterance,
+          game: resolved.submission.title ? { title: resolved.submission.title } : {},
+          ...(resolved.submission.locale ? { locale: resolved.submission.locale } : {}),
+        });
+      } catch (error) {
+        // Never fail open into a *write*: with no answer there is nothing to
+        // apply, so the honest reply is that the router did not answer.
+        request.log.warn({ slug, err: error }, 'editor assist call failed');
+        return reply.status(503).send({ error: 'the assistant did not answer — try again' });
+      }
+
+      // Cost lands on the game's own job, beside gate runs and seeds, so a
+      // creator's tuning spend is visible in the same report as everything else.
+      if (result.tokens) {
+        await store
+          .recordJobCost(resolved.submission.issueNumber, {
+            kind: 'assist',
+            at: new Date(now()).toISOString(),
+            by: result.model ?? 'vertex',
+            tokens: result.tokens,
+          })
+          .catch(() => {});
+      }
+
+      if (result.lane !== 'params' || !result.patches || result.patches.length === 0) {
+        // Every non-acting lane returns the same shape, so the panel can say
+        // what happened rather than showing a silent no-op.
+        return reply.send({
+          lane: result.lane === 'params' ? 'code' : result.lane,
+          ...(result.summary ? { summary: result.summary } : {}),
+        });
+      }
+
+      const applied = applyAssistPatches(resolved.definition, body.data.content, result.patches);
+      if (applied.patches.length === 0) {
+        return reply.send({ lane: 'code', ...(result.summary ? { summary: result.summary } : {}) });
+      }
+      request.log.info({ slug, lane: result.lane, patches: applied.patches.length }, 'editor assist applied');
+      return reply.send({
+        lane: 'params',
+        patches: applied.patches,
+        content: applied.content,
+        ...(result.summary ? { summary: result.summary } : {}),
+      });
+    },
+  );
+
   app.post(
     '/api/me/games/:slug/editor/publish',
     { config: { rateLimit: { max: 6, timeWindow: 60 * 60_000 } } },
@@ -346,12 +469,10 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
 
       const reparsed = parseEditorDefinition(editorFile.content);
       if (!reparsed.definition) {
-        return reply
-          .status(422)
-          .send({
-            error: 'the draft does not produce a valid editor definition',
-            problems: reparsed.errors.slice(0, 20),
-          });
+        return reply.status(422).send({
+          error: 'the draft does not produce a valid editor definition',
+          problems: reparsed.errors.slice(0, 20),
+        });
       }
       const generatedPath = GENERATED_CONTENT_PATH;
       const generated = files.find((file) => file.path === generatedPath);

@@ -18,6 +18,7 @@ import { parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
 import { registerCreatorStudioRoutes } from './creator-studio.js';
 import { registerEditorRoutes } from './editor-drafts.js';
+import { VertexEditorAssistant, type EditorAssistant } from './editor-assist.js';
 import { createGenerator } from './generator.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { registerContactRoutes, type ContactRoutesOptions } from './contact.js';
@@ -79,6 +80,8 @@ export interface BuildAppOptions {
   submissionRoutes?: SubmissionRoutesOptions;
   contentChecker?: ContentChecker;
   specRefiner?: SpecRefiner;
+  /** The editor's NL tuning router. Defaults to the Vertex one; stubbed in tests. */
+  editorAssistant?: EditorAssistant;
   multiplayerRoutes?: MultiplayerRoutesOptions;
   /** Seams for play-session telemetry; defaults to a live catalog-backed slug gate. */
   telemetryRoutes?: Omit<TelemetryRoutesOptions, 'store'>;
@@ -501,6 +504,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     store,
     gamesStore,
     contentChecker,
+    // The natural-language tuning lane. Constructed unconditionally (building one
+    // touches no GCP — the Vertex client is lazy) and gated by EDITOR_ASSIST
+    // inside the route, so the flag is the only switch.
+    assistant: options.editorAssistant ?? new VertexEditorAssistant(),
     onSourcesDelivered: gateTrigger,
   });
 

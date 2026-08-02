@@ -53,8 +53,12 @@ const VERSION_SOURCES: Record<string, string> = {
 
 function stubGamesStore(options: { hasEditor?: boolean } = {}) {
   const hasEditor = options.hasEditor ?? true;
-  const stored: Array<{ slug: string; files: Array<{ path: string; content: string }>; origin?: string; engineRef?: string }> =
-    [];
+  const stored: Array<{
+    slug: string;
+    files: Array<{ path: string; content: string }>;
+    origin?: string;
+    engineRef?: string;
+  }> = [];
   const gamesStore = {
     putCandidateSources: async (input: {
       slug: string;
@@ -320,5 +324,150 @@ describe('editor draft routes', () => {
       headers: authHeaders('g:alice'),
     });
     expect(response.statusCode).toBe(409);
+  });
+});
+
+/*
+ * The assist route. Its own guarantees are the ones tested here: it is off
+ * unless the deploy flag says so, it never writes (the returned document still
+ * goes through the draft write), moderation and quota come before the paid
+ * call, and a non-params lane is reported honestly rather than as a silent
+ * no-op.
+ */
+describe('editor assist route', () => {
+  let store: InMemoryStore;
+  let app: FastifyInstance | null = null;
+
+  const PARAMS_EDITOR_JSON = JSON.stringify({
+    version: 1,
+    params: {
+      dogScale: { type: 'number', min: 0.5, max: 3, default: 1, label: { en: 'Dog size', pl: 'Wielkość psa' } },
+    },
+    content: JSON.parse(EDITOR_JSON).content,
+  });
+
+  beforeEach(async () => {
+    store = new InMemoryStore();
+    await seedOwnedGame(store, 'g:alice');
+    delete process.env.EDITOR_ASSIST;
+    if (app) {
+      await app.close();
+      app = null;
+    }
+  });
+
+  async function createAssistApp(assistant?: {
+    assist: () => Promise<{ lane: string; patches?: Array<{ key: string; value: unknown }>; tokens?: unknown }>;
+  }) {
+    const { gamesStore } = stubGamesStore();
+    // Same stub version, but its EDITOR.json declares a tunable.
+    const withParams = {
+      ...gamesStore,
+      getSourceFile: async (slug: string, version: string, path: string) =>
+        path === 'EDITOR.json' && version === 'v1'
+          ? PARAMS_EDITOR_JSON
+          : ((await (
+              gamesStore as unknown as { getSourceFile: (s: string, v: string, p: string) => Promise<string | null> }
+            ).getSourceFile(slug, version, path)) ?? null),
+    } as unknown as GamesStore;
+    app = await buildApp({
+      store,
+      sessionSecret,
+      ...(assistant ? { editorAssistant: assistant as never } : {}),
+      submissionRoutes: {
+        submissionTokenSecret: 'token-secret',
+        agentChannel: { gamesStore: withParams, onSourcesDelivered: () => ({ buildId: 'b' }) },
+      },
+    });
+    return app;
+  }
+
+  const call = (instance: FastifyInstance, utterance: string) =>
+    instance.inject({
+      method: 'POST',
+      url: '/api/me/games/garden-gather/editor/assist',
+      headers: authHeaders('g:alice'),
+      payload: {
+        utterance,
+        content: { params: { dogScale: 1 }, gardens: JSON.parse(PARAMS_EDITOR_JSON).content.gardens.defaults },
+      },
+    });
+
+  it('503s while the deploy flag is off, without calling the model', async () => {
+    let called = false;
+    const instance = await createAssistApp({
+      assist: async () => {
+        called = true;
+        return { lane: 'params' };
+      },
+    });
+    const response = await call(instance, 'make the dog bigger');
+    expect(response.statusCode).toBe(503);
+    expect(called).toBe(false);
+  });
+
+  it('applies a params patch and returns a document the draft write accepts', async () => {
+    process.env.EDITOR_ASSIST = 'true';
+    const instance = await createAssistApp({
+      assist: async () => ({
+        lane: 'params',
+        patches: [{ key: 'dogScale', value: 1.4 }],
+        tokens: { input: 900, output: 40 },
+      }),
+    });
+    const response = await call(instance, 'the dog should be slightly bigger');
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.lane).toBe('params');
+    expect(body.patches).toEqual([{ key: 'dogScale', value: 1.4 }]);
+
+    // The route wrote nothing; the ordinary draft path still has to accept it.
+    const saved = await instance.inject({
+      method: 'PUT',
+      url: '/api/me/games/garden-gather/editor/draft',
+      headers: authHeaders('g:alice'),
+      payload: { content: body.content },
+    });
+    expect(saved.statusCode).toBe(200);
+
+    // And the spend landed on the game's own job, beside gate runs and seeds.
+    const job = await store.getSubmission(sourceJob);
+    expect(job?.costs?.some((entry) => entry.kind === 'assist')).toBe(true);
+  });
+
+  it('reports a code-lane hand-off instead of inventing a value', async () => {
+    process.env.EDITOR_ASSIST = 'true';
+    const instance = await createAssistApp({
+      assist: async () => ({ lane: 'code' }),
+    });
+    const response = await call(instance, 'make the dog bark when I click it');
+    expect(response.statusCode).toBe(200);
+    expect(response.json().lane).toBe('code');
+  });
+
+  it('drops an undeclared key the model proposed, and says so as a hand-off', async () => {
+    process.env.EDITOR_ASSIST = 'true';
+    const instance = await createAssistApp({
+      assist: async () => ({ lane: 'params', patches: [{ key: 'catScale', value: 2 }] }),
+    });
+    const response = await call(instance, 'make the cat bigger');
+    expect(response.json().lane).toBe('code');
+    expect(response.json().patches).toBeUndefined();
+  });
+
+  it('spends the daily quota and refuses past it', async () => {
+    process.env.EDITOR_ASSIST = 'true';
+    // Kept well under the route's own 20/min rate limit, which is a different
+    // ceiling for a different reason (burst vs. daily spend).
+    process.env.DAILY_ASSIST_QUOTA = '3';
+    try {
+      const instance = await createAssistApp({ assist: async () => ({ lane: 'code' }) });
+      for (let i = 0; i < 3; i += 1) {
+        expect((await call(instance, `tweak ${i}`)).statusCode).toBe(200);
+      }
+      expect((await call(instance, 'one too many')).statusCode).toBe(429);
+    } finally {
+      delete process.env.DAILY_ASSIST_QUOTA;
+    }
   });
 });

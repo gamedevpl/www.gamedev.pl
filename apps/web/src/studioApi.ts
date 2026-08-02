@@ -148,6 +148,39 @@ export async function publishEditorContent(slug: string): Promise<{ version: str
   return (await response.json()) as { version: string; jobId: number };
 }
 
+export type AssistLane = 'params' | 'content' | 'code' | 'reject';
+
+export type AssistResponse = {
+  lane: AssistLane;
+  /** Only on the `params` lane: what changed, and the document to save. */
+  patches?: Array<{ key: string; value: EditorParamValue }>;
+  content?: EditorContentDoc;
+  summary?: { en: string; pl: string };
+};
+
+/**
+ * Ask the tuning router to turn a sentence into a params patch.
+ *
+ * Returns a *proposal*: the caller applies it by saving the returned document
+ * through `putEditorDraft`, so validation and moderation run on exactly the same
+ * path a slider drag takes. 503 means the lane is switched off for this
+ * deployment; 429 is the daily cap.
+ */
+export async function requestEditorAssist(
+  slug: string,
+  utterance: string,
+  content: EditorContentDoc,
+): Promise<AssistResponse> {
+  const response = await fetch(`${API_BASE}/api/me/games/${encodeURIComponent(slug)}/editor/assist`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ utterance, content }),
+  });
+  if (!response.ok) await throwResponseError(response);
+  return (await response.json()) as AssistResponse;
+}
+
 export type StudioHealthResponse = {
   days: string[];
   truncated: boolean;

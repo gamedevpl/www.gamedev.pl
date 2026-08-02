@@ -45,6 +45,7 @@ export type ModerationSurface =
   | 'player_feedback' // written feedback on someone else's published game
   | 'world_text' // text placed into a persistent world, seen by other players
   | 'editor_draft' // declared text in a Studio content draft (names, labels)
+  | 'editor_assist' // a natural-language tuning request in the editor
   | 'contact' // the public contact form, no session required
   | 'mock_prompt'; // the dev-only mock generator route
 

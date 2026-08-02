@@ -287,7 +287,7 @@ export interface SubmissionRecord {
  * (docs: architecture B), so that arriving is a writer, not a migration.
  */
 export interface JobCostEntry {
-  kind: 'agent_session' | 'gate_run' | 'seed';
+  kind: 'agent_session' | 'gate_run' | 'seed' | 'assist';
   at: string;
   /**
    * Who charged for it: an agent backend (`copilot`), a service (`cloud-build`), or —
@@ -456,6 +456,8 @@ export interface UsageCounters {
   playerFeedback: number;
   /** Creator-requested improvements on already-published games (studio control panel). */
   improvements: number;
+  /** Natural-language tuning requests in the editor (one Vertex call each). */
+  assists: number;
 }
 
 /**
@@ -555,7 +557,8 @@ export interface VisitEvent {
     | 'create_step'
     | 'waitlist_step'
     | 'studio_step'
-    | 'editor_step';
+    | 'editor_step'
+    | 'assist_step';
   /** Server-anchored instant, derived like `TelemetryEvent.at`. */
   at: string;
   /** Milliseconds from visit start — the trustworthy measure of within-visit timing. */
@@ -565,8 +568,8 @@ export interface VisitEvent {
   /** `route_viewed`: the route kind now shown. Never its parameters. */
   route?: string;
   /**
-   * `create_step` / `waitlist_step` / `studio_step` / `editor_step`: which funnel
-   * step this visit reached.
+   * `create_step` / `waitlist_step` / `studio_step` / `editor_step` /
+   * `assist_step`: which funnel step or outcome this visit reached.
    */
   step?: string;
   /**
@@ -1867,6 +1870,7 @@ function emptyUsageCounters(): UsageCounters {
     feedback: 0,
     playerFeedback: 0,
     improvements: 0,
+    assists: 0,
   };
 }
 
