@@ -42,7 +42,9 @@ export type EditorPropertySpec =
 
 export type EditorConstraint =
   | { tile: string; min?: number; max?: number; exactly?: number }
-  | { equalCounts: [string, string] };
+  | { equalCounts: [string, string] }
+  /** Every `require` tile must be reachable from `from` without crossing `blockedBy`. */
+  | { reachable: { from: string; blockedBy: string[]; require: string[] } };
 
 export type EditorTileSpec = {
   key: string;

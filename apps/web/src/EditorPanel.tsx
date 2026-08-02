@@ -46,6 +46,66 @@ function useLabel(): (label: EditorLabel) => string {
   return useCallback((label: EditorLabel) => (i18n.language?.startsWith('pl') ? label.pl : label.en), [i18n.language]);
 }
 
+/**
+ * Four-way flood fill, mirroring the contract's `reachable` rule.
+ *
+ * A live check that cannot see a rule the server enforces is worse than none:
+ * without this the panel reported "all checks pass" for a map whose goal was
+ * walled off, and the creator only found out when the save was refused.
+ */
+function unreachableCount(
+  spec: EditorCollectionSpec['item'],
+  item: EditorItemContent,
+  rule: { from: string; blockedBy: string[]; require: string[] },
+): number {
+  const rows = item.rows;
+  const height = rows.length;
+  const width = height > 0 ? rows[0].length : 0;
+  const charToKey = new Map(spec.tiles.map((tile) => [tile.char, tile.key]));
+  const keyAt = (row: number, col: number) => charToKey.get(rows[row][col]);
+  const blocked = new Set(rule.blockedBy);
+  const required = new Set(rule.require);
+
+  const seen = new Set<number>();
+  const queue: Array<[number, number]> = [];
+  for (let row = 0; row < height; row += 1) {
+    for (let col = 0; col < width; col += 1) {
+      if (keyAt(row, col) !== rule.from) continue;
+      seen.add(row * width + col);
+      queue.push([row, col]);
+    }
+  }
+  if (queue.length === 0) return 0;
+  while (queue.length > 0) {
+    const [row, col] = queue.shift() as [number, number];
+    for (const [dr, dc] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ] as const) {
+      const nextRow = row + dr;
+      const nextCol = col + dc;
+      if (nextRow < 0 || nextCol < 0 || nextRow >= height || nextCol >= width) continue;
+      if (rows[nextRow].length !== width) continue;
+      const key = keyAt(nextRow, nextCol);
+      if (key === undefined || blocked.has(key)) continue;
+      const index = nextRow * width + nextCol;
+      if (seen.has(index)) continue;
+      seen.add(index);
+      queue.push([nextRow, nextCol]);
+    }
+  }
+  let missed = 0;
+  for (let row = 0; row < height; row += 1) {
+    for (let col = 0; col < width; col += 1) {
+      const key = keyAt(row, col);
+      if (key !== undefined && required.has(key) && !seen.has(row * width + col)) missed += 1;
+    }
+  }
+  return missed;
+}
+
 /** Client-side mirror of the constraint arithmetic — hints only; the server re-checks. */
 function itemProblems(spec: EditorCollectionSpec['item'], item: EditorItemContent, name: (label: EditorLabel) => string) {
   const counts = new Map<string, number>(spec.tiles.map((tile) => [tile.key, 0]));
@@ -62,6 +122,15 @@ function itemProblems(spec: EditorCollectionSpec['item'], item: EditorItemConten
   };
   const problems: string[] = [];
   for (const rule of spec.constraints) {
+    if ('reachable' in rule) {
+      const missed = unreachableCount(spec, item, rule.reachable);
+      if (missed > 0) {
+        problems.push(
+          `${missed} × ${tileName(rule.reachable.require[0] ?? '')} walled off from ${tileName(rule.reachable.from)}`,
+        );
+      }
+      continue;
+    }
     if ('equalCounts' in rule) {
       const [a, b] = rule.equalCounts;
       if (counts.get(a) !== counts.get(b)) {
