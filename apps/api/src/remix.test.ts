@@ -7,9 +7,10 @@ import type { GitHubClient } from './github-client.js';
 import type { EditorAssistant } from './editor-assist.js';
 
 /*
- * The remix surface's promises, tested at the route: a player needs no account,
- * nothing they send is ever compiled, a code edit is only visible once it
- * builds, and a share link carries declared values and never generated code.
+ * The remix surface's promises, tested at the route: it is signed-in only for
+ * now, a remix belongs to whoever started it, nothing a browser sends is ever
+ * compiled, a code edit is only visible once it builds, and a share link carries
+ * declared values and never generated code.
  */
 
 const EDITOR_JSON = JSON.stringify({
@@ -69,6 +70,12 @@ async function buildTestApp(overrides: { assistant?: EditorAssistant; codeLane?:
   const seen: Array<Record<string, string> | undefined> = [];
   const app = Fastify();
   app.decorateRequest('user', null);
+  // Stands in for the auth plugin: `x-test-uid` becomes the session, absent
+  // means signed out. Enough to exercise the gate without minting real cookies.
+  app.addHook('onRequest', async (request) => {
+    const uid = request.headers['x-test-uid'];
+    (request as { user?: unknown }).user = typeof uid === 'string' ? { uid, tier: 'standard' } : null;
+  });
   await registerRemixRoutes(app, {
     store,
     gamesStore: stubGamesStore(),
@@ -80,6 +87,8 @@ async function buildTestApp(overrides: { assistant?: EditorAssistant; codeLane?:
   await app.ready();
   return { app, seen };
 }
+
+const alice = { 'x-test-uid': 'g:alice' };
 
 describe('remix routes', () => {
   let app: FastifyInstance | null = null;
@@ -96,10 +105,42 @@ describe('remix routes', () => {
     app = null;
   });
 
-  it('starts a remix with no account and hands back the declared sliders', async () => {
+  it('refuses every route without a session — remix is signed-in only for now', async () => {
     const built = await buildTestApp();
     app = built.app;
-    const response = await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix' });
+    const start = await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix' });
+    expect(start.statusCode).toBe(401);
+    for (const lane of ['assist', 'code', 'share']) {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/remixes/whatever/${lane}`,
+        payload: { utterance: 'bigger dog' },
+      });
+      // 401 before 404: a signed-out caller is told to sign in, not that the
+      // remix does not exist.
+      expect(response.statusCode, lane).toBe(401);
+    }
+  });
+
+  it("404s another player's remix — an id is not a bearer token", async () => {
+    const built = await buildTestApp({
+      assistant: { assist: async () => ({ lane: 'params' }) } as EditorAssistant,
+    });
+    app = built.app;
+    const { remixId } = (await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix', headers: alice })).json();
+    const stolen = await app.inject({
+      method: 'POST',
+      url: `/api/remixes/${remixId}/assist`,
+      headers: { 'x-test-uid': 'g:mallory' },
+      payload: { utterance: 'bigger dog' },
+    });
+    expect(stolen.statusCode).toBe(404);
+  });
+
+  it('starts a remix for a signed-in player and hands back the declared sliders', async () => {
+    const built = await buildTestApp();
+    app = built.app;
+    const response = await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix', headers: alice });
     expect(response.statusCode).toBe(200);
     const body = response.json();
     expect(body.remixId).toBeTruthy();
@@ -110,10 +151,11 @@ describe('remix routes', () => {
   it('404s an unknown game and an expired remix id', async () => {
     const built = await buildTestApp();
     app = built.app;
-    expect((await app.inject({ method: 'POST', url: '/api/games/nope/remix' })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'POST', url: '/api/games/nope/remix', headers: alice })).statusCode).toBe(404);
     const stale = await app.inject({
       method: 'POST',
       url: '/api/remixes/00000000-0000-4000-8000-000000000000/assist',
+      headers: alice,
       payload: { utterance: 'bigger dog' },
     });
     expect(stale.statusCode).toBe(404);
@@ -126,10 +168,11 @@ describe('remix routes', () => {
       } as EditorAssistant,
     });
     app = built.app;
-    const { remixId } = (await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix' })).json();
+    const { remixId } = (await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix', headers: alice })).json();
     const response = await app.inject({
       method: 'POST',
       url: `/api/remixes/${remixId}/assist`,
+      headers: alice,
       payload: { utterance: 'the dog should be bigger', params: { dogScale: 1, tagline: 'go!' } },
     });
     expect(response.json()).toMatchObject({ lane: 'params', patches: [{ key: 'dogScale', value: 1.4 }] });
@@ -152,10 +195,11 @@ describe('remix routes', () => {
     };
     const built = await buildTestApp({ codeLane });
     app = built.app;
-    const { remixId } = (await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix' })).json();
+    const { remixId } = (await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix', headers: alice })).json();
     const response = await app.inject({
       method: 'POST',
       url: `/api/remixes/${remixId}/code`,
+      headers: alice,
       payload: { utterance: 'make it twice as fast' },
     });
     const body = response.json();
@@ -175,10 +219,11 @@ describe('remix routes', () => {
     };
     const built = await buildTestApp({ codeLane });
     app = built.app;
-    const { remixId } = (await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix' })).json();
+    const { remixId } = (await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix', headers: alice })).json();
     const response = await app.inject({
       method: 'POST',
       url: `/api/remixes/${remixId}/code`,
+      headers: alice,
       payload: { utterance: 'something impossible' },
     });
     expect(response.json()).toMatchObject({ ok: false, reason: 'did_not_compile' });
@@ -193,11 +238,12 @@ describe('remix routes', () => {
       codeLane: { run: async () => ({ ok: true }) },
     });
     app = built.app;
-    const { remixId } = (await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix' })).json();
+    const { remixId } = (await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix', headers: alice })).json();
     for (const lane of ['assist', 'code']) {
       const response = await app.inject({
         method: 'POST',
         url: `/api/remixes/${remixId}/${lane}`,
+        headers: alice,
         payload: { utterance: 'do a thing' },
       });
       expect(response.statusCode, lane).toBe(503);
@@ -220,12 +266,18 @@ describe('remix routes', () => {
     };
     const built = await buildTestApp({ codeLane });
     app = built.app;
-    const { remixId } = (await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix' })).json();
-    await app.inject({ method: 'POST', url: `/api/remixes/${remixId}/code`, payload: { utterance: 'faster' } });
+    const { remixId } = (await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix', headers: alice })).json();
+    await app.inject({
+      method: 'POST',
+      url: `/api/remixes/${remixId}/code`,
+      headers: alice,
+      payload: { utterance: 'faster' },
+    });
 
     const response = await app.inject({
       method: 'POST',
       url: `/api/remixes/${remixId}/share`,
+      headers: alice,
       // 99 is far outside the declared 0.5–3, and must not survive into a link.
       payload: { params: { dogScale: 99, tagline: 'hi' } },
     });

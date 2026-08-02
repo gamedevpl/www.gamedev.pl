@@ -6,6 +6,8 @@ import { PixelIcon } from './PixelIcon.js';
 import { useGameTelemetry } from './gamePlayer.js';
 import { rememberRecentPlay } from './recentPlays.js';
 import { recordGamePlayed } from './recommendationsApi.js';
+import { AuthModal } from './AuthModal.js';
+import { useAuth } from './AuthContext.js';
 import { RemixPanel } from './RemixPanel.js';
 import { readSharedParams } from './remixApi.js';
 
@@ -30,6 +32,7 @@ type PublishedGameFrameProps = {
  */
 export function PublishedGameFrame({ slug, title, frameRef, embed, slots, remixable }: PublishedGameFrameProps) {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [html, setHtml] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [gameTitle, setGameTitle] = useState<string>(title);
@@ -43,6 +46,7 @@ export function PublishedGameFrame({ slug, title, frameRef, embed, slots, remixa
    */
   const [remixHtml, setRemixHtml] = useState<string | null>(null);
   const [remixOpen, setRemixOpen] = useState(false);
+  const [remixAuthOpen, setRemixAuthOpen] = useState(false);
   const localFrameRef = useRef<HTMLIFrameElement | null>(null);
   const activeFrameRef = frameRef ?? localFrameRef;
   // Present only when the player arrived on a shared link; read once.
@@ -107,7 +111,20 @@ export function PublishedGameFrame({ slug, title, frameRef, embed, slots, remixa
   return (
     <div className="remix-host">
       {frame}
-      {remixOpen || sharedParams ? (
+      {/*
+       * Signed-in only for now (owner decision): a remix spends model calls on
+       * someone's behalf, and a session is what makes that attributable during
+       * the beta.
+       *
+       * That includes arriving on a shared link. The values are harmless on
+       * their own, but the panel is what applies them and the panel needs a
+       * session to exist — so a signed-out visitor gets the game as published
+       * plus a sign-in prompt, rather than a link that silently does nothing.
+       * Applying shared values without an account would need an ungated way to
+       * read a game's declaration, which is a surface worth adding on purpose
+       * rather than as a side effect of this gate.
+       */}
+      {user && (remixOpen || sharedParams) ? (
         <RemixPanel
           slug={slug}
           frameRef={activeFrameRef}
@@ -116,10 +133,21 @@ export function PublishedGameFrame({ slug, title, frameRef, embed, slots, remixa
           onClose={() => setRemixOpen(false)}
         />
       ) : (
-        <button type="button" className="remix-open" onClick={() => setRemixOpen(true)}>
-          <PixelIcon name="wrench" size={13} /> {t('remix.button')}
+        <button
+          type="button"
+          className="remix-open"
+          title={user ? t('remix.button') : t('remix.signInToRemix')}
+          onClick={() => (user ? setRemixOpen(true) : setRemixAuthOpen(true))}
+        >
+          <PixelIcon name="wrench" size={13} /> {user ? t('remix.button') : t('remix.signInToRemix')}
         </button>
       )}
+      <AuthModal
+        isOpen={remixAuthOpen}
+        onClose={() => setRemixAuthOpen(false)}
+        title={t('remix.signInTitle')}
+        subtitle={t('remix.signInSubtitle')}
+      />
     </div>
   );
 }

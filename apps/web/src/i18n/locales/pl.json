@@ -954,6 +954,9 @@
     "shareFailed": "Nie udało się utworzyć linku.",
     "makeItYours": "Zrób ją moją",
     "conceptSeed": "Gra jak {{slug}}, ale moja własna wersja",
-    "button": "Remiks"
+    "button": "Remiks",
+    "signInToRemix": "Zaloguj się, aby remiksować",
+    "signInTitle": "Zaloguj się, aby zremiksować tę grę",
+    "signInSubtitle": "W czasie zamkniętej bety remiksowanie jest powiązane z kontem."
   }
 }

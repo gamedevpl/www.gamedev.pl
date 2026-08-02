@@ -950,6 +950,9 @@
     "shareFailed": "Couldn't make a link for that.",
     "makeItYours": "Make it mine",
     "conceptSeed": "A game like {{slug}}, but my own version",
-    "button": "Remix"
+    "button": "Remix",
+    "signInToRemix": "Sign in to remix",
+    "signInTitle": "Sign in to remix this game",
+    "signInSubtitle": "Remixing is tied to your account while we're in closed beta."
   }
 }

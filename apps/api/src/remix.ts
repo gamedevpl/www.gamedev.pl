@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { PARAMS_KEY, parseEditorDefinition, type EditorDefinition } from './editor-contract.js';
 import { EDITOR_FILE } from './editor-contract.js';
@@ -13,11 +13,18 @@ import { assembleGameHtml } from './assemble.js';
 import type { GitHubClient } from './github-client.js';
 
 /**
- * Remix: a player bends a published game, in their own browser, without an account.
+ * Remix: a player bends a published game while playing it.
  *
  * The product shape (ops repo: realtime-game-editing-plan §D) is that this is
  * play-first — retention and shares, with creator conversion as upside — so the
  * rules here follow from "ephemeral" rather than from "draft":
+ *
+ * **Signed-in only, for now** (owner decision, 2026-08-02). The design supports
+ * anonymous remixing and the surface was built for it, but every route here
+ * spends model calls on behalf of whoever asks, and during the closed beta a
+ * session is what makes that spend attributable and rate-limitable per person
+ * rather than per IP. Nothing else about the shape changes, so lifting this is
+ * deleting a guard, not rebuilding a surface.
  *
  *  - **A remix never publishes.** There is no path from here into the games
  *    store, the catalog, or the gate. The only durable things it can produce are
@@ -49,6 +56,8 @@ export const MAX_CODE_EDITS = 12;
 
 interface RemixSession {
   id: string;
+  /** Who started it. A remix id is not a bearer token — it is scoped to its owner. */
+  ownerUid: string;
   slug: string;
   /** Engine ref the rebuild pins to. */
   ref: string;
@@ -107,12 +116,31 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
     }
   }
 
+  /**
+   * The beta gate. 401 rather than a silent no-op so the client can offer the
+   * sign-in prompt instead of a button that does nothing.
+   */
+  function requireUser(request: FastifyRequest, reply: FastifyReply): boolean {
+    if (!request.user) {
+      reply.status(401).send({ error: 'sign in to remix' });
+      return false;
+    }
+    if (request.user.tier === 'blocked') {
+      reply.status(403).send({ error: 'account is blocked' });
+      return false;
+    }
+    return true;
+  }
+
   function getSession(request: FastifyRequest): RemixSession | null {
     sweep();
     const id = (request.params as { id?: string }).id;
     if (!id) return null;
     const session = sessions.get(id);
     if (!session || session.expiresAt <= now()) return null;
+    // Someone else's remix is indistinguishable from an expired one, which is
+    // the honest answer as well as the safe one.
+    if (session.ownerUid !== request.user?.uid) return null;
     return session;
   }
 
@@ -173,6 +201,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
     '/api/games/:slug/remix',
     { config: { rateLimit: { max: 20, timeWindow: 60_000 } } },
     async (request, reply) => {
+      if (!requireUser(request, reply)) return;
       const params = StartSchema.safeParse(request.params);
       if (!params.success) return reply.status(400).send({ error: 'invalid game id' });
       const loaded = await loadSources(params.data.slug);
@@ -184,6 +213,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       sweep();
       sessions.set(id, {
         id,
+        ownerUid: request.user!.uid,
         slug: params.data.slug,
         ref: loaded.ref,
         sources: loaded.fromStore ? loaded.sources : {},
@@ -212,6 +242,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
     '/api/remixes/:id/assist',
     { config: { rateLimit: { max: 20, timeWindow: 60_000 } } },
     async (request, reply) => {
+      if (!requireUser(request, reply)) return;
       const session = getSession(request);
       if (!session) return reply.status(404).send({ error: 'this remix has expired — start a new one' });
       if (!options.assistant || !assistEnabled() || !session.definition?.params) {
@@ -225,7 +256,11 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       if (options.contentChecker) {
         const verdict = await options.contentChecker.check(body.data.utterance);
         if (!verdict.allowed) {
-          logModerationRejection(request.log, { surface: 'remix_assist', category: verdict.category });
+          logModerationRejection(request.log, {
+            surface: 'remix_assist',
+            uid: request.user?.uid,
+            category: verdict.category,
+          });
           return reply.status(422).send({ error: 'that request was rejected' });
         }
       }
@@ -264,6 +299,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
     '/api/remixes/:id/code',
     { config: { rateLimit: { max: 6, timeWindow: 60_000 } } },
     async (request, reply) => {
+      if (!requireUser(request, reply)) return;
       const session = getSession(request);
       if (!session) return reply.status(404).send({ error: 'this remix has expired — start a new one' });
       if (!options.codeLane || !codeLaneEnabled()) {
@@ -283,7 +319,11 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       if (options.contentChecker) {
         const verdict = await options.contentChecker.check(body.data.utterance);
         if (!verdict.allowed) {
-          logModerationRejection(request.log, { surface: 'remix_code', category: verdict.category });
+          logModerationRejection(request.log, {
+            surface: 'remix_code',
+            uid: request.user?.uid,
+            category: verdict.category,
+          });
           return reply.status(422).send({ error: 'that request was rejected' });
         }
       }
@@ -340,6 +380,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
     '/api/remixes/:id/share',
     { config: { rateLimit: { max: 10, timeWindow: 60_000 } } },
     async (request, reply) => {
+      if (!requireUser(request, reply)) return;
       const session = getSession(request);
       if (!session) return reply.status(404).send({ error: 'this remix has expired — start a new one' });
       const body = ShareSchema.safeParse(request.body);
@@ -355,7 +396,11 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       if (texts.length > 0 && options.contentChecker) {
         const verdict = await options.contentChecker.checkFields(texts);
         if (!verdict.allowed) {
-          logModerationRejection(request.log, { surface: 'remix_share', category: verdict.category });
+          logModerationRejection(request.log, {
+            surface: 'remix_share',
+            uid: request.user?.uid,
+            category: verdict.category,
+          });
           return reply.status(422).send({ error: 'that text was rejected' });
         }
       }
