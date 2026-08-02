@@ -183,10 +183,15 @@ export function RemixPanel(props: {
     recordRemixStep('opened');
   }, []);
 
+  // Identity, not the object: this effect mints a session and the only thing
+  // about the viewer it depends on is which account they are. Keying on the
+  // object would re-run — and re-mint — on any render that hands back a fresh
+  // one, and a game that declares no values makes that loop self-sustaining.
+  const uid = user?.uid ?? null;
   useEffect(() => {
     // No session without a session: the API 401s signed out, and the composer
     // needs nothing from the server until send — so a visitor can type first.
-    if (!user) return;
+    if (!uid) return;
     let cancelled = false;
     startRemix(props.slug)
       .then((started) => {
@@ -209,7 +214,7 @@ export function RemixPanel(props: {
     return () => {
       cancelled = true;
     };
-  }, [props.slug, props.initialParams, pushToGame, user]);
+  }, [props.slug, props.initialParams, pushToGame, uid]);
 
   // The reward lands the second they're through the wall: once the session
   // exists and a stashed request is waiting, run it with no further taps.
@@ -433,7 +438,18 @@ export function RemixPanel(props: {
             {lane === 'idle' ? t('remix.ask') : t('remix.asking')}
           </button>
         </form>
-      ) : null}
+      ) : (
+        /*
+         * No lane answers here — the game declares no parameters and its code is
+         * not reachable for a rebuild. The panel has to say so: a surface whose
+         * whole promise is "say what you want" cannot open with no place to say
+         * it and no explanation, which reads as broken rather than as not-yet.
+         * The way onward stays offered below.
+         */
+        <p className="remix-note is-info" role="status">
+          {t('remix.notHere')}
+        </p>
+      )}
 
       {note ? (
         <p className={`remix-note is-${note.kind}`} role="status">
