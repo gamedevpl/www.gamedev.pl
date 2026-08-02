@@ -176,6 +176,7 @@ export type AssistStep = 'asked' | 'applied' | 'handoff' | 'rejected';
  */
 export type RemixStep =
   | 'opened'
+  | 'no_lane' // opened, and this game offered no way in — see the note below
   | 'typed' // wrote a request and hit send — desire exists, regardless of auth
   | 'wall_shown' // the sign-in wall dropped between typing and spending
   | 'signed_in' // came through the wall; the stashed request runs next

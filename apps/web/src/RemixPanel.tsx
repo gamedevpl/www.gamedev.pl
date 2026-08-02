@@ -230,6 +230,14 @@ export function RemixPanel(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per session arrival
   }, [session, props.slug]);
 
+  // A panel that opened onto nothing. Recorded against the same `opened`
+  // denominator so the share of visits that met a game with no way in is a
+  // number rather than an anecdote — it is the difference between "people are
+  // not interested" and "we showed them a door that does not open".
+  useEffect(() => {
+    if (session && !session.canAssist && !session.canCode) recordRemixStep('no_lane');
+  }, [session]);
+
   function setParam(key: string, value: EditorParamValue) {
     const next = { ...valuesRef.current, [key]: value };
     setValues(next);

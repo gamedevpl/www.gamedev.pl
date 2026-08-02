@@ -28,7 +28,8 @@ const remixApi = vi.hoisted(() => ({
 }));
 vi.mock('./remixApi', () => remixApi);
 
-vi.mock('./visitTelemetry', () => ({ recordRemixStep: vi.fn() }));
+const telemetry = vi.hoisted(() => ({ recordRemixStep: vi.fn() }));
+vi.mock('./visitTelemetry', () => telemetry);
 
 vi.mock('./AuthModal', () => ({ AuthModal: () => null }));
 
@@ -90,6 +91,9 @@ describe('RemixPanel', () => {
     );
     // The way onward is still offered rather than the panel being a dead end.
     expect(container.textContent).toContain('Make it mine');
+    // And it is counted: without this rung, a visit that met a dead panel is
+    // indistinguishable from one that opened the panel and lost interest.
+    expect(telemetry.recordRemixStep).toHaveBeenCalledWith('no_lane');
   });
 
   it('opens with the composer when a lane can answer', async () => {
@@ -106,5 +110,6 @@ describe('RemixPanel', () => {
     expect(container.querySelector('.remix-ask input')).not.toBeNull();
     // Prompt-only: the declaration drives the lane, never the player's surface.
     expect(container.querySelector('.remix-sliders')).toBeNull();
+    expect(telemetry.recordRemixStep).not.toHaveBeenCalledWith('no_lane');
   });
 });
