@@ -15,6 +15,7 @@ describe('HeroPromptSection', () => {
   afterEach(() => {
     document.body.innerHTML = '';
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('renders prompt inputs and voice, upload, sketch buttons', async () => {
@@ -51,6 +52,42 @@ describe('HeroPromptSection', () => {
     expect(micBtn).not.toBeNull();
     expect(uploadBtn).not.toBeNull();
     expect(sketchBtn).not.toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
+  it('does not autofocus the prompt on a narrow viewport', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockReturnValue({
+        matches: true,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }),
+    );
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: '',
+          catalogEntries: [],
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+          mockStatus: 'idle',
+          mockError: null,
+        }),
+      );
+      await flushEffects();
+    });
+
+    expect(document.activeElement).not.toBe(container.querySelector('.big-prompt-input'));
 
     await act(async () => root.unmount());
   });
