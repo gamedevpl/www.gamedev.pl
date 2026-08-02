@@ -1,8 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createNodeVmCage } from './cage.js';
+import { createNodeVmCage, type SimCage, type SimInstance } from './cage.js';
 import { ZONE_SNAPSHOT_VERSION, type ZoneSnapshot } from './contract.js';
 import { parseZoneSchema, type ZoneSchema } from './schema.js';
-import { Zone, ZoneFullError, type SimSource, type ZoneOutboundFrame, type ZoneSnapshotStore } from './zone.js';
+import {
+  Zone,
+  ZoneFullError,
+  type SimSource,
+  type ZoneOutboundFrame,
+  type ZoneSnapshotStore,
+  type ZoneWarnEvent,
+} from './zone.js';
 import {
   BLOATED_SIM,
   COUNTER_SIM,
@@ -271,6 +278,69 @@ describe('hibernation', () => {
     await second.zone.hibernate('empty');
     expect(JSON.parse(second.store.saved.get('ember-watch')!.state).slept).toBeGreaterThan(0);
     void state;
+  });
+
+  it('opens on the last snapshot when wake catch-up times out, rather than refusing the join', async () => {
+    // A6 2026-08-02: cold gamedev-world + biplane-skirmish wake blew the isolate budget
+    // and the shell fell back to silent solo play. Surviving on the snapshot is the
+    // lesser wrong — the world is a few minutes behind, not a different mode of play.
+    const store = new FakeStore();
+    const first = harness({ store });
+    await first.zone.join('player-a');
+    first.runTicks(3);
+    await first.zone.hibernate('empty');
+    const slept = store.saved.get('ember-watch')!;
+
+    const warnings: ZoneWarnEvent[] = [];
+    let wakeCalls = 0;
+    const inner = createNodeVmCage();
+    const cage: SimCage = {
+      kind: 'node-vm',
+      preemptsRunawayTick: false,
+      async load(options) {
+        const instance = await inner.load(options);
+        const wrapped: SimInstance = {
+          init: (seed) => instance.init(seed),
+          restore: (seed, state, draws) => instance.restore(seed, state, draws),
+          tick: (events) => instance.tick(events),
+          wake: (elapsedMs) => {
+            wakeCalls += 1;
+            if (wakeCalls === 1) throw new Error('Script execution timed out.');
+            instance.wake(elapsedMs);
+          },
+          snapshot: () => instance.snapshot(),
+          dispose: () => instance.dispose(),
+        };
+        return wrapped;
+      },
+      dispose: () => inner.dispose(),
+    };
+
+    const zone = new Zone({
+      id: 'ember-watch',
+      slug: 'ember-watch',
+      schema: SCHEMA,
+      cage,
+      source: simSource(COUNTER_SIM),
+      store,
+      broadcast: () => undefined,
+      sendTo: () => undefined,
+      now: () => slept.savedAt + 60_000,
+      newSeed: () => 4242,
+      onWarn: (event) => warnings.push(event),
+    });
+
+    await expect(zone.join('player-a')).resolves.toBe(0);
+    expect(zone.state).toBe('live');
+    expect(wakeCalls).toBe(1);
+    expect(warnings).toEqual([
+      expect.objectContaining({
+        kind: 'wake_catchup_skipped',
+        slug: 'ember-watch',
+        zoneId: 'ember-watch',
+        elapsedMs: 60_000,
+      }),
+    ]);
   });
 
   it('loses what a sim kept outside its state, which is why the gate checks for it', async () => {

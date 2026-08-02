@@ -52,10 +52,26 @@ export interface LoadSimOptions {
   bundleJs: string;
   /** The games repo's `shared/sim-math.ts`, transpiled. Installed as `Math`. */
   simMathJs: string;
-  /** Wall-clock ceiling for one call into the sim. */
+  /** Wall-clock ceiling for one call into the sim (init / tick / restore / snapshot). */
   timeoutMs: number;
+  /**
+   * Wall-clock ceiling for `wake` alone. Defaults to `timeoutMs`.
+   *
+   * Wake is once per hibernation and may run many catch-up ticks; keeping it on the
+   * per-tick budget is how a cold Cloud Run isolate turns a healthy sim into
+   * `zone_unavailable` (A6 2026-08-02, biplane-skirmish). Tick stays short so one zone
+   * cannot eat the core; wake gets its own headroom.
+   */
+  wakeTimeoutMs?: number;
   /** Heap ceiling for the whole zone, in MiB. Ignored by the node:vm cage, which has none. */
   memoryMb: number;
+}
+
+/** True when a cage interrupted a call for exceeding its wall-clock ceiling. */
+export function isSimTimeoutError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  // isolated-vm: "Script execution timed out."; node:vm: "Script execution timed out after Nms"
+  return /timed?\s*out/i.test(message);
 }
 
 export class SimCageUnavailableError extends Error {}
@@ -223,10 +239,11 @@ export async function createIsolatedVmCage(): Promise<SimCage> {
   return {
     kind: 'isolated-vm',
     preemptsRunawayTicks: true,
-    async load({ bundleJs, simMathJs, timeoutMs, memoryMb }) {
+    async load({ bundleJs, simMathJs, timeoutMs, wakeTimeoutMs, memoryMb }) {
       const isolate = new ivm.Isolate({ memoryLimit: memoryMb });
       isolates.push(isolate);
       const context = isolate.createContextSync();
+      const wakeBudget = wakeTimeoutMs ?? timeoutMs;
 
       try {
         // Order matters: sim-math captures the exact-by-spec natives it builds on, so it
@@ -248,10 +265,10 @@ export async function createIsolatedVmCage(): Promise<SimCage> {
         throw error instanceof SimLoadError ? error : new SimLoadError(describeRealmFailure(error));
       }
 
-      const call = <T>(name: string, args: unknown[]): T => {
+      const call = <T>(name: string, args: unknown[], budget = timeoutMs): T => {
         const fn = context.global.getSync(name, { reference: true });
         try {
-          return fn.applySync(undefined, args, { timeout: timeoutMs }) as T;
+          return fn.applySync(undefined, args, { timeout: budget }) as T;
         } finally {
           fn.release();
         }
@@ -261,7 +278,7 @@ export async function createIsolatedVmCage(): Promise<SimCage> {
         init: (seed) => void call<number>('__zoneInit', [seed]),
         restore: (seed, stateJson, draws) => void call('__zoneRestore', [seed, stateJson, draws]),
         tick: (events) => void call('__zoneTick', [JSON.stringify(events)]),
-        wake: (elapsedMs) => void call('__zoneWake', [elapsedMs]),
+        wake: (elapsedMs) => void call('__zoneWake', [elapsedMs], wakeBudget),
         snapshot: () => ({ state: call<string>('__zoneState', []), draws: call<number>('__zoneDraws', []) }),
         dispose: () => {
           if (!isolate.isDisposed) isolate.dispose();
@@ -294,8 +311,9 @@ export function createNodeVmCage(): SimCage {
   return {
     kind: 'node-vm',
     preemptsRunawayTicks: false,
-    async load({ bundleJs, simMathJs, timeoutMs }) {
+    async load({ bundleJs, simMathJs, timeoutMs, wakeTimeoutMs }) {
       const context = vm.createContext({}, { codeGeneration: { strings: false, wasm: false }, name: 'zone-sim-realm' });
+      const wakeBudget = wakeTimeoutMs ?? timeoutMs;
 
       try {
         vm.runInContext(simMathJs, context, { timeout: timeoutMs });
@@ -315,10 +333,10 @@ export function createNodeVmCage(): SimCage {
         throw error instanceof SimLoadError ? error : new SimLoadError(describeRealmFailure(error));
       }
 
-      const call = <T>(source: string, args: Record<string, unknown> = {}): T => {
+      const call = <T>(source: string, args: Record<string, unknown> = {}, budget = timeoutMs): T => {
         Object.assign(context as Record<string, unknown>, args);
         try {
-          return vm.runInContext(source, context, { timeout: timeoutMs }) as T;
+          return vm.runInContext(source, context, { timeout: budget }) as T;
         } finally {
           for (const key of Object.keys(args)) delete (context as Record<string, unknown>)[key];
         }
@@ -330,7 +348,7 @@ export function createNodeVmCage(): SimCage {
         restore: (seed, stateJson, draws) =>
           void call('__zoneRestore(__seed, __state, __draws)', { __seed: seed, __state: stateJson, __draws: draws }),
         tick: (events) => void call('__zoneTick(__events)', { __events: JSON.stringify(events) }),
-        wake: (elapsedMs) => void call('__zoneWake(__elapsed)', { __elapsed: elapsedMs }),
+        wake: (elapsedMs) => void call('__zoneWake(__elapsed)', { __elapsed: elapsedMs }, wakeBudget),
         snapshot: () => ({ state: call<string>('__zoneState()'), draws: call<number>('__zoneDraws()') }),
         dispose: () => {
           // Nothing to release: a node:vm context is ordinary garbage. The flag exists so

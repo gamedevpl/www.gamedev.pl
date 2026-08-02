@@ -3,6 +3,7 @@ import {
   assertProductionCage,
   createIsolatedVmCage,
   createNodeVmCage,
+  isSimTimeoutError,
   SimCageUnavailableError,
   unwrapNativeModule,
   type SimCage,
@@ -50,6 +51,14 @@ const CAGES: Array<[string, () => Promise<SimCage> | SimCage]> = [
 function load(cage: SimCage, bundleJs: string) {
   return cage.load({ bundleJs, simMathJs: TEST_SIM_MATH_JS, timeoutMs: 2000, memoryMb: 32 });
 }
+
+describe('isSimTimeoutError', () => {
+  it('recognises isolated-vm and node:vm timeout messages', () => {
+    expect(isSimTimeoutError(new Error('Script execution timed out.'))).toBe(true);
+    expect(isSimTimeoutError(new Error('Script execution timed out after 200ms'))).toBe(true);
+    expect(isSimTimeoutError(new Error('zone is closed'))).toBe(false);
+  });
+});
 
 describe.each(CAGES)('%s cage', (_name, make) => {
   it('runs a sim and keeps its world inside the realm', async () => {
