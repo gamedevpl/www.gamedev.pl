@@ -94,7 +94,7 @@ export function RemixPanel(props: {
   const failStreakRef = useRef(0);
   const [undo, setUndo] = useState<Record<string, EditorParamValue> | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<'unsupported' | 'error' | null>(null);
   const valuesRef = useRef(values);
   valuesRef.current = values;
 
@@ -133,8 +133,10 @@ export function RemixPanel(props: {
         // A shared link's values are live the moment the game is listening.
         if (props.initialParams) window.setTimeout(() => pushToGame(merged), 300);
       })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
+      .catch((error: RemixApiError) => {
+        // 404 is a fact about this game (not remixable here), not a fault —
+        // the panel says the honest thing instead of "couldn't do that".
+        if (!cancelled) setFailed(error.status === 404 ? 'unsupported' : 'error');
       });
     return () => {
       cancelled = true;
@@ -307,7 +309,7 @@ export function RemixPanel(props: {
   if (failed) {
     return (
       <div className="remix-panel remix-panel-note" role="alert">
-        {t('remix.unavailable')}
+        {failed === 'unsupported' ? t('remix.notHere') : t('remix.unavailable')}
         <button type="button" className="secondary-btn" onClick={props.onClose}>
           {t('remix.close')}
         </button>

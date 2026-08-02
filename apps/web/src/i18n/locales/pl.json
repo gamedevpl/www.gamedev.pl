@@ -962,6 +962,7 @@
     "wallSubtitle": "Twoja prośba jest zapisana — wykona się zaraz po zalogowaniu.",
     "buildingSlow": "Wciąż pracuję — przebudowuję Twoją grę…",
     "tookTooLong": "To trwało za długo — oddaję Ci grę bez zmian.",
-    "napping": "Edytowanie teraz odpoczywa — gra nadal działa."
+    "napping": "Edytowanie teraz odpoczywa — gra nadal działa.",
+    "notHere": "Tej gry nie można jeszcze remiksować — ale nadal działa."
   }
 }

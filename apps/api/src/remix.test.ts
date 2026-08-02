@@ -48,6 +48,8 @@ function stubGamesStore(): GamesStore {
 /** Records what the assembler was asked to build, so overrides can be asserted. */
 function stubGitHubClient(seen: Array<Record<string, string> | undefined>): GitHubClient {
   return {
+    getGameFile: async (_ref: string, slug: string, path: string) =>
+      slug === 'dog-dash' || slug === 'repo-game' ? (SOURCES[path] ?? null) : null,
     getGameSources: async (_ref: string, slug: string, overrides?: Record<string, string>) => {
       // Like the real client: a slug with no game directory on the ref is null.
       if (slug !== 'dog-dash') return null;
@@ -287,5 +289,82 @@ describe('remix routes', () => {
     expect(JSON.stringify(body)).not.toContain('startGame');
     // The player is told their code edit is not travelling, rather than it silently vanishing.
     expect(body.codeEditsExcluded).toBe(true);
+  });
+});
+
+/*
+ * The two eras. Production answered "game not found" for every slug because the
+ * start route proved existence by assembling the whole game and swallowed any
+ * failure as an absence; these pin the replacement — a manifest read decides
+ * existence, a declaration read decides which lanes exist, and a repo-era game
+ * gets the params lane instead of nothing.
+ */
+describe('remix across the two catalog eras', () => {
+  let app: FastifyInstance | null = null;
+
+  beforeEach(() => {
+    process.env.EDITOR_ASSIST = 'true';
+    process.env.CODE_LANE = 'true';
+  });
+
+  afterEach(async () => {
+    delete process.env.EDITOR_ASSIST;
+    delete process.env.CODE_LANE;
+    if (app) await app.close();
+    app = null;
+  });
+
+  /** No publication record → the repo-era path, exactly like a catalog game. */
+  async function repoEraApp() {
+    const store = new InMemoryStore();
+    const seen: Array<Record<string, string> | undefined> = [];
+    const instance = Fastify();
+    instance.decorateRequest('user', null);
+    instance.addHook('onRequest', async (request) => {
+      const uid = request.headers['x-test-uid'];
+      (request as { user?: unknown }).user = typeof uid === 'string' ? { uid, tier: 'standard' } : null;
+    });
+    await registerRemixRoutes(instance, {
+      store,
+      gamesStore: stubGamesStore(),
+      githubClient: stubGitHubClient(seen),
+      publishedRef: 'main',
+      assistant: { assist: async () => ({ lane: 'params' }) } as EditorAssistant,
+      codeLane: { run: async () => ({ ok: true }) } as never,
+    });
+    await instance.ready();
+    return instance;
+  }
+
+  it('opens a repo-era game on its declaration alone, with the params lane live', async () => {
+    app = await repoEraApp();
+    const response = await app.inject({ method: 'POST', url: '/api/games/repo-game/remix', headers: alice });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    // The declaration came from a file read, not from an assembly.
+    expect(body.params.dogScale.max).toBe(3);
+    expect(body.canAssist).toBe(true);
+    // ...but its code is still on the ref, so the deep lane says so honestly.
+    expect(body.canCode).toBe(false);
+  });
+
+  it('refuses the code lane on a repo-era game rather than mapping nothing', async () => {
+    app = await repoEraApp();
+    const { remixId } = (
+      await app.inject({ method: 'POST', url: '/api/games/repo-game/remix', headers: alice })
+    ).json();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/remixes/${remixId}/code`,
+      headers: alice,
+      payload: { utterance: 'add a double jump' },
+    });
+    expect(response.statusCode).toBe(409);
+  });
+
+  it('404s a slug with no manifest — a real absence, not a swallowed failure', async () => {
+    app = await repoEraApp();
+    const response = await app.inject({ method: 'POST', url: '/api/games/not-a-game/remix', headers: alice });
+    expect(response.statusCode).toBe(404);
   });
 });

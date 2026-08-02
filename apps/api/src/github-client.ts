@@ -79,6 +79,9 @@ const MAX_GAME_SOURCE_BYTES = 200 * 1024;
  *
  * Returns null when the specifier is not a relative TypeScript module path.
  */
+/** What `getGameFile` will read. Declarations and manifests, never source or media. */
+const GAME_FILE_READS = new Set(['GAME.json', 'SPEC.md', 'EDITOR.json']);
+
 export function resolveGameTypeScriptPath(resolveDir: string, specifier: string): string | null {
   if (!specifier.startsWith('./') && !specifier.startsWith('../')) {
     return null;
@@ -415,6 +418,17 @@ export interface GitHubClient {
    * never looked at, because the bundler only ever asks for game-root paths.
    */
   getGameSources(ref: string, slug: string, overrides?: Record<string, string>): Promise<GameSources | null>;
+  /**
+   * One declared file out of a game's directory, or null when it is not there.
+   *
+   * Exists because "does this game exist, and what does it declare?" should not
+   * cost a full assembly. `getGameSources` fetches the engine, every module,
+   * every audio asset and then bundles — minutes of work in bytes for a question
+   * two reads answer. Errors are *not* swallowed: a 403 or a rate limit must not
+   * be indistinguishable from a missing file, which is exactly the confusion
+   * that made every remix answer "game not found".
+   */
+  getGameFile(ref: string, slug: string, path: string): Promise<string | null>;
   /**
    * Reads the agent's own progress journal for a game on `ref`
    * (`games/<slug>/PROGRESS.md`). This is how the coding agent narrates what it is
@@ -1095,6 +1109,14 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       const raw = await readRawFile(`games/${slug}/PROGRESS.md`, ref);
       // Cap the read: this is agent-authored and only its newest lines are shown.
       return raw === null ? null : raw.slice(0, 4096);
+    },
+
+    async getGameFile(ref, slug, path) {
+      // Same slug guard as getGameSources, plus a closed file list: this reads
+      // whatever a caller names, so the names are ours rather than theirs.
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) return null;
+      if (!GAME_FILE_READS.has(path)) return null;
+      return readRawFile(`games/${slug}/${path}`, ref);
     },
 
     async getGameSources(ref, slug, overrides) {

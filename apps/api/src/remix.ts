@@ -66,6 +66,12 @@ interface RemixSession {
   sources: Record<string, string>;
   /** Accumulated edits, newest wins. Applied over `sources` on every rebuild. */
   overrides: Record<string, string>;
+  /**
+   * Whether every source is in hand. Only a store-era delivery hands over its
+   * files, and the code lane needs them to map regions — a repo-era game gets
+   * the params lane and an honest "not that deep, here" for the rest.
+   */
+  fromStore: boolean;
   definition: EditorDefinition | null;
   title: string;
   codeEdits: number;
@@ -164,10 +170,20 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
   }
 
   /**
-   * Every source file of the published version, whichever side of the migration
-   * the game lives on. Store games are authoritative in GCS; repo games are read
-   * from the published ref by the assembler itself, so only their editor
-   * declaration is fetched here.
+   * What this game is, and what it lets a player change.
+   *
+   * Two eras, one answer. A store-era game is authoritative in GCS and hands
+   * over every source, so both lanes can work on it. A repo-era game keeps its
+   * sources on the ref, and only its *declaration* is read here — two cheap
+   * file reads rather than a full assembly.
+   *
+   * That split is deliberate and was learned the hard way: the first version
+   * used `getGameSources` as an existence probe, which fetches the engine,
+   * every module and every audio asset and then bundles — and wrapped it in a
+   * catch that turned any GitHub hiccup into "game not found". Every remix on
+   * the site answered that, with nothing in the logs to say why. Existence is
+   * now a question about a manifest, and a read that *fails* is reported as a
+   * failure rather than as an absence.
    */
   async function loadSources(
     slug: string,
@@ -186,18 +202,22 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       const sources = Object.fromEntries(entries.filter((entry): entry is [string, string] => entry !== null));
       return { sources, ref: manifest.engineRef ?? options.publishedRef ?? 'main', fromStore: true };
     }
+
     if (!options.githubClient || !options.publishedRef) return null;
-    // Prove the game exists before minting a session for it: without the store's
-    // publication record, "is this a real published game" is a question only the
-    // assembler can answer, and answering it here keeps a typo'd slug from
-    // becoming a remix that fails on its first action instead of at the door.
-    const probe = await options.githubClient.getGameSources(options.publishedRef, slug).catch(() => null);
-    if (!probe) return null;
-    // A repo game's sources stay on the ref and the assembler reads them there.
-    // Nothing is loaded up front: without the store's file list there is no way
-    // to map regions, so such a game gets the params lane only — and its
-    // declaration, if it has one, arrives with the sources at rebuild time.
-    return { sources: {}, ref: options.publishedRef, fromStore: false };
+    const ref = options.publishedRef;
+    // GAME.json is the proof of existence — every game has one, and a missing
+    // file is a real "no such game" rather than a swallowed error.
+    const manifest = await options.githubClient.getGameFile(ref, slug, 'GAME.json');
+    if (manifest === null) return null;
+    const editorJson = await options.githubClient.getGameFile(ref, slug, EDITOR_FILE);
+    // Declaration only: a repo game's code stays on the ref (the assembler reads
+    // it there), so the code lane has no file list to map and says so, while the
+    // params lane works on exactly the games that declare params.
+    return {
+      sources: editorJson === null ? {} : { [EDITOR_FILE]: editorJson },
+      ref,
+      fromStore: false,
+    };
   }
 
   /** Rebuild the whole document with the session's edits applied. */
@@ -205,8 +225,9 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
     if (!options.githubClient) return null;
     const overrides = { ...session.overrides, ...extra };
     const sources = await options.githubClient.getGameSources(session.ref, session.slug, {
-      // Store games carry every file; repo games carry only what was edited.
-      ...session.sources,
+      // A store game's files replace the ref's entirely (its code lives in GCS);
+      // a repo game keeps the ref as its base and only carries the edit.
+      ...(session.fromStore ? session.sources : {}),
       ...overrides,
     });
     if (!sources) return null;
@@ -235,7 +256,8 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         ownerUid: request.user!.uid,
         slug: params.data.slug,
         ref: loaded.ref,
-        sources: loaded.fromStore ? loaded.sources : {},
+        sources: loaded.sources,
+        fromStore: loaded.fromStore,
         overrides: {},
         definition,
         title: params.data.slug,
@@ -326,9 +348,11 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       if (!options.codeLane || !codeLaneEnabled()) {
         return reply.status(503).send({ error: 'code changes are not available here' });
       }
-      if (Object.keys(session.sources).length === 0) {
-        // Repo-era games keep their sources on the ref; the lane needs them in hand
-        // to map regions, so this is honestly "not here", not a failure.
+      if (!session.fromStore) {
+        // Repo-era games keep their sources on the ref; the lane needs them in
+        // hand to map regions, so this is honestly "not here", not a failure.
+        // Checked on `fromStore` rather than on the source count, because such a
+        // session now legitimately carries one file — its declaration.
         return reply.status(409).send({ error: 'this game cannot be remixed that deeply yet' });
       }
       if (session.codeEdits >= MAX_CODE_EDITS) {
