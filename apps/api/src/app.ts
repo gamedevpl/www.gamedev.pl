@@ -58,7 +58,7 @@ import { peekQuota } from './quota-gate.js';
 import { registerRateLimit } from './rate-limit.js';
 import { isKnownSpaShellPath, looksLikeStaticAsset } from './spa-paths.js';
 import { logModerationRejection } from './moderation-metrics.js';
-import { OAUTH_PROTECTED_RESOURCE_PATH, registerOAuthProtectedResourceRoutes } from './mcp-oauth-metadata.js';
+import { registerOAuthProtectedResourceRoutes } from './mcp-oauth-metadata.js';
 
 const GenerateRequestSchema = z.object({
   prompt: z.string().trim().min(1, 'prompt is required').max(500, 'prompt is too long'),
@@ -547,7 +547,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // flow, and the waitlist — which by definition serves people who just failed sign-in).
   app.addHook('onRequest', async (request, reply) => {
     if (!privateBeta) return;
-    if (request.url === OAUTH_PROTECTED_RESOURCE_PATH) return;
+    // No entry here for the OAuth protected-resource document: it is served outside
+    // `/api/`, so the next line already passes it through. An exemption that never fires
+    // would imply this wall covers that route, and a bypass list has to be read as exact.
     if (!request.url.startsWith('/api/')) return; // static shell always passes through
     if (request.url === '/api/health' || request.url.startsWith('/api/auth')) return;
     if (request.url.startsWith('/api/waitlist')) return;

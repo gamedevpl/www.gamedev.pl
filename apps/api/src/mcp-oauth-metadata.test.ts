@@ -40,6 +40,29 @@ describe('canonicalAppBaseUrl / oauth metadata helpers', () => {
     expect(oauthProtectedResourceMetadataUrl()).toBe(`https://staging.gamedev.pl${OAUTH_PROTECTED_RESOURCE_PATH}`);
   });
 
+  // These values reach clients inside a WWW-Authenticate challenge, so a misconfigured
+  // env must not turn into a metadata URL that resolves nowhere.
+  it('reduces a CANONICAL_HOST carrying a path to its origin', () => {
+    process.env.CANONICAL_HOST = 'www.gamedev.pl/some/path';
+    expect(oauthProtectedResourceMetadataUrl()).toBe(`https://www.gamedev.pl${OAUTH_PROTECTED_RESOURCE_PATH}`);
+  });
+
+  it('reduces an APP_BASE_URL carrying a path and query to its origin', () => {
+    process.env.APP_BASE_URL = 'https://staging.gamedev.pl/base?tenant=1#frag';
+    expect(oauthProtectedResourceMetadataUrl()).toBe(`https://staging.gamedev.pl${OAUTH_PROTECTED_RESOURCE_PATH}`);
+  });
+
+  it('keeps an explicit port', () => {
+    process.env.CANONICAL_HOST = 'localhost:5173';
+    expect(oauthProtectedResourceMetadataUrl()).toBe(`https://localhost:5173${OAUTH_PROTECTED_RESOURCE_PATH}`);
+  });
+
+  it('falls through to the next source when a value is not a URL at all', () => {
+    process.env.CANONICAL_HOST = 'http://';
+    process.env.APP_BASE_URL = 'https://staging.gamedev.pl';
+    expect(oauthProtectedResourceMetadataUrl()).toBe(`https://staging.gamedev.pl${OAUTH_PROTECTED_RESOURCE_PATH}`);
+  });
+
   it('omits authorization_servers when MCP_AUTHORIZATION_SERVERS is unset', () => {
     delete process.env.MCP_AUTHORIZATION_SERVERS;
     const doc = buildOAuthProtectedResourceDocument();
