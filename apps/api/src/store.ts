@@ -2325,10 +2325,13 @@ export class InMemoryStore implements Store {
   }): Promise<WaitlistEntry> {
     const now = new Date().toISOString();
     const existing = this.waitlist.get(entry.uid);
+    // Lowercase at write so equality queries (Firestore `where email ==`) and the
+    // pre-approve path agree — mixed-case joins used to miss and mint a second row.
+    const rawEmail = entry.email ?? existing?.email;
 
     const updated: WaitlistEntry = {
       uid: entry.uid,
-      email: entry.email ?? existing?.email,
+      email: rawEmail !== undefined ? rawEmail.toLowerCase() : undefined,
       name: entry.name ?? existing?.name,
       requestedAt: now,
       locale: entry.locale ?? existing?.locale,
@@ -3694,10 +3697,14 @@ export class FirestoreStore implements Store {
     const docRef = this.db.collection('waitlist').doc(entry.uid);
     const snap = await docRef.get();
     const existing = snap.exists ? (snap.data() as WaitlistEntry) : null;
+    // Same normalisation as InMemoryStore: email queries are case-sensitive in
+    // Firestore, and setWaitlistStatusByEmail / isWaitlistApproved look up the
+    // lowercased form.
+    const rawEmail = entry.email !== undefined ? entry.email : existing?.email;
 
     const record: WaitlistEntry = {
       uid: entry.uid,
-      email: entry.email,
+      email: rawEmail !== undefined ? rawEmail.toLowerCase() : undefined,
       name: entry.name,
       requestedAt: now,
       locale: entry.locale,
@@ -3767,7 +3774,16 @@ export class FirestoreStore implements Store {
     if (!querySnap.empty) {
       const doc = querySnap.docs[0]!;
       await doc.ref.update({ status });
-      return { ...(doc.data() as WaitlistEntry), status };
+      return { ...(doc.data() as WaitlistEntry), status, email: emailLower };
+    }
+    // Rows written before email was normalised may still hold mixed case; find and
+    // heal them so an approve does not mint a duplicate `email:` doc beside the
+    // original join. Cheap at closed-beta scale (one collection read, operator-only).
+    const legacySnap = await this.db.collection('waitlist').get();
+    const legacy = legacySnap.docs.find((doc) => (doc.data() as WaitlistEntry).email?.toLowerCase() === emailLower);
+    if (legacy) {
+      await legacy.ref.update({ status, email: emailLower });
+      return { ...(legacy.data() as WaitlistEntry), status, email: emailLower };
     }
     const now = new Date().toISOString();
     const created: WaitlistEntry = {

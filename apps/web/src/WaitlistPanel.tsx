@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   fetchWaitlist,
   setWaitlistStatus,
@@ -43,10 +43,15 @@ export function WaitlistPanel() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [email, setEmail] = useState('');
+  // Monotonic id so a slow Pending fetch cannot overwrite an Approved list the
+  // operator already switched to (Copilot + Codex both flagged this race).
+  const loadGeneration = useRef(0);
 
   const load = useCallback(async (status: WaitlistStatus | 'all') => {
+    const generation = ++loadGeneration.current;
     try {
       const result = await fetchWaitlist(status);
+      if (generation !== loadGeneration.current) return;
       if (result === null) {
         setState('forbidden');
         return;
@@ -54,6 +59,7 @@ export function WaitlistPanel() {
       setEntries(result);
       setState('ready');
     } catch {
+      if (generation !== loadGeneration.current) return;
       setState('error');
     }
   }, []);
@@ -108,9 +114,10 @@ export function WaitlistPanel() {
     }
   }, [email, filter, load]);
 
+  // Filters stay mounted during the first load so a slow Pending fetch cannot
+  // trap the operator — they can switch to Approved while it is still in flight,
+  // which is also the race the generation guard below exists for.
   if (state === 'forbidden') return <p className="health-empty">Not found.</p>;
-  if (state === 'loading' && !entries) return <p className="health-empty">Reading the waitlist…</p>;
-  if (state === 'error' && !entries) return <p className="health-empty">Could not read the waitlist.</p>;
 
   const now = Date.now();
 
@@ -153,6 +160,9 @@ export function WaitlistPanel() {
       </div>
 
       {message && <p className="admin-limits-message">{message}</p>}
+
+      {state === 'loading' && !entries && <p className="health-empty">Reading the waitlist…</p>}
+      {state === 'error' && !entries && <p className="health-empty">Could not read the waitlist.</p>}
 
       {entries && entries.length === 0 && (
         <p className="health-empty">{filter === 'pending' ? 'Nobody is waiting.' : 'No entries in this filter.'}</p>

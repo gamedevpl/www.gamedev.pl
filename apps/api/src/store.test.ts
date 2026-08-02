@@ -331,6 +331,16 @@ describe('InMemoryStore', () => {
     const updated = await store.setWaitlistStatusByEmail('joined@example.com', 'rejected');
     expect(updated).toMatchObject({ uid: 'g:joined', status: 'rejected' });
   });
+
+  it('stores waitlist emails lowercased so approve-by-email finds a mixed-case join', async () => {
+    const store = new InMemoryStore();
+    const joined = await store.upsertWaitlistEntry({ uid: 'g:mix', email: 'Friend@Example.com' });
+    expect(joined.email).toBe('friend@example.com');
+
+    const approved = await store.setWaitlistStatusByEmail('FRIEND@example.com', 'approved');
+    expect(approved).toMatchObject({ uid: 'g:mix', status: 'approved' });
+    expect(store.waitlistEntries()).toHaveLength(1);
+  });
 });
 
 /**

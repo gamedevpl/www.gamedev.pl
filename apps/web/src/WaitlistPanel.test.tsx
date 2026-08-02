@@ -109,4 +109,38 @@ describe('WaitlistPanel', () => {
 
     await act(async () => root.unmount());
   });
+
+  it('ignores a stale filter response that resolves after a newer one', async () => {
+    let resolvePending!: (entries: WaitlistEntry[]) => void;
+    mocked.fetchWaitlist.mockImplementation((status: string) => {
+      if (status === 'pending') {
+        return new Promise<WaitlistEntry[]>((resolve) => {
+          resolvePending = resolve;
+        });
+      }
+      return Promise.resolve([entry({ uid: 'g:in', email: 'in@example.com', status: 'approved', name: 'In' })]);
+    });
+
+    const { container, root } = await render();
+    const approved = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Approved',
+    ) as HTMLButtonElement;
+    await act(async () => {
+      approved.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('In');
+    // Pending finally arrives — must not overwrite the Approved list.
+    await act(async () => {
+      resolvePending([entry()]);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(container.textContent).toContain('In');
+    expect(container.textContent).not.toContain('Waiter');
+
+    await act(async () => root.unmount());
+  });
 });

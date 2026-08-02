@@ -146,7 +146,11 @@ function fakeFirestore() {
     where: (field: string, op: string, value: unknown) => makeQuery([path], null).where(field, op, value),
     count: () => makeQuery([path], null).count(),
     get: async () => ({
-      docs: idsUnder(path).map((id) => ({ id, data: () => docs.get(key(path, id)) ?? {} })),
+      docs: idsUnder(path).map((id) => ({
+        id,
+        data: () => docs.get(key(path, id)) ?? {},
+        ref: makeRef(path, id),
+      })),
     }),
   });
 
@@ -282,6 +286,32 @@ describe('FirestoreStore.upsertWaitlistEntry', () => {
       status: 'approved',
     });
     expect(await store.isWaitlistApproved('g:other', 'new@example.com')).toBe(true);
+  });
+
+  it('lowercases emails on join and heals a legacy mixed-case row on approve', async () => {
+    const { db, docs, key } = fakeFirestore();
+    const store = new FirestoreStore(db);
+
+    const joined = await store.upsertWaitlistEntry({ uid: 'g:mix', email: 'Friend@Example.com' });
+    expect(joined.email).toBe('friend@example.com');
+    expect(docs.get(key('waitlist', 'g:mix'))?.email).toBe('friend@example.com');
+
+    // Simulate a row written before normalisation — mixed case still on disk.
+    docs.set(key('waitlist', 'g:legacy'), {
+      uid: 'g:legacy',
+      email: 'Legacy@Example.com',
+      requestedAt: '2026-07-01T00:00:00.000Z',
+      status: 'pending',
+    });
+
+    const healed = await store.setWaitlistStatusByEmail('legacy@example.com', 'approved');
+    expect(healed).toMatchObject({ uid: 'g:legacy', email: 'legacy@example.com', status: 'approved' });
+    expect(docs.get(key('waitlist', 'g:legacy'))).toMatchObject({
+      email: 'legacy@example.com',
+      status: 'approved',
+    });
+    // No duplicate email: row beside the healed join.
+    expect([...docs.keys()].filter((k) => k.startsWith('waitlist/'))).toHaveLength(2);
   });
 });
 
