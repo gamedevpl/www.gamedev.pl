@@ -116,6 +116,56 @@ describe('CreatorStudioView', () => {
     root.unmount();
   });
 
+  it('claims the app shell while the shelf loads so the footer does not flash', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+
+    let resolveGames!: (value: StudioGame[]) => void;
+    fetchStudioGames.mockReturnValue(
+      new Promise<StudioGame[]>((resolve) => {
+        resolveGames = resolve;
+      }),
+    );
+
+    const container = document.createElement('div');
+    // The shell CSS is keyed off `.app:has(...)`, so the marker has to sit under an
+    // `.app` that also holds a footer — the real tree App mounts.
+    const app = document.createElement('div');
+    app.className = 'app';
+    const content = document.createElement('div');
+    content.className = 'content';
+    const footer = document.createElement('footer');
+    footer.className = 'site-footer';
+    app.append(content, footer);
+    document.body.appendChild(app);
+    content.appendChild(container);
+
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(createElement(CreatorStudioView, { onNavigate: vi.fn(), onPlay: vi.fn() }));
+    });
+
+    expect(container.querySelector('.studio-shell-pending')).toBeTruthy();
+    expect(container.textContent).toContain('Loading your games…');
+    // jsdom does not apply stylesheets, so assert the marker the `:has()` rule keys on
+    // rather than computed footer display — that is what keeps the flash from painting.
+    expect(app.querySelector('.studio-shell-pending')).toBeTruthy();
+
+    await act(async () => {
+      resolveGames(manyGames(2));
+      await fetchStudioGames.mock.results[0]?.value;
+      await fetchStudioHealth.mock.results[0]?.value;
+    });
+
+    expect(container.querySelector('.studio-shell-pending')).toBeFalsy();
+    expect(container.querySelector('.studio-layout.is-game-open')).toBeTruthy();
+
+    root.unmount();
+    app.remove();
+    authUser = null;
+  });
+
   it('adds search and filters once the shelf has many games', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
@@ -164,6 +214,73 @@ describe('CreatorStudioView', () => {
     expect(container.querySelector('.studio-layout')?.classList.contains('is-shelf-open')).toBe(true);
     expect(container.querySelector('.studio-shelf-backdrop')).toBeTruthy();
 
+    root.unmount();
+  });
+
+  it('lists one shelf row per game when a live title has an improve tip', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue([
+      {
+        token: 'live-mw',
+        title: 'Miniature Warfare 2D',
+        slug: 'miniature-warfare-2d',
+        createdAt: '2026-07-01T00:00:00.000Z',
+        lastKnownStatus: 'published',
+        publishedAt: '2026-07-01T00:00:00.000Z',
+      },
+      {
+        token: 'tip-mw',
+        title: 'Miniature Warfare 2D',
+        slug: 'miniature-warfare-2d',
+        createdAt: '2026-07-20T00:00:00.000Z',
+        lastKnownStatus: 'building',
+      },
+      {
+        token: 'live-gts',
+        title: 'Global Thermonuclear Strategy',
+        slug: 'global-thermonuclear-strategy',
+        createdAt: '2026-07-02T00:00:00.000Z',
+        lastKnownStatus: 'published',
+        publishedAt: '2026-07-02T00:00:00.000Z',
+      },
+      {
+        token: 'tip-gts',
+        title: 'Global Thermonuclear Strategy',
+        slug: 'global-thermonuclear-strategy',
+        createdAt: '2026-07-21T00:00:00.000Z',
+        lastKnownStatus: 'building',
+      },
+      {
+        token: 'live-tv',
+        title: 'A game tycoon like where I run a tv busi',
+        slug: 'tv-tycoon',
+        createdAt: '2026-07-03T00:00:00.000Z',
+        lastKnownStatus: 'published',
+        publishedAt: '2026-07-03T00:00:00.000Z',
+      },
+    ]);
+
+    const width = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { value: 390, configurable: true });
+
+    const { container, root } = await renderStudio({ selectedGame: 'miniature-warfare-2d' });
+
+    // Collapsed tip+live pairs → 3 shelf rows. Open the phone drawer to count them.
+    const openShelf = container.querySelector('.studio-shelf-open');
+    expect(openShelf).toBeTruthy();
+    await act(async () => {
+      openShelf!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const shelf = container.querySelector('.studio-shelf');
+    expect(shelf?.textContent).toMatch(/3 games/i);
+    expect(shelf?.querySelectorAll('.studio-shelf-item').length).toBe(3);
+    expect(shelf?.textContent).toMatch(/Building\s*2/);
+    expect(shelf?.textContent).toMatch(/Live\s*3/);
+
+    Object.defineProperty(window, 'innerWidth', { value: width, configurable: true });
     root.unmount();
   });
 
@@ -240,9 +357,13 @@ describe('CreatorStudioView', () => {
 
     await act(async () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      // closeShelf restores focus on the next animation frame.
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     });
     expect(document.body.style.overflow).not.toBe('hidden');
     expect(container.querySelector('.studio-shelf')?.hasAttribute('inert')).toBe(true);
+    // Escape must not leave focus trapped in the now-hidden search field.
+    expect(document.activeElement).toBe(openShelf);
 
     Object.defineProperty(window, 'innerWidth', { value: width, configurable: true });
     root.unmount();

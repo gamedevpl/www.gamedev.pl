@@ -7,7 +7,7 @@ import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
 import type { ContentChecker } from './moderation.js';
 import { InMemoryStore, type Store } from './store.js';
-import { mintToken } from './submission-token.js';
+import { mintToken, verifyToken } from './submission-token.js';
 import { canTransition } from './job-state.js';
 import type { AgentBackend, BuildBrief } from './agent-backend.js';
 import type { GamesStore } from './games-store.js';
@@ -3100,6 +3100,43 @@ describe('POST /api/submissions/:token/improve', () => {
     expect(improvement?.defaultBuilder).toBe('platform');
     expect(improvement?.dispatch?.backend).toBe('stub');
     expect(briefs.at(-1)?.issueNumber).toBe(jobId);
+    await app.close();
+  });
+
+  it('returns the new job’s own token so the creator’s thread can move onto it', async () => {
+    // Publishing is terminal: the improvement is a new job, and the published token
+    // cannot address it (its round key is dead). The response has to carry the new
+    // job's own capability, minted exactly like the shelf mints one per record.
+    const stub = createGithubClientStub({});
+    const { backend } = createBackendStub();
+    const { app, store, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    const published = await store.allocateJobId();
+    await store.createSubmission(published, 'g:test-user', 'Handoff Game');
+    await store.setSubmissionSlug(published, 'handoff-game');
+    await store.setSubmissionPublishedAt(published, '2026-07-01T00:00:00.000Z');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(published, secret)}/improve`,
+      headers: authHeaders,
+      payload: { feedback: 'Please add a checkpoint before the hard second level jump.' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { ok: boolean; jobId: number; token: string; slug: string };
+    // The wire name stays `jobId` (the client type was the thing out of step, not this).
+    expect(body.jobId).toBeTypeOf('number');
+    expect(body.jobId).not.toBe(published);
+    expect(body.slug).toBe('handoff-game');
+    // The token addresses the *new* job, not the published one it was minted from.
+    expect(body.token).toBeTypeOf('string');
+    expect(verifyToken(body.token, secret)).toBe(body.jobId);
+    expect(verifyToken(body.token, secret)).not.toBe(published);
     await app.close();
   });
 });

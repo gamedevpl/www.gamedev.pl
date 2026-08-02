@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { APIRequestContext, Browser, Page, Route } from 'playwright-core';
 import {
+  BASE_URL,
   collectProblems,
   describeProblems,
   e2ePrerequisites,
@@ -263,6 +264,124 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
       }
 
       expect(describeProblems(watcher.drain())).toBe('');
+    });
+  }
+
+  /**
+   * The open-game tests above wait until a composer is on screen, so they never see the
+   * shelf-fetch window — which is exactly where the marketing footer used to paint and
+   * then vanish. Hold `/api/me/studio` and assert the pending shell claim itself: footer
+   * and lid gone, page scroll gone, bottom bars joined to the column (there is no
+   * composer yet, so "covers the composer" is the wrong question — `position: static` is
+   * the CSS contract that keeps them from floating over whatever comes next).
+   */
+  for (const viewport of VIEWPORTS) {
+    it(`claims the window while the shelf loads on a ${viewport.label}`, async () => {
+      const watcher = collectProblems(page);
+
+      let releaseShelf!: () => void;
+      const shelfHeld = new Promise<void>((resolve) => {
+        releaseShelf = resolve;
+      });
+      let released = false;
+      const release = () => {
+        if (released) return;
+        released = true;
+        releaseShelf();
+      };
+
+      const holdShelf: Parameters<Page['route']>[1] = async (route) => {
+        const path = new URL(route.request().url()).pathname.replace(/\/$/, '');
+        if (path.endsWith('/api/me/studio/health')) {
+          await fulfillJson(route, { days: [], truncated: false, games: [] });
+          return;
+        }
+        if (path.endsWith('/api/me/studio/scorecards')) {
+          await fulfillJson(route, { scorecards: [] });
+          return;
+        }
+        if (path.endsWith('/api/me/studio')) {
+          await shelfHeld;
+          await fulfillJson(route, {
+            games: [
+              {
+                token: FIXTURE_TOKEN,
+                title: 'E2E Studio Shell Fixture',
+                createdAt: '2026-01-01T00:00:00.000Z',
+                lastKnownStatus: 'published',
+                slug: FIXTURE_SLUG,
+                publishedAt: '2026-01-02T00:00:00.000Z',
+              },
+            ],
+          });
+          return;
+        }
+        await route.fallback();
+      };
+
+      await page.route('**/api/me/studio**', holdShelf);
+      try {
+        await page.setViewportSize({ width: viewport.width, height: viewport.height });
+        // Short settle only: the shelf is held on purpose, so a long wait would just sit
+        // on the pending marker. Goto + marker is the signal the shell CSS under test ran.
+        await page.goto(`${BASE_URL}/studio`, { waitUntil: 'domcontentloaded' });
+        try {
+          await page.waitForSelector('.studio-shell-pending', { state: 'attached', timeout: 15_000 });
+        } catch {
+          expect.fail(
+            'studio shell did not mount .studio-shell-pending while the shelf was held — the loading-state gate would assert nothing',
+          );
+        }
+
+        const pending = await page.evaluate(() => {
+          const footer = document.querySelector('.site-footer');
+          const header = document.querySelector('.studio-panel-header');
+          const app = document.querySelector('.app');
+          return {
+            footerDisplay: footer ? getComputedStyle(footer).display : null,
+            headerDisplay: header ? getComputedStyle(header).display : null,
+            appOverflow: app ? getComputedStyle(app).overflow : null,
+            pageScroll: document.documentElement.scrollHeight - document.documentElement.clientHeight,
+            gameOpen: Boolean(document.querySelector('.studio-layout.is-game-open')),
+          };
+        });
+
+        expect(pending.gameOpen, 'a game must not open while the shelf response is held').toBe(false);
+        expect(pending.footerDisplay, 'the marketing footer must stay hidden during the fetch').toBe('none');
+        expect(pending.headerDisplay, 'the Creator Studio lid must stay hidden during the fetch').toBe('none');
+        expect(pending.appOverflow, 'the pending shell must take the page scroll away').toBe('hidden');
+        expect(pending.pageScroll, 'the pending shell should own the window').toBeLessThanOrEqual(2);
+
+        for (const bar of BOTTOM_BARS) {
+          const position = await page.evaluate((className) => {
+            const app = document.querySelector('.app');
+            const injected = document.createElement('div');
+            injected.className = className;
+            injected.dataset.e2eInjected = 'true';
+            app?.appendChild(injected);
+            const computed = getComputedStyle(injected).position;
+            injected.remove();
+            return computed;
+          }, bar);
+          expect(position, `.${bar} should join the column while the shell is pending`).toBe('static');
+        }
+
+        release();
+        try {
+          await page.waitForSelector('.studio-layout.is-game-open', { state: 'attached', timeout: 15_000 });
+        } catch {
+          expect.fail('releasing the shelf did not open a game — pending→open handoff broke');
+        }
+        expect(
+          await page.locator('.studio-shell-pending').count(),
+          'the pending marker must leave once a game is open',
+        ).toBe(0);
+
+        expect(describeProblems(watcher.drain())).toBe('');
+      } finally {
+        release();
+        await page.unroute('**/api/me/studio**', holdShelf);
+      }
     });
   }
 });

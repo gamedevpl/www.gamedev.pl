@@ -9,11 +9,15 @@ import { playPath, studioPath, type StudioTab } from './router.js';
 import { abandonSubmission } from './submissionApi.js';
 import { StudioPlaytestPanel } from './StudioPlaytestPanel.js';
 import {
+  collapseStudioGames,
   filterStudioGames,
   isStudioGamePublished,
+  isStudioGameShelfLive,
+  sortStudioGames,
   STUDIO_LIVE_STATUSES,
   STUDIO_SHELF_TOOLS_AT,
   type StudioShelfFilter,
+  type StudioShelfGame,
 } from './studioShelf.js';
 import { SubmissionStatusView } from './SubmissionStatusView.js';
 import {
@@ -49,7 +53,9 @@ import {
  * Shelf scales past a handful of games: compact rows, search/filter once the list grows.
  * On a desktop with a long shelf it collapses to a left-edge rail of dots (not a "switch
  * game" combo); expand it to get the full list back. On a phone with a game open the
- * shelf is never permanently in the page — it is a drawer over ~90% of the width.
+ * shelf is never permanently in the page — it is a drawer over ~90% of the width. A
+ * published game plus its improve tip share a slug — the shelf shows one row (the tip),
+ * not the same title twice.
  *
  * Selection + surface live in the URL (`/studio/<slug>/<surface>`) so a refresh or a
  * shared link reopens the same place. The five old tab names still resolve, onto
@@ -169,8 +175,15 @@ export function CreatorStudioView({
   const [shelfOpen, setShelfOpen] = useState(false);
   /** True when the shelf is the phone drawer (off-canvas), not the desktop rail. */
   const [shelfIsDrawer, setShelfIsDrawer] = useState(false);
+  // Publishing is terminal, so an improvement on a live game opens a *new* job with its
+  // own token — one not on the shelf yet. When that happens the open thread moves onto
+  // it while the shelf selection stays on the source game (the new job inherits its slug,
+  // so the chrome beside the thread is still right). Cleared whenever the selected game
+  // changes, so switching games or following a link always lands on that game's own tip.
+  const [handoffToken, setHandoffToken] = useState<string | null>(null);
   const shelfSearchId = useId();
   const shelfSearchRef = useRef<HTMLInputElement>(null!);
+  const shelfOpenRef = useRef<HTMLButtonElement>(null!);
 
   // What the URL is asking for, readable from inside the shelf fetch below without
   // making that fetch re-run every time the address changes. Seeded rather than
@@ -181,15 +194,22 @@ export function CreatorStudioView({
     requestedGameRef.current = selectedGame;
   }, [selectedGame]);
 
+  // One row per game for picking and counting. Raw `games` still holds every job so
+  // abandoning an improve tip can reveal the published sibling again without a refetch.
+  const shelfGames = useMemo(() => collapseStudioGames(games), [games]);
+
   // Resolve the URL's game segment against the shelf — by slug, or by capability token
   // for links minted before games were given slugs at submission. A value matching
   // neither selects nothing: the shelf holds only this creator's games, so a slug
   // belonging to someone else is indistinguishable from one that does not exist.
+  // Prefer the collapsed tip when a slug has both a live job and an improve job.
   useEffect(() => {
     if (!selectedGame) return;
     const match = games.find((game) => game.slug === selectedGame || game.token === selectedGame);
-    if (match) setSelected(match.token);
-  }, [selectedGame, games]);
+    if (!match) return;
+    const tip = match.slug ? shelfGames.find((game) => game.slug === match.slug) : match;
+    if (tip) setSelected(tip.token);
+  }, [selectedGame, games, shelfGames]);
 
   useEffect(() => {
     if (!user) {
@@ -212,16 +232,30 @@ export function CreatorStudioView({
         setHealthDays(health.days);
         setTruncated(health.truncated);
         setLoading(false);
+        const collapsed = collapseStudioGames(shelf);
         setSelected((current) => {
-          if (current && shelf.some((game) => game.token === current)) return current;
+          if (current) {
+            const stillOpen = collapsed.find((game) => game.token === current);
+            if (stillOpen) return stillOpen.token;
+            // Selected token was a published sibling now collapsed behind its tip.
+            const raw = shelf.find((game) => game.token === current);
+            if (raw?.slug) {
+              const tip = collapsed.find((game) => game.slug === raw.slug);
+              if (tip) return tip.token;
+            }
+          }
           // A URL naming a game picks that one, or none at all. Falling through to the
           // newest would answer "show me this game" with a different game, silently —
           // and since slugs are public, the request may well be for somebody else's.
           const requested = requestedGameRef.current;
           if (requested) {
-            return shelf.find((game) => game.slug === requested || game.token === requested)?.token ?? null;
+            const match = shelf.find((game) => game.slug === requested || game.token === requested);
+            if (!match) return null;
+            return (match.slug ? collapsed.find((game) => game.slug === match.slug)?.token : null) ?? match.token;
           }
-          return shelf[0]?.token ?? null;
+          // Same order the shelf paints: active tips first. Collapsed Map order alone
+          // would prefer whichever slugged job arrived first in the API payload.
+          return sortStudioGames(collapsed)[0]?.token ?? null;
         });
       })
       .catch(() => {
@@ -263,25 +297,52 @@ export function CreatorStudioView({
     };
   }, [user]);
 
-  const activeGame = useMemo(() => games.find((game) => game.token === selected) ?? null, [games, selected]);
+  // A handoff belongs to the game the creator was on when they asked for the improvement.
+  // The moment the selected game changes — a shelf pick, a deep link, an Up — that thread
+  // is no longer on screen, so drop the override and let the newly selected game show its
+  // own current tip.
+  useEffect(() => {
+    setHandoffToken(null);
+  }, [selected]);
+
+  const activeGame = useMemo(() => shelfGames.find((game) => game.token === selected) ?? null, [shelfGames, selected]);
+  // The token the thread is actually showing: the new job's after an improvement handoff,
+  // otherwise the selected game's own.
+  const threadToken = handoffToken ?? activeGame?.token ?? null;
+  // Playtest must follow the same handoff: if it kept the published shelf record, pause
+  // feedback would call submitImprovement on the old token and open a second concurrent
+  // round (Codex P1). While a handoff is live, treat the surface as the unpublished new job.
+  const playtestGame = useMemo((): StudioShelfGame | null => {
+    if (!activeGame) return null;
+    if (!handoffToken || handoffToken === activeGame.token) return activeGame;
+    return {
+      ...activeGame,
+      token: handoffToken,
+      lastKnownStatus: 'building',
+      publishedAt: undefined,
+      // Tip is not catalog-published; drop any sibling stamp so playtest routes to feedback.
+      livePublishedAt: undefined,
+    };
+  }, [activeGame, handoffToken]);
+  const playtestPublished = Boolean(playtestGame && isStudioGamePublished(playtestGame) && !handoffToken);
   const selectedHealth = activeGame ? healthFor(activeGame, healthRows) : null;
   const selectedScorecard = activeGame?.slug
     ? (scorecards.find((card) => card.slug === activeGame.slug) ?? null)
     : null;
   const visibleGames = useMemo(
-    () => filterStudioGames(games, { filter: shelfFilter, query: shelfQuery }),
-    [games, shelfFilter, shelfQuery],
+    () => filterStudioGames(shelfGames, { filter: shelfFilter, query: shelfQuery }),
+    [shelfGames, shelfFilter, shelfQuery],
   );
-  const showShelfTools = games.length >= STUDIO_SHELF_TOOLS_AT;
+  const showShelfTools = shelfGames.length >= STUDIO_SHELF_TOOLS_AT;
   // The URL named a game and the shelf does not have it: a typo, a game since abandoned,
   // or somebody else's slug. Said plainly, because an unexplained shelf looks like the
   // link worked and the game vanished.
-  const missingGame = Boolean(selectedGame) && !loading && !error && games.length > 0 && !activeGame;
+  const missingGame = Boolean(selectedGame) && !loading && !error && shelfGames.length > 0 && !activeGame;
   const buildingCount = useMemo(
-    () => games.filter((game) => game.lastKnownStatus && STUDIO_LIVE_STATUSES.has(game.lastKnownStatus)).length,
-    [games],
+    () => shelfGames.filter((game) => game.lastKnownStatus && STUDIO_LIVE_STATUSES.has(game.lastKnownStatus)).length,
+    [shelfGames],
   );
-  const liveCount = useMemo(() => games.filter((game) => isStudioGamePublished(game)).length, [games]);
+  const liveCount = useMemo(() => shelfGames.filter((game) => isStudioGameShelfLive(game)).length, [shelfGames]);
 
   // Keep the visible tab aligned with the selected game, and the URL on the game's
   // current address. Only writes an address when the route already carried one (a deep
@@ -294,7 +355,7 @@ export function CreatorStudioView({
   // leaves a readable URL behind and takes the capability token out of history.
   useEffect(() => {
     if (!selected) return;
-    const game = games.find((entry) => entry.token === selected);
+    const game = shelfGames.find((entry) => entry.token === selected);
     if (!game) return;
     const next = resolveTab(game, selectedTab);
     setTab(next);
@@ -305,7 +366,7 @@ export function CreatorStudioView({
     if (window.location.pathname !== canonical) {
       onNavigate(canonical, { replace: true });
     }
-  }, [selected, selectedTab, selectedGame, games, onNavigate]);
+  }, [selected, selectedTab, selectedGame, shelfGames, onNavigate]);
 
   /**
    * Below the rail breakpoint the details panel is a sheet over the thread, and a sheet
@@ -360,29 +421,43 @@ export function CreatorStudioView({
     };
   }, []);
 
+  function closeShelf({ restoreFocus = false }: { restoreFocus?: boolean } = {}) {
+    setShelfOpen(false);
+    if (restoreFocus) {
+      // Escape / backdrop leave focus in the (now inert) search field otherwise.
+      window.requestAnimationFrame(() => shelfOpenRef.current?.focus());
+    }
+  }
+
   useEffect(() => {
     if (!shelfOpen || !activeGame) return;
     const previous = document.body.style.overflow;
     // Only the phone drawer needs to freeze the page; the desktop rail expands in flow.
     if (shelfIsDrawer) document.body.style.overflow = 'hidden';
-    const frame = window.requestAnimationFrame(() => shelfSearchRef.current?.focus());
+    const focusFrame = window.requestAnimationFrame(() => shelfSearchRef.current?.focus());
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setShelfOpen(false);
+      if (event.key !== 'Escape') return;
+      setShelfOpen(false);
+      // Hand focus back to the opener on the phone drawer; desktop rail collapse keeps
+      // the edge toggle itself as the natural landing place.
+      if (shelfIsDrawer) {
+        window.requestAnimationFrame(() => shelfOpenRef.current?.focus());
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => {
       document.body.style.overflow = previous;
-      window.cancelAnimationFrame(frame);
+      window.cancelAnimationFrame(focusFrame);
       window.removeEventListener('keydown', onKey);
     };
   }, [shelfOpen, activeGame, shelfIsDrawer]);
 
   function selectGame(token: string) {
-    const next = games.find((game) => game.token === token) ?? null;
+    const next = shelfGames.find((game) => game.token === token) ?? null;
     const nextTab = defaultTabFor();
     setSelected(token);
     setTab(nextTab);
-    setShelfOpen(false);
+    closeShelf({ restoreFocus: shelfIsDrawer });
     if (next) onNavigate(studioPath(studioAddress(next), nextTab));
   }
 
@@ -440,10 +515,18 @@ export function CreatorStudioView({
         </button>
       </header>
 
-      {loading ? <p className="studio-empty">{t('studioPanel.loading')}</p> : null}
+      {loading ? (
+        <>
+          {/* Claims the app shell for the length of the shelf fetch so the marketing
+              footer (and this panel's lid) do not paint and then vanish the moment a
+              game opens — bare /studio auto-picks one without naming it in the URL. */}
+          <div className="studio-shell-pending" hidden />
+          <p className="studio-empty">{t('studioPanel.loading')}</p>
+        </>
+      ) : null}
       {error ? <p className="studio-empty studio-error">{error}</p> : null}
 
-      {!loading && !error && games.length === 0 ? (
+      {!loading && !error && shelfGames.length === 0 ? (
         <div className="studio-empty-state">
           <p>{t('studioPanel.empty')}</p>
           <button type="button" className="primary-btn" onClick={() => onNavigate('/')}>
@@ -452,7 +535,7 @@ export function CreatorStudioView({
         </div>
       ) : null}
 
-      {!loading && games.length > 0 ? (
+      {!loading && shelfGames.length > 0 ? (
         <div
           className={[
             'studio-layout',
@@ -469,7 +552,7 @@ export function CreatorStudioView({
             <div
               className="modal-backdrop studio-shelf-backdrop"
               role="presentation"
-              onClick={() => setShelfOpen(false)}
+              onClick={() => closeShelf({ restoreFocus: shelfIsDrawer })}
             />
           ) : null}
 
@@ -490,12 +573,15 @@ export function CreatorStudioView({
           >
             <div className="studio-shelf-head">
               <h2 className="studio-shelf-heading">{t('studioPanel.shelf.heading')}</h2>
-              <span className="studio-shelf-count">{t('studioPanel.shelf.count', { count: games.length })}</span>
+              <span className="studio-shelf-count">{t('studioPanel.shelf.count', { count: shelfGames.length })}</span>
               {activeGame ? (
                 <button
                   type="button"
                   className="studio-shelf-edge-toggle"
-                  onClick={() => setShelfOpen((open) => !open)}
+                  onClick={() => {
+                    if (shelfOpen) closeShelf({ restoreFocus: shelfIsDrawer });
+                    else setShelfOpen(true);
+                  }}
                   aria-expanded={shelfOpen}
                   aria-label={shelfOpen ? t('studioPanel.shelf.collapseShelf') : t('studioPanel.shelf.expandShelf')}
                 >
@@ -512,10 +598,10 @@ export function CreatorStudioView({
               searchRef={shelfSearchRef}
               query={shelfQuery}
               filter={shelfFilter}
-              showTools={showShelfTools || (shelfOpen && games.length > 1)}
+              showTools={showShelfTools || (shelfOpen && shelfGames.length > 1)}
               buildingCount={buildingCount}
               liveCount={liveCount}
-              totalCount={games.length}
+              totalCount={shelfGames.length}
               onQueryChange={setShelfQuery}
               onFilterChange={setShelfFilter}
             />
@@ -530,6 +616,7 @@ export function CreatorStudioView({
                 <button
                   type="button"
                   className="studio-shelf-open"
+                  ref={shelfOpenRef}
                   onClick={() => setShelfOpen(true)}
                   aria-expanded={shelfOpen}
                   aria-label={t('studioPanel.shelf.openShelf')}
@@ -583,9 +670,11 @@ export function CreatorStudioView({
                 {tab !== 'playtest' ? (
                   <div className="studio-build">
                     <SubmissionStatusView
-                      key={activeGame.token}
-                      token={activeGame.token}
+                      key={threadToken ?? activeGame.token}
+                      token={threadToken ?? activeGame.token}
                       embedded
+                      justHandedOff={handoffToken != null}
+                      onImproved={(newToken) => setHandoffToken(newToken)}
                       onPlaytest={() => openTab('playtest')}
                       onRetry={
                         onRetryConcept
@@ -599,10 +688,10 @@ export function CreatorStudioView({
                   </div>
                 ) : null}
 
-                {tab === 'playtest' ? (
+                {tab === 'playtest' && playtestGame ? (
                   <StudioPlaytestPanel
-                    game={activeGame}
-                    published={isStudioGamePublished(activeGame)}
+                    game={playtestGame}
+                    published={playtestPublished}
                     onExit={() => openTab('thread')}
                     shelfOpen={shelfOpen}
                   />
@@ -743,7 +832,7 @@ function StudioShelfList({
   emptyLabel,
   onSelect,
 }: {
-  games: StudioGame[];
+  games: StudioShelfGame[];
   selected: string | null;
   locale: string;
   emptyLabel: string;
@@ -761,12 +850,13 @@ function StudioShelfList({
         const active = game.token === selected;
         const status = game.lastKnownStatus;
         const building = Boolean(status && STUDIO_LIVE_STATUSES.has(status));
-        const published = isStudioGamePublished(game);
+        // Building wins the dot: a revise tip on a live game is still "moving".
+        const live = !building && isStudioGameShelfLive(game);
         return (
           <li key={game.token}>
             <button
               type="button"
-              className={`studio-shelf-item${active ? ' is-active' : ''}${building ? ' is-live' : ''}${published ? ' is-published' : ''}`}
+              className={`studio-shelf-item${active ? ' is-active' : ''}${building ? ' is-live' : ''}${live ? ' is-published' : ''}`}
               onClick={() => onSelect(game.token)}
               aria-current={active ? 'true' : undefined}
               title={game.title}
@@ -777,7 +867,7 @@ function StudioShelfList({
                   order. The state that matters at a glance is "is this one moving", and a
                   dot says that without spending a line on it. */}
               <span
-                className={`studio-shelf-dot${building ? ' is-live' : ''}${published ? ' is-published' : ''}`}
+                className={`studio-shelf-dot${building ? ' is-live' : ''}${live ? ' is-published' : ''}`}
                 aria-hidden="true"
               />
               <span className="studio-shelf-title">{game.title}</span>
@@ -810,7 +900,7 @@ function DetailsPanel({
   onPlay,
   onRemoved,
 }: {
-  game: StudioGame;
+  game: StudioShelfGame;
   health: GameHealth | null;
   days: number;
   healthDays: string[];
@@ -822,7 +912,10 @@ function DetailsPanel({
   onRemoved: (token: string) => void;
 }) {
   const { t, i18n } = useTranslation();
-  const published = isStudioGamePublished(game);
+  // This *job* is published — composer/playtest routing. Distinct from catalog-live below.
+  const publishedJob = isStudioGamePublished(game);
+  const catalogLive = isStudioGameShelfLive(game);
+  const publishedAt = game.publishedAt ?? game.livePublishedAt;
   const [abandonArmed, setAbandonArmed] = useState(false);
   const [abandoning, setAbandoning] = useState(false);
 
@@ -848,9 +941,9 @@ function DetailsPanel({
           <span className="funnel-stat-value">{formatRelativeTime(Date.parse(game.createdAt), i18n.language)}</span>
           <span className="funnel-stat-label">{t('studioPanel.overview.created')}</span>
         </li>
-        {game.publishedAt ? (
+        {publishedAt ? (
           <li>
-            <span className="funnel-stat-value">{formatRelativeTime(Date.parse(game.publishedAt), i18n.language)}</span>
+            <span className="funnel-stat-value">{formatRelativeTime(Date.parse(publishedAt), i18n.language)}</span>
             <span className="funnel-stat-label">{t('studioPanel.overview.published')}</span>
           </li>
         ) : null}
@@ -871,7 +964,7 @@ function DetailsPanel({
         {/* Nothing here to reopen the build with: the thread is on the screen already,
             beside this panel. Playing a published game is the one action that is not
             simply "look left". */}
-        {published && game.slug ? (
+        {catalogLive && game.slug ? (
           <button type="button" className="primary-btn" onClick={onPlay}>
             <PixelIcon name="play" size={12} /> {t('myGames.play')}
           </button>
@@ -879,7 +972,7 @@ function DetailsPanel({
         <button type="button" className="secondary-btn" onClick={onOpenPlaytest}>
           <PixelIcon name="play" size={12} /> {t('studioPanel.overview.playtest')}
         </button>
-        {!published && game.lastKnownStatus !== 'abandoned' ? (
+        {!publishedJob && game.lastKnownStatus !== 'abandoned' ? (
           <button
             type="button"
             className={`status-abandon${abandonArmed ? ' is-danger' : ''}`}
@@ -891,12 +984,14 @@ function DetailsPanel({
         ) : null}
       </div>
 
-      {!published && game.slug && game.lastKnownStatus !== 'abandoned' ? <DraftShareControl game={game} /> : null}
+      {/* Draft share is for pre-catalog games. A revise tip on a live slug already has a
+          public play link — offering a second "share the draft" switch would lie. */}
+      {!catalogLive && game.slug && game.lastKnownStatus !== 'abandoned' ? <DraftShareControl game={game} /> : null}
 
       {/* Only once there is play to report on. Before a game is live every one of these
           numbers is zero, and a wall of zeroes reads as a verdict rather than as
           "nobody has played it yet, because nobody can". */}
-      {published ? (
+      {catalogLive ? (
         <StatsSection
           game={game}
           health={health}

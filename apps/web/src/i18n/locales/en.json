@@ -493,6 +493,9 @@
       "quota": "You've sent a lot of feedback today — please try again tomorrow.",
       "published": "This game is already published. Submit a new idea to make another version."
     },
+    "handoff": {
+      "notice": "Improvement round started — this is the new build thread."
+    },
     "progress": {
       "checklistTitle": "What the agent is doing",
       "activityTitle": "Build activity",
@@ -802,6 +805,7 @@
     },
     "step2": {
       "title": "Tell your agent what to build",
+      "sameConnection": "Your gamedev.pl connection stays the same — only this round's key, inside the prompt below, is new. No need to change your agent's config.",
       "expiry": "This key works only for this game and expires {{when}}."
     },
     "clients": {

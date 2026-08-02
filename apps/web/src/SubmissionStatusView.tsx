@@ -20,7 +20,7 @@ import {
   type SubmissionPreview,
   type SubmissionStatus,
 } from './submissionApi.js';
-import { statusPath, studioPath } from './router.js';
+import { NAVIGATE_EVENT, statusPath, studioPath } from './router.js';
 import { formatRelativeTime } from './relativeTime.js';
 import { selfComposerRoute, selfStatusCopy, shouldShowConnectCard } from './selfBuildCopy.js';
 import { StudioConnectCard } from './StudioConnectCard.js';
@@ -220,6 +220,20 @@ type SubmissionStatusViewProps = {
    * save-link lecture and point share URLs at `/studio/:token`.
    */
   embedded?: boolean;
+  /**
+   * Publishing is terminal: an improvement on a live game opens a *new* job with its
+   * own token, and the creator's thread must move onto it. Embedded in Studio the
+   * parent owns the open thread, so it does the switch (see CreatorStudioView). When
+   * absent — the standalone `/status/:token` view — this component navigates the
+   * browser to the new token itself.
+   */
+  onImproved?: (token: string) => void;
+  /**
+   * Marks this mount as the destination of an improvement handoff, so the new build
+   * thread announces itself rather than appearing out of nowhere. Set by the parent
+   * that performed the switch.
+   */
+  justHandedOff?: boolean;
 };
 
 export function SubmissionStatusView({
@@ -230,6 +244,8 @@ export function SubmissionStatusView({
   onRetry,
   onPlaytest,
   embedded = false,
+  onImproved,
+  justHandedOff = false,
 }: SubmissionStatusViewProps) {
   const { t, i18n } = useTranslation();
   const [status, setStatus] = useState<SubmissionStatus | null>(null);
@@ -265,6 +281,25 @@ export function SubmissionStatusView({
     () => trackingUrl ?? new URL(embedded ? studioPath(token) : statusPath(token), window.location.href).toString(),
     [token, trackingUrl, embedded],
   );
+
+  /**
+   * Move the creator onto the new job an improvement just opened. Embedded, the parent
+   * owns which thread is on screen, so it does the switch (and re-mounts us on the new
+   * token with `justHandedOff`). Standalone, we drive the browser there ourselves — the
+   * same programmatic push App uses. App only re-reads the route on popstate/hashchange
+   * (pushState is silent), so we fire PopStateEvent after the push; NAVIGATE_EVENT still
+   * announces for telemetry listeners.
+   */
+  const handleImproved = (newToken: string) => {
+    if (onImproved) {
+      onImproved(newToken);
+      return;
+    }
+    const path = statusPath(newToken);
+    window.history.pushState(null, '', path);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    window.dispatchEvent(new CustomEvent(NAVIGATE_EVENT, { detail: { path } }));
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -567,6 +602,11 @@ export function SubmissionStatusView({
     return (
       <>
         <div className="studio-thread">
+          {justHandedOff ? (
+            <p className="status-handoff-notice" role="status">
+              <PixelIcon name="sparkle" size={13} /> {t('statusView.handoff.notice')}
+            </p>
+          ) : null}
           {loading ? (
             <p className="catalog-state studio-thread-empty">{t('statusView.loading')}</p>
           ) : errorMessage ? (
@@ -652,6 +692,7 @@ export function SubmissionStatusView({
                     stall={status.stall}
                     failureReason={status.failure?.reason}
                     onSent={(text) => setPendingRevisions((current) => [...current, { text, at: Date.now() }])}
+                    onPublishedImprove={handleImproved}
                   />
                 ) : null}
               </div>
@@ -666,6 +707,11 @@ export function SubmissionStatusView({
   return (
     <>
       <section className="panel status-panel">
+        {justHandedOff ? (
+          <p className="status-handoff-notice" role="status">
+            <PixelIcon name="sparkle" size={13} /> {t('statusView.handoff.notice')}
+          </p>
+        ) : null}
         {
           <>
             <div className="status-heading">
@@ -818,6 +864,7 @@ export function SubmissionStatusView({
                 stall={status.stall}
                 failureReason={status.failure?.reason}
                 onSent={(text) => setPendingRevisions((current) => [...current, { text, at: Date.now() }])}
+                onPublishedImprove={handleImproved}
               />
             ) : null}
 
@@ -1006,6 +1053,7 @@ function FeedbackPanel({
   stall,
   failureReason,
   onSent,
+  onPublishedImprove,
 }: {
   token: string;
   /** Routes the message: an improvement on the live game, or a change on the build. */
@@ -1021,6 +1069,12 @@ function FeedbackPanel({
   stall?: SubmissionStatus['stall'];
   failureReason?: string;
   onSent: (text: string) => void;
+  /**
+   * A published-game improvement opened a new job; called with its token so the view
+   * can move the creator onto the new build thread. Only fires on the `published`
+   * path — a draft revision continues the current round and stays on this thread.
+   */
+  onPublishedImprove?: (token: string) => void;
 }) {
   const { t } = useTranslation();
   const [text, setText] = useState('');
@@ -1084,16 +1138,21 @@ function FeedbackPanel({
     // client bounds the server call; this button stays disabled until that answer lands.
     try {
       const roundBuilder = chooseBuilder ? builder : undefined;
+      // The new job an improvement opened, if this send was one — the thread hands over
+      // to it once the local echo and receipt are in place, below.
+      let handoffToken: string | undefined;
       // Same box, same act, different destination — decided here from the state the
       // server reported rather than by asking the creator which one they meant.
       // Only pass builder when a new round is being chosen — keeps the 2-arg call
       // shape for ordinary mid-round messages (and the tests that assert it).
       if (published) {
-        if (roundBuilder) {
-          await submitImprovement(token, trimmed, undefined, roundBuilder);
-        } else {
-          await submitImprovement(token, trimmed);
-        }
+        const improved = roundBuilder
+          ? await submitImprovement(token, trimmed, undefined, roundBuilder)
+          : await submitImprovement(token, trimmed);
+        // Publishing is terminal: the improvement is a new job with its own token. The
+        // builder memory is keyed by token in localStorage, so persist the choice under
+        // the *new* token as well — the old token's memory dies with its round.
+        handoffToken = improved.token;
       } else {
         const result = roundBuilder
           ? await submitFeedback(token, trimmed, undefined, roundBuilder)
@@ -1105,7 +1164,9 @@ function FeedbackPanel({
         }
       }
       if (roundBuilder) {
-        saveLastBuilder(token, roundBuilder);
+        // A published improve moved to a new token; save the choice there too so the new
+        // build thread's composer/connect defaults to it before its status echoes back.
+        saveLastBuilder(handoffToken ?? token, roundBuilder);
         recordStudioStep('builder_chosen', roundBuilder);
       }
       setState('sent');
@@ -1116,6 +1177,9 @@ function FeedbackPanel({
       // Echo it into the activity feed straight away: the API only sees it once the
       // comment round-trips through GitHub, which is a poll or two away.
       onSent(trimmed);
+      // Then move the creator onto the new build thread. Last, so the receipt and the
+      // local echo are already committed before the thread this box lives in is swapped.
+      if (handoffToken) onPublishedImprove?.(handoffToken);
     } catch (err) {
       const message = err instanceof Error ? err.message : '';
       if (message === 'content_rejected') {

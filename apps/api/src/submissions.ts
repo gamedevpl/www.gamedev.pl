@@ -2726,7 +2726,19 @@ export async function registerSubmissionRoutes(
       if (!started) {
         return reply.status(502).send({ error: 'failed to submit improvement request' });
       }
-      return reply.send({ ok: true, jobId: started.jobId, slug: record.slug, ...(shotId ? { shotId } : {}) });
+      // Publishing is terminal, so this is a *new* job with its own capability. The
+      // creator's thread has to move onto it — the old (published) token cannot address
+      // the new round, and its round key is dead. Minted exactly as GET
+      // /api/submissions/mine mints one per shelf record: owner-session-authed, same
+      // exposure class as the shelf the creator already reads.
+      const jobToken = mintToken(started.jobId, submissionTokenSecret);
+      return reply.send({
+        ok: true,
+        jobId: started.jobId,
+        token: jobToken,
+        slug: record.slug,
+        ...(shotId ? { shotId } : {}),
+      });
     },
   );
 

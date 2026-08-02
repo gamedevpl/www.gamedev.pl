@@ -497,6 +497,9 @@
       "quota": "Wysłałeś dziś dużo uwag — spróbuj ponownie jutro.",
       "published": "Ta gra jest już opublikowana. Prześlij nowy pomysł, aby stworzyć kolejną wersję."
     },
+    "handoff": {
+      "notice": "Runda ulepszeń rozpoczęta — to jest wątek nowej wersji."
+    },
     "progress": {
       "checklistTitle": "Nad czym pracuje agent",
       "activityTitle": "Przebieg prac",
@@ -806,6 +809,7 @@
     },
     "step2": {
       "title": "Powiedz agentowi, co zbudować",
+      "sameConnection": "Połączenie z gamedev.pl pozostaje bez zmian — nowy jest tylko klucz tej rundy, w prompcie poniżej. Nie musisz zmieniać konfiguracji agenta.",
       "expiry": "Ten klucz działa tylko dla tej gry i wygasa {{when}}."
     },
     "clients": {
