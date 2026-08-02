@@ -46,9 +46,10 @@ import {
  * and it always targets the game's current state — published or not, there is only ever
  * the tip to work on.
  *
- * Shelf scales past a handful of games: compact rows, search/filter once the list grows,
- * and on narrow viewports a game switcher (picker sheet) so the thread is not buried
- * under ten cards.
+ * Shelf scales past a handful of games: compact rows, search/filter once the list grows.
+ * On a desktop with a long shelf it collapses to a left-edge rail of dots (not a "switch
+ * game" combo); expand it to get the full list back. On a phone with a game open the
+ * shelf is never permanently in the page — it is a drawer over ~90% of the width.
  *
  * Selection + surface live in the URL (`/studio/<slug>/<surface>`) so a refresh or a
  * shared link reopens the same place. The five old tab names still resolve, onto
@@ -161,10 +162,10 @@ export function CreatorStudioView({
   const [tab, setTab] = useState<StudioTab>(selectedTab ?? 'thread');
   const [shelfQuery, setShelfQuery] = useState('');
   const [shelfFilter, setShelfFilter] = useState<StudioShelfFilter>('all');
-  const [pickerOpen, setPickerOpen] = useState(false);
+  /** Desktop rail expand, or mobile drawer open. Closed by default once a game is open. */
+  const [shelfOpen, setShelfOpen] = useState(false);
   const shelfSearchId = useId();
-  const pickerSearchId = useId();
-  const pickerSearchRef = useRef<HTMLInputElement>(null!);
+  const shelfSearchRef = useRef<HTMLInputElement>(null!);
 
   // What the URL is asking for, readable from inside the shelf fetch below without
   // making that fetch re-run every time the address changes. Seeded rather than
@@ -343,12 +344,17 @@ export function CreatorStudioView({
   }, [detailsIsSheet]);
 
   useEffect(() => {
-    if (!pickerOpen) return;
+    if (!shelfOpen || !activeGame) return;
     const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const frame = window.requestAnimationFrame(() => pickerSearchRef.current?.focus());
+    // Only the phone drawer needs to freeze the page; the desktop rail expands in flow.
+    const narrow =
+      typeof window.matchMedia === 'function'
+        ? window.matchMedia('(max-width: 800px)').matches
+        : window.innerWidth <= 800;
+    if (narrow) document.body.style.overflow = 'hidden';
+    const frame = window.requestAnimationFrame(() => shelfSearchRef.current?.focus());
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setPickerOpen(false);
+      if (event.key === 'Escape') setShelfOpen(false);
     };
     window.addEventListener('keydown', onKey);
     return () => {
@@ -356,14 +362,14 @@ export function CreatorStudioView({
       window.cancelAnimationFrame(frame);
       window.removeEventListener('keydown', onKey);
     };
-  }, [pickerOpen]);
+  }, [shelfOpen, activeGame]);
 
   function selectGame(token: string) {
     const next = games.find((game) => game.token === token) ?? null;
     const nextTab = defaultTabFor();
     setSelected(token);
     setTab(nextTab);
-    setPickerOpen(false);
+    setShelfOpen(false);
     if (next) onNavigate(studioPath(studioAddress(next), nextTab));
   }
 
@@ -438,26 +444,48 @@ export function CreatorStudioView({
           className={[
             'studio-layout',
             activeGame ? 'is-game-open' : '',
-            // Once the shelf is no longer a glanceable handful, collapse it after
-            // selection so the work surface owns the viewport (desktop + mobile).
-            activeGame && showShelfTools ? 'is-focus' : '',
+            // Long shelf on a desktop: collapse to a left-edge rail of dots after pick.
+            // Phones ignore this — they always use the drawer once a game is open.
+            activeGame && showShelfTools ? 'is-compact-shelf' : '',
+            shelfOpen ? 'is-shelf-open' : '',
           ]
             .filter(Boolean)
             .join(' ')}
         >
+          {activeGame && shelfOpen ? (
+            <div
+              className="modal-backdrop studio-shelf-backdrop"
+              role="presentation"
+              onClick={() => setShelfOpen(false)}
+            />
+          ) : null}
+
           <aside className="studio-shelf" aria-label={t('studioPanel.shelfAria')}>
             <div className="studio-shelf-head">
               <h2 className="studio-shelf-heading">{t('studioPanel.shelf.heading')}</h2>
               <span className="studio-shelf-count">{t('studioPanel.shelf.count', { count: games.length })}</span>
+              {activeGame ? (
+                <button
+                  type="button"
+                  className="studio-shelf-edge-toggle"
+                  onClick={() => setShelfOpen((open) => !open)}
+                  aria-expanded={shelfOpen}
+                  aria-label={shelfOpen ? t('studioPanel.shelf.collapseShelf') : t('studioPanel.shelf.expandShelf')}
+                >
+                  <PixelIcon name={shelfOpen ? 'collapse' : 'expand'} size={12} />
+                </button>
+              ) : null}
             </div>
             <button type="button" className="studio-shelf-new" onClick={() => onNavigate('/')}>
-              <PixelIcon name="sparkle" size={12} /> {t('studioPanel.shelf.newGame')}
+              <PixelIcon name="sparkle" size={12} />{' '}
+              <span className="studio-shelf-new-label">{t('studioPanel.shelf.newGame')}</span>
             </button>
             <StudioShelfControls
               searchInputId={shelfSearchId}
+              searchRef={shelfSearchRef}
               query={shelfQuery}
               filter={shelfFilter}
-              showTools={showShelfTools}
+              showTools={showShelfTools || (shelfOpen && games.length > 1)}
               buildingCount={buildingCount}
               liveCount={liveCount}
               totalCount={games.length}
@@ -474,23 +502,13 @@ export function CreatorStudioView({
               <div className="studio-detail-head">
                 <button
                   type="button"
-                  className="studio-game-switcher"
-                  onClick={() => setPickerOpen(true)}
-                  aria-haspopup="dialog"
-                  aria-expanded={pickerOpen}
+                  className="studio-shelf-open"
+                  onClick={() => setShelfOpen(true)}
+                  aria-expanded={shelfOpen}
+                  aria-label={t('studioPanel.shelf.openShelf')}
                 >
-                  <span className="studio-game-switcher-meta">
-                    <span className="studio-game-switcher-label">{t('studioPanel.shelf.switcher')}</span>
-                    <span className="studio-game-switcher-count">
-                      {t('studioPanel.shelf.count', { count: games.length })}
-                    </span>
-                  </span>
-                  <span className="studio-game-switcher-title">{activeGame.title}</span>
-                  {activeGame.slug ? <code className="studio-slug">{activeGame.slug}</code> : null}
-                  {/* Not `expand`: once a phone puts this button and the Details button on
-                      one row, the same icon appeared twice on that row meaning two
-                      different things. A folder is the other games. */}
                   <PixelIcon name="folder" size={12} />
+                  <span className="studio-shelf-open-label">{t('studioPanel.shelf.openShelf')}</span>
                 </button>
                 <div className="studio-detail-title-row">
                   <div className="studio-detail-title-block">
@@ -559,7 +577,7 @@ export function CreatorStudioView({
                     game={activeGame}
                     published={isStudioGamePublished(activeGame)}
                     onExit={() => openTab('thread')}
-                    pickerOpen={pickerOpen}
+                    shelfOpen={shelfOpen}
                   />
                 ) : null}
 
@@ -620,51 +638,6 @@ export function CreatorStudioView({
               </div>
             </div>
           ) : null}
-        </div>
-      ) : null}
-
-      {pickerOpen ? (
-        <div
-          className="modal-backdrop studio-picker-backdrop"
-          role="presentation"
-          onClick={(event) => {
-            if (event.target === event.currentTarget) setPickerOpen(false);
-          }}
-        >
-          <div
-            className="studio-picker"
-            role="dialog"
-            aria-modal="true"
-            aria-label={t('studioPanel.shelf.pickerTitle')}
-          >
-            <header className="studio-picker-header">
-              <div>
-                <h2>{t('studioPanel.shelf.pickerTitle')}</h2>
-                <p>{t('studioPanel.shelf.count', { count: games.length })}</p>
-              </div>
-              <button
-                type="button"
-                className="modal-close-btn"
-                onClick={() => setPickerOpen(false)}
-                aria-label={t('studioPanel.shelf.closePicker')}
-              >
-                <PixelIcon name="close" size={14} />
-              </button>
-            </header>
-            <StudioShelfControls
-              searchInputId={pickerSearchId}
-              searchRef={pickerSearchRef}
-              query={shelfQuery}
-              filter={shelfFilter}
-              showTools={showShelfTools || games.length > 1}
-              buildingCount={buildingCount}
-              liveCount={liveCount}
-              totalCount={games.length}
-              onQueryChange={setShelfQuery}
-              onFilterChange={setShelfFilter}
-            />
-            {shelfList}
-          </div>
         </div>
       ) : null}
     </section>
@@ -769,6 +742,7 @@ function StudioShelfList({
               className={`studio-shelf-item${active ? ' is-active' : ''}${building ? ' is-live' : ''}${published ? ' is-published' : ''}`}
               onClick={() => onSelect(game.token)}
               aria-current={active ? 'true' : undefined}
+              title={game.title}
             >
               {/* A dot, not a label. Every row used to carry its status in words and its
                   age beside it, which made a list of five games a wall of small text with

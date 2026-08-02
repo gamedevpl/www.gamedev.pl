@@ -63,8 +63,7 @@ const VIEWPORTS = [
 /** Stable ids used only inside the stubbed responses — never written to the API. */
 const FIXTURE_TOKEN = 'e2e-studio-shell-token';
 const FIXTURE_SLUG = 'e2e-studio-shell';
-/** Enough games to trip focus mode (STUDIO_SHELF_TOOLS_AT = 5), which is the desktop
- *  path that used to re-cage the work surface after the shelf collapsed. */
+/** Enough games to trip the compact left rail (STUDIO_SHELF_TOOLS_AT = 5). */
 const FOCUS_SHELF_SIZE = 5;
 
 async function fulfillJson(route: Route, body: unknown) {
@@ -92,10 +91,9 @@ function fixtureGames() {
  * The SPA still mounts CreatorStudioView + SubmissionStatusView and applies the real
  * stylesheet; only the JSON those views fetch is replaced.
  *
- * Five games, not one: a single-game shelf never enters focus mode, and that is the
- * desktop state where a capped reading column used to float in empty gutters after the
- * shelf hid. Stubbing under the threshold made the gate green while the live screen
- * with a real shelf was wrong.
+ * Five games, not one: a single-game shelf never enters the compact-rail path, and that
+ * is the desktop state this gate has to keep honest (work surface beside a skinny rail,
+ * not a floating card and not a "switch game" combo).
  */
 async function stubStudioThreadData(page: Page) {
   await page.route('**/api/me/studio**', async (route) => {
@@ -223,14 +221,20 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
           pageScroll: document.documentElement.scrollHeight - document.documentElement.clientHeight,
           scrollerOverflowY: scroller ? getComputedStyle(scroller).overflowY : null,
           gameOpen: Boolean(document.querySelector('.studio-layout.is-game-open')),
-          focusMode: Boolean(layout?.classList.contains('is-focus')),
+          compactShelf: Boolean(layout?.classList.contains('is-compact-shelf')),
+          shelfOpen: Boolean(layout?.classList.contains('is-shelf-open')),
           detailWidth: detail?.getBoundingClientRect().width ?? 0,
           viewportWidth: window.innerWidth,
+          hasSwitcher: Boolean(document.querySelector('.studio-game-switcher')),
+          hasShelf: Boolean(document.querySelector('.studio-shelf')),
         };
       });
 
       expect(shell.gameOpen, 'the studio should mark a game open so the shell CSS applies').toBe(true);
-      expect(shell.focusMode, 'the fixture shelf must be large enough to enter focus mode').toBe(true);
+      expect(shell.compactShelf, 'the fixture shelf must be large enough to enter compact-rail mode').toBe(true);
+      expect(shell.shelfOpen, 'compact shelf should start collapsed/closed').toBe(false);
+      expect(shell.hasSwitcher, 'the switch-game combo must stay gone').toBe(false);
+      expect(shell.hasShelf, 'the shelf itself must remain in the tree as a rail/drawer').toBe(true);
 
       // The page owning the window is the precondition for the rest: it is what removes
       // the scroll a reader would otherwise use to escape a bar sitting on the composer.
@@ -244,13 +248,12 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
         /^(auto|scroll)$/,
       );
 
-      // Desktop focus mode used to leave a ~1080px column floating in gutters after the
-      // shelf hid. The work surface should own the window width (padding aside).
+      // Desktop compact rail (~56px) leaves the work surface owning the rest of the window.
       if (viewport.width >= 801) {
         expect(
           shell.detailWidth,
-          `focus-mode work surface should be full-bleed at ${viewport.width}px, not a centred card`,
-        ).toBeGreaterThan(viewport.width - 80);
+          `compact-rail work surface should fill the window beside the rail at ${viewport.width}px`,
+        ).toBeGreaterThan(viewport.width - 120);
       }
 
       for (const bar of BOTTOM_BARS) {

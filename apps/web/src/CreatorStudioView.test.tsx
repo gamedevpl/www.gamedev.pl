@@ -146,7 +146,7 @@ describe('CreatorStudioView', () => {
     root.unmount();
   });
 
-  it('opens the game picker from the switcher', async () => {
+  it('opens the games shelf from the open control', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
@@ -154,19 +154,20 @@ describe('CreatorStudioView', () => {
 
     const { container, root } = await renderStudio();
 
-    const switcher = container.querySelector('.studio-game-switcher');
-    expect(switcher).toBeTruthy();
+    const openShelf = container.querySelector('.studio-shelf-open');
+    expect(openShelf).toBeTruthy();
 
     await act(async () => {
-      switcher!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      openShelf!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    expect(container.querySelector('[role="dialog"]')?.textContent).toMatch(/Choose a game/i);
+    expect(container.querySelector('.studio-layout')?.classList.contains('is-shelf-open')).toBe(true);
+    expect(container.querySelector('.studio-shelf-backdrop')).toBeTruthy();
 
     root.unmount();
   });
 
-  it('closes picker on Escape while in playtest tab without exiting playtest', async () => {
+  it('closes the shelf on Escape while in playtest tab without exiting playtest', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
@@ -174,27 +175,27 @@ describe('CreatorStudioView', () => {
 
     const { container, root } = await renderStudio({ selectedGame: 'game-2', selectedTab: 'playtest' });
 
-    const switcher = container.querySelector('.studio-game-switcher');
-    expect(switcher).toBeTruthy();
+    const openShelf = container.querySelector('.studio-shelf-open');
+    expect(openShelf).toBeTruthy();
 
     await act(async () => {
-      switcher!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      openShelf!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    expect(container.querySelector('.studio-picker')).toBeTruthy();
+    expect(container.querySelector('.studio-layout')?.classList.contains('is-shelf-open')).toBe(true);
 
     await act(async () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     });
 
-    expect(container.querySelector('.studio-picker')).toBeFalsy();
+    expect(container.querySelector('.studio-layout')?.classList.contains('is-shelf-open')).toBe(false);
     expect(container.querySelector('.studio-panel')?.classList.contains('is-playtesting')).toBe(true);
 
     root.unmount();
     authUser = null;
   });
 
-  it('enters focus mode once the shelf has many games selected', async () => {
+  it('collapses a long shelf to a rail after a game is selected', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
@@ -202,8 +203,10 @@ describe('CreatorStudioView', () => {
 
     const { container, root } = await renderStudio();
 
-    expect(container.querySelector('.studio-layout')?.classList.contains('is-focus')).toBe(true);
-    expect(container.querySelector('.studio-game-switcher')?.textContent).toMatch(/10 games/i);
+    expect(container.querySelector('.studio-layout')?.classList.contains('is-compact-shelf')).toBe(true);
+    expect(container.querySelector('.studio-layout')?.classList.contains('is-shelf-open')).toBe(false);
+    expect(container.querySelector('.studio-shelf')).toBeTruthy();
+    expect(container.querySelector('.studio-game-switcher')).toBeNull();
 
     root.unmount();
   });

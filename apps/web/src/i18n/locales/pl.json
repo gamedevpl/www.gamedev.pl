@@ -260,8 +260,9 @@
         "live": "Na żywo"
       },
       "noMatches": "Żadna gra nie pasuje do tego wyszukiwania.",
-      "switcher": "Zmień grę",
-      "pickerTitle": "Wybierz grę",
+      "openShelf": "Twoje gry",
+      "expandShelf": "Rozwiń listę gier",
+      "collapseShelf": "Zwiń listę gier",
       "closePicker": "Zamknij listę gier"
     },
     "tabs": {

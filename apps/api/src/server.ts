@@ -34,7 +34,7 @@ async function main() {
     await store.setSubmissionSlug(102, 'studio-tycoon');
     await store.setSubmissionLastStatus(102, 'building');
     await store.setSubmissionNotifiedStatus(102, 'building');
-    // Extra shelf rows so local QA can exercise search/filters/mobile switcher at 10+.
+    // Extra shelf rows so local QA can exercise search/filters/compact rail + drawer at 10+.
     const extras: Array<{
       issue: number;
       title: string;

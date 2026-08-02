@@ -258,8 +258,9 @@
         "live": "Live"
       },
       "noMatches": "No games match that search.",
-      "switcher": "Switch game",
-      "pickerTitle": "Choose a game",
+      "openShelf": "Your games",
+      "expandShelf": "Expand games list",
+      "collapseShelf": "Collapse games list",
       "closePicker": "Close game list"
     },
     "tabs": {
