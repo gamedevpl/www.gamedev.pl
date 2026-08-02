@@ -10333,9 +10333,30 @@ body.player-open {
 }
 
 .remix-ask.is-compact {
-  padding-bottom: 11px;
-  padding-right: 96px;
+  /*
+   * A row rather than a box with a hole reserved in it. The full-size composer
+   * can afford to place Send absolutely — its bottom padding is the space. Here
+   * there is no such space, and reserving it as a padding-right magic number
+   * only holds while the label is short: "Change it" fits where a longer
+   * translation would sit on top of the text.
+   */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 12px;
   font-size: 0.9rem;
+}
+
+.remix-ask.is-compact textarea {
+  flex: 1;
+  /* A flex item will not shrink below its content without this, and one long
+     unbroken word is enough to push Send off the edge of a phone. */
+  min-width: 0;
+}
+
+.remix-ask.is-compact .remix-send {
+  position: static;
+  flex: none;
 }
 
 .remix-count {

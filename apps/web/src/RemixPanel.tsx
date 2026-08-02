@@ -271,7 +271,19 @@ export function RemixPanel(props: {
     const spec = session?.params?.[suggestion.key];
     if (!spec) return '';
     const name = label(spec.label);
-    return name ? t(`remix.try.${suggestion.direction}`, { label: name }) : '';
+    if (!name) return '';
+    let direction = suggestion.direction;
+    if (spec.type === 'bool') {
+      // Against what the game is doing *now*, which only the client knows: a
+      // shared link can arrive with a toggle already flipped, and the server
+      // derived its direction from the declaration's default. Offering "turn on"
+      // for something already on is a suggestion that does nothing — and it does
+      // it expensively, since a no-op patch falls through to a rebuild.
+      const live = values[suggestion.key];
+      const isOn = typeof live === 'boolean' ? live : spec.default === true;
+      direction = isOn ? 'off' : 'on';
+    }
+    return t(`remix.try.${direction}`, { label: name });
   }
 
   function setParam(key: string, value: EditorParamValue) {
@@ -297,7 +309,9 @@ export function RemixPanel(props: {
     }
     if (!active) return; // session still starting — the send lands a beat later
     setNote(null);
-    setChanged(null);
+    // The previous result deliberately stays until a new one lands. Clearing it
+    // here loses its Undo the moment a follow-up fails — and a follow-up that
+    // fails is exactly when the player most wants the last good state back.
     setAsked(text);
     recordRemixStep('asked');
 
@@ -686,7 +700,13 @@ export function RemixPanel(props: {
        * follows from the share. Until that sequence exists, the panel offers
        * nothing it has not earned.
        */}
-      {expert && specs ? (
+      {/*
+       * Expert mode is the owner's debug surface, not the player's, so its share
+       * is not held to the earned-reward rule — moving a slider is a change, and
+       * this is where sliders live. It does step aside when the earned button is
+       * already on screen, because two share buttons is a bug in any mode.
+       */}
+      {expert && specs && !changed?.canShare ? (
         <div className="remix-actions">
           <button type="button" className="remix-action" onClick={() => void share()}>
             {t('remix.share')}

@@ -45,6 +45,11 @@ export function buildSuggestions(
       } else if (spec.type === 'bool') {
         // Toward the change, whichever way that is — offering the state it is
         // already in reads as a suggestion that does nothing.
+        //
+        // Against the declaration's default, which is all this side knows: the
+        // player's live values never reach this server, and a shared link can
+        // arrive with the toggle already flipped. The client corrects the
+        // direction against what the game is actually doing before rendering it.
         out.push({ key, kind: 'param', direction: spec.default === true ? 'off' : 'on' });
       }
       // Text and enum are deliberately absent: a useful line for either would
