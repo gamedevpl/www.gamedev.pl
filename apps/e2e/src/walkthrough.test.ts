@@ -187,6 +187,16 @@ describe.skipIf(!prereq.ok)('signed-in walkthrough', () => {
     const { slug } = singlePlayer();
     await visit(page, `/play/${slug}`, 5_000);
 
+    // The theater bar now auto-hides a few seconds into play, so the report path
+    // is reached the way a person reaches it: the peek pill is always on screen
+    // and brings the chrome back. Asserting the whole route rather than the
+    // element alone is the stronger guard — "accessible" under art. 16 is a claim
+    // about a path, and an auto-hide that swallowed the only route would pass a
+    // test that merely looked for the link.
+    const pill = page.locator('.theater-peek-pill');
+    await pill.waitFor({ state: 'visible', timeout: 15_000 });
+    await pill.click();
+
     // A mailto, not a button — the honest MVP per ReportGameButton.tsx. The four
     // headings are what makes a notice actionable under art. 16, so an empty mail
     // body would technically "have a report path" and still fail the obligation.

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { PARAMS_KEY, parseEditorDefinition, type EditorDefinition } from './editor-contract.js';
@@ -41,12 +41,23 @@ import type { EditingGate } from './creation-limits.js';
  *    frame to swap in, built by the same assembler the play path uses.
  *
  * Sessions live in this instance's memory with a TTL. Deliberately not
- * Firestore: a remix is explicitly disposable, a document per tweak would be
- * write traffic for something nobody may ever look at again, and the failure
- * mode is mild — an instance change loses the code edits, the client re-creates
- * the session and re-applies its params, which it holds itself. If remixes ever
- * become durable (the "save this as yours" path growing teeth), that is the
- * moment to give them a real home.
+ * Firestore: a remix is explicitly disposable, and a document per tweak would be
+ * write traffic for something nobody may ever look at again.
+ *
+ * But the app service deploys with `--max-instances 4` (it is only pinned to 1
+ * while party rooms live here — see `infra/deploy-api.sh`), so "this instance"
+ * is not where the next request necessarily lands. Memory alone would mean a
+ * player starts a remix on one container, types, and is told their remix expired
+ * — intermittently, and therefore blamed on their wifi. So the *id* carries what
+ * a session needs to exist: a container that has never seen it rebuilds it from
+ * the id and serves the request. Memory is the cache; the id is the record.
+ *
+ * What survives a hop is everything the player can see: the game, its
+ * declaration, and the parameter values (which the client holds and re-pushes).
+ * What does not is the accumulated code edits, because those are the one thing
+ * too big to put in a URL — a rebuilt session starts from the published game.
+ * If remixes ever become durable (the "save this as yours" path growing teeth),
+ * that is the moment to give them a real home.
  */
 
 export const REMIX_TTL_MS = 60 * 60_000;
@@ -102,6 +113,48 @@ const AssistSchema = z.object({
 const ShareSchema = z.object({
   params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
 });
+
+/**
+ * The id is the session's record, so any container can answer for it.
+ *
+ * It carries only facts that are already the player's: which game, until when,
+ * and a tag for whose it is. Everything authoritative — the engine ref, the
+ * sources, whether the game is store-era — is re-derived from the catalog when a
+ * session is rebuilt, never read out of the id, so a hand-edited id cannot point
+ * a rebuild at a ref or a file list of its author's choosing.
+ *
+ * The owner is a hash rather than the uid itself: it keeps "an id is not a
+ * bearer token" true across a hop without putting a real account id in a URL.
+ * It is not a signature and does not need to be — the only claim it makes is one
+ * the caller must already be able to make about themselves.
+ */
+function ownerTag(uid: string): string {
+  return createHash('sha256').update(uid).digest('base64url').slice(0, 12);
+}
+
+/**
+ * `1.<owner>.<expiry>.<nonce>.<slug>` — every part URL-safe, none containing a
+ * dot, so it travels as a path segment without escaping. Deliberately not
+ * base64url'd JSON: that ran to ~130 characters and Fastify's route parser
+ * rejects a parameter over `MAX_REMIX_ID_LENGTH` before any handler sees it.
+ */
+export const MAX_REMIX_ID_LENGTH = 128;
+const REMIX_ID_PATTERN = /^1\.([A-Za-z0-9_-]{12})\.([0-9a-z]{1,10})\.([A-Za-z0-9_-]{6})\.(.+)$/;
+
+function mintRemixId(uid: string, slug: string, expiresAt: number): string {
+  const nonce = randomBytes(6).toString('base64url').slice(0, 6);
+  return `1.${ownerTag(uid)}.${expiresAt.toString(36)}.${nonce}.${slug}`;
+}
+
+function readRemixId(id: string): { uidTag: string; slug: string; expiresAt: number } | null {
+  if (id.length > MAX_REMIX_ID_LENGTH) return null;
+  const match = REMIX_ID_PATTERN.exec(id);
+  if (!match) return null;
+  const expiresAt = parseInt(match[2], 36);
+  if (!Number.isFinite(expiresAt)) return null;
+  if (!StartSchema.shape.slug.safeParse(match[4]).success) return null;
+  return { uidTag: match[1], slug: match[4], expiresAt };
+}
 
 export interface RemixRoutesOptions {
   store?: Store;
@@ -174,15 +227,61 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
     return true;
   }
 
-  function getSession(request: FastifyRequest): RemixSession | null {
+  async function getSession(request: FastifyRequest): Promise<RemixSession | null> {
     sweep();
     const id = (request.params as { id?: string }).id;
-    if (!id) return null;
+    const uid = request.user?.uid;
+    if (!id || !uid) return null;
     const session = sessions.get(id);
-    if (!session || session.expiresAt <= now()) return null;
-    // Someone else's remix is indistinguishable from an expired one, which is
-    // the honest answer as well as the safe one.
-    if (session.ownerUid !== request.user?.uid) return null;
+    if (session) {
+      if (session.expiresAt <= now()) return null;
+      // Someone else's remix is indistinguishable from an expired one, which is
+      // the honest answer as well as the safe one.
+      if (session.ownerUid !== uid) return null;
+      return session;
+    }
+    return rehydrate(id, uid);
+  }
+
+  /**
+   * This container has never seen this remix. Rebuild it, or say it is gone.
+   *
+   * Reached whenever the load balancer hands a follow-up request to a different
+   * instance than the one that minted the id — the common case under any real
+   * traffic, and the reason the id is self-describing. The game is re-read from
+   * the catalog exactly as `start` reads it, so a rebuilt session is a session:
+   * same declaration, same lanes, same ownership answer.
+   *
+   * Two things reset. Code edits are gone, because they only ever lived in the
+   * instance that made them; the player's params come back from the client, so
+   * what they see is what they had. And `codeEdits` restarts at zero, which
+   * loosens the per-session spend bound — deliberately accepted, because the
+   * per-route rate limit, the per-account daily cap and the platform breaker are
+   * the bounds that actually hold, and none of them live in this map.
+   */
+  async function rehydrate(id: string, uid: string): Promise<RemixSession | null> {
+    const claims = readRemixId(id);
+    if (!claims || claims.expiresAt <= now()) return null;
+    if (claims.uidTag !== ownerTag(uid)) return null;
+    const loaded = await loadSources(claims.slug);
+    if (!loaded) return null;
+    const editorJson = loaded.sources[EDITOR_FILE];
+    const session: RemixSession = {
+      id,
+      ownerUid: uid,
+      slug: claims.slug,
+      ref: loaded.ref,
+      sources: loaded.sources,
+      fromStore: loaded.fromStore,
+      overrides: {},
+      definition: editorJson ? parseEditorDefinition(editorJson).definition : null,
+      title: claims.slug,
+      codeEdits: 0,
+      codeInFlight: false,
+      expiresAt: claims.expiresAt,
+    };
+    sessions.set(id, session);
+    sweep();
     return session;
   }
 
@@ -266,7 +365,8 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
 
       const editorJson = loaded.sources[EDITOR_FILE];
       const definition = editorJson ? parseEditorDefinition(editorJson).definition : null;
-      const id = randomUUID();
+      const expiresAt = now() + REMIX_TTL_MS;
+      const id = mintRemixId(request.user!.uid, params.data.slug, expiresAt);
       sweep();
       sessions.set(id, {
         id,
@@ -280,7 +380,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         title: params.data.slug,
         codeEdits: 0,
         codeInFlight: false,
-        expiresAt: now() + REMIX_TTL_MS,
+        expiresAt,
       });
 
       return reply.send({
@@ -302,7 +402,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
     { config: { rateLimit: { max: 20, timeWindow: 60_000 } } },
     async (request, reply) => {
       if (!requireUser(request, reply)) return;
-      const session = getSession(request);
+      const session = await getSession(request);
       if (!session) return reply.status(404).send({ error: 'this remix has expired — start a new one' });
       if (!options.assistant || !assistEnabled() || !session.definition?.params) {
         return reply.status(503).send({ error: 'tuning by request is not available here' });
@@ -361,7 +461,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
     { config: { rateLimit: { max: 6, timeWindow: 60_000 } } },
     async (request, reply) => {
       if (!requireUser(request, reply)) return;
-      const session = getSession(request);
+      const session = await getSession(request);
       if (!session) return reply.status(404).send({ error: 'this remix has expired — start a new one' });
       if (!options.codeLane || !codeLaneEnabled()) {
         return reply.status(503).send({ error: 'code changes are not available here' });
@@ -479,7 +579,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
     { config: { rateLimit: { max: 10, timeWindow: 60_000 } } },
     async (request, reply) => {
       if (!requireUser(request, reply)) return;
-      const session = getSession(request);
+      const session = await getSession(request);
       if (!session) return reply.status(404).send({ error: 'this remix has expired — start a new one' });
       const body = ShareSchema.safeParse(request.body);
       if (!body.success) return reply.status(400).send({ error: 'invalid request' });
