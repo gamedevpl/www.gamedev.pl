@@ -113,6 +113,10 @@ export function HeroPromptSection({
   mockError,
 }: HeroPromptSectionProps) {
   const { t } = useTranslation();
+  // Focusing a text field during mobile page load opens the on-screen keyboard and hides
+  // most of the creation surface. Keep the desktop shortcut, where no virtual keyboard
+  // competes for viewport space.
+  const shouldAutoFocusPrompt = typeof matchMedia !== 'function' || !matchMedia('(max-width: 768px)').matches;
   const [promptText, setPromptText] = useState(initialPrompt);
   const [attachments, setAttachments] = useState<VisualAttachment[]>([]);
   const [isSketchOpen, setIsSketchOpen] = useState(false);
@@ -323,7 +327,7 @@ export function HeroPromptSection({
           <div className="prompt-textarea-wrapper">
             <textarea
               className="big-prompt-input"
-              autoFocus
+              autoFocus={shouldAutoFocusPrompt}
               value={promptText}
               onChange={(e) => {
                 // Intent, recorded once per visit: the top of the creation funnel is
