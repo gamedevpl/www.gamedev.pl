@@ -90,6 +90,33 @@ describe('studioShelf', () => {
     expect(collapsed[0]?.publishedAt).toBeUndefined();
   });
 
+  it('keeps an improve tip catalog-live when the sibling has no publish timestamp', () => {
+    // lastKnownStatus alone is enough for isStudioGamePublished; publishedAt is only
+    // present "when known". The tip must still pass the Live filter.
+    const collapsed = collapseStudioGames([
+      game({
+        token: 'legacy-live',
+        title: 'Sky Dodge',
+        slug: 'sky-dodge',
+        lastKnownStatus: 'published',
+        createdAt: '2026-06-01T00:00:00.000Z',
+      }),
+      game({
+        token: 'tip',
+        title: 'Sky Dodge',
+        slug: 'sky-dodge',
+        lastKnownStatus: 'building',
+        createdAt: '2026-07-20T00:00:00.000Z',
+      }),
+    ]);
+
+    expect(collapsed).toHaveLength(1);
+    expect(collapsed[0]?.token).toBe('tip');
+    expect(collapsed[0]?.livePublishedAt).toBe('');
+    expect(isStudioGameShelfLive(collapsed[0]!)).toBe(true);
+    expect(filterStudioGames(collapsed, { filter: 'live' }).map((item) => item.token)).toEqual(['tip']);
+  });
+
   it('filters by building / live and by title or slug query', () => {
     const games = collapseStudioGames([
       game({

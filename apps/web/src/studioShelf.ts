@@ -14,6 +14,8 @@ export type StudioShelfFilter = 'all' | 'building' | 'live';
  * talk to is the new job (no `publishedAt` of its own), but the game is still live in
  * the catalog, so Live filters / Play / stats need the sibling's publish time without
  * flipping the composer onto `improve()` (that path requires the published job's token).
+ * Empty string means “catalog-live, publish time unknown” (`lastKnownStatus` said
+ * published but no timestamp) — present for liveness, falsy so the UI skips the date.
  */
 export type StudioShelfGame = StudioGame & { livePublishedAt?: string };
 
@@ -26,7 +28,7 @@ export function isStudioGamePublished(game: StudioGame): boolean {
 
 /** Live in the catalog — this job, or a published sibling collapsed behind an improve tip. */
 export function isStudioGameShelfLive(game: StudioShelfGame): boolean {
-  return isStudioGamePublished(game) || Boolean(game.livePublishedAt);
+  return isStudioGamePublished(game) || game.livePublishedAt !== undefined;
 }
 
 function shelfRank(game: StudioShelfGame): number {
@@ -73,7 +75,7 @@ export function collapseStudioGames(games: readonly StudioGame[]): StudioShelfGa
       continue;
     }
     const liveSibling = group.find((game) => isStudioGamePublished(game));
-    collapsed.push(liveSibling?.publishedAt ? { ...newest, livePublishedAt: liveSibling.publishedAt } : newest);
+    collapsed.push(liveSibling ? { ...newest, livePublishedAt: liveSibling.publishedAt ?? '' } : newest);
   }
 
   return [...collapsed, ...unslugged];
