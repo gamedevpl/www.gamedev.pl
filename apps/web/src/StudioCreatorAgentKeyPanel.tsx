@@ -2,11 +2,14 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   getCreatorAgentKey,
+  mintCreatorAgentKey,
   revokeCreatorAgentKey,
   rotateCreatorAgentKey,
   type CreatorAgentKeyPayload,
+  type CreatorAgentKeyStatus,
 } from './connectApi.js';
 import { PixelIcon } from './PixelIcon.js';
+import { recordStudioStep } from './visitTelemetry.js';
 
 /**
  * Creator-wide MCP opener controls (BY-27a). Sits with OAuth grants — both answer
@@ -21,32 +24,50 @@ export function StudioCreatorAgentKeyPanel() {
   const [fingerprint, setFingerprint] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
   const [keyGeneration, setKeyGeneration] = useState<number | null>(null);
+  const [revoked, setRevoked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [rotateArmed, setRotateArmed] = useState(false);
   const [revokeArmed, setRevokeArmed] = useState(false);
-  const [busy, setBusy] = useState<'rotate' | 'revoke' | null>(null);
+  const [busy, setBusy] = useState<'mint' | 'rotate' | 'revoke' | null>(null);
 
-  const applyPayload = (payload: CreatorAgentKeyPayload) => {
+  const applyPayload = useCallback((payload: CreatorAgentKeyPayload) => {
     keyRef.current = payload.key;
     setMaskedHeader(payload.authorizationHeaderMasked);
     setFingerprint(payload.fingerprint);
     setExpiresAt(payload.expiresAt);
     setKeyGeneration(payload.keyGeneration);
-  };
+    setRevoked(false);
+  }, []);
+
+  const applyStatus = useCallback(
+    (status: CreatorAgentKeyStatus) => {
+      if (status.revoked) {
+        keyRef.current = null;
+        setMaskedHeader(null);
+        setFingerprint(null);
+        setExpiresAt(null);
+        setKeyGeneration(status.keyGeneration);
+        setRevoked(true);
+        return;
+      }
+      applyPayload(status);
+    },
+    [applyPayload],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      applyPayload(await getCreatorAgentKey());
+      applyStatus(await getCreatorAgentKey());
     } catch {
       setError(t('creatorKey.loadError'));
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [applyStatus, t]);
 
   useEffect(() => {
     void load();
@@ -68,6 +89,19 @@ export function StudioCreatorAgentKeyPanel() {
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
       // Masked line stays on screen; creator can mint again if copy fails.
+    }
+    recordStudioStep('connect_copied', 'self', 'header');
+  };
+
+  const handleMint = async () => {
+    setBusy('mint');
+    setError(null);
+    try {
+      applyPayload(await mintCreatorAgentKey());
+    } catch {
+      setError(t('creatorKey.mintError'));
+    } finally {
+      setBusy(null);
     }
   };
 
@@ -93,15 +127,17 @@ export function StudioCreatorAgentKeyPanel() {
       setMaskedHeader(null);
       setFingerprint(null);
       setExpiresAt(null);
-      setKeyGeneration(null);
+      setKeyGeneration((prev) => (prev == null ? 1 : prev + 1));
+      setRevoked(true);
       setRevokeArmed(false);
-      applyPayload(await getCreatorAgentKey());
     } catch {
       setError(t('creatorKey.revokeError'));
     } finally {
       setBusy(null);
     }
   };
+
+  const hasActiveKey = Boolean(maskedHeader) && !revoked;
 
   return (
     <section className="studio-oauth-clients" aria-labelledby={`${baseId}-title`}>
@@ -113,7 +149,16 @@ export function StudioCreatorAgentKeyPanel() {
       {loading ? <p className="studio-connect-state">{t('creatorKey.loading')}</p> : null}
       {error ? <p className="error">{error}</p> : null}
 
-      {!loading && maskedHeader ? (
+      {!loading && revoked ? (
+        <div className="studio-connect-actions">
+          <p className="studio-connect-state">{t('creatorKey.revoked')}</p>
+          <button type="button" className="button" disabled={busy === 'mint'} onClick={() => void handleMint()}>
+            {busy === 'mint' ? t('creatorKey.minting') : t('creatorKey.mint')}
+          </button>
+        </div>
+      ) : null}
+
+      {!loading && hasActiveKey ? (
         <>
           <pre className="studio-connect-snippet" tabIndex={0} data-testid="creator-key-masked">
             {maskedHeader}

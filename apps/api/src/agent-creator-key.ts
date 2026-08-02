@@ -174,13 +174,16 @@ export function verifyCreatorAgentKey(token: string, secret: string): CreatorAge
 }
 
 /**
- * Checks expiry and keyGeneration against the creator's current record.
+ * Checks expiry, revocation, and keyGeneration against the creator's current record.
  */
 export function assertCreatorAgentKeyActive(
   claims: CreatorAgentKeyClaims,
-  record: { keyGeneration: number },
+  record: { keyGeneration: number; revokedAt?: string },
   nowMs: number = Date.now(),
 ): void {
+  if (record.revokedAt) {
+    throw new InvalidAgentTokenError(ROTATED_CREATOR_KEY_REASON);
+  }
   if (claims.exp * 1000 <= nowMs) {
     throw new InvalidAgentTokenError(ROTATED_CREATOR_KEY_REASON);
   }

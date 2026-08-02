@@ -349,23 +349,25 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     let claims: AgentTokenClaims;
     let channelToken: string;
 
-    if (bearer) {
-      if (looksLikeAsAccessToken(bearer)) {
-        return toolErr(
-          'OAuth access proves your identity only — call start() with your game slug (Authorization: Bearer <oauth access>) to get a session key',
-        );
-      }
-      // Durable openers are start-only — never a write capability via Bearer.
-      if (looksLikeGameAgentKey(bearer)) {
-        return toolErr(
-          'this game key only opens a session via start() — pass the sessionKey start returned for later tools',
-        );
-      }
-      if (looksLikeCreatorAgentKey(bearer)) {
-        return toolErr(
-          'this creator key only opens a session via start() — pass the sessionKey start returned for later tools',
-        );
-      }
+    // Paste-once MCP config leaves Authorization: Bearer <opener> on every request.
+    // When the tool also passes sessionKey, prefer that — openers never authorize writes.
+    const bearerIsOpener = Boolean(bearer) && (looksLikeGameAgentKey(bearer!) || looksLikeCreatorAgentKey(bearer!));
+
+    if (bearer && looksLikeAsAccessToken(bearer)) {
+      return toolErr(
+        'OAuth access proves your identity only — call start() with your game slug (Authorization: Bearer <oauth access>) to get a session key',
+      );
+    }
+
+    if (bearerIsOpener && !sessionKeyArg) {
+      return toolErr(
+        looksLikeCreatorAgentKey(bearer!)
+          ? 'this creator key only opens a session via start() — pass the sessionKey start returned for later tools'
+          : 'this game key only opens a session via start() — pass the sessionKey start returned for later tools',
+      );
+    }
+
+    if (bearer && !bearerIsOpener) {
       try {
         claims = verifyAgentToken(bearer, agentTokenSecret);
       } catch (error) {

@@ -2,9 +2,17 @@
 
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import './i18n/index.js';
 import { StudioCreatorAgentKeyPanel } from './StudioCreatorAgentKeyPanel.js';
+import { recordStudioStep } from './visitTelemetry.js';
+
+vi.mock('./visitTelemetry', async () => {
+  const actual = await vi.importActual<typeof import('./visitTelemetry')>('./visitTelemetry');
+  return { ...actual, recordStudioStep: vi.fn() };
+});
+
+const mockedRecordStudioStep = vi.mocked(recordStudioStep);
 
 const FULL_KEY = 'YzEu' + 'a'.repeat(100);
 
@@ -16,6 +24,14 @@ async function flush() {
 describe('StudioCreatorAgentKeyPanel', () => {
   let container: HTMLDivElement;
   let root: Root;
+
+  beforeEach(() => {
+    mockedRecordStudioStep.mockClear();
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
+    });
+  });
 
   afterEach(() => {
     act(() => {
@@ -59,5 +75,15 @@ describe('StudioCreatorAgentKeyPanel', () => {
     expect(container.querySelector('[data-testid="creator-key-masked"]')?.textContent).toBe(
       'Authorization: Bearer ····9a10e',
     );
+
+    await act(async () => {
+      container.querySelectorAll('button').forEach((button) => {
+        if (button.textContent?.includes('Copy header') || button.textContent?.includes('Kopiuj')) {
+          button.click();
+        }
+      });
+      await flush();
+    });
+    expect(mockedRecordStudioStep).toHaveBeenCalledWith('connect_copied', 'self', 'header');
   });
 });

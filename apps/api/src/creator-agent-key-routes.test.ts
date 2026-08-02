@@ -103,7 +103,7 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
     app = null;
   });
 
-  it('mints, remints without bumping, rotates, and revokes', async () => {
+  it('mints, remints without bumping, rotates, and revokes without resurrecting gen-1', async () => {
     const store = new InMemoryStore();
     app = await createApp(store);
 
@@ -148,10 +148,30 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
       headers: authHeaders(),
     });
     expect(revoked.statusCode).toBe(204);
-    expect(await store.getCreatorAgentKey(OWNER)).toBeNull();
+    const afterRevoke = await store.getCreatorAgentKey(OWNER);
+    expect(afterRevoke?.revokedAt).toBeTruthy();
+    expect(afterRevoke?.keyGeneration).toBe(3);
 
-    const reminted = await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
-    expect(reminted.json().keyGeneration).toBe(1);
+    const status = await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
+    expect(status.statusCode).toBe(200);
+    expect(status.json()).toMatchObject({ revoked: true, keyGeneration: 3 });
+    expect(status.json().key).toBeUndefined();
+
+    const reminted = await app.inject({
+      method: 'POST',
+      url: '/api/me/creator-agent-key',
+      headers: authHeaders(),
+    });
+    expect(reminted.statusCode).toBe(200);
+    expect(reminted.json().keyGeneration).toBe(3);
+    expect(() => assertCreatorAgentKeyActive(claims1, { keyGeneration: reminted.json().keyGeneration })).toThrow(
+      /rotated/i,
+    );
+    const live = await store.getCreatorAgentKey(OWNER);
+    expect(live?.revokedAt).toBeUndefined();
+    expect(() =>
+      assertCreatorAgentKeyActive(verifyCreatorAgentKey(reminted.json().key as string, secret), live!),
+    ).not.toThrow();
   });
 
   it('starts via Authorization Bearer + slug on the creator key', async () => {
@@ -315,7 +335,7 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
     expect(platform.structured).toMatchObject({ error: PLATFORM_ROUND_REASON });
   });
 
-  it('rejects the creator key on write tools', async () => {
+  it('rejects the creator key on write tools when no sessionKey is present', async () => {
     const store = new InMemoryStore();
     app = await createApp(store);
 
@@ -349,6 +369,43 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
     };
     expect(body.result?.isError).toBe(true);
     expect(body.result?.content?.[0]?.text).toMatch(/creator key only opens a session/i);
+  });
+
+  it('honours sessionKey for write tools even when Authorization still carries the creator key', async () => {
+    const store = new InMemoryStore();
+    app = await createApp(store);
+
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'Paste Once', concept: CONCEPT, builder: 'self' },
+    });
+    expect(submit.statusCode).toBe(200);
+    const record = (await store.listSubmissionsByOwner(OWNER))[0]!;
+    await store.setSubmissionSlug(record.issueNumber, SLUG);
+    await store.ensureRoundGeneration(record.issueNumber);
+
+    const minted = await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
+    const creatorKey = minted.json().key as string;
+    const started = await callStart(app, { slug: SLUG }, { authorization: `Bearer ${creatorKey}` });
+    expect(started.isError).toBe(false);
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const progress = await mcpCall(
+      app,
+      'tools/call',
+      {
+        name: 'report_progress',
+        arguments: { sessionKey, step: 'planning', text: 'paste-once ok' },
+      },
+      {
+        authorization: `Bearer ${creatorKey}`,
+        'mcp-session-id': started.sessionId,
+      },
+    );
+    const body = progress.json() as { result?: { isError?: boolean } };
+    expect(body.result?.isError).not.toBe(true);
   });
 
   it('keeps legacy round keys and durable per-game keys working', async () => {

@@ -1141,12 +1141,16 @@ export interface GameAgentKeyRecord {
  *
  * The HMAC opener itself is never stored — only the generation that revokes it.
  * Bumped only by an explicit creator rotate/revoke; never on round close or publish.
+ * Revoke must NOT delete the doc: deleting would let the next mint restart at
+ * generation 1 and resurrect a previously leaked gen-1 key until its exp.
  */
 export interface CreatorAgentKeyRecord {
   ownerUid: string;
   keyGeneration: number;
   createdAt: string;
   updatedAt: string;
+  /** Set by revoke; cleared on the next explicit mint. */
+  revokedAt?: string;
 }
 
 /** OAuth dynamic or CIMD-registered MCP client (BY-18b). */
@@ -1780,19 +1784,24 @@ export interface Store {
   getCreatorAgentKey(ownerUid: string): Promise<CreatorAgentKeyRecord | null>;
   /**
    * Ensures a creatorAgentKeys doc exists for ownerUid, creating generation 1 when
-   * absent. Remint (fresh exp) reuses the current generation.
+   * absent. Does not clear `revokedAt` — mint after revoke is an explicit reactivate.
    */
   ensureCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord>;
   /**
-   * Transactionally bumps `keyGeneration`. Returns the new record, or null when the
-   * creator has no key yet (caller should ensure first).
+   * Clears `revokedAt` so a post-revoke mint can issue at the current (already bumped)
+   * generation. Creates generation 1 when absent. Does not bump `keyGeneration`.
+   */
+  reactivateCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord>;
+  /**
+   * Transactionally bumps `keyGeneration` and clears `revokedAt`. Returns the new
+   * record, or null when the creator has no key yet (caller should ensure first).
    */
   rotateCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null>;
   /**
-   * Deletes the creatorAgentKeys doc (revoke). Returns false when nothing to delete.
-   * A subsequent ensure starts again at generation 1.
+   * Transactionally bumps `keyGeneration` and sets `revokedAt`. Returns the new
+   * record, or null when missing. Keeps the doc so generation never resets to 1.
    */
-  revokeCreatorAgentKey(ownerUid: string): Promise<boolean>;
+  revokeCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null>;
   /** Persist a dynamically registered or CIMD-cached OAuth client. */
   createOAuthClient(record: OAuthClientRecord): Promise<void>;
   getOAuthClient(clientId: string): Promise<OAuthClientRecord | null>;
@@ -3200,20 +3209,47 @@ export class InMemoryStore implements Store {
     return { ...created };
   }
 
+  async reactivateCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord> {
+    const existing = this.creatorAgentKeys.get(ownerUid);
+    if (!existing) {
+      return this.ensureCreatorAgentKey(ownerUid, at);
+    }
+    if (!existing.revokedAt) return { ...existing };
+    const cleared: CreatorAgentKeyRecord = {
+      ownerUid: existing.ownerUid,
+      keyGeneration: existing.keyGeneration,
+      createdAt: existing.createdAt,
+      updatedAt: at,
+    };
+    this.creatorAgentKeys.set(ownerUid, cleared);
+    return { ...cleared };
+  }
+
   async rotateCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null> {
     const existing = this.creatorAgentKeys.get(ownerUid);
     if (!existing) return null;
     const next: CreatorAgentKeyRecord = {
-      ...existing,
+      ownerUid: existing.ownerUid,
       keyGeneration: existing.keyGeneration + 1,
+      createdAt: existing.createdAt,
       updatedAt: at,
     };
     this.creatorAgentKeys.set(ownerUid, next);
     return { ...next };
   }
 
-  async revokeCreatorAgentKey(ownerUid: string): Promise<boolean> {
-    return this.creatorAgentKeys.delete(ownerUid);
+  async revokeCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null> {
+    const existing = this.creatorAgentKeys.get(ownerUid);
+    if (!existing) return null;
+    const next: CreatorAgentKeyRecord = {
+      ownerUid: existing.ownerUid,
+      keyGeneration: existing.keyGeneration + 1,
+      createdAt: existing.createdAt,
+      updatedAt: at,
+      revokedAt: at,
+    };
+    this.creatorAgentKeys.set(ownerUid, next);
+    return { ...next };
   }
 
   async createOAuthClient(record: OAuthClientRecord): Promise<void> {
@@ -5230,6 +5266,33 @@ export class FirestoreStore implements Store {
     });
   }
 
+  async reactivateCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord> {
+    const docRef = this.db.collection('creatorAgentKeys').doc(ownerUid);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef);
+      if (!snap.exists) {
+        const created: CreatorAgentKeyRecord = {
+          ownerUid,
+          keyGeneration: 1,
+          createdAt: at,
+          updatedAt: at,
+        };
+        tx.create(docRef, created);
+        return created;
+      }
+      const existing = snap.data() as CreatorAgentKeyRecord;
+      if (!existing.revokedAt) return existing;
+      const cleared: CreatorAgentKeyRecord = {
+        ownerUid: existing.ownerUid,
+        keyGeneration: existing.keyGeneration,
+        createdAt: existing.createdAt,
+        updatedAt: at,
+      };
+      tx.set(docRef, cleared);
+      return cleared;
+    });
+  }
+
   async rotateCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null> {
     const docRef = this.db.collection('creatorAgentKeys').doc(ownerUid);
     return this.db.runTransaction(async (tx) => {
@@ -5237,8 +5300,9 @@ export class FirestoreStore implements Store {
       if (!snap.exists) return null;
       const existing = snap.data() as CreatorAgentKeyRecord;
       const next: CreatorAgentKeyRecord = {
-        ...existing,
+        ownerUid: existing.ownerUid,
         keyGeneration: existing.keyGeneration + 1,
+        createdAt: existing.createdAt,
         updatedAt: at,
       };
       tx.set(docRef, next);
@@ -5246,12 +5310,22 @@ export class FirestoreStore implements Store {
     });
   }
 
-  async revokeCreatorAgentKey(ownerUid: string): Promise<boolean> {
+  async revokeCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null> {
     const docRef = this.db.collection('creatorAgentKeys').doc(ownerUid);
-    const snap = await docRef.get();
-    if (!snap.exists) return false;
-    await docRef.delete();
-    return true;
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef);
+      if (!snap.exists) return null;
+      const existing = snap.data() as CreatorAgentKeyRecord;
+      const next: CreatorAgentKeyRecord = {
+        ownerUid: existing.ownerUid,
+        keyGeneration: existing.keyGeneration + 1,
+        createdAt: existing.createdAt,
+        updatedAt: at,
+        revokedAt: at,
+      };
+      tx.set(docRef, next);
+      return next;
+    });
   }
 
   async touchAccessToken(tokenId: string, at: string): Promise<void> {

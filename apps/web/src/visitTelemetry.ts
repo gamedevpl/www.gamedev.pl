@@ -132,10 +132,12 @@ export type StudioStep = 'builder_chosen' | 'connect_copied' | 'agent_signaled' 
 
 /**
  * Closed detail for studio steps that need one. `install` / `kickoff` are connect-card
- * copies; `green` / `red` / `kit_outdated` are gate verdicts. Absent on steps that
- * need none (builder choice, first agent signal).
+ * copies; `header` is the creator-wide MCP Authorization header (BY-27a);
+ * `green` / `red` / `kit_outdated` are gate verdicts. Absent on steps that need none
+ * (builder choice, first agent signal).
  */
-export type StudioStepDetail = 'install' | 'kickoff' | 'green' | 'red' | 'kit_outdated' | 'creator' | 'agent';
+export type StudioStepDetail =
+  'install' | 'kickoff' | 'header' | 'green' | 'red' | 'kit_outdated' | 'creator' | 'agent';
 
 /**
  * The content-editor funnel (EditorKit): did a creator who *can* edit actually

@@ -937,13 +937,16 @@
     "copyHeader": "Kopiuj nagłówek",
     "copied": "Skopiowano",
     "meta": "Końcówka {{fingerprint}} · generacja {{generation}} · wygasa {{when}}",
+    "revoked": "Klucz agenta został unieważniony. Utwórz nowy, gdy będziesz gotów połączyć się ponownie.",
+    "mint": "Utwórz klucz",
+    "minting": "Tworzenie…",
+    "mintError": "Nie udało się utworzyć klucza. Spróbuj za chwilę.",
     "rotate": {
       "start": "Rotuj klucz",
       "confirm": "Rotacja zatrzymuje każdy agent wciąż używający starego klucza. Kontynuować?",
       "yes": "Rotuj",
       "no": "Anuluj",
-      "sending": "Rotowanie…",
-      "error": "Nie udało się obrócić klucza. Spróbuj za chwilę."
+      "sending": "Rotowanie…"
     },
     "rotateError": "Nie udało się obrócić klucza. Spróbuj za chwilę.",
     "revoke": {

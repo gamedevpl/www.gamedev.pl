@@ -152,11 +152,32 @@ export type CreatorAgentKeyPayload = {
   authorizationHeader: string;
   authorizationHeaderMasked: string;
   rotated?: boolean;
+  revoked?: false;
 };
 
-/** Mint or remint the creator-wide MCP opener (BY-27a). Fresh exp; no rotate. */
-export async function getCreatorAgentKey(): Promise<CreatorAgentKeyPayload> {
+/** Status when the key is revoked — no secret; mint again explicitly. */
+export type CreatorAgentKeyRevokedStatus = {
+  keyGeneration: number;
+  revoked: true;
+};
+
+export type CreatorAgentKeyStatus = CreatorAgentKeyPayload | CreatorAgentKeyRevokedStatus;
+
+/** Current creator-wide MCP opener (BY-27a). Remints at current gen, or reports revoked. */
+export async function getCreatorAgentKey(): Promise<CreatorAgentKeyStatus> {
   const response = await fetch(`${API_BASE}/api/me/creator-agent-key`, { credentials: 'include' });
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+  return (await response.json()) as CreatorAgentKeyStatus;
+}
+
+/** Mint after revoke (or first time). Does not reset generation. */
+export async function mintCreatorAgentKey(): Promise<CreatorAgentKeyPayload> {
+  const response = await fetch(`${API_BASE}/api/me/creator-agent-key`, {
+    method: 'POST',
+    credentials: 'include',
+  });
   if (!response.ok) {
     await throwResponseError(response);
   }
@@ -175,7 +196,7 @@ export async function rotateCreatorAgentKey(): Promise<CreatorAgentKeyPayload> {
   return (await response.json()) as CreatorAgentKeyPayload;
 }
 
-/** Revoke the creator-wide key. A later mint starts at generation 1. */
+/** Revoke the creator-wide key. Generation is preserved; remint needs an explicit mint. */
 export async function revokeCreatorAgentKey(): Promise<void> {
   const response = await fetch(`${API_BASE}/api/me/creator-agent-key`, {
     method: 'DELETE',

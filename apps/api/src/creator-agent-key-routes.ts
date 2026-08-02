@@ -32,6 +32,7 @@ function mintPayload(
   fingerprint: string;
   authorizationHeader: string;
   authorizationHeaderMasked: string;
+  revoked: false;
 } {
   const key = mintCreatorAgentKey(secret, { creatorUid: ownerUid, keyGeneration, now: nowMs });
   const claims = verifyCreatorAgentKey(key, secret);
@@ -42,6 +43,7 @@ function mintPayload(
     fingerprint: creatorAgentKeyFingerprint(key),
     authorizationHeader: `Authorization: Bearer ${key}`,
     authorizationHeaderMasked: maskCreatorAgentKeyHeader(key),
+    revoked: false,
   };
 }
 
@@ -51,19 +53,46 @@ export function registerCreatorAgentKeyRoutes(app: FastifyInstance, options: Cre
 
   /**
    * GET remints at the current generation (fresh exp) without rotating.
-   * When no record exists yet, ensures generation 1.
+   * When no record exists yet, ensures generation 1. When revoked, returns status
+   * only — does not resurrect a key (call POST to mint again).
    */
   app.get('/api/me/creator-agent-key', async (request, reply) => {
     const uid = request.user?.uid;
     if (!uid) return reply.status(401).send({ error: 'unauthorized' });
 
     const at = new Date(now()).toISOString();
-    const record = await store.ensureCreatorAgentKey(uid, at);
+    const existing = await store.getCreatorAgentKey(uid);
+    if (existing?.revokedAt) {
+      return reply.header('Cache-Control', 'no-store').send({
+        keyGeneration: existing.keyGeneration,
+        revoked: true,
+      });
+    }
+
+    const record = existing ?? (await store.ensureCreatorAgentKey(uid, at));
     const payload = mintPayload(submissionTokenSecret, uid, record.keyGeneration, now());
     return reply.header('Cache-Control', 'no-store').send(payload);
   });
 
-  /** POST bumps keyGeneration — any agent still holding the old key is cut off. */
+  /**
+   * POST mints (first time or after revoke). Clears `revokedAt` without resetting
+   * generation, so a leaked gen-1 key cannot come back after revoke.
+   */
+  app.post(
+    '/api/me/creator-agent-key',
+    { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const uid = request.user?.uid;
+      if (!uid) return reply.status(401).send({ error: 'unauthorized' });
+
+      const at = new Date(now()).toISOString();
+      const record = await store.reactivateCreatorAgentKey(uid, at);
+      const payload = mintPayload(submissionTokenSecret, uid, record.keyGeneration, now());
+      return reply.header('Cache-Control', 'no-store').send(payload);
+    },
+  );
+
+  /** POST rotate bumps keyGeneration — any agent still holding the old key is cut off. */
   app.post(
     '/api/me/creator-agent-key/rotate',
     { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } },
@@ -82,7 +111,10 @@ export function registerCreatorAgentKeyRoutes(app: FastifyInstance, options: Cre
     },
   );
 
-  /** DELETE revokes the key entirely. A later GET starts again at generation 1. */
+  /**
+   * DELETE revokes by bumping generation and setting revokedAt. The doc is kept so
+   * generation never resets to 1 (a leaked gen-1 key must stay dead).
+   */
   app.delete(
     '/api/me/creator-agent-key',
     { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } },
@@ -90,7 +122,13 @@ export function registerCreatorAgentKeyRoutes(app: FastifyInstance, options: Cre
       const uid = request.user?.uid;
       if (!uid) return reply.status(401).send({ error: 'unauthorized' });
 
-      const revoked = await store.revokeCreatorAgentKey(uid);
+      const existing = await store.getCreatorAgentKey(uid);
+      if (!existing || existing.revokedAt) {
+        return reply.status(404).send({ error: 'not_found' });
+      }
+
+      const at = new Date(now()).toISOString();
+      const revoked = await store.revokeCreatorAgentKey(uid, at);
       if (!revoked) return reply.status(404).send({ error: 'not_found' });
       return reply.status(204).send();
     },
