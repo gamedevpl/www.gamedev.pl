@@ -77,12 +77,3 @@ export function landmarksFromVideo(
     return null;
   }
 }
-
-/** Closed-beta spike: `?handSpike=1` on the theater URL forces the hand pipeline. */
-export function handSpikeEnabled(): boolean {
-  try {
-    return typeof location !== 'undefined' && new URLSearchParams(location.search).get('handSpike') === '1';
-  } catch {
-    return false;
-  }
-}

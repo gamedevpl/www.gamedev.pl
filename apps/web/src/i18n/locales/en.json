@@ -774,6 +774,8 @@
     "cameraLive": "Camera on",
     "cameraExplain": "Nothing is recorded or sent — the camera stays in your browser and only shows behind the game.",
     "cameraStartAria": "Start camera backdrop — allow camera access. Nothing is recorded or sent.",
+    "cameraHandExplain": "Nothing is recorded or sent — hand position can steer the game; everything stays in your browser.",
+    "cameraHandStartAria": "Start camera for hand control — allow camera access. Nothing is recorded or sent.",
     "handLoading": "Hand…",
     "handTracking": "Hand"
   },

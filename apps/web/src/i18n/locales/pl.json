@@ -778,6 +778,8 @@
     "cameraLive": "Kamera włączona",
     "cameraExplain": "Nic nie jest nagrywane ani wysyłane — kamera zostaje w przeglądarce i tylko widać ją pod grą.",
     "cameraStartAria": "Włącz tło z kamery — zezwól na dostęp do kamery. Nic nie jest nagrywane ani wysyłane.",
+    "cameraHandExplain": "Nic nie jest nagrywane ani wysyłane — pozycja dłoni może sterować grą; wszystko zostaje w przeglądarce.",
+    "cameraHandStartAria": "Włącz kamerę do sterowania dłonią — zezwól na dostęp. Nic nie jest nagrywane ani wysyłane.",
     "handLoading": "Dłoń…",
     "handTracking": "Dłoń"
   },

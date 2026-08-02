@@ -168,9 +168,9 @@ export const privacyEn: LegalDocument = {
         {
           kind: 'p',
           text:
-            'Some games can show your device camera behind the play surface. That feed is displayed only in your ' +
-            'browser for the session; it is never recorded, never uploaded, and never included in the gameplay ' +
-            'statistics above.',
+            'Some games can show your device camera behind the play surface, and some can estimate hand position ' +
+            'for control. That processing happens only in your browser for the session; frames and landmarks are ' +
+            'never recorded, never uploaded, and never included in the gameplay statistics above.',
         },
       ],
     },

@@ -509,8 +509,8 @@ export function GameTheater({
                 type="button"
                 className="secondary-btn camera-btn"
                 onClick={sensing.backdrop.start}
-                title={t('sensing.cameraExplain')}
-                aria-label={t('sensing.cameraStartAria')}
+                title={sensing.hand.engaged ? t('sensing.cameraHandExplain') : t('sensing.cameraExplain')}
+                aria-label={sensing.hand.engaged ? t('sensing.cameraHandStartAria') : t('sensing.cameraStartAria')}
               >
                 <PixelIcon name="phone" size={13} />
                 <span className="btn-label">{t('sensing.cameraStart')}</span>
@@ -598,17 +598,6 @@ export function GameTheater({
                 : ` · ${t('sensing.handLoading')}`
               : null}
           </div>
-        ) : null}
-        {/* Phase 1 spike: shell-side aim crosshair so we can judge tracking before GameKit consumes it. */}
-        {sensing.hand.engaged && sensing.hand.tracking && sensing.hand.aim ? (
-          <div
-            className="theater-hand-aim"
-            style={{
-              left: `${((sensing.hand.aim.x + 1) / 2) * 100}%`,
-              top: `${((1 - sensing.hand.aim.y) / 2) * 100}%`,
-            }}
-            aria-hidden="true"
-          />
         ) : null}
         {/* A nudge, not a gate: the game stays playable and running underneath, and
             the hint clears itself the moment the device is turned. */}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
-import { handSpikeEnabled, landmarksFromVideo, loadHandLandmarker } from './handLandmarker.js';
+import { landmarksFromVideo, loadHandLandmarker } from './handLandmarker.js';
 import { createHandVerbState, sampleHandVerbs, type HandAim } from './handVerbs.js';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
 import { tiltFromOrientation } from './useDeviceTilt.js';
@@ -18,9 +18,9 @@ import { tiltFromOrientation } from './useDeviceTilt.js';
  * clears transparent when true. Camera never auto-starts; a theater chrome tap is
  * required every session.
  *
- * Phase 1 (spike) — hand verbs: when a game asks for `hand` (or `?handSpike=1`), the
- * shell runs MediaPipe on that same camera stream and posts clamped `sensing:hand`
- * aim + `sensing:act` pinch edges. Landmarks never enter the iframe.
+ * Phase 1 — hand verbs: when a game asks for `hand`, the shell runs MediaPipe on that
+ * same camera stream and posts clamped `sensing:hand` aim + `sensing:act` pinch edges.
+ * Landmarks never enter the iframe.
  *
  * Shared properties of both phases:
  *
@@ -128,7 +128,7 @@ export type SensingBackdrop = {
 };
 
 export type SensingHand = {
-  /** Game asked for hand (or closed-beta `?handSpike=1`). */
+  /** Game asked for hand verbs. */
   engaged: boolean;
   /** Landmarker loaded and at least one hand frame decoded. */
   tracking: boolean;
@@ -313,8 +313,7 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
 
       const wantsTilt = message.features.includes('tilt');
       const wantsBackdrop = message.features.includes('backdrop');
-      // Spike: `?handSpike=1` opts the theater into hand verbs without a games-repo change.
-      const wantsHand = message.features.includes('hand') || handSpikeEnabled();
+      const wantsHand = message.features.includes('hand');
       // Unknown-only hellos are noise before any engagement. Once a game has said
       // hello, a later hello is authoritative — including one that drops features.
       if (
