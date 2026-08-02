@@ -166,6 +166,69 @@ describe('CreatorStudioView', () => {
     root.unmount();
   });
 
+  it('lists one picker row per game when a live title has an improve tip', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue([
+      {
+        token: 'live-mw',
+        title: 'Miniature Warfare 2D',
+        slug: 'miniature-warfare-2d',
+        createdAt: '2026-07-01T00:00:00.000Z',
+        lastKnownStatus: 'published',
+        publishedAt: '2026-07-01T00:00:00.000Z',
+      },
+      {
+        token: 'tip-mw',
+        title: 'Miniature Warfare 2D',
+        slug: 'miniature-warfare-2d',
+        createdAt: '2026-07-20T00:00:00.000Z',
+        lastKnownStatus: 'building',
+      },
+      {
+        token: 'live-gts',
+        title: 'Global Thermonuclear Strategy',
+        slug: 'global-thermonuclear-strategy',
+        createdAt: '2026-07-02T00:00:00.000Z',
+        lastKnownStatus: 'published',
+        publishedAt: '2026-07-02T00:00:00.000Z',
+      },
+      {
+        token: 'tip-gts',
+        title: 'Global Thermonuclear Strategy',
+        slug: 'global-thermonuclear-strategy',
+        createdAt: '2026-07-21T00:00:00.000Z',
+        lastKnownStatus: 'building',
+      },
+      {
+        token: 'live-tv',
+        title: 'A game tycoon like where I run a tv busi',
+        slug: 'tv-tycoon',
+        createdAt: '2026-07-03T00:00:00.000Z',
+        lastKnownStatus: 'published',
+        publishedAt: '2026-07-03T00:00:00.000Z',
+      },
+    ]);
+
+    const { container, root } = await renderStudio({ selectedGame: 'miniature-warfare-2d' });
+
+    const switcher = container.querySelector('.studio-game-switcher');
+    expect(switcher?.textContent).toMatch(/3 games/i);
+
+    await act(async () => {
+      switcher!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const picker = container.querySelector('.studio-picker');
+    expect(picker?.textContent).toMatch(/3 games/i);
+    expect(picker?.querySelectorAll('.studio-shelf-item').length).toBe(3);
+    expect(picker?.textContent).toMatch(/Building\s*2/);
+    expect(picker?.textContent).toMatch(/Live\s*3/);
+
+    root.unmount();
+  });
+
   it('closes picker on Escape while in playtest tab without exiting playtest', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
