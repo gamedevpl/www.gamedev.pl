@@ -91,22 +91,6 @@ export function PublishedGameFrame({ slug, title, frameRef, embed, slots, remixa
     };
   }, [slug, title, loadAttempt]);
 
-  if (failed) {
-    return (
-      <div className="load-error" role="alert">
-        <p className="error">{t('catalog.gameLoadError')}</p>
-        <button type="button" className="secondary-btn" onClick={() => setLoadAttempt((n) => n + 1)}>
-          <PixelIcon name="undo" size={13} /> {t('catalog.retry')}
-        </button>
-      </div>
-    );
-  }
-  if (html === null) {
-    return <p className="catalog-state">{t('catalog.gameLoading')}</p>;
-  }
-  // `embed` describes chrome, not ownership — the theater always embeds — so the
-  // gate is the explicit prop plus "this frame is one player's", which a party
-  // session (slots) is not.
   useEffect(() => {
     if (!remixable || slots !== undefined || remixRevealed) return;
     const frame = activeFrameRef.current;
@@ -125,6 +109,22 @@ export function PublishedGameFrame({ slug, title, frameRef, embed, slots, remixa
     };
   }, [remixable, slots, remixRevealed, activeFrameRef, html]);
 
+  if (failed) {
+    return (
+      <div className="load-error" role="alert">
+        <p className="error">{t('catalog.gameLoadError')}</p>
+        <button type="button" className="secondary-btn" onClick={() => setLoadAttempt((n) => n + 1)}>
+          <PixelIcon name="undo" size={13} /> {t('catalog.retry')}
+        </button>
+      </div>
+    );
+  }
+  if (html === null) {
+    return <p className="catalog-state">{t('catalog.gameLoading')}</p>;
+  }
+  // `embed` describes chrome, not ownership — the theater always embeds — so the
+  // gate is the explicit prop plus "this frame is one player's", which a party
+  // session (slots) is not.
   const showRemix = Boolean(remixable) && slots === undefined;
   const frame = <GameFrame title={gameTitle} html={remixHtml ?? html} frameRef={activeFrameRef} embed={embed} />;
   if (!showRemix) return frame;
