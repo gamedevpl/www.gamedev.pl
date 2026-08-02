@@ -92,6 +92,8 @@ export interface ErasePlayerSignalsResult {
   feedbackDeleted: number;
   /** Games whose saved progress was found (and deleted, unless this was a dry run). */
   savesDeleted: string[];
+  /** Editor drafts found under the account (and deleted, unless this was a dry run). */
+  editorDraftsDeleted: number;
   /** Games recorded in play affinity (and deleted, unless this was a dry run). */
   affinityCleared: string[];
   /**
@@ -167,10 +169,17 @@ export async function erasePlayerSignals(options: ErasePlayerSignalsOptions): Pr
   const savesDeleted = (await store.listGameSaves(uid)).map((save) => save.slug).sort();
   if (!dryRun && savesDeleted.length > 0) await store.deleteGameSaves(uid);
 
+  // A creator's private editor drafts are personal data the same way saves are.
+  // Count-only in the report: a draft names the creator's own game, which the
+  // submissions erasure already reports by name.
+  const editorDraftsDeleted = dryRun
+    ? 0
+    : await store.deleteEditorDrafts(uid).catch(() => 0);
+
   const affinityCleared = (await store.listPlayAffinity(uid)).map((entry) => entry.slug).sort();
   if (!dryRun && affinityCleared.length > 0) await store.deletePlayAffinity(uid);
 
   if (!dryRun && worldsErased.length > 0) await store.deleteWorldEntriesForUser(uid);
 
-  return { uid, votesCleared, feedbackDeleted, savesDeleted, affinityCleared, worldsErased, dryRun };
+  return { uid, votesCleared, feedbackDeleted, savesDeleted, editorDraftsDeleted, affinityCleared, worldsErased, dryRun };
 }

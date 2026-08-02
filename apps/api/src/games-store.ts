@@ -65,6 +65,12 @@ export const ALLOWED_SOURCE_FILES = [
   // even run. Let Check 28 report the missing contract until old workspaces drain; then
   // promote to a required upload (same path TRACE/PLAYTEST already took).
   'AGENT.json',
+  // The editor declaration (EditorKit L0, games-repo Check 31). Optional — only
+  // born-editable games ship one — but same drift class as TRACE/PLAYTEST/AGENT
+  // above: the games repo's `FIXED_FILES` already lists it, and refusing it here
+  // would 400 every born-editable delivery at upload. The generated
+  // `game/editor-content.ts` needs no entry, it matches EXTRA_SOURCE_PATTERN.
+  'EDITOR.json',
   'index.html',
   'game.ts',
   'style.css',
@@ -272,6 +278,16 @@ export interface VersionManifest {
    * `kitEngineRef`). Compared by the gate to `kits/current.json`'s N/N−1 window.
    */
   kitEngineRef?: string;
+  /**
+   * How this version came to exist, when not an ordinary agent delivery.
+   *
+   * `'editor'` marks a content-only publish from the Creator Studio: the previous
+   * version's sources with new editor content (EDITOR.json defaults + regenerated
+   * `game/editor-content.ts`), no agent involved. The gate reads it to know the
+   * committed TRACE.json golden predates this content and must be re-derived
+   * (`npm run trace -- --accept`) before `check:game` replays it.
+   */
+  origin?: 'editor';
   /** Verdict of our own gate. A version without a green one is never publishable. */
   gate?: GateVerdict;
   /**
@@ -354,6 +370,8 @@ export interface GamesStore {
     engineRef?: string;
     /** Creator Kit engineRef the sources were built against (BY-06). */
     kitEngineRef?: string;
+    /** Content-only Studio publish — see {@link VersionManifest.origin}. */
+    origin?: 'editor';
   }): Promise<{ version: string; manifest: VersionManifest }>;
   getManifest(slug: string, version: string): Promise<VersionManifest | null>;
   getSourceFile(slug: string, version: string, path: string): Promise<string | null>;
@@ -496,6 +514,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         model: input.model,
         engineRef: input.engineRef,
         ...(input.kitEngineRef ? { kitEngineRef: input.kitEngineRef } : {}),
+        ...(input.origin ? { origin: input.origin } : {}),
         sourceFiles: files.map((file) => file.path),
       };
       // Written last: a manifest is what makes a version real, so a run that dies

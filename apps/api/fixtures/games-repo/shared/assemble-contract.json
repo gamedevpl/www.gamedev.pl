@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "_comment": "Cross-repo serve contract. Website half: www.gamedev.pl apps/api/src/games-repo-contract.ts + CI contract:games-repo (PR #253). Keep GAME_KIT_MODULES as an array literal in tools/lib/assemble.ts for that scraper. maxProjectBytes = authorBudgetBytes + platformCeilingBytes. The author gate is measured (assembled − platformBytes); the ceiling is serve-compat only. Feature-by-feature archaeology: docs/platform-byte-ledger.md in the games repo.",
+  "_comment": "Cross-repo serve contract. Website half: www.gamedev.pl apps/api/src/games-repo-contract.ts + CI contract:games-repo (PR #253). Keep GAME_KIT_MODULES as an array literal in tools/lib/assemble.ts for that scraper. maxProjectBytes = authorBudgetBytes + platformCeilingBytes. The author gate is measured (assembled − platformBytes); the ceiling is serve-compat only. Feature-by-feature archaeology: docs/platform-byte-ledger.md.",
   "gameKitModules": [
     "input",
     "collision",
@@ -20,14 +20,18 @@
     "mascot",
     "zone",
     "sensing",
-    "voice"
+    "voice",
+    "editor"
   ],
   "authorBudgetBytes": 204800,
-  "platformCeilingBytes": 277887,
-  "maxProjectBytes": 482687,
+  "platformCeilingBytes": 281587,
+  "maxProjectBytes": 486387,
   "audio": {
     "musicField": "string",
-    "musicCatalogRequiredKeys": ["version", "tracks"],
+    "musicCatalogRequiredKeys": [
+      "version",
+      "tracks"
+    ],
     "injectedGlobals": {
       "assets": "__GAME_AUDIO_ASSETS__",
       "defaultMusic": "__GAME_AUDIO_MUSIC__",

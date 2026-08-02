@@ -50,6 +50,9 @@ export const GAME_KIT_MODULES = [
   'sensing',
   // Voice loudness meter (games-repo voice-on-phones Layer 0). Opt-in reserve like zone.
   'voice',
+  // Studio-editable content (EditorKit L2, games-repo Check 31). Opt-in, receive-only
+  // bridge module; the Studio pushes drafts, the game re-enters play. Appended last.
+  'editor',
 ] as const;
 
 export type GameKitModuleName = (typeof GAME_KIT_MODULES)[number];
@@ -61,7 +64,7 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
  * Platform half of the serve cap — games-repo `GAMEKIT_PLATFORM_BYTES` /
  * `assemble-contract.json` `platformCeilingBytes`. Together with
  * {@link GAME_BUDGET_BYTES} this must equal games-repo `MAX_BUNDLE_BYTES`
- * (482_687, matching `maxProjectBytes`). Not a round KiB.
+ * (486_387, matching `maxProjectBytes`). Not a round KiB.
  *
  * One derived ceiling, not a sum of per-feature constants (games-repo #281). Check 4
  * over there bills each author for measured `assembled − platformBytes` against the
@@ -70,11 +73,11 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
  * `docs/platform-byte-ledger.md`. Raise this when measurement shows a passing game
  * would exceed it — do not re-split it into named allowances on this side either.
  *
- * Last moved by sensing Phase 2 (camera backdrop): sensing ledger line 6_500 → 9_000
- * (+2_500), 480_187 → 482_687. Before the ledger collapse, Phase 0 tilt added the
- * named sensing reserve (+6_500, 473_687 → 480_187).
+ * Last moved by the opt-in `editor` module (EditorKit L2): +3_700 measured,
+ * 482_687 → 486_387. Before it, sensing Phase 2 (camera backdrop) raised the sensing
+ * ledger line 6_500 → 9_000 (+2_500), 480_187 → 482_687.
  */
-export const GAMEKIT_PLATFORM_BYTES = 277_887;
+export const GAMEKIT_PLATFORM_BYTES = 281_587;
 
 /** Combined html+js+css size cap — must match games-repo `MAX_BUNDLE_BYTES`. */
 export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;

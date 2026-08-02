@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { recentPartitions, summarizeGameHealth, type GameHealth } from './telemetry-health.js';
+import type { GamesStore } from './games-store.js';
 import type { Store, TelemetryEvent } from './store.js';
 
 /**
@@ -28,6 +29,8 @@ const QuerySchema = z.object({
 
 export interface CreatorStudioRoutesOptions {
   store: Store;
+  /** Read manifests to learn which games ship an editor definition (EditorKit). */
+  gamesStore?: GamesStore;
   /** Mints status tokens so the studio can deep-link into the build page. */
   mintStatusToken?: (issueNumber: number) => string;
   now?: () => number;
@@ -42,6 +45,13 @@ export interface CreatorStudioGame {
   publishedAt?: string;
   /** Whether the creator has turned on the shared link for this game's draft. */
   draftShared?: boolean;
+  /**
+   * Whether this game's delivered version ships an editor definition
+   * (EDITOR.json) — the gate for the studio's Edit surface. Absent for every
+   * game that is not born-editable; the studio must render exactly as before
+   * for those.
+   */
+  editable?: boolean;
 }
 
 export interface CreatorHealthResponse {
@@ -161,19 +171,38 @@ export async function registerCreatorStudioRoutes(
     }
 
     const records = await store.listSubmissionsByOwner(request.user!.uid, { limit: MAX_STUDIO_GAMES });
-    const games: CreatorStudioGame[] = records
+    const shelf = records
       // `abandonedAt` is the shelf contract; also drop `canceled` so an operator
       // reject that predated writing `abandonedAt` does not leave a zombie row.
-      .filter((record) => !record.abandonedAt && record.state !== 'canceled')
-      .map((record) => ({
-        token: options.mintStatusToken!(record.issueNumber),
-        title: record.title,
-        createdAt: record.createdAt,
-        lastKnownStatus: record.lastNotifiedStatus ?? null,
-        ...(record.slug ? { slug: record.slug } : {}),
-        ...(record.publishedAt ? { publishedAt: record.publishedAt } : {}),
-        ...(record.draftSharedAt ? { draftShared: true } : {}),
-      }));
+      .filter((record) => !record.abandonedAt && record.state !== 'canceled');
+
+    // Which delivered versions ship an editor definition. One manifest read per
+    // game with a delivery, best-effort: a read that fails only costs the Edit
+    // pill until the next load, never the shelf.
+    const editableSlugs = new Set<string>();
+    if (options.gamesStore) {
+      await Promise.all(
+        shelf
+          .filter((record) => record.slug && record.deliveredVersion)
+          .map(async (record) => {
+            const manifest = await options
+              .gamesStore!.getManifest(record.slug as string, record.deliveredVersion as string)
+              .catch(() => null);
+            if (manifest?.sourceFiles.includes('EDITOR.json')) editableSlugs.add(record.slug as string);
+          }),
+      );
+    }
+
+    const games: CreatorStudioGame[] = shelf.map((record) => ({
+      token: options.mintStatusToken!(record.issueNumber),
+      title: record.title,
+      createdAt: record.createdAt,
+      lastKnownStatus: record.lastNotifiedStatus ?? null,
+      ...(record.slug ? { slug: record.slug } : {}),
+      ...(record.publishedAt ? { publishedAt: record.publishedAt } : {}),
+      ...(record.draftSharedAt ? { draftShared: true } : {}),
+      ...(record.slug && editableSlugs.has(record.slug) ? { editable: true } : {}),
+    }));
 
     return reply.send({ games });
   });
