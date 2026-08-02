@@ -1264,12 +1264,12 @@ describe('SubmissionStatusView', () => {
         headSha: 'sha-1',
         commits: [],
         checklist: [
-          { id: 'a', label: 'A', checked: true },
-          { id: 'b', label: 'B', checked: true },
-          { id: 'c', label: 'C', checked: true },
-          { id: 'd', label: 'D', checked: true },
-          { id: 'e', label: 'E', checked: false },
-          { id: 'f', label: 'F', checked: false },
+          { text: 'A', checked: true },
+          { text: 'B', checked: true },
+          { text: 'C', checked: true },
+          { text: 'D', checked: true },
+          { text: 'E', checked: false },
+          { text: 'F', checked: false },
         ],
       },
     });
