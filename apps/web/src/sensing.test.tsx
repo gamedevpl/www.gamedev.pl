@@ -150,6 +150,38 @@ describe('useSensingBridge', () => {
     expect(toGame).toHaveLength(0);
   });
 
+  it('re-hello with a narrower feature set drops the omitted engagement', async () => {
+    vi.stubGlobal('DeviceOrientationEvent', function DeviceOrientationEvent() {});
+    const trackStop = vi.fn();
+    const fakeStream = {
+      getTracks: () => [{ stop: trackStop, kind: 'video' }],
+    } as unknown as MediaStream;
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      mediaDevices: { getUserMedia: vi.fn(() => Promise.resolve(fakeStream)) },
+    });
+
+    const { fromGame } = mount();
+    fromGame({ t: 'sensing:hello', features: ['tilt', 'backdrop'] });
+    expect(latest().engaged).toBe(true);
+    expect(latest().backdrop.engaged).toBe(true);
+    await act(async () => {
+      latest().backdrop.start();
+      await Promise.resolve();
+    });
+    expect(latest().backdrop.live).toBe(true);
+
+    fromGame({ t: 'sensing:hello', features: ['tilt'] });
+    expect(latest().engaged).toBe(true);
+    expect(latest().backdrop.engaged).toBe(false);
+    expect(latest().backdrop.live).toBe(false);
+    expect(trackStop).toHaveBeenCalled();
+
+    fromGame({ t: 'sensing:hello', features: ['backdrop'] });
+    expect(latest().engaged).toBe(false);
+    expect(latest().backdrop.engaged).toBe(true);
+  });
+
   it('ignores gdp traffic from any window that is not the served frame', () => {
     vi.stubGlobal('DeviceOrientationEvent', function DeviceOrientationEvent() {});
     mount();

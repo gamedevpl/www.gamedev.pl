@@ -270,16 +270,23 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
 
       const wantsTilt = message.features.includes('tilt');
       const wantsBackdrop = message.features.includes('backdrop');
-      if (!wantsTilt && !wantsBackdrop) return;
+      // Unknown-only hellos are noise before any engagement. Once a game has said
+      // hello, a later hello is authoritative — including one that drops tilt/backdrop.
+      if (!wantsTilt && !wantsBackdrop && !wantsTiltRef.current && !wantsBackdropRef.current) {
+        return;
+      }
 
       wantsTiltRef.current = wantsTilt;
       wantsBackdropRef.current = wantsBackdrop;
-      if (wantsTilt) setTiltEngaged(true);
+      setTiltEngaged(wantsTilt);
       if (wantsBackdrop) {
         const facing = message.facing ?? 'user';
         backdropFacingRef.current = facing;
         setBackdropFacing(facing);
         setBackdropEngaged(true);
+      } else {
+        setBackdropEngaged(false);
+        stopBackdropTracks();
       }
       // A reloaded or restarted game says hello again; tell it where things stand so it
       // does not sit out its handshake timeout when the sensor is already flowing.
@@ -288,7 +295,7 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
 
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [frameRef, postState]);
+  }, [frameRef, postState, stopBackdropTracks]);
 
   // Camera stream must die when the tab hides or the theater unmounts — OS camera
   // indicator and trust both depend on MediaStreamTrack.stop(), not pause().
