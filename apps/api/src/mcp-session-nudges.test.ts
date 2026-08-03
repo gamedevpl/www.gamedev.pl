@@ -58,4 +58,13 @@ describe('mcp-session-nudges', () => {
     expect(pendingCountFromPayload({ messages: [{}, {}] })).toBe(2);
     expect(pendingCountFromPayload({ ok: true })).toBeNull();
   });
+
+  it('warns seed_unread on kit browse until get_seed runs', () => {
+    const nudges = createMcpNudgeTracker();
+    const t0 = 1_000_000;
+    nudges.noteSeedStatus(1, 'available', t0);
+    expect(nudges.warningsFor(1, 'read_kit_files', t0).map((w) => w.code)).toContain('seed_unread');
+    nudges.noteToolSuccess(1, 'get_seed', t0);
+    expect(nudges.warningsFor(1, 'read_kit_files', t0 + 1).map((w) => w.code)).not.toContain('seed_unread');
+  });
 });

@@ -27,6 +27,13 @@ export const KIT_LIST_MAX_LIMIT = 500;
 export const KIT_SEARCH_MAX_MATCHES = 40;
 /** Cap on how many files a search will open (text only). */
 export const KIT_SEARCH_MAX_FILES_SCANNED = 400;
+/**
+ * Batch whole-file reads — enough for a scaffold's small entry files in one model turn,
+ * without dumping the kit. Per-file ceiling still applies.
+ */
+export const KIT_BATCH_MAX_FILES = 12;
+/** Aggregate raw-byte budget across a successful batch (not base64-expanded size). */
+export const KIT_BATCH_MAX_TOTAL_BYTES = 128 * 1024;
 /** Reject absurdly large kit tarballs rather than OOM. */
 export const KIT_TREE_MAX_BYTES = 8 * 1024 * 1024;
 /** Keep current + previous trees warm (N / N−1 window). */
@@ -226,18 +233,24 @@ export function searchKitFiles(
   return { engineRef: tree.engineRef, query, matches, truncated, filesScanned };
 }
 
-export function readKitFile(
-  tree: KitTree,
-  rawPath: string,
-  options: { encoding?: 'utf8' | 'base64' } = {},
-): {
+export type KitFileReadResult = {
   engineRef: string;
   path: string;
   bytes: number;
   kind: KitFileKind;
   encoding: 'utf8' | 'base64';
   content: string;
-} {
+};
+
+export type KitBatchFileResult =
+  | ({ ok: true } & Omit<KitFileReadResult, 'engineRef'>)
+  | { ok: false; path: string; error: KitFilesError['code'] | 'kit_batch_budget'; message: string };
+
+export function readKitFile(
+  tree: KitTree,
+  rawPath: string,
+  options: { encoding?: 'utf8' | 'base64' } = {},
+): KitFileReadResult {
   const path = normalizeKitPath(rawPath);
   const bytes = tree.files.get(path);
   if (!bytes) {
@@ -264,6 +277,77 @@ export function readKitFile(
     kind,
     encoding,
     content: encoding === 'base64' ? bytes.toString('base64') : bytes.toString('utf8'),
+  };
+}
+
+/**
+ * Read several small kit files in one call (order preserved). Per-path failures stay in
+ * the result list; whole-call auth / tree load errors still throw from the store.
+ */
+export function readKitFiles(
+  tree: KitTree,
+  rawPaths: string[],
+  options: { encoding?: 'utf8' | 'base64' } = {},
+): {
+  engineRef: string;
+  files: KitBatchFileResult[];
+  totalBytes: number;
+  maxBytes: number;
+  maxFiles: number;
+  truncated: boolean;
+} {
+  if (!Array.isArray(rawPaths) || rawPaths.length === 0) {
+    throw new KitFilesError('kit_query_invalid', 'paths must be a non-empty array');
+  }
+  const truncated = rawPaths.length > KIT_BATCH_MAX_FILES;
+  const paths = rawPaths.slice(0, KIT_BATCH_MAX_FILES);
+  const files: KitBatchFileResult[] = [];
+  let totalBytes = 0;
+
+  for (const rawPath of paths) {
+    const displayPath = typeof rawPath === 'string' ? rawPath.trim() : '';
+    try {
+      const read = readKitFile(tree, displayPath, options);
+      if (totalBytes + read.bytes > KIT_BATCH_MAX_TOTAL_BYTES) {
+        files.push({
+          ok: false,
+          path: read.path,
+          error: 'kit_batch_budget',
+          message: `batch would exceed ${KIT_BATCH_MAX_TOTAL_BYTES} bytes (already ${totalBytes}); use read_kit_file / fragment for the rest`,
+        });
+        continue;
+      }
+      totalBytes += read.bytes;
+      files.push({
+        ok: true,
+        path: read.path,
+        bytes: read.bytes,
+        kind: read.kind,
+        encoding: read.encoding,
+        content: read.content,
+      });
+    } catch (error) {
+      if (error instanceof KitFilesError) {
+        let path = displayPath || '(empty)';
+        try {
+          if (displayPath) path = normalizeKitPath(displayPath);
+        } catch {
+          // keep displayPath
+        }
+        files.push({ ok: false, path, error: error.code, message: error.message });
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  return {
+    engineRef: tree.engineRef,
+    files,
+    totalBytes,
+    maxBytes: KIT_BATCH_MAX_TOTAL_BYTES,
+    maxFiles: KIT_BATCH_MAX_FILES,
+    truncated,
   };
 }
 

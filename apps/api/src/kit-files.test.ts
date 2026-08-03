@@ -2,6 +2,8 @@ import { gzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import type { GcsObjectStore } from './gcs-sign.js';
 import {
+  KIT_BATCH_MAX_FILES,
+  KIT_BATCH_MAX_TOTAL_BYTES,
   KIT_READ_MAX_BYTES,
   createKitFileStore,
   kitFileKind,
@@ -9,6 +11,7 @@ import {
   normalizeKitPath,
   readKitFile,
   readKitFileFragment,
+  readKitFiles,
   searchKitFiles,
   type KitTree,
   KitFilesError,
@@ -115,6 +118,34 @@ describe('kit file ops', () => {
       'huge.md': 'x'.repeat(KIT_READ_MAX_BYTES + 1),
     });
     expect(() => readKitFile(big, 'huge.md')).toThrow(/read_kit_file_fragment/);
+  });
+
+  it('batches several files with per-path errors and aggregate budget', () => {
+    const batch = readKitFiles(tree, ['SKILL.md', 'missing.md', 'shared/modules/core.ts', 'shared/audio/beep.wav']);
+    expect(batch.engineRef).toBe(ENGINE);
+    expect(batch.files).toHaveLength(4);
+    expect(batch.files[0]).toMatchObject({ ok: true, path: `${KIT_ROOT_DIR}/SKILL.md` });
+    expect(batch.files[1]).toMatchObject({ ok: false, error: 'kit_file_missing' });
+    expect(batch.files[2]).toMatchObject({ ok: true, path: `${KIT_ROOT_DIR}/shared/modules/core.ts` });
+    expect(batch.files[3]).toMatchObject({ ok: true, encoding: 'base64' });
+    expect(batch.totalBytes).toBeGreaterThan(0);
+    expect(batch.maxBytes).toBe(KIT_BATCH_MAX_TOTAL_BYTES);
+    expect(batch.maxFiles).toBe(KIT_BATCH_MAX_FILES);
+    expect(batch.truncated).toBe(false);
+
+    const many = Array.from({ length: KIT_BATCH_MAX_FILES + 2 }, () => 'SKILL.md');
+    expect(readKitFiles(tree, many).truncated).toBe(true);
+    expect(readKitFiles(tree, many).files).toHaveLength(KIT_BATCH_MAX_FILES);
+
+    const fat = treeFrom({
+      a: 'a'.repeat(40 * 1024),
+      b: 'b'.repeat(40 * 1024),
+      c: 'c'.repeat(40 * 1024),
+      d: 'd'.repeat(40 * 1024),
+    });
+    const overBudget = readKitFiles(fat, ['a', 'b', 'c', 'd']);
+    expect(overBudget.files.filter((f) => f.ok)).toHaveLength(3);
+    expect(overBudget.files[3]).toMatchObject({ ok: false, error: 'kit_batch_budget' });
   });
 
   it('reads line and byte fragments', () => {

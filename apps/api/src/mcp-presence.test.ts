@@ -11,6 +11,7 @@ describe('mcp presence pulses', () => {
   it('pulses kit browse and brief reads, not openers or report_progress', () => {
     expect(shouldPulseMcpPresence('list_kit_files')).toBe(true);
     expect(shouldPulseMcpPresence('read_kit_file')).toBe(true);
+    expect(shouldPulseMcpPresence('read_kit_files')).toBe(true);
     expect(shouldPulseMcpPresence('get_brief')).toBe(true);
     expect(shouldPulseMcpPresence('report_progress')).toBe(false);
     expect(shouldPulseMcpPresence('start')).toBe(false);

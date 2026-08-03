@@ -831,6 +831,19 @@ export async function registerSubmissionRoutes(
       // Every new submission has one by now; the guard is for the paths that do not.
       // Self rounds reuse a seed already on the job (resume of the same round).
       const storedSeed = builder === 'self' ? existing?.seed : undefined;
+      // Only self builds expose seed files on the job (`get_seed`). Platform seeds land
+      // on a branch the coding agent already has — no pending race for MCP.
+      const willAttemptSelfSeed =
+        builder === 'self' && !storedSeed && !input.feedback && Boolean(input.slug) && Boolean(gameSeeder);
+      if (storedSeed) {
+        await store.setSubmissionSeed(input.issueNumber, storedSeed);
+      } else if (willAttemptSelfSeed) {
+        // Seed generation can take minutes; mark pending so MCP agents recheck get_seed
+        // instead of treating a race as "no seed, scaffold from scratch".
+        await store.setSeedStatus(input.issueNumber, 'pending');
+      } else if (builder === 'self') {
+        await store.setSeedStatus(input.issueNumber, 'unavailable');
+      }
       const draft =
         storedSeed || input.feedback || !input.slug ? undefined : await seedBuild({ ...input, slug: input.slug });
       const seed: SeedFiles | undefined = storedSeed
@@ -843,6 +856,15 @@ export async function registerSubmissionRoutes(
               ...(draft.notes ? { notes: draft.notes } : {}),
             }
           : undefined;
+      if (builder === 'self' && !storedSeed) {
+        if (seed) {
+          // Persist before dispatch so a racing get_brief/get_seed can see the draft even
+          // if the self backend's persistSeed races behind the first tool call.
+          await store.setSubmissionSeed(input.issueNumber, seed);
+        } else {
+          await store.setSeedStatus(input.issueNumber, 'unavailable');
+        }
+      }
       // Persist generation before minting. New jobs already carry `1` from
       // createSubmission; a legacy job without the field must be initialized here so
       // the round-scoped token we hand the agent validates against the record.

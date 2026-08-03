@@ -29,6 +29,7 @@ const PRESENCE_COPY: Record<string, string> = {
   list_kit_files: 'Browsing the Creator Kit…',
   search_kit_files: 'Searching the Creator Kit…',
   read_kit_file: 'Reading Creator Kit files…',
+  read_kit_files: 'Reading Creator Kit files…',
   read_kit_file_fragment: 'Reading Creator Kit files…',
   get_sources: 'Loading existing game sources…',
   list_examples: 'Browsing example games…',

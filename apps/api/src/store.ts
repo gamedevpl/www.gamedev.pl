@@ -300,6 +300,12 @@ export interface SubmissionRecord {
    */
   seed?: SeedFiles;
   /**
+   * Whether a seed is still generating, ready, or will not arrive this round.
+   * Distinct from {@link seed}: agents can race create_game → get_brief before files
+   * land, so `pending` must not look like `unavailable`. Cleared with the seed.
+   */
+  seedStatus?: 'pending' | 'available' | 'unavailable';
+  /**
    * How many sources deliveries this round has accepted. Self rounds cap this
    * (`SELF_BUILD_DELIVERY_CAP`); resets when a new round opens.
    */
@@ -1380,6 +1386,8 @@ export interface Store {
   setRoundBuilder(issueNumber: number, builder: BuilderKind, options?: { resetRoundBudget?: boolean }): Promise<void>;
   /** Stores (or clears) the generated seed draft on a self-build job. */
   setSubmissionSeed(issueNumber: number, seed: SeedFiles | null): Promise<void>;
+  /** Marks seed generation pending / unavailable (available is set via {@link setSubmissionSeed}). */
+  setSeedStatus(issueNumber: number, status: 'pending' | 'unavailable'): Promise<void>;
   /** Increments and returns the per-round sources-delivery count. */
   incrementRoundDeliveryCount(issueNumber: number): Promise<number>;
   /** Appends a dispatch ref, recording which backend is building this job and where. */
@@ -2332,6 +2340,7 @@ export class InMemoryStore implements Store {
     };
     if (closes) {
       delete next.seed;
+      delete next.seedStatus;
       // Signals belong to the round that closed — keeping them makes the next self
       // round look "connected" before any agent has joined.
       delete next.lastAgentSignalAt;
@@ -2346,6 +2355,7 @@ export class InMemoryStore implements Store {
     const roundGeneration = nextRoundGeneration(sub.roundGeneration);
     const next: SubmissionRecord = { ...sub, roundGeneration, roundDeliveryCount: 0 };
     delete next.seed;
+    delete next.seedStatus;
     delete next.lastAgentSignalAt;
     this.submissions.set(issueNumber, next);
     return roundGeneration;
@@ -2379,6 +2389,7 @@ export class InMemoryStore implements Store {
     };
     if (reset) {
       delete next.seed;
+      delete next.seedStatus;
       next.roundDeliveryCount = 0;
     }
     this.submissions.set(issueNumber, next);
@@ -2388,12 +2399,23 @@ export class InMemoryStore implements Store {
     const sub = this.submissions.get(issueNumber);
     if (!sub) return;
     if (seed) {
-      this.submissions.set(issueNumber, { ...sub, seed });
+      this.submissions.set(issueNumber, { ...sub, seed, seedStatus: 'available' });
       return;
     }
-    const next = { ...sub };
+    const next = { ...sub, seedStatus: 'unavailable' as const };
     delete next.seed;
     this.submissions.set(issueNumber, next);
+  }
+
+  async setSeedStatus(issueNumber: number, status: 'pending' | 'unavailable'): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub) return;
+    // Never downgrade an already-stored draft.
+    if (sub.seed) {
+      this.submissions.set(issueNumber, { ...sub, seedStatus: 'available' });
+      return;
+    }
+    this.submissions.set(issueNumber, { ...sub, seedStatus: status });
   }
 
   async incrementRoundDeliveryCount(issueNumber: number): Promise<number> {
@@ -3948,6 +3970,7 @@ export class FirestoreStore implements Store {
           roundDeliveryCount: 0,
         };
         delete next.seed;
+        delete next.seedStatus;
         delete next.lastAgentSignalAt;
         tx.set(ref, next);
       } else {
@@ -3974,6 +3997,7 @@ export class FirestoreStore implements Store {
       const roundGeneration = nextRoundGeneration(current.roundGeneration);
       const next: SubmissionRecord = { ...current, roundGeneration, roundDeliveryCount: 0 };
       delete next.seed;
+      delete next.seedStatus;
       delete next.lastAgentSignalAt;
       tx.set(ref, next);
       return roundGeneration;
@@ -4019,6 +4043,7 @@ export class FirestoreStore implements Store {
         roundDeliveryCount: 0,
       };
       delete next.seed;
+      delete next.seedStatus;
       tx.set(ref, next);
     });
   }
@@ -4026,16 +4051,30 @@ export class FirestoreStore implements Store {
   async setSubmissionSeed(issueNumber: number, seed: SeedFiles | null): Promise<void> {
     const ref = this.db.collection('submissions').doc(String(issueNumber));
     if (seed) {
-      await ref.set({ seed }, { merge: true });
+      await ref.set({ seed, seedStatus: 'available' }, { merge: true });
       return;
     }
     await this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) return;
       const current = snap.data() as SubmissionRecord;
-      const next = { ...current };
+      const next: SubmissionRecord = { ...current, seedStatus: 'unavailable' };
       delete next.seed;
       tx.set(ref, next);
+    });
+  }
+
+  async setSeedStatus(issueNumber: number, status: 'pending' | 'unavailable'): Promise<void> {
+    const ref = this.db.collection('submissions').doc(String(issueNumber));
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return;
+      const current = snap.data() as SubmissionRecord;
+      if (current.seed) {
+        tx.set(ref, { seedStatus: 'available' }, { merge: true });
+        return;
+      }
+      tx.set(ref, { seedStatus: status }, { merge: true });
     });
   }
 
