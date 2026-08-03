@@ -11,10 +11,18 @@ const DETAILS_POLL_MS = 10_000;
  * thread foot. Kept out of the composer strip so the conversation stays Claude-quiet;
  * open Details when you want the count.
  */
-export function StudioDetailsBuildProgress({ token }: { token: string }) {
+export function StudioDetailsBuildProgress({
+  token,
+  emptyLabel,
+}: {
+  token: string;
+  /** When set, an empty checklist renders this instead of nothing. */
+  emptyLabel?: string;
+}) {
   const { t, i18n } = useTranslation();
   const [progress, setProgress] = useState<BuildProgress | null>(null);
   const [events, setEvents] = useState<BuildEvent[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -27,6 +35,8 @@ export function StudioDetailsBuildProgress({ token }: { token: string }) {
         setEvents(status.events ?? []);
       } catch {
         // Secondary chrome — a failed poll must not toast over the thread.
+      } finally {
+        if (!cancelled) setLoaded(true);
       }
     };
 
@@ -43,56 +53,57 @@ export function StudioDetailsBuildProgress({ token }: { token: string }) {
   const doneCount = reported?.done ?? checklist.filter((item) => item.checked).length;
   const totalCount = reported?.total ?? checklist.length;
 
-  if (totalCount === 0) return null;
+  if (totalCount === 0) {
+    if (!loaded) return <p className="studio-rail-empty">{t('statusView.loading')}</p>;
+    if (emptyLabel) return <p className="studio-rail-empty">{emptyLabel}</p>;
+    return null;
+  }
 
   const donePercent = (doneCount / totalCount) * 100;
   const currentStep = checklist.find((item) => !item.checked);
   const note = events[0]?.text ?? progress?.note;
 
   return (
-    <section className="studio-rail-section" data-testid="studio-details-progress">
+    <div className="studio-details-progress" data-testid="studio-details-progress">
       <div className="build-progress-heading-row">
-        <h4 className="studio-rail-section-title">{t('studioPanel.rail.build')}</h4>
         <span className="build-progress-count">
           {t('statusView.progress.checklistCount', { done: doneCount, total: totalCount })}
         </span>
       </div>
-      <div className="studio-details-progress">
-        <div
-          className="build-progress-bar"
-          role="progressbar"
-          aria-valuenow={doneCount}
-          aria-valuemin={0}
-          aria-valuemax={totalCount}
-        >
-          <div className="build-progress-bar-fill" style={{ width: `${donePercent}%` }} />
-        </div>
-        {note ? (
-          <p className="studio-details-progress-note">
-            <span className="build-progress-note-label">
-              {events[0]?.step ? t(`statusView.progress.steps.${events[0].step}`) : t('statusView.progress.agentSays')}
-            </span>
-            <span className="build-progress-note-text">{note}</span>
-          </p>
-        ) : currentStep ? (
-          <p className="build-progress-current">
-            <span className="build-progress-current-spinner" aria-hidden="true" />
-            {t('statusView.progress.currentStep', { step: currentStep.text })}
-          </p>
-        ) : null}
-        {checklist.length > 0 ? (
-          <ul className="studio-details-checklist">
-            {checklist.map((item, index) => (
-              <li key={index} className={item.checked ? 'checklist-done' : 'checklist-pending'}>
-                <span aria-hidden="true">
-                  <PixelIcon name={item.checked ? 'check' : 'checkbox'} size={12} />
-                </span>{' '}
-                {item.text}
-              </li>
-            ))}
-          </ul>
-        ) : null}
+      <div
+        className="build-progress-bar"
+        role="progressbar"
+        aria-valuenow={doneCount}
+        aria-valuemin={0}
+        aria-valuemax={totalCount}
+      >
+        <div className="build-progress-bar-fill" style={{ width: `${donePercent}%` }} />
       </div>
-    </section>
+      {note ? (
+        <p className="studio-details-progress-note">
+          <span className="build-progress-note-label">
+            {events[0]?.step ? t(`statusView.progress.steps.${events[0].step}`) : t('statusView.progress.agentSays')}
+          </span>
+          <span className="build-progress-note-text">{note}</span>
+        </p>
+      ) : currentStep ? (
+        <p className="build-progress-current">
+          <span className="build-progress-current-spinner" aria-hidden="true" />
+          {t('statusView.progress.currentStep', { step: currentStep.text })}
+        </p>
+      ) : null}
+      {checklist.length > 0 ? (
+        <ul className="studio-details-checklist">
+          {checklist.map((item, index) => (
+            <li key={index} className={item.checked ? 'checklist-done' : 'checklist-pending'}>
+              <span aria-hidden="true">
+                <PixelIcon name={item.checked ? 'check' : 'checkbox'} size={12} />
+              </span>{' '}
+              {item.text}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }

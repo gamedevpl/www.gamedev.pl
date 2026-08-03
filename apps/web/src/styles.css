@@ -4494,16 +4494,26 @@ a.user-name--profile:focus-visible {
 
 @media (min-width: 1100px) {
   .studio-workspace.is-details-open {
-    grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 400px);
   }
 }
 
 .studio-rail {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
   border-radius: 12px;
   border: 1px solid var(--panel-border);
   background: var(--panel-card);
-  padding: 14px 16px 18px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.studio-rail-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
 }
 
 .studio-rail-head {
@@ -4511,7 +4521,9 @@ a.user-name--profile:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 6px;
+  flex: none;
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid var(--panel-border);
 }
 
 .studio-rail-head h3 {
@@ -4521,6 +4533,65 @@ a.user-name--profile:focus-visible {
   letter-spacing: 0.6px;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+.studio-rail-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  align-items: stretch;
+}
+
+.studio-rail-pane {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 10px 14px 16px;
+}
+
+/* Cursor-like secondary strip — one icon, one pane. */
+.studio-rail-icons {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 6px;
+  border-left: 1px solid var(--panel-border);
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.studio-rail-icon {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.studio-rail-icon:hover {
+  color: var(--text);
+  background: rgba(148, 163, 184, 0.1);
+}
+
+.studio-rail-icon.is-active {
+  color: var(--turquoise);
+  border-color: rgba(0, 228, 172, 0.35);
+  background: rgba(0, 228, 172, 0.1);
+}
+
+.studio-rail-empty {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
 }
 
 /* The sheet's backdrop: something to tap beside it, and a dimmed page behind so the
@@ -4537,12 +4608,26 @@ a.user-name--profile:focus-visible {
     inset: auto 0 0 0;
     z-index: 1100;
     max-height: min(80vh, 40rem);
-    overflow-y: auto;
+    overflow: hidden;
     border-radius: 16px 16px 0 0;
     border-bottom: 0;
     background: var(--panel);
     box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
     animation: fadeIn 0.2s ease;
+  }
+
+  /* Phone sheet: icons as a horizontal strip under the title, not a side column. */
+  .studio-workspace.is-details-open .studio-rail-body {
+    flex-direction: column;
+  }
+
+  .studio-workspace.is-details-open .studio-rail-icons {
+    flex-direction: row;
+    justify-content: center;
+    order: -1;
+    border-left: 0;
+    border-bottom: 1px solid var(--panel-border);
+    padding: 8px 10px;
   }
 }
 
@@ -4619,22 +4704,36 @@ a.user-name--profile:focus-visible {
   box-shadow: 0 0 16px var(--turquoise-glow);
 }
 
-/* A shelf row is a title. The state that matters at a glance rides on a dot. */
-.studio-shelf-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--panel-border);
+/* Shelf mark: two title letters. Colour carries live/published; letters carry identity. */
+.studio-shelf-mark {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  border: 1px solid var(--panel-border);
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
-.studio-shelf-dot.is-live {
-  background: var(--accent-blue);
-  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+.studio-shelf-mark.is-live {
+  color: #7dd3fc;
+  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(56, 189, 248, 0.12);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.1);
 }
 
-.studio-shelf-dot.is-published {
-  background: var(--turquoise);
+.studio-shelf-mark.is-published {
+  color: var(--turquoise);
+  border-color: rgba(0, 228, 172, 0.4);
+  background: rgba(0, 228, 172, 0.1);
 }
 
 /* ── THE THREAD ──────────────────────────────────────────────────────────────────
@@ -5221,10 +5320,10 @@ a.user-name--profile:focus-visible {
     padding: 6px 10px;
   }
 
-  /* Icon-only in the title row — Playtest's word plus Details (and Claim) was enough to
-     shove the trailing control past the right edge on a 390px phone with a long title.
-     Clipped rather than display: none so the button keeps its accessible name. */
-  .app:has(.studio-layout.is-game-open) .studio-head-action .studio-head-action-label {
+  /* Icon-only peers in the title row — Details / Edit / Claim were enough to shove the
+     trailing control past the right edge on a 390px phone with a long title. Play keeps
+     its word: clipping it made the primary CTA a tiny icon twin of Details. */
+  .app:has(.studio-layout.is-game-open) .studio-head-action:not(.is-primary) .studio-head-action-label {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -8507,16 +8606,43 @@ a.user-name--profile:focus-visible {
   z-index: 1100;
 }
 
-/* 5+ games on a desktop: collapse to a left-edge rail of dots after selection.
-   Not a "switch game" combo — the shelf stays the shelf, just skinny. */
+/* 5+ games on a desktop: collapse to a left-edge rail of title marks after selection.
+   Width matches the header mascot column, so the rail and the logo share one vertical
+   band instead of a skinny strip floating left of the face. */
 @media (min-width: 801px) {
+  /* Variable on `.app` (ancestor of both header and shelf) — children inherit it. */
+  .app:has(.studio-layout.is-game-open.is-compact-shelf:not(.is-shelf-open)) {
+    --studio-shelf-collapsed-width: 80px;
+  }
+
   .studio-layout.is-compact-shelf:not(.is-shelf-open) {
-    grid-template-columns: 56px 1fr;
+    grid-template-columns: var(--studio-shelf-collapsed-width, 80px) 1fr;
+  }
+
+  /* Full-bleed studio content starts at x=0 while the header kept 28px — the mascot
+     sat indented past the rail. Pull the header in; the wordmark still runs into the
+     main column, and the face sits over the same band as the game marks. */
+  .app:has(.studio-layout.is-game-open.is-compact-shelf:not(.is-shelf-open)) .app-header {
+    padding-left: 0;
+  }
+
+  .app:has(.studio-layout.is-game-open.is-compact-shelf:not(.is-shelf-open)) .logo-brand {
+    gap: 2px;
+    padding-left: 6px;
+  }
+
+  .app:has(.studio-layout.is-game-open.is-compact-shelf:not(.is-shelf-open)) .nav-up {
+    width: 32px;
+    height: 32px;
+  }
+
+  .app:has(.studio-layout.is-game-open.is-compact-shelf:not(.is-shelf-open)) .app-header .logo .mascot {
+    margin-right: 10px;
   }
 
   .studio-layout.is-compact-shelf:not(.is-shelf-open) .studio-shelf {
     align-items: center;
-    padding: 12px 8px;
+    padding: 12px 10px;
     gap: 10px;
   }
 
@@ -8554,7 +8680,20 @@ a.user-name--profile:focus-visible {
 
   .studio-layout.is-compact-shelf:not(.is-shelf-open) .studio-shelf-item {
     justify-content: center;
-    padding: 10px 8px;
+    padding: 8px;
+  }
+
+  .studio-layout.is-compact-shelf:not(.is-shelf-open) .studio-shelf-mark {
+    width: 36px;
+    height: 36px;
+    border-radius: 11px;
+    font-size: 0.72rem;
+  }
+
+  .studio-layout.is-compact-shelf:not(.is-shelf-open) .studio-shelf-item.is-active,
+  .studio-layout.is-compact-shelf:not(.is-shelf-open) .studio-shelf-item.is-active:hover {
+    /* No left inset bar in the icon rail — the active mark is enough. */
+    box-shadow: 0 0 14px rgba(0, 228, 172, 0.12);
   }
 
   .studio-layout.is-compact-shelf.is-shelf-open .studio-shelf-edge-toggle {
@@ -8711,17 +8850,17 @@ a.user-name--profile:focus-visible {
   gap: 0;
 }
 
-/* One job per band — stops the Details rail reading as a single wall of chrome. */
+/* One job per band inside a single icon-pane. */
 .studio-rail-section {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 14px 0;
+  padding: 12px 0;
   border-bottom: 1px solid var(--panel-border);
 }
 
 .studio-rail-section:first-child {
-  padding-top: 4px;
+  padding-top: 2px;
 }
 
 .studio-rail-section:last-child {
@@ -8738,58 +8877,20 @@ a.user-name--profile:focus-visible {
   color: var(--muted);
 }
 
-.studio-rail-credentials {
-  margin: 0;
-  padding: 12px 0 0;
-}
-
-.studio-rail-credentials > summary {
-  list-style: none;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 2px 0 10px;
-}
-
-.studio-rail-credentials > summary::-webkit-details-marker {
-  display: none;
-}
-
-.studio-rail-credentials > summary::after {
-  content: '+';
-  position: absolute;
-  right: 0;
-  top: 2px;
-  color: var(--muted);
-  font-size: 1rem;
-  font-weight: 600;
-  line-height: 1;
-}
-
-.studio-rail-credentials {
-  position: relative;
-}
-
-.studio-rail-credentials[open] > summary::after {
-  content: '−';
-}
-
 .studio-rail-credentials-hint {
+  margin: 0 0 8px;
   font-size: 0.78rem;
   color: var(--muted);
   font-weight: 400;
   letter-spacing: 0;
   text-transform: none;
   line-height: 1.35;
-  padding-right: 1.5rem;
 }
 
 .studio-rail-credentials-body {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  padding: 4px 0 8px;
 }
 
 /* Panel density: install chrome without the thread's title/lead/waiting stack. */

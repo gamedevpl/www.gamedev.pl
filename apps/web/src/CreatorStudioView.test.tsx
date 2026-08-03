@@ -595,6 +595,99 @@ describe('CreatorStudioView', () => {
     root.unmount();
   });
 
+  it('shows title initials on shelf rows instead of anonymous status bulbs', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue(
+      studioShelf([
+        {
+          token: 'token-draft',
+          title: '2D Total War',
+          createdAt: '2026-07-30T09:00:00.000Z',
+          lastKnownStatus: 'building',
+          slug: '2d-total-war',
+        },
+      ]),
+    );
+
+    const { container, root } = await renderStudio({ selectedGame: '2d-total-war' });
+
+    const mark = container.querySelector('.studio-shelf-mark');
+    expect(mark?.textContent).toBe('2T');
+    expect(container.querySelector('.studio-shelf-dot')).toBeNull();
+
+    root.unmount();
+  });
+
+  it('opens Details on the Overview icon pane, and switches panes one at a time', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue(
+      studioShelf([
+        {
+          token: 'token-draft',
+          title: 'TV Tycoon',
+          createdAt: '2026-07-30T09:00:00.000Z',
+          lastKnownStatus: 'building',
+          slug: 'tv-tycoon',
+        },
+      ]),
+    );
+
+    const { container, root } = await renderStudio({ selectedGame: 'tv-tycoon', selectedTab: 'details' });
+
+    // Cursor-shaped strip: icons pick one pane. Overview is the landing surface — Share
+    // lives there; Connect / Build / Keys are not dumped into the same scroll.
+    const overview = container.querySelector('[data-testid="studio-rail-icon-overview"]');
+    const connect = container.querySelector('[data-testid="studio-rail-icon-connect"]');
+    const build = container.querySelector('[data-testid="studio-rail-icon-build"]');
+    const keys = container.querySelector('[data-testid="studio-rail-icon-keys"]');
+    expect(overview?.getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('[data-testid="studio-rail-pane-overview"]')).not.toBeNull();
+    expect(container.querySelector('.studio-share-toggle')).not.toBeNull();
+    expect(container.querySelector('[data-testid="studio-details-progress"]')).toBeNull();
+
+    await act(async () => {
+      connect!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(connect?.getAttribute('aria-pressed')).toBe('true');
+    expect(overview?.getAttribute('aria-pressed')).toBe('false');
+    expect(container.querySelector('[data-testid="studio-rail-pane-connect"]')).not.toBeNull();
+    expect(container.querySelector('.studio-share-toggle')).toBeNull();
+
+    await act(async () => {
+      build!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(build?.getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('[data-testid="studio-rail-pane-build"]')).not.toBeNull();
+
+    await act(async () => {
+      keys!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(keys?.getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('[data-testid="studio-rail-pane-keys"]')).not.toBeNull();
+    expect(container.textContent).toMatch(/Creator key|legacy per-game key/i);
+
+    // Header Details always re-opens on Overview — not whatever pane was left selected.
+    const details = Array.from(container.querySelectorAll('.studio-head-action')).find((button) =>
+      button.textContent?.includes('Details'),
+    );
+    await act(async () => {
+      details!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      details!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('[data-testid="studio-rail-icon-overview"]')?.getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+    expect(container.querySelector('.studio-share-toggle')).not.toBeNull();
+
+    root.unmount();
+  });
+
   it('does not carry one game’s details state onto another', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
@@ -773,6 +866,13 @@ describe('CreatorStudioView — what players think', () => {
     if (detailsAction) {
       await act(async () => {
         detailsAction.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+    }
+    // Stats / suggestions / autonomy live on the Stats icon pane, not Overview.
+    const statsIcon = container.querySelector('[data-testid="studio-rail-icon-stats"]');
+    if (statsIcon) {
+      await act(async () => {
+        statsIcon.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       });
     }
     return { container, root };
