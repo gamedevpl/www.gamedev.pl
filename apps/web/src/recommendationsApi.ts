@@ -67,11 +67,15 @@ function parseNewest(body: unknown): string[] {
   );
 }
 
-function parseCachedPayload(raw: string): CatalogSortPayload | null {
+function parseCachedPayload(raw: string): (CatalogSortPayload & { viewer: string }) | null {
   try {
     const body: unknown = JSON.parse(raw);
     if (typeof body !== 'object' || body === null) return null;
+    const viewer = (body as { viewer?: unknown }).viewer;
+    // Unscoped legacy entries are unusable — affinity is account-specific.
+    if (typeof viewer !== 'string') return null;
     return {
+      viewer,
       items: parseItems(body),
       popularity: parsePopularity(body),
       lastPlayed: parseLastPlayed(body),
@@ -82,25 +86,51 @@ function parseCachedPayload(raw: string): CatalogSortPayload | null {
   }
 }
 
-/** Last recommendations payload — used so reload does not flash catalog-default order. */
-export function readCachedCatalogSortPayload(): CatalogSortPayload | null {
+function viewerKey(viewerUid: string | null | undefined): string {
+  return viewerUid ?? '';
+}
+
+/**
+ * Last recommendations payload for this viewer — used so reload does not flash
+ * catalog-default order. Returns null when missing or cached for another account.
+ */
+export function readCachedCatalogSortPayload(viewerUid: string | null = null): CatalogSortPayload | null {
   try {
     const raw = sessionStorage.getItem(SIGNALS_CACHE_KEY);
-    return raw ? parseCachedPayload(raw) : null;
+    const parsed = raw ? parseCachedPayload(raw) : null;
+    if (!parsed || parsed.viewer !== viewerKey(viewerUid)) return null;
+    return {
+      items: parsed.items,
+      popularity: parsed.popularity,
+      lastPlayed: parsed.lastPlayed,
+      newest: parsed.newest,
+    };
   } catch {
     return null;
   }
 }
 
-export function writeCachedCatalogSortPayload(payload: CatalogSortPayload): void {
+export function writeCachedCatalogSortPayload(payload: CatalogSortPayload, viewerUid: string | null = null): void {
   try {
-    sessionStorage.setItem(SIGNALS_CACHE_KEY, JSON.stringify(payload));
+    sessionStorage.setItem(SIGNALS_CACHE_KEY, JSON.stringify({ viewer: viewerKey(viewerUid), ...payload }));
   } catch {
-    // Private mode / quota — next reload may flash once.
+    // Private mode / quota — next reload may wait on the network once.
   }
 }
 
-export async function fetchCatalogSortSignals(recent: string[] = []): Promise<CatalogSortPayload> {
+/** Drop the sort-signals cache (logout / account switch). */
+export function clearCachedCatalogSortPayload(): void {
+  try {
+    sessionStorage.removeItem(SIGNALS_CACHE_KEY);
+  } catch {
+    // Private mode — ignore.
+  }
+}
+
+export async function fetchCatalogSortSignals(
+  recent: string[] = [],
+  viewerUid: string | null = null,
+): Promise<CatalogSortPayload> {
   const params = new URLSearchParams();
   if (recent.length > 0) params.set('recent', recent.slice(0, 8).join(','));
   const query = params.toString();
@@ -117,7 +147,7 @@ export async function fetchCatalogSortSignals(recent: string[] = []): Promise<Ca
       lastPlayed: parseLastPlayed(body),
       newest: parseNewest(body),
     };
-    writeCachedCatalogSortPayload(payload);
+    writeCachedCatalogSortPayload(payload, viewerUid);
     return payload;
   } catch {
     return empty;

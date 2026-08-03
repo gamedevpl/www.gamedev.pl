@@ -3,13 +3,7 @@ import { getRecentPlays } from './recentPlays.js';
 
 export type CatalogSortMode = 'recommended' | 'newest' | 'most_played' | 'last_played' | 'alpha';
 
-export const CATALOG_SORT_MODES: CatalogSortMode[] = [
-  'recommended',
-  'newest',
-  'most_played',
-  'last_played',
-  'alpha',
-];
+export const CATALOG_SORT_MODES: CatalogSortMode[] = ['recommended', 'newest', 'most_played', 'last_played', 'alpha'];
 
 export const DEFAULT_CATALOG_SORT: CatalogSortMode = 'recommended';
 
@@ -244,7 +238,7 @@ export function orderCatalogEntries(
   return [...sortCatalogEntries(mine, mode, signals), ...sortCatalogEntries(others, mode, signals)];
 }
 
-/** Sort modes that need the recommendations payload to avoid a wrong first paint. */
+/** Sort modes that need the recommendations payload to avoid painting the wrong order. */
 export function catalogSortNeedsSignals(mode: CatalogSortMode): boolean {
   return mode !== 'alpha';
 }

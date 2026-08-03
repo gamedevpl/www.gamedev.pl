@@ -8,13 +8,13 @@
 
 ## Sort modes
 
-| Mode | Signal |
-| ---- | ------ |
+| Mode        | Signal                                                                                                         |
+| ----------- | -------------------------------------------------------------------------------------------------------------- |
 | Recommended | Scorecards + signed-in play affinity / anonymous recent hints ([`recommend.ts`](../apps/api/src/recommend.ts)) |
-| Newest | Submission `publishedAt` when known; otherwise reverse catalog order |
-| Most played | Scorecard session counts |
-| Last played | Signed-in play affinity timestamps, else device-local recent plays |
-| A–Z | Title, case-insensitive |
+| Newest      | Submission `publishedAt` when known; otherwise reverse catalog order                                           |
+| Most played | Scorecard session counts                                                                                       |
+| Last played | Signed-in play affinity timestamps, else device-local recent plays                                             |
+| A–Z         | Title, case-insensitive                                                                                        |
 
 ## Your games (merged into Games)
 
@@ -30,10 +30,10 @@ heading when you have builds or published games. Published slugs come from
 
 ## Filters
 
-| Filter | Effect |
-| ------ | ------ |
-| My games | Show only the signed-in creator’s published games (plus in-progress builds). Hidden when signed out or when you have no builds/published games. |
-| Not played | Show only games with no play affinity and no device-local recent open |
+| Filter     | Effect                                                                                                                                          |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| My games   | Show only the signed-in creator’s published games (plus in-progress builds). Hidden when signed out or when you have no builds/published games. |
+| Not played | Show only games with no play affinity and no device-local recent open                                                                           |
 
 Filters combine with AND. Sort preference is remembered in `localStorage`
 (`gdpl.catalogSort`); filters in `gdpl.catalogFilters`. The last recommendations
@@ -45,12 +45,12 @@ games) + Not played + Sort ▾ (menu closes on outside tap / Escape).
 
 ## Signals & privacy
 
-| Source | What | Identity |
-| ------ | ---- | -------- |
-| Scorecards | Sessions, vote net, finish rate, median play time (28-day roll) | None — aggregates about games |
-| Play affinity | `users/{uid}/playAffinity/{slug}` — open count + last opened | Signed-in humans only |
-| Recent plays (browser) | `localStorage` list, forwarded as `?recent=` hints | Device-local |
-| My submissions | Published slugs pinned first in the gallery | Signed-in creator |
+| Source                 | What                                                            | Identity                      |
+| ---------------------- | --------------------------------------------------------------- | ----------------------------- |
+| Scorecards             | Sessions, vote net, finish rate, median play time (28-day roll) | None — aggregates about games |
+| Play affinity          | `users/{uid}/playAffinity/{slug}` — open count + last opened    | Signed-in humans only         |
+| Recent plays (browser) | `localStorage` list, forwarded as `?recent=` hints              | Device-local                  |
+| My submissions         | Published slugs pinned first in the gallery                     | Signed-in creator             |
 
 Anonymous play telemetry (`playEvents`) and visit telemetry stay **unjoinable** and
 **unattributed**. Affinity is an account feature like votes and saves, disclosed in the
@@ -75,6 +75,15 @@ games-repo order rather than inventing a shuffle.
   "newest": ["slug-a", "slug-b"]
 }
 ```
+
+Community half (`scorecards` → popularity / recommended base, plus newest from
+recent publishes) is cached in-process for ~5 minutes and coalesced while refreshing —
+those Firestore reads otherwise run on every home-page load. Personal affinity and
+`?recent=` hints are applied per request on top of that shared snapshot.
+
+The browser also caches the last payload in `sessionStorage`, keyed to the signed-in
+viewer (cleared on logout), so a reload can paint immediately without flashing the
+wrong account's affinity.
 
 ## UI
 

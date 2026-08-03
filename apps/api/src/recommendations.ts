@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { PublishedSlugGate } from './published-slugs.js';
-import { rankRecommendations, type RecommendGame } from './recommend.js';
+import { rankRecommendations, type RecommendGame, type RecommendScorecardSignals } from './recommend.js';
 import type { Scorecard, Store } from './store.js';
 
 /**
@@ -12,6 +12,10 @@ import type { Scorecard, Store } from './store.js';
  * Affinity recording (`POST /api/games/:slug/played`) is identity-attached account
  * data, erased with the account. It never writes to the anonymous play/visit
  * telemetry streams and must not grow a join key between them.
+ *
+ * Community half (scorecards + newest) is process-local cached: those reads hit
+ * Firestore on every home load otherwise, and scorecards only move on the nightly
+ * sweep. Personal affinity stays per-request.
  */
 
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
@@ -27,6 +31,8 @@ const RecentQuerySchema = z.object({
 });
 
 const MAX_RECENT_HINTS = 8;
+/** Shared community signals: scorecards are nightly; a few minutes of staleness is fine. */
+export const RECOMMENDATION_SHARED_TTL_MS = 5 * 60_000;
 
 export interface CatalogGenreSource {
   listPublished(): Promise<RecommendGame[]>;
@@ -38,7 +44,19 @@ export interface RecommendationRoutesOptions {
   publishedSlugs?: PublishedSlugGate | null;
   /** Published catalog with genres; tests inject a fixed list. */
   catalog?: CatalogGenreSource | null;
+  /** Injectable clock for cache expiry tests. */
+  now?: () => number;
+  /** Override shared-signals TTL (defaults to {@link RECOMMENDATION_SHARED_TTL_MS}). */
+  sharedSignalsTtlMs?: number;
 }
+
+type SharedCommunitySignals = {
+  expiresAt: number;
+  games: RecommendGame[];
+  scorecards: Map<string, RecommendScorecardSignals>;
+  popularity: Array<{ slug: string; sessions: number }>;
+  newest: string[];
+};
 
 function parseRecentHints(raw: string | undefined): string[] {
   if (!raw) return [];
@@ -54,7 +72,7 @@ function parseRecentHints(raw: string | undefined): string[] {
   return out;
 }
 
-function scorecardSignals(card: Scorecard) {
+function scorecardSignals(card: Scorecard): RecommendScorecardSignals {
   return {
     sessions: card.sessions.count,
     votesUp: card.votes.up,
@@ -69,14 +87,105 @@ function isBotUid(uid: string): boolean {
   return uid.startsWith('bot:');
 }
 
+function buildNewestOrder(games: RecommendGame[], publishedAtBySlug: Map<string, string>): string[] {
+  const dated = games
+    .filter((game) => publishedAtBySlug.has(game.slug))
+    .sort(
+      (a, b) =>
+        (publishedAtBySlug.get(b.slug) ?? '').localeCompare(publishedAtBySlug.get(a.slug) ?? '') ||
+        a.slug.localeCompare(b.slug),
+    )
+    .map((game) => game.slug);
+  const datedSet = new Set(dated);
+  const undatedNewestFirst = [...games]
+    .reverse()
+    .filter((game) => !datedSet.has(game.slug))
+    .map((game) => game.slug);
+  return [...dated, ...undatedNewestFirst];
+}
+
 export async function registerRecommendationRoutes(
   app: FastifyInstance,
   options: RecommendationRoutesOptions,
 ): Promise<void> {
   const { store, publishedSlugs, catalog } = options;
+  const now = options.now ?? Date.now;
+  const sharedTtlMs = options.sharedSignalsTtlMs ?? RECOMMENDATION_SHARED_TTL_MS;
+
+  let sharedCache: SharedCommunitySignals | null = null;
+  let sharedRefresh: Promise<SharedCommunitySignals> | null = null;
 
   async function isPublished(slug: string): Promise<boolean> {
     return (await publishedSlugs?.isPublished(slug)) ?? false;
+  }
+
+  async function refreshSharedSignals(): Promise<SharedCommunitySignals> {
+    const games = (await catalog?.listPublished()) ?? [];
+    if (games.length === 0) {
+      return {
+        expiresAt: now() + sharedTtlMs,
+        games: [],
+        scorecards: new Map(),
+        popularity: [],
+        newest: [],
+      };
+    }
+
+    const published = new Set(games.map((game) => game.slug));
+    const [scorecards, recentPublished] = await Promise.all([
+      store.listScorecards({ limit: 500 }),
+      store.listRecentlyPublished(500),
+    ]);
+
+    const scorecardMap = new Map(
+      scorecards.filter((card) => published.has(card.slug)).map((card) => [card.slug, scorecardSignals(card)]),
+    );
+    const popularity = [...scorecardMap.entries()]
+      .map(([slug, signals]) => ({ slug, sessions: signals.sessions }))
+      .sort((a, b) => b.sessions - a.sessions || a.slug.localeCompare(b.slug));
+
+    const publishedAtBySlug = new Map<string, string>();
+    for (const submission of recentPublished) {
+      if (!submission.slug || !submission.publishedAt || !published.has(submission.slug)) continue;
+      const existing = publishedAtBySlug.get(submission.slug);
+      if (!existing || submission.publishedAt > existing) {
+        publishedAtBySlug.set(submission.slug, submission.publishedAt);
+      }
+    }
+
+    const entry: SharedCommunitySignals = {
+      expiresAt: now() + sharedTtlMs,
+      games,
+      scorecards: scorecardMap,
+      popularity,
+      newest: buildNewestOrder(games, publishedAtBySlug),
+    };
+    sharedCache = entry;
+    return entry;
+  }
+
+  async function getSharedSignals(): Promise<SharedCommunitySignals> {
+    if (sharedCache && sharedCache.expiresAt > now()) {
+      return sharedCache;
+    }
+    if (sharedRefresh) {
+      return sharedRefresh;
+    }
+
+    sharedRefresh = refreshSharedSignals()
+      .catch((error: unknown) => {
+        // Stale community signals beat a visitor-facing failure: scorecards move nightly.
+        if (sharedCache) {
+          app.log.warn({ err: error }, 'recommendation shared signals refresh failed; serving stale');
+          return sharedCache;
+        }
+        throw error;
+      })
+      .finally(() => {
+        sharedRefresh = null;
+      });
+
+    return sharedRefresh;
   }
 
   /**
@@ -105,12 +214,12 @@ export async function registerRecommendationRoutes(
       return reply.status(400).send({ error: query.error.issues[0]?.message ?? 'invalid query' });
     }
 
-    const games = (await catalog?.listPublished()) ?? [];
-    if (games.length === 0) {
-      return reply.send({ items: [] });
+    const shared = await getSharedSignals();
+    if (shared.games.length === 0) {
+      return reply.send({ items: [], popularity: [], lastPlayed: [], newest: [] });
     }
 
-    const published = new Set(games.map((game) => game.slug));
+    const published = new Set(shared.games.map((game) => game.slug));
     const recentHints = parseRecentHints(query.data.recent).filter((slug) => published.has(slug));
 
     let affinity: Awaited<ReturnType<Store['listPlayAffinity']>> = [];
@@ -118,58 +227,24 @@ export async function registerRecommendationRoutes(
       affinity = await store.listPlayAffinity(request.user.uid);
     }
 
-    const scorecards = await store.listScorecards({ limit: 500 });
-    const scorecardMap = new Map(
-      scorecards.filter((card) => published.has(card.slug)).map((card) => [card.slug, scorecardSignals(card)]),
-    );
-
     const ranked = rankRecommendations({
-      games,
-      scorecards: scorecardMap,
+      games: shared.games,
+      scorecards: shared.scorecards,
       affinity,
       recentHints,
-      limit: query.data.limit ?? games.length,
+      limit: query.data.limit ?? shared.games.length,
     });
-
-    const popularity = [...scorecardMap.entries()]
-      .map(([slug, signals]) => ({ slug, sessions: signals.sessions }))
-      .sort((a, b) => b.sessions - a.sessions || a.slug.localeCompare(b.slug));
 
     const lastPlayed = affinity
       .filter((entry) => published.has(entry.slug))
       .map((entry) => ({ slug: entry.slug, lastPlayedAt: entry.lastPlayedAt }))
       .sort((a, b) => b.lastPlayedAt.localeCompare(a.lastPlayedAt) || a.slug.localeCompare(b.slug));
 
-    // Newest: submission publish time when we have it; undated games follow in reverse
-    // catalog order (committed catalogs tend to grow oldest→newest).
-    const recentPublished = await store.listRecentlyPublished(500);
-    const publishedAtBySlug = new Map<string, string>();
-    for (const submission of recentPublished) {
-      if (!submission.slug || !submission.publishedAt || !published.has(submission.slug)) continue;
-      const existing = publishedAtBySlug.get(submission.slug);
-      if (!existing || submission.publishedAt > existing) {
-        publishedAtBySlug.set(submission.slug, submission.publishedAt);
-      }
-    }
-    const dated = games
-      .filter((game) => publishedAtBySlug.has(game.slug))
-      .sort(
-        (a, b) =>
-          (publishedAtBySlug.get(b.slug) ?? '').localeCompare(publishedAtBySlug.get(a.slug) ?? '') ||
-          a.slug.localeCompare(b.slug),
-      )
-      .map((game) => game.slug);
-    const datedSet = new Set(dated);
-    const undatedNewestFirst = [...games]
-      .reverse()
-      .filter((game) => !datedSet.has(game.slug))
-      .map((game) => game.slug);
-
     return reply.send({
       items: ranked.map((item) => ({ slug: item.slug, reason: item.reason })),
-      popularity,
+      popularity: shared.popularity,
       lastPlayed,
-      newest: [...dated, ...undatedNewestFirst],
+      newest: shared.newest,
     });
   });
 }

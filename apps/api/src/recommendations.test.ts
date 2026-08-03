@@ -226,4 +226,132 @@ describe('recommendation routes', () => {
     expect(body.items.some((item) => item.slug === 'puzzle-two' && item.reason === 'for_you')).toBe(true);
     await server.close();
   });
+
+  it('caches shared community signals and still personalises per request', async () => {
+    let scorecardReads = 0;
+    let recentPublishedReads = 0;
+    let clock = 1_000_000;
+
+    const countingStore = new Proxy(store, {
+      get(target, prop, receiver) {
+        const value = Reflect.get(target, prop, receiver);
+        if (prop === 'listScorecards') {
+          return async (...args: Parameters<InMemoryStore['listScorecards']>) => {
+            scorecardReads += 1;
+            return target.listScorecards(...args);
+          };
+        }
+        if (prop === 'listRecentlyPublished') {
+          return async (...args: Parameters<InMemoryStore['listRecentlyPublished']>) => {
+            recentPublishedReads += 1;
+            return target.listRecentlyPublished(...args);
+          };
+        }
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+
+    await store.putScorecard(
+      'arcade-hit',
+      scorecard({
+        slug: 'arcade-hit',
+        sessions: { count: 40, bounces: 0, closes: 0, medianPlaySeconds: 30, totalPlaySeconds: 1200 },
+        votes: { up: 5, down: 0 },
+      }),
+    );
+    await store.recordPlayAffinity('g:alice', 'puzzle-one', new Date().toISOString());
+
+    const server = await buildApp({
+      store: countingStore as InMemoryStore,
+      sessionSecret,
+      recommendationRoutes: {
+        publishedSlugs: slugGate(games.map((g) => g.slug)),
+        catalog: catalogOf(games),
+        now: () => clock,
+        sharedSignalsTtlMs: 60_000,
+      },
+    });
+
+    const first = await server.inject({ method: 'GET', url: '/api/recommendations' });
+    expect(first.statusCode).toBe(200);
+    expect(scorecardReads).toBe(1);
+    expect(recentPublishedReads).toBe(1);
+
+    const second = await server.inject({ method: 'GET', url: '/api/recommendations' });
+    expect(second.statusCode).toBe(200);
+    expect(scorecardReads).toBe(1);
+    expect(recentPublishedReads).toBe(1);
+    expect(second.json()).toEqual(first.json());
+
+    const personal = await server.inject({
+      method: 'GET',
+      url: '/api/recommendations',
+      headers: authHeaders('g:alice'),
+    });
+    expect(personal.statusCode).toBe(200);
+    // Affinity is per-request; community Firestore reads stay cached.
+    expect(scorecardReads).toBe(1);
+    expect(recentPublishedReads).toBe(1);
+    const personalBody = personal.json() as { items: Array<{ slug: string; reason: string }> };
+    expect(personalBody.items[0]).toEqual({ slug: 'puzzle-one', reason: 'continue' });
+
+    clock += 60_000 + 1;
+    const afterTtl = await server.inject({ method: 'GET', url: '/api/recommendations' });
+    expect(afterTtl.statusCode).toBe(200);
+    expect(scorecardReads).toBe(2);
+    expect(recentPublishedReads).toBe(2);
+
+    await server.close();
+  });
+
+  it('coalesces concurrent cold shared-signal refreshes into one store read', async () => {
+    let scorecardReads = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    const countingStore = new Proxy(store, {
+      get(target, prop, receiver) {
+        const value = Reflect.get(target, prop, receiver);
+        if (prop === 'listScorecards') {
+          return async (...args: Parameters<InMemoryStore['listScorecards']>) => {
+            scorecardReads += 1;
+            await gate;
+            return target.listScorecards(...args);
+          };
+        }
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+
+    await store.putScorecard(
+      'arcade-hit',
+      scorecard({
+        slug: 'arcade-hit',
+        sessions: { count: 10, bounces: 0, closes: 0, medianPlaySeconds: 10, totalPlaySeconds: 100 },
+      }),
+    );
+
+    const server = await buildApp({
+      store: countingStore as InMemoryStore,
+      sessionSecret,
+      recommendationRoutes: {
+        publishedSlugs: slugGate(games.map((g) => g.slug)),
+        catalog: catalogOf(games),
+      },
+    });
+
+    const pending = Promise.all([
+      server.inject({ method: 'GET', url: '/api/recommendations' }),
+      server.inject({ method: 'GET', url: '/api/recommendations' }),
+      server.inject({ method: 'GET', url: '/api/recommendations' }),
+    ]);
+    release();
+    const responses = await pending;
+    expect(responses.every((res) => res.statusCode === 200)).toBe(true);
+    expect(scorecardReads).toBe(1);
+
+    await server.close();
+  });
 });

@@ -60,6 +60,12 @@ function humanizeMoment(name: string): string {
     .join(' ');
 }
 
+/** Prefer a mid-capture still — `opening` is often an empty ready/title frame. */
+function defaultScreenshotIndex(screenshots: Array<{ name: string }>): number {
+  const idx = screenshots.findIndex((shot) => shot.name !== 'opening');
+  return idx >= 0 ? idx : 0;
+}
+
 function CatalogCard({
   entry,
   isYours = false,
@@ -73,34 +79,69 @@ function CatalogCard({
 }) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
-  // Defer preview media until the card is near the viewport — below-fold cards
-  // must not fetch posters/videos on initial home load.
-  const { ref: mediaRef, inView } = useInView<HTMLDivElement>({ rootMargin: '200px 0px', once: true });
-  const [selectedScreenshot, setSelectedScreenshot] = useState(0);
+  // Poster when near the fold; video `src` only on hover/play. Leave-view unloads
+  // so scrolled-away cards do not keep decoders and MP4 buffers alive.
+  const { ref: mediaRef, inView } = useInView<HTMLDivElement>({ rootMargin: '200px 0px', once: false });
+  const screenshots = entry.media?.screenshots ?? [];
+  const [selectedScreenshot, setSelectedScreenshot] = useState(() => defaultScreenshotIndex(screenshots));
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
   const [isPreviewPinned, setIsPreviewPinned] = useState(false);
-  const screenshots = entry.media?.screenshots ?? [];
+  const [videoArmed, setVideoArmed] = useState(false);
   const selected = screenshots[selectedScreenshot] ?? screenshots[0];
   const posterUrl = selected && inView ? catalogMediaUrl(entry.slug, selected.file) : undefined;
-  const videoUrl = entry.media?.video && inView ? catalogMediaUrl(entry.slug, entry.media.video) : null;
   const hasVideo = Boolean(entry.media?.video);
+  const videoUrl =
+    hasVideo && inView && videoArmed && entry.media?.video ? catalogMediaUrl(entry.slug, entry.media.video) : null;
 
-  function playPreview() {
+  useEffect(() => {
+    if (inView) return;
+    setVideoArmed(false);
+    setIsPreviewPlaying(false);
+    setIsPreviewPinned(false);
+  }, [inView]);
+
+  useEffect(() => {
+    if (!videoUrl) return;
     const video = videoRef.current;
     if (!video) return;
-    void video.play().then(
-      () => setIsPreviewPlaying(true),
-      () => setIsPreviewPlaying(false),
-    );
+    try {
+      void Promise.resolve(video.play()).then(
+        () => setIsPreviewPlaying(true),
+        () => setIsPreviewPlaying(false),
+      );
+    } catch {
+      setIsPreviewPlaying(false);
+    }
+  }, [videoUrl]);
+
+  function armPreview() {
+    setVideoArmed(true);
+    const video = videoRef.current;
+    if (!video?.src) return;
+    try {
+      void Promise.resolve(video.play()).then(
+        () => setIsPreviewPlaying(true),
+        () => setIsPreviewPlaying(false),
+      );
+    } catch {
+      setIsPreviewPlaying(false);
+    }
   }
 
-  function pausePreview(reset = false) {
+  function stopPreview() {
     const video = videoRef.current;
-    if (!video) return;
-    video.pause();
-    if (reset) {
-      video.currentTime = 0;
+    if (video) {
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
     }
+    setVideoArmed(false);
+    setIsPreviewPlaying(false);
+  }
+
+  function pausePreview() {
+    const video = videoRef.current;
+    if (video) video.pause();
     setIsPreviewPlaying(false);
   }
 
@@ -110,14 +151,14 @@ function CatalogCard({
       pausePreview();
     } else {
       setIsPreviewPinned(true);
-      playPreview();
+      armPreview();
     }
   }
 
   function selectScreenshot(index: number) {
     setSelectedScreenshot(index);
     setIsPreviewPinned(false);
-    pausePreview(true);
+    stopPreview();
   }
 
   return (
@@ -129,21 +170,21 @@ function CatalogCard({
         onPointerEnter={
           hasVideo
             ? (event) => {
-                if (event.pointerType === 'mouse') playPreview();
+                if (event.pointerType === 'mouse') armPreview();
               }
             : undefined
         }
         onPointerLeave={
           hasVideo
             ? (event) => {
-                if (event.pointerType === 'mouse' && !isPreviewPinned) pausePreview(true);
+                if (event.pointerType === 'mouse' && !isPreviewPinned) stopPreview();
               }
             : undefined
         }
         onFocus={
           hasVideo
             ? (event) => {
-                if (event.target === event.currentTarget) playPreview();
+                if (event.target === event.currentTarget) armPreview();
               }
             : undefined
         }
@@ -152,7 +193,7 @@ function CatalogCard({
             ? (event) => {
                 if (!event.currentTarget.contains(event.relatedTarget)) {
                   setIsPreviewPinned(false);
-                  pausePreview(true);
+                  stopPreview();
                 }
               }
             : undefined
@@ -160,7 +201,6 @@ function CatalogCard({
       >
         {videoUrl ? (
           <video
-            key={posterUrl}
             ref={videoRef}
             className="catalog-preview"
             src={videoUrl}
@@ -168,7 +208,7 @@ function CatalogCard({
             muted
             loop
             playsInline
-            preload="metadata"
+            preload="auto"
             aria-label={t('catalog.previewVideo', { title: entry.title })}
             onPlay={() => setIsPreviewPlaying(true)}
             onPause={() => setIsPreviewPlaying(false)}
@@ -341,11 +381,29 @@ function payloadToSignals(payload: CatalogSortPayload): CatalogSortSignals {
   };
 }
 
-function initialSignals(): { signals: CatalogSortSignals; ready: boolean } {
+function sameCatalogSortSignals(a: CatalogSortSignals, b: CatalogSortSignals): boolean {
+  if (a.recommended.length !== b.recommended.length || a.newest.length !== b.newest.length) return false;
+  if (a.sessions.size !== b.sessions.size || a.affinityLastPlayed.size !== b.affinityLastPlayed.size) return false;
+  for (let i = 0; i < a.recommended.length; i++) {
+    if (a.recommended[i] !== b.recommended[i]) return false;
+  }
+  for (let i = 0; i < a.newest.length; i++) {
+    if (a.newest[i] !== b.newest[i]) return false;
+  }
+  for (const [slug, sessions] of a.sessions) {
+    if (b.sessions.get(slug) !== sessions) return false;
+  }
+  for (const [slug, at] of a.affinityLastPlayed) {
+    if (b.affinityLastPlayed.get(slug) !== at) return false;
+  }
+  return true;
+}
+
+function initialSignals(viewerUid: string | null): { signals: CatalogSortSignals; ready: boolean } {
   if (typeof sessionStorage === 'undefined') {
     return { signals: EMPTY_CATALOG_SORT_SIGNALS, ready: false };
   }
-  const cached = readCachedCatalogSortPayload();
+  const cached = readCachedCatalogSortPayload(viewerUid);
   if (!cached) return { signals: EMPTY_CATALOG_SORT_SIGNALS, ready: false };
   return { signals: payloadToSignals(cached), ready: true };
 }
@@ -392,6 +450,7 @@ export function ArcadeCatalog({
 }: ArcadeCatalogProps) {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
+  const viewerUid = user?.uid ?? null;
   const locale = i18n.language;
   const [sortMode, setSortMode] = useState<CatalogSortMode>(() =>
     typeof localStorage === 'undefined' ? DEFAULT_CATALOG_SORT : readCatalogSortMode(),
@@ -401,25 +460,45 @@ export function ArcadeCatalog({
   );
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const sortMenuRef = useRef<HTMLDivElement | null>(null);
-  const initial = initialSignals();
-  const [signals, setSignals] = useState<CatalogSortSignals>(initial.signals);
-  const [signalsReady, setSignalsReady] = useState(initial.ready);
+  const [signals, setSignals] = useState<CatalogSortSignals>(() => initialSignals(viewerUid).signals);
+  const [signalsReady, setSignalsReady] = useState(() => initialSignals(viewerUid).ready);
   const [creatorItems, setCreatorItems] = useState<CreatorGameItem[]>([]);
 
+  // Fetch sort signals as soon as the arcade mounts — in parallel with App's
+  // catalog fetch — so cold load waits for max(catalog, signals), not their sum.
+  // Cache is viewer-scoped; a matching cache paints immediately, then the network
+  // response replaces it only when the payload actually differs (account switch,
+  // affinity drift) or an explicit post-play refresh asked for a re-rank.
   useEffect(() => {
-    if (catalogStatus !== 'ready' || catalogEntries.length === 0) {
-      return;
-    }
     let cancelled = false;
-    void fetchCatalogSortSignals(getRecentPlays()).then((payload) => {
-      if (cancelled) return;
-      setSignals(payloadToSignals(payload));
+    const cached = readCachedCatalogSortPayload(viewerUid);
+    if (cached) {
+      setSignals(payloadToSignals(cached));
       setSignalsReady(true);
-    });
+    } else {
+      setSignalsReady(false);
+    }
+    const forceReplace = recommendationsRefreshKey > 0;
+    void fetchCatalogSortSignals(getRecentPlays(), viewerUid)
+      .then((payload) => {
+        if (cancelled) return;
+        const next = payloadToSignals(payload);
+        if (forceReplace) {
+          setSignals(next);
+        } else {
+          setSignals((prev) => (sameCatalogSortSignals(prev, next) ? prev : next));
+        }
+        setSignalsReady(true);
+      })
+      .catch(() => {
+        // Transport failure must not leave the arcade stuck on the loading mascot.
+        if (cancelled) return;
+        setSignalsReady(true);
+      });
     return () => {
       cancelled = true;
     };
-  }, [catalogStatus, catalogEntries, recommendationsRefreshKey]);
+  }, [recommendationsRefreshKey, viewerUid]);
 
   // Creator games (published + in progress) — only while the gallery is visible.
   useEffect(() => {

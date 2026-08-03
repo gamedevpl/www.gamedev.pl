@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { clearCachedCatalogSortPayload } from './recommendationsApi.js';
 
 export interface User {
   uid: string;
@@ -167,6 +168,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+    clearCachedCatalogSortPayload();
     setUser(null);
   };
 
