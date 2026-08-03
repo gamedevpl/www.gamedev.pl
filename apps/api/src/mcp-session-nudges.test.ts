@@ -43,12 +43,12 @@ describe('mcp-session-nudges', () => {
   it('warns inbox_pending only while count > 0 (not on read_inbox itself)', () => {
     const nudges = createMcpNudgeTracker();
     const t0 = 1_000_000;
-    nudges.ensure(1, t0);
-    nudges.notePendingCount(1, 2);
+    nudges.notePendingCount(1, 2, t0);
+    expect(nudges.peek(1)?.startedAt).toBe(t0);
     expect(nudges.warningsFor(1, 'read_kit_file', t0).map((w) => w.code)).toContain('inbox_pending');
     expect(nudges.warningsFor(1, 'read_inbox', t0).map((w) => w.code)).not.toContain('inbox_pending');
     nudges.noteInboxCheck(1, t0);
-    nudges.notePendingCount(1, 0);
+    nudges.notePendingCount(1, 0, t0);
     expect(nudges.warningsFor(1, 'read_kit_file', t0 + 1)).toEqual([]);
   });
 

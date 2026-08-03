@@ -652,7 +652,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
     const pending = pendingCountFromPayload(data);
     if (pending !== null) {
-      nudgeTracker.notePendingCount(jobId, pending);
+      nudgeTracker.notePendingCount(jobId, pending, nowMs);
     }
 
     nudgeTracker.noteToolSuccess(jobId, toolName, nowMs);
@@ -663,7 +663,15 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     if (warnings.length > 0) {
       data = { ...data, warnings };
     }
-    return toolOk(data);
+    // Keep non-text content (e.g. get_gate_media's inline opening screenshot). Rebuilding
+    // via toolOk() would drop those blocks whenever a warning or piggyback lands.
+    return {
+      content: [
+        { type: 'text' as const, text: JSON.stringify(data) },
+        ...result.content.filter((block) => block.type !== 'text'),
+      ],
+      structuredContent: data,
+    };
   }
 
   /**

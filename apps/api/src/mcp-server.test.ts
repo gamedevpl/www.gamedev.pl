@@ -1422,6 +1422,41 @@ describe('POST /api/mcp (BY-05)', () => {
       expect(text).not.toContain(TINY_PNG);
     });
 
+    it('keeps the opening image when session nudges add warnings', async () => {
+      // applySessionNudges must not rebuild via toolOk alone — that dropped image blocks.
+      const store = new InMemoryStore();
+      await seedJob(store);
+      await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
+      app = await createApp(store, mediaGamesStore(), mediaObjectStore());
+      const sessionId = await initialize(app);
+      const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+      const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+      for (let i = 0; i < 6; i += 1) {
+        await callTool(app, 'list_examples', { sessionKey }, { 'mcp-session-id': sessionId });
+      }
+
+      const res = await mcpCall(
+        app,
+        'tools/call',
+        { name: 'get_gate_media', arguments: { sessionKey } },
+        { 'mcp-session-id': sessionId },
+      );
+      expect(res.statusCode).toBe(200);
+      const result = res.json().result as {
+        content: Array<{ type: string; data?: string; mimeType?: string }>;
+        structuredContent: { warnings?: Array<{ code: string }>; openingShot?: { attached: boolean } };
+        isError?: boolean;
+      };
+      expect(result.isError).toBeFalsy();
+      expect(result.structuredContent.warnings?.map((w) => w.code)).toContain('progress_stale');
+      expect(result.structuredContent.openingShot?.attached).toBe(true);
+      expect(result.content.find((part) => part.type === 'image')).toMatchObject({
+        mimeType: 'image/png',
+        data: TINY_PNG,
+      });
+    });
+
     it('reports available:false instead of erroring before anything is delivered', async () => {
       const store = new InMemoryStore();
       await seedJob(store);

@@ -58,7 +58,8 @@ export interface McpNudgeTracker {
   ensure(jobId: number, nowMs: number): JobNudgeState;
   noteProgress(jobId: number, nowMs: number): void;
   noteInboxCheck(jobId: number, nowMs: number): void;
-  notePendingCount(jobId: number, count: number): void;
+  /** `nowMs` is only used if the job has never been ensured — callers should pass the injected clock. */
+  notePendingCount(jobId: number, count: number, nowMs: number): void;
   noteToolSuccess(jobId: number, toolName: string, nowMs: number): void;
   warningsFor(jobId: number, toolName: string, nowMs: number): NudgeWarning[];
   /** Test helper. */
@@ -98,8 +99,8 @@ export function createMcpNudgeTracker(
     state.lastInboxCheckAt = nowMs;
   }
 
-  function notePendingCount(jobId: number, count: number): void {
-    const state = ensure(jobId, Date.now());
+  function notePendingCount(jobId: number, count: number, nowMs: number): void {
+    const state = ensure(jobId, nowMs);
     state.pendingCount = Math.max(0, count);
   }
 
