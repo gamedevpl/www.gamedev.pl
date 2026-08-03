@@ -46,10 +46,14 @@ export const MAX_REPAIR_ROUNDS = 2;
  * any of them was to remix a real game and read the wreckage.
  *
  * On by owner decision (2026-08-03), while one question is open: how often does
- * the lane land, and why does it miss? The switch is `vars.REMIX_DEBUG`, threaded
- * through the deploy — so closing it again is a settings change and not a
- * release. It is meant to close with the question, because it carries the
- * player's own utterance and a window left open long enough becomes a habit.
+ * the lane land, and why does it miss?
+ *
+ * Opening it is `vars.REMIX_DEBUG`, threaded through both deploy paths — slow
+ * and deliberate, which is right for a window onto players' own words. Closing
+ * it is *not* that switch: clearing a repository variable changes nothing on a
+ * revision already running, and the wait for the next deploy would be spent
+ * logging. `remixTracePaused` on the creation-limits document stops emission
+ * within the breaker's TTL, from the same place an operator already looks.
  *
  * The durable way to watch a run is `npm run remix:probe -w @gamedevpl/api`,
  * which costs no player a session and needs no flag at all.

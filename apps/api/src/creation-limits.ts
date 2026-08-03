@@ -212,6 +212,17 @@ export function createCreationGate(options: CreationGateOptions): CreationGate {
 export interface EditingGate {
   /** Decides and spends one of the day's editing-model slots, or refuses. */
   checkAndSpend(uid: string, dateStr: string): Promise<CreationGateOutcome>;
+  /**
+   * Whether the operator has closed the code-lane trace window.
+   *
+   * The trace is turned *on* by a deploy-threaded env flag — deliberate and
+   * slow, which is right for opening it. Turning it off must not need a
+   * release: clearing the repository variable changes nothing on a revision
+   * already running, and the interval between "I turned it off" and "it is off"
+   * is spent writing players' words to the log. So off lives here, in the same
+   * document the breaker uses, and takes effect within its TTL.
+   */
+  isTracePaused(): Promise<boolean>;
 }
 
 /**
@@ -234,6 +245,7 @@ export function createEditingGate(options: CreationGateOptions): EditingGate {
     globalDailySubmissionCap: null,
     editingPaused: false,
     globalDailyEditCap: null,
+    remixTracePaused: false,
   };
   let cache: { value: CreationLimits; expiresAt: number } | null = null;
 
@@ -254,6 +266,10 @@ export function createEditingGate(options: CreationGateOptions): EditingGate {
   }
 
   return {
+    async isTracePaused() {
+      return (await limits()).remixTracePaused === true;
+    },
+
     async checkAndSpend(uid, dateStr) {
       if (bypassesBreaker(uid)) return { allowed: true };
 

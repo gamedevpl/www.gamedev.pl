@@ -618,7 +618,13 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
           },
         );
 
-        if (codeLaneDebugEnabled()) {
+        // The flag opens the window; the breaker document closes it. Asymmetric
+        // on purpose: opening it is a deploy, because it should be deliberate,
+        // and closing it must not wait for one, because until it closes the log
+        // is filling with players' own words. Emission is what this gates — the
+        // lane may still assemble a trace, but nothing leaves the process.
+        const tracing = codeLaneDebugEnabled() && !(await options.editingGate?.isTracePaused());
+        if (tracing) {
           // Before the success branch, deliberately: a trace that only ever
           // described the runs that worked would be silent on the ones the flag
           // exists to explain.
@@ -637,7 +643,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
           return reply.send({
             ok: false,
             reason: outcome.reason,
-            ...(codeLaneDebugEnabled() && outcome.trace ? { debug: outcome.trace } : {}),
+            ...(tracing && outcome.trace ? { debug: outcome.trace } : {}),
             ...(outcome.summary ? { summary: outcome.summary } : {}),
           });
         }
@@ -669,7 +675,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
           html,
           undoable: true,
           region: outcome.region,
-          ...(codeLaneDebugEnabled() && outcome.trace ? { debug: outcome.trace } : {}),
+          ...(tracing && outcome.trace ? { debug: outcome.trace } : {}),
           ...(outcome.summary ? { summary: outcome.summary } : {}),
         });
       } finally {
