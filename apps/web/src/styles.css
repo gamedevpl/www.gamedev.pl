@@ -10867,6 +10867,16 @@ a.user-name--profile:focus-visible {
   font-size: 0.85rem;
 }
 
+.creator-profile-owner-actions {
+  margin: 0.85rem 0 0;
+}
+
+.creator-profile-owner-actions .secondary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .creator-profile-status {
   margin: 1rem 0;
   opacity: 0.8;
@@ -10937,32 +10947,7 @@ a.user-name--profile:focus-visible {
   opacity: 1;
 }
 
-/* Studio profile: quiet chrome chip, or claim panel on a game waiting to publish. */
-.creator-profile-editor {
-  margin: 0 0 0.85rem;
-}
-
-.creator-profile-editor.is-publish-gate {
-  margin: 0 0 1rem;
-}
-
-.creator-profile-editor.is-collapsed {
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
-
-.creator-profile-editor.is-expanded {
-  padding: 0.85rem 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.creator-profile-editor.needs-handle {
-  border-color: rgba(120, 210, 160, 0.35);
-}
-
+/* Profile claim/edit modals share form + preview styles below. */
 .creator-profile-editor-quiet {
   margin: 0;
   font-size: 0.85rem;
@@ -11020,68 +11005,29 @@ a.user-name--profile:focus-visible {
 }
 
 @media (min-width: 640px) {
-  .claim-handle-modal-body {
+  .claim-handle-modal-body,
+  .edit-profile-modal-body {
     grid-template-columns: 1fr minmax(10rem, 11.5rem);
     align-items: start;
   }
 
-  .claim-handle-modal-body .creator-profile-message {
+  .claim-handle-modal-body .creator-profile-message,
+  .edit-profile-modal-body .creator-profile-message {
     grid-column: 1 / -1;
   }
 }
 
-.creator-profile-chip-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.55rem 0.85rem;
+.edit-profile-modal-card {
+  max-width: 640px;
+  width: min(94vw, 640px);
 }
 
-.creator-profile-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  margin: 0;
-  padding: 0.3rem 0.65rem 0.3rem 0.3rem;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
-  color: inherit;
-  font: inherit;
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-
-.creator-profile-chip:hover,
-.creator-profile-chip:focus-visible {
-  border-color: rgba(255, 255, 255, 0.28);
-  background: rgba(255, 255, 255, 0.07);
-}
-
-.creator-profile-chip--claim {
-  padding: 0.4rem 0.8rem;
-  border-color: rgba(120, 210, 160, 0.4);
-  color: #c8f5da;
-}
-
-.creator-profile-chip-letter {
+.edit-profile-modal-body {
   display: grid;
-  place-items: center;
-  width: 1.55rem;
-  height: 1.55rem;
-  border-radius: 999px;
-  background: linear-gradient(145deg, #1f6b4a, #0d3d2a);
-  color: #e8fff4;
-  font-size: 0.75rem;
-  font-weight: 700;
+  gap: 1rem;
+  margin-top: 1rem;
 }
 
-.creator-profile-chip-sep {
-  margin: 0 0.3rem;
-  opacity: 0.45;
-}
-
-.creator-profile-chip-link,
 .creator-profile-text-link {
   font-size: 0.85rem;
   color: inherit;
@@ -11090,65 +11036,8 @@ a.user-name--profile:focus-visible {
   text-underline-offset: 2px;
 }
 
-.creator-profile-chip-link:hover,
 .creator-profile-text-link:hover {
   opacity: 1;
-}
-
-.creator-profile-editor-head-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.creator-profile-editor-title {
-  margin: 0;
-  font-size: 1rem;
-}
-
-.creator-profile-done {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  font-size: 0.85rem;
-  opacity: 0.75;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
-}
-
-.creator-profile-done:hover {
-  opacity: 1;
-}
-
-.creator-profile-editor-copy {
-  margin: 0.3rem 0 0;
-  font-size: 0.88rem;
-  opacity: 0.8;
-  max-width: 36rem;
-}
-
-.creator-profile-nudge {
-  margin: 0.5rem 0 0;
-  font-size: 0.88rem;
-  color: #b8f0d0;
-}
-
-.creator-profile-editor-body {
-  display: grid;
-  gap: 1rem;
-  margin-top: 0.85rem;
-}
-
-@media (min-width: 720px) {
-  .creator-profile-editor-body {
-    grid-template-columns: minmax(0, 1.2fr) minmax(12rem, 0.8fr);
-    align-items: start;
-  }
 }
 
 .creator-profile-form {

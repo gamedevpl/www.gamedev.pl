@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
 import { AuthModal } from './AuthModal.js';
 import { ClaimHandleModal } from './ClaimHandleModal.js';
-import { CreatorProfileEditor } from './CreatorProfileEditor.js';
 import { StudioCreatorProfileProvider } from './studioCreatorProfile.js';
 import type { GameHealth } from './healthApi.js';
 import { PixelIcon } from './PixelIcon.js';
@@ -536,8 +535,7 @@ export function CreatorStudioView({
           </button>
         </header>
 
-        {/* Quiet @handle chip once claimed. Claiming is a modal at publish need. */}
-        {!loading ? <CreatorProfileEditor /> : null}
+        {/* Profile edit lives on /creators/:handle. Studio only claims at publish need. */}
         <ClaimHandleModal isOpen={claimOpen} onClose={() => setClaimOpen(false)} />
 
         {loading ? (

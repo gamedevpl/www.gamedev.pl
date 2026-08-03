@@ -26,8 +26,8 @@ export type StudioCreatorProfile = {
   setNameInput: (value: string) => void;
   setBioInput: (value: string) => void;
   setAvatarMode: (value: AvatarMode) => void;
-  onClaim: (event: FormEvent) => Promise<void>;
-  onSaveDetails: (event: FormEvent) => Promise<void>;
+  onClaim: (event: FormEvent) => Promise<MeProfile | null>;
+  onSaveDetails: (event: FormEvent) => Promise<boolean>;
   refusalCopy: (code: HandleClaimError) => string;
   clearMessage: () => void;
 };
@@ -119,7 +119,7 @@ export function StudioCreatorProfileProvider({ children }: { children: ReactNode
     setAvatarMode(next.avatarMode ?? 'letter');
   };
 
-  const onClaim = async (event: FormEvent) => {
+  const onClaim = async (event: FormEvent): Promise<MeProfile | null> => {
     event.preventDefault();
     setStatus('saving');
     setMessage(null);
@@ -129,16 +129,18 @@ export function StudioCreatorProfileProvider({ children }: { children: ReactNode
       setMessage(t('creatorProfile.claimed'));
       setStatus('ready');
       await refreshUser();
+      return next;
     } catch (err) {
       const code = ((err as { code?: HandleClaimError }).code ?? 'unknown') as HandleClaimError;
       setMessage(refusalCopy(code));
       setStatus('ready');
+      return null;
     }
   };
 
-  const onSaveDetails = async (event: FormEvent) => {
+  const onSaveDetails = async (event: FormEvent): Promise<boolean> => {
     event.preventDefault();
-    if (!me?.handle) return;
+    if (!me?.handle) return false;
     setStatus('saving');
     setMessage(null);
     try {
@@ -151,9 +153,11 @@ export function StudioCreatorProfileProvider({ children }: { children: ReactNode
       setMessage(t('creatorProfile.saved'));
       setStatus('ready');
       await refreshUser();
+      return true;
     } catch {
       setMessage(t('creatorProfile.errors.unknown'));
       setStatus('ready');
+      return false;
     }
   };
 
