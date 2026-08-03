@@ -422,6 +422,8 @@ describe('SubmissionStatusView', () => {
       status: 'in_review',
       phase: 'ready_for_review',
       builder: 'self',
+      // Stale quiet can linger after gate-green — must not resurface as a stall chip.
+      stall: 'quiet',
       slug: 'studio-play',
       preview: { slug: 'studio-play' },
       progress: { headSha: 'v1', commits: [], checklist: [] },
@@ -455,6 +457,9 @@ describe('SubmissionStatusView', () => {
     expect(container.textContent).not.toContain('Continue with your agent');
     expect(container.textContent).not.toMatch(/could not load the connect steps/i);
     expect(container.querySelector('.status-feedback-route')).toBeNull();
+    expect(container.querySelector('.studio-status-chip')).toBeNull();
+    expect(container.textContent).not.toMatch(/quiet for a while|can't start it from here/i);
+    expect(container.querySelector('.studio-context-phase')?.textContent).toMatch(/Final check/i);
 
     await act(async () => {
       root.unmount();

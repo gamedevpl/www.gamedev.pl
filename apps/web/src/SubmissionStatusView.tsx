@@ -679,10 +679,11 @@ export function SubmissionStatusView({
                     needs a sentence here — the thread's emptyLabel only shows when there
                     are no turns, which is exactly when a bounced build still has planning
                     notes and used to look like nothing was wrong.
-                    Self rounds: no-agent-yet / quiet / gate-green resurface the connect
-                    card inside the transcript scroller (not this foot) so a phone still
-                    has room for the conversation. Delivery-cap is a failure sentence.
-                    When that card is up, skip the quiet chip — the card lead already says it. */}
+                    Self rounds: no-agent-yet / quiet resurface the connect card inside
+                    the transcript scroller (not this foot) so a phone still has room for
+                    the conversation. Gate-green is Done — no connect, no stale quiet chip.
+                    Delivery-cap is a failure sentence. When the connect card is up, skip
+                    the quiet chip — the card lead already says it. */}
                 {status.failure ? (
                   <ThreadStatusChip chipKey={`failure:${status.failure.reason}`}>
                     <PixelIcon name="signal" size={13} />
@@ -693,7 +694,7 @@ export function SubmissionStatusView({
                     <PixelIcon name="signal" size={13} />
                     <span>{t('statusView.states.needs_changes.description')}</span>
                   </ThreadStatusChip>
-                ) : isAwaitingOwnAgent(status) ? null : status.stall ? (
+                ) : isAwaitingOwnAgent(status) || status.phase === 'ready_for_review' ? null : status.stall ? (
                   <ThreadStatusChip chipKey={`stall:${status.stall}`}>
                     <PixelIcon name="signal" size={13} />
                     <span>{t(`statusView.stall.${status.stall}`)}</span>
@@ -824,12 +825,14 @@ export function SubmissionStatusView({
 
             {/* A dead round outranks a slow one: when both are set, the failure is
                 the explanation and the stall is just its symptom. Self quiet keeps
-                its warning and resurfaces the connect card. */}
+                its warning and resurfaces the connect card. Gate-green suppresses a
+                stale quiet stall — Final check is Done, not "agent wandered off". */}
             {status.failure ? (
               <p className="status-warning">
                 <PixelIcon name="signal" size={13} /> {t(`statusView.failure.${failureCopyKey(status.failure.reason)}`)}
               </p>
-            ) : selfCopy === 'no_agent_yet' ? null : selfCopy === 'quiet_agent' ? (
+            ) : status.phase === 'ready_for_review' ? null : selfCopy === 'no_agent_yet' ? null : selfCopy ===
+              'quiet_agent' ? (
               <p className="status-warning">
                 <PixelIcon name="signal" size={13} /> {t('statusView.stall.quietSelf')}
               </p>
