@@ -275,6 +275,14 @@ const SESSION_WORKFLOW_TEXT = [
   `If a call is refused: ${RETIRED_KEY_ETIQUETTE}`,
 ].join('\n');
 
+/**
+ * `BUILD_STEPS` widened to plain strings, for validating input that is `unknown`.
+ *
+ * `BUILD_STEPS.includes(x)` only accepts the `BuildStep` union, so checking a raw
+ * argument against it is a type error rather than a check.
+ */
+const BUILD_STEP_NAMES: ReadonlySet<string> = new Set<string>(BUILD_STEPS);
+
 const SESSION_KEY_PROP = {
   type: 'string' as const,
   description:
@@ -1131,7 +1139,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
               `Optional: step (one of ${BUILD_STEPS.join(', ')}), textLocalized, locale, done, total.`,
           );
         }
-        if (args.step !== undefined && (typeof args.step !== 'string' || !BUILD_STEPS.includes(args.step))) {
+        if (args.step !== undefined && (typeof args.step !== 'string' || !BUILD_STEP_NAMES.has(args.step))) {
           return toolErr(`step must be one of: ${BUILD_STEPS.join(', ')}`);
         }
         const payload: Record<string, unknown> = {
