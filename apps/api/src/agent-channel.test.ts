@@ -845,6 +845,80 @@ describe('agent build channel', () => {
       expect(response.json().control.mustFixGate).toBeUndefined();
     });
 
+    it('prefers a newer preview verdict over a stale red publish', async () => {
+      // Publish set deliveredVersion=v1 (and previewVersion=v1). A later mode=preview
+      // only advances previewVersion — delivered-first would keep reporting the old red.
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      await store.setSubmissionSlug(ISSUE, 'comet-courier');
+      await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
+      await store.setSubmissionPreviewVersion(ISSUE, 'v2');
+      const { gamesStore } = stubGamesStore();
+      app = await createApp(store, {
+        gamesStore: {
+          ...gamesStore,
+          getManifest: async (_slug: string, version: string) => {
+            if (version === 'v2') {
+              return {
+                previewGate: {
+                  green: false,
+                  ranAt: '2026-08-03T22:00:00Z',
+                  report: 'typecheck failed: missing export',
+                },
+              };
+            }
+            return {
+              gate: {
+                green: false,
+                ranAt: '2026-08-03T21:00:00Z',
+                report: 'trace stage refused: TRACE.json missing',
+              },
+            };
+          },
+        } as unknown as GamesStore,
+      });
+
+      const response = await app.inject({ method: 'GET', url: '/api/agent/build/inbox', headers: agentHeaders() });
+
+      expect(response.json()).toMatchObject({
+        gate: {
+          version: 'v2',
+          lane: 'preview',
+          status: 'preview_failed',
+          report: 'typecheck failed: missing export',
+        },
+      });
+      expect(response.json().control.mustFixGate).toMatch(/mode=preview/);
+    });
+
+    it('surfaces kit_outdated from a preview-lane check', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      await store.setSubmissionSlug(ISSUE, 'comet-courier');
+      await store.setSubmissionPreviewVersion(ISSUE, 'v1');
+      const { gamesStore } = stubGamesStore();
+      app = await createApp(store, {
+        gamesStore: {
+          ...gamesStore,
+          getManifest: async () => ({
+            previewGate: {
+              green: false,
+              ranAt: '2026-08-03T22:00:00Z',
+              report: 'kitEngineRef outside supported window',
+              status: 'kit_outdated',
+            },
+          }),
+        } as unknown as GamesStore,
+      });
+
+      const response = await app.inject({ method: 'GET', url: '/api/agent/build/inbox', headers: agentHeaders() });
+
+      expect(response.json()).toMatchObject({
+        gate: { version: 'v1', lane: 'preview', status: 'kit_outdated' },
+      });
+      expect(response.json().control.mustFixGate).toMatch(/kit_outdated|Creator Kit/i);
+    });
+
     it('keeps the channel working when the gate verdict cannot be read', async () => {
       // The channel is how an agent reports progress and reads its creator's messages.
       // A store that will not answer must cost it the verdict, not both.
@@ -1103,6 +1177,60 @@ describe('agent build channel', () => {
           { path: 'SPEC.md', content: '# Comet Courier' },
           { path: 'game.ts', content: 'export const tick = () => {};' },
         ],
+      });
+    });
+
+    it('restores a preview-only delivery when nothing has been published yet', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      await store.setSubmissionSlug(ISSUE, 'comet-courier');
+      await store.setSubmissionPreviewVersion(ISSUE, 'v1');
+      app = await createApp(store, {
+        gamesStore: storeWithVersion({ 'SPEC.md': '# Draft', 'game.ts': 'export {};' }),
+      });
+
+      const response = await app.inject({ method: 'GET', url: '/api/agent/build/sources', headers: agentHeaders() });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        delivery: { slug: 'comet-courier', version: 'v1' },
+        files: [
+          { path: 'SPEC.md', content: '# Draft' },
+          { path: 'game.ts', content: 'export {};' },
+        ],
+      });
+    });
+
+    it('restores the newer preview when a red publish pointer is still on the job', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      await store.setSubmissionSlug(ISSUE, 'comet-courier');
+      await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
+      await store.setSubmissionPreviewVersion(ISSUE, 'v2');
+      const filesByVersion: Record<string, Record<string, string>> = {
+        v1: { 'SPEC.md': '# Publish attempt' },
+        v2: { 'SPEC.md': '# Preview fix' },
+      };
+      app = await createApp(store, {
+        gamesStore: {
+          putCandidateSources: async () => ({ version: 'v1', manifest: {} as never }),
+          getManifest: async (_slug: string, version: string) => ({
+            sourceFiles: Object.keys(filesByVersion[version] ?? {}),
+          }),
+          getSourceFile: async (_slug: string, version: string, path: string) =>
+            filesByVersion[version]?.[path] ?? null,
+          putGateResult: async () => {},
+          putDerivedArtifact: async () => {},
+          getDerivedArtifact: async () => null,
+        } as unknown as GamesStore,
+      });
+
+      const response = await app.inject({ method: 'GET', url: '/api/agent/build/sources', headers: agentHeaders() });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        delivery: { slug: 'comet-courier', version: 'v2' },
+        files: [{ path: 'SPEC.md', content: '# Preview fix' }],
       });
     });
 

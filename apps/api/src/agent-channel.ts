@@ -498,7 +498,10 @@ export async function registerAgentChannelRoutes(
    */
   async function gateVerdict(record: SubmissionRecord) {
     const { slug } = record;
-    const version = record.deliveredVersion ?? record.previewVersion;
+    // Prefer previewVersion: publish writes both pointers to the same id, while a later
+    // mode=preview only advances previewVersion. delivered-first would keep reporting the
+    // stale publish red after the agent already fixed and re-previewed.
+    const version = record.previewVersion ?? record.deliveredVersion;
     if (!options.gamesStore || !slug || !version) return null;
     try {
       const manifest = await options.gamesStore.getManifest(slug, version);
@@ -519,6 +522,7 @@ export async function registerAgentChannelRoutes(
       }
       // Preview-lane check: never report as publishable green (that ends the MCP round).
       if (manifest?.previewGate) {
+        const kitOutdated = manifest.previewGate.status === 'kit_outdated';
         return {
           version,
           lane: 'preview' as const,
@@ -526,7 +530,11 @@ export async function registerAgentChannelRoutes(
           previewPassed: manifest.previewGate.green,
           ranAt: manifest.previewGate.ranAt,
           ...(manifest.previewGate.report ? { report: manifest.previewGate.report } : {}),
-          status: manifest.previewGate.green ? ('preview_passed' as const) : ('preview_failed' as const),
+          status: kitOutdated
+            ? ('kit_outdated' as const)
+            : manifest.previewGate.green
+              ? ('preview_passed' as const)
+              : ('preview_failed' as const),
         };
       }
       return null;
@@ -1011,11 +1019,13 @@ export async function registerAgentChannelRoutes(
    * The store already holds every delivered version, immutably; this is the read that
    * makes it the source of truth rather than a copy nobody can get back.
    *
-   * Prefer the job's own last delivery. When this job has not delivered yet but its
-   * slug is already published — the shape of every post-publish improvement, which is a
-   * *new* job on an existing game — fall back to the live publication. Without that,
-   * `npm run restore` reports nothing to restore and the agent rebuilds a stranger's
-   * game instead of revising the one the creator asked to change.
+   * Prefer the job's own latest candidate — previewVersion first (mode=preview may be
+   * the only upload so far, or a fix after a red publish), then deliveredVersion. When
+   * this job has neither but its slug is already published — the shape of every
+   * post-publish improvement, which is a *new* job on an existing game — fall back to
+   * the live publication. Without that, `npm run restore` reports nothing to restore
+   * and the agent rebuilds a stranger's game instead of revising the one the creator
+   * asked to change.
    *
    * Scoped to the job's own game by the same token that authorizes its delivery, so a
    * build can restore what it (or its published predecessor) delivered and nothing else.
@@ -1033,7 +1043,7 @@ export async function registerAgentChannelRoutes(
       }
 
       const slug = record.slug;
-      let version = record.deliveredVersion;
+      let version = record.previewVersion ?? record.deliveredVersion;
       // An improvement job inherits the slug before it has delivered anything of its
       // own. The publication pointer is what is live — the version the creator played.
       if (slug && !version) {
@@ -1531,7 +1541,8 @@ export async function registerAgentChannelRoutes(
    * Unlike every other channel read, a capability whose generation is exactly one
    * behind current is accepted — limited to this delivery's own verdict — so an agent
    * can observe the green that closed its round. Writes and other reads still 401.
-   * Query `?version=` to name a delivery; default is the job's latest `deliveredVersion`.
+   * Query `?version=` to name a delivery; default is the job's latest playable pointer
+   * (`previewVersion`, then `deliveredVersion`) — same order as Studio and restore.
    */
   app.get(
     '/api/agent/build/gate',
@@ -1543,7 +1554,7 @@ export async function registerAgentChannelRoutes(
 
       const query = request.query as { version?: string };
       const requestedVersion = typeof query.version === 'string' && query.version.trim() ? query.version.trim() : null;
-      const version = requestedVersion ?? record.deliveredVersion ?? record.previewVersion ?? null;
+      const version = requestedVersion ?? record.previewVersion ?? record.deliveredVersion ?? null;
 
       if (!version || !record.slug) {
         return reply.send({
@@ -1636,7 +1647,7 @@ export async function registerAgentChannelRoutes(
 
       const query = request.query as { version?: string; frames?: string };
       const requestedVersion = typeof query.version === 'string' && query.version.trim() ? query.version.trim() : null;
-      const version = requestedVersion ?? record.deliveredVersion ?? record.previewVersion ?? null;
+      const version = requestedVersion ?? record.previewVersion ?? record.deliveredVersion ?? null;
 
       if (!version || !record.slug) {
         return reply.send({

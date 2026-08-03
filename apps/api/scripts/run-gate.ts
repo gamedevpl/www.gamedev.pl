@@ -142,10 +142,12 @@ async function main(): Promise<void> {
       engineRef: outcome.engineCommit,
     });
   } else if (preview) {
-    // Never putGateResult — preview passes must not look publishable.
+    // Never putGateResult — preview passes must not look publishable. kit_outdated still
+    // rides along so the channel can tell the agent to refresh the kit, not chase smoke.
     await store.putPreviewGateResult(slug, version, {
       green: outcome.green,
       report: outcome.report,
+      ...(outcome.status ? { status: outcome.status } : {}),
     });
   } else {
     // The resolved sha rides along so the manifest ends up pinned to what was actually

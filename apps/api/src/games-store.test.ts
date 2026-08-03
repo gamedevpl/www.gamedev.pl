@@ -277,6 +277,32 @@ describe('GCS games store', () => {
     expect((await store.getManifest('g', version))?.gate).toMatchObject({ green: false, report: '3 checks failed' });
   });
 
+  it('records kit_outdated on a preview-lane check without touching gate', async () => {
+    const { impl } = stubGcs();
+    const store = createGcsGamesStore({ ...base, fetchImpl: impl });
+    const draft = MINIMAL.filter((f) => f.path !== 'TRACE.json' && f.path !== 'PLAYTEST.json');
+    const { version } = await store.putCandidateSources({
+      slug: 'g',
+      issueNumber: 1,
+      files: draft,
+      mode: 'preview',
+    });
+
+    await store.putPreviewGateResult('g', version, {
+      green: false,
+      report: 'kitEngineRef outside supported window',
+      status: 'kit_outdated',
+    });
+
+    const manifest = await store.getManifest('g', version);
+    expect(manifest?.gate).toBeUndefined();
+    expect(manifest?.previewGate).toMatchObject({
+      green: false,
+      report: 'kitEngineRef outside supported window',
+      status: 'kit_outdated',
+    });
+  });
+
   it('pins the engine the first gate run checked against, and never repins', async () => {
     const { impl } = stubGcs();
     const store = createGcsGamesStore({ ...base, fetchImpl: impl });

@@ -314,8 +314,10 @@ export interface VersionManifest {
   /**
    * Preview-lane check (`check:game --preview`). Separate from {@link gate} so a
    * typecheck/smoke/build pass never looks publishable to reconciliation or the catalog.
+   * `status: 'kit_outdated'` is preserved so agents refresh the kit instead of retrying
+   * typecheck/smoke/build against an unsupported engine pin.
    */
-  previewGate?: { green: boolean; ranAt: string; report?: string };
+  previewGate?: { green: boolean; ranAt: string; report?: string; status?: 'kit_outdated' };
   /**
    * The most recent *health* verdict: the same check re-run later against the current
    * engine, asking "does this game still work on today's GameKit".
@@ -426,7 +428,11 @@ export interface GamesStore {
    * Records a preview-lane check. Never touches {@link VersionManifest.gate} — a preview
    * pass must not make the version publishable.
    */
-  putPreviewGateResult(slug: string, version: string, result: { green: boolean; report?: string }): Promise<void>;
+  putPreviewGateResult(
+    slug: string,
+    version: string,
+    result: { green: boolean; report?: string; status?: 'kit_outdated' },
+  ): Promise<void>;
   /**
    * Records a *health* verdict — the check re-run against the current engine, long
    * after acceptance. Never touches `gate` or `engineRef`: health answers "does it
@@ -597,6 +603,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         green: result.green,
         ranAt: new Date(now()).toISOString(),
         ...(result.report ? { report: result.report } : {}),
+        ...(result.status ? { status: result.status } : {}),
       };
       await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
     },
