@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { build, transform } from 'esbuild';
 import { classifyTouchSource, type CatalogGameTouch } from './catalog-touch.js';
-import { GAME_KIT_MODULES } from './games-repo-contract.js';
+import { GAME_KIT_MODULES, type GameKitModuleName } from './games-repo-contract.js';
 import { isRateLimitResponse } from './github-rate-limit.js';
 
 export type { CatalogGameTouch } from './catalog-touch.js';
@@ -69,8 +69,11 @@ export interface GameSources {
 
 // GAME_KIT_MODULES lives in games-repo-contract.ts — CI re-checks the live
 // games repo copy when GAMES_REPO_TOKEN is set (issue #247).
-const MAX_GAME_MODULES = 64;
-const MAX_GAME_SOURCE_BYTES = 200 * 1024;
+const MAX_SOURCE_GRAPH_MODULES = 64;
+const MAX_SOURCE_GRAPH_BYTES = 200 * 1024;
+const GAME_KIT_MODULE_ENTRIES: Partial<Record<GameKitModuleName, string>> = {
+  racing: 'shared/verticals/racing/index.ts',
+};
 
 /**
  * Maps a relative import specifier onto a `.ts` source path.
@@ -109,7 +112,7 @@ interface GameManifest {
 }
 
 interface ParsedGameManifest {
-  modules: string[];
+  modules: GameKitModuleName[];
   sounds: string[];
   /**
    * Selected BGM track id from GAME.json (`audio.music` string). Null when the
@@ -141,7 +144,7 @@ function parseGameManifest(source: string): ParsedGameManifest {
   }
 
   if (!modules.includes('audio')) {
-    return { modules, sounds: [], music: null };
+    return { modules: modules as GameKitModuleName[], sounds: [], music: null };
   }
 
   const sounds = manifest.audio?.sounds;
@@ -161,7 +164,7 @@ function parseGameManifest(source: string): ParsedGameManifest {
     throw new Error('game manifest contains invalid audio music');
   }
 
-  return { modules, sounds, music };
+  return { modules: modules as GameKitModuleName[], sounds, music };
 }
 
 /**
@@ -797,27 +800,28 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
     return (await response.json()) as T;
   }
 
-  async function bundleGameTypeScript(
+  async function bundleTypeScriptGraph(
     entrySource: string,
     ref: string,
-    slug: string,
+    sourceRoot: string,
+    entryPath: string,
+    sourceKind: 'game' | 'GameKit module',
     overrides?: Record<string, string>,
-    /** When given, every module the walk loads is recorded here by game-relative path. */
+    /** When given, every module the walk loads is recorded here by root-relative path. */
     collect?: Map<string, string>,
   ): Promise<string> {
-    const gameRoot = `/games/${slug}`;
-    const loadedPaths = new Set([`${gameRoot}/game.ts`]);
+    const loadedPaths = new Set([entryPath]);
     let sourceBytes = Buffer.byteLength(entrySource, 'utf8');
-    if (sourceBytes > MAX_GAME_SOURCE_BYTES) {
-      throw new Error(`game TypeScript exceeds ${MAX_GAME_SOURCE_BYTES} bytes`);
+    if (sourceBytes > MAX_SOURCE_GRAPH_BYTES) {
+      throw new Error(`${sourceKind} TypeScript exceeds ${MAX_SOURCE_GRAPH_BYTES} bytes`);
     }
 
     const result = await build({
       stdin: {
         contents: entrySource,
         loader: 'ts',
-        resolveDir: gameRoot,
-        sourcefile: `${gameRoot}/game.ts`,
+        resolveDir: sourceRoot,
+        sourcefile: entryPath,
       },
       bundle: true,
       write: false,
@@ -827,43 +831,43 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       legalComments: 'inline',
       plugins: [
         {
-          name: 'github-game-modules',
+          name: 'github-typescript-modules',
           setup(builder) {
             builder.onResolve({ filter: /^\./ }, (args) => {
               // Games-repo TypeScript follows normal ESM habits: relative imports may
               // carry a `.ts` suffix, a `.js` suffix (TypeScript's Node ESM convention
               // — the source file is still `.ts`), or no suffix at all. Map all three
-              // onto a path under the game directory before the sandbox check; anything
-              // that escapes the game root is rejected.
+              // onto a path under the source root before the sandbox check; anything
+              // that escapes that root is rejected.
               const sourcePath = resolveGameTypeScriptPath(args.resolveDir, args.path);
-              if (!sourcePath || !sourcePath.startsWith(`${gameRoot}/`)) {
+              if (!sourcePath || !sourcePath.startsWith(`${sourceRoot}/`)) {
                 return {
-                  errors: [{ text: `game imports must be TypeScript files inside ${gameRoot}` }],
+                  errors: [{ text: `${sourceKind} imports must be TypeScript files inside ${sourceRoot}` }],
                 };
               }
-              return { path: sourcePath, namespace: 'github-game-source' };
+              return { path: sourcePath, namespace: 'github-typescript-source' };
             });
             builder.onResolve({ filter: /^[^.]/ }, (args) => ({
-              errors: [{ text: `game runtime dependency is forbidden: "${args.path}"` }],
+              errors: [{ text: `${sourceKind} runtime dependency is forbidden: "${args.path}"` }],
             }));
-            builder.onLoad({ filter: /.*/, namespace: 'github-game-source' }, async (args) => {
+            builder.onLoad({ filter: /.*/, namespace: 'github-typescript-source' }, async (args) => {
               // Prefer the resolved file; if an extensionless import pointed at a
               // directory, fall back to its index.ts (same rule TypeScript uses).
               // Count the *actual* source path once — not the synthetic `dir.ts`
               // plus `dir/index.ts` — so directory imports don't burn two slots
-              // toward MAX_GAME_MODULES.
+              // toward MAX_SOURCE_GRAPH_MODULES.
               let loadedPath = args.path;
               // An override shadows the ref's copy of the same file. Keyed by the
-              // game-relative path, which is what a source edit names.
+              // root-relative path, which is what a source edit names.
               const overrideOf = (absolutePath: string): string | null => {
-                if (!overrides || !absolutePath.startsWith(`${gameRoot}/`)) return null;
-                const relative = absolutePath.slice(gameRoot.length + 1);
+                if (!overrides || !absolutePath.startsWith(`${sourceRoot}/`)) return null;
+                const relative = absolutePath.slice(sourceRoot.length + 1);
                 return Object.hasOwn(overrides, relative) ? overrides[relative] : null;
               };
               let source = overrideOf(loadedPath) ?? (await readRawFile(loadedPath.slice(1), ref));
               if (source === null && loadedPath.endsWith('.ts')) {
                 const indexPath = `${loadedPath.slice(0, -'.ts'.length)}/index.ts`;
-                if (indexPath.startsWith(`${gameRoot}/`)) {
+                if (indexPath.startsWith(`${sourceRoot}/`)) {
                   const indexSource = overrideOf(indexPath) ?? (await readRawFile(indexPath.slice(1), ref));
                   if (indexSource !== null) {
                     loadedPath = indexPath;
@@ -872,17 +876,19 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
                 }
               }
               if (source === null) {
-                return { errors: [{ text: `game module not found: ${args.path}` }] };
+                return { errors: [{ text: `${sourceKind} module not found: ${args.path}` }] };
               }
-              collect?.set(loadedPath.slice(gameRoot.length + 1), source);
+              collect?.set(loadedPath.slice(sourceRoot.length + 1), source);
               if (!loadedPaths.has(loadedPath)) {
-                if (loadedPaths.size >= MAX_GAME_MODULES) {
-                  return { errors: [{ text: `game exceeds ${MAX_GAME_MODULES} TypeScript modules` }] };
+                if (loadedPaths.size >= MAX_SOURCE_GRAPH_MODULES) {
+                  return {
+                    errors: [{ text: `${sourceKind} exceeds ${MAX_SOURCE_GRAPH_MODULES} TypeScript modules` }],
+                  };
                 }
                 loadedPaths.add(loadedPath);
                 sourceBytes += Buffer.byteLength(source, 'utf8');
-                if (sourceBytes > MAX_GAME_SOURCE_BYTES) {
-                  return { errors: [{ text: `game TypeScript exceeds ${MAX_GAME_SOURCE_BYTES} bytes` }] };
+                if (sourceBytes > MAX_SOURCE_GRAPH_BYTES) {
+                  return { errors: [{ text: `${sourceKind} TypeScript exceeds ${MAX_SOURCE_GRAPH_BYTES} bytes` }] };
                 }
               }
               return {
@@ -897,9 +903,36 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
     });
     const output = result.outputFiles?.[0];
     if (!output) {
-      throw new Error('game TypeScript bundler produced no output');
+      throw new Error(`${sourceKind} TypeScript bundler produced no output`);
     }
     return output.text;
+  }
+
+  function bundleGameTypeScript(
+    entrySource: string,
+    ref: string,
+    slug: string,
+    overrides?: Record<string, string>,
+    collect?: Map<string, string>,
+  ): Promise<string> {
+    const gameRoot = `/games/${slug}`;
+    return bundleTypeScriptGraph(entrySource, ref, gameRoot, `${gameRoot}/game.ts`, 'game', overrides, collect);
+  }
+
+  async function compileGameKitModule(moduleName: GameKitModuleName, ref: string): Promise<string | null> {
+    const entryPath = GAME_KIT_MODULE_ENTRIES[moduleName] ?? `shared/modules/${moduleName}.ts`;
+    const source = await readRawFile(entryPath, ref);
+    if (source === null) return null;
+    if (GAME_KIT_MODULE_ENTRIES[moduleName]) {
+      return bundleTypeScriptGraph(source, ref, `/${path.posix.dirname(entryPath)}`, `/${entryPath}`, 'GameKit module');
+    }
+    const result = await transform(source, {
+      loader: 'ts',
+      target: 'es2022',
+      format: 'iife',
+      legalComments: 'inline',
+    });
+    return result.code;
   }
 
   return {
@@ -1241,7 +1274,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
 
       const manifest = parseGameManifest(manifestSource);
       const moduleSources = await Promise.all(
-        manifest.modules.map((moduleName) => readRawFile(`shared/modules/${moduleName}.ts`, ref)),
+        manifest.modules.map((moduleName) => compileGameKitModule(moduleName, ref)),
       );
       if (moduleSources.some((source) => source === null)) {
         return null;
@@ -1285,17 +1318,13 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       }
 
       const assetsJs = assetChunks.length > 0 ? `${assetChunks.join('\n')}\n` : '';
-      const transpiledSources = await Promise.all(
-        [coreTs, ...availableModuleSources].map(async (source) => {
-          const result = await transform(source, {
-            loader: 'ts',
-            target: 'es2022',
-            format: 'iife',
-            legalComments: 'inline',
-          });
-          return result.code;
-        }),
-      );
+      const coreResult = await transform(coreTs, {
+        loader: 'ts',
+        target: 'es2022',
+        format: 'iife',
+        legalComments: 'inline',
+      });
+      const transpiledSources = [coreResult.code, ...availableModuleSources];
       const gameJs = await bundleGameTypeScript(gameTs, ref, slug, overrides);
       const bundledJs = `${assetsJs}${transpiledSources.join('\n')}
 Object.freeze(window.GameKit);

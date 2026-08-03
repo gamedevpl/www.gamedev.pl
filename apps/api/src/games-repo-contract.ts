@@ -31,6 +31,8 @@ export const GAME_KIT_MODULES = [
   'actors',
   'gfx',
   'gfx3d',
+  // Genre vertical: the GitHub client bundles its private shared/verticals/racing graph.
+  'racing',
   'effects',
   'audio',
   'party',

@@ -727,6 +727,37 @@ describe('getGameSources', () => {
     expect(() => new Function(sources?.gameJs ?? '')).not.toThrow();
   });
 
+  it('bundles an opt-in GameKit vertical from its private TypeScript graph', async () => {
+    const files = new Map<string, string | Uint8Array>([
+      ['games/racer/index.html', '<canvas id="game"></canvas>'],
+      ['games/racer/game.ts', 'GameKit.mount({ vertical: GameKit.circuitRacer });'],
+      ['games/racer/style.css', '.game {}'],
+      ['games/racer/SPEC.md', specMd({ title: 'Racer' })],
+      ['games/racer/GAME.json', JSON.stringify({ engine: { modules: ['racing'] } })],
+      ['shared/game-shell.css', '.shell {}'],
+      ['shared/modules/core.ts', 'window.GameKit = { mount() {} };'],
+      [
+        'shared/verticals/racing/index.ts',
+        "import { createRace } from './simulation.ts'; Object.assign(GameKit, { circuitRacer: { createRace } });",
+      ],
+      ['shared/verticals/racing/simulation.ts', "export function createRace(): string { return 'vertical-loaded'; }"],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const requestedPath = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+      const value = files.get(requestedPath);
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    const sources = await client.getGameSources('main', 'racer');
+
+    expect(sources?.gameJs).toContain('vertical-loaded');
+    expect(sources?.gameJs).not.toContain('import ');
+    expect(() => new Function(sources?.gameJs ?? '')).not.toThrow();
+  });
+
   it('rejects a GAME.json that still uses a pre-draw-surface module list as incomplete order', async () => {
     // modules that omit required ordering relative to the canonical list are fine
     // as a subset — but unknown names must throw (the live 502 root cause).
