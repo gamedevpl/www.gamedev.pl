@@ -128,6 +128,12 @@ export interface SourceFile {
   content: string;
 }
 
+/**
+ * Delivery lane. Preview is the vibe-coding loop (typecheck→smoke→build, no TRACE).
+ * Publish is the sealed candidate the full gate judges for ready_for_review.
+ */
+export type DeliveryMode = 'preview' | 'publish';
+
 export class InvalidUploadError extends Error {
   constructor(message: string) {
     super(message);
@@ -174,8 +180,12 @@ export function forbiddenDeliveryPathReason(path: string): string | null {
  * Returns the files to store; throws {@link InvalidUploadError} with a message meant for
  * the agent, since the agent is the only one who can fix it and a vague rejection costs a
  * whole session.
+ *
+ * `mode: 'preview'` skips publish-stage seals (TRACE / PLAYTEST) so a first playable
+ * draft can land without burning the agent on capture tooling. Publish (default) keeps
+ * the hard requirements — a TRACE-less publishable candidate is still dead on arrival.
  */
-export function validateSourceUpload(files: SourceFile[]): SourceFile[] {
+export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = 'publish'): SourceFile[] {
   if (files.length === 0) throw new InvalidUploadError('no files in upload');
   if (files.length > MAX_UPLOAD_FILES) {
     throw new InvalidUploadError(`too many files: ${files.length} > ${MAX_UPLOAD_FILES}`);
@@ -225,28 +235,34 @@ export function validateSourceUpload(files: SourceFile[]): SourceFile[] {
   if (!seen.has('index.html') || !seen.has('game.ts')) {
     throw new InvalidUploadError('index.html and game.ts are required — a game must be playable');
   }
-  // Refused here rather than stored and failed later. Without the golden the gate cannot
-  // reach a verdict at all — it stops at the trace stage having proved nothing — so
-  // accepting the upload would mean storing a version that is dead on arrival, and
-  // telling the agent it had succeeded. It is still running at this moment and can
-  // record the golden and retry; twenty minutes later it is gone.
-  if (!seen.has('TRACE.json')) {
-    throw new InvalidUploadError(
-      'TRACE.json is required — the gate diffs your game against it and cannot verify a ' +
-        'delivery without one. Record it with `npm run trace -- <slug> --accept`, read what ' +
-        'it captured, then deliver again.',
-    );
-  }
-  // Same reasoning as TRACE.json, and the same failure without it: the harness's Check
-  // 26 refuses a game that does not declare its progress landmarks, so a delivery
-  // missing this one is stored, reported as accepted, and then stops at validate having
-  // produced no bundle at all. Told now, while the agent still exists to act on it.
-  if (!seen.has('PLAYTEST.json')) {
-    throw new InvalidUploadError(
-      'PLAYTEST.json is required — it declares the progress landmarks your CAPTURE.json ' +
-        'run must reach, and the gate refuses a game without one. The minimum is ' +
-        '{"expectProgress": ["round-start"]}; list richer landmarks if your capture reaches them.',
-    );
+  if (mode === 'publish') {
+    // Refused here rather than stored and failed later. Without the golden the gate cannot
+    // reach a verdict at all — it stops at the trace stage having proved nothing — so
+    // accepting the upload would mean storing a version that is dead on arrival, and
+    // telling the agent it had succeeded. It is still running at this moment and can
+    // record the golden and retry; twenty minutes later it is gone.
+    //
+    // Preview deliveries skip this: they run `check:game --preview` (typecheck→smoke→build)
+    // and only produce Studio-playable preview.html — never a publishable green.
+    if (!seen.has('TRACE.json')) {
+      throw new InvalidUploadError(
+        'TRACE.json is required for publish — the gate diffs your game against it and cannot ' +
+          'verify a publishable delivery without one. Record it with `npm run trace -- <slug> --accept`, ' +
+          'or deliver mode=preview first while iterating. Read what TRACE captured, then deliver again.',
+      );
+    }
+    // Same reasoning as TRACE.json, and the same failure without it: the harness's Check
+    // 26 refuses a game that does not declare its progress landmarks, so a delivery
+    // missing this one is stored, reported as accepted, and then stops at validate having
+    // produced no bundle at all. Told now, while the agent still exists to act on it.
+    if (!seen.has('PLAYTEST.json')) {
+      throw new InvalidUploadError(
+        'PLAYTEST.json is required for publish — it declares the progress landmarks your CAPTURE.json ' +
+          'run must reach, and the gate refuses a publishable game without one. The minimum is ' +
+          '{"expectProgress": ["round-start"]}; list richer landmarks if your capture reaches them. ' +
+          'Or deliver mode=preview while iterating without it.',
+      );
+    }
   }
   // AGENT.json is allowed above but deliberately not required here yet — see the
   // ALLOWED_SOURCE_FILES note. Missing file → Check 28 on the gate, not a 400 at upload.
@@ -288,8 +304,18 @@ export interface VersionManifest {
    * (`npm run trace -- --accept`) before `check:game` replays it.
    */
   origin?: 'editor';
+  /**
+   * Which lane produced this version. Absent on legacy manifests (= publish).
+   * Preview versions must never carry a publishable {@link gate}.green.
+   */
+  deliveryMode?: DeliveryMode;
   /** Verdict of our own gate. A version without a green one is never publishable. */
   gate?: GateVerdict;
+  /**
+   * Preview-lane check (`check:game --preview`). Separate from {@link gate} so a
+   * typecheck/smoke/build pass never looks publishable to reconciliation or the catalog.
+   */
+  previewGate?: { green: boolean; ranAt: string; report?: string };
   /**
    * The most recent *health* verdict: the same check re-run later against the current
    * engine, asking "does this game still work on today's GameKit".
@@ -372,6 +398,8 @@ export interface GamesStore {
     kitEngineRef?: string;
     /** Content-only Studio publish — see {@link VersionManifest.origin}. */
     origin?: 'editor';
+    /** Preview skips TRACE/PLAYTEST; default publish. */
+    mode?: DeliveryMode;
   }): Promise<{ version: string; manifest: VersionManifest }>;
   getManifest(slug: string, version: string): Promise<VersionManifest | null>;
   getSourceFile(slug: string, version: string, path: string): Promise<string | null>;
@@ -394,6 +422,11 @@ export interface GamesStore {
       screenshot?: string;
     },
   ): Promise<void>;
+  /**
+   * Records a preview-lane check. Never touches {@link VersionManifest.gate} — a preview
+   * pass must not make the version publishable.
+   */
+  putPreviewGateResult(slug: string, version: string, result: { green: boolean; report?: string }): Promise<void>;
   /**
    * Records a *health* verdict — the check re-run against the current engine, long
    * after acceptance. Never touches `gate` or `engineRef`: health answers "does it
@@ -494,7 +527,8 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
   return {
     async putCandidateSources(input) {
       assertSlug(input.slug);
-      const files = validateSourceUpload(input.files);
+      const mode: DeliveryMode = input.mode === 'preview' ? 'preview' : 'publish';
+      const files = validateSourceUpload(input.files, mode);
       const at = new Date(now());
       const version = versionId(at);
       const prefix = versionPrefix(input.slug, version);
@@ -513,6 +547,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         backend: input.backend,
         model: input.model,
         engineRef: input.engineRef,
+        deliveryMode: mode,
         ...(input.kitEngineRef ? { kitEngineRef: input.kitEngineRef } : {}),
         ...(input.origin ? { origin: input.origin } : {}),
         sourceFiles: files.map((file) => file.path),
@@ -550,6 +585,19 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       // First writer wins: the ref the *first* gate run checked against is the one the
       // verdict is reproducible against, and a re-run must not quietly repin it.
       if (result.engineRef && !manifest.engineRef) manifest.engineRef = result.engineRef;
+      await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
+    },
+
+    async putPreviewGateResult(slug, version, result) {
+      const prefix = versionPrefix(slug, version);
+      const existing = await readObject(`${prefix}/manifest.json`);
+      if (!existing) throw new Error(`no manifest for ${slug}@${version}`);
+      const manifest = JSON.parse(existing.toString('utf8')) as VersionManifest;
+      manifest.previewGate = {
+        green: result.green,
+        ranAt: new Date(now()).toISOString(),
+        ...(result.report ? { report: result.report } : {}),
+      };
       await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
     },
 

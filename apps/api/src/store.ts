@@ -124,6 +124,12 @@ export interface SubmissionRecord {
    */
   deliveredVersion?: string;
   /**
+   * Latest Studio-playable delivery (preview or publish). Preview-only rounds update
+   * this without setting {@link deliveredVersion}, so control.delivered / publication
+   * reconciliation still wait for a sealed publish delivery.
+   */
+  previewVersion?: string;
+  /**
    * How many times this job has been sent back for finishing without delivering.
    *
    * Counted rather than inferred from the transition history, which is capped and drops
@@ -1457,6 +1463,8 @@ export interface Store {
   setSubmissionTitle(issueNumber: number, title: string): Promise<void>;
   /** Records the candidate version a delivery just stored, for the preview to read. */
   setSubmissionDeliveredVersion(issueNumber: number, version: string): Promise<void>;
+  /** Latest playable version for Studio (preview or publish). */
+  setSubmissionPreviewVersion(issueNumber: number, version: string): Promise<void>;
   /** Counts a send-back for finishing without delivering. Returns the new total. */
   recordDeliveryNudge(issueNumber: number): Promise<number>;
   /** Stamps the moment a submission was first seen published (for build-time stats). */
@@ -2515,7 +2523,12 @@ export class InMemoryStore implements Store {
 
   async setSubmissionDeliveredVersion(issueNumber: number, version: string): Promise<void> {
     const sub = this.submissions.get(issueNumber);
-    if (sub) this.submissions.set(issueNumber, { ...sub, deliveredVersion: version });
+    if (sub) this.submissions.set(issueNumber, { ...sub, deliveredVersion: version, previewVersion: version });
+  }
+
+  async setSubmissionPreviewVersion(issueNumber: number, version: string): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (sub) this.submissions.set(issueNumber, { ...sub, previewVersion: version });
   }
 
   async recordDeliveryNudge(issueNumber: number): Promise<number> {
@@ -4235,7 +4248,11 @@ export class FirestoreStore implements Store {
     await this.db
       .collection('submissions')
       .doc(String(issueNumber))
-      .set({ deliveredVersion: version }, { merge: true });
+      .set({ deliveredVersion: version, previewVersion: version }, { merge: true });
+  }
+
+  async setSubmissionPreviewVersion(issueNumber: number, version: string): Promise<void> {
+    await this.db.collection('submissions').doc(String(issueNumber)).set({ previewVersion: version }, { merge: true });
   }
 
   async recordDeliveryNudge(issueNumber: number): Promise<number> {

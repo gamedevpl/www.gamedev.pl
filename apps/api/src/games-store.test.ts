@@ -94,6 +94,13 @@ describe('validateSourceUpload — the delivery contract', () => {
     );
   });
 
+  it('preview mode allows iterating without TRACE/PLAYTEST seals', () => {
+    const draft = MINIMAL.filter((f) => f.path !== 'TRACE.json' && f.path !== 'PLAYTEST.json');
+    expect(() => validateSourceUpload(draft, 'publish')).toThrow(/TRACE\.json is required/);
+    expect(validateSourceUpload(draft, 'preview').map((f) => f.path)).not.toContain('TRACE.json');
+    expect(validateSourceUpload(draft, 'preview').map((f) => f.path)).toContain('game.ts');
+  });
+
   it('accepts the agent-play contract without blocking pre-companion submit tools', () => {
     // The bug this PR fixes is "path not deliverable" for AGENT.json — accepting the
     // file is the unblock. Hard-requiring it would 400 in-flight workspaces that still

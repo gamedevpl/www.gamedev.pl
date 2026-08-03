@@ -56,6 +56,11 @@ export interface GateRunOptions {
    * not the one it was accepted against".
    */
   engineRef?: string;
+  /**
+   * Preview lane: `check:game --preview` (typecheck→smoke→build). Never stores
+   * bundle.html / publishable green — only preview.html.
+   */
+  preview?: boolean;
 }
 
 export interface GateRunnerDeps {
@@ -156,6 +161,7 @@ export async function runGate(
   // check:game run. Health re-gates skip this — they ask about today's engine, not
   // whether the original kit claim was still supported.
   const healthRun = Boolean(options.engineRef);
+  const previewRun = Boolean(options.preview);
   if (!healthRun && manifest.kitEngineRef) {
     const registry = await (deps.readKitRegistry ?? (() => deps.store.getKitRegistry()))().catch(() => null);
     if (registry && !isKitEngineRefSupported(manifest.kitEngineRef, registry)) {
@@ -197,7 +203,8 @@ export async function runGate(
     // validate including Check 31, accept, playtest) still judges the edited
     // content for real; `--accept` here only retires the has-it-changed question,
     // which for a content edit is always answered "yes, that was the point".
-    if (manifest.origin === 'editor') {
+    // Preview lane skips this: it never reaches the trace stage.
+    if (!previewRun && manifest.origin === 'editor') {
       const trace = await deps.run('npm', ['run', 'trace', '--', slug, '--accept'], harness);
       if (trace.code !== 0) {
         return {
@@ -216,18 +223,19 @@ export async function runGate(
       }
     }
 
-    // Deliberately without `--accept`. That flag re-records the behavioural golden
-    // instead of checking against it, which would make the trace stage unconditionally
-    // pass and quietly retire the one check that can catch a game behaving differently
-    // here than it did for the agent. The candidate ships its own `TRACE.json`, and the
-    // gate replays it against *our* engine: a golden recorded against a locally
-    // modified GameKit fails here, which is precisely the thing worth catching.
-    const check = await deps.run('npm', ['run', 'check:game', '--', slug], harness);
+    // Preview: typecheck→smoke→build only. Publish: full check:game without `--accept`
+    // (that flag re-records the behavioural golden instead of checking against it).
+    const check = await deps.run(
+      'npm',
+      previewRun ? ['run', 'check:game', '--', slug, '--preview'] : ['run', 'check:game', '--', slug],
+      harness,
+    );
     if (check.code !== 0) {
       // Preview for the creator; media when capture got far enough — both best-effort.
+      // Preview lane never runs capture, so media store is a no-op there.
       const artifacts = [
         ...(await storePreview(deps, slug, version, harness)),
-        ...(await storeCaptureMedia(deps, slug, version, harness, roots)),
+        ...(previewRun ? [] : await storeCaptureMedia(deps, slug, version, harness, roots)),
       ];
       const screenshot = firstGateScreenshotPath(artifacts);
       return {
@@ -246,6 +254,19 @@ export async function runGate(
         durationMs: now() - startedAt,
         ...(engineCommit ? { engineCommit } : {}),
         ...(screenshot ? { screenshot } : {}),
+      };
+    }
+
+    if (previewRun) {
+      // Preview pass: Studio-playable document only. Never bundle.html / media — those
+      // are publish seals. Caller writes previewGate, not gate.
+      const artifacts = await storePreview(deps, slug, version, harness);
+      return {
+        green: true,
+        report: `check:game --preview passed against engine ${engineCommit ?? engineRef}; preview.html stored`,
+        artifacts,
+        durationMs: now() - startedAt,
+        ...(engineCommit ? { engineCommit } : {}),
       };
     }
 

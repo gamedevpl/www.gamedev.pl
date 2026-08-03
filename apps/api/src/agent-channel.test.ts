@@ -39,7 +39,12 @@ async function createApp(
     maxEventsPerWindow?: number;
     gamesStore?: GamesStore;
     maxSubmitsPerWindow?: number;
-    onSourcesDelivered?: (input: { issueNumber: number; slug: string; version: string }) => void;
+    onSourcesDelivered?: (input: {
+      issueNumber: number;
+      slug: string;
+      version: string;
+      mode?: 'health' | 'preview';
+    }) => void;
   },
 ) {
   await store.upsertUser({ uid: 'g:owner' });
@@ -689,22 +694,30 @@ describe('agent build channel', () => {
     ];
 
     function stubGamesStore() {
-      const stored: Array<{ slug: string; issueNumber: number; files: unknown[]; kitEngineRef?: string }> = [];
+      const stored: Array<{
+        slug: string;
+        issueNumber: number;
+        files: unknown[];
+        kitEngineRef?: string;
+        mode?: string;
+      }> = [];
       const gamesStore = {
         putCandidateSources: async (input: {
           slug: string;
           issueNumber: number;
           files: unknown[];
           kitEngineRef?: string;
+          mode?: 'preview' | 'publish';
         }) => {
           stored.push(input);
           const { validateSourceUpload } = await import('./games-store.js');
-          validateSourceUpload(input.files as Array<{ path: string; content: string }>);
+          validateSourceUpload(input.files as Array<{ path: string; content: string }>, input.mode ?? 'publish');
           return { version: 'v1', manifest: {} as never };
         },
         getManifest: async () => null,
         getSourceFile: async () => null,
         putGateResult: async () => {},
+        putPreviewGateResult: async () => {},
         putDerivedArtifact: async () => {},
         getDerivedArtifact: async () => null,
         getKitRegistry: async () => null,
@@ -977,7 +990,7 @@ describe('agent build channel', () => {
       const store = new InMemoryStore();
       await seedSubmission(store);
       const { gamesStore } = stubGamesStore();
-      const delivered: Array<{ slug: string; version: string }> = [];
+      const delivered: Array<{ slug: string; version: string; mode?: string }> = [];
       app = await createApp(store, { gamesStore });
       // Re-create with the hook wired, since createApp builds options once.
       await app.close();
@@ -991,8 +1004,8 @@ describe('agent build channel', () => {
           translator: new NoopTranslator(),
           agentChannel: {
             gamesStore,
-            onSourcesDelivered: ({ slug, version }) => {
-              delivered.push({ slug, version });
+            onSourcesDelivered: ({ slug, version, mode }) => {
+              delivered.push({ slug, version, ...(mode ? { mode } : {}) });
             },
           },
         },
@@ -1006,6 +1019,51 @@ describe('agent build channel', () => {
       });
 
       expect(delivered).toEqual([{ slug: 'comet-courier', version: 'v1' }]);
+    });
+
+    it('preview mode accepts TRACE-less drafts and does not seal deliveredVersion', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore, stored } = stubGamesStore();
+      const delivered: Array<{ mode?: string }> = [];
+      app = await buildApp({
+        store,
+        sessionSecret,
+        submissionRoutes: {
+          githubClient: stubGitHub(),
+          githubToken: 'gh-token',
+          submissionTokenSecret: secret,
+          translator: new NoopTranslator(),
+          agentChannel: {
+            gamesStore,
+            onSourcesDelivered: (input) => {
+              delivered.push({ mode: input.mode });
+            },
+          },
+        },
+      });
+
+      const draft = MINIMAL.filter((f) => f.path !== 'TRACE.json' && f.path !== 'PLAYTEST.json');
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          files: draft,
+          kitEngineRef: 'abcdef1234567890',
+          mode: 'preview',
+        },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ accepted: true, mode: 'preview' });
+      expect(stored[0]?.mode).toBe('preview');
+      expect(delivered).toEqual([{ mode: 'preview' }]);
+
+      const record = await store.getSubmission(ISSUE);
+      expect(record?.previewVersion).toBe('v1');
+      expect(record?.deliveredVersion).toBeUndefined();
+      expect(record?.state).not.toBe('submitted');
     });
   });
 
