@@ -278,7 +278,7 @@ const SESSION_WORKFLOW_TEXT = [
 const SESSION_KEY_PROP = {
   type: 'string' as const,
   description:
-    'Short-lived session capability from start(). Present this argument OR configure Authorization: Bearer <round key> — not both required. Mcp-Session-Id alone is never authority.',
+    'Short-lived session capability from start(). Present this argument OR configure Authorization: Bearer <round key> — not both required. Send it with the same Mcp-Session-Id header start() used: that header alone is never authority, but a sessionKey is bound to the session that minted it, so a different one is refused. If the transport session is lost, call start() again — it re-binds and re-mints.',
 };
 
 export async function registerMcpServerRoutes(app: FastifyInstance, options: McpServerOptions = {}): Promise<void> {
@@ -1122,6 +1122,18 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
+        // The tool declares `text` required and then forwarded whatever arrived, so an
+        // agent guessing `phase`/`message` got the channel's bare `{"error":"Required"}`
+        // — which names neither the field that was missing nor the ones that exist.
+        if (typeof args.text !== 'string' || !args.text.trim()) {
+          return toolErr(
+            'report_progress needs text: a short English sentence about what you are doing. ' +
+              `Optional: step (one of ${BUILD_STEPS.join(', ')}), textLocalized, locale, done, total.`,
+          );
+        }
+        if (args.step !== undefined && (typeof args.step !== 'string' || !BUILD_STEPS.includes(args.step))) {
+          return toolErr(`step must be one of: ${BUILD_STEPS.join(', ')}`);
+        }
         const payload: Record<string, unknown> = {
           text: args.text,
           ...(typeof args.step === 'string' ? { step: args.step } : {}),
