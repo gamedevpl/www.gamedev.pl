@@ -633,6 +633,11 @@ describe('POST /api/mcp (BY-05)', () => {
       stop: false,
       pendingMessages: [expect.objectContaining({ text: 'Make it faster' })],
     });
+    // Soft nudge while creator notes are waiting — never isError.
+    expect(progress.isError).toBe(false);
+    expect((progress.structured as { warnings?: Array<{ code: string }> }).warnings?.map((w) => w.code)).toContain(
+      'inbox_pending',
+    );
 
     const acked = await callTool(app, 'ack_inbox', { sessionKey, ids: [msg.id] }, { 'mcp-session-id': sessionId });
     expect(acked.structured).toMatchObject({
@@ -643,6 +648,54 @@ describe('POST /api/mcp (BY-05)', () => {
     // stop/pendingMessages keys must be present on the write reply.
     expect(acked.structured).toHaveProperty('stop');
     expect(acked.structured).toHaveProperty('pendingMessages');
+  });
+
+  it('soft-nudges progress_stale after several tools without report_progress', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    let last: { structured: unknown; isError: boolean } | undefined;
+    for (let i = 0; i < 6; i += 1) {
+      last = await callTool(app, 'list_examples', { sessionKey }, { 'mcp-session-id': sessionId });
+      expect(last.isError).toBe(false);
+    }
+    const warnings = (last?.structured as { warnings?: Array<{ code: string; message: string }> }).warnings ?? [];
+    expect(warnings.map((w) => w.code)).toContain('progress_stale');
+    expect(warnings.find((w) => w.code === 'progress_stale')?.message).toMatch(/report_progress/);
+
+    const progress = await callTool(
+      app,
+      'report_progress',
+      { sessionKey, text: 'Still building.', step: 'mechanics' },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(progress.isError).toBe(false);
+    const cleared = await callTool(app, 'list_examples', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(
+      ((cleared.structured as { warnings?: Array<{ code: string }> }).warnings ?? []).map((w) => w.code),
+    ).not.toContain('progress_stale');
+  });
+
+  it('piggybacks pendingMessages on kit/browse-style reads and warns inbox_pending', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    await store.appendCreatorMessage(ISSUE, 'Add a power-up');
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    // list_examples is a hot read — should carry inbox piggyback without a separate read_inbox.
+    const examples = await callTool(app, 'list_examples', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(examples.isError).toBe(false);
+    expect(examples.structured).toMatchObject({
+      pendingMessages: [expect.objectContaining({ text: 'Add a power-up' })],
+      warnings: [expect.objectContaining({ code: 'inbox_pending' })],
+    });
   });
 
   it('rejects oversized screenshots at the MCP layer', async () => {
