@@ -88,8 +88,9 @@ describe('catalog playback', () => {
     const playButton = container.querySelector('.catalog-card .card-actions .primary-btn');
     expect(playButton?.textContent).toContain('Play');
     // Poster-first: cards near the fold show a still until preview is armed.
+    // Default still prefers a mid-capture over `opening`.
     const poster = container.querySelector<HTMLImageElement>('img.catalog-preview');
-    expect(poster?.getAttribute('src')).toBe('/api/games/sky-dodge/media/opening.png');
+    expect(poster?.getAttribute('src')).toBe('/api/games/sky-dodge/media/close-call.png');
     expect(container.querySelectorAll('.catalog-moment')).toHaveLength(2);
 
     const previewButton = container.querySelector<HTMLButtonElement>('.preview-toggle');
@@ -100,7 +101,7 @@ describe('catalog playback', () => {
     });
     const preview = container.querySelector<HTMLVideoElement>('video.catalog-preview');
     expect(preview?.getAttribute('src')).toBe('/api/games/sky-dodge/media/gameplay.mp4');
-    expect(preview?.getAttribute('poster')).toBe('/api/games/sky-dodge/media/opening.png');
+    expect(preview?.getAttribute('poster')).toBe('/api/games/sky-dodge/media/close-call.png');
     expect(previewButton?.textContent).toContain('Pause preview');
 
     // history.pushState fires nothing, so in-app navigation is announced explicitly

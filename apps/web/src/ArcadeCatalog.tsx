@@ -5,6 +5,7 @@ import { catalogMediaUrl, isPlatformAuthor, type CatalogEntry } from './catalog.
 import {
   applyCatalogFilters,
   CATALOG_SORT_MODES,
+  catalogSortNeedsSignals,
   DEFAULT_CATALOG_SORT,
   EMPTY_CATALOG_SORT_SIGNALS,
   orderCatalogEntries,
@@ -59,6 +60,12 @@ function humanizeMoment(name: string): string {
     .join(' ');
 }
 
+/** Prefer a mid-capture still — `opening` is often an empty ready/title frame. */
+function defaultScreenshotIndex(screenshots: Array<{ name: string }>): number {
+  const idx = screenshots.findIndex((shot) => shot.name !== 'opening');
+  return idx >= 0 ? idx : 0;
+}
+
 function CatalogCard({
   entry,
   isYours = false,
@@ -75,11 +82,11 @@ function CatalogCard({
   // Poster when near the fold; video `src` only on hover/play. Leave-view unloads
   // so scrolled-away cards do not keep decoders and MP4 buffers alive.
   const { ref: mediaRef, inView } = useInView<HTMLDivElement>({ rootMargin: '200px 0px', once: false });
-  const [selectedScreenshot, setSelectedScreenshot] = useState(0);
+  const screenshots = entry.media?.screenshots ?? [];
+  const [selectedScreenshot, setSelectedScreenshot] = useState(() => defaultScreenshotIndex(screenshots));
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
   const [isPreviewPinned, setIsPreviewPinned] = useState(false);
   const [videoArmed, setVideoArmed] = useState(false);
-  const screenshots = entry.media?.screenshots ?? [];
   const selected = screenshots[selectedScreenshot] ?? screenshots[0];
   const posterUrl = selected && inView ? catalogMediaUrl(entry.slug, selected.file) : undefined;
   const hasVideo = Boolean(entry.media?.video);
@@ -374,10 +381,13 @@ function payloadToSignals(payload: CatalogSortPayload): CatalogSortSignals {
   };
 }
 
-function initialSignals(): CatalogSortSignals {
-  if (typeof sessionStorage === 'undefined') return EMPTY_CATALOG_SORT_SIGNALS;
+function initialSignals(): { signals: CatalogSortSignals; ready: boolean } {
+  if (typeof sessionStorage === 'undefined') {
+    return { signals: EMPTY_CATALOG_SORT_SIGNALS, ready: false };
+  }
   const cached = readCachedCatalogSortPayload();
-  return cached ? payloadToSignals(cached) : EMPTY_CATALOG_SORT_SIGNALS;
+  if (!cached) return { signals: EMPTY_CATALOG_SORT_SIGNALS, ready: false };
+  return { signals: payloadToSignals(cached), ready: true };
 }
 
 function InProgressCard({ item, onOpen }: { item: CreatorGameItem; onOpen: (address: string) => void }) {
@@ -431,22 +441,27 @@ export function ArcadeCatalog({
   );
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const sortMenuRef = useRef<HTMLDivElement | null>(null);
-  const [signals, setSignals] = useState<CatalogSortSignals>(initialSignals);
+  const [signals, setSignals] = useState<CatalogSortSignals>(() => initialSignals().signals);
+  const [signalsReady, setSignalsReady] = useState(() => initialSignals().ready);
+  // If sessionStorage already gave us an order, a background refresh must not reshuffle
+  // the painted grid. Explicit bumps (after play) still re-rank.
+  const hadCachedSignalsRef = useRef(signalsReady);
   const [creatorItems, setCreatorItems] = useState<CreatorGameItem[]>([]);
 
+  // Fetch sort signals as soon as the arcade mounts — in parallel with App's
+  // catalog fetch — so cold load waits for max(catalog, signals), not their sum.
   useEffect(() => {
-    if (catalogStatus !== 'ready' || catalogEntries.length === 0) {
-      return;
-    }
     let cancelled = false;
+    const replaceOrder = !hadCachedSignalsRef.current || recommendationsRefreshKey > 0;
     void fetchCatalogSortSignals(getRecentPlays()).then((payload) => {
       if (cancelled) return;
-      setSignals(payloadToSignals(payload));
+      if (replaceOrder) setSignals(payloadToSignals(payload));
+      setSignalsReady(true);
     });
     return () => {
       cancelled = true;
     };
-  }, [catalogStatus, catalogEntries, recommendationsRefreshKey]);
+  }, [recommendationsRefreshKey]);
 
   // Creator games (published + in progress) — only while the gallery is visible.
   useEffect(() => {
@@ -539,6 +554,9 @@ export function ArcadeCatalog({
       return next;
     });
   }
+  const awaitingSignals =
+    catalogStatus === 'ready' && catalogEntries.length > 0 && catalogSortNeedsSignals(sortMode) && !signalsReady;
+
   const emptyMessage =
     yourGamesOnly && notPlayedOnly && (catalogEntries.length > 0 || mySlugs.size > 0)
       ? t('catalog.emptyYourGamesNotPlayed')
@@ -548,7 +566,11 @@ export function ArcadeCatalog({
           ? t('catalog.emptyNotPlayed')
           : t('catalog.empty');
   const showEmpty =
-    catalogStatus !== 'loading' && catalogStatus !== 'error' && orderedEntries.length === 0 && inProgress.length === 0;
+    !awaitingSignals &&
+    catalogStatus !== 'loading' &&
+    catalogStatus !== 'error' &&
+    orderedEntries.length === 0 &&
+    inProgress.length === 0;
 
   return (
     <section id="arcade" className="arcade-section">
@@ -641,7 +663,7 @@ export function ArcadeCatalog({
         </div>
       ) : null}
 
-      {catalogStatus === 'loading' ? (
+      {catalogStatus === 'loading' || awaitingSignals ? (
         <MascotMoment className="catalog-state" emotion="busy" size={56} title={t('mascot.busyAlt')}>
           <p>{t('catalog.loading')}</p>
         </MascotMoment>

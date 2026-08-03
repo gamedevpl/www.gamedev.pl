@@ -237,3 +237,8 @@ export function orderCatalogEntries(
   if (mine.length === 0) return sortCatalogEntries(others, mode, signals);
   return [...sortCatalogEntries(mine, mode, signals), ...sortCatalogEntries(others, mode, signals)];
 }
+
+/** Sort modes that need the recommendations payload to avoid painting the wrong order. */
+export function catalogSortNeedsSignals(mode: CatalogSortMode): boolean {
+  return mode !== 'alpha';
+}

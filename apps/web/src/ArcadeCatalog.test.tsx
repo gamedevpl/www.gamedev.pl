@@ -163,9 +163,10 @@ describe('ArcadeCatalog lazy media', () => {
     });
 
     // Near-fold: poster image only — no MP4 fetch until hover / play.
+    // Default still prefers a mid-capture over `opening` (often an empty ready frame).
     expect(container.querySelectorAll('video')).toHaveLength(0);
     const poster = container.querySelector<HTMLImageElement>('img.catalog-preview');
-    expect(poster?.getAttribute('src')).toBe('/api/games/above-fold/media/opening.png');
+    expect(poster?.getAttribute('src')).toBe('/api/games/above-fold/media/mid.png');
     expect(container.querySelectorAll('.catalog-moment')).toHaveLength(2);
 
     await act(async () => {
@@ -175,7 +176,7 @@ describe('ArcadeCatalog lazy media', () => {
 
     const preview = container.querySelector<HTMLVideoElement>('video.catalog-preview');
     expect(preview?.getAttribute('src')).toBe('/api/games/above-fold/media/gameplay.mp4');
-    expect(preview?.getAttribute('poster')).toBe('/api/games/above-fold/media/opening.png');
+    expect(preview?.getAttribute('poster')).toBe('/api/games/above-fold/media/mid.png');
 
     // The second card still has no media srcs — it never intersected.
     expect(container.querySelectorAll('video')).toHaveLength(1);
@@ -234,7 +235,7 @@ describe('ArcadeCatalog lazy media', () => {
     });
   });
 
-  it('renders the grid immediately without waiting for sort signals', async () => {
+  it('waits for sort signals before painting the grid (no provisional re-sort)', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     sessionStorage.clear();
     let resolveSignals: ((value: Response) => void) | undefined;
@@ -262,8 +263,8 @@ describe('ArcadeCatalog lazy media', () => {
       await flushEffects();
     });
 
-    expect(container.querySelectorAll('.catalog-card')).toHaveLength(2);
-    expect(container.querySelector('.catalog-state')).toBeNull();
+    expect(container.querySelectorAll('.catalog-card')).toHaveLength(0);
+    expect(container.querySelector('.catalog-state')?.textContent).toMatch(/Loading/i);
 
     await act(async () => {
       resolveSignals?.(
@@ -274,6 +275,41 @@ describe('ArcadeCatalog lazy media', () => {
       );
       await flushEffects();
     });
+
+    expect(container.querySelectorAll('.catalog-card')).toHaveLength(2);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('paints immediately when sort signals are already cached', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      () =>
+        new Promise<Response>(() => {
+          /* leave hanging — cache must be enough for first paint */
+        }),
+    );
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(ArcadeCatalog, {
+          catalogStatus: 'ready',
+          catalogError: null,
+          catalogEntries: entries,
+          onPlayGame: vi.fn(),
+          onPlayTogether: vi.fn(),
+          onRetryCatalog: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    expect(container.querySelectorAll('.catalog-card')).toHaveLength(2);
 
     await act(async () => {
       root.unmount();
