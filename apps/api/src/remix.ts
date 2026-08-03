@@ -5,6 +5,7 @@ import { PARAMS_KEY, parseEditorDefinition, type EditorDefinition } from './edit
 import { EDITOR_FILE } from './editor-contract.js';
 import { applyAssistPatches, assistEnabled, MAX_UTTERANCE_LENGTH, type EditorAssistant } from './editor-assist.js';
 import { codeLaneDebugEnabled, codeLaneEnabled, type VertexCodeLane } from './code-lane.js';
+import { typeCheckGame } from './type-check.js';
 import { buildSuggestions } from './remix-suggestions.js';
 import type { GamesStore } from './games-store.js';
 import type { Store } from './store.js';
@@ -603,9 +604,28 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       session.codeInFlight = true;
       try {
         const current = { ...session.sources, ...session.overrides };
+        // The kit is wanted twice — to show the editing call what `GameKit`
+        // actually offers, and to type-check what comes back — so it is fetched
+        // once and cached per ref by the client. A ref without one is not fatal:
+        // the edit is made with less to go on and the gate stands down.
+        const kit = options.githubClient ? await options.githubClient.getGameKitDeclaration(session.ref) : null;
         const outcome = await options.codeLane.run(
-          { slug: session.slug, sources: current, utterance: body.data.utterance, game: { title: session.title } },
+          {
+            slug: session.slug,
+            sources: current,
+            utterance: body.data.utterance,
+            game: { title: session.title },
+            ...(kit ? { kit } : {}),
+          },
           async (candidate) => {
+            // Type-check before building. esbuild only transpiles, so a wrong
+            // property name assembles into a perfectly valid document that
+            // breaks the game on the first frame — or worse, quietly draws
+            // nothing. This is the only step that can see that, and its message
+            // is the one a repair round can act on, so it goes first and its
+            // errors are what the model is handed.
+            const checked = typeCheckGame({ ...current, ...candidate }, kit);
+            if (!checked.ok) return checked;
             // "Does it build" is answered by building the real document — the same
             // assembler, CSP and caps the play path applies — so a green answer here
             // means the frame can actually run it.

@@ -85,6 +85,10 @@ function stubGitHubClient(
       if (slug !== 'dog-dash') return null;
       return { 'game.ts': SOURCES['game.ts'], 'game/runtime.ts': SOURCES['game/runtime.ts'] };
     },
+    // No kit declaration on this ref. The lane must still edit, and the
+    // type-check gate must stand down rather than failing every candidate —
+    // a fixture without the engine's declaration is not a broken game.
+    getGameKitDeclaration: async () => null,
     getGameSources: async (_ref: string, slug: string, overrides?: Record<string, string>) => {
       // Like the real client: a slug with no game directory on the ref is null.
       if (slug !== 'dog-dash') return null;

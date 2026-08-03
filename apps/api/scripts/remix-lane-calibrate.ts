@@ -18,7 +18,10 @@
 
 import path from 'node:path';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { GAMES_ROOT, assembleGame, typeCheck } from './remix-lane-bench.js';
+import { GAMES_ROOT, REF, assembleGame, github, typeCheck } from './remix-lane-bench.js';
+
+/** The game's own sources, so the check sees the whole game and not one file. */
+const gameSources = async () => (await github.getGameSourceMap(REF, SLUG)) ?? {};
 
 const SLUG = 'garden-gather';
 const FILE = 'game/model.ts';
@@ -55,13 +58,13 @@ async function main() {
   }
 
   const brokenStarted = Date.now();
-  const brokenCheck = typeCheck(SLUG, overrides);
+  const brokenCheck = await typeCheck(SLUG, { ...(await gameSources()), ...overrides });
   const brokenSeconds = ((Date.now() - brokenStarted) / 1000).toFixed(1);
   console.log(`\n3. tsc on the break (${brokenSeconds}s): ${brokenCheck.ok ? 'CLEAN — the gate would NOT catch this' : 'CAUGHT'}`);
   if (!brokenCheck.ok) for (const error of brokenCheck.errors) console.log(`     ${error}`);
 
   const cleanStarted = Date.now();
-  const cleanCheck = typeCheck(SLUG, {});
+  const cleanCheck = await typeCheck(SLUG, await gameSources());
   const cleanSeconds = ((Date.now() - cleanStarted) / 1000).toFixed(1);
   console.log(
     `\n4. tsc on the unedited game (${cleanSeconds}s): ${cleanCheck.ok ? 'CLEAN — safe to gate on' : 'DIRTY — gating would reject good edits'}`,
