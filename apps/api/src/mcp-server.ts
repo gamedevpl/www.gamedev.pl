@@ -44,6 +44,7 @@ import {
   newMcpSessionId,
   verifyMcpSessionKey,
 } from './mcp-session-key.js';
+import { mcpSessionStartedFields, mcpToolRefusalFields, toolErrorReason } from './mcp-debug-log.js';
 import {
   MCP_MISSING_CREDENTIAL_HINT,
   sendMcpOAuthChallenge,
@@ -389,35 +390,17 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     let claims: AgentTokenClaims;
     let channelToken: string;
 
-    // Paste-once MCP config leaves Authorization: Bearer <opener> on every request.
-    // When the tool also passes sessionKey, prefer that — openers never authorize writes.
+    // Paste-once MCP config leaves Authorization: Bearer <opener or OAuth access> on
+    // every request (ChatGPT Apps, Claude connectors, Studio "connect" snippets).
+    // Those credentials never authorize writes — prefer sessionKey when present.
+    // A round-scoped Bearer is different: it is itself a write credential, and must
+    // keep working even if the client also echoes a stale sessionKey from an earlier
+    // transport session (reconnect with retained tool args).
     const bearerIsOpener = Boolean(bearer) && (looksLikeGameAgentKey(bearer!) || looksLikeCreatorAgentKey(bearer!));
+    const bearerIsOAuth = Boolean(bearer) && looksLikeAsAccessToken(bearer!);
+    const preferSessionKey = Boolean(sessionKeyArg) && (!bearer || bearerIsOAuth || bearerIsOpener);
 
-    if (bearer && looksLikeAsAccessToken(bearer)) {
-      return toolErr(
-        'OAuth access proves your identity only — call start() with your game slug (Authorization: Bearer <oauth access>) to get a session key',
-      );
-    }
-
-    if (bearerIsOpener && !sessionKeyArg) {
-      return toolErr(
-        looksLikeCreatorAgentKey(bearer!)
-          ? 'this creator key only opens a session via start() — pass the sessionKey start returned for later tools'
-          : 'this game key only opens a session via start() — pass the sessionKey start returned for later tools',
-      );
-    }
-
-    if (bearer && !bearerIsOpener) {
-      try {
-        claims = verifyAgentToken(bearer, agentTokenSecret);
-      } catch (error) {
-        if (error instanceof InvalidAgentTokenError) {
-          return toolErr(error.message || 'invalid build key');
-        }
-        throw error;
-      }
-      channelToken = bearer;
-    } else if (sessionKeyArg) {
+    if (preferSessionKey) {
       if (looksLikeGameAgentKey(sessionKeyArg)) {
         return toolErr(
           'this game key only opens a session via start() — pass the sessionKey start returned for later tools',
@@ -434,7 +417,14 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         assertMcpSessionKeyUnexpired(sessionClaims, now());
       } catch (error) {
         if (error instanceof InvalidAgentTokenError) {
-          return toolErr(error.message || FINISHED_REASON);
+          // Expired keys carry STALE_AGENT_TOKEN_REASON (correct: round is done).
+          // Forge/malformed throws InvalidAgentTokenError with the generic default —
+          // do not rewrite that as "finished" or agents will chase the wrong fix.
+          return toolErr(
+            error.message === STALE_AGENT_TOKEN_REASON
+              ? STALE_AGENT_TOKEN_REASON
+              : 'invalid sessionKey — call start() again',
+          );
         }
         throw error;
       }
@@ -455,6 +445,26 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         now: now(),
         ttlDays: 1,
       });
+    } else if (bearerIsOAuth) {
+      return toolErr(
+        'OAuth access proves your identity only — call start() with your game slug (Authorization: Bearer <oauth access>) to get a session key',
+      );
+    } else if (bearerIsOpener) {
+      return toolErr(
+        looksLikeCreatorAgentKey(bearer!)
+          ? 'this creator key only opens a session via start() — pass the sessionKey start returned for later tools'
+          : 'this game key only opens a session via start() — pass the sessionKey start returned for later tools',
+      );
+    } else if (bearer) {
+      try {
+        claims = verifyAgentToken(bearer, agentTokenSecret);
+      } catch (error) {
+        if (error instanceof InvalidAgentTokenError) {
+          return toolErr(error.message || 'invalid build key');
+        }
+        throw error;
+      }
+      channelToken = bearer;
     } else {
       // Possession of Mcp-Session-Id alone authorizes nothing.
       return toolErr(MCP_MISSING_CREDENTIAL_HINT);
@@ -1804,6 +1814,16 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
     // Non-initialize requests: require session header when we issued one (transport only).
     if (sessionHeader && !transportSessions.has(sessionHeader)) {
+      // In-memory map miss (multi-instance, prune, or client inventing an id). ChatGPT
+      // often hides the 404 body — log so GCP can show the correlator that was refused.
+      request.log.warn(
+        {
+          event: 'mcp_unknown_session',
+          transportSessionId: sessionHeader,
+          userAgent: headerValue(request.headers['user-agent'])?.slice(0, 120) ?? undefined,
+        },
+        'mcp unknown session',
+      );
       return reply.status(404).send({ error: 'unknown MCP session' });
     }
 
@@ -1844,6 +1864,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         return reply.send(jsonRpcError(message.id, -32601, `unknown tool: ${name}`));
       }
       const args = params.arguments && typeof params.arguments === 'object' ? params.arguments : {};
+      const sessionKeyArg = typeof args.sessionKey === 'string' ? args.sessionKey.trim() : '';
+      const userAgent = headerValue(request.headers['user-agent']);
       try {
         const result = await tool.handler(args, ctx);
         // Echo session id on tool responses when we have one (transport correlator).
@@ -1853,9 +1875,47 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           const sid = (result.structuredContent as { sessionId?: string }).sessionId;
           if (sid) reply.header('Mcp-Session-Id', sid);
         }
+
+        // Connectors often omit isError payloads from the chat transcript. These lines
+        // are the durable signal in Cloud Logging — never include sessionKey / bearer.
+        const reason = toolErrorReason(result);
+        if (reason) {
+          request.log.warn(
+            mcpToolRefusalFields({
+              tool: name,
+              reason,
+              bearer: bearerToken,
+              sessionKey: sessionKeyArg,
+              transportSessionId: sessionHeader,
+              agentTokenSecret,
+              userAgent,
+            }),
+            'mcp tool refused',
+          );
+        } else if (name === 'start' && result.structuredContent && typeof result.structuredContent === 'object') {
+          const started = result.structuredContent as {
+            jobId?: unknown;
+            slug?: unknown;
+            sessionId?: unknown;
+            round?: unknown;
+          };
+          if (typeof started.jobId === 'number' && typeof started.sessionId === 'string') {
+            request.log.info(
+              mcpSessionStartedFields({
+                jobId: started.jobId,
+                slug: typeof started.slug === 'string' ? started.slug : null,
+                sessionId: started.sessionId,
+                round: typeof started.round === 'number' ? started.round : 0,
+                userAgent,
+              }),
+              'mcp session started',
+            );
+          }
+        }
+
         return reply.send(jsonRpcResult(message.id, result));
       } catch (error) {
-        app.log.error({ err: error }, 'MCP tool handler failed');
+        app.log.error({ err: error, tool: name }, 'MCP tool handler failed');
         return reply.send(
           jsonRpcResult(message.id, toolErr(error instanceof Error ? error.message : 'internal error')),
         );
@@ -1889,6 +1949,19 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
     const message = body as JsonRpcRequest;
     if (shouldIssueMcpOAuthChallenge(request, message)) {
+      const tool =
+        message.method === 'tools/call' && message.params && typeof message.params === 'object'
+          ? String((message.params as { name?: unknown }).name ?? '')
+          : '';
+      request.log.warn(
+        {
+          event: 'mcp_oauth_challenge',
+          tool: tool || undefined,
+          method: message.method,
+          userAgent: headerValue(request.headers['user-agent'])?.slice(0, 120) ?? undefined,
+        },
+        'mcp oauth challenge',
+      );
       return sendMcpOAuthChallenge(reply);
     }
 

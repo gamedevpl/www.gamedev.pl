@@ -82,6 +82,30 @@ node infra/gcp-read.mjs describe gamedev-app            # full service config
 node infra/gcp-read.mjs raw GET <any GCP REST url>      # anything not wrapped above
 ```
 
+### MCP / self-build debugging
+
+ChatGPT Apps and some other MCP clients drop `isError` tool payloads from the chat
+transcript, so a failed `get_brief` after a successful `start` can look like “no
+response”. The API writes structured lines for that path (never the `sessionKey` or
+Bearer secret):
+
+```bash
+# Tool-level refusals: reason, tool, bearerKind, sessionKeyShape, jobId, sessionIdMismatch, userAgent
+node infra/gcp-read.mjs logs 'jsonPayload.event="mcp_tool_refused" OR jsonPayload.msg="mcp tool refused"' --since 6h --limit 50
+
+# Successful start() binds (jobId, slug, transport sessionId)
+node infra/gcp-read.mjs logs 'jsonPayload.event="mcp_session_started" OR jsonPayload.msg="mcp session started"' --since 6h --limit 50
+
+# HTTP 401 OAuth challenge (no sessionKey / Bearer on tools/call)
+node infra/gcp-read.mjs logs 'jsonPayload.event="mcp_oauth_challenge" OR jsonPayload.msg="mcp oauth challenge"' --since 6h --limit 50
+
+# Client sent an Mcp-Session-Id this instance does not know (multi-instance / stale)
+node infra/gcp-read.mjs logs 'jsonPayload.event="mcp_unknown_session" OR jsonPayload.msg="mcp unknown session"' --since 6h --limit 50
+
+# HTTP shape next to those lines (responseSize includes headers)
+node infra/gcp-read.mjs logs 'resource.type="cloud_run_revision" AND httpRequest.requestUrl=~"/api/mcp" AND httpRequest.userAgent=~"openai|claude"' --since 6h --limit 50
+```
+
 `raw` is the escape hatch: any runbook `gcloud` step has a REST equivalent, and the credential
 — not the wrapper — is what stops a mutation. Start with `whoami`; if a command 403s, that
 output tells you immediately whether it is a permission boundary or a real fault.

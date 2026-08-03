@@ -4,7 +4,7 @@ import fastifyWebsocket from '@fastify/websocket';
 import type { GameGenerator } from '@gamedevpl/game-generator';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import { z } from 'zod';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import { registerAccessTokenRoutes } from './access-token-routes.js';
@@ -74,7 +74,8 @@ const GenerateRequestSchema = z.object({
 
 export interface BuildAppOptions {
   generator?: GameGenerator;
-  logger?: boolean;
+  /** `false` in tests by default; pass a Pino destination to assert on log lines. */
+  logger?: FastifyServerOptions['logger'];
   store?: Store;
   sessionSecret?: string;
   sessionSecretPrev?: string;
