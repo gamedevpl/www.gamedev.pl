@@ -5463,6 +5463,9 @@ a.user-name--profile:focus-visible {
 
 .studio-connect-hide.is-foot {
   width: 100%;
+  padding: 0.55rem 0.85rem;
+  border-color: var(--turquoise, #00e4ac);
+  background: color-mix(in srgb, var(--turquoise, #00e4ac) 18%, transparent);
 }
 
 @media (max-width: 800px) {
