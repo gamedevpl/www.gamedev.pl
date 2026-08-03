@@ -6,6 +6,7 @@ import {
   resetCatalogScrollIdleForTests,
   setCatalogScrollingForTests,
   watchCatalogScrollIdle,
+  whenCatalogScrollIdle,
 } from './catalogScrollIdle.js';
 
 describe('catalogScrollIdle', () => {
@@ -33,5 +34,36 @@ describe('catalogScrollIdle', () => {
     expect(isCatalogScrolling()).toBe(true);
     setCatalogScrollingForTests(false);
     expect(isCatalogScrolling()).toBe(false);
+  });
+
+  it('runs whenCatalogScrollIdle immediately when idle', () => {
+    const fn = vi.fn();
+    whenCatalogScrollIdle(fn);
+    expect(fn).toHaveBeenCalledOnce();
+  });
+
+  it('defers whenCatalogScrollIdle until scrolling settles', () => {
+    vi.useFakeTimers();
+    watchCatalogScrollIdle();
+    window.dispatchEvent(new Event('scroll'));
+
+    const fn = vi.fn();
+    whenCatalogScrollIdle(fn);
+    expect(fn).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(140);
+    expect(fn).toHaveBeenCalledOnce();
+  });
+
+  it('lets callers cancel a pending idle waiter', () => {
+    vi.useFakeTimers();
+    watchCatalogScrollIdle();
+    window.dispatchEvent(new Event('scroll'));
+
+    const fn = vi.fn();
+    const cancel = whenCatalogScrollIdle(fn);
+    cancel();
+    vi.advanceTimersByTime(140);
+    expect(fn).not.toHaveBeenCalled();
   });
 });

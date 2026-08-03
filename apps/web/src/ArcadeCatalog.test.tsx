@@ -189,6 +189,65 @@ describe('ArcadeCatalog lazy media', () => {
     });
   });
 
+  it('opens moments on video-less cards via the moments toggle', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ items: [] })));
+    const stillsOnly: CatalogEntry[] = [
+      {
+        ...entries[0]!,
+        slug: 'stills-only',
+        title: 'Stills Only',
+        media: {
+          screenshots: [
+            { name: 'opening', file: 'opening.png' },
+            { name: 'mid', file: 'mid.png' },
+          ],
+          video: null,
+        },
+      },
+    ];
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(ArcadeCatalog, {
+          catalogStatus: 'ready',
+          catalogError: null,
+          catalogEntries: stillsOnly,
+          onPlayGame: vi.fn(),
+          onPlayTogether: vi.fn(),
+          onRetryCatalog: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    const media = container.querySelector('.catalog-media')!;
+    expect(media.getAttribute('tabindex')).toBe('0');
+    await act(async () => {
+      intersect(observers[0]!, media, true);
+      await flushEffects();
+    });
+
+    expect(container.querySelectorAll('.catalog-moment')).toHaveLength(0);
+    const toggle = container.querySelector<HTMLButtonElement>('.preview-toggle');
+    expect(toggle?.getAttribute('aria-label')).toMatch(/Show moments/i);
+
+    await act(async () => {
+      toggle?.click();
+      await flushEffects();
+    });
+
+    expect(container.querySelectorAll('.catalog-moment')).toHaveLength(2);
+    expect(container.querySelectorAll('video')).toHaveLength(0);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('unloads poster and video when a card leaves the viewport', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ items: [] })));

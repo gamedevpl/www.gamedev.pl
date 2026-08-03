@@ -185,6 +185,8 @@
     "watchPreview": "Watch preview",
     "pausePreview": "Pause preview",
     "gameMoments": "Gameplay moments from {{title}}",
+    "showMoments": "Show moments",
+    "hideMoments": "Hide moments",
     "viewMoment": "View {{moment}} from {{title}}",
     "keyboardOnly": "Keyboard only",
     "keyboardOnlyTooltip": "This game has no touch controls — it needs a keyboard.",
