@@ -694,9 +694,14 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     } else if (data.seedAvailable === true) {
       nudgeTracker.noteSeedStatus(jobId, 'available', nowMs);
     } else if (store && (toolName === 'get_brief' || SEED_STATUS_LOOKUP_TOOLS.has(toolName))) {
-      const record = await store.getSubmission(jobId);
-      if (record) {
-        nudgeTracker.noteSeedStatus(jobId, seedPayload(record).seedStatus, nowMs);
+      // Only re-read while unknown/pending — available/unavailable are terminal for the
+      // round, and kit browse would otherwise pay a Firestore read per tool call.
+      const known = nudgeTracker.peek(jobId)?.seedStatus;
+      if (known === null || known === 'pending') {
+        const record = await store.getSubmission(jobId);
+        if (record) {
+          nudgeTracker.noteSeedStatus(jobId, seedPayload(record).seedStatus, nowMs);
+        }
       }
     }
 

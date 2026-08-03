@@ -861,7 +861,9 @@ export async function registerSubmissionRoutes(
           // Persist before dispatch so a racing get_brief/get_seed can see the draft even
           // if the self backend's persistSeed races behind the first tool call.
           await store.setSubmissionSeed(input.issueNumber, seed);
-        } else {
+        } else if (willAttemptSelfSeed) {
+          // Downgrade pending→unavailable only when generation was attempted and failed.
+          // The !willAttemptSelfSeed path already wrote unavailable above.
           await store.setSeedStatus(input.issueNumber, 'unavailable');
         }
       }
