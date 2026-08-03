@@ -20,7 +20,10 @@
     "token:revoke": "tsx scripts/access-token.ts revoke",
     "slug:backfill": "tsx scripts/slug-backfill.ts",
     "player:erase": "tsx scripts/erase-player-signals.ts",
-    "verify:erase": "tsx scripts/verify-erase-signals.ts"
+    "verify:erase": "tsx scripts/verify-erase-signals.ts",
+    "remix:sweep": "tsx scripts/remix-lane-sweep.ts",
+    "remix:judge": "tsx scripts/remix-lane-judge.ts",
+    "remix:calibrate": "tsx scripts/remix-lane-calibrate.ts"
   },
   "dependencies": {
     "@fastify/cookie": "11.1.0",

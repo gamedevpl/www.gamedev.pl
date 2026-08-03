@@ -170,6 +170,51 @@ export function renderSymbolMap(regions: SymbolRegion[]): string {
     .join('\n');
 }
 
+/** Declarations whose *shape* is the contract, so they are worth quoting whole. */
+const TYPE_DECLARATION = /^(?:export\s+)?(?:declare\s+)?(?:type|interface|enum)\s/;
+
+/** Ceiling on the digest, so a large game cannot undo the two-call cost argument. */
+export const MAX_DIGEST_LINES = 260;
+
+/**
+ * The game's API as the editing call needs it: every type in full, everything
+ * else by signature alone.
+ *
+ * This is the cheap half of "show call 2 more". A region that must populate a
+ * field, satisfy a return type, or call a neighbour fails not because the model
+ * cannot write the function but because it cannot see what the function owes
+ * anyone — and that obligation lives in the type declarations, which are a small
+ * fraction of the bytes. Bodies stay out: they are the expensive part and they
+ * are not what the edit has to agree with.
+ */
+export function renderApiDigest(
+  sources: Record<string, string>,
+  regions: SymbolRegion[],
+  exclude?: SymbolRegion,
+): string {
+  const lines: string[] = [];
+  let file: string | null = null;
+  for (const region of regions) {
+    // `<imports>` and `<file>` are placeholders for spans with no declaration in
+    // them. They carry no API — quoting their first line just puts an import
+    // statement in the prompt as if it were a symbol.
+    if (region.name === '<imports>' || region.name === '<file>') continue;
+    if (exclude && region.file === exclude.file && region.name === exclude.name) continue;
+    const source = sources[region.file];
+    if (source === undefined) continue;
+    const isType = TYPE_DECLARATION.test(region.signature);
+    const body = isType ? sliceRegion(source, region).replace(/^\s*(?:\/\/|\/\*|\*).*$/gm, '').trim() : null;
+    const entry = body || `${region.signature.replace(/\s*\{\s*$/, '')} // …`;
+    if (lines.length + entry.split('\n').length > MAX_DIGEST_LINES) break;
+    if (region.file !== file) {
+      file = region.file;
+      lines.push(`${lines.length ? '\n' : ''}// ${file}`);
+    }
+    lines.push(entry);
+  }
+  return lines.join('\n').trim();
+}
+
 export function findRegion(regions: SymbolRegion[], file: string, name: string): SymbolRegion | null {
   return regions.find((region) => region.file === file && region.name === name) ?? null;
 }

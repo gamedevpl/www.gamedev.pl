@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { VertexCodeLane, codeLaneEnabled } from './code-lane.js';
+import { VertexCodeLane, codeLaneEnabled, parseLaneJson } from './code-lane.js';
 
 /*
  * The lane's contract, tested through an injected client and builder: the model
@@ -19,8 +19,12 @@ export function startGame() {
 `,
 };
 
-/** A client stub: each call returns the next queued JSON payload. */
-function stubClient(responses: unknown[]) {
+/**
+ * A client stub: each call returns the next queued JSON payload as a real
+ * `GenerationResult`, because the lane reads `usage` off it — a stub that only
+ * answered `.json()` would let the token accounting rot unnoticed.
+ */
+function stubClient(responses: unknown[], usage = { inputTokens: 100, outputTokens: 20 }) {
   const prompts: string[] = [];
   const client = ((prompt: string) => {
     prompts.push(prompt);
@@ -28,7 +32,7 @@ function stubClient(responses: unknown[]) {
     const chain = {
       temperature: () => chain,
       signal: () => chain,
-      json: (parse: (value: unknown) => unknown) => Promise.resolve(parse(payload)),
+      run: () => Promise.resolve({ parts: [{ type: 'text', text: JSON.stringify(payload) }], usage }),
     };
     return chain;
   }) as never;
@@ -118,6 +122,91 @@ describe('code lane', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toBe('no_region');
     expect(build).not.toHaveBeenCalled();
+  });
+
+  it('banks the usage of every call it makes', async () => {
+    // The cost of the two-call shape is the entire argument for it, so an
+    // outcome that reports zero tokens is not a neutral omission — it is the
+    // number the design is judged on, missing. It was missing: `.json()`
+    // discards the result that carries `usage`.
+    const { client } = stubClient([
+      { decision: 'edit', file: 'game/runtime.ts', name: 'startGame' },
+      { replacement: 'export function startGame() {\n  return 0.08;\n}' },
+    ]);
+    const lane = new VertexCodeLane({ client });
+
+    const result = await lane.run({ slug: 'g', sources: SOURCES, utterance: 'faster' }, async () => ({ ok: true }));
+    expect(result.tokens).toEqual({ input: 200, output: 40 });
+  });
+
+  it('shows the editing call the game\'s other types, so it cannot invent a field', async () => {
+    // The default. Five of eighteen bench edits compiled and then failed the
+    // player by writing to a field the type never declared; this is what stops
+    // that, and it must carry declarations without carrying bodies.
+    const sources = {
+      'game/model.ts': 'export type Round = {\n  seedsLeft: number;\n};\n\nexport function createRound(): Round {\n  return { seedsLeft: 3 };\n}\n',
+      'game/render.ts': '/** Paint it. */\nexport function paintWorld(round: Round) {\n  const x = round.seedsLeft;\n  return x;\n}\n',
+    };
+    const { client, prompts } = stubClient([
+      { decision: 'edit', file: 'game/render.ts', name: 'paintWorld' },
+      { replacement: 'export function paintWorld(round: Round) {\n  return 1;\n}' },
+    ]);
+    await new VertexCodeLane({ client }).run({ slug: 'g', sources, utterance: 'x' }, async () => ({ ok: true }));
+
+    // The type it must satisfy, in full.
+    expect(prompts[1]).toContain('seedsLeft: number;');
+    // Its neighbours by signature only — no bodies, or this stops being cheap.
+    expect(prompts[1]).toContain('export function createRound(): Round');
+    expect(prompts[1]).not.toContain('return { seedsLeft: 3 };');
+  });
+
+  it('never sends the editing call another region\'s body, but will send the file when asked', async () => {
+    const pick = { decision: 'edit', file: 'game/runtime.ts', name: 'startGame' };
+    const edit = { replacement: 'export function startGame() {\n  return 0.08;\n}' };
+    const build = async () => ({ ok: true }) as const;
+
+    const narrow = stubClient([pick, edit]);
+    await new VertexCodeLane({ client: narrow.client }).run({ slug: 'g', sources: SOURCES, utterance: 'x' }, build);
+    expect(narrow.prompts[1]).not.toContain("import { CELL } from './model.ts';");
+
+    const wide = stubClient([pick, edit]);
+    await new VertexCodeLane({ client: wide.client, editContext: 'file' }).run(
+      { slug: 'g', sources: SOURCES, utterance: 'x' },
+      build,
+    );
+    expect(wide.prompts[1]).toContain("import { CELL } from './model.ts';");
+  });
+
+  it('reads a reply that a model ended with a stray code fence', () => {
+    // Observed on the bench, and the single largest cause of failure there: a
+    // well-formed object followed by a closing fence that was never opened. A
+    // start-anchored fence stripper cannot see it.
+    expect(parseLaneJson('{"replacement":"x"}```')).toEqual({ replacement: 'x' });
+    expect(parseLaneJson('```json\n{"replacement":"x"}\n```')).toEqual({ replacement: 'x' });
+    expect(parseLaneJson('  {"replacement":"x"}  ')).toEqual({ replacement: 'x' });
+  });
+
+  it('reads a reply with a raw newline left inside a string', () => {
+    expect(parseLaneJson('{"replacement":"line one\nline two"}')).toEqual({ replacement: 'line one\nline two' });
+  });
+
+  it('still refuses a reply that is not JSON at all', () => {
+    expect(() => parseLaneJson('I cannot help with that.')).toThrow();
+  });
+
+  it('spends a repair round on an unreadable reply instead of giving up', async () => {
+    // The repair budget existed but a malformed reply never reached it: the
+    // edit call's catch returned straight to the player.
+    const { client } = stubClient([
+      { decision: 'edit', file: 'game/runtime.ts', name: 'startGame' },
+      'not json at all',
+      { replacement: 'export function startGame() {\n  return 0.08;\n}' },
+    ]);
+    const lane = new VertexCodeLane({ client });
+
+    const result = await lane.run({ slug: 'g', sources: SOURCES, utterance: 'faster' }, async () => ({ ok: true }));
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.rounds).toBe(1);
   });
 
   it('is off unless the deploy flag says exactly true', () => {
