@@ -843,6 +843,22 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     },
 
     create_game: {
+      annotations: {
+        title: 'Create a game',
+        // Additive: it makes a game that did not exist and removes nothing. The daily
+        // creation allowance it spends is the whole blast radius.
+        ...WRITES,
+      },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          jobId: { type: 'number' },
+          slug: { type: 'string', description: 'Pass this to start().' },
+          studioUrl: { type: 'string' },
+          next: { type: 'string' },
+        },
+        required: ['jobId', 'slug'],
+      },
       description:
         "Create a new game on the creator's account and open its first build round. " +
         'Accepts Authorization: Bearer (creator key or OAuth access) — a per-game key cannot create ' +
