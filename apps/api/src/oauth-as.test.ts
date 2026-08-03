@@ -4,9 +4,8 @@ import { buildApp } from './app.js';
 import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-token.js';
 import { mintGameAgentKey } from './agent-game-key.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
-import { OAUTH_AS_METADATA_PATH } from './oauth-as.js';
+import { consentToken, OAUTH_AS_METADATA_PATH } from './oauth-as.js';
 import { pkceChallengeS256 } from './oauth-pkce.js';
-import { consentToken } from './oauth-as.js';
 import { AS_ACCESS_TOKEN_TTL_MS, generateAsAccessToken, generateAsRefreshToken } from './oauth-tokens.js';
 import { MCP_ENDPOINT_PATH } from './self-build-connect.js';
 import { InMemoryStore } from './store.js';
@@ -677,5 +676,87 @@ describe('oauth token helpers', () => {
       payload: new URLSearchParams({ ...fields, consent_token: issued![1]! }).toString(),
     });
     expect(accepted.statusCode).toBe(302);
+  });
+
+  // Sessions verify against the previous secret during a rotation, so a consent token
+  // that did not would 403 a creator who did nothing wrong — on the one screen where a
+  // refusal reads like an attack rather than a config change.
+  it('still accepts a consent token issued under the previous session secret', async () => {
+    const PREV = 'previous-session-secret-value';
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:creator', email: 'creator@example.com' });
+    const app = await buildApp({
+      store,
+      sessionSecret: SESSION_SECRET,
+      sessionSecretPrev: PREV,
+      submissionRoutes: {
+        githubClient: {
+          createIssue: async () => ({ number: 42 }),
+          getIssueState: async () => ({ state: 'open' as const }),
+          findLinkedPR: async () => null,
+          createIssueComment: async () => ({ id: 1 }),
+          updateIssueBody: async () => {},
+          closeIssue: async () => {},
+          closePullRequest: async () => {},
+          ensureOpenPullRequest: async () => ({ number: 1 }),
+          deleteBranch: async () => {},
+          getGameSources: async () => null,
+          getGameMedia: async () => null,
+          getCatalog: async () => [],
+          getProgressNotes: async () => null,
+        } as never,
+        githubToken: 'gh-token',
+        submissionTokenSecret: MCP_SECRET,
+        translator: new NoopTranslator(),
+        agentChannel: {},
+      },
+    });
+
+    // Distinct source IP: /oauth/register is rate limited per IP and the suite shares one.
+    const reg = await app.inject({
+      method: 'POST',
+      url: '/oauth/register',
+      remoteAddress: '10.1.2.3',
+      headers: { 'content-type': 'application/json' },
+      payload: {
+        redirect_uris: ['http://127.0.0.1/rotate'],
+        client_name: 'Rotation Agent',
+        token_endpoint_auth_method: 'none',
+      },
+    });
+    expect(reg.statusCode).toBe(201);
+    const clientId = reg.json().client_id as string;
+    const verifier = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
+    const challenge = pkceChallengeS256(verifier);
+    const fields = {
+      response_type: 'code',
+      client_id: clientId,
+      redirect_uri: 'http://127.0.0.1/rotate',
+      scope: 'mcp',
+      code_challenge: challenge,
+      code_challenge_method: 'S256',
+      action: 'approve',
+    };
+
+    // The token the screen handed out before the rotation.
+    const beforeRotation = consentToken({ uid: 'g:creator', clientId, codeChallenge: challenge, secret: PREV });
+    const accepted = await app.inject({
+      method: 'POST',
+      url: '/oauth/authorize',
+      headers: { cookie: sessionCookie('g:creator'), 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({ ...fields, consent_token: beforeRotation }).toString(),
+    });
+    expect(accepted.statusCode).toBe(302);
+
+    // A secret that was never ours is still refused — this widens the window, not the gate.
+    const foreign = consentToken({ uid: 'g:creator', clientId, codeChallenge: challenge, secret: 'not-our-secret' });
+    const refused = await app.inject({
+      method: 'POST',
+      url: '/oauth/authorize',
+      headers: { cookie: sessionCookie('g:creator'), 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({ ...fields, consent_token: foreign }).toString(),
+    });
+    expect(refused.statusCode).toBe(403);
+    await app.close();
   });
 });

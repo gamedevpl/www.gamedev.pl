@@ -573,13 +573,18 @@ export function registerOAuthAuthorizationServerRoutes(
       typeof (request.body as { consent_token?: string }).consent_token === 'string'
         ? (request.body as { consent_token: string }).consent_token
         : '';
-    const expectedToken = consentToken({
-      uid,
-      clientId: params.client_id,
-      codeChallenge: params.code_challenge,
-      secret: sessionSecret,
-    });
-    if (!consentTokenValid(submittedToken, expectedToken)) {
+    // Both secrets, exactly as the session cookie is read. A rotation between the GET
+    // that issued the token and the POST that spends it leaves the session valid — it
+    // verifies against `sessionSecretPrev` — so rejecting the token would 403 a creator
+    // who did nothing wrong, on the one screen where a refusal looks like a break-in.
+    const acceptedSecrets = sessionSecretPrev ? [sessionSecret, sessionSecretPrev] : [sessionSecret];
+    const tokenAccepted = acceptedSecrets.some((secret) =>
+      consentTokenValid(
+        submittedToken,
+        consentToken({ uid, clientId: params.client_id, codeChallenge: params.code_challenge, secret }),
+      ),
+    );
+    if (!tokenAccepted) {
       return reply.status(403).send({ error: 'invalid_consent' });
     }
 
