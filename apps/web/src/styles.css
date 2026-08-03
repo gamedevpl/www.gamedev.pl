@@ -10922,6 +10922,14 @@ a.user-name--profile:focus-visible {
   opacity: 0.7;
 }
 
+/* Phone + on-screen keyboard: the visual viewport shrinks; keep the claim action reachable. */
+.claim-handle-modal-backdrop {
+  align-items: safe center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1rem 0;
+}
+
 .claim-handle-modal-card {
   background: var(--panel);
   border: 1px solid var(--panel-border);
@@ -10929,9 +10937,13 @@ a.user-name--profile:focus-visible {
   padding: 1.5rem 1.35rem 1.35rem;
   max-width: 520px;
   width: min(92vw, 520px);
+  max-height: min(92dvh, 92vh);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   position: relative;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
   text-align: left;
+  margin: auto;
 }
 
 .claim-handle-modal-head h2 {

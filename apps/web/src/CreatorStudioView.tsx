@@ -685,7 +685,7 @@ export function CreatorStudioView({
                       {/* Labels are wrapped rather than left as bare text so a phone can
                         hide the word and keep the icon — and hide it the way that leaves
                         the button still named for a screen reader, not display: none. */}
-                      {!user.handle &&
+                      {!user?.handle &&
                       (activeGame.lastKnownStatus === 'in_review' || activeGame.lastKnownStatus === 'publishing') ? (
                         <button
                           type="button"

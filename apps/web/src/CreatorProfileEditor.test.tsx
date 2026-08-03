@@ -157,6 +157,41 @@ describe('ClaimHandleModal', () => {
     expect(dialog?.querySelector('button.primary-btn')?.textContent).toContain('Claim handle');
   });
 
+  it('closes on Escape', async () => {
+    profileApi.fetchMyProfile.mockResolvedValue({
+      profile: null,
+      publishReady: false,
+      picture: null,
+    });
+    let open = true;
+    root = createRoot(container);
+    const render = () => {
+      root!.render(
+        <StudioCreatorProfileProvider>
+          <ClaimHandleModal
+            isOpen={open}
+            onClose={() => {
+              open = false;
+            }}
+          />
+        </StudioCreatorProfileProvider>,
+      );
+    };
+    await act(async () => {
+      render();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(document.body.querySelector('.claim-handle-modal-card')).not.toBeNull();
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      render();
+      await Promise.resolve();
+    });
+    expect(open).toBe(false);
+  });
+
   it('reveals the chrome chip after a successful claim without remounting', async () => {
     profileApi.fetchMyProfile.mockResolvedValue({
       profile: null,

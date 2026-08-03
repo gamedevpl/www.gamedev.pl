@@ -76,12 +76,22 @@ export function StudioCreatorProfileProvider({ children }: { children: ReactNode
       return;
     }
     const handle = handleInput.trim().toLowerCase();
+    let cancelled = false;
     const timer = window.setTimeout(() => {
       void checkHandleAvailability(handle)
-        .then((result) => setAvailability({ available: result.available, reason: result.reason }))
-        .catch(() => setAvailability(null));
+        .then((result) => {
+          // Ignore stale responses from a previous keystroke after the user typed again.
+          if (cancelled) return;
+          setAvailability({ available: result.available, reason: result.reason });
+        })
+        .catch(() => {
+          if (!cancelled) setAvailability(null);
+        });
     }, 300);
-    return () => window.clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [handleInput, me?.handle]);
 
   const refusalCopy = (code: HandleClaimError): string => {

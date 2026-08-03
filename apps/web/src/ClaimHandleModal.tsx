@@ -1,9 +1,12 @@
-import { useEffect, useId, type FormEvent } from 'react';
+import { useEffect, useId, useRef, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useStudioCreatorProfile } from './studioCreatorProfile.js';
 import { PixelIcon } from './PixelIcon.js';
 import { creatorPath } from './router.js';
+
+const FOCUSABLE =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
  * Claim a public handle at the publish moment — not as Studio page chrome.
@@ -12,16 +15,67 @@ import { creatorPath } from './router.js';
 export function ClaimHandleModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { t } = useTranslation();
   const formId = useId();
-  const { me, status, handleInput, availability, message, setHandleInput, onClaim, refusalCopy, clearMessage } =
-    useStudioCreatorProfile();
+  const cardRef = useRef<HTMLDivElement>(null);
+  const {
+    me,
+    status,
+    handleInput,
+    nameInput,
+    availability,
+    message,
+    setHandleInput,
+    onClaim,
+    refusalCopy,
+    clearMessage,
+  } = useStudioCreatorProfile();
 
   useEffect(() => {
     if (isOpen && me?.publishReady) onClose();
   }, [isOpen, me?.publishReady, onClose]);
 
+  // Escape, focus trap, and restore focus to whatever opened the dialog (the claim CTA).
+  useEffect(() => {
+    if (!isOpen) return;
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        clearMessage();
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const root = cardRef.current;
+      if (!root) return;
+      // Do not use offsetParent — it is null for descendants of position:fixed backdrops.
+      const focusable = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+        (el) => !el.hasAttribute('disabled') && el.getClientRects().length > 0,
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0]!;
+      const last = focusable[focusable.length - 1]!;
+      if (event.shiftKey) {
+        if (document.activeElement === first || !root.contains(document.activeElement)) {
+          event.preventDefault();
+          last.focus();
+        }
+      } else if (document.activeElement === last || !root.contains(document.activeElement)) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      previouslyFocused?.focus?.();
+    };
+  }, [isOpen, onClose, clearMessage]);
+
   if (!isOpen) return null;
 
   const previewHandle = (handleInput.trim() || 'you').toLowerCase();
+  const previewName = (nameInput.trim() || previewHandle).trim();
+  const previewLetter = previewName.charAt(0).toUpperCase() || '?';
   const previewPath = creatorPath(previewHandle);
 
   const handleSubmit = async (event: FormEvent) => {
@@ -33,14 +87,21 @@ export function ClaimHandleModal({ isOpen, onClose }: { isOpen: boolean; onClose
     onClose();
   };
 
+  const stopCardKey = (event: ReactKeyboardEvent) => {
+    // Backdrop click closes; keep key events on the card from bubbling oddly.
+    event.stopPropagation();
+  };
+
   return createPortal(
-    <div className="modal-backdrop" onClick={handleClose} role="presentation">
+    <div className="modal-backdrop claim-handle-modal-backdrop" onClick={handleClose} role="presentation">
       <div
+        ref={cardRef}
         className="claim-handle-modal-card"
         role="dialog"
         aria-modal="true"
         aria-labelledby={`${formId}-heading`}
         onClick={(event) => event.stopPropagation()}
+        onKeyDown={stopCardKey}
       >
         <button type="button" className="modal-close-btn" onClick={handleClose} aria-label={t('studioPanel.close')}>
           &times;
@@ -99,10 +160,10 @@ export function ClaimHandleModal({ isOpen, onClose }: { isOpen: boolean; onClose
               <p className="creator-profile-preview-kicker">{t('creatorProfile.previewKicker')}</p>
               <div className="creator-profile-preview-card">
                 <span className="creator-profile-preview-letter" aria-hidden>
-                  {previewHandle.charAt(0).toUpperCase() || '?'}
+                  {previewLetter}
                 </span>
                 <div className="creator-profile-preview-meta">
-                  <p className="creator-profile-preview-name">{previewHandle}</p>
+                  <p className="creator-profile-preview-name">{previewName}</p>
                   <p className="creator-profile-preview-handle">@{previewHandle}</p>
                   <p className="creator-profile-preview-path">{previewPath}</p>
                 </div>
