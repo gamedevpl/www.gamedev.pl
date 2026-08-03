@@ -177,6 +177,11 @@ describe('catalog helpers', () => {
     );
   });
 
+  it('asks for a baked width with ?w= when one is given', () => {
+    expect(catalogMediaUrl('sky-dodge', 'mid.png', 640)).toBe('/api/games/sky-dodge/media/mid.png?w=640');
+    expect(catalogMediaUrl('sky-dodge', 'mid.png', 96)).toBe('/api/games/sky-dodge/media/mid.png?w=96');
+  });
+
   it('surfaces the API error body when the catalog request fails', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ error: 'failed to load catalog' }), { status: 502, statusText: '' }),

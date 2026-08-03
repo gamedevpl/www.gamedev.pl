@@ -96,7 +96,9 @@ function CatalogCard({
   const [videoArmed, setVideoArmed] = useState(false);
   const [extrasOpen, setExtrasOpen] = useState(false);
   const selected = screenshots[selectedScreenshot] ?? screenshots[0];
-  const posterUrl = selected && inView ? catalogMediaUrl(entry.slug, selected.file) : undefined;
+  // 640 rather than the original: the card box is a few hundred CSS pixels, so this is
+  // roughly 2x what is drawn and a fraction of a full screenshot to decode.
+  const posterUrl = selected && inView ? catalogMediaUrl(entry.slug, selected.file, 640) : undefined;
   const hasVideo = Boolean(entry.media?.video);
   const hasMoments = screenshots.length > 1;
   const videoUrl =
@@ -388,7 +390,7 @@ function CatalogCard({
                 aria-pressed={index === selectedScreenshot}
                 onClick={() => selectScreenshot(index)}
               >
-                <img src={catalogMediaUrl(entry.slug, screenshot.file)} alt="" loading="lazy" decoding="async" />
+                <img src={catalogMediaUrl(entry.slug, screenshot.file, 96)} alt="" loading="lazy" decoding="async" />
               </button>
             ))}
           </div>

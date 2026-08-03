@@ -22,6 +22,7 @@ import type { CatalogGameEntry } from './github-client.js';
  *   snapshots/<id>/catalog.json               → CatalogGameEntry[]
  *   snapshots/<id>/games/<slug>.json          → { slug, title, html }
  *   snapshots/<id>/media/<slug>/<filename>    → screenshot / video bytes
+ *   snapshots/<id>/media/<slug>/w<width>/<f>  → downscaled screenshot (see image-variants)
  *
  * Snapshot prefixes are immutable and content-addressed by publish; only
  * `current.json` is ever overwritten. Three things fall out of that:
@@ -87,14 +88,19 @@ export interface GameSnapshotReader {
   getPointer(): Promise<SnapshotPointer | null>;
   getCatalog(): Promise<CatalogGameEntry[] | null>;
   getGame(slug: string): Promise<SnapshotGame | null>;
-  getMedia(slug: string, filename: string): Promise<SnapshotMedia | null>;
+  /**
+   * `width` asks for a baked size variant. Callers must treat a null as "serve the
+   * original": snapshots baked before variants existed have none, and a bake that
+   * could not read one PNG skips only that variant.
+   */
+  getMedia(slug: string, filename: string, width?: number): Promise<SnapshotMedia | null>;
 }
 
 /** The write side, used by the publish job. */
 export interface GameSnapshotWriter {
   putCatalog(snapshotId: string, entries: CatalogGameEntry[]): Promise<void>;
   putGame(snapshotId: string, game: SnapshotGame): Promise<void>;
-  putMedia(snapshotId: string, slug: string, filename: string, media: SnapshotMedia): Promise<void>;
+  putMedia(snapshotId: string, slug: string, filename: string, media: SnapshotMedia, width?: number): Promise<void>;
   putPointer(pointer: SnapshotPointer): Promise<void>;
 }
 
@@ -110,8 +116,12 @@ export function gameObject(snapshotId: string, slug: string): string {
   return `snapshots/${snapshotId}/games/${slug}.json`;
 }
 
-export function mediaObject(snapshotId: string, slug: string, filename: string): string {
-  return `snapshots/${snapshotId}/media/${slug}/${filename}`;
+export function mediaObject(snapshotId: string, slug: string, filename: string, width?: number): string {
+  // Variants live in their own directory rather than behind a filename suffix: the
+  // filename is validated against the game's own catalog entry, and inventing
+  // `opening-96.png` would put a synthetic name into a space real screenshots occupy.
+  const prefix = `snapshots/${snapshotId}/media/${slug}`;
+  return width === undefined ? `${prefix}/${filename}` : `${prefix}/w${width}/${filename}`;
 }
 
 export function mediaContentType(filename: string): string {
@@ -338,12 +348,12 @@ export function createGcsSnapshotStore(options: GcsSnapshotStoreOptions): GameSn
       return readJson<SnapshotGame>(gameObject(pointer.snapshotId, slug));
     },
 
-    async getMedia(slug, filename) {
+    async getMedia(slug, filename, width) {
       assertSafeSlug(slug);
       assertSafeMediaFilename(filename);
       const pointer = await this.getPointer();
       if (!pointer) return null;
-      const body = await readObject(mediaObject(pointer.snapshotId, slug, filename));
+      const body = await readObject(mediaObject(pointer.snapshotId, slug, filename, width));
       if (!body) return null;
       return { body, contentType: mediaContentType(filename) };
     },
@@ -369,11 +379,11 @@ export function createGcsSnapshotStore(options: GcsSnapshotStoreOptions): GameSn
       );
     },
 
-    async putMedia(snapshotId, slug, filename, media) {
+    async putMedia(snapshotId, slug, filename, media, width) {
       assertSafeSnapshotId(snapshotId);
       assertSafeSlug(slug);
       assertSafeMediaFilename(filename);
-      await writeObject(mediaObject(snapshotId, slug, filename), media.body, media.contentType, IMMUTABLE_CACHE);
+      await writeObject(mediaObject(snapshotId, slug, filename, width), media.body, media.contentType, IMMUTABLE_CACHE);
     },
 
     async putPointer(pointer) {
