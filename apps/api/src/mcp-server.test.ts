@@ -1074,4 +1074,68 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(instructions).toMatch(/get_gate_verdict/);
     expect(instructions).toMatch(/honour stop/i);
   });
+
+  // CP-2: an agent that guessed `phase`/`message` got the channel's bare
+  // {"error":"Required"} — which names neither the missing field nor the real ones.
+  // The tool declared `text` required and then forwarded whatever arrived.
+  it('names the fields when report_progress is called with the wrong ones', async () => {
+    const store = new InMemoryStore();
+    await seedActiveSelfJob(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const wrong = await callTool(
+      app,
+      'report_progress',
+      { sessionKey, phase: 'planning', message: 'thinking' },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(wrong.isError).toBe(true);
+    const { error } = wrong.structured as { error: string };
+    expect(error).toMatch(/report_progress needs text/i);
+    expect(error).toMatch(/step \(one of/i);
+    expect(error).not.toBe('Required');
+
+    const badStep = await callTool(
+      app,
+      'report_progress',
+      { sessionKey, step: 'vibing', text: 'ok' },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(badStep.isError).toBe(true);
+    expect((badStep.structured as { error: string }).error).toMatch(/step must be one of/i);
+
+    // The declared shape still works.
+    const good = await callTool(
+      app,
+      'report_progress',
+      { sessionKey, step: 'planning', text: 'ok' },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(good.isError).toBe(false);
+  });
+
+  // The binding is real and was documented nowhere: start's own description says
+  // "Does not treat Mcp-Session-Id as authority", which reads as "the header does not
+  // matter" when in fact it is necessary, just not sufficient.
+  it('documents that a sessionKey is bound to the session that minted it', async () => {
+    const store = new InMemoryStore();
+    await seedActiveSelfJob(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+
+    const res = await mcpCall(app, 'tools/list', undefined, { 'mcp-session-id': sessionId });
+    const tools = (
+      res.json().result as {
+        tools: Array<{ name: string; inputSchema: { properties?: Record<string, { description?: string }> } }>;
+      }
+    ).tools;
+    const brief = tools.find((tool) => tool.name === 'get_brief');
+    const described = brief?.inputSchema.properties?.sessionKey?.description ?? '';
+
+    expect(described).toMatch(/same Mcp-Session-Id/i);
+    expect(described).toMatch(/call start\(\) again/i);
+  });
 });
