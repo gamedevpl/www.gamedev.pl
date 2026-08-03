@@ -473,6 +473,60 @@ describe('MCP OAuth integration (BY-18b)', () => {
     expect(startedBody.result?.structuredContent?.title).toBe('Comet Courier');
   });
 
+  // ChatGPT Apps (and other OAuth MCP clients) keep Authorization: Bearer <access>
+  // on every tools/call. That must not shadow the sessionKey start() just minted —
+  // otherwise the client can create a game, start a round, and then every write
+  // tool is refused immediately ("rejected the session key").
+  it('honours sessionKey for write tools even when Authorization still carries OAuth access', async () => {
+    const store = new InMemoryStore();
+    await seedSelfRound(store, 43, 'g:creator');
+    await store.upsertUser({ uid: 'g:creator' });
+    app = await buildOAuthApp(store);
+    const clientId = await registerClient(app);
+    const verifier = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
+    const tokens = await authorizeAndExchange(app, clientId, 'http://127.0.0.1/callback', verifier, 'g:creator');
+    const sessionId = await mcpInitialize();
+
+    const started = await app.inject({
+      method: 'POST',
+      url: MCP_ENDPOINT_PATH,
+      headers: {
+        'content-type': 'application/json',
+        'mcp-session-id': sessionId,
+        authorization: `Bearer ${tokens.access_token}`,
+      },
+      payload: {
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/call',
+        params: { name: 'start', arguments: { slug: 'comet-courier' } },
+      },
+    });
+    const sessionKey = (started.json() as { result?: { structuredContent?: { sessionKey?: string } } }).result
+      ?.structuredContent?.sessionKey;
+    expect(typeof sessionKey).toBe('string');
+
+    const brief = await app.inject({
+      method: 'POST',
+      url: MCP_ENDPOINT_PATH,
+      headers: {
+        'content-type': 'application/json',
+        'mcp-session-id': sessionId,
+        authorization: `Bearer ${tokens.access_token}`,
+      },
+      payload: {
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: { name: 'get_brief', arguments: { sessionKey } },
+      },
+    });
+    expect(brief.statusCode).toBe(200);
+    const body = brief.json() as { result?: { isError?: boolean; structuredContent?: { error?: string } } };
+    expect(body.result?.isError).not.toBe(true);
+    expect(body.result?.structuredContent?.error).toBeUndefined();
+  });
+
   it('static round key, durable game key, and sessionKey still work', async () => {
     const store = new InMemoryStore();
     await seedSelfRound(store, 77, 'g:owner');

@@ -389,35 +389,14 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     let claims: AgentTokenClaims;
     let channelToken: string;
 
-    // Paste-once MCP config leaves Authorization: Bearer <opener> on every request.
-    // When the tool also passes sessionKey, prefer that — openers never authorize writes.
+    // Paste-once MCP config leaves Authorization: Bearer <opener or OAuth access> on
+    // every request (ChatGPT Apps, Claude connectors, Studio "connect" snippets).
+    // When the tool also passes sessionKey, prefer that — openers and OAuth access
+    // never authorize writes by themselves.
     const bearerIsOpener = Boolean(bearer) && (looksLikeGameAgentKey(bearer!) || looksLikeCreatorAgentKey(bearer!));
+    const bearerIsOAuth = Boolean(bearer) && looksLikeAsAccessToken(bearer!);
 
-    if (bearer && looksLikeAsAccessToken(bearer)) {
-      return toolErr(
-        'OAuth access proves your identity only — call start() with your game slug (Authorization: Bearer <oauth access>) to get a session key',
-      );
-    }
-
-    if (bearerIsOpener && !sessionKeyArg) {
-      return toolErr(
-        looksLikeCreatorAgentKey(bearer!)
-          ? 'this creator key only opens a session via start() — pass the sessionKey start returned for later tools'
-          : 'this game key only opens a session via start() — pass the sessionKey start returned for later tools',
-      );
-    }
-
-    if (bearer && !bearerIsOpener) {
-      try {
-        claims = verifyAgentToken(bearer, agentTokenSecret);
-      } catch (error) {
-        if (error instanceof InvalidAgentTokenError) {
-          return toolErr(error.message || 'invalid build key');
-        }
-        throw error;
-      }
-      channelToken = bearer;
-    } else if (sessionKeyArg) {
+    if (sessionKeyArg) {
       if (looksLikeGameAgentKey(sessionKeyArg)) {
         return toolErr(
           'this game key only opens a session via start() — pass the sessionKey start returned for later tools',
@@ -455,6 +434,26 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         now: now(),
         ttlDays: 1,
       });
+    } else if (bearerIsOAuth) {
+      return toolErr(
+        'OAuth access proves your identity only — call start() with your game slug (Authorization: Bearer <oauth access>) to get a session key',
+      );
+    } else if (bearerIsOpener) {
+      return toolErr(
+        looksLikeCreatorAgentKey(bearer!)
+          ? 'this creator key only opens a session via start() — pass the sessionKey start returned for later tools'
+          : 'this game key only opens a session via start() — pass the sessionKey start returned for later tools',
+      );
+    } else if (bearer) {
+      try {
+        claims = verifyAgentToken(bearer, agentTokenSecret);
+      } catch (error) {
+        if (error instanceof InvalidAgentTokenError) {
+          return toolErr(error.message || 'invalid build key');
+        }
+        throw error;
+      }
+      channelToken = bearer;
     } else {
       // Possession of Mcp-Session-Id alone authorizes nothing.
       return toolErr(MCP_MISSING_CREDENTIAL_HINT);
