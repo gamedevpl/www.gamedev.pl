@@ -75,13 +75,6 @@ export function PublishedGameFrame({
   const [remixSession, setRemixSession] = useState<RemixSession | null>(null);
   const [remixUndoable, setRemixUndoable] = useState(false);
   const [remixOpen, setRemixOpen] = useState(false);
-  /**
-   * Remix is an invitation, revealed in the gaps rather than at second zero:
-   * a finished run (the "aw" beat), a reached landmark, or — failing both — a
-   * one-time gentle pulse after a minute of play. All three ride telemetry
-   * signals the game already sends; nothing new crosses the bridge.
-   */
-  const [remixRevealed, setRemixRevealed] = useState(false);
   const localFrameRef = useRef<HTMLIFrameElement | null>(null);
   const activeFrameRef = frameRef ?? localFrameRef;
   // Present only when the player arrived on a shared link; read once.
@@ -129,24 +122,6 @@ export function PublishedGameFrame({
     if ((remixOpenNonce ?? 0) > 0 || (painterNonce ?? 0) > 0) setRemixOpen(true);
   }, [remixOpenNonce, painterNonce]);
 
-  useEffect(() => {
-    if (!remixable || slots !== undefined || remixRevealed) return;
-    const frame = activeFrameRef.current;
-    function onMessage(event: MessageEvent) {
-      if (event.origin !== 'null') return;
-      if (!frame || event.source !== frame.contentWindow) return;
-      const data = event.data as { source?: string; type?: string } | null;
-      if (!data || data.source !== 'gdpl-player') return;
-      if (data.type === 'end' || data.type === 'progress') setRemixRevealed(true);
-    }
-    window.addEventListener('message', onMessage);
-    const pulse = window.setTimeout(() => setRemixRevealed(true), 60_000);
-    return () => {
-      window.removeEventListener('message', onMessage);
-      window.clearTimeout(pulse);
-    };
-  }, [remixable, slots, remixRevealed, activeFrameRef, html]);
-
   if (failed) {
     return (
       <div className="load-error" role="alert">
@@ -184,10 +159,6 @@ export function PublishedGameFrame({
           painterRequest={painterNonce}
           onCapabilities={onRemixCapabilities}
         />
-      ) : remixRevealed ? (
-        <button type="button" className="remix-open is-revealed" onClick={() => setRemixOpen(true)}>
-          <PixelIcon name="wrench" size={13} /> {t('remix.button')}
-        </button>
       ) : null}
     </div>
   );

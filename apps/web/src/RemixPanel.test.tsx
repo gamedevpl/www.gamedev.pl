@@ -121,7 +121,7 @@ describe('RemixPanel', () => {
     expect(telemetry.recordRemixStep).not.toHaveBeenCalledWith('no_lane');
   });
 
-  it('offers the suggestions the game can act on, and sends one on tap', async () => {
+  it('offers the suggestions the game can act on, and a tap fills the box rather than sending', async () => {
     remixApi.startRemix.mockResolvedValue({
       remixId: 'r1',
       params: { dogScale: { type: 'number', min: 0.5, max: 3, default: 1, label: { en: 'dog size' } } },
@@ -143,11 +143,25 @@ describe('RemixPanel', () => {
     expect(tries.length).toBe(1);
     expect(tries[0].textContent).toBe('more dog size');
 
+    // Inert while the gesture that opened the panel is still landing.
+    expect((tries[0] as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => {
+      // Real time rather than fake: this file drives the panel through awaited
+      // promises, and swapping the clock under those is more fragile than the
+      // half-second it saves.
+      await new Promise((resolve) => setTimeout(resolve, 450));
+    });
+    expect((tries[0] as HTMLButtonElement).disabled).toBe(false);
+
     await act(async () => {
       tries[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    // Tapping is saying it: one tap, no second step.
-    expect(remixApi.remixAssist).toHaveBeenCalledWith('r1', 'more dog size', expect.anything());
+    // A tap fills the composer and stops. It used to send, which made a mis-tap
+    // — on a control that arrives late, under a composer that grows as you type
+    // — cost a rebuild and an undo. The sentence is a starting point to edit,
+    // not a wish granted whole.
+    expect(remixApi.remixAssist).not.toHaveBeenCalled();
+    expect(container.querySelector<HTMLTextAreaElement>('.remix-ask textarea')?.value).toBe('more dog size');
   });
 
   it('offers share only once a change has landed', async () => {

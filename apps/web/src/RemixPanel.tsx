@@ -243,6 +243,17 @@ export function RemixPanel(props: {
   const contentDocRef = useRef(contentDoc);
   contentDocRef.current = contentDoc;
   const [painterOpen, setPainterOpen] = useState(false);
+  /**
+   * Whether the suggestions accept a press yet.
+   *
+   * They sit directly under the composer, they arrive with the session rather
+   * than with the panel, and the gesture that opened the panel is still landing
+   * when they appear — so a tap meant for the sheet could hit one, and a
+   * suggestion used to *send*. That is twenty seconds of rebuild and an undo for
+   * a press nobody made. Arming late costs a moment; not arming late costs a
+   * game edit.
+   */
+  const [suggestionsArmed, setSuggestionsArmed] = useState(false);
   /** Whether the router proposed the painter and the offer is still on screen. */
   const [painterOffer, setPainterOffer] = useState(false);
   /** First door wins — matches the telemetry dedupe, which keeps the first via. */
@@ -313,8 +324,37 @@ export function RemixPanel(props: {
   // opens increment would make every rung read as a share of the wrong total —
   // exactly the wall experiment this funnel exists to measure.
   useEffect(() => {
+    // A door records this too, with which door it was, and the step dedupes — so
+    // a click keeps its `entry` and this only lands for the path that has none:
+    // a shared link that opens the panel on arrival.
     recordRemixStep('opened');
   }, []);
+
+  const suggestions = session?.suggestions ?? [];
+  const showSuggestions = lane === 'idle' && !changed && utterance.length === 0 && suggestions.length > 0;
+
+  /*
+   * The delay runs from when the suggestions *appear*, not from when the panel
+   * mounts.
+   *
+   * They arrive with the session, which is a network round trip — reliably
+   * longer than 400ms. A mount-time timer therefore expired while the panel was
+   * still showing its starting state, and armed them on the very first frame
+   * they rendered: exactly the frame whose layout change lands under a finger
+   * already moving. The guard was inert precisely when it was needed.
+   *
+   * Re-arming on every appearance rather than once is deliberate. They come
+   * back when the field empties or a change lands, and both are moments the
+   * panel just reflowed.
+   */
+  useEffect(() => {
+    if (!showSuggestions) {
+      setSuggestionsArmed(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setSuggestionsArmed(true), 400);
+    return () => window.clearTimeout(timer);
+  }, [showSuggestions]);
 
   // Identity, not the object: this effect mints a session and the only thing
   // about the viewer it depends on is which account they are. Keying on the
@@ -736,9 +776,6 @@ export function RemixPanel(props: {
   // honest answer is to accept the words and let the wall decide — so it types.
   const canType = session ? session.canAssist || session.canCode : true;
 
-  const suggestions = session?.suggestions ?? [];
-  const showSuggestions = lane === 'idle' && !changed && utterance.length === 0 && suggestions.length > 0;
-
   /** The composer, in its two sizes: the door, and the way back for a second change. */
   function composer(compact: boolean) {
     return (
@@ -868,9 +905,14 @@ export function RemixPanel(props: {
              * Three things worth saying, derived from what this game can
              * actually do. An empty field over a paused game is where most
              * people close the panel; these answer "what do I even say" and
-             * teach the register at the same time. Tapping one sends it.
+             * teach the register at the same time.
+             *
+             * Tapping one *fills the box*; it does not send. A mis-tap should
+             * cost a keystroke to undo, not a rebuild — and the sentence is
+             * worth more as something to edit than as something to submit
+             * whole, since the nearest suggestion is rarely the exact wish.
              */
-            <div className="remix-tries">
+            <div className={`remix-tries${suggestionsArmed ? '' : ' is-arming'}`}>
               {suggestions.map((suggestion) => {
                 const text = suggestionText(suggestion);
                 if (!text) return null;
@@ -879,9 +921,10 @@ export function RemixPanel(props: {
                     key={suggestion.kind === 'param' ? `p:${suggestion.key}` : `s:${suggestion.id}`}
                     type="button"
                     className="remix-try"
+                    disabled={!suggestionsArmed}
                     onClick={() => {
                       setUtterance(text);
-                      void ask(text);
+                      inputRef.current?.focus();
                     }}
                   >
                     {text}

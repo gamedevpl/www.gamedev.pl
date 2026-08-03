@@ -96,6 +96,25 @@ export interface VisitFunnel {
    */
   remixPaintedVia: Array<{ via: 'redirect' | 'menu' | 'panel' | 'unknown'; visits: number }>;
   /**
+   * Whether the remix entry is worth the space it takes.
+   *
+   * `offered` is every visit shown the control; `opened` is every visit that
+   * pressed it; `byControl` splits the presses between the chrome bar and the
+   * overflow menu it sheds into on narrow screens. `medianSecondsToOpen` is
+   * measured among visits that opened it — how long a player plays before they
+   * want to change something.
+   *
+   * `null` for the median means no visit opened a remix in the window. Absence
+   * of evidence renders as absence: a `0` here would read as "they open it
+   * instantly", which is the opposite of what no data means.
+   */
+  remixEntry: {
+    offered: number;
+    opened: number;
+    byControl: Array<{ control: 'bar' | 'more' | 'unknown'; visits: number }>;
+    medianSecondsToOpen: number | null;
+  };
+  /**
    * How to play card usage — the numbers that decide whether a richer per-game format
    * is worth building (github.com/gamedevpl/www.gamedev.pl/issues/395).
    *
@@ -181,6 +200,13 @@ export type AssistStep = (typeof ASSIST_STEPS)[number];
  * typing), so they are read as counts against `opened`, not as a strict ladder.
  */
 export const REMIX_STEPS = [
+  // The denominator. A visit that was shown the way in, whether or not it used
+  // it — recorded when the control renders. Every rung below is read against
+  // this one, which is the point: the entry left the player's line of sight and
+  // moved onto the chrome bar, and `offered → opened` is the only thing that can
+  // say what that cost. Without it, "nobody wants to remix" and "nobody found
+  // the button" are the same number.
+  'offered',
   'opened',
   // Opened onto nothing: the game declares no parameters and its code is not
   // reachable, so there was no composer to type into. Sits directly under
@@ -231,6 +257,10 @@ interface VisitRollup {
   paintedVia?: string;
   assistSteps: Set<string>;
   remixSteps: Set<string>;
+  /** Which control opened the remix — first one wins, like `paintedVia`. */
+  remixControl?: string;
+  /** How far into the visit the remix was first opened. */
+  remixOpenedMs?: number;
   entry?: string;
   referrer?: string;
   utmSource?: string;
@@ -299,6 +329,15 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       if (event.step) rollup.remixSteps.add(event.step);
       if (event.step === 'painted' && rollup.paintedVia === undefined) {
         rollup.paintedVia = event.via ?? 'unknown';
+      }
+      if (event.step === 'opened') {
+        if (rollup.remixControl === undefined) rollup.remixControl = event.control ?? 'unknown';
+        // Earliest wins, for the same reason `firstPlayMs` does: a flush can
+        // deliver events out of order, and "how long until they opened it" must
+        // not depend on which row was written first.
+        if (rollup.remixOpenedMs === undefined || event.msSinceStart < rollup.remixOpenedMs) {
+          rollup.remixOpenedMs = event.msSinceStart;
+        }
       }
     } else if (event.type === 'play_started') {
       rollup.plays += 1;
@@ -476,6 +515,42 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       const unknown = painting.filter((rollup) => !doors.includes(rollup.paintedVia as (typeof doors)[number])).length;
       if (unknown > 0) rows.push({ via: 'unknown', visits: unknown });
       return rows;
+    })(),
+    remixEntry: (() => {
+      const offered = rollups.filter((rollup) => rollup.remixSteps.has('offered'));
+      /**
+       * Opens *within the offered cohort*, not every open in the window.
+       *
+       * A tab running the client from before this deploy records `opened` and
+       * never `offered`, so counting all opens against only new offers puts
+       * legacy visits in the numerator and none of them in the denominator —
+       * two old opens beside one new offered-and-opened visit reports "3 of 1",
+       * and a rate over 100% discredits the very experiment it exists to
+       * settle. The same rule the zone join rate had to learn: count the
+       * numerator only inside the denominator's set, and let the residual bias
+       * understate rather than invent.
+       *
+       * Nothing is hidden by this — a legacy open is still counted on the
+       * `opened` rung of `remixing` above. This block is narrower on purpose:
+       * it reports only the visits we know were shown the control.
+       */
+      const opened = offered.filter((rollup) => rollup.remixSteps.has('opened'));
+      const doors = ['bar', 'more'] as const;
+      const byControl: Array<{ control: 'bar' | 'more' | 'unknown'; visits: number }> = doors.map((control) => ({
+        control,
+        visits: opened.filter((rollup) => rollup.remixControl === control).length,
+      }));
+      const unknown = opened.filter((rollup) => !doors.includes(rollup.remixControl as (typeof doors)[number])).length;
+      if (unknown > 0) byControl.push({ control: 'unknown', visits: unknown });
+      // Only visits that actually opened one carry a delay, so the median is over
+      // that set — including the silent majority would measure the window, not them.
+      const delays = opened.map((rollup) => rollup.remixOpenedMs).filter((ms): ms is number => ms !== undefined);
+      return {
+        offered: offered.length,
+        opened: opened.length,
+        byControl,
+        medianSecondsToOpen: delays.length > 0 ? Math.round(median(delays) / 1000) : null,
+      };
     })(),
     howToPlay: {
       opens: howToOpens,

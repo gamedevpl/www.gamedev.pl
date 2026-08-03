@@ -95,6 +95,7 @@ const EditorStepSchema = z.enum(['opened', 'draft_saved', 'previewed', 'publishe
 const AssistStepSchema = z.enum(['asked', 'applied', 'handoff', 'rejected']);
 /** The player-side remix funnel — see visit-funnel's REMIX_STEPS for the order's meaning. */
 const RemixStepSchema = z.enum([
+  'offered',
   'opened',
   'no_lane',
   'typed',
@@ -113,6 +114,13 @@ const RemixStepSchema = z.enum([
 ]);
 /** Which door led to the painter — recorded on `painted`, closed like every grouping key. */
 const RemixViaSchema = z.enum(['redirect', 'menu', 'panel']);
+/**
+ * Which control opened the remix. Its own field rather than more members on
+ * `via`: that one names what led a player to the painter, this one names the
+ * button they pressed, and collapsing the two would make every stored row
+ * ambiguous the first time a third door exists.
+ */
+const RemixControlSchema = z.enum(['bar', 'more']);
 /**
  * Which chrome surface opened How to play. Optional so a tab still running the previous
  * client can record the open without `via` — the aggregate treats missing as unknown
@@ -172,7 +180,13 @@ const EventSchema = z.discriminatedUnion('type', [
   }),
   z.object({ type: z.literal('editor_step'), step: EditorStepSchema, ...offsetField }),
   z.object({ type: z.literal('assist_step'), step: AssistStepSchema, ...offsetField }),
-  z.object({ type: z.literal('remix_step'), step: RemixStepSchema, via: RemixViaSchema.optional(), ...offsetField }),
+  z.object({
+    type: z.literal('remix_step'),
+    step: RemixStepSchema,
+    via: RemixViaSchema.optional(),
+    control: RemixControlSchema.optional(),
+    ...offsetField,
+  }),
 ]);
 
 const RequestSchema = z.object({
@@ -289,6 +303,7 @@ export async function registerVisitTelemetryRoutes(
             type: event.type,
             step: event.step,
             ...(event.via === undefined ? {} : { via: event.via }),
+            ...(event.control === undefined ? {} : { control: event.control }),
           };
         case 'how_to_play_opened':
           return {

@@ -429,6 +429,17 @@ export class VertexCodeLane {
     /** The rejected attempt, so a repair round can see what it is correcting. */
     let previous = '';
     let summary = bilingual(picked.summary);
+    /**
+     * Whether a round has already described the change in the player's terms.
+     *
+     * Only the first readable edit does. A repair round is the lane fixing its
+     * own mistake, and its summary says so — a player who asked for a yellow car
+     * was being told "Fixed type error in startGame by removing invalid property
+     * reference on RaceScene3D", which is a note to a compiler wearing the
+     * costume of an answer. The repair is supposed to preserve the intent of the
+     * edit it repairs, so the first description stays the true one.
+     */
+    let described = false;
 
     for (let round = 0; round <= (this.options.maxRepairRounds ?? MAX_REPAIR_ROUNDS); round += 1) {
       let edit: z.infer<typeof EditSchema>;
@@ -464,7 +475,14 @@ export class VertexCodeLane {
         if (debug) trace.rounds.push({ round, replacement: '', buildErrors: errors });
         continue;
       }
-      summary = bilingual(edit.summary) ?? summary;
+      // The first edit round's description wins; after that a later round may
+      // only fill a gap. `bilingual` returns nothing for a half-written summary
+      // (the schema permits `en` without `pl`), and treating that as "described"
+      // would let one malformed reply cost the player any answer at all — while
+      // still refusing a repair note the moment something usable already exists.
+      const candidate = bilingual(edit.summary);
+      if (candidate && (!described || summary === undefined)) summary = candidate;
+      described = true;
       previous = edit.replacement;
       this.options.observe?.replacement?.(round, edit.replacement);
 

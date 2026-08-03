@@ -246,6 +246,102 @@ describe('summarizeVisitFunnel', () => {
     ]);
   });
 
+  it('reads the remix entry against everyone who was shown it, split by control and by when', () => {
+    const remix = (visitId: string, step: string, options?: { control?: string; msSinceStart?: number }): VisitEvent =>
+      ({
+        visitId,
+        type: 'remix_step',
+        at: '2026-08-03T10:00:00.000Z',
+        msSinceStart: options?.msSinceStart ?? 0,
+        step,
+        ...(options?.control ? { control: options.control } : {}),
+      }) as VisitEvent;
+
+    const funnel = summarizeVisitFunnel([
+      started('a'),
+      remix('a', 'offered'),
+      remix('a', 'opened', { control: 'bar', msSinceStart: 20_000 }),
+      started('b'),
+      remix('b', 'offered'),
+      remix('b', 'opened', { control: 'more', msSinceStart: 80_000 }),
+      started('c'),
+      remix('c', 'offered'),
+      // A client from before the dimension existed: opened, control unknown.
+      remix('c', 'opened', { msSinceStart: 60_000 }),
+      // Shown it and never touched it — the whole reason `offered` exists.
+      started('d'),
+      remix('d', 'offered'),
+    ]);
+
+    expect(funnel.remixEntry.offered).toBe(4);
+    expect(funnel.remixEntry.opened).toBe(3);
+    expect(funnel.remixEntry.byControl).toEqual([
+      { control: 'bar', visits: 1 },
+      { control: 'more', visits: 1 },
+      { control: 'unknown', visits: 1 },
+    ]);
+    // Median of the three that opened one — the visit that never did contributes
+    // no delay, because including it would measure the window rather than them.
+    expect(funnel.remixEntry.medianSecondsToOpen).toBe(60);
+  });
+
+  it('never reports more opens than offers, even while old clients are still running', () => {
+    // A tab from before this deploy records `opened` and never `offered`. Counting
+    // every open against only the new offers put legacy visits in the numerator
+    // and none of them in the denominator — "3 of 1", a rate over 100%, which
+    // discredits the experiment the number exists to settle.
+    const remix = (visitId: string, step: string, control?: string): VisitEvent =>
+      ({
+        visitId,
+        type: 'remix_step',
+        at: '2026-08-03T10:00:00.000Z',
+        msSinceStart: 5_000,
+        step,
+        ...(control ? { control } : {}),
+      }) as VisitEvent;
+
+    const funnel = summarizeVisitFunnel([
+      // Two legacy visits: opened, never offered.
+      started('old-1'),
+      remix('old-1', 'opened'),
+      started('old-2'),
+      remix('old-2', 'opened'),
+      // One current visit, all the way through.
+      started('new'),
+      remix('new', 'offered'),
+      remix('new', 'opened', 'bar'),
+    ]);
+
+    expect(funnel.remixEntry.offered).toBe(1);
+    expect(funnel.remixEntry.opened).toBe(1);
+    expect(funnel.remixEntry.opened).toBeLessThanOrEqual(funnel.remixEntry.offered);
+    // The splits come from the same cohort, or they would disagree with the ratio.
+    expect(funnel.remixEntry.byControl).toEqual([
+      { control: 'bar', visits: 1 },
+      { control: 'more', visits: 0 },
+    ]);
+    // Nothing is lost: the legacy opens are still on the funnel's own rung.
+    expect(funnel.remixing.find((row) => row.step === 'opened')?.visits).toBe(3);
+  });
+
+  it('reports no median when nobody opened a remix, rather than an instant one', () => {
+    const funnel = summarizeVisitFunnel([
+      started('a'),
+      {
+        visitId: 'a',
+        type: 'remix_step',
+        at: '2026-08-03T10:00:00.000Z',
+        msSinceStart: 0,
+        step: 'offered',
+      } as VisitEvent,
+    ]);
+    expect(funnel.remixEntry.offered).toBe(1);
+    expect(funnel.remixEntry.opened).toBe(0);
+    // `0` would read as "they open it the instant they see it", which is the
+    // opposite of what no data means.
+    expect(funnel.remixEntry.medianSecondsToOpen).toBeNull();
+  });
+
   it('emits zeroed door rows while nobody has painted, so the split cannot read as missing', () => {
     const funnel = summarizeVisitFunnel([started('a')]);
     expect(funnel.remixPaintedVia).toEqual([

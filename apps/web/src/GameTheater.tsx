@@ -11,7 +11,7 @@ import { ReportGameButton } from './ReportGameButton.js';
 import { ShareGameButton } from './ShareGameButton.js';
 import { VoteWidget } from './VoteWidget.js';
 import { useGamePlayer } from './gamePlayer.js';
-import { recordVisitEvent } from './visitTelemetry.js';
+import { recordRemixStep, recordVisitEvent } from './visitTelemetry.js';
 import { useGameSaveBridge } from './gameSave.js';
 import { usePresenceBridge } from './presence.js';
 import { useSensingBridge, type BackdropFacing } from './sensing.js';
@@ -469,6 +469,47 @@ export function GameTheater({
       </button>
     ) : null;
 
+  /**
+   * The way into Remix, in both places chrome lives.
+   *
+   * It used to be a pill that faded in over the bottom-right of the running game
+   * and pulsed twice. It was discoverable, and it was the only thing on the
+   * screen moving for its own sake — on top of the game it was advertising. A
+   * standard control asks for the space every other control gets.
+   *
+   * The trade is real and unmeasured, which is why `offered` exists beside
+   * `opened`: a quieter door is only worth it if the clicks it costs are visible
+   * rather than assumed, and the decision to make it quieter still (or louder
+   * again) should be made against a number.
+   */
+  const remixControl = (className: string, control: 'bar' | 'more') =>
+    'slug' in source ? (
+      <button
+        type="button"
+        className={className}
+        onClick={() => {
+          setMoreOpen(false);
+          setRemixOpenNonce((nonce) => nonce + 1);
+          // Recorded at the door rather than in the panel, because only the door
+          // knows which one it was. The panel still records `opened` for the path
+          // that has no door — a shared link that opens it on arrival — and the
+          // step dedupes, so whichever came first wins and a click always does.
+          recordRemixStep('opened', { control });
+        }}
+      >
+        <PixelIcon name="wrench" size={13} />
+        <span className="btn-label">{t('remix.button')}</span>
+      </button>
+    ) : null;
+
+  // Every visit shown the control, whether or not it pressed it — the denominator
+  // `opened` is read against. Fires on render, since being shown is the most the
+  // client can honestly claim to know.
+  useEffect(() => {
+    if (!('slug' in source)) return;
+    recordRemixStep('offered');
+  }, [source]);
+
   // The one thing a player needs before the first key press, and the game's own copy of
   // it is hidden inside the frame by HIDE_CHROME. Reuses `theater-menu-item` in the
   // overflow menu so the four hand-enumerated selector lists in styles.css keep working.
@@ -613,6 +654,7 @@ export function GameTheater({
                 "Mikrofon: …" labels otherwise clip the title at mid widths. */}
             {micControl('secondary-btn mic-btn mic-bar')}
             {fullscreenControl('secondary-btn fullscreen-btn theater-desktop-chrome')}
+            {remixControl('secondary-btn remix-btn theater-desktop-chrome', 'bar')}
             {showMoreMenu && (
               <div className={`theater-more${moreOpen ? ' is-open' : ''}`} ref={moreRef}>
                 <button
@@ -634,18 +676,7 @@ export function GameTheater({
                   {fullscreenControl('theater-menu-item theater-mobile-chrome')}
                   {'slug' in source ? (
                     <>
-                      <button
-                        type="button"
-                        className="theater-menu-item"
-                        role="menuitem"
-                        onClick={() => {
-                          setMoreOpen(false);
-                          setRemixOpenNonce((nonce) => nonce + 1);
-                        }}
-                      >
-                        <PixelIcon name="wrench" size={13} />
-                        <span className="btn-label">{t('remix.button')}</span>
-                      </button>
+                      {remixControl('theater-menu-item theater-mobile-chrome', 'more')}
                       {remixHasPainter ? (
                         <button
                           type="button"
