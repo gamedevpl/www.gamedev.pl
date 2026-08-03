@@ -4,7 +4,7 @@ import { buildApp } from './app.js';
 import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-token.js';
 import { mintGameAgentKey } from './agent-game-key.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
-import { OAUTH_AS_METADATA_PATH } from './oauth-as.js';
+import { consentToken, OAUTH_AS_METADATA_PATH } from './oauth-as.js';
 import { pkceChallengeS256 } from './oauth-pkce.js';
 import { AS_ACCESS_TOKEN_TTL_MS, generateAsAccessToken, generateAsRefreshToken } from './oauth-tokens.js';
 import { MCP_ENDPOINT_PATH } from './self-build-connect.js';
@@ -59,10 +59,22 @@ async function seedSelfRound(store: InMemoryStore, issue = 42, owner = 'g:creato
   });
 }
 
+/**
+ * Registers a client from its own source IP.
+ *
+ * `/oauth/register` is rate limited per IP and the whole suite shares 127.0.0.1, so
+ * whether a given test got a 201 or a 429 depended on how many registrations ran before
+ * it — which is file order, which differs between a local run and CI. That is how a
+ * green local suite went red on the runner. Each caller now gets its own bucket.
+ */
+let registrarIp = 0;
+
 async function registerClient(app: FastifyInstance, redirectUri = 'http://127.0.0.1/callback') {
+  registrarIp += 1;
   const res = await app.inject({
     method: 'POST',
     url: '/oauth/register',
+    remoteAddress: `10.9.${Math.floor(registrarIp / 250)}.${(registrarIp % 250) + 1}`,
     headers: { 'content-type': 'application/json' },
     payload: {
       redirect_uris: [redirectUri],
@@ -98,6 +110,7 @@ async function authorizeAndExchange(
       code_challenge: challenge,
       code_challenge_method: 'S256',
       action: 'approve',
+      consent_token: consentToken({ uid, clientId, codeChallenge: challenge, secret: SESSION_SECRET }),
     }).toString(),
   });
   expect(approve.statusCode).toBe(302);
@@ -202,6 +215,7 @@ describe('OAuth authorization server (BY-18b)', () => {
         code_challenge: challenge,
         code_challenge_method: 'S256',
         action: 'approve',
+        consent_token: consentToken({ uid: 'g:creator', clientId, codeChallenge: challenge, secret: SESSION_SECRET }),
       }).toString(),
     });
     const code = new URL(approve.headers.location as string).searchParams.get('code');
@@ -238,6 +252,7 @@ describe('OAuth authorization server (BY-18b)', () => {
         code_challenge: challenge,
         code_challenge_method: 'S256',
         action: 'approve',
+        consent_token: consentToken({ uid: 'g:creator', clientId, codeChallenge: challenge, secret: SESSION_SECRET }),
       }).toString(),
     });
     const code = new URL(approve.headers.location as string).searchParams.get('code')!;
@@ -646,5 +661,159 @@ describe('oauth token helpers', () => {
     });
     const { verifyAsAccessToken } = await import('./oauth-tokens.js');
     expect(await verifyAsAccessToken(store, generated.token, Date.now())).toBeNull();
+  });
+
+  // The screen mints durable write access to someone's games, and `sameSite: 'lax'` does
+  // not stop a top-level cross-site form POST — so before this, the consent screen could
+  // be skipped entirely by a page the creator never saw.
+  it('names who is asking, and only accepts a submit that came from its own screen', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:creator', email: 'creator@example.com' });
+    const app = await buildOAuthApp(store);
+    const clientId = await registerClient(app);
+    const verifier = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
+    const challenge = pkceChallengeS256(verifier);
+
+    const query = {
+      response_type: 'code',
+      client_id: clientId,
+      redirect_uri: 'http://127.0.0.1/callback',
+      scope: 'mcp',
+      state: 'xyz',
+      code_challenge: challenge,
+      code_challenge_method: 'S256',
+    };
+
+    const page = await app.inject({
+      method: 'GET',
+      url: `/oauth/authorize?${new URLSearchParams(query).toString()}`,
+      headers: { cookie: sessionCookie('g:creator') },
+    });
+    expect(page.statusCode).toBe(200);
+
+    // Two different clients must not produce an identical screen — that is what makes
+    // consent informed rather than a formality.
+    expect(page.body).toContain('Test Agent');
+    expect(page.body).not.toContain('A coding agent is asking');
+    expect(page.body).toContain('creator@example.com');
+    // It says what the grant permits, and for how long.
+    expect(page.body).toMatch(/build rounds on games you own/i);
+    expect(page.body).toMatch(/until you revoke it/i);
+    // The grant also dies on its own after 90 days of inactivity — refresh rotation only
+    // resets that clock. Saying "until you revoke it" alone would be a promise the
+    // refresh TTL breaks, which is the same defect as #488's "rotating stops every agent".
+    expect(page.body).toMatch(/90 days without connecting/i);
+    // The site is dark; a consent page that looks foreign is one nobody can vet.
+    expect(page.body).toContain('#0f1418');
+
+    const issued = /name="consent_token" value="([^"]+)"/.exec(page.body);
+    expect(issued, 'the screen must issue a token').toBeTruthy();
+
+    const fields = { ...query, action: 'approve' };
+
+    // A submit that never saw the screen is refused.
+    const forged = await app.inject({
+      method: 'POST',
+      url: '/oauth/authorize',
+      headers: { cookie: sessionCookie('g:creator'), 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams(fields).toString(),
+    });
+    expect(forged.statusCode).toBe(403);
+    expect(forged.json()).toMatchObject({ error: 'invalid_consent' });
+
+    // So is another creator's token — it is bound to the uid, not just to the request.
+    const lifted = await app.inject({
+      method: 'POST',
+      url: '/oauth/authorize',
+      headers: { cookie: sessionCookie('g:creator'), 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({
+        ...fields,
+        consent_token: consentToken({
+          uid: 'g:someone-else',
+          clientId,
+          codeChallenge: challenge,
+          secret: SESSION_SECRET,
+        }),
+      }).toString(),
+    });
+    expect(lifted.statusCode).toBe(403);
+
+    // And the real one is accepted, so this is a gate rather than a wall.
+    const accepted = await app.inject({
+      method: 'POST',
+      url: '/oauth/authorize',
+      headers: { cookie: sessionCookie('g:creator'), 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({ ...fields, consent_token: issued![1]! }).toString(),
+    });
+    expect(accepted.statusCode).toBe(302);
+  });
+
+  // Sessions verify against the previous secret during a rotation, so a consent token
+  // that did not would 403 a creator who did nothing wrong — on the one screen where a
+  // refusal reads like an attack rather than a config change.
+  it('still accepts a consent token issued under the previous session secret', async () => {
+    const PREV = 'previous-session-secret-value';
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:creator', email: 'creator@example.com' });
+    const app = await buildApp({
+      store,
+      sessionSecret: SESSION_SECRET,
+      sessionSecretPrev: PREV,
+      submissionRoutes: {
+        githubClient: {
+          createIssue: async () => ({ number: 42 }),
+          getIssueState: async () => ({ state: 'open' as const }),
+          findLinkedPR: async () => null,
+          createIssueComment: async () => ({ id: 1 }),
+          updateIssueBody: async () => {},
+          closeIssue: async () => {},
+          closePullRequest: async () => {},
+          ensureOpenPullRequest: async () => ({ number: 1 }),
+          deleteBranch: async () => {},
+          getGameSources: async () => null,
+          getGameMedia: async () => null,
+          getCatalog: async () => [],
+          getProgressNotes: async () => null,
+        } as never,
+        githubToken: 'gh-token',
+        submissionTokenSecret: MCP_SECRET,
+        translator: new NoopTranslator(),
+        agentChannel: {},
+      },
+    });
+
+    const clientId = await registerClient(app, 'http://127.0.0.1/rotate');
+    const verifier = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
+    const challenge = pkceChallengeS256(verifier);
+    const fields = {
+      response_type: 'code',
+      client_id: clientId,
+      redirect_uri: 'http://127.0.0.1/rotate',
+      scope: 'mcp',
+      code_challenge: challenge,
+      code_challenge_method: 'S256',
+      action: 'approve',
+    };
+
+    // The token the screen handed out before the rotation.
+    const beforeRotation = consentToken({ uid: 'g:creator', clientId, codeChallenge: challenge, secret: PREV });
+    const accepted = await app.inject({
+      method: 'POST',
+      url: '/oauth/authorize',
+      headers: { cookie: sessionCookie('g:creator'), 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({ ...fields, consent_token: beforeRotation }).toString(),
+    });
+    expect(accepted.statusCode).toBe(302);
+
+    // A secret that was never ours is still refused — this widens the window, not the gate.
+    const foreign = consentToken({ uid: 'g:creator', clientId, codeChallenge: challenge, secret: 'not-our-secret' });
+    const refused = await app.inject({
+      method: 'POST',
+      url: '/oauth/authorize',
+      headers: { cookie: sessionCookie('g:creator'), 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({ ...fields, consent_token: foreign }).toString(),
+    });
+    expect(refused.statusCode).toBe(403);
+    await app.close();
   });
 });

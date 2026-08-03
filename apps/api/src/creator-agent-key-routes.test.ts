@@ -13,6 +13,7 @@ import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { buildApp } from './app.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
 import { mintMcpSessionKey } from './mcp-session-key.js';
+import { consentToken } from './oauth-as.js';
 import { pkceChallengeS256 } from './oauth-pkce.js';
 import { InMemoryStore } from './store.js';
 import type { CreatorAgentKeyRecord } from './store.js';
@@ -164,6 +165,7 @@ async function oauthAccessToken(app: FastifyInstance): Promise<string> {
   });
   const clientId = register.json().client_id as string;
   const verifier = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
+  const challenge = pkceChallengeS256(verifier);
   const approve = await app.inject({
     method: 'POST',
     url: '/oauth/authorize',
@@ -174,9 +176,10 @@ async function oauthAccessToken(app: FastifyInstance): Promise<string> {
       redirect_uri: 'http://127.0.0.1/callback',
       scope: 'mcp',
       state: 'xyz',
-      code_challenge: pkceChallengeS256(verifier),
+      code_challenge: challenge,
       code_challenge_method: 'S256',
       action: 'approve',
+      consent_token: consentToken({ uid: OWNER, clientId, codeChallenge: challenge, secret: sessionSecret }),
     }).toString(),
   });
   const code = new URL(approve.headers.location as string).searchParams.get('code');
@@ -374,6 +377,7 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
         code_challenge: challenge,
         code_challenge_method: 'S256',
         action: 'approve',
+        consent_token: consentToken({ uid: OWNER, clientId, codeChallenge: challenge, secret: sessionSecret }),
       }).toString(),
     });
     expect(approve.statusCode).toBe(302);
