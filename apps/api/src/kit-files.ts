@@ -128,16 +128,22 @@ export function normalizeKitPath(raw: string): string {
 
 function matchSimpleGlob(path: string, pattern: string): boolean {
   // Escape regex metacharacters except `*`, which becomes `.*`.
-  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+  // `?` must be escaped too — otherwise it is a regex quantifier, not a literal.
+  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
   return new RegExp(`^${escaped}$`, 'i').test(path);
+}
+
+/** Coerce a caller-supplied limit/offset; treat NaN/±Infinity as absent. */
+function finiteOrUndefined(value: number | undefined): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 export function listKitFiles(
   tree: KitTree,
   options: { prefix?: string; glob?: string; limit?: number; offset?: number } = {},
 ): { engineRef: string; entry: string; files: KitFileMeta[]; total: number; truncated: boolean } {
-  const limit = Math.min(Math.max(1, options.limit ?? KIT_LIST_DEFAULT_LIMIT), KIT_LIST_MAX_LIMIT);
-  const offset = Math.max(0, options.offset ?? 0);
+  const limit = Math.min(Math.max(1, finiteOrUndefined(options.limit) ?? KIT_LIST_DEFAULT_LIMIT), KIT_LIST_MAX_LIMIT);
+  const offset = Math.max(0, finiteOrUndefined(options.offset) ?? 0);
   const prefix = options.prefix?.trim() ? normalizeKitPath(options.prefix) : '';
   const glob = options.glob?.trim() ?? '';
 
@@ -175,7 +181,10 @@ export function searchKitFiles(
   if (query.length < 2 || query.length > 120) {
     throw new KitFilesError('kit_query_invalid', 'query must be 2–120 characters');
   }
-  const limit = Math.min(Math.max(1, options.limit ?? KIT_SEARCH_MAX_MATCHES), KIT_SEARCH_MAX_MATCHES);
+  const limit = Math.min(
+    Math.max(1, finiteOrUndefined(options.limit) ?? KIT_SEARCH_MAX_MATCHES),
+    KIT_SEARCH_MAX_MATCHES,
+  );
   let prefix = '';
   if (options.prefix?.trim()) {
     prefix = normalizeKitPath(options.prefix);
@@ -286,7 +295,7 @@ export function readKitFileFragment(
   }
   const kind = kitFileKind(path, bytes);
   const unit = options.unit ?? 'lines';
-  const offset = Math.max(0, options.offset ?? 0);
+  const offset = Math.max(0, finiteOrUndefined(options.offset) ?? 0);
   const encoding = options.encoding ?? (kind === 'binary' ? 'base64' : 'utf8');
 
   if (kind === 'binary' && encoding !== 'base64') {
@@ -297,7 +306,10 @@ export function readKitFileFragment(
   }
 
   if (unit === 'bytes') {
-    const limit = Math.min(Math.max(1, options.limit ?? KIT_FRAGMENT_MAX_BYTES), KIT_FRAGMENT_MAX_BYTES);
+    const limit = Math.min(
+      Math.max(1, finiteOrUndefined(options.limit) ?? KIT_FRAGMENT_MAX_BYTES),
+      KIT_FRAGMENT_MAX_BYTES,
+    );
     if (offset > bytes.length) {
       throw new KitFilesError('kit_query_invalid', `offset ${offset} is past end of file (${bytes.length} bytes)`);
     }
@@ -319,7 +331,7 @@ export function readKitFileFragment(
 
   const text = bytes.toString('utf8');
   const lines = text.split(/\r?\n/);
-  const limit = Math.min(Math.max(1, options.limit ?? 80), KIT_FRAGMENT_MAX_LINES);
+  const limit = Math.min(Math.max(1, finiteOrUndefined(options.limit) ?? 80), KIT_FRAGMENT_MAX_LINES);
   if (offset > lines.length) {
     throw new KitFilesError('kit_query_invalid', `offset ${offset} is past end of file (${lines.length} lines)`);
   }

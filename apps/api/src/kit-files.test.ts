@@ -77,6 +77,22 @@ describe('kit file ops', () => {
 
     const skills = listKitFiles(tree, { glob: '**/SKILL.md' });
     expect(skills.files.map((f) => f.path)).toEqual([`${KIT_ROOT_DIR}/SKILL.md`]);
+
+    // `?` is literal, not a single-char wildcard / regex quantifier.
+    expect(listKitFiles(tree, { glob: 'SKILL.m?' }).files).toHaveLength(0);
+    expect(listKitFiles(tree, { glob: 'SKILL.md' }).files).toHaveLength(1);
+  });
+
+  it('treats non-finite limit/offset as absent (keeps caps)', () => {
+    const tree = treeFrom({
+      'a.md': 'one\n',
+      'b.md': 'two\n',
+      'c.md': 'one again\n',
+    });
+    const listed = listKitFiles(tree, { limit: Number.NaN, offset: Number.POSITIVE_INFINITY });
+    expect(listed.files.length).toBe(3);
+    const hits = searchKitFiles(tree, { query: 'one', limit: Number.NaN });
+    expect(hits.matches.length).toBeLessThanOrEqual(40);
   });
 
   it('searches text files and skips binaries', () => {

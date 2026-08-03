@@ -313,6 +313,12 @@ export async function registerAgentChannelRoutes(
   const submitsByBuild = new Map<number, number[]>();
   const kitFileStore = options.objectStore ? createKitFileStore(options.objectStore) : null;
 
+  function optionalFiniteQuery(raw: string | undefined): number | undefined {
+    if (raw === undefined) return undefined;
+    const value = Number(raw);
+    return Number.isFinite(value) ? value : undefined;
+  }
+
   function sendKitFilesError(reply: FastifyReply, error: unknown): FastifyReply | null {
     if (error instanceof KitFilesError) {
       const status =
@@ -1196,14 +1202,12 @@ export async function registerAgentChannelRoutes(
           offset?: string;
         };
         const tree = await kitFileStore.loadCurrentTree();
-        const limitNum = query.limit !== undefined ? Number(query.limit) : undefined;
-        const offsetNum = query.offset !== undefined ? Number(query.offset) : undefined;
         return reply.send(
           listKitFiles(tree, {
             prefix: query.prefix,
             glob: query.glob,
-            limit: limitNum !== undefined && Number.isFinite(limitNum) ? limitNum : undefined,
-            offset: offsetNum !== undefined && Number.isFinite(offsetNum) ? offsetNum : undefined,
+            limit: optionalFiniteQuery(query.limit),
+            offset: optionalFiniteQuery(query.offset),
           }),
         );
       } catch (error) {
@@ -1231,7 +1235,7 @@ export async function registerAgentChannelRoutes(
           searchKitFiles(tree, {
             query: query.q ?? query.query ?? '',
             prefix: query.prefix,
-            limit: query.limit !== undefined ? Number(query.limit) : undefined,
+            limit: optionalFiniteQuery(query.limit),
           }),
         );
       } catch (error) {
@@ -1294,8 +1298,8 @@ export async function registerAgentChannelRoutes(
         const tree = await kitFileStore.loadCurrentTree();
         return reply.send(
           readKitFileFragment(tree, query.path, {
-            offset: query.offset !== undefined ? Number(query.offset) : undefined,
-            limit: query.limit !== undefined ? Number(query.limit) : undefined,
+            offset: optionalFiniteQuery(query.offset),
+            limit: optionalFiniteQuery(query.limit),
             unit,
             encoding,
           }),
