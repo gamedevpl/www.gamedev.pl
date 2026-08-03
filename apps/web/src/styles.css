@@ -5415,36 +5415,62 @@ a.user-name--profile:focus-visible {
 
 .studio-connect-title-row {
   display: flex;
-  align-items: baseline;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px 12px;
 }
 
 .studio-connect-title {
   margin: 0;
+  flex: 1 1 12rem;
   font-size: 1rem;
   font-weight: 700;
   color: var(--text-heading, #fff);
 }
 
+/* Peer of Copy config / install chips — not a muted underline that vanishes into
+   a wrapping title on a phone. */
 .studio-connect-hide,
 .studio-connect-show {
-  appearance: none;
-  border: 0;
-  background: none;
-  padding: 0;
-  font: inherit;
-  font-size: 0.8rem;
-  color: var(--muted, #94a3b8);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   flex-shrink: 0;
+  padding: 0.4rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--turquoise, #00e4ac) 45%, var(--panel-border, #33383d));
+  background: color-mix(in srgb, var(--turquoise, #00e4ac) 12%, transparent);
+  color: var(--text-heading, #fff);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .studio-connect-hide:hover,
 .studio-connect-show:hover {
-  color: var(--text, #e2e8f0);
+  border-color: var(--turquoise, #00e4ac);
+  background: color-mix(in srgb, var(--turquoise, #00e4ac) 20%, transparent);
+}
+
+/* Phone: title wraps and buries the header chip — repeat dismiss where reading ends.
+   Desktop keeps the header control only so the card does not grow two exits. */
+.studio-connect-foot-dismiss {
+  display: none;
+}
+
+.studio-connect-hide.is-foot {
+  width: 100%;
+}
+
+@media (max-width: 800px) {
+  .studio-connect-foot-dismiss {
+    display: flex;
+    justify-content: stretch;
+    padding-top: 2px;
+  }
 }
 
 .studio-connect.is-collapsed {
@@ -5456,7 +5482,7 @@ a.user-name--profile:focus-visible {
 .studio-connect-collapsed-actions {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: 8px 12px;
 }
 

@@ -447,6 +447,10 @@ describe('StudioConnectCard', () => {
     expect(container.querySelector('[data-testid="connect-expanded"]')).not.toBeNull();
     const hide = container.querySelector<HTMLButtonElement>('[data-testid="connect-hide"]');
     expect(hide?.textContent).toContain('Hide for now');
+    // Chip affordance — not a muted underline that disappears into the title row.
+    expect(hide?.classList.contains('studio-connect-hide')).toBe(true);
+    // End-of-card twin: title wrap on phones buries the header control.
+    expect(container.querySelector('[data-testid="connect-hide-foot"]')?.textContent).toContain('Hide for now');
 
     await act(async () => {
       hide?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -455,15 +459,14 @@ describe('StudioConnectCard', () => {
 
     expect(container.querySelector('[data-testid="connect-expanded"]')).toBeNull();
     expect(container.querySelector('[data-testid="connect-collapsed"]')).not.toBeNull();
-    expect(container.textContent).toContain('Show connect steps');
+    expect(container.querySelector('[data-testid="connect-show"]')?.textContent).toContain('Show connect steps');
     expect(container.textContent).toContain('Also in Details anytime');
     expect(localStorage.getItem('gamedev_connect_collapsed:status-tok')).toBe('1');
 
     await act(async () => {
-      const show = [...container.querySelectorAll<HTMLButtonElement>('button')].find((btn) =>
-        btn.textContent?.includes('Show connect steps'),
-      );
-      show?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="connect-show"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flush();
     });
 

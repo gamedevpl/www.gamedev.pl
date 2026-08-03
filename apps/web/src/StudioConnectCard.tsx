@@ -166,8 +166,8 @@ export function StudioConnectCard({
           {isResume ? t('connect.resume.waiting') : t('connect.waiting')}
         </p>
         <div className="studio-connect-collapsed-actions">
-          <button type="button" className="studio-connect-show" onClick={showCard}>
-            {t('connect.show')}
+          <button type="button" className="studio-connect-show" onClick={showCard} data-testid="connect-show">
+            <PixelIcon name="expand" size={12} /> {t('connect.show')}
           </button>
           <span className="studio-connect-collapsed-hint">{t('connect.collapsed.hint')}</span>
         </div>
@@ -424,8 +424,14 @@ export function StudioConnectCard({
           {isResume ? t('connect.resume.title') : t('connect.title')}
         </h3>
         {collapsible && !error ? (
-          <button type="button" className="studio-connect-hide" onClick={hideCard} data-testid="connect-hide">
-            {t('connect.hide')}
+          <button
+            type="button"
+            className="studio-connect-hide"
+            onClick={hideCard}
+            data-testid="connect-hide"
+            title={t('connect.hide')}
+          >
+            <PixelIcon name="close" size={11} /> {t('connect.hide')}
           </button>
         ) : null}
       </div>
@@ -459,6 +465,21 @@ export function StudioConnectCard({
             </p>
           </>
         )
+      ) : null}
+
+      {/* End-of-card dismiss: the title-row chip is easy to miss once the title wraps on
+          a phone; readers finish at the waiting line and need a clear exit there. */}
+      {collapsible && !error && payload && !loading ? (
+        <div className="studio-connect-foot-dismiss">
+          <button
+            type="button"
+            className="studio-connect-hide is-foot"
+            onClick={hideCard}
+            data-testid="connect-hide-foot"
+          >
+            <PixelIcon name="close" size={11} /> {t('connect.hide')}
+          </button>
+        </div>
       ) : null}
     </section>
   );
