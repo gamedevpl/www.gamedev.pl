@@ -346,6 +346,31 @@ describe('gallery media', () => {
     await app.close();
   });
 
+  // Variants are screenshots only. An MP4 with `?w=` must not attempt a variant read
+  // or land in a separate cache key — that would multiply video entries for free.
+  it('ignores ?w= on video and serves the original once', async () => {
+    const withVideo = catalogEntry('bubble-pop', {
+      media: { screenshots: [{ name: 'opening', file: 'opening.png' }], video: 'gameplay.mp4' },
+    });
+    const { githubClient } = createGithubStub([withVideo]);
+    const snapshot = createSnapshotStub({
+      catalog: [withVideo],
+      media: { 'bubble-pop/gameplay.mp4': Buffer.from('video-bytes') },
+    });
+    const app = await createApp({ githubClient, snapshotReader: snapshot.reader });
+
+    const withWidth = await app.inject({ method: 'GET', url: '/api/games/bubble-pop/media/gameplay.mp4?w=96' });
+    const plain = await app.inject({ method: 'GET', url: '/api/games/bubble-pop/media/gameplay.mp4' });
+
+    expect(withWidth.statusCode).toBe(200);
+    expect(withWidth.rawPayload.toString()).toBe('video-bytes');
+    expect(plain.rawPayload.toString()).toBe('video-bytes');
+    // One read for the first request; the second hits the same `full` cache entry.
+    expect(snapshot.getMedia).toHaveBeenCalledTimes(1);
+    expect(snapshot.getMedia).toHaveBeenCalledWith('bubble-pop', 'gameplay.mp4');
+    await app.close();
+  });
+
   it('returns 404 when the file is allowlisted but missing from the snapshot', async () => {
     const { githubClient, getGameMedia } = createGithubStub([withMedia]);
     const snapshot = createSnapshotStub({ catalog: [withMedia], media: {} });

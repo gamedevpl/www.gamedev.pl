@@ -4087,10 +4087,12 @@ export async function registerSubmissionRoutes(
     }
 
     // An allowlist, not a number: `?w=` naming an arbitrary size would be an invitation
-    // to fill the cache with one entry per width somebody felt like asking for. Anything
-    // else is ignored and the original is served, so a stale client cannot break.
+    // to fill the cache with one entry per width somebody felt like asking for. Variants
+    // are a PNG-only idea — an MP4 with `?w=` would only add a useless extra read and a
+    // duplicate cache entry. Anything else is ignored and the original is served.
     const requestedWidth = Number((request.query as { w?: string } | undefined)?.w);
-    const variantWidth = isVariantWidth(requestedWidth) ? requestedWidth : undefined;
+    const variantWidth =
+      parsedParams.data.filename.endsWith('.png') && isVariantWidth(requestedWidth) ? requestedWidth : undefined;
 
     const currentTime = now();
     if (isRateLimited(mediaByIp, request.ip, currentTime, maxMediaPerWindow, gamesRateLimitWindowMs)) {
