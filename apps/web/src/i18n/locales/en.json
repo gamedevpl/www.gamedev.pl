@@ -1055,6 +1055,9 @@
     "editorTitle": "Level editor",
     "editorHide": "Hide",
     "editorButton": "Level editor",
-    "sharedWithoutContent": "Link copied — it carries your settings; painted maps stay in this remix."
+    "sharedWithoutContent": "Link copied — it carries your settings; painted maps stay in this remix.",
+    "undone": "Put back the way it was.",
+    "undoFailed": "Couldn't go back just now.",
+    "brokeIt": "That change stopped the game working. Put it back?"
   }
 }

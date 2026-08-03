@@ -11089,3 +11089,9 @@ body.player-open {
   flex-direction: column;
   gap: 2px;
 }
+
+/* A build that compiled and then threw. The tick would be a lie. */
+.remix-result.is-broken .remix-tick {
+  background: rgba(242, 162, 162, 0.16);
+  color: #f2a2a2;
+}
