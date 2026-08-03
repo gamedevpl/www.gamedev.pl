@@ -679,7 +679,15 @@ describe('remix code lane over a real connection', () => {
         run: async (_request: unknown, build: (o: Record<string, string>) => Promise<{ ok: boolean }>) => {
           const good = { 'game/runtime.ts': 'export function startGame() {\n  return 0.08;\n}\n' };
           await build(good);
-          return { ok: true, overrides: good, region: { file: 'game/runtime.ts', name: 'startGame' } };
+          // Full outcome shape, as the lane really returns: a stub that omits
+          // fields the route does not read yet ages into a false green.
+          return {
+            ok: true,
+            overrides: good,
+            region: { file: 'game/runtime.ts', name: 'startGame' },
+            rounds: 0,
+            tokens: { input: 1, output: 1 },
+          };
         },
       },
     });

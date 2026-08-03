@@ -480,6 +480,33 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
     '/api/remixes/:id/code',
     { config: { rateLimit: { max: 6, timeWindow: 60_000 } } },
     async (request, reply) => {
+      /**
+       * Did the player walk away while we worked?
+       *
+       * Watched from the first line of the handler, before anything is awaited:
+       * a disconnect during moderation or the spend gate would otherwise fire
+       * its event before there was a listener, and the run would land anyway.
+       *
+       * On the *response*, not the request. `request.raw.destroyed` reads as
+       * "the client hung up" and is not — Node destroys the request stream once
+       * its body has been consumed, which for any request with a JSON payload is
+       * always. That check was true on arrival for every real edit, so every
+       * finished rebuild was discarded and the route answered 200 with an empty
+       * body. `inject()` never reproduced it, because a mock request is never a
+       * stream that ends.
+       */
+      let clientGone = false;
+      reply.raw.on('close', () => {
+        if (!reply.raw.writableFinished) clientGone = true;
+      });
+      // Belt as well as braces: a connection that was already gone before this
+      // handler ran has no event left to emit, so the state is read directly too.
+      const abandoned = () =>
+        options.isAbandoned
+          ? options.isAbandoned(request)
+          : clientGone ||
+            ((reply.raw.destroyed || reply.raw.socket?.destroyed === true) && !reply.raw.writableFinished);
+
       if (!requireUser(request, reply)) return;
       const session = await getSession(request);
       if (!session) return reply.status(404).send({ error: 'this remix has expired — start a new one' });
@@ -543,31 +570,6 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         return reply.status(409).send({ error: 'still working on your last change' });
       }
       if (!(await spendEditSlot(request, reply))) return;
-
-      /**
-       * Did the player walk away while we worked?
-       *
-       * The client aborts its fetch at its own timeout and tells the player
-       * their game came back untouched. Nothing about that reaches this
-       * handler, so without this check the rebuild would finish anyway and
-       * write itself into the session — and the *next* edit would silently
-       * build on a change the player was told had been discarded. The socket
-       * closing is the only signal we get, and it is enough: an abandoned run
-       * is discarded here, which makes the client's promise true.
-       */
-      let clientGone = false;
-      // On the *response*, not the request. `request.raw.destroyed` reads as
-      // "the client hung up" and is not: Node destroys the request stream once
-      // its body has been consumed, which for any request with a JSON payload is
-      // always — so in production this fired on every single edit, the finished
-      // rebuild was discarded, and the route answered 200 with an empty body.
-      // `inject()` never reproduced it, because a mock request is never a stream
-      // that ends. The response socket closing before the reply is written is
-      // the one event that actually means nobody is listening.
-      reply.raw.on('close', () => {
-        if (!reply.raw.writableFinished) clientGone = true;
-      });
-      const abandoned = () => (options.isAbandoned ? options.isAbandoned(request) : clientGone);
 
       session.codeInFlight = true;
       try {
