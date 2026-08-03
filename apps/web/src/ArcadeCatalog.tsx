@@ -97,20 +97,28 @@ function CatalogCard({
     if (!videoUrl) return;
     const video = videoRef.current;
     if (!video) return;
-    void video.play().then(
-      () => setIsPreviewPlaying(true),
-      () => setIsPreviewPlaying(false),
-    );
+    try {
+      void Promise.resolve(video.play()).then(
+        () => setIsPreviewPlaying(true),
+        () => setIsPreviewPlaying(false),
+      );
+    } catch {
+      setIsPreviewPlaying(false);
+    }
   }, [videoUrl]);
 
   function armPreview() {
     setVideoArmed(true);
     const video = videoRef.current;
     if (!video?.src) return;
-    void video.play().then(
-      () => setIsPreviewPlaying(true),
-      () => setIsPreviewPlaying(false),
-    );
+    try {
+      void Promise.resolve(video.play()).then(
+        () => setIsPreviewPlaying(true),
+        () => setIsPreviewPlaying(false),
+      );
+    } catch {
+      setIsPreviewPlaying(false);
+    }
   }
 
   function stopPreview() {
