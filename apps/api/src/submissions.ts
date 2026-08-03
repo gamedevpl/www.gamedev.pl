@@ -1070,6 +1070,12 @@ export async function registerSubmissionRoutes(
     // game, and a job that dispatched without one has already told the agent the wrong
     // thing.
     await store.setSubmissionSlug(jobId, source.slug);
+    // The change request is this round's brief, so persist it. `dispatchBuild` below
+    // carries the same text into a platform backend's prompt, but a self round has no
+    // backend to read it: the creator's own agent calls get_brief, which serves the
+    // stored brief and nothing else. Without this an agent-opened improvement round
+    // starts with an empty spec and no idea what the creator asked for.
+    await store.setSubmissionBrief(jobId, { spec: input.text, qa: [] });
     await store.recordJobTransition(jobId, {
       to: 'queued',
       at: new Date(now()).toISOString(),

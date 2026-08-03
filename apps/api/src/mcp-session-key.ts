@@ -88,6 +88,29 @@ export function mintMcpSessionKey(secret: string, options: MintMcpSessionKeyOpti
 }
 
 /**
+ * Shape-only classifier: does this string carry a sessionKey's wire format?
+ *
+ * Never a stand-in for {@link verifyMcpSessionKey} — no signature is checked, so this
+ * decides only *which credential the caller supplied*, never whether it is valid. It
+ * exists so `start` can tell an agent that presented a sessionKey that it presented
+ * the wrong kind of key, rather than the generic "key is required", which reads as
+ * "you sent nothing" when in fact something was sent.
+ */
+export function looksLikeMcpSessionKey(candidate: string): boolean {
+  const parts = Buffer.from(candidate, 'base64url').toString('utf8').split('.');
+  if (parts.length !== 5) return false;
+  const [sessionId, jobIdRaw, generationRaw, expRaw, signature] = parts;
+  return (
+    Boolean(sessionId) &&
+    SESSION_ID_RE.test(sessionId) &&
+    /^\d+$/.test(jobIdRaw ?? '') &&
+    /^\d+$/.test(generationRaw ?? '') &&
+    /^\d+$/.test(expRaw ?? '') &&
+    /^[a-f0-9]{64}$/i.test(signature ?? '')
+  );
+}
+
+/**
  * Verifies the HMAC and returns claims. Does **not** check generation against the
  * job document — {@link classifyAgentTokenAccess} (via the MCP auth path) does that.
  */

@@ -41,6 +41,25 @@ export const PLATFORM_ROUND_REASON =
 export const SLUG_NOT_ON_ACCOUNT_REASON =
   'no game with that slug on your account — check the slug in your Studio thread';
 
+/**
+ * A sessionKey offered where an opener belongs — the mirror of the opener-in-sessionKey
+ * refusals. Says which credential arrived, because the generic "key is required" claims
+ * nothing was sent and sends an agent looking for a key it already has.
+ */
+/**
+ * A durable game key arrives in `Authorization: Bearer` — which every other tool
+ * recognises and answers with "only opens a session via start()". `start` itself takes
+ * game keys from the `key` argument alone, so without this the agent is sent to start
+ * and told "key is required", and the two refusals loop.
+ */
+export const GAME_KEY_GOES_IN_KEY_ARG_REASON =
+  'a game key opens a session through the key argument, not Authorization: Bearer — call start with ' +
+  'key: <game key>, or use a creator key or OAuth access with the game slug';
+
+export const SESSION_KEY_IS_NOT_AN_OPENER_REASON =
+  'that is a sessionKey from an earlier start() — start needs an opener: a game key, or ' +
+  'Authorization Bearer (creator key or OAuth) with the game slug';
+
 /** Rotated or generation-mismatched durable key. */
 export const ROTATED_GAME_KEY_REASON =
   'this game key was rotated — get a fresh prompt from the Studio thread for this game';

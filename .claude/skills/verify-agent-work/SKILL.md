@@ -140,6 +140,36 @@ Two concrete instances of that (observed 2026-07-23):
   class of bug fails closed (it rejects access), so it is a contract/UX defect rather
   than a security hole — say so explicitly when reporting, so severity is not
   overstated.
+- **A fix that narrows a predicate can reintroduce the same defect through a smaller
+  door — and its regression test will not notice.** Observed (BY-25, 2026-08-02): a
+  correct fix replaced "does the creator have ANY non-abandoned job with this slug"
+  (a scan) with "is the NEWEST job for this slug owned by them and non-abandoned" (a
+  point read). Both agree in the seeded regression scenario, so a 250-job probe
+  encoded straight from the bug report passed. They disagree when a *newer* job on the
+  same slug is abandoned — a canceled improvement round, or the `no_connect` sweep
+  auto-abandoning one — at which point ownership of a live published game reads false
+  and the durable key is refused with the same misleading "rotated" message the fix
+  existed to remove. Lesson: when a fix swaps a **scan** for a **point read**, ask
+  what the scan used to tolerate. Enumerate the states the discarded records could be
+  in (abandoned, canceled, superseded, owned-by-someone-else) and test the newest
+  record in each, not just the one from the bug report.
+- **Run your probe against the PRE-fix branch too.** A probe that only fails on the
+  candidate proves a defect exists; running the identical probe on the base proves
+  whether the PR *introduced* it or merely failed to fix it. Those are different
+  verdicts with different remedies, and the A/B costs one command — check out the base
+  in a second worktree and run the same file. Pair it with a control case that must
+  pass on both, so a green-everywhere result reads as a broken probe rather than a
+  clean bill of health.
+- **A PR that changes an error's SHAPE has changed agent behaviour even when no test
+  turns red.** Observed (BY-18a, 2026-08-02): a tools/call missing its credential used
+  to return a JSON-RPC tool error carrying recovery instructions ("pass sessionKey from
+  start(), or configure Authorization: Bearer"); the OAuth work replaced it with a bare
+  HTTP 401. The suite stayed green because the assertion was rewritten in the same
+  commit. Diff test files for assertions that were *edited* rather than *added* — an
+  edited expectation is a behaviour change the author decided was acceptable, and it
+  deserves the same scrutiny as the source change. For agent-facing surfaces
+  specifically, check that any replacement error still tells the agent what to do next;
+  a status code is not an instruction.
 
 ## Read the diff against the spec
 
