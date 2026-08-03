@@ -426,4 +426,169 @@ describe('StudioConnectCard', () => {
       await act(async () => root.unmount());
     }
   });
+
+  it('hides the tall card behind a one-line strip and restores it on demand', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    localStorage.clear();
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(StudioConnectCard, { token: 'status-tok' }));
+      await flush();
+    });
+    await act(async () => {
+      await flush();
+    });
+
+    expect(container.querySelector('[data-testid="connect-expanded"]')).not.toBeNull();
+    const hide = container.querySelector<HTMLButtonElement>('[data-testid="connect-hide"]');
+    expect(hide?.textContent).toContain('Hide for now');
+    // Chip affordance — not a muted underline that disappears into the title row.
+    expect(hide?.classList.contains('studio-connect-hide')).toBe(true);
+    // End-of-card twin: title wrap on phones buries the header control.
+    expect(container.querySelector('[data-testid="connect-hide-foot"]')?.textContent).toContain('Hide for now');
+
+    await act(async () => {
+      hide?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flush();
+    });
+
+    expect(container.querySelector('[data-testid="connect-expanded"]')).toBeNull();
+    expect(container.querySelector('[data-testid="connect-collapsed"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="connect-show"]')?.textContent).toContain('Show connect steps');
+    expect(container.textContent).toContain('Also in Details anytime');
+    expect(localStorage.getItem('gamedev_connect_collapsed:status-tok')).toBe('1');
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="connect-show"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flush();
+    });
+
+    expect(container.querySelector('[data-testid="connect-expanded"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="connect-kickoff"]')).not.toBeNull();
+    expect(localStorage.getItem('gamedev_connect_collapsed:status-tok')).toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
+  it('stays collapsed across remount when the preference is set', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    localStorage.setItem('gamedev_connect_collapsed:status-tok', '1');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(StudioConnectCard, { token: 'status-tok' }));
+      await flush();
+    });
+    await act(async () => {
+      await flush();
+    });
+
+    expect(container.querySelector('[data-testid="connect-collapsed"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="connect-kickoff"]')).toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
+  it('returns nothing when hideIfUnavailable and the round is not self', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: false,
+        status: 409,
+        json: async () => ({ error: 'connect_unavailable', reason: 'not_self_round', builder: 'platform' }),
+      })),
+    );
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(StudioConnectCard, { token: 'plat-tok', hideIfUnavailable: true, collapsible: false }));
+      await flush();
+    });
+    await act(async () => {
+      await flush();
+    });
+
+    expect(container.querySelector('.studio-connect')).toBeNull();
+    expect(container.textContent).toBe('');
+
+    await act(async () => root.unmount());
+  });
+
+  it('surfaces missing_slug instead of hiding when hideIfUnavailable', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: false,
+        status: 409,
+        json: async () => ({ error: 'connect_unavailable', reason: 'missing_slug', builder: 'self' }),
+      })),
+    );
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(StudioConnectCard, { token: 'slugless', hideIfUnavailable: true, collapsible: false }));
+      await flush();
+    });
+    await act(async () => {
+      await flush();
+    });
+
+    expect(container.querySelector('.studio-connect.is-error')).not.toBeNull();
+    expect(container.textContent).toContain("couldn't load the connect steps");
+
+    await act(async () => root.unmount());
+  });
+
+  it('resume mode leads with the kickoff and tucks MCP install under details', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(StudioConnectCard, { token: 'status-tok', mode: 'resume' }));
+      await flush();
+    });
+    await act(async () => {
+      await flush();
+    });
+
+    expect(container.querySelector('[data-connect-mode="resume"]')).not.toBeNull();
+    expect(container.querySelector('.studio-connect-title')?.textContent).toContain('Continue with your agent');
+    expect(container.textContent).not.toContain('Connect your coding agent');
+    expect(container.querySelector('[data-testid="connect-kickoff"]')?.textContent).toContain('slug: sky-dodge');
+    // Install stays under a closed disclosure — still in the DOM (jsdom keeps details
+    // content), but not the primary chrome a quiet mid-round should lead with.
+    const details = container.querySelector<HTMLDetailsElement>('[data-testid="connect-setup-details"]');
+    expect(details).not.toBeNull();
+    expect(details?.open).toBe(false);
+    expect(details?.textContent).toContain('Need to reconnect MCP?');
+    expect(details?.querySelector('[data-testid="connect-install-cursor"]')).not.toBeNull();
+    expect(container.innerHTML).not.toContain(FULL_KEY);
+
+    await act(async () => root.unmount());
+  });
 });

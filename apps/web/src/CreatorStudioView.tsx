@@ -23,7 +23,9 @@ import {
   type StudioShelfGame,
 } from './studioShelf.js';
 import { StudioAgentKeyPanel } from './StudioAgentKeyPanel.js';
+import { StudioConnectCard } from './StudioConnectCard.js';
 import { StudioCreatorAgentKeyPanel } from './StudioCreatorAgentKeyPanel.js';
+import { StudioDetailsBuildProgress } from './StudioDetailsBuildProgress.js';
 import { StudioOAuthClientsPanel } from './StudioOAuthClientsPanel.js';
 import { SubmissionStatusView } from './SubmissionStatusView.js';
 import {
@@ -668,26 +670,22 @@ export function CreatorStudioView({
                       {tabAvailable(activeGame, 'edit') ? (
                         <button
                           type="button"
-                          className={`studio-head-action${tab === 'edit' ? ' is-active' : ''}`}
+                          className={`studio-head-action is-icon-only${tab === 'edit' ? ' is-active' : ''}`}
                           aria-pressed={tab === 'edit'}
+                          aria-label={t('studioPanel.tabs.edit')}
                           onClick={() => openTab(tab === 'edit' ? 'thread' : 'edit')}
                         >
                           <PixelIcon name="pencil" size={12} />{' '}
                           <span className="studio-head-action-label">{t('studioPanel.tabs.edit')}</span>
                         </button>
                       ) : null}
-                      {/* Playtest is the next action after a build — same weight as Send
-                        feedback, not a peer of the Details toggle beside it. When already
-                        open (empty/error keeps chrome visible), clicking again returns to
-                        the thread so creators are never stuck without a Build tab. */}
-                      {/* Labels are wrapped rather than left as bare text so a phone can
-                        hide the word and keep the icon — and hide it the way that leaves
-                        the button still named for a screen reader, not display: none. */}
+                      {/* Claude-shaped cluster: one primary Play verb, icon-only peers for
+                        Edit / Details (side panel). Labels stay in the DOM for AT. */}
                       {!user?.handle &&
                       (activeGame.lastKnownStatus === 'in_review' || activeGame.lastKnownStatus === 'publishing') ? (
                         <button
                           type="button"
-                          className="studio-head-action studio-head-action--claim"
+                          className="studio-head-action is-icon-only studio-head-action--claim"
                           onClick={() => setClaimOpen(true)}
                           aria-label={t('creatorProfile.publishGateTitle')}
                         >
@@ -706,8 +704,9 @@ export function CreatorStudioView({
                       </button>
                       <button
                         type="button"
-                        className={`studio-head-action${tab === 'details' ? ' is-active' : ''}`}
+                        className={`studio-head-action is-icon-only${tab === 'details' ? ' is-active' : ''}`}
                         aria-pressed={tab === 'details'}
+                        aria-label={t('studioPanel.tabs.details')}
                         onClick={() => openTab(tab === 'details' ? 'thread' : 'details')}
                       >
                         <PixelIcon name="expand" size={12} />{' '}
@@ -1051,6 +1050,18 @@ function DetailsPanel({
       {/* Draft share is for pre-catalog games. A revise tip on a live slug already has a
           public play link — offering a second "share the draft" switch would lie. */}
       {!catalogLive && game.slug && game.lastKnownStatus !== 'abandoned' ? <DraftShareControl game={game} /> : null}
+
+      {/* Checklist fraction left the thread foot — Details is where Claude-style chrome
+          keeps build meta without crowding the composer. */}
+      {game.lastKnownStatus !== 'abandoned' && game.lastKnownStatus !== 'published' ? (
+        <StudioDetailsBuildProgress token={game.token} />
+      ) : null}
+
+      {/* Self-build connect steps live here too so the thread can dismiss them without
+          losing the path back — hideIfUnavailable keeps platform rounds silent. */}
+      {game.lastKnownStatus !== 'abandoned' && game.lastKnownStatus !== 'published' ? (
+        <StudioConnectCard token={game.token} collapsible={false} hideIfUnavailable />
+      ) : null}
 
       {game.slug && game.lastKnownStatus !== 'abandoned' ? <StudioAgentKeyPanel token={game.token} /> : null}
 

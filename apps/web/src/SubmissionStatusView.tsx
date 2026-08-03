@@ -22,7 +22,7 @@ import {
 } from './submissionApi.js';
 import { NAVIGATE_EVENT, statusPath, studioPath } from './router.js';
 import { formatRelativeTime } from './relativeTime.js';
-import { selfComposerRoute, selfStatusCopy, shouldShowConnectCard } from './selfBuildCopy.js';
+import { connectCardMode, selfComposerRoute, selfStatusCopy, shouldShowConnectCard } from './selfBuildCopy.js';
 import { StudioConnectCard } from './StudioConnectCard.js';
 import { submitImprovement } from './studioApi.js';
 import { recordStudioStep, type StudioStepDetail } from './visitTelemetry.js';
@@ -203,6 +203,35 @@ const FAILURE_COPY_KEYS = new Set([
 
 function failureCopyKey(reason: string): string {
   return FAILURE_COPY_KEYS.has(reason) ? reason : 'generic';
+}
+
+/**
+ * Claude-shaped status chip above the composer: one sentence, dismissible with ×.
+ * Reappears when the underlying condition changes (`chipKey`).
+ */
+function ThreadStatusChip({ chipKey, children }: { chipKey: string; children: ReactNode }) {
+  const { t } = useTranslation();
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    setDismissed(false);
+  }, [chipKey]);
+
+  if (dismissed) return null;
+
+  return (
+    <div className="studio-status-chip status-warning" role="status" data-chip-key={chipKey}>
+      <span className="studio-status-chip-body">{children}</span>
+      <button
+        type="button"
+        className="studio-status-chip-dismiss"
+        onClick={() => setDismissed(true)}
+        aria-label={t('notifications.dismiss')}
+      >
+        <PixelIcon name="close" size={12} />
+      </button>
+    </div>
+  );
 }
 
 type SubmissionStatusViewProps = {
@@ -597,22 +626,6 @@ export function SubmissionStatusView({
           t('statusView.gallery.caption'),
         )
       : [];
-    const reported = status?.events?.find((event) => event.progress)?.progress;
-    const checklist = status?.progress?.checklist ?? [];
-    const done = reported?.done ?? checklist.filter((item) => item.checked).length;
-    const total = reported?.total ?? checklist.length;
-
-    // Short play verb in the foot — the phase already says live vs draft, so
-    // "Play your game" / "Play the draft" were two long peers of the quieter playtest path.
-    const playable =
-      status?.status === 'published' && status.slug
-        ? { label: t('statusView.playShort'), onClick: () => setPlaying('published') }
-        : preview
-          ? { label: t('statusView.playShort'), onClick: openDraft }
-          : channelHtml
-            ? { label: t('statusView.playShort'), onClick: openChannel }
-            : undefined;
-
     return (
       <>
         <div className="studio-thread">
@@ -636,7 +649,21 @@ export function SubmissionStatusView({
             </div>
           ) : status ? (
             <>
-              <ThreadStream token={token} entries={activity} emptyLabel={stateDescription} />
+              <ThreadStream
+                token={token}
+                entries={activity}
+                emptyLabel={stateDescription}
+                stickNonce={isAwaitingOwnAgent(status) ? pendingRevisions.length + 1 : 0}
+                after={
+                  isAwaitingOwnAgent(status) ? (
+                    <StudioConnectCard
+                      key={`connect-${pendingRevisions.length}`}
+                      token={token}
+                      mode={connectCardMode(copyInputFromStatus(status)) ?? 'setup'}
+                    />
+                  ) : null
+                }
+              />
 
               <div className="studio-thread-foot">
                 {/* Trouble is said once, immediately above the box the creator would use
@@ -646,34 +673,34 @@ export function SubmissionStatusView({
                     needs a sentence here — the thread's emptyLabel only shows when there
                     are no turns, which is exactly when a bounced build still has planning
                     notes and used to look like nothing was wrong.
-                    Self rounds: no-agent-yet is the connect card alone; quiet keeps a
-                    self-specific warning *and* resurfaces the card (we cannot wake the
-                    agent). Delivery-cap is a failure sentence, not a stall. */}
+                    Self rounds: no-agent-yet / quiet / gate-green resurface the connect
+                    card inside the transcript scroller (not this foot) so a phone still
+                    has room for the conversation. Delivery-cap is a failure sentence. */}
                 {status.failure ? (
-                  <p className="status-warning">
-                    <PixelIcon name="signal" size={13} />{' '}
-                    {t(`statusView.failure.${failureCopyKey(status.failure.reason)}`)}
-                  </p>
+                  <ThreadStatusChip chipKey={`failure:${status.failure.reason}`}>
+                    <PixelIcon name="signal" size={13} />
+                    <span>{t(`statusView.failure.${failureCopyKey(status.failure.reason)}`)}</span>
+                  </ThreadStatusChip>
                 ) : status.status === 'needs_changes' ? (
-                  <p className="status-warning">
-                    <PixelIcon name="signal" size={13} /> {t('statusView.states.needs_changes.description')}
-                  </p>
+                  <ThreadStatusChip chipKey="needs_changes">
+                    <PixelIcon name="signal" size={13} />
+                    <span>{t('statusView.states.needs_changes.description')}</span>
+                  </ThreadStatusChip>
                 ) : selfCopy === 'no_agent_yet' ? null : selfCopy === 'quiet_agent' ? (
-                  <p className="status-warning">
-                    <PixelIcon name="signal" size={13} /> {t('statusView.stall.quietSelf')}
-                  </p>
+                  <ThreadStatusChip chipKey="quiet_self">
+                    <PixelIcon name="signal" size={13} />
+                    <span>{t('statusView.stall.quietSelf')}</span>
+                  </ThreadStatusChip>
                 ) : status.stall ? (
-                  <p className="status-warning">
-                    <PixelIcon name="signal" size={13} /> {t(`statusView.stall.${status.stall}`)}
-                  </p>
+                  <ThreadStatusChip chipKey={`stall:${status.stall}`}>
+                    <PixelIcon name="signal" size={13} />
+                    <span>{t(`statusView.stall.${status.stall}`)}</span>
+                  </ThreadStatusChip>
                 ) : status.progress?.checks === 'FAILURE' ? (
-                  <p className="status-warning">
-                    <PixelIcon name="signal" size={13} /> {t('statusView.checksFailed')}
-                  </p>
-                ) : null}
-
-                {isAwaitingOwnAgent(status) ? (
-                  <StudioConnectCard key={`connect-${pendingRevisions.length}`} token={token} />
+                  <ThreadStatusChip chipKey="checks_failure">
+                    <PixelIcon name="signal" size={13} />
+                    <span>{t('statusView.checksFailed')}</span>
+                  </ThreadStatusChip>
                 ) : null}
 
                 {previewError && !preview && !channelHtml ? <p className="error">{previewError}</p> : null}
@@ -687,22 +714,18 @@ export function SubmissionStatusView({
                   </button>
                 ) : null}
 
-                {/* Checklist fraction earns its keep while work remains; once every
-                    item is checked it only restates the phase. Slug lives in the studio
-                    header — repeating it here is infra chrome. */}
+                {/* Claude-shaped foot: phase + heartbeat only. Play lives in the header
+                    icon cluster; abandon / checklist / connect live in Details. */}
                 <ThreadContextBar
                   phase={t(`statusView.states.${status.status}.label`)}
                   heartbeatAt={heartbeatAt}
                   active={!TERMINAL_STATUSES.has(status.status)}
-                  {...(!TERMINAL_STATUSES.has(status.status) ? { stopToken: token } : {})}
-                  {...(total > 0 && done < total ? { progress: { done, total } } : {})}
-                  {...(playable ? { primary: playable } : {})}
-                  {...(onPlaytest && playable
-                    ? { secondary: { label: t('statusView.playtestCta'), onClick: onPlaytest } }
-                    : {})}
                 />
 
-                {status.status !== 'abandoned' ? (
+                {/* Before the first agent signal there is nobody to receive a note — the
+                    connect card is the only move. Quiet / gate-green still keep the box
+                    so a creator can leave work for the next start. */}
+                {status.status !== 'abandoned' && selfCopy !== 'no_agent_yet' ? (
                   <FeedbackPanel
                     token={token}
                     published={status.status === 'published'}
@@ -808,7 +831,11 @@ export function SubmissionStatusView({
             ) : null}
 
             {isAwaitingOwnAgent(status) ? (
-              <StudioConnectCard key={`connect-${pendingRevisions.length}`} token={token} />
+              <StudioConnectCard
+                key={`connect-${pendingRevisions.length}`}
+                token={token}
+                mode={connectCardMode(copyInputFromStatus(status)) ?? 'setup'}
+              />
             ) : null}
 
             {TERMINAL_STATUSES.has(status.status) && status.status !== 'published' && submittedConcept && onRetry ? (
@@ -880,7 +907,7 @@ export function SubmissionStatusView({
 
                 No mode to pick, either: a game is either published or it is not, and
                 there is only ever the current version to work on. */}
-            {status.status !== 'abandoned' ? (
+            {status.status !== 'abandoned' && selfCopy !== 'no_agent_yet' ? (
               <FeedbackPanel
                 token={token}
                 published={status.status === 'published'}
@@ -1165,12 +1192,11 @@ function FeedbackPanel({
       : composerRoute === 'waiting'
         ? 'statusView.feedback.sentSelfWaiting'
         : null;
-  const routeNoteKey =
-    composerRoute === 'active'
-      ? 'statusView.feedback.routeSelfActive'
-      : composerRoute === 'waiting'
-        ? 'statusView.feedback.routeSelfWaiting'
-        : null;
+  // Active self rounds already imply a listening agent — repeating that above the
+  // box is chrome noise (the placeholder covers "what to write"). Waiting is the
+  // case that still needs a sentence: the note will not be read until they start
+  // their agent again.
+  const routeNoteKey = composerRoute === 'waiting' ? 'statusView.feedback.routeSelfWaiting' : null;
 
   // The composer grows with what is typed, which is what replaced the resize grip: once
   // the send button moved inside the box, a drag handle in the middle of its right edge
@@ -1425,7 +1451,22 @@ function FeedbackPanel({
  * bottom as the agent talks — unless the reader has scrolled up, which is them saying
  * they are reading something and would like it to stay put.
  */
-function ThreadStream({ token, entries, emptyLabel }: { token: string; entries: ActivityEntry[]; emptyLabel: string }) {
+function ThreadStream({
+  token,
+  entries,
+  emptyLabel,
+  after,
+  stickNonce = 0,
+}: {
+  token: string;
+  entries: ActivityEntry[];
+  emptyLabel: string;
+  /** Renders inside the scroller after the turns — tall surfaces (connect card) belong
+   *  here, not in the pinned foot, or a phone has no room left for the conversation. */
+  after?: ReactNode;
+  /** Bump when `after` appears/disappears so a stick-to-bottom reader still sees it. */
+  stickNonce?: number;
+}) {
   const { t, i18n } = useTranslation();
   const [zoomed, setZoomed] = useState<BuildMediaItem | null>(null);
   const [broken, setBroken] = useState<string[]>([]);
@@ -1444,7 +1485,7 @@ function ThreadStream({ token, entries, emptyLabel }: { token: string; entries: 
     const pane = scrollRef.current;
     if (!pane || !stickToBottomRef.current) return;
     pane.scrollTop = pane.scrollHeight;
-  }, [entries.length]);
+  }, [entries.length, stickNonce]);
 
   return (
     <div className="studio-thread-scroll" ref={scrollRef} onScroll={onScroll}>
@@ -1495,6 +1536,7 @@ function ThreadStream({ token, entries, emptyLabel }: { token: string; entries: 
           );
         })}
       </ol>
+      {after}
       {zoomed ? <ShotLightbox token={token} item={zoomed} onClose={() => setZoomed(null)} /> : null}
     </div>
   );
@@ -1514,19 +1556,14 @@ function ThreadContextBar({
   heartbeatAt,
   progress,
   primary,
-  secondary,
   active = false,
-  stopToken,
 }: {
   phase: string;
   heartbeatAt: number | null;
   progress?: { done: number; total: number };
   primary?: { label: string; onClick: () => void };
-  secondary?: { label: string; onClick: () => void };
   /** Agent is mid-build — show motion so "Writing code" does not read as stuck text. */
   active?: boolean;
-  /** When set, offer a two-step stop control for the running build. */
-  stopToken?: string;
 }) {
   const { t } = useTranslation();
 
@@ -1548,12 +1585,6 @@ function ThreadContextBar({
           <span className="studio-context-progress">
             {t('statusView.progress.checklistCount', { done: progress.done, total: progress.total })}
           </span>
-        ) : null}
-        {stopToken ? <AbandonControl token={stopToken} compact /> : null}
-        {secondary ? (
-          <button type="button" className="studio-context-link status-playtest-cta" onClick={secondary.onClick}>
-            {secondary.label}
-          </button>
         ) : null}
         {primary ? (
           <button type="button" className="primary-btn status-play-cta" onClick={primary.onClick}>

@@ -402,7 +402,7 @@ describe('CreatorStudioView', () => {
     root.unmount();
   });
 
-  it('makes Playtest the primary head action, not a peer of Details', async () => {
+  it('makes Play the primary head action, with Details as an icon peer', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
@@ -411,19 +411,21 @@ describe('CreatorStudioView', () => {
 
     const { container, root } = await renderStudio({ selectedGame: 'token-0' });
 
-    const playtest = Array.from(container.querySelectorAll('.studio-head-action')).find((button) =>
-      button.textContent?.includes('Playtest'),
+    const play = Array.from(container.querySelectorAll('.studio-head-action')).find((button) =>
+      button.classList.contains('is-primary'),
     );
     const details = Array.from(container.querySelectorAll('.studio-head-action')).find((button) =>
       button.textContent?.includes('Details'),
     );
-    expect(playtest?.classList.contains('is-primary')).toBe(true);
+    expect(play?.textContent).toMatch(/Play/);
+    expect(play?.classList.contains('is-primary')).toBe(true);
     expect(details?.classList.contains('is-primary')).toBe(false);
+    expect(details?.classList.contains('is-icon-only')).toBe(true);
 
     root.unmount();
   });
 
-  it('lets Playtest toggle back to the thread when already open', async () => {
+  it('lets Play toggle back to the thread when already open', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
@@ -435,15 +437,15 @@ describe('CreatorStudioView', () => {
       selectedTab: 'playtest',
     });
 
-    const playtest = Array.from(container.querySelectorAll('.studio-head-action')).find((button) =>
-      button.textContent?.includes('Playtest'),
+    const play = Array.from(container.querySelectorAll('.studio-head-action')).find((button) =>
+      button.classList.contains('is-primary'),
     );
-    expect(playtest?.getAttribute('aria-pressed')).toBe('true');
+    expect(play?.getAttribute('aria-pressed')).toBe('true');
     expect(container.querySelector('.studio-playtest')).not.toBeNull();
     expect(container.querySelector('.studio-build')).toBeNull();
 
     await act(async () => {
-      playtest!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      play!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     expect(onNavigate).toHaveBeenCalledWith('/studio/token-0/thread');

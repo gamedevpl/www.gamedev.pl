@@ -274,7 +274,7 @@
     "tabs": {
       "thread": "Thread",
       "details": "Details",
-      "playtest": "Playtest",
+      "playtest": "Play",
       "edit": "Edit"
     },
     "editor": {
@@ -323,9 +323,9 @@
       "sessions": "Recent play",
       "play": "played",
       "openBuild": "Open build",
-      "playtest": "Playtest & prompt",
-      "abandon": "Stop build",
-      "abandonConfirm": "Confirm stop"
+      "playtest": "Play & note",
+      "abandon": "Abandon this build",
+      "abandonConfirm": "Yes, abandon — discard this round"
     },
     "share": {
       "title": "Share the draft",
@@ -644,13 +644,13 @@
     },
     "tryAgain": "Try this idea again",
     "abandon": {
-      "start": "Stop this build",
-      "compact": "Stop",
-      "confirm": "Stop building this game?",
-      "yes": "Yes, stop it",
+      "start": "Abandon this build",
+      "compact": "Abandon",
+      "confirm": "Abandon this round? Agent work so far is discarded.",
+      "yes": "Yes, abandon it",
       "no": "Keep building",
-      "sending": "Stopping…",
-      "error": "We couldn't stop this build right now. Please try again in a moment."
+      "sending": "Abandoning…",
+      "error": "We couldn't abandon this build right now. Please try again in a moment."
     },
     "playableHint": "An early build, straight from the workshop — rough, unfinished, and already playable. Tell them what to change while it is easy."
   },
@@ -918,6 +918,12 @@
     "copyInstall": "Copy",
     "copyKickoff": "Copy prompt",
     "waiting": "Waiting for your agent to check in…",
+    "hide": "Hide for now",
+    "show": "Show connect steps",
+    "collapsed": {
+      "title": "Waiting for your coding agent",
+      "hint": "Also in Details anytime."
+    },
     "authMode": {
       "label": "How to connect",
       "key": "Paste header",
@@ -960,6 +966,14 @@
       "no": "Cancel",
       "sending": "Rotating…",
       "error": "We couldn't rotate the key right now. Try again in a moment."
+    },
+    "resume": {
+      "title": "Continue with your agent",
+      "lead": "Your agent went quiet. Paste this prompt into the same session — or start a new one with your existing gamedev.pl connection.",
+      "kickoffTitle": "Continue prompt",
+      "kickoffHint": "This prompt carries only the game slug. Your MCP connection stays in the agent config.",
+      "setupDetails": "Need to reconnect MCP?",
+      "waiting": "Waiting for your agent to check in again…"
     }
   },
   "agentKey": {
