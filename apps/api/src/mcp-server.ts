@@ -1,7 +1,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { looksLikeCreatorAgentKey } from './agent-creator-key.js';
-import { resolveCreatorAgentKeyForOpenRound, resolveCreatorAgentKeyForStart } from './agent-creator-key-resolve.js';
+import {
+  resolveCreatorAgentKeyForOpenRound,
+  resolveCreatorAgentKeyForStart,
+  resolveOwnedSlugForOpenRound,
+} from './agent-creator-key-resolve.js';
 import {
   looksLikeGameAgentKey,
   GAME_KEY_GOES_IN_KEY_ARG_REASON,
@@ -739,7 +743,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     open_round: {
       description:
         'Open a new post-publish improvement round on a published game. ' +
-        'Accepts a durable per-game key, or Authorization: Bearer <creator key> + slug. ' +
+        'Accepts a durable per-game key, or Authorization: Bearer (creator key or OAuth access) + slug. ' +
         'Spends the same daily improvement quota as Studio. ' +
         'Returns jobId only — call start() next for a sessionKey. Idempotent while a round is already open.',
       inputSchema: {
@@ -747,11 +751,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         properties: {
           key: {
             type: 'string',
-            description: 'Durable per-game key. Optional when using Authorization Bearer with a creator key + slug.',
+            description:
+              'Durable per-game key. Optional when using Authorization Bearer (creator key or OAuth) + slug.',
           },
           slug: {
             type: 'string',
-            description: 'Game slug. Required with a creator-key Bearer; ignored with a per-game key.',
+            description: 'Game slug. Required with a creator-key or OAuth Bearer; ignored with a per-game key.',
           },
           feedback: {
             type: 'string',
@@ -807,6 +812,29 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             publishedRecord: creatorResolved.publishedRecord,
             activeRound: creatorResolved.activeRound,
           };
+        } else if (!key && bearer && looksLikeAsAccessToken(bearer)) {
+          // OAuth could join a round but never open one, so an OAuth-connected agent went
+          // idle the moment a round closed and waited for a human to start the next. That
+          // is the whole promise inverted: after one-time configuration, only a slug is
+          // supposed to be needed. `start` already accepted OAuth here; `open_round` was
+          // simply never taught the same identity.
+          const asAccess = await verifyAsAccessToken(store, bearer, now());
+          if (!asAccess) {
+            return toolErr('invalid OAuth access — sign in again from your coding agent');
+          }
+          if (!slugArg) {
+            return toolErr('slug is required when using OAuth — pass the game slug to improve');
+          }
+          const oauthResolved = await resolveOwnedSlugForOpenRound(store, slugArg, asAccess.ownerUid);
+          if (!oauthResolved.ok) {
+            return toolErr(oauthResolved.reason);
+          }
+          resolved = {
+            creatorUid: asAccess.ownerUid,
+            slug: oauthResolved.slug,
+            publishedRecord: oauthResolved.publishedRecord,
+            activeRound: oauthResolved.activeRound,
+          };
         } else if (key && looksLikeGameAgentKey(key)) {
           const gameResolved = await resolveGameAgentKeyForOpenRound(store, key, agentTokenSecret, now());
           if (!gameResolved.ok) {
@@ -822,10 +850,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           return toolErr('creator key must be sent as Authorization Bearer, not as the key argument');
         } else if (key) {
           return toolErr(
-            'open_round requires a durable per-game key or Authorization Bearer with a creator key + slug',
+            'open_round requires a durable per-game key, or Authorization Bearer (creator key or OAuth) + slug',
           );
         } else {
-          return toolErr('pass a durable per-game key, or Authorization Bearer with a creator key + slug');
+          return toolErr('pass a durable per-game key, or Authorization Bearer (creator key or OAuth) + slug');
         }
 
         const at = new Date(now()).toISOString();
