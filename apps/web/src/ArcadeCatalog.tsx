@@ -510,7 +510,7 @@ export function ArcadeCatalog({
   onOpenStudio,
 }: ArcadeCatalogProps) {
   const { t, i18n } = useTranslation();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const viewerUid = user?.uid ?? null;
   const locale = i18n.language;
   const [sortMode, setSortMode] = useState<CatalogSortMode>(() =>
@@ -524,10 +524,9 @@ export function ArcadeCatalog({
   const [signals, setSignals] = useState<CatalogSortSignals>(() => initialSignals(viewerUid).signals);
   const [signalsReady, setSignalsReady] = useState(() => initialSignals(viewerUid).ready);
   const [creatorItems, setCreatorItems] = useState<CreatorGameItem[]>([]);
-  // Signed-in "Yours" pins + Studio chip land with the first grid paint — waiting for
-  // the shelf (in parallel with catalog/signals) avoids pinning mid-scroll after the
-  // published order was already on screen.
-  const [creatorGamesReady, setCreatorGamesReady] = useState(() => !viewerUid);
+  // Starts false until auth resolves: a null→uid transition must not paint an
+  // unpinned grid first and then flip back to loading when the shelf gate applies.
+  const [creatorGamesReady, setCreatorGamesReady] = useState(false);
   /** Grid order committed for the current sort/filter/viewer; later signal refresh must not reshuffle. */
   const [displayedEntries, setDisplayedEntries] = useState<CatalogEntry[]>([]);
   const desiredOrderRef = useRef<CatalogEntry[]>([]);
@@ -572,17 +571,20 @@ export function ArcadeCatalog({
   }, [recommendationsRefreshKey, viewerUid]);
 
   useEffect(() => {
+    if (authLoading) return;
     if (!viewerUid) {
       setCreatorItems([]);
       setCreatorGamesReady(true);
       return;
     }
+    // Drop the previous viewer's shelf immediately on account switch.
+    setCreatorItems([]);
     setCreatorGamesReady(false);
-  }, [viewerUid, locale]);
+  }, [authLoading, viewerUid, locale]);
 
   // Creator shelf feeds the Studio chip and "Yours" pins — never the grid itself.
   useEffect(() => {
-    if (!viewerUid) return;
+    if (authLoading || !viewerUid) return;
     let cancelled = false;
     void loadCreatorGames(locale).then((items) => {
       if (cancelled) return;
@@ -598,7 +600,7 @@ export function ArcadeCatalog({
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [viewerUid, creatorGamesRefreshKey, locale]);
+  }, [authLoading, viewerUid, creatorGamesRefreshKey, locale]);
 
   // Close the sort menu on outside tap or Escape — phones have no hover to dismiss it.
   useEffect(() => {
@@ -653,7 +655,8 @@ export function ArcadeCatalog({
 
   const awaitingSignals =
     catalogStatus === 'ready' && catalogEntries.length > 0 && catalogSortNeedsSignals(sortMode) && !signalsReady;
-  const awaitingCreatorShelf = Boolean(viewerUid) && !creatorGamesReady;
+  // Hold the grid while auth is unknown, and while a signed-in shelf is still loading.
+  const awaitingCreatorShelf = authLoading || (Boolean(viewerUid) && !creatorGamesReady);
   const layoutReady = catalogStatus === 'ready' && !awaitingSignals && !awaitingCreatorShelf;
 
   // Commit order once per sort/filter/viewer (and when the shelf/signals first land).

@@ -30,8 +30,13 @@ describe('catalog grid layout', () => {
   });
 
   it('hides trailer/moment chrome on coarse pointers so cards keep one Play CTA', () => {
-    expect(css).toMatch(
-      /@media\s*\(\s*pointer:\s*coarse\s*\)\s*,\s*\(\s*max-width:\s*768px\s*\)\s*\{[^}]*\.preview-toggle\s*,\s*\.catalog-moments\s*\{[^}]*display:\s*none/s,
+    const rule = css.match(/\.preview-toggle\s*,\s*\.catalog-moments\s*\{([\s\S]*?)\}/);
+    expect(rule, 'missing combined preview-toggle/catalog-moments hide rule').not.toBeNull();
+    expect(rule![1]).toMatch(/display:\s*none/);
+    // Same rule lives under the coarse/phone media query (look behind a short window).
+    const at = css.indexOf(rule![0]!);
+    expect(css.slice(Math.max(0, at - 240), at)).toMatch(
+      /@media\s*\(\s*pointer:\s*coarse\s*\)\s*,\s*\(\s*max-width:\s*768px\s*\)/,
     );
   });
 });

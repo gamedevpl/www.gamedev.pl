@@ -111,9 +111,19 @@ async function flushEffects() {
   await Promise.resolve();
 }
 
+/** Default AuthContext is `loading: true` — resolve auth so the shelf gate can finish. */
+function mockSignedOutAuth() {
+  vi.spyOn(AuthContextModule, 'useAuth').mockReturnValue({
+    user: null,
+    loading: false,
+    privateBeta: false,
+  } as ReturnType<typeof AuthContextModule.useAuth>);
+}
+
 describe('ArcadeCatalog lazy media', () => {
   beforeEach(async () => {
     installIntersectionObserverMock();
+    mockSignedOutAuth();
     sessionStorage.setItem(
       'gdpl.catalogSortSignals',
       JSON.stringify({ viewer: '', items: [], popularity: [], lastPlayed: [], newest: [] }),
@@ -410,6 +420,7 @@ describe('ArcadeCatalog lazy media', () => {
 describe('ArcadeCatalog shared-world badge', () => {
   beforeEach(async () => {
     installIntersectionObserverMock();
+    mockSignedOutAuth();
     sessionStorage.setItem(
       'gdpl.catalogSortSignals',
       JSON.stringify({ viewer: '', items: [], popularity: [], lastPlayed: [], newest: [] }),
@@ -469,6 +480,7 @@ describe('ArcadeCatalog shared-world badge', () => {
 describe('ArcadeCatalog soft-refresh failure', () => {
   beforeEach(async () => {
     installIntersectionObserverMock();
+    mockSignedOutAuth();
     sessionStorage.setItem(
       'gdpl.catalogSortSignals',
       JSON.stringify({ viewer: '', items: [], popularity: [], lastPlayed: [], newest: [] }),
@@ -525,6 +537,7 @@ describe('ArcadeCatalog soft-refresh failure', () => {
 describe('ArcadeCatalog Studio chip', () => {
   beforeEach(async () => {
     installIntersectionObserverMock();
+    mockSignedOutAuth();
     sessionStorage.setItem(
       'gdpl.catalogSortSignals',
       JSON.stringify({ viewer: '', items: [], popularity: [], lastPlayed: [], newest: [] }),
