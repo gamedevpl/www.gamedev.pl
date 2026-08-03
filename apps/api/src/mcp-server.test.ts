@@ -595,7 +595,9 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(JSON.stringify(res.structured)).toContain('finished');
   });
 
-  it('rejects a sessionKey presented under a mismatched Mcp-Session-Id', async () => {
+  it('accepts a valid sessionKey even when Mcp-Session-Id has drifted', async () => {
+    // ChatGPT Apps (and Cloud Run multi-instance) often present a different correlator
+    // than the one start() embedded. The sessionKey is the capability; the header is not.
     const store = new InMemoryStore();
     await seedJob(store);
     app = await createApp(store);
@@ -604,9 +606,25 @@ describe('POST /api/mcp (BY-05)', () => {
     const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionA });
     const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
 
-    const mismatch = await callTool(app, 'get_brief', { sessionKey }, { 'mcp-session-id': sessionB });
-    expect(mismatch.isError).toBe(true);
-    expect(JSON.stringify(mismatch.structured)).toMatch(/bound to a different Mcp-Session-Id/i);
+    const brief = await callTool(app, 'get_brief', { sessionKey }, { 'mcp-session-id': sessionB });
+    expect(brief.isError).toBe(false);
+    expect(brief.structured).toMatchObject({ title: 'Comet Courier' });
+  });
+
+  it('binds start to the client Mcp-Session-Id even when this instance never saw initialize', async () => {
+    // Simulate multi-instance: client sends a well-formed id that is not in our local map.
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const foreignSessionId = 'abcdef0123456789abcdef0123456789abcd';
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': foreignSessionId });
+    expect(started.isError).toBe(false);
+    expect(started.structured).toMatchObject({ sessionId: foreignSessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const brief = await callTool(app, 'get_brief', { sessionKey }, { 'mcp-session-id': foreignSessionId });
+    expect(brief.isError).toBe(false);
+    expect(brief.structured).toMatchObject({ title: 'Comet Courier' });
   });
 
   it('reaches /api/mcp through the private-beta wall without a site session', async () => {
@@ -969,7 +987,9 @@ describe('POST /api/mcp (BY-05)', () => {
     });
   });
 
-  it('DELETE terminates the transport session (not auth)', async () => {
+  it('DELETE drops the local correlator; a well-formed id is re-adopted on the next call', async () => {
+    // Multi-instance Cloud Run cannot treat DELETE as a hard kill — the next revision
+    // would just 404 a still-valid ChatGPT session. Adopt restores the correlator.
     const store = new InMemoryStore();
     await seedJob(store);
     app = await createApp(store);
@@ -983,7 +1003,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(del.statusCode).toBe(204);
 
     const listed = await mcpCall(app, 'tools/list', {}, { 'mcp-session-id': sessionId });
-    expect(listed.statusCode).toBe(404);
+    expect(listed.statusCode).toBe(200);
   });
 
   it('list_examples and get_sources wrap the channel', async () => {
@@ -1280,10 +1300,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(good.isError).toBe(false);
   });
 
-  // The binding is real and was documented nowhere: start's own description says
-  // "Does not treat Mcp-Session-Id as authority", which reads as "the header does not
-  // matter" when in fact it is necessary, just not sufficient.
-  it('documents that a sessionKey is bound to the session that minted it', async () => {
+  it('documents that Mcp-Session-Id is a correlator and start() rebinds if lost', async () => {
     const store = new InMemoryStore();
     await seedActiveSelfJob(store);
     app = await createApp(store);
@@ -1298,7 +1315,7 @@ describe('POST /api/mcp (BY-05)', () => {
     const brief = tools.find((tool) => tool.name === 'get_brief');
     const described = brief?.inputSchema.properties?.sessionKey?.description ?? '';
 
-    expect(described).toMatch(/same Mcp-Session-Id/i);
+    expect(described).toMatch(/correlator|never authority/i);
     expect(described).toMatch(/call start\(\) again/i);
   });
 
