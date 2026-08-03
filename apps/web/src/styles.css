@@ -10759,8 +10759,8 @@ body.player-open {
 .theater-peek-btn,
 .theater-peek-pill {
   position: absolute;
-  top: 12px;
-  right: 12px;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
   z-index: 6;
   width: 34px;
   height: 34px;

@@ -226,10 +226,12 @@ export function GameTheater({
       rehideAfterMs === undefined ? null : window.setTimeout(() => setChromeHidden(true), rehideAfterMs);
   }, []);
 
+  const handleTopHover = useCallback(() => revealChrome(2500), [revealChrome]);
+
   // Escape is handled twice on purpose: the window listener below covers the app's
   // own chrome, and this covers the game iframe, which holds focus while playing
   // and swallows its own key events.
-  const player = useGamePlayer(frameRef, true, escapeOrExit, dismissMore, revealChrome);
+  const player = useGamePlayer(frameRef, true, escapeOrExit, dismissMore, handleTopHover);
 
   // Desktop mouse proximity: moving the cursor near the top edge unveils the topbar.
   useEffect(() => {
