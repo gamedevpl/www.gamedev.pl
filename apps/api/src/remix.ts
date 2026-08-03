@@ -555,8 +555,19 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
        * closing is the only signal we get, and it is enough: an abandoned run
        * is discarded here, which makes the client's promise true.
        */
-      const abandoned = () =>
-        options.isAbandoned ? options.isAbandoned(request) : request.raw.destroyed || request.socket.destroyed;
+      let clientGone = false;
+      // On the *response*, not the request. `request.raw.destroyed` reads as
+      // "the client hung up" and is not: Node destroys the request stream once
+      // its body has been consumed, which for any request with a JSON payload is
+      // always — so in production this fired on every single edit, the finished
+      // rebuild was discarded, and the route answered 200 with an empty body.
+      // `inject()` never reproduced it, because a mock request is never a stream
+      // that ends. The response socket closing before the reply is written is
+      // the one event that actually means nobody is listening.
+      reply.raw.on('close', () => {
+        if (!reply.raw.writableFinished) clientGone = true;
+      });
+      const abandoned = () => (options.isAbandoned ? options.isAbandoned(request) : clientGone);
 
       session.codeInFlight = true;
       try {
@@ -592,7 +603,11 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
             { slug: session.slug, region: outcome.region },
             'remix code edit abandoned before it landed',
           );
-          return;
+          // Answered rather than dropped. Nobody is listening by definition, but
+          // a handler that returns without replying leaves Fastify holding an
+          // open request — which is what an abandoned edit looked like from the
+          // outside: a 200 with nothing in it.
+          return reply.status(499).send({ ok: false, reason: 'abandoned' });
         }
 
         session.overrides = { ...session.overrides, ...outcome.overrides };

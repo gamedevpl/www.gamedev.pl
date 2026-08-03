@@ -647,3 +647,58 @@ describe('remix survives an instance change', () => {
     expect(response.statusCode).toBe(404);
   });
 });
+
+/*
+ * Over a real socket, because `inject()` is what hid the defect this pins.
+ *
+ * A mock request is never a stream that ends, so `request.raw.destroyed` stayed
+ * false in every test while being true for every real request with a body — Node
+ * destroys the request stream once its payload has been consumed. The route read
+ * that as "the player walked away", discarded the finished rebuild and returned
+ * without replying, so production answered 200 with an empty body for every code
+ * edit. Twenty passing route tests could not see it.
+ */
+describe('remix code lane over a real connection', () => {
+  let app: FastifyInstance | null = null;
+
+  beforeEach(() => {
+    process.env.EDITOR_ASSIST = 'true';
+    process.env.CODE_LANE = 'true';
+  });
+
+  afterEach(async () => {
+    delete process.env.EDITOR_ASSIST;
+    delete process.env.CODE_LANE;
+    if (app) await app.close();
+    app = null;
+  });
+
+  it('lands an edit for a caller who is still there', async () => {
+    const built = await buildTestApp({
+      codeLane: {
+        run: async (_request: unknown, build: (o: Record<string, string>) => Promise<{ ok: boolean }>) => {
+          const good = { 'game/runtime.ts': 'export function startGame() {\n  return 0.08;\n}\n' };
+          await build(good);
+          return { ok: true, overrides: good, region: { file: 'game/runtime.ts', name: 'startGame' } };
+        },
+      },
+    });
+    app = built.app;
+    const address = await app.listen({ port: 0, host: '127.0.0.1' });
+
+    const started = await fetch(`${address}/api/games/dog-dash/remix`, { method: 'POST', headers: alice });
+    const { remixId } = (await started.json()) as { remixId: string };
+
+    const response = await fetch(`${address}/api/remixes/${remixId}/code`, {
+      method: 'POST',
+      headers: { ...alice, 'content-type': 'application/json' },
+      body: JSON.stringify({ utterance: 'make it twice as fast' }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { ok: boolean; html?: string };
+    // The body is the whole point: an empty 200 is what this defect produced.
+    expect(body.ok).toBe(true);
+    expect(body.html).toContain('return 0.08;');
+  });
+});
