@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { gzipSync } from 'node:zlib';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-token.js';
 import { AGENT_BUILD_RULES_DIGEST } from './agent-build-brief.js';
@@ -7,6 +8,7 @@ import { buildApp } from './app.js';
 import { MAX_PROJECT_BYTES } from './games-repo-contract.js';
 import type { GcsObjectStore } from './gcs-sign.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
+import { KIT_ROOT_DIR } from './kit-registry.js';
 import { InMemoryStore } from './store.js';
 import { NoopTranslator } from './translate.js';
 
@@ -14,6 +16,25 @@ const secret = 'test-secret';
 const ISSUE = 77;
 const ENGINE = 'deadbeef0123456789abcdef0123456789abcdef';
 const SHA = 'a'.repeat(64);
+const TAR_BLOCK = 512;
+
+function kitEntryBlocks(name: string, body: string | Buffer): Buffer {
+  const payload = Buffer.isBuffer(body) ? body : Buffer.from(body, 'utf8');
+  const header = Buffer.alloc(TAR_BLOCK);
+  header.write(name, 0, 100, 'utf8');
+  header.write(`${payload.length.toString(8).padStart(11, '0')} `, 124, 12, 'utf8');
+  header.write('0', 156, 1, 'utf8');
+  header.write('ustar\0', 257, 6, 'utf8');
+  const padding = Buffer.alloc((TAR_BLOCK - (payload.length % TAR_BLOCK)) % TAR_BLOCK);
+  return Buffer.concat([header, payload, padding]);
+}
+
+function packedKitTarball(files: Record<string, string | Buffer>): Buffer {
+  const entries = Object.entries(files).map(([name, body]) =>
+    kitEntryBlocks(name.startsWith(`${KIT_ROOT_DIR}/`) ? name : `${KIT_ROOT_DIR}/${name}`, body),
+  );
+  return gzipSync(Buffer.concat([...entries, Buffer.alloc(TAR_BLOCK * 2)]));
+}
 
 function stubGitHub(): GitHubClient {
   return {
@@ -81,6 +102,10 @@ describe('agent build reads (BY-04)', () => {
     '/api/agent/build/brief',
     '/api/agent/build/seed',
     '/api/agent/build/kit',
+    '/api/agent/build/kit/files',
+    '/api/agent/build/kit/search?q=GameKit',
+    '/api/agent/build/kit/file?path=SKILL.md',
+    '/api/agent/build/kit/file/fragment?path=SKILL.md&limit=2',
     '/api/agent/build/examples',
     '/api/agent/build/examples/block-cascade',
   ];
@@ -209,7 +234,75 @@ describe('agent build reads (BY-04)', () => {
       entry: 'gamedevpl-creator-kit/SKILL.md',
     });
     expect(res.json().unpack).toBe(`curl -fsSL 'https://signed.example/kits/${ENGINE}.tgz?sig=1' | tar -xz`);
+    expect(res.json().browse).toEqual({
+      list: 'list_kit_files',
+      search: 'search_kit_files',
+      read: 'read_kit_file',
+      fragment: 'read_kit_file_fragment',
+    });
     expect(signReadUrl).toHaveBeenCalledWith(`kits/${ENGINE}.tgz`, expect.any(Number));
+  });
+
+  it('lists, searches, and reads kit files from the packed tarball over the channel', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const tgz = packedKitTarball({
+      'SKILL.md': '# Kit\n\nUse GameKit.createCanvasGame.\n',
+      'shared/modules/core.ts': 'export const core = 1; // GameKit\n',
+      'shared/audio/beep.wav': Buffer.from([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0]),
+    });
+    const objects = new Map<string, Buffer>([
+      [
+        'kits/current.json',
+        Buffer.from(
+          JSON.stringify({
+            current: ENGINE,
+            previous: null,
+            updatedAt: '2026-07-31T00:00:00.000Z',
+          }),
+        ),
+      ],
+      ['kits/' + ENGINE + '.json', Buffer.from(JSON.stringify({ sha256: SHA, packedAt: '2026-07-31T00:00:00.000Z' }))],
+      ['kits/' + ENGINE + '.tgz', tgz],
+    ]);
+    app = await createApp(store, mockObjectStore(objects));
+
+    const listed = await app.inject({
+      method: 'GET',
+      url: '/api/agent/build/kit/files?prefix=shared',
+      headers: agentHeaders(),
+    });
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json().engineRef).toBe(ENGINE);
+    expect(listed.json().files.every((f: { path: string }) => f.path.includes('/shared/'))).toBe(true);
+
+    const searched = await app.inject({
+      method: 'GET',
+      url: '/api/agent/build/kit/search?q=createCanvasGame',
+      headers: agentHeaders(),
+    });
+    expect(searched.statusCode).toBe(200);
+    expect(searched.json().matches[0]).toMatchObject({
+      path: `${KIT_ROOT_DIR}/SKILL.md`,
+      line: expect.any(Number),
+    });
+
+    const read = await app.inject({
+      method: 'GET',
+      url: '/api/agent/build/kit/file?path=SKILL.md',
+      headers: agentHeaders(),
+    });
+    expect(read.statusCode).toBe(200);
+    expect(read.json().content).toMatch(/Creator Kit|# Kit/);
+
+    const fragment = await app.inject({
+      method: 'GET',
+      url: '/api/agent/build/kit/file/fragment?path=SKILL.md&unit=lines&offset=0&limit=1',
+      headers: agentHeaders(),
+    });
+    expect(fragment.statusCode).toBe(200);
+    expect(fragment.json().content).toBe('# Kit');
+    expect(fragment.json().eof).toBe(false);
   });
 
   it('returns a machine-readable error when kits/current.json is missing', async () => {

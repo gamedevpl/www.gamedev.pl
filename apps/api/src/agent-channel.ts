@@ -22,6 +22,14 @@ import { InvalidUploadError, MAX_UPLOAD_FILES, type GamesStore } from './games-s
 import { parseSpecTitle } from './github-client.js';
 import { canTransition, resolveJobState, type JobState } from './job-state.js';
 import {
+  KitFilesError,
+  createKitFileStore,
+  listKitFiles,
+  readKitFile,
+  readKitFileFragment,
+  searchKitFiles,
+} from './kit-files.js';
+import {
   KIT_ENTRY,
   KitRegistryError,
   exampleUnpackCommand,
@@ -303,6 +311,34 @@ export async function registerAgentChannelRoutes(
   const shotsByBuild = new Map<number, number[]>();
   const previewsByBuild = new Map<number, number[]>();
   const submitsByBuild = new Map<number, number[]>();
+  const kitFileStore = options.objectStore ? createKitFileStore(options.objectStore) : null;
+
+  function optionalFiniteQuery(raw: string | undefined): number | undefined {
+    if (raw === undefined) return undefined;
+    const value = Number(raw);
+    return Number.isFinite(value) ? value : undefined;
+  }
+
+  function sendKitFilesError(reply: FastifyReply, error: unknown): FastifyReply | null {
+    if (error instanceof KitFilesError) {
+      const status =
+        error.code === 'kit_store_unavailable'
+          ? 503
+          : error.code === 'kit_registry_missing' ||
+              error.code === 'kit_registry_invalid' ||
+              error.code === 'kit_artifact_missing' ||
+              error.code === 'kit_file_missing'
+            ? 404
+            : error.code === 'kit_revision_unsupported'
+              ? 409
+              : 400;
+      return reply.status(status).send({ error: error.code, message: error.message });
+    }
+    if (error instanceof KitRegistryError) {
+      return reply.status(404).send({ error: error.code, message: error.message });
+    }
+    return null;
+  }
 
   /**
    * Resolves the build a request is about. The token is the whole credential: it
@@ -1129,11 +1165,158 @@ export async function registerAgentChannelRoutes(
           sha256: sidecar.sha256,
           unpack: kitUnpackCommand(kitUrl),
           entry: KIT_ENTRY,
+          // Shell-less MCP clients (ChatGPT Apps code_execution often cannot curl
+          // storage.googleapis.com) should browse via the kit file tools instead of
+          // unpacking — keep kitUrl/unpack for agents with a writable checkout.
+          browse: {
+            list: 'list_kit_files',
+            search: 'search_kit_files',
+            read: 'read_kit_file',
+            fragment: 'read_kit_file_fragment',
+          },
         });
       } catch (error) {
         if (error instanceof KitRegistryError) {
           return reply.status(404).send({ error: error.code, message: error.message });
         }
+        throw error;
+      }
+    },
+  );
+
+  /**
+   * List files inside the current Creator Kit without downloading the tarball to the agent.
+   */
+  app.get(
+    '/api/agent/build/kit/files',
+    { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      if (!kitFileStore) {
+        return reply.status(503).send({ error: 'kit_store_unavailable', message: 'the kit store is not configured' });
+      }
+      try {
+        const query = request.query as {
+          prefix?: string;
+          glob?: string;
+          limit?: string;
+          offset?: string;
+          engineRef?: string;
+        };
+        const tree = await kitFileStore.loadTree(query.engineRef);
+        return reply.send(
+          listKitFiles(tree, {
+            prefix: query.prefix,
+            glob: query.glob,
+            limit: optionalFiniteQuery(query.limit),
+            offset: optionalFiniteQuery(query.offset),
+          }),
+        );
+      } catch (error) {
+        const sent = sendKitFilesError(reply, error);
+        if (sent) return sent;
+        throw error;
+      }
+    },
+  );
+
+  /** Grep text files in the current Creator Kit. */
+  app.get(
+    '/api/agent/build/kit/search',
+    { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      if (!kitFileStore) {
+        return reply.status(503).send({ error: 'kit_store_unavailable', message: 'the kit store is not configured' });
+      }
+      try {
+        const query = request.query as {
+          q?: string;
+          query?: string;
+          prefix?: string;
+          limit?: string;
+          engineRef?: string;
+        };
+        const tree = await kitFileStore.loadTree(query.engineRef);
+        return reply.send(
+          searchKitFiles(tree, {
+            query: query.q ?? query.query ?? '',
+            prefix: query.prefix,
+            limit: optionalFiniteQuery(query.limit),
+          }),
+        );
+      } catch (error) {
+        const sent = sendKitFilesError(reply, error);
+        if (sent) return sent;
+        throw error;
+      }
+    },
+  );
+
+  /** Read one small kit file (refuse oversized — use /fragment). */
+  app.get(
+    '/api/agent/build/kit/file',
+    { config: { rateLimit: { max: 240, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      if (!kitFileStore) {
+        return reply.status(503).send({ error: 'kit_store_unavailable', message: 'the kit store is not configured' });
+      }
+      try {
+        const query = request.query as { path?: string; encoding?: string; engineRef?: string };
+        if (!query.path?.trim()) {
+          return reply.status(400).send({ error: 'kit_path_invalid', message: 'path is required' });
+        }
+        const encoding = query.encoding === 'base64' || query.encoding === 'utf8' ? query.encoding : undefined;
+        const tree = await kitFileStore.loadTree(query.engineRef);
+        return reply.send(readKitFile(tree, query.path, { encoding }));
+      } catch (error) {
+        const sent = sendKitFilesError(reply, error);
+        if (sent) return sent;
+        throw error;
+      }
+    },
+  );
+
+  /** Read a byte/line window of one kit file. */
+  app.get(
+    '/api/agent/build/kit/file/fragment',
+    { config: { rateLimit: { max: 240, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      if (!kitFileStore) {
+        return reply.status(503).send({ error: 'kit_store_unavailable', message: 'the kit store is not configured' });
+      }
+      try {
+        const query = request.query as {
+          path?: string;
+          offset?: string;
+          limit?: string;
+          unit?: string;
+          encoding?: string;
+          engineRef?: string;
+        };
+        if (!query.path?.trim()) {
+          return reply.status(400).send({ error: 'kit_path_invalid', message: 'path is required' });
+        }
+        const encoding = query.encoding === 'base64' || query.encoding === 'utf8' ? query.encoding : undefined;
+        const unit = query.unit === 'bytes' || query.unit === 'lines' ? query.unit : undefined;
+        const tree = await kitFileStore.loadTree(query.engineRef);
+        return reply.send(
+          readKitFileFragment(tree, query.path, {
+            offset: optionalFiniteQuery(query.offset),
+            limit: optionalFiniteQuery(query.limit),
+            unit,
+            encoding,
+          }),
+        );
+      } catch (error) {
+        const sent = sendKitFilesError(reply, error);
+        if (sent) return sent;
         throw error;
       }
     },
