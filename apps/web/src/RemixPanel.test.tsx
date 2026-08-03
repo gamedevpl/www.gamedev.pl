@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, createRef } from 'react';
+import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n/index.js';
@@ -24,6 +24,7 @@ const remixApi = vi.hoisted(() => ({
   remixAssist: vi.fn(),
   remixCode: vi.fn(),
   remixShare: vi.fn(),
+  remixUndo: vi.fn(),
   coerceSharedParams: (_specs: unknown, values: unknown) => values,
 }));
 vi.mock('./remixApi', () => remixApi);
@@ -37,12 +38,14 @@ import { RemixPanel } from './RemixPanel.js';
 
 let container: HTMLDivElement;
 let root: Root | null = null;
+let swapped: string[] = [];
 
 beforeEach(async () => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   await i18n.changeLanguage('en');
   container = document.createElement('div');
   document.body.appendChild(container);
+  swapped = [];
 });
 
 afterEach(() => {
@@ -54,14 +57,18 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+/** Stands in for the game frame, so a message can claim to come from it. */
+const frameWindow = { postMessage: () => {} } as unknown as Window;
+const frameRef = { current: { contentWindow: frameWindow } } as unknown as React.RefObject<HTMLIFrameElement>;
+
 async function draw() {
   root = createRoot(container);
   await act(async () => {
     root!.render(
       <RemixPanel
         slug="dog-dash"
-        frameRef={createRef<HTMLIFrameElement>() as never}
-        onSwapDocument={() => {}}
+        frameRef={frameRef as never}
+        onSwapDocument={(html) => swapped.push(html)}
         onClose={() => {}}
       />,
     );
@@ -431,6 +438,123 @@ describe('RemixPanel', () => {
     await draw();
 
     expect(container.querySelector('.remix-try')?.textContent).toBe('turn off rain');
+  });
+
+  it('does not offer a link that would carry nothing', async () => {
+    // A code change moves no declared value, so the link is an empty diff — a
+    // link to the game the player started with. Offering it makes the loudest
+    // button on the panel the least true thing on it.
+    remixApi.startRemix.mockResolvedValue({
+      remixId: 'r1',
+      params: { dogScale: { type: 'number', min: 0.5, max: 3, default: 1, label: { en: 'dog size' } } },
+      values: { dogScale: 1 },
+      canAssist: true,
+      canCode: true,
+      suggestions: [],
+      expiresInMs: 3_600_000,
+    });
+    remixApi.remixAssist.mockResolvedValue({ lane: 'code' });
+    remixApi.remixCode.mockResolvedValue({
+      ok: true,
+      html: '<html></html>',
+      region: { file: 'game/render.ts', name: 'paintWorld' },
+      summary: { en: 'Replaced stars with drawn carrots.' },
+    });
+    await draw();
+    await send('replace the stars with carrots');
+
+    // The change landed and says so...
+    expect(container.querySelector('.remix-result')?.textContent).toContain('carrots');
+    // ...and there is nothing to share, so nothing is offered.
+    expect(container.querySelector('.remix-btn.is-primary')).toBeNull();
+
+    // But there is always a way back. A rebuild that compiles is not a rebuild
+    // that plays, and the lane cannot tell the difference — so the player must
+    // never be left holding a broken game and a composer.
+    const undo = container.querySelector('.remix-btn.is-quiet') as HTMLButtonElement;
+    expect(undo?.textContent).toBe('Undo');
+
+    remixApi.remixUndo.mockResolvedValue({ ok: true, html: '<html>original</html>', undoable: false });
+    await act(async () => {
+      undo.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(remixApi.remixUndo).toHaveBeenCalledWith('r1');
+    expect(swapped.at(-1)).toBe('<html>original</html>');
+  });
+
+  it('says so when the new build throws, and makes going back the loud option', async () => {
+    // The lane checked that it assembles. It did — and then `createRound` threw
+    // on `undefined.map` in the player's face, under a cheerful tick.
+    remixApi.startRemix.mockResolvedValue({
+      remixId: 'r1',
+      params: null,
+      values: null,
+      canAssist: false,
+      canCode: true,
+      suggestions: [],
+      expiresInMs: 3_600_000,
+    });
+    remixApi.remixCode.mockResolvedValue({
+      ok: true,
+      html: '<html>broken</html>',
+      region: { file: 'game/render.ts', name: 'paintWorld' },
+      summary: { en: 'Added a pulsing animation.' },
+    });
+    await draw();
+    await send('make the seeds pulse');
+    expect(container.querySelector('.remix-result')?.textContent).toContain('pulsing');
+
+    // The frame reports its uncaught error over the same channel play telemetry
+    // uses; the panel is listening rather than leaving the player to notice.
+    await act(async () => {
+      const event = new MessageEvent('message', {
+        data: { source: 'gdpl-player', type: 'error', message: 'boom' },
+      });
+      // jsdom will not take a plain object as `source`/`origin` through the
+      // constructor, and the panel checks both — an opaque-origin frame is the
+      // only thing it listens to.
+      Object.defineProperty(event, 'source', { value: frameWindow });
+      Object.defineProperty(event, 'origin', { value: 'null' });
+      window.dispatchEvent(event);
+    });
+
+    expect(container.querySelector('.remix-result.is-broken')).not.toBeNull();
+    expect(container.querySelector('.remix-result')?.textContent).toContain('stopped the game working');
+    expect(container.querySelector('.remix-btn.is-primary')?.textContent).toBe('Undo');
+  });
+
+  it('keeps the way back when the sheet is reopened over a running change', async () => {
+    // Close the sheet, play-test the change, find it broken, reopen — the most
+    // natural sequence there is, and the one a session owned by this panel could
+    // not survive: the change keeps running while the history that undoes it
+    // was thrown away with the unmount.
+    const session = {
+      remixId: 'r1',
+      params: null,
+      values: null,
+      canAssist: false,
+      canCode: true,
+      suggestions: [],
+      expiresInMs: 3_600_000,
+    };
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(
+        <RemixPanel
+          slug="dog-dash"
+          frameRef={frameRef as never}
+          onSwapDocument={(html) => swapped.push(html)}
+          onClose={() => {}}
+          session={session as never}
+          undoable
+        />,
+      );
+    });
+
+    // No second session was minted for the reopening...
+    expect(remixApi.startRemix).not.toHaveBeenCalled();
+    // ...and the way back is offered before anything else is asked for.
+    expect(container.querySelector('.remix-btn')?.textContent).toBe('Undo');
   });
 
   async function send(text: string) {

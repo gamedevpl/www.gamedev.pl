@@ -104,6 +104,8 @@ const RemixStepSchema = z.enum([
   'painted',
   'asked',
   'applied',
+  'broken',
+  'undone',
   'handoff',
   'refused',
   'shared',

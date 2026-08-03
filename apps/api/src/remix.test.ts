@@ -344,6 +344,88 @@ describe('remix routes', () => {
     await first;
   });
 
+  it('puts the game back when an edit that compiled turns out to be broken', async () => {
+    // The lane verifies that a rebuild assembles, not that it plays: a model can
+    // rewrite a render function into valid TypeScript that draws nothing. One
+    // step back is the only safety net there is, and it has to move the session
+    // too — undoing the document alone would leave the next edit building on the
+    // broken source.
+    const codeLane = {
+      run: async (_request: unknown, build: (o: Record<string, string>) => Promise<{ ok: boolean }>) => {
+        const broken = { 'game/runtime.ts': 'export function startGame() {\n  return 0.99;\n}\n' };
+        await build(broken);
+        return {
+          ok: true,
+          overrides: broken,
+          region: { file: 'game/runtime.ts', name: 'startGame' },
+          rounds: 0,
+          tokens: { input: 1, output: 1 },
+        };
+      },
+    };
+    const built = await buildTestApp({ codeLane });
+    app = built.app;
+    const { remixId } = (await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix', headers: alice })).json();
+
+    const edit = await app.inject({
+      method: 'POST',
+      url: `/api/remixes/${remixId}/code`,
+      headers: alice,
+      payload: { utterance: 'draw carrots' },
+    });
+    expect(edit.json().html).toContain('return 0.99;');
+
+    const undone = await app.inject({ method: 'POST', url: `/api/remixes/${remixId}/undo`, headers: alice });
+    expect(undone.statusCode).toBe(200);
+    // The published game, not the edit.
+    expect(undone.json().html).toContain('return 0.16;');
+    expect(undone.json().undoable).toBe(false);
+
+    // And the session went back with it: the next rebuild starts from the game,
+    // not from the change the player just rejected.
+    expect(built.seen.at(-1)?.['game/runtime.ts']).not.toContain('return 0.99;');
+
+    // Nothing left to undo.
+    const again = await app.inject({ method: 'POST', url: `/api/remixes/${remixId}/undo`, headers: alice });
+    expect(again.statusCode).toBe(409);
+    expect(again.json().reason).toBe('nothing_to_undo');
+  });
+
+  it('carries the lane trace into the answer only under the debug flag', async () => {
+    // Temporary and deliberately loud: it carries the utterance, so it must be a
+    // deploy-time decision rather than something a request can ask for.
+    const codeLane = {
+      run: async (_request: unknown, build: (o: Record<string, string>) => Promise<{ ok: boolean }>) => {
+        const good = { 'game/runtime.ts': 'export function startGame() {\n  return 0.08;\n}\n' };
+        await build(good);
+        return {
+          ok: true,
+          overrides: good,
+          region: { file: 'game/runtime.ts', name: 'startGame' },
+          rounds: 0,
+          tokens: { input: 1, output: 1 },
+          trace: { regionCount: 3, picked: { decision: 'edit', found: true }, rounds: [] },
+        };
+      },
+    };
+    const built = await buildTestApp({ codeLane });
+    app = built.app;
+    const { remixId } = (await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix', headers: alice })).json();
+    const url = `/api/remixes/${remixId}/code`;
+    const payload = { utterance: 'make it twice as fast' };
+
+    const quiet = await app.inject({ method: 'POST', url, headers: alice, payload });
+    expect(quiet.json().debug).toBeUndefined();
+
+    process.env.REMIX_DEBUG = 'true';
+    try {
+      const loud = await app.inject({ method: 'POST', url, headers: alice, payload });
+      expect(loud.json().debug).toMatchObject({ regionCount: 3, picked: { found: true } });
+    } finally {
+      delete process.env.REMIX_DEBUG;
+    }
+  });
+
   it('reports a failed code edit without swapping anything', async () => {
     const codeLane = {
       run: async () => ({ ok: false, reason: 'did_not_compile', tokens: { input: 1, output: 1 } }),

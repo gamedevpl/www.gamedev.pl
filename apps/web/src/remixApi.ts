@@ -47,7 +47,7 @@ export type RemixAssistResponse = {
 };
 
 export type RemixCodeResponse =
-  | { ok: true; html: string; region: { file: string; name: string }; summary?: EditorLabel }
+  | { ok: true; html: string; undoable?: boolean; region: { file: string; name: string }; summary?: EditorLabel }
   | { ok: false; reason: 'no_region' | 'refused' | 'did_not_compile' | 'error'; summary?: EditorLabel };
 
 export type RemixShare = {
@@ -89,6 +89,17 @@ export function remixAssist(
 
 export function remixCode(remixId: string, utterance: string, signal?: AbortSignal): Promise<RemixCodeResponse> {
   return post<RemixCodeResponse>(`/api/remixes/${encodeURIComponent(remixId)}/code`, { utterance }, signal);
+}
+
+/**
+ * One step back, server-side.
+ *
+ * Not a client-side swap: the session is what the *next* edit builds on, so
+ * restoring the document in the browser while leaving the broken source on the
+ * server would quietly compound the damage.
+ */
+export function remixUndo(remixId: string): Promise<{ ok: true; html: string; undoable: boolean }> {
+  return post<{ ok: true; html: string; undoable: boolean }>(`/api/remixes/${encodeURIComponent(remixId)}/undo`);
 }
 
 export function remixShare(remixId: string, params: Record<string, EditorParamValue>): Promise<RemixShare> {

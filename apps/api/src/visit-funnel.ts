@@ -204,6 +204,13 @@ export const REMIX_STEPS = [
   'painted',
   'asked',
   'applied',
+  // `applied` is recorded when the rebuild arrives, which is before the game has
+  // run a frame. A build that then throws was counted as a success, and one the
+  // player took back was counted twice over — so the rung that measures whether
+  // the safety flow works had no numbers at all. These two are read against
+  // `applied`, not against each other: not every broken edit is undone.
+  'broken',
+  'undone',
   'handoff',
   'refused',
   'shared',

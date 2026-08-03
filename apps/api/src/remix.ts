@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { PARAMS_KEY, parseEditorDefinition, type EditorDefinition } from './editor-contract.js';
 import { EDITOR_FILE } from './editor-contract.js';
 import { applyAssistPatches, assistEnabled, MAX_UTTERANCE_LENGTH, type EditorAssistant } from './editor-assist.js';
-import { codeLaneEnabled, type VertexCodeLane } from './code-lane.js';
+import { codeLaneDebugEnabled, codeLaneEnabled, type VertexCodeLane } from './code-lane.js';
 import { buildSuggestions } from './remix-suggestions.js';
 import type { GamesStore } from './games-store.js';
 import type { Store } from './store.js';
@@ -78,6 +78,17 @@ interface RemixSession {
   sources: Record<string, string>;
   /** Accumulated edits, newest wins. Applied over `sources` on every rebuild. */
   overrides: Record<string, string>;
+  /**
+   * What `overrides` looked like before each code edit, newest last.
+   *
+   * A rebuild that compiles is not a rebuild that plays: the lane's only
+   * verification is that the document assembles, and a model can rewrite a
+   * render function into valid TypeScript that draws nothing. That happened on
+   * the first real remix, and the player had no way back — which turns a toy for
+   * exploring a game into one that can wreck it. One step back per edit, bounded
+   * by the same ceiling as the edits themselves.
+   */
+  history: Array<Record<string, string>>;
   /**
    * Whether the game's authoritative copy is the store's. It decides where a
    * rebuild's base comes from: a store game's files replace the ref's entirely,
@@ -291,6 +302,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       fromStore: loaded.fromStore,
       sourcesLoaded: loaded.fromStore,
       overrides: {},
+      history: [],
       definition: editorJson ? parseEditorDefinition(editorJson).definition : null,
       title: claims.slug,
       codeEdits: 0,
@@ -394,6 +406,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         fromStore: loaded.fromStore,
         sourcesLoaded: loaded.fromStore,
         overrides: {},
+        history: [],
         definition,
         title: params.data.slug,
         codeEdits: 0,
@@ -605,10 +618,26 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
           },
         );
 
+        if (codeLaneDebugEnabled()) {
+          // Before the success branch, deliberately: a trace that only ever
+          // described the runs that worked would be silent on the ones the flag
+          // exists to explain.
+          request.log.info(
+            {
+              slug: session.slug,
+              utterance: body.data.utterance,
+              ok: outcome.ok,
+              ...(outcome.ok ? { region: outcome.region } : { reason: outcome.reason, detail: outcome.detail }),
+              trace: outcome.trace,
+            },
+            'remix code lane trace',
+          );
+        }
         if (!outcome.ok) {
           return reply.send({
             ok: false,
             reason: outcome.reason,
+            ...(codeLaneDebugEnabled() && outcome.trace ? { debug: outcome.trace } : {}),
             ...(outcome.summary ? { summary: outcome.summary } : {}),
           });
         }
@@ -628,6 +657,8 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
           return reply.status(499).send({ ok: false, reason: 'abandoned' });
         }
 
+        session.history.push(session.overrides);
+        if (session.history.length > MAX_CODE_EDITS) session.history.shift();
         session.overrides = { ...session.overrides, ...outcome.overrides };
         session.codeEdits += 1;
         session.expiresAt = now() + REMIX_TTL_MS;
@@ -636,12 +667,63 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         return reply.send({
           ok: true,
           html,
+          undoable: true,
           region: outcome.region,
+          ...(codeLaneDebugEnabled() && outcome.trace ? { debug: outcome.trace } : {}),
           ...(outcome.summary ? { summary: outcome.summary } : {}),
         });
       } finally {
         session.codeInFlight = false;
       }
+    },
+  );
+
+  /**
+   * One step back.
+   *
+   * The code lane verifies that a rebuild *assembles*, which is not the same as
+   * verifying that it still plays — a model can turn a render function into
+   * valid TypeScript that draws an empty board, and the first real remix did
+   * exactly that. Without this the player is left holding a broken game and a
+   * composer, which is a worse place than they started.
+   *
+   * Server-side rather than a client-side swap, because the session is what the
+   * *next* edit builds on: restoring the document in the browser while leaving
+   * the broken source in the session would quietly compound the damage. The
+   * spend is not refunded — the work happened — but `codeEdits` is given back,
+   * since a step undone should not also cost a step forward.
+   */
+  app.post(
+    '/api/remixes/:id/undo',
+    { config: { rateLimit: { max: 20, timeWindow: 60_000 } } },
+    async (request, reply) => {
+      if (!requireUser(request, reply)) return;
+      const session = await getSession(request);
+      if (!session) return reply.status(404).send({ error: 'this remix has expired — start a new one' });
+      const previous = session.history.pop();
+      if (previous === undefined) {
+        return reply.status(409).send({ error: 'there is nothing to undo', reason: 'nothing_to_undo' });
+      }
+      const restored = session.overrides;
+      session.overrides = previous;
+      session.codeEdits = Math.max(0, session.codeEdits - 1);
+      // Put it back rather than leaving the session in a state the player cannot
+      // see: a failed undo must not silently become a third version, and an
+      // assembler that *throws* fails exactly as much as one that returns null.
+      let html: string | null = null;
+      try {
+        html = await rebuild(session);
+      } catch (error) {
+        request.log.error({ err: error, slug: session.slug }, 'remix undo could not rebuild');
+      }
+      if (!html) {
+        session.overrides = restored;
+        session.history.push(previous);
+        session.codeEdits += 1;
+        return reply.status(503).send({ error: 'could not go back just now', reason: 'rebuild_failed' });
+      }
+      session.expiresAt = now() + REMIX_TTL_MS;
+      return reply.send({ ok: true, html, undoable: session.history.length > 0 });
     },
   );
 
