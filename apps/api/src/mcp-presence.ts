@@ -19,6 +19,8 @@ const NO_PULSE = new Set([
   'report_progress',
   'send_screenshot',
   'submit_sources',
+  'stage_source_file',
+  'clear_staged_sources',
   'ack_inbox',
 ]);
 
@@ -34,6 +36,7 @@ const PRESENCE_COPY: Record<string, string> = {
   get_sources: 'Loading existing game sources…',
   list_examples: 'Browsing example games…',
   get_example: 'Reading an example game…',
+  list_staged_sources: 'Checking staged sources…',
   read_inbox: 'Checking creator notes…',
   get_gate_verdict: 'Waiting on automated checks…',
   get_gate_media: 'Reviewing gate captures…',

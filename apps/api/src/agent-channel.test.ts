@@ -701,6 +701,7 @@ describe('agent build channel', () => {
         kitEngineRef?: string;
         mode?: string;
       }> = [];
+      const staged = new Map<string, string>();
       const gamesStore = {
         putCandidateSources: async (input: {
           slug: string;
@@ -714,6 +715,48 @@ describe('agent build channel', () => {
           validateSourceUpload(input.files as Array<{ path: string; content: string }>, input.mode ?? 'publish');
           return { version: 'v1', manifest: {} as never };
         },
+        putStagedSourceFile: async (input: { path: string; content: string }) => {
+          staged.set(input.path, input.content);
+          const files = [...staged.entries()].map(([path, content]) => ({
+            path,
+            bytes: Buffer.byteLength(content, 'utf8'),
+          }));
+          return {
+            path: input.path,
+            bytes: Buffer.byteLength(input.content, 'utf8'),
+            files,
+            totalBytes: files.reduce((sum, file) => sum + file.bytes, 0),
+            maxBytes: 2 * 1024 * 1024,
+            maxFiles: 200,
+            updatedAt: '2026-08-03T23:00:00.000Z',
+          };
+        },
+        listStagedSources: async () => {
+          const files = [...staged.entries()].map(([path, content]) => ({
+            path,
+            bytes: Buffer.byteLength(content, 'utf8'),
+          }));
+          return {
+            files,
+            totalBytes: files.reduce((sum, file) => sum + file.bytes, 0),
+            maxBytes: 2 * 1024 * 1024,
+            maxFiles: 200,
+            updatedAt: files.length ? '2026-08-03T23:00:00.000Z' : null,
+          };
+        },
+        getStagedSourceFiles: async () => [...staged.entries()].map(([path, content]) => ({ path, content })),
+        clearStagedSources: async (input?: { paths?: string[] }) => {
+          if (!input?.paths?.length) {
+            const cleared = staged.size;
+            staged.clear();
+            return { cleared };
+          }
+          let cleared = 0;
+          for (const path of input.paths) {
+            if (staged.delete(path)) cleared += 1;
+          }
+          return { cleared };
+        },
         getManifest: async () => null,
         getSourceFile: async () => null,
         putGateResult: async () => {},
@@ -722,7 +765,7 @@ describe('agent build channel', () => {
         getDerivedArtifact: async () => null,
         getKitRegistry: async () => null,
       } as unknown as GamesStore;
-      return { gamesStore, stored };
+      return { gamesStore, stored, staged };
     }
 
     it('stores a delivered game as a candidate version', async () => {
@@ -1138,6 +1181,57 @@ describe('agent build channel', () => {
       expect(record?.previewVersion).toBe('v1');
       expect(record?.deliveredVersion).toBeUndefined();
       expect(record?.state).not.toBe('submitted');
+    });
+
+    it('stages files one-by-one and finalizes with fromStaged', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore, stored, staged } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      const draft = MINIMAL.filter((f) => f.path !== 'TRACE.json' && f.path !== 'PLAYTEST.json');
+      for (const file of draft) {
+        const stagedRes = await app.inject({
+          method: 'PUT',
+          url: '/api/agent/build/sources/stage',
+          headers: agentHeaders(),
+          payload: { slug: 'comet-courier', path: file.path, content: file.content },
+        });
+        expect(stagedRes.statusCode).toBe(200);
+        expect(stagedRes.json()).toMatchObject({ accepted: true, path: file.path });
+      }
+
+      const listed = await app.inject({
+        method: 'GET',
+        url: '/api/agent/build/sources/stage',
+        headers: agentHeaders(),
+      });
+      expect(
+        listed
+          .json()
+          .files.map((f: { path: string }) => f.path)
+          .sort(),
+      ).toEqual(draft.map((f) => f.path).sort());
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          fromStaged: true,
+          kitEngineRef: 'abcdef1234567890',
+          mode: 'preview',
+        },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ accepted: true, mode: 'preview' });
+      expect(stored[0]?.mode).toBe('preview');
+      expect((stored[0]?.files as Array<{ path: string }>).map((f) => f.path).sort()).toEqual(
+        draft.map((f) => f.path).sort(),
+      );
+      // Finalize clears the buffer so the next iterate starts clean.
+      expect(staged.size).toBe(0);
     });
   });
 

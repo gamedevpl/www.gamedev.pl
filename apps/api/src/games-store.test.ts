@@ -204,6 +204,11 @@ function stubGcs() {
       objects.set(name, Buffer.from(init.body as Uint8Array));
       return new Response('{}', { status: 200 });
     }
+    if (init.method === 'DELETE') {
+      const name = decodeURIComponent(href.split('/o/')[1].split('?')[0]);
+      objects.delete(name);
+      return new Response(null, { status: 200 });
+    }
     const name = decodeURIComponent(href.split('/o/')[1].split('?')[0]);
     const body = objects.get(name);
     return body ? new Response(new Uint8Array(body), { status: 200 }) : new Response('', { status: 404 });
@@ -275,6 +280,38 @@ describe('GCS games store', () => {
     await store.putGateResult('g', version, { green: false, report: '3 checks failed' });
 
     expect((await store.getManifest('g', version))?.gate).toMatchObject({ green: false, report: '3 checks failed' });
+  });
+
+  it('stages files one-by-one and assembles them for finalize', async () => {
+    const { impl, objects } = stubGcs();
+    const store = createGcsGamesStore({ ...base, fetchImpl: impl });
+    const draft = MINIMAL.filter((f) => f.path !== 'TRACE.json' && f.path !== 'PLAYTEST.json');
+
+    for (const file of draft) {
+      await store.putStagedSourceFile({
+        slug: 'g',
+        issueNumber: 7,
+        roundGeneration: 1,
+        path: file.path,
+        content: file.content,
+      });
+    }
+
+    const listed = await store.listStagedSources({ slug: 'g', issueNumber: 7, roundGeneration: 1 });
+    expect(listed.files.map((f) => f.path).sort()).toEqual(draft.map((f) => f.path).sort());
+    expect(objects.has('games/g/staging/7/g1/source/game.ts')).toBe(true);
+
+    const assembled = await store.getStagedSourceFiles({ slug: 'g', issueNumber: 7, roundGeneration: 1 });
+    const { version } = await store.putCandidateSources({
+      slug: 'g',
+      issueNumber: 7,
+      files: assembled,
+      mode: 'preview',
+    });
+    expect(version).toBeTruthy();
+
+    await store.clearStagedSources({ slug: 'g', issueNumber: 7, roundGeneration: 1 });
+    expect((await store.listStagedSources({ slug: 'g', issueNumber: 7, roundGeneration: 1 })).files).toEqual([]);
   });
 
   it('records kit_outdated on a preview-lane check without touching gate', async () => {
