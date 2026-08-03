@@ -539,6 +539,82 @@ describe('ArcadeCatalog in-progress builds', () => {
     vi.restoreAllMocks();
   });
 
+  it('waits for the creator shelf before painting so in-progress cards do not shove the grid', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.spyOn(AuthContextModule, 'useAuth').mockReturnValue({
+      user: { uid: 'test-user', tier: 'standard' },
+      loading: false,
+      privateBeta: false,
+    } as ReturnType<typeof AuthContextModule.useAuth>);
+
+    let resolveMine: ((value: Response) => void) | undefined;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/api/submissions/mine')) {
+        return new Promise<Response>((resolve) => {
+          resolveMine = resolve;
+        });
+      }
+      return new Response(JSON.stringify({ items: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(ArcadeCatalog, {
+          catalogStatus: 'ready',
+          catalogError: null,
+          catalogEntries: entries,
+          onPlayGame: vi.fn(),
+          onPlayTogether: vi.fn(),
+          onRetryCatalog: vi.fn(),
+          onOpenStatus: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    // Catalog + signals are ready, but the shelf is still in flight — keep the
+    // loading state rather than painting a grid that will jump when builds arrive.
+    expect(container.querySelectorAll('.catalog-card')).toHaveLength(0);
+    expect(container.querySelector('.catalog-state')?.textContent).toMatch(/Loading/i);
+
+    await act(async () => {
+      resolveMine?.(
+        new Response(
+          JSON.stringify({
+            submissions: [
+              {
+                token: 'tok-build',
+                title: 'Building Game',
+                createdAt: new Date().toISOString(),
+                lastKnownStatus: 'building',
+                slug: 'building-game',
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+      await flushEffects();
+    });
+
+    const cards = container.querySelectorAll('.catalog-card');
+    expect(cards.length).toBe(3);
+    expect(container.querySelectorAll('.catalog-build-card')).toHaveLength(1);
+    expect(cards[0]?.classList.contains('catalog-build-card')).toBe(true);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('passes slug or token to onOpenStatus when opening an in-progress card', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.spyOn(AuthContextModule, 'useAuth').mockReturnValue({

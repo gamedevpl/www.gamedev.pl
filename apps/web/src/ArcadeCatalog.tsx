@@ -556,6 +556,11 @@ export function ArcadeCatalog({
   const [signals, setSignals] = useState<CatalogSortSignals>(() => initialSignals(viewerUid).signals);
   const [signalsReady, setSignalsReady] = useState(() => initialSignals(viewerUid).ready);
   const [creatorItems, setCreatorItems] = useState<CreatorGameItem[]>([]);
+  // Signed-in creators get in-progress cards (and "Yours" pins) prepended to the
+  // grid. Waiting for that first shelf fetch avoids painting the published grid
+  // and then shoving it aside when the builds arrive — the jump people notice.
+  // Refresh ticks and post-submit bumps update in place without re-blocking.
+  const [creatorGamesReady, setCreatorGamesReady] = useState(() => !viewerUid);
 
   useEffect(() => watchCatalogScrollIdle(), []);
 
@@ -595,16 +600,26 @@ export function ArcadeCatalog({
     };
   }, [recommendationsRefreshKey, viewerUid]);
 
-  // Creator games (published + in progress) — only while the gallery is visible.
+  // Block grid paint again when the viewer (or locale) changes — a different
+  // shelf must not flash under the previous one's layout.
   useEffect(() => {
-    if (!user) {
+    if (!viewerUid) {
       setCreatorItems([]);
+      setCreatorGamesReady(true);
       return;
     }
-    if (catalogStatus === 'loading') return;
+    setCreatorGamesReady(false);
+  }, [viewerUid, locale]);
+
+  // Creator games (published + in progress). Starts with the arcade mount so cold
+  // load waits for max(catalog, signals, shelf), not catalog then shelf in series.
+  useEffect(() => {
+    if (!viewerUid) return;
     let cancelled = false;
     void loadCreatorGames(locale).then((items) => {
-      if (!cancelled) setCreatorItems(items);
+      if (cancelled) return;
+      setCreatorItems(items);
+      setCreatorGamesReady(true);
     });
     const timer = window.setInterval(() => {
       void loadCreatorGames(locale).then((items) => {
@@ -615,7 +630,7 @@ export function ArcadeCatalog({
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [user, catalogStatus, creatorGamesRefreshKey, locale]);
+  }, [viewerUid, creatorGamesRefreshKey, locale]);
 
   // Close the sort menu on outside tap or Escape — phones have no hover to dismiss it.
   useEffect(() => {
@@ -688,6 +703,7 @@ export function ArcadeCatalog({
   }
   const awaitingSignals =
     catalogStatus === 'ready' && catalogEntries.length > 0 && catalogSortNeedsSignals(sortMode) && !signalsReady;
+  const awaitingCreatorShelf = Boolean(viewerUid) && !creatorGamesReady;
 
   const emptyMessage =
     yourGamesOnly && notPlayedOnly && (catalogEntries.length > 0 || mySlugs.size > 0)
@@ -795,7 +811,7 @@ export function ArcadeCatalog({
         </div>
       ) : null}
 
-      {catalogStatus === 'loading' || awaitingSignals ? (
+      {catalogStatus === 'loading' || awaitingSignals || awaitingCreatorShelf ? (
         <MascotMoment className="catalog-state" emotion="busy" size={56} title={t('mascot.busyAlt')}>
           <p>{t('catalog.loading')}</p>
         </MascotMoment>
