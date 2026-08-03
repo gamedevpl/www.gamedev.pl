@@ -2,6 +2,7 @@
 
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { Simulate } from 'react-dom/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n/index.js';
 
@@ -18,7 +19,11 @@ vi.mock('./AuthContext.js', () => ({
   useAuth: () => ({ refreshUser: vi.fn(), user: { uid: 'g:test' } }),
 }));
 
-import { CreatorProfileEditor, type CreatorProfileSurface } from './CreatorProfileEditor.js';
+import {
+  CreatorProfileEditor,
+  StudioCreatorProfileProvider,
+  type CreatorProfileSurface,
+} from './CreatorProfileEditor.js';
 
 let container: HTMLDivElement;
 let root: Root | null = null;
@@ -45,7 +50,26 @@ afterEach(() => {
 async function draw(surface: CreatorProfileSurface): Promise<void> {
   root = createRoot(container);
   await act(async () => {
-    root!.render(<CreatorProfileEditor surface={surface} />);
+    root!.render(
+      <StudioCreatorProfileProvider>
+        <CreatorProfileEditor surface={surface} />
+      </StudioCreatorProfileProvider>,
+    );
+  });
+  await act(async () => {
+    await Promise.resolve();
+  });
+}
+
+async function drawBoth(): Promise<void> {
+  root = createRoot(container);
+  await act(async () => {
+    root!.render(
+      <StudioCreatorProfileProvider>
+        <CreatorProfileEditor surface="chrome" />
+        <CreatorProfileEditor surface="publish-gate" />
+      </StudioCreatorProfileProvider>,
+    );
   });
   await act(async () => {
     await Promise.resolve();
@@ -153,5 +177,50 @@ describe('CreatorProfileEditor', () => {
     expect(container.querySelector('.creator-profile-editor.is-expanded')).toBeTruthy();
     expect(container.querySelector('button.primary-btn')?.textContent).toContain('Save profile');
     expect(container.querySelector('details.creator-profile-rename')).toBeTruthy();
+  });
+
+  it('shows the chrome chip after a claim on the publish gate without remounting', async () => {
+    profileApi.fetchMyProfile.mockResolvedValue({
+      profile: null,
+      publishReady: false,
+      picture: null,
+    });
+    profileApi.claimHandle.mockResolvedValue({
+      profile: {
+        handle: 'ada',
+        profileName: 'ada',
+        bio: '',
+        avatarUrl: null,
+        profileCreatedAt: '2026-08-01T00:00:00.000Z',
+      },
+      publishReady: true,
+      handle: 'ada',
+      profileName: 'ada',
+      avatarMode: 'letter',
+      picture: null,
+    });
+
+    await drawBoth();
+    expect(container.querySelector('.creator-profile-editor.is-publish-gate')).toBeTruthy();
+    expect(container.querySelector('.creator-profile-editor.is-chrome')).toBeNull();
+
+    const input = container.querySelector('.creator-profile-input') as HTMLInputElement;
+    await act(async () => {
+      // Simulate feeds the synthetic event into React's onChange; set the DOM value too
+      // so a stale read of input.value cannot win.
+      input.value = 'ada';
+      Simulate.change(input);
+    });
+
+    await act(async () => {
+      Simulate.submit(container.querySelector('form.creator-profile-form') as HTMLFormElement);
+      await Promise.resolve();
+    });
+
+    expect(profileApi.claimHandle).toHaveBeenCalledWith('ada');
+    expect(container.querySelector('.creator-profile-editor.is-publish-gate')).toBeNull();
+    expect(container.querySelector('.creator-profile-editor.is-chrome')).toBeTruthy();
+    expect(container.textContent).toContain('@ada');
+    expect(container.textContent).toContain('Edit profile');
   });
 });

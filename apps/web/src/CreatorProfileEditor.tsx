@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type FormEvent } from 'react';
+import { createContext, useContext, useEffect, useId, useState, type FormEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
 import {
@@ -18,23 +18,47 @@ import { creatorPath } from './router.js';
  *
  * - `chrome`: quiet `@handle · Edit` chip once a profile exists; otherwise nothing.
  * - `publish-gate`: claim form on a game that is waiting to go live without a handle.
+ *
+ * Both surfaces must share one profile store: claiming on the gate has to reveal the
+ * chrome chip without a remount/reload.
  */
 export type CreatorProfileSurface = 'chrome' | 'publish-gate';
 
-export function CreatorProfileEditor({ surface }: { surface: CreatorProfileSurface }) {
+type ProfileStatus = 'loading' | 'ready' | 'saving' | 'error';
+
+type StudioCreatorProfile = {
+  me: MeProfile | null;
+  status: ProfileStatus;
+  handleInput: string;
+  nameInput: string;
+  bioInput: string;
+  avatarMode: AvatarMode;
+  availability: { available: boolean; reason?: HandleClaimError } | null;
+  message: string | null;
+  setHandleInput: (value: string) => void;
+  setNameInput: (value: string) => void;
+  setBioInput: (value: string) => void;
+  setAvatarMode: (value: AvatarMode) => void;
+  onClaim: (event: FormEvent) => Promise<void>;
+  onSaveDetails: (event: FormEvent) => Promise<void>;
+  refusalCopy: (code: HandleClaimError) => string;
+  /** Cleared after chrome collapses following a successful claim/save. */
+  clearMessage: () => void;
+};
+
+const StudioCreatorProfileContext = createContext<StudioCreatorProfile | null>(null);
+
+export function StudioCreatorProfileProvider({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
   const { refreshUser } = useAuth();
-  const formId = useId();
   const [me, setMe] = useState<MeProfile | null>(null);
   const [handleInput, setHandleInput] = useState('');
   const [nameInput, setNameInput] = useState('');
   const [bioInput, setBioInput] = useState('');
   const [avatarMode, setAvatarMode] = useState<AvatarMode>('letter');
   const [availability, setAvailability] = useState<{ available: boolean; reason?: HandleClaimError } | null>(null);
-  const [status, setStatus] = useState<'loading' | 'ready' | 'saving' | 'error'>('loading');
+  const [status, setStatus] = useState<ProfileStatus>('loading');
   const [message, setMessage] = useState<string | null>(null);
-  /** Chrome only: null = stay collapsed; true = edit expanded. */
-  const [chromeExpanded, setChromeExpanded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -104,7 +128,6 @@ export function CreatorProfileEditor({ surface }: { surface: CreatorProfileSurfa
       applyProfile(next);
       setMessage(t('creatorProfile.claimed'));
       setStatus('ready');
-      setChromeExpanded(false);
       await refreshUser();
     } catch (err) {
       const code = ((err as { code?: HandleClaimError }).code ?? 'unknown') as HandleClaimError;
@@ -127,13 +150,66 @@ export function CreatorProfileEditor({ surface }: { surface: CreatorProfileSurfa
       applyProfile(next);
       setMessage(t('creatorProfile.saved'));
       setStatus('ready');
-      setChromeExpanded(false);
       await refreshUser();
     } catch {
       setMessage(t('creatorProfile.errors.unknown'));
       setStatus('ready');
     }
   };
+
+  const value: StudioCreatorProfile = {
+    me,
+    status,
+    handleInput,
+    nameInput,
+    bioInput,
+    avatarMode,
+    availability,
+    message,
+    setHandleInput,
+    setNameInput,
+    setBioInput,
+    setAvatarMode,
+    onClaim,
+    onSaveDetails,
+    refusalCopy,
+    clearMessage: () => setMessage(null),
+  };
+
+  return <StudioCreatorProfileContext.Provider value={value}>{children}</StudioCreatorProfileContext.Provider>;
+}
+
+function useStudioCreatorProfile(): StudioCreatorProfile {
+  const ctx = useContext(StudioCreatorProfileContext);
+  if (!ctx) {
+    throw new Error('CreatorProfileEditor requires StudioCreatorProfileProvider');
+  }
+  return ctx;
+}
+
+export function CreatorProfileEditor({ surface }: { surface: CreatorProfileSurface }) {
+  const { t } = useTranslation();
+  const formId = useId();
+  const {
+    me,
+    status,
+    handleInput,
+    nameInput,
+    bioInput,
+    avatarMode,
+    availability,
+    message,
+    setHandleInput,
+    setNameInput,
+    setBioInput,
+    setAvatarMode,
+    onClaim,
+    onSaveDetails,
+    refusalCopy,
+    clearMessage,
+  } = useStudioCreatorProfile();
+  /** Chrome only: stay collapsed until the creator asks to edit. */
+  const [chromeExpanded, setChromeExpanded] = useState(false);
 
   // Chrome stays silent until there is a handle to edit. Publish-gate stays silent once
   // the gate is clear (or while we do not yet know). Errors only matter on the gate.
@@ -200,12 +276,18 @@ export function CreatorProfileEditor({ surface }: { surface: CreatorProfileSurfa
         surfaceClass="is-chrome"
         title={t('creatorProfile.editorTitle')}
         copy={t('creatorProfile.editorReady')}
-        onDone={() => setChromeExpanded(false)}
+        onDone={() => {
+          setChromeExpanded(false);
+          clearMessage();
+        }}
         onHandleChange={setHandleInput}
         onNameChange={setNameInput}
         onBioChange={setBioInput}
         onAvatarModeChange={setAvatarMode}
-        onSaveDetails={onSaveDetails}
+        onSaveDetails={async (event) => {
+          await onSaveDetails(event);
+          setChromeExpanded(false);
+        }}
         onClaim={onClaim}
         refusalCopy={refusalCopy}
       />
@@ -327,7 +409,7 @@ function ProfileEditPanel({
   bioInput: string;
   avatarMode: AvatarMode;
   availability: { available: boolean; reason?: HandleClaimError } | null;
-  status: 'loading' | 'ready' | 'saving' | 'error';
+  status: ProfileStatus;
   message: string | null;
   surfaceClass: string;
   title: string;
