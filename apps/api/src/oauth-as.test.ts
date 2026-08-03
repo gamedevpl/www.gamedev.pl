@@ -167,6 +167,23 @@ describe('OAuth authorization server (BY-18b)', () => {
     expect(tokens.scope).toBe('mcp');
   });
 
+  it('sends unauthenticated browsers to studio with oauth_return so login can resume authorize', async () => {
+    process.env.CANONICAL_HOST = 'www.gamedev.pl';
+    const store = new InMemoryStore();
+    app = await buildOAuthApp(store);
+    const clientId = await registerClient(app);
+    const challenge = pkceChallengeS256('dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk');
+    const authorizePath =
+      `/oauth/authorize?response_type=code&client_id=${clientId}` +
+      `&redirect_uri=${encodeURIComponent('http://127.0.0.1/callback')}` +
+      `&code_challenge=${challenge}&code_challenge_method=S256`;
+    const res = await app.inject({ method: 'GET', url: authorizePath });
+    expect(res.statusCode).toBe(302);
+    const location = new URL(res.headers.location as string);
+    expect(location.origin + location.pathname).toBe('https://www.gamedev.pl/studio');
+    expect(location.searchParams.get('oauth_return')).toBe(authorizePath);
+  });
+
   it('rejects authorization_code without PKCE verifier', async () => {
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:creator' });

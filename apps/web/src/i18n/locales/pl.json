@@ -941,7 +941,7 @@
     },
     "oauth": {
       "title": "Zaloguj się z poziomu agenta",
-      "hint": "Albo skopiuj ten URL MCP do innego agenta, a potem zaloguj się, gdy zapyta. Przy starcie podaj slug gry z promptu poniżej."
+      "hint": "Albo skopiuj ten URL MCP do innego agenta, a potem zaloguj się, gdy zapyta. Przy starcie podaj slug gry z promptu poniżej. Jeśli Cursor pokazuje Unauthorized bez otwarcia przeglądarki, otwórz URL autoryzacji z Output → MCP (znany bug Cursora) albo użyj Wklej nagłówek."
     },
     "clients": {
       "claudeCode": "Claude Code",
