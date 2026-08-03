@@ -518,7 +518,23 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
     })(),
     remixEntry: (() => {
       const offered = rollups.filter((rollup) => rollup.remixSteps.has('offered'));
-      const opened = rollups.filter((rollup) => rollup.remixSteps.has('opened'));
+      /**
+       * Opens *within the offered cohort*, not every open in the window.
+       *
+       * A tab running the client from before this deploy records `opened` and
+       * never `offered`, so counting all opens against only new offers puts
+       * legacy visits in the numerator and none of them in the denominator —
+       * two old opens beside one new offered-and-opened visit reports "3 of 1",
+       * and a rate over 100% discredits the very experiment it exists to
+       * settle. The same rule the zone join rate had to learn: count the
+       * numerator only inside the denominator's set, and let the residual bias
+       * understate rather than invent.
+       *
+       * Nothing is hidden by this — a legacy open is still counted on the
+       * `opened` rung of `remixing` above. This block is narrower on purpose:
+       * it reports only the visits we know were shown the control.
+       */
+      const opened = offered.filter((rollup) => rollup.remixSteps.has('opened'));
       const doors = ['bar', 'more'] as const;
       const byControl: Array<{ control: 'bar' | 'more' | 'unknown'; visits: number }> = doors.map((control) => ({
         control,

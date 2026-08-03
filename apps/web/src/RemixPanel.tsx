@@ -330,12 +330,31 @@ export function RemixPanel(props: {
     recordRemixStep('opened');
   }, []);
 
-  // Long enough that the tap which opened the panel has finished landing, short
-  // enough that nobody reading the suggestions notices they were ever inert.
+  const suggestions = session?.suggestions ?? [];
+  const showSuggestions = lane === 'idle' && !changed && utterance.length === 0 && suggestions.length > 0;
+
+  /*
+   * The delay runs from when the suggestions *appear*, not from when the panel
+   * mounts.
+   *
+   * They arrive with the session, which is a network round trip — reliably
+   * longer than 400ms. A mount-time timer therefore expired while the panel was
+   * still showing its starting state, and armed them on the very first frame
+   * they rendered: exactly the frame whose layout change lands under a finger
+   * already moving. The guard was inert precisely when it was needed.
+   *
+   * Re-arming on every appearance rather than once is deliberate. They come
+   * back when the field empties or a change lands, and both are moments the
+   * panel just reflowed.
+   */
   useEffect(() => {
+    if (!showSuggestions) {
+      setSuggestionsArmed(false);
+      return;
+    }
     const timer = window.setTimeout(() => setSuggestionsArmed(true), 400);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [showSuggestions]);
 
   // Identity, not the object: this effect mints a session and the only thing
   // about the viewer it depends on is which account they are. Keying on the
@@ -756,9 +775,6 @@ export function RemixPanel(props: {
   // The composer is the door. Signed out we cannot know the lanes yet, and the
   // honest answer is to accept the words and let the wall decide — so it types.
   const canType = session ? session.canAssist || session.canCode : true;
-
-  const suggestions = session?.suggestions ?? [];
-  const showSuggestions = lane === 'idle' && !changed && utterance.length === 0 && suggestions.length > 0;
 
   /** The composer, in its two sizes: the door, and the way back for a second change. */
   function composer(compact: boolean) {

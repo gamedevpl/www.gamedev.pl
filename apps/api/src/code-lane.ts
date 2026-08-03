@@ -465,10 +465,14 @@ export class VertexCodeLane {
         if (debug) trace.rounds.push({ round, replacement: '', buildErrors: errors });
         continue;
       }
-      if (!described) {
-        summary = bilingual(edit.summary) ?? summary;
-        described = true;
-      }
+      // The first edit round's description wins; after that a later round may
+      // only fill a gap. `bilingual` returns nothing for a half-written summary
+      // (the schema permits `en` without `pl`), and treating that as "described"
+      // would let one malformed reply cost the player any answer at all — while
+      // still refusing a repair note the moment something usable already exists.
+      const candidate = bilingual(edit.summary);
+      if (candidate && (!described || summary === undefined)) summary = candidate;
+      described = true;
       this.options.observe?.replacement?.(round, edit.replacement);
 
       if (debug) trace.rounds.push({ round, replacement: clip(edit.replacement), buildErrors: [] });

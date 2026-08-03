@@ -118,6 +118,31 @@ describe('code lane', () => {
     expect(result.summary?.pl).toBe('Samochód jest teraz żółty.');
   });
 
+  it('takes a later summary when the first was half-written, rather than none at all', async () => {
+    // `EditSchema` permits `en` without `pl`, and a summary missing a language is
+    // unusable. Treating that as "already described" would let one malformed
+    // reply cost the player any answer — while a *usable* first summary must
+    // still refuse to be overwritten by a repair note.
+    const { client } = stubClient([
+      { decision: 'edit', file: 'game/runtime.ts', name: 'startGame' },
+      { replacement: 'export function startGame() { return ; }', summary: { en: 'Only English.' } },
+      {
+        replacement: 'export function startGame() {\n  return 0.08;\n}',
+        summary: { en: 'Made the car yellow.', pl: 'Samochód jest teraz żółty.' },
+      },
+    ]);
+    const lane = new VertexCodeLane({ client });
+    let calls = 0;
+    const build = async () => {
+      calls += 1;
+      return calls === 1 ? ({ ok: false, errors: ['runtime.ts:2: Unexpected ";"'] } as const) : ({ ok: true } as const);
+    };
+
+    const result = await lane.run({ slug: 'g', sources: SOURCES, utterance: 'make my car yellow' }, build);
+    expect(result.ok).toBe(true);
+    expect(result.summary?.en).toBe('Made the car yellow.');
+  });
+
   it('gives up honestly after the repair cap instead of shipping a broken build', async () => {
     const { client } = stubClient([
       { decision: 'edit', file: 'game/runtime.ts', name: 'startGame' },
