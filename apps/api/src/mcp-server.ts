@@ -140,8 +140,14 @@ interface JsonRpcRequest {
   params?: unknown;
 }
 
+type ToolContent =
+  /** The JSON body every tool answers with. */
+  | { type: 'text'; text: string }
+  /** A rendered frame (get_gate_media) — clients show these inline in chat. */
+  | { type: 'image'; data: string; mimeType: string };
+
 interface ToolResult {
-  content: Array<{ type: 'text'; text: string }>;
+  content: ToolContent[];
   structuredContent?: unknown;
   isError?: boolean;
 }
@@ -259,12 +265,13 @@ const SESSION_WORKFLOW: readonly string[] = [
   'Run the kit checks green (at least check:static) before delivering when you have a local kit checkout; otherwise deliver and let the gate run checks.',
   'submit_sources with the kitEngineRef get_kit returned.',
   'Poll get_gate_verdict about every 30s until it is green, red, or kit_outdated.',
+  'Once a verdict lands, get_gate_media returns the screenshots and gameplay video the gate recorded — check the frames for visual defects the report cannot describe, and show them to the creator. Essential when you cannot run the game yourself.',
   'red: read the report, fix, and resubmit on the SAME key.',
   'kit_outdated: re-run get_kit, rebuild against the new kit, and resubmit.',
   // Green closes the round before the next tool call; writes and non-receipt reads then
   // reject the retired key (terminal-receipt tests). Any final progress/inbox work must
   // happen on earlier write replies — do not instruct post-green tools (Codex P1).
-  'green: the round is complete — END the session immediately. Do not report_progress, read_inbox, or ack after green; the key retired with that transition (get_gate_verdict may still answer via terminal receipt).',
+  'green: the round is complete — END the session immediately. Do not report_progress, read_inbox, or ack after green; the key retired with that transition (get_gate_verdict and get_gate_media may still answer via terminal receipt).',
 ];
 
 /**
@@ -1864,6 +1871,58 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           return toolErr(body.error ?? `gate verdict failed (${res.statusCode})`);
         }
         return toolOk(body);
+      },
+    },
+
+    get_gate_media: {
+      annotations: { title: "Fetch the gate's screenshots and video", ...READS },
+      description:
+        'Fetch the media the gate itself produced for a delivery (default: latest): capture screenshots and a ' +
+        'gameplay MP4 as short-lived signed URLs, plus the opening frame attached inline as an image. ' +
+        'Use it when you cannot run the game yourself — check the frames for visual defects (blank canvas, ' +
+        'missing sprites) before resubmitting, and share the screenshots/video with the creator. ' +
+        'Read-only over the gate run that already happened; it never triggers a build, and media exists only ' +
+        'after a delivery has been gated. Terminal receipt: like get_gate_verdict, the latest delivery stays ' +
+        'readable after green closes the round. ' +
+        BEHAVIOURAL_CONTRACT,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          sessionKey: SESSION_KEY_PROP,
+          deliveryId: { type: 'string', description: "Delivery version id; default is the job's latest." },
+        },
+        required: [],
+      },
+      handler: async (args, ctx) => {
+        const auth = await resolveAuth(ctx, args, { allowTerminalReceipt: true });
+        if (!('channelToken' in auth)) return auth;
+
+        const deliveryId =
+          typeof args.deliveryId === 'string' && args.deliveryId.trim() ? args.deliveryId.trim() : null;
+        const path = deliveryId
+          ? `/api/agent/build/media?version=${encodeURIComponent(deliveryId)}`
+          : '/api/agent/build/media';
+        const res = await injectChannel(ctx.request, 'GET', path, auth.channelToken);
+        const body = res.json() as Record<string, unknown> & {
+          error?: string;
+          openingShot?: { file?: string; png?: string };
+        };
+        if (res.statusCode !== 200) {
+          return toolErr(body.error ?? `gate media failed (${res.statusCode})`);
+        }
+        // The inline frame travels as an MCP image block, not inside the JSON body —
+        // duplicating ~700 KB of base64 into the text content would bloat every client's
+        // context for no benefit, and image blocks are the shape chat surfaces render.
+        const { openingShot, ...rest } = body;
+        const structured = {
+          ...rest,
+          ...(openingShot?.file ? { openingShot: { file: openingShot.file, attached: Boolean(openingShot.png) } } : {}),
+        };
+        const result = toolOk(structured);
+        if (openingShot?.png) {
+          result.content.push({ type: 'image', data: openingShot.png, mimeType: 'image/png' });
+        }
+        return result;
       },
     },
 

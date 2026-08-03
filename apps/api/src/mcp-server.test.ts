@@ -4,6 +4,7 @@ import { classifyAgentTokenAccess, mintAgentToken, STALE_AGENT_TOKEN_REASON } fr
 import { mintGameAgentKey } from './agent-game-key.js';
 import { buildApp } from './app.js';
 import type { GamesStore } from './games-store.js';
+import type { GcsObjectStore } from './gcs-sign.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
 import { mintMcpSessionKey, verifyMcpSessionKey } from './mcp-session-key.js';
 import { InMemoryStore } from './store.js';
@@ -80,7 +81,7 @@ function stubGamesStore(gate?: { green: boolean; ranAt?: string; report?: string
   return { gamesStore, stored };
 }
 
-async function createApp(store: InMemoryStore, gamesStore?: GamesStore) {
+async function createApp(store: InMemoryStore, gamesStore?: GamesStore, objectStore?: GcsObjectStore) {
   return await buildApp({
     store,
     sessionSecret: 'dev-session-secret-change-me',
@@ -89,7 +90,7 @@ async function createApp(store: InMemoryStore, gamesStore?: GamesStore) {
       githubToken: 'gh-token',
       submissionTokenSecret: secret,
       translator: new NoopTranslator(),
-      agentChannel: gamesStore ? { gamesStore } : {},
+      agentChannel: { ...(gamesStore ? { gamesStore } : {}), ...(objectStore ? { objectStore } : {}) },
     },
   });
 }
@@ -1259,5 +1260,173 @@ describe('POST /api/mcp (BY-05)', () => {
     };
     expect(startSchema.properties?.sessionKey).toBeTruthy();
     expect(startSchema.required).toContain('sessionKey');
+  });
+  describe('get_gate_media (BY-28)', () => {
+    const MEDIA_METADATA = JSON.stringify({
+      captures: { opening: { file: 'opening.png' } },
+      video: { file: 'gameplay.mp4' },
+    });
+
+    /** A gate run that stored one frame and a video for delivery v1. */
+    function mediaGamesStore(green = true) {
+      const artifacts = new Map<string, Buffer>([
+        ['media/metadata.json', Buffer.from(MEDIA_METADATA)],
+        ['media/opening.png', Buffer.from(TINY_PNG, 'base64')],
+        ['media/gameplay.mp4', Buffer.from('mp4-bytes')],
+      ]);
+      return {
+        getManifest: async (slug: string, version: string) =>
+          slug === 'comet-courier' && version === 'v1'
+            ? { slug, version, gate: { green, ranAt: '2026-08-01T12:00:00.000Z' } }
+            : null,
+        getDerivedArtifact: async (slug: string, version: string, name: string) =>
+          slug === 'comet-courier' && version === 'v1' ? (artifacts.get(name) ?? null) : null,
+        getSourceFile: async () => null,
+        putCandidateSources: async () => ({ version: 'v1', manifest: {} as never }),
+        putGateResult: async () => {},
+        putDerivedArtifact: async () => {},
+        getKitRegistry: async () => null,
+      } as unknown as GamesStore;
+    }
+
+    function mediaObjectStore(): GcsObjectStore {
+      return {
+        readObject: async () => null,
+        objectExists: async () => true,
+        signReadUrl: async (name: string) => `https://signed.example/${name}?sig=1`,
+      };
+    }
+
+    it('returns signed media and attaches the opening frame as an image block', async () => {
+      // The whole point of the tool: a client that cannot run the game gets something
+      // it can look at and something it can show the creator.
+      const store = new InMemoryStore();
+      await seedJob(store);
+      await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
+      app = await createApp(store, mediaGamesStore(), mediaObjectStore());
+      const sessionId = await initialize(app);
+      const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+      const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+      const res = await mcpCall(
+        app,
+        'tools/call',
+        { name: 'get_gate_media', arguments: { sessionKey } },
+        { 'mcp-session-id': sessionId },
+      );
+      expect(res.statusCode).toBe(200);
+      const result = res.json().result as {
+        content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
+        structuredContent: {
+          available: boolean;
+          deliveryId: string;
+          screenshots: Array<{ file: string; url: string }>;
+          video: { file: string; url: string };
+          openingShot?: { file: string; attached: boolean };
+        };
+        isError?: boolean;
+      };
+      expect(result.isError).toBeFalsy();
+      expect(result.structuredContent).toMatchObject({
+        available: true,
+        deliveryId: 'v1',
+        screenshots: [
+          {
+            file: 'opening.png',
+            url: 'https://signed.example/games/comet-courier/versions/v1/media/opening.png?sig=1',
+          },
+        ],
+        video: {
+          file: 'gameplay.mp4',
+          url: 'https://signed.example/games/comet-courier/versions/v1/media/gameplay.mp4?sig=1',
+        },
+        openingShot: { file: 'opening.png', attached: true },
+      });
+
+      const image = result.content.find((part) => part.type === 'image');
+      expect(image).toMatchObject({ mimeType: 'image/png', data: TINY_PNG });
+      // The frame rides the image block only — duplicating it into the JSON body would
+      // put the same base64 into every client's context twice.
+      const text = result.content.find((part) => part.type === 'text')?.text ?? '';
+      expect(text).not.toContain(TINY_PNG);
+    });
+
+    it('reports available:false instead of erroring before anything is delivered', async () => {
+      const store = new InMemoryStore();
+      await seedJob(store);
+      app = await createApp(store, mediaGamesStore(), mediaObjectStore());
+      const sessionId = await initialize(app);
+      const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+      const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+      const media = await callTool(app, 'get_gate_media', { sessionKey }, { 'mcp-session-id': sessionId });
+      expect(media.isError).toBe(false);
+      expect(media.structured).toMatchObject({ available: false, deliveryId: null });
+    });
+
+    it('stays readable on the terminal receipt after green closes the round', async () => {
+      // Post-green is exactly when the agent wants the frames — the round it just
+      // finished is the one that produced them.
+      const store = new InMemoryStore();
+      await seedJob(store);
+      const gamesStore = mediaGamesStore();
+      app = await createApp(store, gamesStore, mediaObjectStore());
+      const sessionId = await initialize(app);
+      const originalKey = roundKey(1);
+      const started = await callTool(app, 'start', { key: originalKey }, { 'mcp-session-id': sessionId });
+      const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+      await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
+      await store.recordJobTransition(ISSUE, {
+        to: 'submitted',
+        at: '2026-08-01T11:00:00.000Z',
+        by: 'agent',
+        reason: 'sources_delivered',
+      });
+      await store.recordJobTransition(ISSUE, {
+        to: 'ready_for_review',
+        at: '2026-08-01T12:00:00.000Z',
+        by: 'gate',
+        reason: 'gate_green',
+      });
+      expect((await store.getSubmission(ISSUE))?.roundGeneration).toBe(2);
+
+      const viaSession = await callTool(app, 'get_gate_media', { sessionKey }, { 'mcp-session-id': sessionId });
+      expect(viaSession.isError).toBe(false);
+      expect(viaSession.structured).toMatchObject({ available: true, access: 'terminal_receipt' });
+
+      const viaBearer = await callTool(
+        app,
+        'get_gate_media',
+        {},
+        { 'mcp-session-id': sessionId, authorization: `Bearer ${originalKey}` },
+      );
+      expect(viaBearer.isError).toBe(false);
+      expect(viaBearer.structured).toMatchObject({ available: true, access: 'terminal_receipt' });
+
+      // The receipt is not a general read grant: other reads still reject.
+      const brief = await callTool(app, 'get_brief', { sessionKey }, { 'mcp-session-id': sessionId });
+      expect(brief.isError).toBe(true);
+    });
+
+    it('is advertised as a read, not a destructive tool', async () => {
+      const store = new InMemoryStore();
+      await seedJob(store);
+      app = await createApp(store);
+      const sessionId = await initialize(app);
+
+      const listed = await mcpCall(app, 'tools/list', {}, { 'mcp-session-id': sessionId });
+      const tools = listed.json().result.tools as Array<{
+        name: string;
+        description: string;
+        annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean };
+      }>;
+      const media = tools.find((tool) => tool.name === 'get_gate_media');
+      expect(media?.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
+      // The description has to carry why an agent would call it — descriptions are the
+      // one prompt surface every client reads.
+      expect(media?.description).toMatch(/screenshot/i);
+      expect(media?.description).toMatch(/video|mp4/i);
+    });
   });
 });

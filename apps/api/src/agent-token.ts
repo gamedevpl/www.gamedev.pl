@@ -209,10 +209,13 @@ export function assertAgentTokenActive(
  *
  * - `active` — generation matches; full channel access.
  * - `terminal_receipt` — generation is exactly one behind current and unexpired.
- *   Only {@link get_gate_verdict} (and its plain-HTTP twin) may use this: gate-green
- *   closes the round, so the agent's next verdict poll would otherwise be rejected
- *   a moment before it can observe the green it was told to wait for. Every write
- *   and every other read still rejects. Expiry still applies.
+ *   Only the gate reads — the verdict and the gate media (`get_gate_verdict` /
+ *   `get_gate_media` and their plain-HTTP twins) — may use this: gate-green closes
+ *   the round, so the agent's next verdict poll would otherwise be rejected a moment
+ *   before it can observe the green it was told to wait for, and the frames it wants
+ *   to show the creator exist only once that same run finished. Both are limited to
+ *   the delivery the closed round owns. Every write and every other read still
+ *   rejects. Expiry still applies.
  */
 export type AgentTokenAccess = 'active' | 'terminal_receipt';
 
