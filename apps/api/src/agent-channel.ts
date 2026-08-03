@@ -19,7 +19,7 @@ import {
 import { selfBuildDeliveryCap } from './builder.js';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from './gcs-sign.js';
 import { InvalidUploadError, MAX_UPLOAD_FILES, type GamesStore } from './games-store.js';
-import { parseSpecTitle } from './github-client.js';
+import { parseGameMedia, parseSpecTitle } from './github-client.js';
 import { canTransition, resolveJobState, type JobState } from './job-state.js';
 import {
   KitFilesError,
@@ -1447,6 +1447,180 @@ export async function registerAgentChannelRoutes(
           : (gate.report?.split('\n').at(-1) ?? 'gate refused this delivery'),
         ...(gate.report ? { report: gate.report } : {}),
         ...(gate.status ? { gateStatus: gate.status } : {}),
+        access,
+      });
+    },
+  );
+
+  /**
+   * Gate-produced media for a delivery (BY-28).
+   *
+   * Exists for the agent that cannot run the game — a connector-surface client
+   * (ChatGPT, claude.ai) with no shell and no browser builds and submits fine, but
+   * iterates blind on verdict text and finishes with nothing to show the creator.
+   * The gate already produced the missing evidence on every run: capture PNGs and a
+   * gameplay MP4, stored as derived artifacts on the version. This is the read back.
+   *
+   * Read-only over runs that already happened — deliberately *not* an on-demand
+   * capture: rendering agent code is gate compute, and it stays behind the delivery
+   * cap. Filenames come exclusively from the validated `media/metadata.json` (the
+   * same allowlist rule as the published-media route), with the manifest's own
+   * `gate.screenshot` as the fallback for runs capture abandoned partway. Terminal
+   * receipt is accepted exactly as on the verdict read, and for the same reason:
+   * green closes the round, and post-green is when there is something worth showing.
+   */
+  app.get(
+    '/api/agent/build/media',
+    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply, { allowTerminalReceipt: true });
+      if (!resolved) return reply;
+      const { record, access } = resolved;
+
+      if (!options.gamesStore || !options.objectStore) {
+        return reply.status(503).send({ error: 'the media store is not configured' });
+      }
+
+      const query = request.query as { version?: string };
+      const requestedVersion = typeof query.version === 'string' && query.version.trim() ? query.version.trim() : null;
+      const version = requestedVersion ?? record.deliveredVersion ?? null;
+
+      if (!version || !record.slug) {
+        return reply.send({
+          available: false,
+          deliveryId: null,
+          reason: 'nothing has been delivered yet — media is produced by the gate, after submit',
+          access,
+        });
+      }
+
+      // Same receipt rule as the verdict read: a closed round may only look at the
+      // delivery it owns.
+      if (access === 'terminal_receipt' && version !== record.deliveredVersion) {
+        return reply.status(401).send({ error: STALE_AGENT_TOKEN_REASON });
+      }
+
+      // Version ids are ours (timestamp + suffix), but this one arrived in a query
+      // string and is about to be interpolated into a signed object path — shape-check
+      // it rather than trusting the round to have asked nicely.
+      if (!/^[A-Za-z0-9-]+$/.test(version)) {
+        return reply.status(400).send({ error: 'invalid version' });
+      }
+
+      const slug = record.slug;
+      // The manifest proves this version exists — but a slug is not a job. Every
+      // improvement round is a *new* job that inherits the published slug, so a
+      // version delivered by an earlier round resolves perfectly well under this
+      // one's slug, and after a slug transfer that earlier job can belong to a
+      // different creator entirely. The manifest records the job that produced it;
+      // that is the ownership check, and the slug never was one.
+      //
+      // Absent and not-yours answer identically on purpose: distinguishing them
+      // would let a round enumerate which versions its predecessors delivered.
+      const manifest = await options.gamesStore.getManifest(slug, version);
+      if (!manifest || manifest.issueNumber !== record.issueNumber) {
+        return reply.send({
+          available: false,
+          deliveryId: version,
+          reason: 'no such delivery for this build',
+          access,
+        });
+      }
+
+      const metadataBody = await options.gamesStore.getDerivedArtifact(slug, version, 'media/metadata.json');
+      const media = parseGameMedia(metadataBody?.toString('utf8') ?? null);
+
+      // Runs that failed mid-capture store frames without metadata; the manifest's
+      // gate verdict names the first stored frame (`media/opening.png` shape).
+      const fallbackShot =
+        !media && manifest.gate?.screenshot && /^media\/[a-z0-9][a-z0-9_.-]*\.png$/i.test(manifest.gate.screenshot)
+          ? manifest.gate.screenshot.slice('media/'.length)
+          : null;
+
+      const screenshotFiles = media
+        ? media.screenshots.map((shot) => ({ name: shot.name, file: shot.file }))
+        : fallbackShot
+          ? [{ name: 'opening', file: fallbackShot }]
+          : [];
+      const videoFile = media?.video ?? null;
+
+      if (screenshotFiles.length === 0 && !videoFile) {
+        return reply.send({
+          available: false,
+          deliveryId: version,
+          reason: 'the gate stored no media for this delivery',
+          access,
+        });
+      }
+
+      const mediaObject = (file: string) => `games/${slug}/versions/${version}/media/${file}`;
+
+      // Metadata names what capture *intended* to store, which is not the same as what
+      // landed: the gate writes each media file independently and swallows a per-file
+      // failure to protect the verdict (gate-runner `storeCaptureMedia`), so a run can
+      // store metadata.json and lose the mp4. Signing a name we never confirmed hands
+      // the agent a URL that 404s — and the agent then tells the creator their video is
+      // ready. Probe before advertising; a signed URL is a promise about bytes.
+      const probed = await Promise.all(
+        screenshotFiles.map(async (shot) =>
+          (await options.objectStore!.objectExists(mediaObject(shot.file))) ? shot : null,
+        ),
+      );
+      const storedShots = probed.filter((shot): shot is { name: string; file: string } => shot !== null);
+      const storedVideo =
+        videoFile && (await options.objectStore.objectExists(mediaObject(videoFile))) ? videoFile : null;
+
+      if (storedShots.length === 0 && !storedVideo) {
+        return reply.send({
+          available: false,
+          deliveryId: version,
+          reason: 'the gate stored no media for this delivery',
+          access,
+        });
+      }
+
+      const screenshots = await Promise.all(
+        storedShots.map(async (shot) => ({
+          ...shot,
+          url: await options.objectStore!.signReadUrl(mediaObject(shot.file), DEFAULT_SIGNED_URL_TTL_SECONDS),
+        })),
+      );
+      const video = storedVideo
+        ? {
+            file: storedVideo,
+            url: await options.objectStore.signReadUrl(mediaObject(storedVideo), DEFAULT_SIGNED_URL_TTL_SECONDS),
+          }
+        : null;
+
+      // One frame inline, for clients that can render an image but not fetch a URL.
+      // Best effort and bounded: an absent or oversized frame degrades to URLs-only.
+      const openingFile = (storedShots.find((shot) => shot.name === 'opening') ?? storedShots[0])?.file;
+      let openingShot: { file: string; png: string } | null = null;
+      if (openingFile) {
+        const body = await options.gamesStore
+          .getDerivedArtifact(slug, version, `media/${openingFile}`)
+          .catch(() => null);
+        if (body && body.length > 0 && body.length <= maxShotBytes) {
+          openingShot = { file: openingFile, png: body.toString('base64') };
+        }
+      }
+
+      return reply.send({
+        available: true,
+        deliveryId: version,
+        ...(manifest.gate
+          ? {
+              gate: {
+                green: manifest.gate.green,
+                ranAt: manifest.gate.ranAt,
+                ...(manifest.gate.status ? { status: manifest.gate.status } : {}),
+              },
+            }
+          : {}),
+        screenshots,
+        video,
+        ...(openingShot ? { openingShot } : {}),
+        expiresInSeconds: DEFAULT_SIGNED_URL_TTL_SECONDS,
         access,
       });
     },
