@@ -34,16 +34,30 @@ const METADATA_CACHE_CONTROL = 'public, max-age=3600';
 
 const SERVER_SCHEMA_URL = 'https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json';
 
-/** Description maxLength is 100 in the registry schema — keep this under that. */
+/**
+ * Description maxLength is 100 in the registry schema — both of these must stay under it.
+ *
+ * The closed-beta variant is not decoration. This descriptor is what a directory entry is
+ * built from, and a listing that promises "build games from your agent" to someone who
+ * cannot get an account is a bait-and-switch discovered only after install. Saying it in
+ * the description puts the gate in front of the install rather than behind it.
+ */
 const SERVER_DESCRIPTION = 'Build and improve browser games on gamedev.pl from your coding agent.';
+const SERVER_DESCRIPTION_PRIVATE_BETA =
+  'Build browser games on gamedev.pl from your coding agent. Creating is closed beta (waitlist).';
 
-export function buildMcpServerJsonDocument(): Record<string, unknown> {
+function serverDescription(privateBeta: boolean): string {
+  return privateBeta ? SERVER_DESCRIPTION_PRIVATE_BETA : SERVER_DESCRIPTION;
+}
+
+export function buildMcpServerJsonDocument(options: { privateBeta?: boolean } = {}): Record<string, unknown> {
   const origin = canonicalAppBaseUrl();
+  const privateBeta = options.privateBeta ?? (process.env.PRIVATE_BETA ?? '').toLowerCase() === 'true';
   return {
     $schema: SERVER_SCHEMA_URL,
     name: MCP_SERVER_REGISTRY_NAME,
     title: 'gamedev.pl',
-    description: SERVER_DESCRIPTION,
+    description: serverDescription(privateBeta),
     version: MCP_SERVER_DESCRIPTOR_VERSION,
     websiteUrl: `${origin}/studio`,
     repository: {
@@ -67,11 +81,11 @@ export function buildMcpServerJsonDocument(): Record<string, unknown> {
   };
 }
 
-export function registerMcpServerDiscoveryRoutes(app: FastifyInstance): void {
+export function registerMcpServerDiscoveryRoutes(app: FastifyInstance, options: { privateBeta?: boolean } = {}): void {
   app.get(MCP_SERVER_JSON_PATH, async (_request, reply) => {
     return reply
       .header('Cache-Control', METADATA_CACHE_CONTROL)
       .type('application/json')
-      .send(buildMcpServerJsonDocument());
+      .send(buildMcpServerJsonDocument({ privateBeta: options.privateBeta }));
   });
 }

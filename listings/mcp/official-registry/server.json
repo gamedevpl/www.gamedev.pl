@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "pl.gamedev/creator",
   "title": "gamedev.pl",
-  "description": "Build and improve browser games on gamedev.pl from your coding agent.",
+  "description": "Build browser games on gamedev.pl from your coding agent. Creating is closed beta (waitlist).",
   "version": "1.0.0",
   "websiteUrl": "https://www.gamedev.pl/studio",
   "repository": {
@@ -22,7 +22,7 @@
     },
     "pl.gamedev/listing": {
       "status": "draft-not-submitted",
-      "note": "Do not publish until the owner clears terms and consent. Live copy is served at /.well-known/mcp/server.json."
+      "note": "Do not publish until the owner clears terms and consent. Live copy is served at /.well-known/mcp/server.json. Strip this pl.gamedev/listing block before running mcp-publisher — it is a repo-side marker, not registry content."
     }
   }
 }

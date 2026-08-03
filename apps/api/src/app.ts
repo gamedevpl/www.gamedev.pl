@@ -583,7 +583,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   // Registry-shaped server.json for remote discovery (BY-18c). Public, cacheable;
   // auth facts stay in the PRM document above — this only links to it.
-  registerMcpServerDiscoveryRoutes(app);
+  registerMcpServerDiscoveryRoutes(app, { privateBeta });
 
   const oauthSessionSecret = options.sessionSecret ?? process.env.SESSION_SECRET ?? 'dev-session-secret-change-me';
   const oauthSessionSecretPrev = options.sessionSecretPrev ?? process.env.SESSION_SECRET_PREV;
