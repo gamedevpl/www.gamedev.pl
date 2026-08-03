@@ -1439,22 +1439,23 @@ describe('POST /api/mcp (BY-05)', () => {
       const res = await mcpCall(
         app,
         'tools/call',
-        { name: 'get_gate_media', arguments: { sessionKey } },
+        // frames=all so this covers the plural case too: the nudge rebuild must keep
+        // *every* image block, not merely the first one.
+        { name: 'get_gate_media', arguments: { sessionKey, frames: 'all' } },
         { 'mcp-session-id': sessionId },
       );
       expect(res.statusCode).toBe(200);
       const result = res.json().result as {
         content: Array<{ type: string; data?: string; mimeType?: string }>;
-        structuredContent: { warnings?: Array<{ code: string }>; openingShot?: { attached: boolean } };
+        structuredContent: { warnings?: Array<{ code: string }>; frames?: Array<{ attached: boolean }> };
         isError?: boolean;
       };
       expect(result.isError).toBeFalsy();
       expect(result.structuredContent.warnings?.map((w) => w.code)).toContain('progress_stale');
-      expect(result.structuredContent.openingShot?.attached).toBe(true);
-      expect(result.content.find((part) => part.type === 'image')).toMatchObject({
-        mimeType: 'image/png',
-        data: TINY_PNG,
-      });
+      expect(result.structuredContent.frames?.every((frame) => frame.attached)).toBe(true);
+      const images = result.content.filter((part) => part.type === 'image');
+      expect(images).toHaveLength(result.structuredContent.frames?.length ?? 0);
+      expect(images[0]).toMatchObject({ mimeType: 'image/png', data: TINY_PNG });
     });
 
     it('reports available:false instead of erroring before anything is delivered', async () => {
