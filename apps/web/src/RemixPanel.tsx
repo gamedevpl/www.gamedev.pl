@@ -236,11 +236,19 @@ export function RemixPanel(props: {
     [pushToGame],
   );
 
+  // Flush, not just cancel: the frame outlives the sheet, and a player who
+  // paints and immediately closes the panel is exactly the player who wants to
+  // go play what they painted — cancelling the only scheduled push would lose
+  // their last stroke with the panel state that held it.
   useEffect(
     () => () => {
-      if (contentPushTimer.current !== null) window.clearTimeout(contentPushTimer.current);
+      if (contentPushTimer.current !== null) {
+        window.clearTimeout(contentPushTimer.current);
+        contentPushTimer.current = null;
+        pushToGame(valuesRef.current);
+      }
     },
-    [],
+    [pushToGame],
   );
 
   // The panel is open the moment it renders, signed in or not. Recorded here

@@ -348,6 +348,72 @@ describe('RemixPanel', () => {
     expect(pushed.content.maps).toEqual([{ properties: {}, rows: ['...', '...', '...'] }]);
   });
 
+  it('flushes a stroke still on the debounce when the sheet closes', async () => {
+    // Paint, then close the sheet inside the 500 ms window. The frame outlives
+    // the panel, so cancelling the only scheduled push would silently lose the
+    // last stroke with the state that held it — the flush is the promise.
+    const postMessage = vi.fn();
+    const frameRef = {
+      current: { contentWindow: { postMessage } },
+    } as unknown as React.MutableRefObject<HTMLIFrameElement | null>;
+    remixApi.startRemix.mockResolvedValue({
+      remixId: 'r1',
+      params: null,
+      values: null,
+      content: {
+        maps: {
+          widget: 'collection',
+          label: { en: 'Maps', pl: 'Mapy' },
+          itemLabel: { en: 'Map', pl: 'Mapa' },
+          min: 1,
+          max: 3,
+          item: {
+            widget: 'tilemap',
+            grid: { minCols: 3, maxCols: 8, minRows: 3, maxRows: 8 },
+            tiles: [
+              { key: 'path', char: '.', label: { en: 'Path', pl: 'Ścieżka' } },
+              { key: 'wall', char: '#', label: { en: 'Wall', pl: 'Mur' } },
+            ],
+            properties: {},
+            constraints: [],
+          },
+          defaults: [{ properties: {}, rows: ['...', '...', '...'] }],
+        },
+      },
+      canAssist: false,
+      canCode: false,
+      suggestions: [],
+      expiresInMs: 3_600_000,
+    });
+
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(<RemixPanel slug="dog-dash" frameRef={frameRef} onSwapDocument={() => {}} onClose={() => {}} />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // Select the wall tile and paint one cell — the push is now debounced.
+    const wall = container.querySelectorAll('.remix-painter .editor-tile')[1] as HTMLButtonElement;
+    await act(async () => {
+      wall.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const cell = container.querySelector('.remix-painter .editor-cell') as HTMLButtonElement;
+    await act(async () => {
+      cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(postMessage).not.toHaveBeenCalled();
+
+    // Close before the debounce fires.
+    await act(async () => {
+      root!.unmount();
+    });
+    root = null;
+    const pushed = postMessage.mock.calls.at(-1)?.[0] as { content: { maps: Array<{ rows: string[] }> } };
+    expect(pushed.content.maps[0].rows[0]).toBe('#..');
+  });
+
   it('offers a toggle the way the running game is not currently set', async () => {
     // Arrived on a shared link that flipped a default-off toggle on. The server
     // derived "turn on" from the declaration; offering that here would be a
