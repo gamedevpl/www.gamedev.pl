@@ -1723,7 +1723,7 @@ export async function registerAgentChannelRoutes(
       let framesOmitted = 0;
       let inlineBytes = 0;
       for (const shot of wanted) {
-        if (frames.length >= MAX_INLINE_FRAMES || inlineBytes >= MAX_INLINE_FRAME_BYTES) {
+        if (frames.length >= MAX_INLINE_FRAMES) {
           framesOmitted += 1;
           continue;
         }
@@ -1731,6 +1731,16 @@ export async function registerAgentChannelRoutes(
         // An unreadable or oversized frame is skipped, not fatal: the URLs still stand
         // for clients that can use them, and a partial answer beats a 500.
         if (!body || body.length === 0 || body.length > maxShotBytes) {
+          framesOmitted += 1;
+          continue;
+        }
+        // Measured with this frame included, not before it. Checking the running total
+        // first makes the budget a floor rather than a ceiling: three frames just under
+        // the line individually still land ~2.1 MB together. A frame that would cross
+        // the line is dropped and the scan continues, so a smaller later frame can
+        // still be carried. No starvation: maxShotBytes is below the budget, so the
+        // first frame always fits.
+        if (inlineBytes + body.length > MAX_INLINE_FRAME_BYTES) {
           framesOmitted += 1;
           continue;
         }

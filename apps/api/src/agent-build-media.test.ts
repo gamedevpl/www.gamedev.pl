@@ -226,6 +226,41 @@ describe('GET /api/agent/build/media (BY-28)', () => {
     expect(dflt.json().frames[0].name).toBe('opening');
   });
 
+  it('keeps the byte budget a ceiling, counting the frame it is about to add', async () => {
+    // Checking the running total *before* appending makes the budget a floor: three
+    // frames each under the per-shot cap still land ~2.1 MB together against a 1.4 MB
+    // limit. Codex #516 P2.
+    const store = new InMemoryStore();
+    await seedDeliveredJob(store);
+    const big = Buffer.alloc(600 * 1024, 7);
+    const metadata = JSON.stringify({
+      captures: { opening: { file: 'opening.png' }, a: { file: 'a.png' }, b: { file: 'b.png' } },
+    });
+    const artifacts = new Map<string, Buffer>([
+      ['media/metadata.json', Buffer.from(metadata)],
+      ['media/opening.png', big],
+      ['media/a.png', big],
+      ['media/b.png', big],
+    ]);
+    app = await createApp(store, stubGamesStore({ artifacts }), stubObjectStore().objectStore);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/agent/build/media?frames=all',
+      headers: agentHeaders(),
+    });
+
+    // Two fit inside 1.4 MB; the third would cross it and is reported, not carried.
+    const body = res.json();
+    expect(body.frames).toHaveLength(2);
+    expect(body.framesOmitted).toBe(1);
+    const decoded = body.frames.reduce(
+      (sum: number, f: { png: string }) => sum + Buffer.from(f.png, 'base64').length,
+      0,
+    );
+    expect(decoded).toBeLessThanOrEqual(1_400 * 1024);
+  });
+
   it('reports frames the budget dropped rather than silently truncating', async () => {
     // A caller told it has every frame when it has three is worse off than one that
     // knows it is looking at a subset.
