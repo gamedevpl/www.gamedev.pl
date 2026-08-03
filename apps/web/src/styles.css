@@ -5056,10 +5056,9 @@ a.user-name--profile:focus-visible {
   flex: 1;
   min-height: 0;
   height: auto;
-  /* Claude-like reading column — full-bleed thread chrome made prompts and chips
-     stretch edge-to-edge on a wide desktop. */
+  /* Chat-app reading column (~Claude / Cursor composer width). */
   width: 100%;
-  max-width: 44rem;
+  max-width: 768px;
   margin-inline: auto;
 }
 
