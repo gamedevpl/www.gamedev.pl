@@ -100,7 +100,13 @@ export function mcpSessionStartedFields(input: {
 export function toolErrorReason(result: {
   isError?: boolean;
   structuredContent?: unknown;
-  content?: Array<{ type: string; text: string }>;
+  /**
+   * `text` is optional because a tool result may carry non-text blocks —
+   * `get_gate_media` attaches the gate's opening frame as an MCP image. The read
+   * below is already guarded, and a refusal is always text (see `toolErr`), so this
+   * widening costs nothing and keeps this module independent of the tool union.
+   */
+  content?: Array<{ type: string; text?: string }>;
 }): string | null {
   if (!result.isError) return null;
   const structured = result.structuredContent;
