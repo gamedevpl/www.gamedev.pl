@@ -8796,6 +8796,7 @@ a.user-name--profile:focus-visible {
 /* Panel density: install chrome without the thread's title/lead/waiting stack. */
 .studio-connect.is-panel {
   gap: 12px;
+  margin: 0;
   padding: 0;
   border: 0;
   background: transparent;
