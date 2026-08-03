@@ -94,6 +94,13 @@ describe('validateSourceUpload — the delivery contract', () => {
     );
   });
 
+  it('preview mode allows iterating without TRACE/PLAYTEST seals', () => {
+    const draft = MINIMAL.filter((f) => f.path !== 'TRACE.json' && f.path !== 'PLAYTEST.json');
+    expect(() => validateSourceUpload(draft, 'publish')).toThrow(/TRACE\.json is required/);
+    expect(validateSourceUpload(draft, 'preview').map((f) => f.path)).not.toContain('TRACE.json');
+    expect(validateSourceUpload(draft, 'preview').map((f) => f.path)).toContain('game.ts');
+  });
+
   it('accepts the agent-play contract without blocking pre-companion submit tools', () => {
     // The bug this PR fixes is "path not deliverable" for AGENT.json — accepting the
     // file is the unblock. Hard-requiring it would 400 in-flight workspaces that still
@@ -268,6 +275,32 @@ describe('GCS games store', () => {
     await store.putGateResult('g', version, { green: false, report: '3 checks failed' });
 
     expect((await store.getManifest('g', version))?.gate).toMatchObject({ green: false, report: '3 checks failed' });
+  });
+
+  it('records kit_outdated on a preview-lane check without touching gate', async () => {
+    const { impl } = stubGcs();
+    const store = createGcsGamesStore({ ...base, fetchImpl: impl });
+    const draft = MINIMAL.filter((f) => f.path !== 'TRACE.json' && f.path !== 'PLAYTEST.json');
+    const { version } = await store.putCandidateSources({
+      slug: 'g',
+      issueNumber: 1,
+      files: draft,
+      mode: 'preview',
+    });
+
+    await store.putPreviewGateResult('g', version, {
+      green: false,
+      report: 'kitEngineRef outside supported window',
+      status: 'kit_outdated',
+    });
+
+    const manifest = await store.getManifest('g', version);
+    expect(manifest?.gate).toBeUndefined();
+    expect(manifest?.previewGate).toMatchObject({
+      green: false,
+      report: 'kitEngineRef outside supported window',
+      status: 'kit_outdated',
+    });
   });
 
   it('pins the engine the first gate run checked against, and never repins', async () => {

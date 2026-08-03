@@ -1763,13 +1763,14 @@ export async function registerSubmissionRoutes(
     // stay unchanged (Codex P1). Presence of `preview.slug` is therefore a readiness
     // signal to attempt loading, not a promise that the route is warm on the same
     // tick — but it must not flip on until something is actually storable.
-    if (record.slug && record.deliveredVersion) {
+    const playableVersion = record.previewVersion ?? record.deliveredVersion;
+    if (record.slug && playableVersion) {
       const gamesStore = options.agentChannel?.gamesStore;
       if (gamesStore?.getDerivedArtifact) {
         try {
           const [bundle, previewHtml] = await Promise.all([
-            gamesStore.getDerivedArtifact(record.slug, record.deliveredVersion, 'bundle.html'),
-            gamesStore.getDerivedArtifact(record.slug, record.deliveredVersion, 'preview.html'),
+            gamesStore.getDerivedArtifact(record.slug, playableVersion, 'bundle.html'),
+            gamesStore.getDerivedArtifact(record.slug, playableVersion, 'preview.html'),
           ]);
           if (bundle || previewHtml) {
             status.preview = { slug: record.slug };
@@ -1796,11 +1797,12 @@ export async function registerSubmissionRoutes(
     // these from its own unsent-state memory, so they vanished on the first reload.
     if (store) {
       const messages = await store.listCreatorMessages(record.issueNumber, { limit: 20 });
-      if (messages.length > 0 || record.deliveredVersion) {
+      if (messages.length > 0 || playableVersion) {
         status.progress = {
           // The preview refreshes when headSha changes; for a native job the moment
           // with something new to show is a delivery, so the version plays that role.
-          headSha: record.deliveredVersion ?? '',
+          // Prefer previewVersion so mode=preview iterations reload Studio.
+          headSha: playableVersion ?? '',
           commits: [],
           checklist: [],
           revisions: messages.map((message) => ({
@@ -3716,24 +3718,25 @@ export async function registerSubmissionRoutes(
     record: SubmissionRecord,
   ): Promise<FastifyReply | null> {
     const gamesStore = options.agentChannel?.gamesStore;
-    const { slug, deliveredVersion } = record;
-    if (!gamesStore || !slug || !deliveredVersion) return null;
+    const { slug } = record;
+    const playableVersion = record.previewVersion ?? record.deliveredVersion;
+    if (!gamesStore || !slug || !playableVersion) return null;
 
     const cached = draftPreviewCache.get(record.issueNumber);
-    if (cached && cached.revision === deliveredVersion && cached.expiresAt > now()) {
+    if (cached && cached.revision === playableVersion && cached.expiresAt > now()) {
       return reply.send(cached.value);
     }
 
-    // The verified bundle first, then the gate's red-run preview. Both are assembled by
-    // the same code from the same sources, so this is not a choice between a good and a
-    // degraded document — it is only about whether the run that produced it also passed.
-    // Falling back is the point: a creator being unable to look at their own build
-    // because it failed a check is the least useful moment to hide it from them, and for
-    // a while that is what happened — a red gate stored nothing, so the studio showed an
-    // empty panel and said nothing about why.
-    let bundle = await gamesStore.getDerivedArtifact(slug, deliveredVersion, 'bundle.html');
+    // The verified bundle first, then the gate's red-run / preview-lane document. Both
+    // are assembled by the same code from the same sources, so this is not a choice
+    // between a good and a degraded document — it is only about whether the run that
+    // produced it also passed. Falling back is the point: a creator being unable to
+    // look at their own build because it failed a check is the least useful moment to
+    // hide it from them, and for a while that is what happened — a red gate stored
+    // nothing, so the studio showed an empty panel and said nothing about why.
+    let bundle = await gamesStore.getDerivedArtifact(slug, playableVersion, 'bundle.html');
     const artifact = bundle ? 'bundle.html' : 'preview.html';
-    bundle ??= await gamesStore.getDerivedArtifact(slug, deliveredVersion, 'preview.html');
+    bundle ??= await gamesStore.getDerivedArtifact(slug, playableVersion, 'preview.html');
     // Absent rather than broken: the gate has not finished, or it went red early enough
     // that there was nothing assemblable to keep. Both are "not ready", and the channel's
     // own pushed previews cover the window. A store that *errors* throws out of here
@@ -3743,11 +3746,11 @@ export async function registerSubmissionRoutes(
     const value: DraftPreviewValue = { slug, title: record.title || slug, html: bundle.toString('utf8') };
     rememberDraftPreview(record.issueNumber, {
       value,
-      revision: deliveredVersion,
+      revision: playableVersion,
       expiresAt: now() + draftPreviewTtlMs,
     });
     request.log.info(
-      { issueNumber: record.issueNumber, slug, version: deliveredVersion, artifact },
+      { issueNumber: record.issueNumber, slug, version: playableVersion, artifact },
       'served gate-built preview for a delivered version',
     );
     return reply.send(value);

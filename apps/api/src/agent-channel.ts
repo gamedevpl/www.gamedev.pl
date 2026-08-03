@@ -19,7 +19,7 @@ import {
 } from './agent-token.js';
 import { selfBuildDeliveryCap } from './builder.js';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from './gcs-sign.js';
-import { InvalidUploadError, MAX_UPLOAD_FILES, type GamesStore } from './games-store.js';
+import { InvalidUploadError, MAX_UPLOAD_FILES, type DeliveryMode, type GamesStore } from './games-store.js';
 import { parseGameMedia, parseSpecTitle } from './github-client.js';
 import { canTransition, resolveJobState, type JobState } from './job-state.js';
 import {
@@ -191,6 +191,11 @@ const BuildSourcesInputSchema = z.object({
     .max(64)
     .regex(/^[0-9a-f]+$/i, 'kitEngineRef must be a hex commit sha')
     .optional(),
+  /**
+   * Preview: typecheck→smoke→build, TRACE/PLAYTEST optional, Studio-playable only.
+   * Publish (default): full gate; TRACE/PLAYTEST required. Keeps `npm run submit` safe.
+   */
+  mode: z.enum(['preview', 'publish']).default('publish'),
 });
 
 const BuildPreviewInputSchema = z.object({
@@ -271,11 +276,10 @@ export interface AgentChannelOptions {
     slug: string;
     version: string;
     /**
-     * The delivery path never sets this; it exists so the operator's health re-gate can
-     * reuse the same configured trigger (see gate-trigger.ts) instead of a second one
-     * that would drift.
+     * `preview` runs `check:game --preview`. `health` is the operator re-gate.
+     * Omitted means the acceptance (publish) gate.
      */
-    mode?: 'health';
+    mode?: 'health' | 'preview';
   }) => Promise<{ buildId?: string } | void> | void;
 }
 
@@ -495,23 +499,47 @@ export async function registerAgentChannelRoutes(
    * yet", which is what the agent would have seen a moment earlier anyway.
    */
   async function gateVerdict(record: SubmissionRecord) {
-    const { slug, deliveredVersion } = record;
-    if (!options.gamesStore || !slug || !deliveredVersion) return null;
+    const { slug } = record;
+    // Prefer previewVersion: publish writes both pointers to the same id, while a later
+    // mode=preview only advances previewVersion. delivered-first would keep reporting the
+    // stale publish red after the agent already fixed and re-previewed.
+    const version = record.previewVersion ?? record.deliveredVersion;
+    if (!options.gamesStore || !slug || !version) return null;
     try {
-      const manifest = await options.gamesStore.getManifest(slug, deliveredVersion);
-      if (!manifest?.gate) return null;
-      return {
-        // Named so the agent can tell a verdict about *this* delivery from a stale one
-        // about the previous round — the difference between "fix it" and "already fixed".
-        version: deliveredVersion,
-        green: manifest.gate.green,
-        ranAt: manifest.gate.ranAt,
-        // The tail is where the chain names the check that stopped it; the runner has
-        // already trimmed to 4000 characters for exactly this reason.
-        ...(manifest.gate.report ? { report: manifest.gate.report } : {}),
-        // `kit_outdated` is a distinct refusal: refresh the kit, do not chase check:game.
-        ...(manifest.gate.status === 'kit_outdated' ? { status: 'kit_outdated' as const } : {}),
-      };
+      const manifest = await options.gamesStore.getManifest(slug, version);
+      if (manifest?.gate) {
+        return {
+          // Named so the agent can tell a verdict about *this* delivery from a stale one
+          // about the previous round — the difference between "fix it" and "already fixed".
+          version,
+          lane: 'publish' as const,
+          green: manifest.gate.green,
+          ranAt: manifest.gate.ranAt,
+          // The tail is where the chain names the check that stopped it; the runner has
+          // already trimmed to 4000 characters for exactly this reason.
+          ...(manifest.gate.report ? { report: manifest.gate.report } : {}),
+          // `kit_outdated` is a distinct refusal: refresh the kit, do not chase check:game.
+          ...(manifest.gate.status === 'kit_outdated' ? { status: 'kit_outdated' as const } : {}),
+        };
+      }
+      // Preview-lane check: never report as publishable green (that ends the MCP round).
+      if (manifest?.previewGate) {
+        const kitOutdated = manifest.previewGate.status === 'kit_outdated';
+        return {
+          version,
+          lane: 'preview' as const,
+          green: false,
+          previewPassed: manifest.previewGate.green,
+          ranAt: manifest.previewGate.ranAt,
+          ...(manifest.previewGate.report ? { report: manifest.previewGate.report } : {}),
+          status: kitOutdated
+            ? ('kit_outdated' as const)
+            : manifest.previewGate.green
+              ? ('preview_passed' as const)
+              : ('preview_failed' as const),
+        };
+      }
+      return null;
     } catch (error) {
       app.log.warn({ err: error, issueNumber: record.issueNumber, slug }, 'could not read the gate verdict');
       return null;
@@ -552,18 +580,21 @@ export async function registerAgentChannelRoutes(
         // and will never know why. This is the same trick as `mustDeliver` above: say it
         // on every call, derived from what we stored, rather than once in a brief read
         // thousands of tokens ago.
-        ...(gate && !gate.green
+        ...(gate && !gate.green && gate.status !== 'preview_passed'
           ? {
               mustFixGate:
                 gate.status === 'kit_outdated'
                   ? `The gate refused your delivery (${gate.version}) because the Creator Kit is ` +
                     'outdated (`kit_outdated`). Refresh the kit (re-run get_kit), rebuild against ' +
                     'it, and deliver again with the new kitEngineRef.'
-                  : `The gate ran against your delivery and refused it (${gate.version}). You are not ` +
-                    'done: nothing can be published until it passes. Read `gate.report` below — it ends ' +
-                    'with the check that stopped the chain — fix the cause in your game, and deliver ' +
-                    'again with `npm run submit -- <slug>`. Re-delivering without a fix just stores ' +
-                    'another version that fails the same way.',
+                  : gate.status === 'preview_failed'
+                    ? `The preview check refused your delivery (${gate.version}). Fix typecheck/smoke/build, ` +
+                      'then submit_sources again with mode=preview. TRACE.json is not required until mode=publish.'
+                    : `The gate ran against your delivery and refused it (${gate.version}). You are not ` +
+                      'done: nothing can be published until it passes. Read `gate.report` below — it ends ' +
+                      'with the check that stopped the chain — fix the cause in your game, and deliver ' +
+                      'again with `npm run submit -- <slug>` (or submit_sources mode=publish). Re-delivering ' +
+                      'without a fix just stores another version that fails the same way.',
             }
           : {}),
         ...(record.deliveredVersion
@@ -888,6 +919,7 @@ export async function registerAgentChannelRoutes(
         // and `canTransition('queued','submitted')` is false, so the protective
         // transition was skipped and the job stayed `building` (CP-1 double-close).
         const stateAfterSignal = await markBuildingFromChannel(issueNumber, record);
+        const mode: DeliveryMode = parsed.data.mode === 'preview' ? 'preview' : 'publish';
         const { version } = await options.gamesStore.putCandidateSources({
           slug,
           issueNumber,
@@ -895,13 +927,17 @@ export async function registerAgentChannelRoutes(
           // Provenance: which backend built this version. Backend name on the dispatch
           // ('copilot' / 'self') is the durable record; builder is the round selector.
           backend: record.dispatch?.backend ?? record.builder,
+          mode,
           ...(parsed.data.kitEngineRef ? { kitEngineRef: parsed.data.kitEngineRef } : {}),
         });
-        // Recorded before the gate is asked to run: this is what the creator's preview
-        // reads, and a delivered game should be playable on the status page whether or
-        // not anything ever verifies it. The gate decides whether it may be *published*,
-        // which is a different question from whether its author can watch it.
-        await store?.setSubmissionDeliveredVersion(issueNumber, version);
+        // Preview updates Studio's playable pointer without marking a sealed delivery —
+        // control.delivered / publication reconciliation still wait for mode=publish.
+        // Publish sets both (setSubmissionDeliveredVersion also refreshes previewVersion).
+        if (mode === 'preview') {
+          await store?.setSubmissionPreviewVersion(issueNumber, version);
+        } else {
+          await store?.setSubmissionDeliveredVersion(issueNumber, version);
+        }
         if (store && record.builder === 'self') {
           await store.incrementRoundDeliveryCount(issueNumber);
         }
@@ -920,13 +956,11 @@ export async function registerAgentChannelRoutes(
             }
           }
         }
-        // Past the agent, and recorded as such. Without this the job stays `building`,
-        // and the agent's own session then reports `completed` with a candidate present
-        // — which the reconciler reads as "done, ready for review". That would promote a
-        // game to the review queue on the agent's say-so, before our gate had run and
-        // whatever it might have said. `submitted` is the state the reconciler refuses
-        // to move, which is exactly the protection this needs.
-        if (store) {
+        // Publish only: without this the job stays `building`, and the agent's own
+        // session then reports `completed` with a candidate present — which the
+        // reconciler reads as "done, ready for review". Preview stays in building so a
+        // vibe-coding loop never looks like a sealed candidate.
+        if (store && mode === 'publish') {
           if (canTransition(stateAfterSignal, 'submitted')) {
             await store.recordJobTransition(issueNumber, {
               to: 'submitted',
@@ -936,7 +970,12 @@ export async function registerAgentChannelRoutes(
             });
           }
         }
-        const gate = await options.onSourcesDelivered?.({ issueNumber, slug, version });
+        const gate = await options.onSourcesDelivered?.({
+          issueNumber,
+          slug,
+          version,
+          ...(mode === 'preview' ? { mode: 'preview' as const } : {}),
+        });
         // Booked here rather than inside the trigger because this is where the job is
         // known: the trigger takes a slug and a version and has no idea whose ledger to
         // write to. Best-effort like every other write in this handler — the delivery has
@@ -956,6 +995,7 @@ export async function registerAgentChannelRoutes(
         const fresh = store ? ((await store.getSubmission(issueNumber)) ?? record) : record;
         return reply.send({
           accepted: true,
+          mode,
           delivery: { slug, version },
           ...(await channelState(issueNumber, fresh)),
         });
@@ -981,11 +1021,13 @@ export async function registerAgentChannelRoutes(
    * The store already holds every delivered version, immutably; this is the read that
    * makes it the source of truth rather than a copy nobody can get back.
    *
-   * Prefer the job's own last delivery. When this job has not delivered yet but its
-   * slug is already published — the shape of every post-publish improvement, which is a
-   * *new* job on an existing game — fall back to the live publication. Without that,
-   * `npm run restore` reports nothing to restore and the agent rebuilds a stranger's
-   * game instead of revising the one the creator asked to change.
+   * Prefer the job's own latest candidate — previewVersion first (mode=preview may be
+   * the only upload so far, or a fix after a red publish), then deliveredVersion. When
+   * this job has neither but its slug is already published — the shape of every
+   * post-publish improvement, which is a *new* job on an existing game — fall back to
+   * the live publication. Without that, `npm run restore` reports nothing to restore
+   * and the agent rebuilds a stranger's game instead of revising the one the creator
+   * asked to change.
    *
    * Scoped to the job's own game by the same token that authorizes its delivery, so a
    * build can restore what it (or its published predecessor) delivered and nothing else.
@@ -1003,7 +1045,7 @@ export async function registerAgentChannelRoutes(
       }
 
       const slug = record.slug;
-      let version = record.deliveredVersion;
+      let version = record.previewVersion ?? record.deliveredVersion;
       // An improvement job inherits the slug before it has delivered anything of its
       // own. The publication pointer is what is live — the version the creator played.
       if (slug && !version) {
@@ -1561,7 +1603,8 @@ export async function registerAgentChannelRoutes(
    * Unlike every other channel read, a capability whose generation is exactly one
    * behind current is accepted — limited to this delivery's own verdict — so an agent
    * can observe the green that closed its round. Writes and other reads still 401.
-   * Query `?version=` to name a delivery; default is the job's latest `deliveredVersion`.
+   * Query `?version=` to name a delivery; default is the job's latest playable pointer
+   * (`previewVersion`, then `deliveredVersion`) — same order as Studio and restore.
    */
   app.get(
     '/api/agent/build/gate',
@@ -1573,7 +1616,7 @@ export async function registerAgentChannelRoutes(
 
       const query = request.query as { version?: string };
       const requestedVersion = typeof query.version === 'string' && query.version.trim() ? query.version.trim() : null;
-      const version = requestedVersion ?? record.deliveredVersion ?? null;
+      const version = requestedVersion ?? record.previewVersion ?? record.deliveredVersion ?? null;
 
       if (!version || !record.slug) {
         return reply.send({
@@ -1590,7 +1633,11 @@ export async function registerAgentChannelRoutes(
         return reply.status(401).send({ error: STALE_AGENT_TOKEN_REASON });
       }
 
-      const gate = await gateVerdict({ ...record, deliveredVersion: version });
+      const gate = await gateVerdict({
+        ...record,
+        deliveredVersion: record.deliveredVersion === version ? version : undefined,
+        previewVersion: version,
+      });
       if (!gate) {
         return reply.send({
           status: 'pending',
@@ -1600,18 +1647,32 @@ export async function registerAgentChannelRoutes(
         });
       }
 
-      const status = gate.green ? 'green' : gate.status === 'kit_outdated' ? 'kit_outdated' : 'red';
+      const status = gate.green
+        ? 'green'
+        : gate.status === 'kit_outdated'
+          ? 'kit_outdated'
+          : gate.status === 'preview_passed'
+            ? 'preview_passed'
+            : gate.status === 'preview_failed'
+              ? 'preview_failed'
+              : 'red';
       return reply.send({
         status,
         deliveryId: version,
         version: gate.version,
         green: gate.green,
+        lane: gate.lane,
         ranAt: gate.ranAt,
         summary: gate.green
           ? 'gate accepted this delivery'
-          : (gate.report?.split('\n').at(-1) ?? 'gate refused this delivery'),
+          : gate.status === 'preview_passed'
+            ? 'preview check passed — continue iterating, then submit_sources with mode=publish (TRACE required)'
+            : gate.status === 'preview_failed'
+              ? (gate.report?.split('\n').at(-1) ?? 'preview check refused this delivery')
+              : (gate.report?.split('\n').at(-1) ?? 'gate refused this delivery'),
         ...(gate.report ? { report: gate.report } : {}),
         ...(gate.status ? { gateStatus: gate.status } : {}),
+        ...('previewPassed' in gate && gate.previewPassed !== undefined ? { previewPassed: gate.previewPassed } : {}),
         access,
       });
     },
@@ -1648,7 +1709,7 @@ export async function registerAgentChannelRoutes(
 
       const query = request.query as { version?: string; frames?: string };
       const requestedVersion = typeof query.version === 'string' && query.version.trim() ? query.version.trim() : null;
-      const version = requestedVersion ?? record.deliveredVersion ?? null;
+      const version = requestedVersion ?? record.previewVersion ?? record.deliveredVersion ?? null;
 
       if (!version || !record.slug) {
         return reply.send({

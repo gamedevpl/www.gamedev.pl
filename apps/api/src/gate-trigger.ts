@@ -48,10 +48,11 @@ export interface GateTriggerInput {
   version: string;
   /**
    * `health` re-runs the check against the current engine and records the verdict as
-   * `manifest.health`, leaving the acceptance verdict alone. Omitted means the
-   * acceptance gate, exactly as before.
+   * `manifest.health`, leaving the acceptance verdict alone. `preview` runs
+   * `check:game --preview` and records `manifest.previewGate` (never publishable).
+   * Omitted means the acceptance (publish) gate, exactly as before.
    */
-  mode?: 'health';
+  mode?: 'health' | 'preview';
 }
 
 const DEFAULTS = {
@@ -126,7 +127,7 @@ function buildSpec(
             // `--health` is our own constant, appended from a two-value union, never
             // from input text.
             `npm run gate:run -w @gamedevpl/api -- --slug '${input.slug}' --version '${input.version}'` +
-              (input.mode === 'health' ? ' --health' : ''),
+              (input.mode === 'health' ? ' --health' : input.mode === 'preview' ? ' --preview' : ''),
           ].join('\n'),
         ],
       },
@@ -148,9 +149,14 @@ function buildSpec(
     },
     timeout: GATE_TIMEOUT,
     // Searchable in the Cloud Build history: "show me every gate run for this game" —
-    // and health runs carry their own tag so a fleet re-check reads as one, not as a
+    // and health/preview runs carry their own tag so a fleet re-check reads as one, not as a
     // wave of failing acceptance gates.
-    tags: ['gate', ...(input.mode === 'health' ? ['health'] : []), `slug-${input.slug}`],
+    tags: [
+      'gate',
+      ...(input.mode === 'health' ? ['health'] : []),
+      ...(input.mode === 'preview' ? ['preview'] : []),
+      `slug-${input.slug}`,
+    ],
   };
 }
 

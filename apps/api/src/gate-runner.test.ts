@@ -82,6 +82,30 @@ describe('runGate', () => {
     expect(check?.[1]).not.toContain('--accept');
   });
 
+  it('preview lane runs check:game --preview and stores only preview.html', async () => {
+    const harness = await harnessDir();
+    const { store, derived } = stubStore();
+    const run = vi.fn(async (command: string, args: string[]) => {
+      if (command === 'npm' && args.includes('check:game')) {
+        return { code: 0, output: 'preview ok' };
+      }
+      return { code: 0, output: 'deadbeef' };
+    });
+
+    const outcome = await runGate(
+      'comet-courier',
+      'v1',
+      { store, prepareHarness: async () => harness, run, assembleBundle: stubAssemble },
+      { preview: true },
+    );
+
+    expect(outcome.green).toBe(true);
+    expect(run).toHaveBeenCalledWith('npm', ['run', 'check:game', '--', 'comet-courier', '--preview'], harness);
+    expect(derived.map((d) => d.name)).toEqual(['preview.html']);
+    expect(outcome.artifacts).toEqual(['preview.html']);
+    expect(outcome.artifacts).not.toContain('bundle.html');
+  });
+
   it('reports the engine commit it actually checked against, from the harness itself', async () => {
     const { store } = stubStore();
     const run = vi.fn(async (command: string) =>

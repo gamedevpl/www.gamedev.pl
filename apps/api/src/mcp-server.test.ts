@@ -328,7 +328,9 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(start?.description).toMatch(/pendingMessages/);
     expect(start?.description).toMatch(/array is non-empty/i);
     expect(start?.description).toMatch(/do not schedule background/i);
-    expect(start?.description).toMatch(/green gate verdict ends the round/i);
+    expect(start?.description).toMatch(
+      /green \*publish\* gate verdict ends the round|green publish gate verdict ends the round/i,
+    );
     expect(start?.description).toMatch(/END immediately/i);
 
     const getKit = tools.find((t) => t.name === 'get_kit');
@@ -424,15 +426,17 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(joined).toMatch(/read_kit_files|list_kit_files|read_kit_file/);
     expect(joined).toMatch(/send_screenshot/);
     expect(joined).toMatch(/submit_sources/);
+    expect(joined).toMatch(/mode:\s*"preview"|mode=preview/i);
+    expect(joined).toMatch(/mode:\s*"publish"|mode=publish/i);
     expect(joined).toMatch(/get_gate_verdict/);
     // The stop condition is explicit: green means done — END immediately; no post-green
     // tools (key retires; get_gate_verdict may still answer via terminal receipt).
-    expect(joined).toMatch(/green: the round is complete/i);
+    expect(joined).toMatch(/green \(publish only\): the round is complete/i);
     expect(joined).toMatch(/END the session immediately/i);
     expect(joined).toMatch(/Do not report_progress, read_inbox, or ack after green/i);
     expect(joined).toMatch(/terminal receipt/i);
     // Both failure branches are covered.
-    expect(joined).toMatch(/red:.*resubmit on the SAME key/i);
+    expect(joined).toMatch(/red \/ preview_failed:.*resubmit on the SAME key/i);
     expect(joined).toMatch(/kit_outdated: re-run get_kit/i);
 
     // Inbox policy: no scheduled polling; drain non-empty pendingMessages from write replies.

@@ -294,12 +294,13 @@ function stopFromChannel(body: { control?: { stop?: boolean; reason?: string } }
 const BEHAVIOURAL_CONTRACT = [
   'Report progress before and after long steps (and whenever a reply carries warnings with code progress_stale).',
   'Send a screenshot as soon as the game draws anything playable.',
+  'While iterating, submit_sources with mode=preview (no TRACE required). Only mode=publish needs TRACE/PLAYTEST and can go green.',
   'Run kit checks green (at least check:static) before submit_sources when you have a local kit checkout; otherwise submit and let the gate run checks.',
   'Honour stop immediately — do not continue after stop:true.',
   'When seedAvailable/seedStatus=available (or warnings.code=seed_unread), call get_seed and continue that draft — do not scaffold from scratch. When seedStatus=pending, recheck get_seed before scaffolding.',
   'Every write reply carries pendingMessages — when that array is non-empty, read_inbox and apply before continuing.',
   'Do not schedule background or recurring inbox polls; drain pendingMessages from write replies (and kit/browse replies that piggyback them) as you go. Honour warnings.code=inbox_pending.',
-  'A green gate verdict ends the round — END immediately; the key retires and new work arrives as a fresh kickoff.',
+  'A green *publish* gate verdict ends the round — END immediately; preview_passed does not end the round. The key retires on green and new work arrives as a fresh kickoff.',
 ].join(' ');
 
 /**
@@ -319,16 +320,17 @@ const SESSION_WORKFLOW: readonly string[] = [
   'get_kit — keep engineRef for submit_sources; prefer read_kit_files for several known small paths (else list_kit_files / search_kit_files / read_kit_file / read_kit_file_fragment) when shell unpack is unavailable; otherwise unpack via the returned one-liner and follow SKILL.md locally. Never dump the whole kit into context.',
   'Build the game — continuing the seed or sources you fetched, otherwise from the kit; report_progress before and after long steps.',
   'send_screenshot as soon as the game draws anything playable.',
-  'Run the kit checks green (at least check:static) before delivering when you have a local kit checkout; otherwise deliver and let the gate run checks.',
-  'submit_sources with the kitEngineRef get_kit returned.',
-  'Poll get_gate_verdict about every 30s until it is green, red, or kit_outdated.',
-  'Once a verdict lands, get_gate_media returns the screenshots and gameplay video the gate recorded — check the frames for visual defects the report cannot describe, and show them to the creator. Essential when you cannot run the game yourself.',
-  'red: read the report, fix, and resubmit on the SAME key.',
+  'While iterating: submit_sources({ mode: "preview", kitEngineRef, files }) — TRACE/PLAYTEST not required; Studio gets a playable draft after typecheck→smoke→build.',
+  'Poll get_gate_verdict until preview_passed or preview_failed; fix and re-preview on the SAME key. preview_passed does NOT end the round.',
+  'When ready to seal: record TRACE (`npm run trace -- <slug> --accept` if you have a kit checkout), include PLAYTEST.json, then submit_sources({ mode: "publish", … }).',
+  'Poll get_gate_verdict about every 30s until it is green, red, or kit_outdated (publish lane).',
+  'Once a publish verdict lands, get_gate_media returns the screenshots and gameplay video the gate recorded — check the frames for visual defects the report cannot describe, and show them to the creator. Essential when you cannot run the game yourself.',
+  'red / preview_failed: read the report, fix, and resubmit on the SAME key (preview while iterating; publish when sealing).',
   'kit_outdated: re-run get_kit, rebuild against the new kit, and resubmit.',
   // Green closes the round before the next tool call; writes and non-receipt reads then
   // reject the retired key (terminal-receipt tests). Any final progress/inbox work must
   // happen on earlier write replies — do not instruct post-green tools (Codex P1).
-  'green: the round is complete — END the session immediately. Do not report_progress, read_inbox, or ack after green; the key retired with that transition (get_gate_verdict and get_gate_media may still answer via terminal receipt). ' +
+  'green (publish only): the round is complete — END the session immediately. Do not report_progress, read_inbox, or ack after green; the key retired with that transition (get_gate_verdict and get_gate_media may still answer via terminal receipt). ' +
     'If the creator wants more changes before publish, call continue_draft({ feedback }) then start() — do not call open_round on an unpublished draft.',
 ];
 
@@ -2514,6 +2516,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         properties: {
           ok: { type: 'boolean' },
           rejected: { type: 'string' },
+          mode: { type: 'string', enum: ['preview', 'publish'] },
           deliveryId: { type: ['string', 'null'] },
           delivery: {
             type: ['object', 'null'],
@@ -2526,11 +2529,22 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           deliveriesRemaining: { type: ['number', 'null'] },
           ...REPLY_CONTROL,
         },
-        required: ['ok', 'deliveryId', 'delivery', 'gateStarted', 'deliveriesRemaining', 'stop', 'pendingMessages'],
+        required: [
+          'ok',
+          'mode',
+          'deliveryId',
+          'delivery',
+          'gateStarted',
+          'deliveriesRemaining',
+          'stop',
+          'pendingMessages',
+        ],
       },
       description:
-        `Deliver game sources for the gate. files[{path, content, encoding utf8|base64}] ≤${MAX_SUBMIT_FILES} items; kitEngineRef required (from get_kit / kit.json). ` +
-        'Subject to delivery cap and filename allowlist. Run kit checks green before submitting. Reply includes stop and pendingMessages. ' +
+        `Deliver game sources. mode=preview (iterate): TRACE/PLAYTEST not required; runs typecheck→smoke→build; Studio gets a draft. ` +
+        `mode=publish (default, seal): TRACE.json + PLAYTEST.json required; full gate; only publish green ends the round. ` +
+        `files[{path, content, encoding utf8|base64}] ≤${MAX_SUBMIT_FILES}; kitEngineRef required (from get_kit / kit.json). ` +
+        'Subject to delivery cap and filename allowlist. Reply includes stop and pendingMessages. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
         type: 'object',
@@ -2552,6 +2566,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           kitEngineRef: {
             type: 'string',
             description: 'Creator Kit engineRef the sources were built against (from get_kit / kit.json).',
+          },
+          mode: {
+            type: 'string',
+            enum: ['preview', 'publish'],
+            description:
+              'preview = iterate without TRACE (Studio draft). publish = sealed candidate (TRACE required; default).',
           },
           slug: { type: 'string' },
           note: { type: 'string' },
@@ -2585,6 +2605,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           return toolErr('kitEngineRef is required — send the engineRef from get_kit / kit.json');
         }
 
+        const mode = args.mode === 'preview' ? 'preview' : 'publish';
+
         const decodedFiles: Array<{ path: string; content: string }> = [];
         for (const file of filesParse.data) {
           if (file.encoding === 'base64') {
@@ -2605,12 +2627,14 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           slug,
           files: decodedFiles,
           kitEngineRef,
+          mode,
         });
         const body = res.json() as {
           error?: string;
           reason?: string;
           accepted?: boolean;
           rejected?: string;
+          mode?: string;
           delivery?: { slug: string; version: string };
           deliveryCap?: number;
           deliveriesUsed?: number;
@@ -2627,6 +2651,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
         return toolOk({
           ok: body.accepted !== false,
+          mode: body.mode === 'preview' ? 'preview' : 'publish',
           ...(body.rejected ? { rejected: body.rejected } : {}),
           deliveryId: body.delivery?.version ?? null,
           delivery: body.delivery ?? null,
@@ -2643,26 +2668,32 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       outputSchema: {
         type: 'object',
         properties: {
-          status: { type: 'string', enum: ['pending', 'green', 'red', 'kit_outdated'] },
+          status: {
+            type: 'string',
+            enum: ['pending', 'green', 'red', 'kit_outdated', 'preview_passed', 'preview_failed'],
+          },
           deliveryId: { type: ['string', 'null'] },
           summary: { type: 'string' },
           access: { type: 'string' },
           version: { type: 'string' },
           green: { type: 'boolean' },
+          lane: { type: 'string', enum: ['preview', 'publish'] },
           ranAt: { type: 'string' },
           report: { type: 'string' },
           gateStatus: { type: 'string' },
+          previewPassed: { type: 'boolean' },
         },
         required: ['status', 'deliveryId', 'summary', 'access'],
       },
       description:
-        'Poll the gate verdict for a delivery (default: latest). Verdicts typically land in 2–5 minutes; ' +
-        'poll every ~30s until green, red, or kit_outdated. kit_outdated is terminal — stop polling, ' +
+        'Poll the gate verdict for a delivery (default: latest). Preview lane: preview_passed / preview_failed ' +
+        '(does not end the round). Publish lane: green / red / kit_outdated — only green ends the round. ' +
+        'Verdicts typically land in 2–5 minutes; poll every ~30s. kit_outdated is terminal — stop polling, ' +
         're-run get_kit, rebuild against the new kit, and deliver again (do not wait for green/red). ' +
         'Terminal receipt: still readable after the round closes ' +
         "when your capability's generation owns that delivery (generation may be exactly one behind current), " +
         'so the verdict stays readable if the round closes between polls. ' +
-        'Expiry still applies. Wait for green before considering the round done. ' +
+        'Expiry still applies. Wait for publish green before considering the round done. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
         type: 'object',

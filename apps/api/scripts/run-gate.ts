@@ -94,6 +94,11 @@ async function main(): Promise<void> {
   const store = createGcsGamesStore({ bucket });
   const harnesses: string[] = [];
   const health = process.argv.includes('--health');
+  const preview = process.argv.includes('--preview');
+  if (health && preview) {
+    console.error('--health and --preview are mutually exclusive');
+    process.exit(2);
+  }
 
   const outcome = await runGate(
     slug,
@@ -127,7 +132,7 @@ async function main(): Promise<void> {
     },
     // Health asks about today's engine, so the manifest's pin is exactly the thing to
     // ignore. An acceptance run passes nothing and lets the pin (or `main`) decide.
-    health ? { engineRef: 'main' } : {},
+    health ? { engineRef: 'main' } : preview ? { preview: true } : {},
   );
 
   if (health) {
@@ -135,6 +140,14 @@ async function main(): Promise<void> {
       green: outcome.green,
       report: outcome.report,
       engineRef: outcome.engineCommit,
+    });
+  } else if (preview) {
+    // Never putGateResult — preview passes must not look publishable. kit_outdated still
+    // rides along so the channel can tell the agent to refresh the kit, not chase smoke.
+    await store.putPreviewGateResult(slug, version, {
+      green: outcome.green,
+      report: outcome.report,
+      ...(outcome.status ? { status: outcome.status } : {}),
     });
   } else {
     // The resolved sha rides along so the manifest ends up pinned to what was actually
@@ -155,7 +168,7 @@ async function main(): Promise<void> {
   }
 
   console.log(
-    `\n${health ? 'health check' : 'gate'} ${outcome.green ? 'PASSED' : 'FAILED'} for ${slug}@${version} ` +
+    `\n${health ? 'health check' : preview ? 'preview check' : 'gate'} ${outcome.green ? 'PASSED' : 'FAILED'} for ${slug}@${version} ` +
       `in ${Math.round(outcome.durationMs / 1000)}s`,
   );
   if (outcome.artifacts.length) console.log(`stored: ${outcome.artifacts.join(', ')}`);
