@@ -7,6 +7,7 @@ import {
   DEFAULT_BUILD_ORIENTATION,
 } from './agent-build-brief.js';
 import { getAgentBuildExample, listAgentBuildExamples } from './agent-build-examples.js';
+import { ExampleFilesError, createExampleFileStore, listExampleFiles, readExampleFile } from './example-files.js';
 import {
   assertAgentTokenActive,
   classifyAgentTokenAccess,
@@ -323,11 +324,25 @@ export async function registerAgentChannelRoutes(
   const previewsByBuild = new Map<number, number[]>();
   const submitsByBuild = new Map<number, number[]>();
   const kitFileStore = options.objectStore ? createKitFileStore(options.objectStore) : null;
+  const exampleFileStore = options.objectStore ? createExampleFileStore(options.objectStore) : null;
 
   function optionalFiniteQuery(raw: string | undefined): number | undefined {
     if (raw === undefined) return undefined;
     const value = Number(raw);
     return Number.isFinite(value) ? value : undefined;
+  }
+
+  function sendExampleFilesError(reply: FastifyReply, error: unknown): FastifyReply | null {
+    if (error instanceof ExampleFilesError) {
+      const status =
+        error.code === 'example_store_unavailable'
+          ? 503
+          : error.code === 'example_unavailable' || error.code === 'example_file_missing'
+            ? 404
+            : 400;
+      return reply.status(status).send({ error: error.code, message: error.message });
+    }
+    return null;
   }
 
   function sendKitFilesError(reply: FastifyReply, error: unknown): FastifyReply | null {
@@ -1398,6 +1413,83 @@ export async function registerAgentChannelRoutes(
         ...(sha256 ? { sha256 } : {}),
         unpack: exampleUnpackCommand(tarballUrl),
       });
+    },
+  );
+
+  /**
+   * Exemplar sources as files, for agents that cannot fetch the tarball.
+   *
+   * Same allowlist gate as the signed-URL route above — the exemplar catalog is a
+   * hand-curated list of first-party slugs, and a slug that is not on it does not
+   * become readable just because a different verb reaches the same bucket. What
+   * changes is only the transport: bytes through the tool instead of a link.
+   */
+  app.get(
+    '/api/agent/build/examples/:slug/files',
+    { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+
+      const example = getAgentBuildExample(String((request.params as { slug?: string }).slug ?? ''));
+      if (!example) {
+        return reply.status(404).send({ error: 'unknown_example', message: 'slug is not on the exemplar allowlist' });
+      }
+      if (!exampleFileStore) {
+        return reply
+          .status(503)
+          .send({ error: 'example_store_unavailable', message: 'the example store is not configured' });
+      }
+
+      try {
+        const query = request.query as { prefix?: string; limit?: string; offset?: string };
+        const tree = await exampleFileStore.loadTree(example.slug);
+        return reply.send(
+          listExampleFiles(tree, {
+            prefix: query.prefix,
+            limit: optionalFiniteQuery(query.limit),
+            offset: optionalFiniteQuery(query.offset),
+          }),
+        );
+      } catch (error) {
+        const sent = sendExampleFilesError(reply, error);
+        if (sent) return sent;
+        throw error;
+      }
+    },
+  );
+
+  /** One file from an allowlisted exemplar, inline. */
+  app.get(
+    '/api/agent/build/examples/:slug/file',
+    { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+
+      const example = getAgentBuildExample(String((request.params as { slug?: string }).slug ?? ''));
+      if (!example) {
+        return reply.status(404).send({ error: 'unknown_example', message: 'slug is not on the exemplar allowlist' });
+      }
+      if (!exampleFileStore) {
+        return reply
+          .status(503)
+          .send({ error: 'example_store_unavailable', message: 'the example store is not configured' });
+      }
+
+      try {
+        const query = request.query as { path?: string; encoding?: string };
+        const encoding = query.encoding === 'base64' ? 'base64' : query.encoding === 'utf8' ? 'utf8' : undefined;
+        if (query.encoding && !encoding) {
+          return reply.status(400).send({ error: 'example_query_invalid', message: 'encoding must be utf8 or base64' });
+        }
+        const tree = await exampleFileStore.loadTree(example.slug);
+        return reply.send(readExampleFile(tree, query.path ?? '', { ...(encoding ? { encoding } : {}) }));
+      } catch (error) {
+        const sent = sendExampleFilesError(reply, error);
+        if (sent) return sent;
+        throw error;
+      }
     },
   );
 
