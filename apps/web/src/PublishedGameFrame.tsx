@@ -21,6 +21,16 @@ type PublishedGameFrameProps = {
    * frame is not the player's alone to bend.
    */
   remixable?: boolean;
+  /**
+   * The theater's More-menu doors, as nonces so a re-chosen entry re-opens what
+   * the player closed. `remixOpenNonce` opens the remix sheet; `painterNonce`
+   * opens it with the level painter showing. The pause-moment invitation below
+   * is untouched by either — these add doors, they do not move the invitation.
+   */
+  remixOpenNonce?: number;
+  painterNonce?: number;
+  /** Reports whether this game's remix has a painter, for the menu to show its entry. */
+  onRemixCapabilities?: (caps: { painter: boolean }) => void;
 };
 
 /**
@@ -28,7 +38,17 @@ type PublishedGameFrameProps = {
  * sandboxed GameFrame. Published games are served through the app (not public
  * GitHub Pages), so this works even when the games repo is private.
  */
-export function PublishedGameFrame({ slug, title, frameRef, embed, slots, remixable }: PublishedGameFrameProps) {
+export function PublishedGameFrame({
+  slug,
+  title,
+  frameRef,
+  embed,
+  slots,
+  remixable,
+  remixOpenNonce,
+  painterNonce,
+  onRemixCapabilities,
+}: PublishedGameFrameProps) {
   const { t } = useTranslation();
   const [html, setHtml] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
@@ -91,6 +111,12 @@ export function PublishedGameFrame({ slug, title, frameRef, embed, slots, remixa
     };
   }, [slug, title, loadAttempt]);
 
+  // Either menu door opens the sheet; the painter door additionally tells the
+  // panel to show the brush (it carries the nonce through as `painterRequest`).
+  useEffect(() => {
+    if ((remixOpenNonce ?? 0) > 0 || (painterNonce ?? 0) > 0) setRemixOpen(true);
+  }, [remixOpenNonce, painterNonce]);
+
   useEffect(() => {
     if (!remixable || slots !== undefined || remixRevealed) return;
     const frame = activeFrameRef.current;
@@ -139,6 +165,8 @@ export function PublishedGameFrame({ slug, title, frameRef, embed, slots, remixa
           initialParams={sharedParams}
           onSwapDocument={setRemixHtml}
           onClose={() => setRemixOpen(false)}
+          painterRequest={painterNonce}
+          onCapabilities={onRemixCapabilities}
         />
       ) : remixRevealed ? (
         <button type="button" className="remix-open is-revealed" onClick={() => setRemixOpen(true)}>

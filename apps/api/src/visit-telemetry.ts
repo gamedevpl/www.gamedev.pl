@@ -101,6 +101,7 @@ const RemixStepSchema = z.enum([
   'wall_shown',
   'signed_in',
   'tuned',
+  'painted',
   'asked',
   'applied',
   'handoff',
@@ -108,6 +109,8 @@ const RemixStepSchema = z.enum([
   'shared',
   'keep_clicked',
 ]);
+/** Which door led to the painter — recorded on `painted`, closed like every grouping key. */
+const RemixViaSchema = z.enum(['redirect', 'menu', 'panel']);
 /**
  * Which chrome surface opened How to play. Optional so a tab still running the previous
  * client can record the open without `via` — the aggregate treats missing as unknown
@@ -167,7 +170,7 @@ const EventSchema = z.discriminatedUnion('type', [
   }),
   z.object({ type: z.literal('editor_step'), step: EditorStepSchema, ...offsetField }),
   z.object({ type: z.literal('assist_step'), step: AssistStepSchema, ...offsetField }),
-  z.object({ type: z.literal('remix_step'), step: RemixStepSchema, ...offsetField }),
+  z.object({ type: z.literal('remix_step'), step: RemixStepSchema, via: RemixViaSchema.optional(), ...offsetField }),
 ]);
 
 const RequestSchema = z.object({
@@ -279,7 +282,12 @@ export async function registerVisitTelemetryRoutes(
         case 'assist_step':
           return { ...base, type: event.type, step: event.step };
         case 'remix_step':
-          return { ...base, type: event.type, step: event.step };
+          return {
+            ...base,
+            type: event.type,
+            step: event.step,
+            ...(event.via === undefined ? {} : { via: event.via }),
+          };
         case 'how_to_play_opened':
           return {
             ...base,

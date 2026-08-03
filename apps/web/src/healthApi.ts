@@ -91,6 +91,8 @@ export interface VisitFunnel {
   assisting?: Array<{ step: string; visits: number }>;
   /** The player-side remix loop. Optional for the same client-outlives-deploy reason. */
   remixing?: Array<{ step: string; visits: number }>;
+  /** Which door brought painting visits to the brush. Optional, same reason. */
+  remixPaintedVia?: Array<{ via: string; visits: number }>;
   /** How to play card usage — open rate, repeats, and where it was opened. */
   howToPlay: HowToPlayFunnel;
 }

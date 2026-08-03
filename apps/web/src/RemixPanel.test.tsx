@@ -199,6 +199,155 @@ describe('RemixPanel', () => {
     expect(container.querySelector('.remix-btn.is-quiet')?.textContent).toBe('Undo');
   });
 
+  it('proposes the painter for a content-shaped request instead of falling through to code', async () => {
+    remixApi.startRemix.mockResolvedValue({
+      remixId: 'r1',
+      params: { dogScale: { type: 'number', min: 0.5, max: 3, default: 1, label: { en: 'dog size' } } },
+      values: { dogScale: 1 },
+      content: {
+        maps: {
+          widget: 'collection',
+          label: { en: 'Maps', pl: 'Mapy' },
+          itemLabel: { en: 'Map', pl: 'Mapa' },
+          min: 1,
+          max: 3,
+          item: {
+            widget: 'tilemap',
+            grid: { minCols: 3, maxCols: 8, minRows: 3, maxRows: 8 },
+            tiles: [
+              { key: 'path', char: '.', label: { en: 'Path', pl: 'Ścieżka' } },
+              { key: 'wall', char: '#', label: { en: 'Wall', pl: 'Mur' } },
+            ],
+            properties: {},
+            constraints: [],
+          },
+          defaults: [{ properties: {}, rows: ['...', '.#.', '...'] }],
+        },
+      },
+      canAssist: true,
+      // The code lane is live — and must still not be where a map change lands.
+      canCode: true,
+      suggestions: [],
+      expiresInMs: 3_600_000,
+    });
+    remixApi.remixAssist.mockResolvedValue({ lane: 'content' });
+    await draw();
+    await send('move the walls around');
+
+    // No rebuild was requested; the proposal is the whole answer.
+    expect(remixApi.remixCode).not.toHaveBeenCalled();
+    const offer = container.querySelector('.remix-actions-row .remix-btn.is-primary');
+    expect(offer?.textContent).toBe('Open the level editor');
+
+    // Taking the offer opens the painter, rendered from the declaration.
+    await act(async () => {
+      offer!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.remix-painter .editor-board')).not.toBeNull();
+    expect(container.querySelectorAll('.remix-painter .editor-tile').length).toBe(2);
+
+    // Painting a cell records the rung with the door that led here — and the
+    // dedupe means the funnel keeps this first door.
+    const cell = container.querySelector('.remix-painter .editor-cell') as HTMLButtonElement;
+    await act(async () => {
+      cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(telemetry.recordRemixStep).toHaveBeenCalledWith('painted', { via: 'redirect' });
+  });
+
+  it('opens straight onto the painter when it is the only lane — the flags-off state', async () => {
+    // Both model flags off, no params — but the game declares maps. The free
+    // lane needs no model, so the panel must not say "can't be remixed yet",
+    // and the visit must not count as `no_lane`: a painter is a way in.
+    remixApi.startRemix.mockResolvedValue({
+      remixId: 'r1',
+      params: null,
+      values: null,
+      content: {
+        maps: {
+          widget: 'collection',
+          label: { en: 'Maps', pl: 'Mapy' },
+          itemLabel: { en: 'Map', pl: 'Mapa' },
+          min: 1,
+          max: 3,
+          item: {
+            widget: 'tilemap',
+            grid: { minCols: 3, maxCols: 8, minRows: 3, maxRows: 8 },
+            tiles: [{ key: 'path', char: '.', label: { en: 'Path', pl: 'Ścieżka' } }],
+            properties: {},
+            constraints: [],
+          },
+          defaults: [{ properties: {}, rows: ['...', '...', '...'] }],
+        },
+      },
+      canAssist: false,
+      canCode: false,
+      suggestions: [],
+      expiresInMs: 3_600_000,
+    });
+    await draw();
+
+    expect(container.querySelector('.remix-painter .editor-board')).not.toBeNull();
+    expect(container.textContent).not.toContain("This game can't be remixed yet");
+    expect(telemetry.recordRemixStep).not.toHaveBeenCalledWith('no_lane');
+
+    const cell = container.querySelector('.remix-painter .editor-cell') as HTMLButtonElement;
+    await act(async () => {
+      cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(telemetry.recordRemixStep).toHaveBeenCalledWith('painted', { via: 'panel' });
+  });
+
+  it('pushes the whole content document over the bridge, never params alone', async () => {
+    // The game-side module replaces its content with what arrives. A params-only
+    // push to a game that also declares collections hands it a document with no
+    // maps — and its next restart reads maps that are no longer there.
+    const postMessage = vi.fn();
+    const frameRef = {
+      current: { contentWindow: { postMessage } },
+    } as unknown as React.MutableRefObject<HTMLIFrameElement | null>;
+    remixApi.startRemix.mockResolvedValue({
+      remixId: 'r1',
+      params: { dogScale: { type: 'number', min: 0.5, max: 3, default: 1, label: { en: 'dog size' } } },
+      values: { dogScale: 1 },
+      content: {
+        maps: {
+          widget: 'collection',
+          label: { en: 'Maps', pl: 'Mapy' },
+          itemLabel: { en: 'Map', pl: 'Mapa' },
+          min: 1,
+          max: 3,
+          item: {
+            widget: 'tilemap',
+            grid: { minCols: 3, maxCols: 8, minRows: 3, maxRows: 8 },
+            tiles: [{ key: 'path', char: '.', label: { en: 'Path', pl: 'Ścieżka' } }],
+            properties: {},
+            constraints: [],
+          },
+          defaults: [{ properties: {}, rows: ['...', '...', '...'] }],
+        },
+      },
+      canAssist: true,
+      canCode: false,
+      suggestions: [],
+      expiresInMs: 3_600_000,
+    });
+    remixApi.remixAssist.mockResolvedValue({ lane: 'params', values: { dogScale: 2 } });
+
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(<RemixPanel slug="dog-dash" frameRef={frameRef} onSwapDocument={() => {}} onClose={() => {}} />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    await send('bigger dog');
+
+    const pushed = postMessage.mock.calls.at(-1)?.[0] as { content: Record<string, unknown> };
+    expect(pushed.content.params).toEqual({ dogScale: 2 });
+    expect(pushed.content.maps).toEqual([{ properties: {}, rows: ['...', '...', '...'] }]);
+  });
+
   it('offers a toggle the way the running game is not currently set', async () => {
     // Arrived on a shared link that flipped a default-off toggle on. The server
     // derived "turn on" from the declaration; offering that here would be a

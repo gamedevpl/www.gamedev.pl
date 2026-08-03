@@ -643,7 +643,7 @@ export interface VisitEvent {
   route?: string;
   /**
    * `create_step` / `waitlist_step` / `studio_step` / `editor_step` /
-   * `assist_step`: which funnel step or outcome this visit reached.
+   * `assist_step` / `remix_step`: which funnel step or outcome this visit reached.
    */
   step?: string;
   /**
@@ -659,7 +659,9 @@ export interface VisitEvent {
   detail?: string;
   /**
    * `how_to_play_opened`: which chrome surface opened the card (`bar` | `more`).
-   * Absent on events recorded before the field existed; never a game identity.
+   * `remix_step` with `step: 'painted'`: which door led to the painter
+   * (`redirect` | `menu`). Absent on events recorded before the field existed;
+   * never a game identity.
    */
   via?: string;
   /**

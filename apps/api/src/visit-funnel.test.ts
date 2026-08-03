@@ -209,6 +209,52 @@ describe('summarizeVisitFunnel', () => {
     expect(funnel.waitlist[0]).toEqual({ step: 'cta_clicked', visits: 1 });
   });
 
+  it('counts painting visits and splits them by the door that led to the brush', () => {
+    const remix = (visitId: string, step: string, via?: string): VisitEvent =>
+      ({
+        visitId,
+        type: 'remix_step',
+        at: '2026-07-26T10:00:00.000Z',
+        msSinceStart: 0,
+        step,
+        ...(via ? { via } : {}),
+      }) as VisitEvent;
+
+    const funnel = summarizeVisitFunnel([
+      started('a'),
+      remix('a', 'opened'),
+      remix('a', 'painted', 'redirect'),
+      started('b'),
+      remix('b', 'opened'),
+      remix('b', 'painted', 'menu'),
+      started('c'),
+      remix('c', 'opened'),
+      // A client from before the dimension existed: painted, door unknown.
+      remix('c', 'painted'),
+      started('d'),
+      remix('d', 'opened'),
+      remix('d', 'tuned'),
+    ]);
+
+    expect(funnel.remixing.find((row) => row.step === 'painted')?.visits).toBe(3);
+    expect(funnel.remixing.find((row) => row.step === 'tuned')?.visits).toBe(1);
+    expect(funnel.remixPaintedVia).toEqual([
+      { via: 'redirect', visits: 1 },
+      { via: 'menu', visits: 1 },
+      { via: 'panel', visits: 0 },
+      { via: 'unknown', visits: 1 },
+    ]);
+  });
+
+  it('emits zeroed door rows while nobody has painted, so the split cannot read as missing', () => {
+    const funnel = summarizeVisitFunnel([started('a')]);
+    expect(funnel.remixPaintedVia).toEqual([
+      { via: 'redirect', visits: 0 },
+      { via: 'menu', visits: 0 },
+      { via: 'panel', visits: 0 },
+    ]);
+  });
+
   it('survives a window with no events at all', () => {
     const funnel = summarizeVisitFunnel([]);
     expect(funnel).toMatchObject({ visits: 0, bounces: 0, plays: 0, medianPlaysPerPlayingVisit: 0 });

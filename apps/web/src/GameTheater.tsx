@@ -144,6 +144,18 @@ export function GameTheater({
   const moreRef = useRef<HTMLDivElement | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
+  /**
+   * The always-available doors to Remix and its painter (ops repo,
+   * remix-content-editing-plan §3.1): nonces the menu bumps, threaded down to
+   * the frame. They complement the pause-moment invitation, which is untouched.
+   * The painter entry appears only once the panel has reported this game
+   * declares paintable content — a door that opens onto nothing is the
+   * `no_lane` lesson, and this menu does not repeat it.
+   */
+  const [remixOpenNonce, setRemixOpenNonce] = useState(0);
+  const [painterNonce, setPainterNonce] = useState(0);
+  const [remixHasPainter, setRemixHasPainter] = useState(false);
+  const onRemixCapabilities = useCallback((caps: { painter: boolean }) => setRemixHasPainter(caps.painter), []);
   // Per theater mount, not per visit: opening once in game A and once in game B is not
   // a "card did not answer" signal. The theater remounts when the slug changes (`key`),
   // so this resets with each published play without needing a game identity on the wire.
@@ -620,6 +632,36 @@ export function GameTheater({
                   {micControl('theater-menu-item mic-menu')}
                   {soundControl('theater-menu-item theater-mobile-chrome')}
                   {fullscreenControl('theater-menu-item theater-mobile-chrome')}
+                  {'slug' in source ? (
+                    <>
+                      <button
+                        type="button"
+                        className="theater-menu-item"
+                        role="menuitem"
+                        onClick={() => {
+                          setMoreOpen(false);
+                          setRemixOpenNonce((nonce) => nonce + 1);
+                        }}
+                      >
+                        <PixelIcon name="wrench" size={13} />
+                        <span className="btn-label">{t('remix.button')}</span>
+                      </button>
+                      {remixHasPainter ? (
+                        <button
+                          type="button"
+                          className="theater-menu-item"
+                          role="menuitem"
+                          onClick={() => {
+                            setMoreOpen(false);
+                            setPainterNonce((nonce) => nonce + 1);
+                          }}
+                        >
+                          <PixelIcon name="pencil" size={13} />
+                          <span className="btn-label">{t('remix.editorButton')}</span>
+                        </button>
+                      ) : null}
+                    </>
+                  ) : null}
                   {reportSlug && (
                     <>
                       <div className="theater-menu-divider theater-mobile-chrome" role="separator" />
@@ -650,7 +692,17 @@ export function GameTheater({
           <BackdropVideo stream={sensing.backdrop.stream} facing={sensing.backdrop.facing} />
         ) : null}
         {'slug' in source ? (
-          <PublishedGameFrame key={source.slug} slug={source.slug} title={title} frameRef={frameRef} embed remixable />
+          <PublishedGameFrame
+            key={source.slug}
+            slug={source.slug}
+            title={title}
+            frameRef={frameRef}
+            embed
+            remixable
+            remixOpenNonce={remixOpenNonce}
+            painterNonce={painterNonce}
+            onRemixCapabilities={onRemixCapabilities}
+          />
         ) : (
           <GameFrame title={title} html={source.html} frameRef={frameRef} embed />
         )}

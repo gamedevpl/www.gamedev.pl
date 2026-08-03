@@ -43,12 +43,20 @@ const REMIX_LABELS: Record<string, string> = {
   wall_shown: 'hit the sign-in wall',
   signed_in: 'came through the wall',
   tuned: 'moved a slider',
+  painted: 'painted a map',
   asked: 'typed a request',
   applied: 'got a change applied',
   handoff: 'told it needs more',
   refused: 'was refused',
   shared: 'shared their version',
   keep_clicked: 'clicked "make it mine"',
+};
+
+const REMIX_VIA_LABELS: Record<string, string> = {
+  redirect: 'prompt hand-off',
+  menu: 'More menu',
+  panel: 'only lane (flags off)',
+  unknown: 'unknown (pre-via clients)',
 };
 
 const ASSIST_LABELS: Record<string, string> = {
@@ -292,6 +300,19 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
               </tbody>
             </table>
           )}
+          {(funnel.remixPaintedVia ?? []).some((row) => row.visits > 0) ? (
+            /*
+             * One line, not a table: the door split exists to settle a single
+             * hypothesis (does the prompt's redirect or the menu bring people
+             * to the brush), and it only means anything while `painted` > 0.
+             */
+            <p className="health-note">
+              Painter door:{' '}
+              {(funnel.remixPaintedVia ?? [])
+                .map((row) => `${REMIX_VIA_LABELS[row.via] ?? row.via} ${row.visits}`)
+                .join(' · ')}
+            </p>
+          ) : null}
         </div>
 
         <div className="funnel-block">

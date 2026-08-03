@@ -11015,3 +11015,77 @@ body.player-open {
     aspect-ratio: 16 / 9;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * Remix painter — the declared content editor inside the remix sheet.
+ * Reuses the Studio's board/palette/check classes (one grammar, two surfaces);
+ * this block only sets the sheet-sized frame around them: smaller thumb cells,
+ * a horizontal scroll for maps wider than a phone, and the chip row that
+ * stands in for the Studio's item list.
+ * ------------------------------------------------------------------------- */
+
+.remix-painter-host {
+  --editor-cell: clamp(18px, 5.6vw, 30px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0 8px;
+  border-bottom: 1px solid var(--panel-border, rgba(255, 255, 255, 0.12));
+}
+
+.remix-painter-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.remix-painter-title {
+  font-weight: 700;
+  font-size: 0.85rem;
+  opacity: 0.9;
+}
+
+.remix-painter {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.remix-painter .editor-board {
+  align-self: flex-start;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.remix-painter-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.remix-painter-item {
+  border: 1px solid var(--panel-border, rgba(255, 255, 255, 0.18));
+  background: transparent;
+  color: inherit;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.remix-painter-item.is-active {
+  background: var(--accent, #65f59a);
+  color: #10131c;
+  border-color: transparent;
+}
+
+.remix-painter-item.is-add,
+.remix-painter-item.is-remove {
+  min-width: 30px;
+}
+
+.remix-painter-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}

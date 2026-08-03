@@ -20,6 +20,29 @@ const EDITOR_JSON = JSON.stringify({
     dogScale: { type: 'number', min: 0.5, max: 3, default: 1, label: { en: 'Dog size', pl: 'Pies' } },
     tagline: { type: 'text', max: 40, default: 'go!', label: { en: 'Tagline', pl: 'Hasło' } },
   },
+  // A collection too, so the start response's `content` half — what the remix
+  // painter renders — is exercised against a full declaration, not a
+  // tunables-only one.
+  content: {
+    maps: {
+      widget: 'collection',
+      label: { en: 'Maps', pl: 'Mapy' },
+      itemLabel: { en: 'Map', pl: 'Mapa' },
+      min: 1,
+      max: 3,
+      item: {
+        widget: 'tilemap',
+        grid: { minCols: 3, maxCols: 8, minRows: 3, maxRows: 8 },
+        tiles: [
+          { key: 'path', char: '.', label: { en: 'Path', pl: 'Ścieżka' } },
+          { key: 'wall', char: '#', label: { en: 'Wall', pl: 'Mur' } },
+        ],
+        properties: {},
+        constraints: [],
+      },
+      defaults: [{ properties: {}, rows: ['...', '.#.', '...'] }],
+    },
+  },
 });
 
 const SOURCES: Record<string, string> = {
@@ -172,6 +195,11 @@ describe('remix routes', () => {
     expect(body.remixId).toBeTruthy();
     expect(body.params.dogScale.max).toBe(3);
     expect(body.values).toEqual({ dogScale: 1, tagline: 'go!' });
+    // The painter's half of the declaration rides along, defaults included —
+    // painted content then never comes back to the server, so this response is
+    // the painter's entire diet.
+    expect(body.content.maps.item.tiles.map((tile: { key: string }) => tile.key)).toEqual(['path', 'wall']);
+    expect(body.content.maps.defaults).toEqual([{ properties: {}, rows: ['...', '.#.', '...'] }]);
   });
 
   it('404s an unknown game and an expired remix id', async () => {
@@ -444,6 +472,9 @@ describe('remix across the two catalog eras', () => {
     const body = response.json();
     // The declaration came from a file read, not from an assembly.
     expect(body.params.dogScale.max).toBe(3);
+    // The painter's half too: the content lane is the one editing lane that
+    // works catalog-wide, precisely because it needs only this file.
+    expect(body.content.maps.defaults.length).toBe(1);
     expect(body.canAssist).toBe(true);
     // ...and the deep lane is offered too: a repo game's sources are reachable
     // through the bundler's walk. Whether this particular game assembles is

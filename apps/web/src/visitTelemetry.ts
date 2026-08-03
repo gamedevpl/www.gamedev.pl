@@ -68,7 +68,7 @@ export type VisitEvent =
   | { type: 'studio_step'; step: StudioStep; builder: BuilderDimension; detail?: StudioStepDetail }
   | { type: 'editor_step'; step: EditorStep }
   | { type: 'assist_step'; step: AssistStep }
-  | { type: 'remix_step'; step: RemixStep };
+  | { type: 'remix_step'; step: RemixStep; via?: RemixPaintedVia };
 
 /**
  * The creation funnel, in the order a creator meets it.
@@ -185,12 +185,24 @@ export type RemixStep =
   | 'wall_shown' // the sign-in wall dropped between typing and spending
   | 'signed_in' // came through the wall; the stashed request runs next
   | 'tuned'
+  | 'painted' // changed declared content in the remix painter — `tuned`'s sibling
   | 'asked'
   | 'applied'
   | 'handoff'
   | 'refused'
   | 'shared'
   | 'keep_clicked';
+
+/**
+ * Which door led to the painter: the router proposing it after a content-shaped
+ * request (`redirect`), the theater's More menu (`menu`), or the panel opening
+ * it itself because it was the only lane this game had (`panel` — the state of
+ * every collections game while the model flags are off). Recorded on `painted`
+ * only — the decision that shaped the doors (ops repo,
+ * remix-content-editing-plan §3.1) is a hypothesis about which one converts,
+ * and this dimension is what settles it.
+ */
+export type RemixPaintedVia = 'redirect' | 'menu' | 'panel';
 
 const FLUSH_AT = 5;
 const MAX_BATCH = 25;
@@ -514,11 +526,13 @@ export function recordAssistStep(step: AssistStep): void {
 
 let recordedRemixSteps = new Set<string>();
 
-export function recordRemixStep(step: RemixStep): void {
+export function recordRemixStep(step: RemixStep, options?: { via?: RemixPaintedVia }): void {
   if (!currentSession) return;
   if (recordedRemixSteps.has(step)) return;
   recordedRemixSteps.add(step);
-  currentSession.record({ type: 'remix_step', step });
+  // Dedupe means the via is the *first* door of the visit — which is the right
+  // reading: the question is which door brought someone to the brush at all.
+  currentSession.record({ type: 'remix_step', step, ...(options?.via ? { via: options.via } : {}) });
 }
 
 /** Test seam: installs a session without touching the DOM. */

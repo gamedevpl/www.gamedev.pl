@@ -1049,6 +1049,12 @@
       "faster": "make it faster",
       "look": "change the colours",
       "harder": "make it harder"
-    }
+    },
+    "editorOffer": "That's a map change — the level editor can do it.",
+    "openEditor": "Open the level editor",
+    "editorTitle": "Level editor",
+    "editorHide": "Hide",
+    "editorButton": "Level editor",
+    "sharedWithoutContent": "Link copied — it carries your settings; painted maps stay in this remix."
   }
 }

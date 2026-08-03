@@ -1,4 +1,4 @@
-import type { EditorLabel, EditorParamSpec, EditorParamValue } from './studioApi.js';
+import type { EditorCollectionSpec, EditorLabel, EditorParamSpec, EditorParamValue } from './studioApi.js';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
@@ -25,6 +25,13 @@ export type RemixSession = {
   remixId: string;
   params: Record<string, EditorParamSpec> | null;
   values: Record<string, EditorParamValue> | null;
+  /**
+   * The collections half of the game's declaration, defaults included — what
+   * the painter renders. Absent from an older server; null when the game
+   * declares only tunables. Painted content never travels back to the server:
+   * it lives in this session and reaches the game over the bridge like params.
+   */
+  content?: Record<string, EditorCollectionSpec> | null;
   canAssist: boolean;
   canCode: boolean;
   /** Absent from an older server; an empty list is the same as none. */
