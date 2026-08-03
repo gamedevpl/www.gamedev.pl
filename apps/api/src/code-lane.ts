@@ -43,10 +43,16 @@ export const MAX_REPAIR_ROUNDS = 2;
  * Temporary: trace every step of a lane run into the response and the log.
  *
  * The lane is three moving parts and, until this existed, the only way to see
- * any of them was to remix a real game and read the wreckage. Off by default,
- * flipped by `REMIX_DEBUG` on a deploy, and meant to be deleted once the lane's
- * hit rate is understood — `npm run remix:probe -w @gamedevpl/api` is the
- * durable way to watch a run, since it costs no player a session.
+ * any of them was to remix a real game and read the wreckage.
+ *
+ * On by owner decision (2026-08-03), while one question is open: how often does
+ * the lane land, and why does it miss? The switch is `vars.REMIX_DEBUG`, threaded
+ * through the deploy — so closing it again is a settings change and not a
+ * release. It is meant to close with the question, because it carries the
+ * player's own utterance and a window left open long enough becomes a habit.
+ *
+ * The durable way to watch a run is `npm run remix:probe -w @gamedevpl/api`,
+ * which costs no player a session and needs no flag at all.
  *
  * It carries the game's own source, which the player already has (the built
  * document contains it) — but it also carries the utterance, so it must not
