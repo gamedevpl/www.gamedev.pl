@@ -5,9 +5,11 @@ import {
   CONNECT_CLIENTS,
   getConnectPayload,
   rotateCreatorAgentKey,
+  type ConnectApiError,
   type ConnectClient,
   type ConnectPayload,
 } from './connectApi.js';
+import { isConnectCollapsed, setConnectCollapsed } from './connectCollapse.js';
 import { recordStudioStep } from './visitTelemetry.js';
 
 const CLIENT_LABEL_KEY: Record<ConnectClient, string> = {
@@ -56,6 +58,16 @@ type StudioConnectCardProps = {
    * disclosure so a mid-round stall does not look like a project reset.
    */
   mode?: ConnectCardMode;
+  /**
+   * When true (default), the creator can hide the tall card and restore it from a
+   * one-line strip — so connect steps do not own the whole thread after first look.
+   */
+  collapsible?: boolean;
+  /**
+   * When true, a non-self / inactive round yields nothing instead of an error
+   * (Details mounts this for every open game; only self rounds have a payload).
+   */
+  hideIfUnavailable?: boolean;
 };
 
 /**
@@ -66,12 +78,19 @@ type StudioConnectCardProps = {
  * Step 2: paste the keyless kickoff prompt (slug only; never a secret).
  * The full Authorization value is held in memory for Copy and never rendered.
  */
-export function StudioConnectCard({ token, agentConnected = false, mode = 'setup' }: StudioConnectCardProps) {
+export function StudioConnectCard({
+  token,
+  agentConnected = false,
+  mode = 'setup',
+  collapsible = true,
+  hideIfUnavailable = false,
+}: StudioConnectCardProps) {
   const { t, i18n } = useTranslation();
   const baseId = useId();
   const authHeaderRef = useRef<string | null>(null);
   const [payload, setPayload] = useState<ConnectPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [client, setClient] = useState<ConnectClient>('claudeCode');
   const [authMode, setAuthMode] = useState<ConnectAuthMode>(() => loadAuthMode());
@@ -79,13 +98,19 @@ export function StudioConnectCard({ token, agentConnected = false, mode = 'setup
   const [rotateArmed, setRotateArmed] = useState(false);
   const [rotating, setRotating] = useState(false);
   const [rotateError, setRotateError] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState(() => (collapsible ? isConnectCollapsed(token) : false));
 
   const isResume = mode === 'resume';
+
+  useEffect(() => {
+    setCollapsed(collapsible ? isConnectCollapsed(token) : false);
+  }, [token, collapsible]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setUnavailable(false);
     getConnectPayload(token)
       .then((next) => {
         if (!cancelled) {
@@ -94,19 +119,60 @@ export function StudioConnectCard({ token, agentConnected = false, mode = 'setup
           setLoading(false);
         }
       })
-      .catch(() => {
-        if (!cancelled) {
-          setError(t('connect.loadError'));
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const apiErr = err as ConnectApiError;
+        // 409 connect_unavailable = platform / inactive round — Details mounts us
+        // opportunistically and should stay quiet. Other failures still surface.
+        if (hideIfUnavailable && (apiErr.status === 409 || apiErr.message === 'connect_unavailable')) {
+          setUnavailable(true);
           setLoading(false);
+          return;
         }
+        setError(t('connect.loadError'));
+        setLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [token, t]);
+  }, [token, t, hideIfUnavailable]);
 
-  if (agentConnected) {
+  if (agentConnected || unavailable) {
     return null;
+  }
+
+  const hideCard = () => {
+    setConnectCollapsed(token, true);
+    setCollapsed(true);
+    recordStudioStep('connect_dismissed', 'self');
+  };
+
+  const showCard = () => {
+    setConnectCollapsed(token, false);
+    setCollapsed(false);
+    recordStudioStep('connect_restored', 'self');
+  };
+
+  if (collapsible && collapsed && !loading && !error) {
+    return (
+      <aside
+        className="studio-connect is-collapsed"
+        aria-label={t('connect.collapsed.title')}
+        data-connect-mode={mode}
+        data-testid="connect-collapsed"
+      >
+        <p className="studio-connect-waiting" aria-live="polite">
+          <span className="studio-connect-pulse" aria-hidden="true" />
+          {isResume ? t('connect.resume.waiting') : t('connect.waiting')}
+        </p>
+        <div className="studio-connect-collapsed-actions">
+          <button type="button" className="studio-connect-show" onClick={showCard}>
+            {t('connect.show')}
+          </button>
+          <span className="studio-connect-collapsed-hint">{t('connect.collapsed.hint')}</span>
+        </div>
+      </aside>
+    );
   }
 
   const chooseAuthMode = (next: ConnectAuthMode) => {
@@ -351,10 +417,18 @@ export function StudioConnectCard({ token, agentConnected = false, mode = 'setup
       className={`studio-connect${error ? ' is-error' : ''}${isResume ? ' is-resume' : ''}`}
       aria-labelledby={`${baseId}-title`}
       data-connect-mode={mode}
+      data-testid="connect-expanded"
     >
-      <h3 id={`${baseId}-title`} className="studio-connect-title">
-        {isResume ? t('connect.resume.title') : t('connect.title')}
-      </h3>
+      <div className="studio-connect-title-row">
+        <h3 id={`${baseId}-title`} className="studio-connect-title">
+          {isResume ? t('connect.resume.title') : t('connect.title')}
+        </h3>
+        {collapsible && !error ? (
+          <button type="button" className="studio-connect-hide" onClick={hideCard} data-testid="connect-hide">
+            {t('connect.hide')}
+          </button>
+        ) : null}
+      </div>
       {/* Lead is setup guidance — drop it once we only have an error, so a phone foot/thread
           is not mostly paragraph + red line. */}
       {!error ? <p className="studio-connect-lead">{isResume ? t('connect.resume.lead') : t('connect.lead')}</p> : null}

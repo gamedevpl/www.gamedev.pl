@@ -922,6 +922,12 @@
     "copyInstall": "Kopiuj",
     "copyKickoff": "Kopiuj prompt",
     "waiting": "Czekamy, aż Twój agent się odezwie…",
+    "hide": "Ukryj na razie",
+    "show": "Pokaż kroki połączenia",
+    "collapsed": {
+      "title": "Czekamy na Twojego agenta",
+      "hint": "Zawsze też w Szczegółach."
+    },
     "authMode": {
       "label": "Jak się połączyć",
       "key": "Wklej nagłówek",

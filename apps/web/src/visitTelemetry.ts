@@ -129,7 +129,14 @@ export type BuilderDimension = 'platform' | 'self';
  * agent signal (`msSinceStart` on `agent_signaled`), and gate verdict per visit.
  */
 export type StudioStep =
-  'builder_chosen' | 'connect_copied' | 'connect_deeplink' | 'agent_signaled' | 'gate_verdict' | 'round_opened';
+  | 'builder_chosen'
+  | 'connect_copied'
+  | 'connect_deeplink'
+  | 'connect_dismissed'
+  | 'connect_restored'
+  | 'agent_signaled'
+  | 'gate_verdict'
+  | 'round_opened';
 
 /**
  * Closed detail for studio steps that need one. `install` / `kickoff` are connect-card

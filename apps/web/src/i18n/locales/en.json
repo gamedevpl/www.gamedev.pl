@@ -918,6 +918,12 @@
     "copyInstall": "Copy",
     "copyKickoff": "Copy prompt",
     "waiting": "Waiting for your agent to check in…",
+    "hide": "Hide for now",
+    "show": "Show connect steps",
+    "collapsed": {
+      "title": "Waiting for your coding agent",
+      "hint": "Also in Details anytime."
+    },
     "authMode": {
       "label": "How to connect",
       "key": "Paste header",

@@ -427,6 +427,106 @@ describe('StudioConnectCard', () => {
     }
   });
 
+  it('hides the tall card behind a one-line strip and restores it on demand', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    localStorage.clear();
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(StudioConnectCard, { token: 'status-tok' }));
+      await flush();
+    });
+    await act(async () => {
+      await flush();
+    });
+
+    expect(container.querySelector('[data-testid="connect-expanded"]')).not.toBeNull();
+    const hide = container.querySelector<HTMLButtonElement>('[data-testid="connect-hide"]');
+    expect(hide?.textContent).toContain('Hide for now');
+
+    await act(async () => {
+      hide?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flush();
+    });
+
+    expect(container.querySelector('[data-testid="connect-expanded"]')).toBeNull();
+    expect(container.querySelector('[data-testid="connect-collapsed"]')).not.toBeNull();
+    expect(container.textContent).toContain('Show connect steps');
+    expect(container.textContent).toContain('Also in Details anytime');
+    expect(localStorage.getItem('gamedev_connect_collapsed:status-tok')).toBe('1');
+
+    await act(async () => {
+      const show = [...container.querySelectorAll<HTMLButtonElement>('button')].find((btn) =>
+        btn.textContent?.includes('Show connect steps'),
+      );
+      show?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flush();
+    });
+
+    expect(container.querySelector('[data-testid="connect-expanded"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="connect-kickoff"]')).not.toBeNull();
+    expect(localStorage.getItem('gamedev_connect_collapsed:status-tok')).toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
+  it('stays collapsed across remount when the preference is set', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    localStorage.setItem('gamedev_connect_collapsed:status-tok', '1');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(StudioConnectCard, { token: 'status-tok' }));
+      await flush();
+    });
+    await act(async () => {
+      await flush();
+    });
+
+    expect(container.querySelector('[data-testid="connect-collapsed"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="connect-kickoff"]')).toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
+  it('returns nothing when hideIfUnavailable and the round is not self', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: false,
+        status: 409,
+        json: async () => ({ error: 'connect_unavailable', reason: 'not_self_round', builder: 'platform' }),
+      })),
+    );
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(StudioConnectCard, { token: 'plat-tok', hideIfUnavailable: true, collapsible: false }));
+      await flush();
+    });
+    await act(async () => {
+      await flush();
+    });
+
+    expect(container.querySelector('.studio-connect')).toBeNull();
+    expect(container.textContent).toBe('');
+
+    await act(async () => root.unmount());
+  });
+
   it('resume mode leads with the kickoff and tucks MCP install under details', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');

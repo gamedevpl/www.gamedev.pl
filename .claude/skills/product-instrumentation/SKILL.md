@@ -151,7 +151,8 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
     sign-in wall, so there is no separate `signin_required` rung (that name already means
     the creation wall).
   - ~~BYOCA / self-build funnel unmeasured~~ — **closed 2026-08-01 (BY-08)**: `studio_step`
-    on the visit stream records `builder_chosen` → `connect_copied` → `agent_signaled` →
+    on the visit stream records `builder_chosen` → `connect_copied` (also `connect_deeplink`,
+    `connect_dismissed`, `connect_restored`) → `agent_signaled` →
     `gate_verdict`, each with a required `builder` dimension (`platform` | `self`). Optional
     `detail` is a closed enum (`install` | `kickoff` | `header` | `cursor` | `vscode` |
     `green` | `red` | `kit_outdated` | `creator` | `agent`). BY-18c adds sibling step

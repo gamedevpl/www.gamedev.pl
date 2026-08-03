@@ -23,6 +23,7 @@ import {
   type StudioShelfGame,
 } from './studioShelf.js';
 import { StudioAgentKeyPanel } from './StudioAgentKeyPanel.js';
+import { StudioConnectCard } from './StudioConnectCard.js';
 import { StudioCreatorAgentKeyPanel } from './StudioCreatorAgentKeyPanel.js';
 import { StudioOAuthClientsPanel } from './StudioOAuthClientsPanel.js';
 import { SubmissionStatusView } from './SubmissionStatusView.js';
@@ -1050,6 +1051,12 @@ function DetailsPanel({
       {/* Draft share is for pre-catalog games. A revise tip on a live slug already has a
           public play link — offering a second "share the draft" switch would lie. */}
       {!catalogLive && game.slug && game.lastKnownStatus !== 'abandoned' ? <DraftShareControl game={game} /> : null}
+
+      {/* Self-build connect steps live here too so the thread can dismiss them without
+          losing the path back — hideIfUnavailable keeps platform rounds silent. */}
+      {game.lastKnownStatus !== 'abandoned' && game.lastKnownStatus !== 'published' ? (
+        <StudioConnectCard token={game.token} collapsible={false} hideIfUnavailable />
+      ) : null}
 
       {game.slug && game.lastKnownStatus !== 'abandoned' ? <StudioAgentKeyPanel token={game.token} /> : null}
 
