@@ -708,7 +708,10 @@ export function SubmissionStatusView({
                     : {})}
                 />
 
-                {status.status !== 'abandoned' ? (
+                {/* Before the first agent signal there is nobody to receive a note — the
+                    connect card is the only move. Quiet / gate-green still keep the box
+                    so a creator can leave work for the next start. */}
+                {status.status !== 'abandoned' && selfCopy !== 'no_agent_yet' ? (
                   <FeedbackPanel
                     token={token}
                     published={status.status === 'published'}
@@ -886,7 +889,7 @@ export function SubmissionStatusView({
 
                 No mode to pick, either: a game is either published or it is not, and
                 there is only ever the current version to work on. */}
-            {status.status !== 'abandoned' ? (
+            {status.status !== 'abandoned' && selfCopy !== 'no_agent_yet' ? (
               <FeedbackPanel
                 token={token}
                 published={status.status === 'published'}

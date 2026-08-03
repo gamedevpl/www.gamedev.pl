@@ -69,8 +69,8 @@ describe('selfComposerRoute', () => {
     expect(selfComposerRoute({ builder: 'self' })).toBe('active');
   });
 
-  it('is waiting before first signal, when quiet, or at the delivery cap', () => {
-    expect(selfComposerRoute({ builder: 'self', stall: 'no_agent_yet' })).toBe('waiting');
+  it('hides the composer before first signal; waits when quiet or at the delivery cap', () => {
+    expect(selfComposerRoute({ builder: 'self', stall: 'no_agent_yet' })).toBeNull();
     expect(selfComposerRoute({ builder: 'self', stall: 'quiet' })).toBe('waiting');
     expect(
       selfComposerRoute({

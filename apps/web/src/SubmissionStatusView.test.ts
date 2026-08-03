@@ -628,6 +628,9 @@ describe('SubmissionStatusView', () => {
       // the conversation to a sliver on a phone (connect + play CTAs + composer).
       expect(container.querySelector('.studio-thread-scroll .studio-connect')).not.toBeNull();
       expect(container.querySelector('.studio-thread-foot .studio-connect')).toBeNull();
+      // Nobody is listening yet — a composer that "saves for later" is just noise beside
+      // the connect steps. It returns once the agent has checked in.
+      expect(container.querySelector('.status-composer')).toBeNull();
       expect(connectFetch).toHaveBeenCalledWith(
         expect.stringContaining('/api/submissions/await-token/connect'),
         expect.objectContaining({ credentials: 'include' }),
