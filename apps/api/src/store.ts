@@ -1903,6 +1903,16 @@ export interface Store {
    * record, or null when missing. Keeps the doc so generation never resets to 1.
    */
   revokeCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null>;
+  /**
+   * Re-dates a generation without bumping it, so it mints a valid key again.
+   *
+   * Mints are anchored to `updatedAt` (one generation, one key), which means a
+   * generation older than the key TTL would otherwise mint an expired key forever —
+   * and the only escape the panel offers is the destructive Rotate. Re-dating keeps
+   * the generation, so nothing that was already dead comes back: every key of this
+   * generation had expired before this could run.
+   */
+  touchCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null>;
   /** Persist a dynamically registered or CIMD-cached OAuth client. */
   createOAuthClient(record: OAuthClientRecord): Promise<void>;
   getOAuthClient(clientId: string): Promise<OAuthClientRecord | null>;
@@ -3449,6 +3459,14 @@ export class InMemoryStore implements Store {
       createdAt: existing.createdAt,
       updatedAt: at,
     };
+    this.creatorAgentKeys.set(ownerUid, next);
+    return { ...next };
+  }
+
+  async touchCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null> {
+    const existing = this.creatorAgentKeys.get(ownerUid);
+    if (!existing || existing.revokedAt) return null;
+    const next: CreatorAgentKeyRecord = { ...existing, updatedAt: at };
     this.creatorAgentKeys.set(ownerUid, next);
     return { ...next };
   }
@@ -5648,6 +5666,19 @@ export class FirestoreStore implements Store {
         createdAt: existing.createdAt,
         updatedAt: at,
       };
+      tx.set(docRef, next);
+      return next;
+    });
+  }
+
+  async touchCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null> {
+    const docRef = this.db.collection('creatorAgentKeys').doc(ownerUid);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef);
+      if (!snap.exists) return null;
+      const existing = snap.data() as CreatorAgentKeyRecord;
+      if (existing.revokedAt) return null;
+      const next: CreatorAgentKeyRecord = { ...existing, updatedAt: at };
       tx.set(docRef, next);
       return next;
     });

@@ -66,6 +66,32 @@ function generationAnchor(record: CreatorAgentKeyRecord, fallbackMs: number): nu
 }
 
 /**
+ * Mints this generation's key, re-dating the generation first if its anchor has aged
+ * past the key TTL.
+ *
+ * Anchoring alone would hand back an already-expired key forever once a generation is
+ * older than 90 days: the panel would still present it as active and offer it for
+ * copying, every `start` would reject it, and the only remedy the panel offers is the
+ * destructive Rotate. Re-dating keeps the generation — every key of it had already
+ * expired, so nothing dead is resurrected — and the creator's pasted header keeps
+ * working after one visit rather than needing a rotation they did not need.
+ */
+async function mintCurrentKey(
+  store: Store,
+  secret: string,
+  ownerUid: string,
+  record: CreatorAgentKeyRecord,
+  nowMs: number,
+): Promise<ReturnType<typeof mintPayload>> {
+  const payload = mintPayload(secret, ownerUid, record.keyGeneration, generationAnchor(record, nowMs));
+  if (payload.expiresAt * 1000 > nowMs) return payload;
+
+  const refreshed = await store.touchCreatorAgentKey(ownerUid, new Date(nowMs).toISOString());
+  if (!refreshed) return payload;
+  return mintPayload(secret, ownerUid, refreshed.keyGeneration, generationAnchor(refreshed, nowMs));
+}
+
+/**
  * Ends every agent session opened against this creator's still-open rounds.
  *
  * Bumping `keyGeneration` alone does not do what the Studio panel promises — "rotating
@@ -79,13 +105,21 @@ function generationAnchor(record: CreatorAgentKeyRecord, fallbackMs: number): nu
  * revocation the round-close path already performs, and `classifyAgentTokenAccess` already
  * rejects a stale generation on every tool call, so nothing new has to be trusted.
  *
- * Deliberately broader than the sentence promises: this also ends sessions opened with a
- * per-game key on those rounds. Rotation is a security action and should fail safe, and
- * the cost is recoverable — the agent calls `start` again for a fresh session.
+ * Deliberately broader than the sentence promises for *self* rounds: this also ends
+ * sessions opened with a per-game key on them. Rotation is a security action and should
+ * fail safe, and the cost is recoverable — the agent calls `start` again.
+ *
+ * Platform rounds are excluded, and that is not the same trade-off. A platform build's
+ * credential is not derived from the creator key — the creator key cannot even open a
+ * platform round (see PLATFORM_ROUND_REASON) — so bumping its generation would stall a
+ * build for no security gain at all. Failing safe means revoking what the key could
+ * reach, not everything the creator owns.
  */
 async function endOpenAgentSessions(store: Store, ownerUid: string): Promise<number> {
   const owned = await store.listSubmissionsByOwner(ownerUid);
-  const open = owned.filter((job) => !job.abandonedAt && isActiveBuildRound(job));
+  const open = owned.filter(
+    (job) => !job.abandonedAt && isActiveBuildRound(job) && (job.builder ?? 'platform') === 'self',
+  );
   let ended = 0;
   for (const job of open) {
     if ((await store.bumpRoundGeneration(job.issueNumber)) !== null) ended += 1;
@@ -116,7 +150,7 @@ export function registerCreatorAgentKeyRoutes(app: FastifyInstance, options: Cre
     }
 
     const record = existing ?? (await store.ensureCreatorAgentKey(uid, at));
-    const payload = mintPayload(submissionTokenSecret, uid, record.keyGeneration, generationAnchor(record, now()));
+    const payload = await mintCurrentKey(store, submissionTokenSecret, uid, record, now());
     return reply.header('Cache-Control', 'no-store').send(payload);
   });
 
@@ -133,7 +167,7 @@ export function registerCreatorAgentKeyRoutes(app: FastifyInstance, options: Cre
 
       const at = new Date(now()).toISOString();
       const record = await store.reactivateCreatorAgentKey(uid, at);
-      const payload = mintPayload(submissionTokenSecret, uid, record.keyGeneration, generationAnchor(record, now()));
+      const payload = await mintCurrentKey(store, submissionTokenSecret, uid, record, now());
       return reply.header('Cache-Control', 'no-store').send(payload);
     },
   );
@@ -170,13 +204,18 @@ export function registerCreatorAgentKeyRoutes(app: FastifyInstance, options: Cre
       if (!uid) return reply.status(401).send({ error: 'unauthorized' });
 
       const existing = await store.getCreatorAgentKey(uid);
-      if (!existing || existing.revokedAt) {
-        return reply.status(404).send({ error: 'not_found' });
-      }
+      if (!existing) return reply.status(404).send({ error: 'not_found' });
 
       const at = new Date(now()).toISOString();
-      const revoked = await store.revokeCreatorAgentKey(uid, at);
-      if (!revoked) return reply.status(404).send({ error: 'not_found' });
+      // Already revoked is not "nothing to do": if a previous attempt persisted the
+      // revocation and then failed to end the sessions, returning 404 here would leave
+      // those sessions writable forever, because no retry could ever reach the cleanup.
+      // Ending sessions is idempotent — a generation bump on an already-dead round costs
+      // nothing — so the retry finishes the job the first attempt started.
+      if (!existing.revokedAt) {
+        const revoked = await store.revokeCreatorAgentKey(uid, at);
+        if (!revoked) return reply.status(404).send({ error: 'not_found' });
+      }
       // Revoke is the stronger of the two controls, so it must at least do what rotate
       // does — a revoked key that leaves live sessions writing is not a revocation.
       await endOpenAgentSessions(store, uid);
