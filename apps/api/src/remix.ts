@@ -492,13 +492,29 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       // overwhelming majority of remixes never ask for a rebuild — the cost lands
       // on the request that needs it, once per session.
       if (!session.fromStore && !session.sourcesLoaded) {
-        const sources = options.githubClient
-          ? await options.githubClient.getGameSourceMap(session.ref, session.slug)
-          : null;
+        let sources: Record<string, string> | null;
+        try {
+          sources = options.githubClient
+            ? await options.githubClient.getGameSourceMap(session.ref, session.slug)
+            : null;
+        } catch (error) {
+          // A pipeline that broke is not a game we decided not to support, and
+          // the two must not arrive as the same sentence. This one is ours: it
+          // is logged with the cause, and answered as a fault the player can
+          // retry rather than as a limit they cannot.
+          request.log.error(
+            { err: error, slug: session.slug, ref: session.ref },
+            'remix code lane could not read a game source map',
+          );
+          return reply.status(503).send({
+            error: 'editing is resting right now — the game still plays',
+            reason: 'sources_unavailable',
+          });
+        }
         if (!sources) {
-          // A game whose sources cannot be assembled cannot be edited; that is a
-          // fact about this game, not a failure of the request.
-          return reply.status(409).send({ error: 'this game cannot be remixed that deeply yet' });
+          // No entry point. A fact about this game, and the only absence this
+          // route reports as one.
+          return reply.status(409).send({ error: 'this game cannot be remixed that deeply yet', reason: 'no_sources' });
         }
         // The declaration already in hand stays: it is not part of the import
         // graph, and the params lane is still reading it.
