@@ -67,7 +67,7 @@ describe('code lane', () => {
     expect(prompts[1]).not.toContain("import './game/runtime.ts';");
   });
 
-  it('repairs once from the compiler error, sending errors and not the file again', async () => {
+  it('repairs once, re-sending the region and the rejected attempt with the errors', async () => {
     const { client, prompts } = stubClient([
       { decision: 'edit', file: 'game/runtime.ts', name: 'startGame' },
       { replacement: 'export function startGame() { return ; }' },
@@ -84,7 +84,13 @@ describe('code lane', () => {
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.rounds).toBe(1);
     expect(prompts[2]).toContain('Unexpected ";"');
-    expect(prompts[2]).not.toContain('const speed = 0.16;');
+    // The region, again. The old prompt sent the errors alone and asserted the
+    // region's *absence* here — encoding as a requirement the very bug that had
+    // repair rounds answering with code from an unrelated game, because these
+    // calls carry no history and the model had never seen what it was fixing.
+    expect(prompts[2]).toContain('const speed = 0.16;');
+    // And the attempt being corrected, so "fix this" has a `this`.
+    expect(prompts[2]).toContain('export function startGame() { return ; }');
   });
 
   it('gives up honestly after the repair cap instead of shipping a broken build', async () => {

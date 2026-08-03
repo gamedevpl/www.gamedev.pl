@@ -26,9 +26,14 @@ import {
  *    game — the only way new code enters is a fresh document. Building it here
  *    also keeps CSP, the AI-Act provenance marking, the credential scan and the
  *    byte caps in the one place that owns serve policy.
- *  - **Repair is bounded and cheap.** A failed build feeds back only the compiler
- *    errors, not the file again; two rounds, then an honest failure. A draft two
- *    rounds from compiling is better finished by an agent than by this loop.
+ *  - **Repair is bounded, and it re-sends everything.** A failed candidate goes
+ *    back with the region, the context, the rejected attempt and the errors —
+ *    two rounds, then an honest failure. It used to send the errors alone, on
+ *    the reasoning that the model still had the region from its own last turn.
+ *    It never did: these calls are stateless, so that round was asking a model
+ *    to fix code it had never seen, and it answered with code from a different
+ *    game entirely. Re-sending is not the expensive part of a round; a wasted
+ *    round is.
  *
  * Legal class is deliberately unchanged: stateless text generation plus our own
  * compile. No agent, no tools, no credentials in a runtime.
@@ -48,6 +53,8 @@ export const MAX_REPAIR_ROUNDS = 2;
  * anything the model invents past the cut.
  */
 export const MAX_KIT_CHARS = 80_000;
+/** Ceiling on the rejected attempt quoted back to a repair round. */
+export const MAX_PREVIOUS_CHARS = 24_000;
 
 /**
  * Temporary: trace every step of a lane run into the response and the log.
@@ -419,11 +426,13 @@ export class VertexCodeLane {
     const slice = sliceRegion(original, region);
     if (debug) trace.slice = clip(slice);
     let errors: string[] = [];
+    /** The rejected attempt, so a repair round can see what it is correcting. */
+    let previous = '';
     let summary = bilingual(picked.summary);
 
     for (let round = 0; round <= (this.options.maxRepairRounds ?? MAX_REPAIR_ROUNDS); round += 1) {
       let edit: z.infer<typeof EditSchema>;
-      const prompt = this.editPrompt(request, region, slice, errors, regions);
+      const prompt = this.editPrompt(request, region, slice, errors, regions, previous);
       this.options.observe?.editPrompt?.(round, prompt);
       try {
         edit = await this.call(
@@ -450,11 +459,13 @@ export class VertexCodeLane {
             ...(debug ? { trace } : {}),
           };
         }
+        previous = '';
         errors = [`your previous reply could not be read as JSON (${String(error).slice(0, 120)})`];
         if (debug) trace.rounds.push({ round, replacement: '', buildErrors: errors });
         continue;
       }
       summary = bilingual(edit.summary) ?? summary;
+      previous = edit.replacement;
       this.options.observe?.replacement?.(round, edit.replacement);
 
       if (debug) trace.rounds.push({ round, replacement: clip(edit.replacement), buildErrors: [] });
@@ -508,6 +519,14 @@ Pick the ONE region a competent developer would edit to satisfy the request belo
 
 Rules:
 - "file" and "name" must be copied exactly from the list. Never invent one.
+- Prefer the SMALLEST region that already contains the thing being changed. Whoever
+  edits it must rewrite it whole, so a 400-line region is rewritten from memory and
+  loses details; a 20-line one that defines the colour, speed or shape in question is
+  both likelier to be right and safer to be wrong about. The line count is given for
+  each region — use it.
+- A large "set the game up" or "start" region is where things are *assembled*, not
+  where they are *defined*. If a smaller region names the thing itself, pick that
+  one instead.
 - If the request is not about changing this game, or asks for something harmful, sexual, hateful, or aimed at a real person, answer {"decision":"reject"}.
 - "summary" is one short sentence in English (en) and Polish (pl) describing the change you expect to make.
 
@@ -526,16 +545,48 @@ ${request.utterance}
     slice: string,
     errors: string[],
     regions: SymbolRegion[],
+    previous: string,
   ): string {
     if (errors.length > 0) {
-      // The repair turn: errors only. The model wrote the code it is fixing.
-      return `Your previous replacement for ${region.file}:${region.name} was rejected:
+      // The repair turn used to send the errors and nothing else, on the stated
+      // reasoning that "the model still has the region from its own last turn".
+      // It does not. Every call here is a standalone, stateless generation —
+      // that is a legal invariant of this system, not an implementation detail —
+      // so the model was being asked to fix code it had never seen. Observed in
+      // production on a request to recolour a car: round 0 was a good edit with
+      // one type error, round 1 came back as a class method for a different
+      // program, and round 2 as an asteroids game. A repair round was not
+      // repairing anything; it was overwriting a nearly-correct answer with a
+      // hallucination, and the second and third rounds were worse than not
+      // running at all.
+      return `You are fixing ONE region of a small browser game written in TypeScript.
 
+Game: ${request.game?.title ?? request.slug}
+Region: ${region.file}:${region.name} (lines ${region.startLine}-${region.endLine})
+${this.editContextBlock(request, region, regions)}
+The region as it is now, unmodified — your replacement replaces exactly this:
+\`\`\`ts
+${slice}
+\`\`\`
+
+You already tried this replacement, and it was REJECTED:
+\`\`\`ts
+${previous.slice(0, MAX_PREVIOUS_CHARS)}
+\`\`\`
+
+It was rejected for these reasons:
 ${errors.join('\n')}
 
-Return a corrected replacement for the same region. Same rules as before: the whole region, TypeScript only, no imports of anything outside this game.
+Fix ONLY those errors. Keep everything else about your replacement the same — the
+errors are usually one wrong name, not a sign that the approach was wrong. Where an
+error lists what was \`available\`, choose from that list. If satisfying the request
+would need a change outside this region, do the part that belongs here and leave the
+rest alone rather than inventing something.
 
-Respond STRICTLY as JSON and nothing else — no code fence before or after it, and every newline inside a string written as \\n:
+Return the COMPLETE replacement for the region, not a diff and not a fragment.
+
+Respond STRICTLY as JSON and nothing else — no code fence before or after it, and
+every newline inside a string written as \\n:
 {"replacement":"...","summary":{"en":"...","pl":"..."}}`;
     }
     return `You are editing ONE region of a small browser game written in TypeScript.
