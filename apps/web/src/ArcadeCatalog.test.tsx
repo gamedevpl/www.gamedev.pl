@@ -116,7 +116,7 @@ describe('ArcadeCatalog lazy media', () => {
     installIntersectionObserverMock();
     sessionStorage.setItem(
       'gdpl.catalogSortSignals',
-      JSON.stringify({ items: [], popularity: [], lastPlayed: [], newest: [] }),
+      JSON.stringify({ viewer: '', items: [], popularity: [], lastPlayed: [], newest: [] }),
     );
     await i18n.changeLanguage('en');
   });
@@ -315,6 +315,36 @@ describe('ArcadeCatalog lazy media', () => {
       root.unmount();
     });
   });
+
+  it('paints the grid with catalog order when the signals fetch rejects', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    sessionStorage.clear();
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('network down'));
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(ArcadeCatalog, {
+          catalogStatus: 'ready',
+          catalogError: null,
+          catalogEntries: entries,
+          onPlayGame: vi.fn(),
+          onPlayTogether: vi.fn(),
+          onRetryCatalog: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    expect(container.querySelectorAll('.catalog-card')).toHaveLength(2);
+    expect(container.querySelector('.catalog-state')).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });
 
 describe('ArcadeCatalog shared-world badge', () => {
@@ -322,7 +352,7 @@ describe('ArcadeCatalog shared-world badge', () => {
     installIntersectionObserverMock();
     sessionStorage.setItem(
       'gdpl.catalogSortSignals',
-      JSON.stringify({ items: [], popularity: [], lastPlayed: [], newest: [] }),
+      JSON.stringify({ viewer: '', items: [], popularity: [], lastPlayed: [], newest: [] }),
     );
     await i18n.changeLanguage('en');
   });
@@ -381,7 +411,7 @@ describe('ArcadeCatalog soft-refresh failure', () => {
     installIntersectionObserverMock();
     sessionStorage.setItem(
       'gdpl.catalogSortSignals',
-      JSON.stringify({ items: [], popularity: [], lastPlayed: [], newest: [] }),
+      JSON.stringify({ viewer: '', items: [], popularity: [], lastPlayed: [], newest: [] }),
     );
     await i18n.changeLanguage('en');
   });
@@ -437,7 +467,7 @@ describe('ArcadeCatalog in-progress builds', () => {
     installIntersectionObserverMock();
     sessionStorage.setItem(
       'gdpl.catalogSortSignals',
-      JSON.stringify({ items: [], popularity: [], lastPlayed: [], newest: [] }),
+      JSON.stringify({ viewer: '', items: [], popularity: [], lastPlayed: [], newest: [] }),
     );
     await i18n.changeLanguage('en');
   });

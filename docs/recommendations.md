@@ -81,6 +81,10 @@ recent publishes) is cached in-process for ~5 minutes and coalesced while refres
 those Firestore reads otherwise run on every home-page load. Personal affinity and
 `?recent=` hints are applied per request on top of that shared snapshot.
 
+The browser also caches the last payload in `sessionStorage`, keyed to the signed-in
+viewer (cleared on logout), so a reload can paint immediately without flashing the
+wrong account's affinity.
+
 ## UI
 
 [`ArcadeCatalog`](../apps/web/src/ArcadeCatalog.tsx) shows the My games / Not played

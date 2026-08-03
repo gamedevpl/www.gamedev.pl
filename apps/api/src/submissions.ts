@@ -405,7 +405,13 @@ function sendMedia(
   if (range === 'invalid') {
     return reply.status(416).header('Content-Range', `bytes */${size}`).send();
   }
-  if (range) {
+  // If-Range: only honour Range when the validator still matches this representation.
+  // A mismatched ETag means the client may stitch bytes from two video versions.
+  const ifRangeRaw = request.headers['if-range'];
+  const ifRange = typeof ifRangeRaw === 'string' ? ifRangeRaw.trim() : undefined;
+  const rangeAllowed =
+    !ifRange || ifRange === entry.etag || ifRange.replace(/^W\//, '') === entry.etag.replace(/^W\//, '');
+  if (range && rangeAllowed) {
     const chunk = entry.body.subarray(range.start, range.end + 1);
     return reply
       .status(206)

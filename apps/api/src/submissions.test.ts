@@ -2296,6 +2296,22 @@ describe('published game media route', () => {
     expect(unsatisfiable.statusCode).toBe(416);
     expect(unsatisfiable.headers['content-range']).toBe('bytes */10');
 
+    const staleIfRange = await app.inject({
+      method: 'GET',
+      url: '/api/games/foo/media/gameplay.mp4',
+      headers: { range: 'bytes=2-5', 'if-range': '"not-this-etag"' },
+    });
+    expect(staleIfRange.statusCode).toBe(200);
+    expect(Buffer.from(staleIfRange.rawPayload)).toEqual(Buffer.from(body));
+
+    const matchingIfRange = await app.inject({
+      method: 'GET',
+      url: '/api/games/foo/media/gameplay.mp4',
+      headers: { range: 'bytes=2-5', 'if-range': full.headers['etag'] as string },
+    });
+    expect(matchingIfRange.statusCode).toBe(206);
+    expect(Buffer.from(matchingIfRange.rawPayload)).toEqual(Buffer.from([2, 3, 4, 5]));
+
     await app.close();
   });
 

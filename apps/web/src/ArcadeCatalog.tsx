@@ -381,11 +381,29 @@ function payloadToSignals(payload: CatalogSortPayload): CatalogSortSignals {
   };
 }
 
-function initialSignals(): { signals: CatalogSortSignals; ready: boolean } {
+function sameCatalogSortSignals(a: CatalogSortSignals, b: CatalogSortSignals): boolean {
+  if (a.recommended.length !== b.recommended.length || a.newest.length !== b.newest.length) return false;
+  if (a.sessions.size !== b.sessions.size || a.affinityLastPlayed.size !== b.affinityLastPlayed.size) return false;
+  for (let i = 0; i < a.recommended.length; i++) {
+    if (a.recommended[i] !== b.recommended[i]) return false;
+  }
+  for (let i = 0; i < a.newest.length; i++) {
+    if (a.newest[i] !== b.newest[i]) return false;
+  }
+  for (const [slug, sessions] of a.sessions) {
+    if (b.sessions.get(slug) !== sessions) return false;
+  }
+  for (const [slug, at] of a.affinityLastPlayed) {
+    if (b.affinityLastPlayed.get(slug) !== at) return false;
+  }
+  return true;
+}
+
+function initialSignals(viewerUid: string | null): { signals: CatalogSortSignals; ready: boolean } {
   if (typeof sessionStorage === 'undefined') {
     return { signals: EMPTY_CATALOG_SORT_SIGNALS, ready: false };
   }
-  const cached = readCachedCatalogSortPayload();
+  const cached = readCachedCatalogSortPayload(viewerUid);
   if (!cached) return { signals: EMPTY_CATALOG_SORT_SIGNALS, ready: false };
   return { signals: payloadToSignals(cached), ready: true };
 }
@@ -432,6 +450,7 @@ export function ArcadeCatalog({
 }: ArcadeCatalogProps) {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
+  const viewerUid = user?.uid ?? null;
   const locale = i18n.language;
   const [sortMode, setSortMode] = useState<CatalogSortMode>(() =>
     typeof localStorage === 'undefined' ? DEFAULT_CATALOG_SORT : readCatalogSortMode(),
@@ -441,27 +460,45 @@ export function ArcadeCatalog({
   );
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const sortMenuRef = useRef<HTMLDivElement | null>(null);
-  const [signals, setSignals] = useState<CatalogSortSignals>(() => initialSignals().signals);
-  const [signalsReady, setSignalsReady] = useState(() => initialSignals().ready);
-  // If sessionStorage already gave us an order, a background refresh must not reshuffle
-  // the painted grid. Explicit bumps (after play) still re-rank.
-  const hadCachedSignalsRef = useRef(signalsReady);
+  const [signals, setSignals] = useState<CatalogSortSignals>(() => initialSignals(viewerUid).signals);
+  const [signalsReady, setSignalsReady] = useState(() => initialSignals(viewerUid).ready);
   const [creatorItems, setCreatorItems] = useState<CreatorGameItem[]>([]);
 
   // Fetch sort signals as soon as the arcade mounts — in parallel with App's
   // catalog fetch — so cold load waits for max(catalog, signals), not their sum.
+  // Cache is viewer-scoped; a matching cache paints immediately, then the network
+  // response replaces it only when the payload actually differs (account switch,
+  // affinity drift) or an explicit post-play refresh asked for a re-rank.
   useEffect(() => {
     let cancelled = false;
-    const replaceOrder = !hadCachedSignalsRef.current || recommendationsRefreshKey > 0;
-    void fetchCatalogSortSignals(getRecentPlays()).then((payload) => {
-      if (cancelled) return;
-      if (replaceOrder) setSignals(payloadToSignals(payload));
+    const cached = readCachedCatalogSortPayload(viewerUid);
+    if (cached) {
+      setSignals(payloadToSignals(cached));
       setSignalsReady(true);
-    });
+    } else {
+      setSignalsReady(false);
+    }
+    const forceReplace = recommendationsRefreshKey > 0;
+    void fetchCatalogSortSignals(getRecentPlays(), viewerUid)
+      .then((payload) => {
+        if (cancelled) return;
+        const next = payloadToSignals(payload);
+        if (forceReplace) {
+          setSignals(next);
+        } else {
+          setSignals((prev) => (sameCatalogSortSignals(prev, next) ? prev : next));
+        }
+        setSignalsReady(true);
+      })
+      .catch(() => {
+        // Transport failure must not leave the arcade stuck on the loading mascot.
+        if (cancelled) return;
+        setSignalsReady(true);
+      });
     return () => {
       cancelled = true;
     };
-  }, [recommendationsRefreshKey]);
+  }, [recommendationsRefreshKey, viewerUid]);
 
   // Creator games (published + in progress) — only while the gallery is visible.
   useEffect(() => {

@@ -2,6 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  clearCachedCatalogSortPayload,
   orderCatalogByRecommendations,
   readCachedCatalogSortPayload,
   writeCachedCatalogSortPayload,
@@ -34,18 +35,37 @@ describe('catalog sort signals cache', () => {
     sessionStorage.clear();
   });
 
-  it('round-trips a payload through sessionStorage', () => {
-    writeCachedCatalogSortPayload({
+  it('round-trips a payload through sessionStorage for a viewer', () => {
+    writeCachedCatalogSortPayload(
+      {
+        items: [{ slug: 'neon-drift', reason: 'popular' }],
+        popularity: [{ slug: 'neon-drift', sessions: 3 }],
+        lastPlayed: [{ slug: 'mid-game', lastPlayedAt: '2026-07-29T12:00:00.000Z' }],
+        newest: ['pixel-pong', 'neon-drift'],
+      },
+      'g:alice',
+    );
+    expect(readCachedCatalogSortPayload('g:alice')).toEqual({
       items: [{ slug: 'neon-drift', reason: 'popular' }],
       popularity: [{ slug: 'neon-drift', sessions: 3 }],
       lastPlayed: [{ slug: 'mid-game', lastPlayedAt: '2026-07-29T12:00:00.000Z' }],
       newest: ['pixel-pong', 'neon-drift'],
     });
-    expect(readCachedCatalogSortPayload()).toEqual({
-      items: [{ slug: 'neon-drift', reason: 'popular' }],
-      popularity: [{ slug: 'neon-drift', sessions: 3 }],
-      lastPlayed: [{ slug: 'mid-game', lastPlayedAt: '2026-07-29T12:00:00.000Z' }],
-      newest: ['pixel-pong', 'neon-drift'],
-    });
+    expect(readCachedCatalogSortPayload('g:bob')).toBeNull();
+    expect(readCachedCatalogSortPayload(null)).toBeNull();
+  });
+
+  it('ignores legacy unscoped cache entries', () => {
+    sessionStorage.setItem(
+      'gdpl.catalogSortSignals',
+      JSON.stringify({ items: [{ slug: 'old', reason: 'popular' }], popularity: [], lastPlayed: [], newest: [] }),
+    );
+    expect(readCachedCatalogSortPayload(null)).toBeNull();
+  });
+
+  it('clearCachedCatalogSortPayload drops the entry', () => {
+    writeCachedCatalogSortPayload({ items: [], popularity: [], lastPlayed: [], newest: [] }, 'g:alice');
+    clearCachedCatalogSortPayload();
+    expect(readCachedCatalogSortPayload('g:alice')).toBeNull();
   });
 });
