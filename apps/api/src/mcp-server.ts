@@ -2057,6 +2057,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       },
       description:
         'Fetch one allowlisted exemplar as a signed tarball URL. Unknown or non-allowlisted slugs fail. ' +
+        'Requires a client that can fetch a URL — if yours cannot, use list_example_files and ' +
+        'read_example_file instead, which return the same sources inline. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
         type: 'object',
@@ -2080,6 +2082,88 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const body = res.json() as { error?: string; message?: string };
         if (res.statusCode !== 200) {
           return toolErr(body.message ?? body.error ?? `example failed (${res.statusCode})`, body);
+        }
+        return toolOk(body);
+      },
+    },
+
+    list_example_files: {
+      annotations: { title: 'List an exemplar’s files', ...READS },
+      description:
+        'List the source files inside an allowlisted exemplar game, without downloading its tarball. ' +
+        'Use this (and read_example_file) when you cannot fetch URLs — get_example returns a link that ' +
+        'a client without shell or network access cannot follow. ' +
+        BEHAVIOURAL_CONTRACT,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          sessionKey: SESSION_KEY_PROP,
+          slug: { type: 'string', description: 'Allowlisted exemplar slug from list_examples.' },
+          prefix: { type: 'string', description: 'Optional path prefix to narrow the listing.' },
+          limit: { type: 'integer', description: 'Max paths to return (default 200, max 500).' },
+          offset: { type: 'integer', description: 'Skip this many matching paths.' },
+        },
+        required: ['slug'],
+      },
+      handler: async (args, ctx) => {
+        const auth = await resolveAuth(ctx, args);
+        if (!('channelToken' in auth)) return auth;
+        const slug = typeof args.slug === 'string' ? args.slug.trim() : '';
+        if (!slug) return toolErr('slug is required');
+        const query = new URLSearchParams();
+        if (typeof args.prefix === 'string' && args.prefix.trim()) query.set('prefix', args.prefix.trim());
+        if (typeof args.limit === 'number') query.set('limit', String(args.limit));
+        if (typeof args.offset === 'number') query.set('offset', String(args.offset));
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        const res = await injectChannel(
+          ctx.request,
+          'GET',
+          `/api/agent/build/examples/${encodeURIComponent(slug)}/files${suffix}`,
+          auth.channelToken,
+        );
+        const body = res.json() as { error?: string; message?: string };
+        if (res.statusCode !== 200) {
+          return toolErr(body.message ?? body.error ?? `example files failed (${res.statusCode})`, body);
+        }
+        return toolOk(body);
+      },
+    },
+
+    read_example_file: {
+      annotations: { title: 'Read one exemplar file', ...READS },
+      description:
+        'Read one file from an allowlisted exemplar game, inline — no fetching required. ' +
+        'Paths come from list_example_files and may be given relative (game.ts) or full (games/<slug>/game.ts). ' +
+        'Binary files need encoding=base64. Large files are refused rather than truncated. ' +
+        BEHAVIOURAL_CONTRACT,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          sessionKey: SESSION_KEY_PROP,
+          slug: { type: 'string', description: 'Allowlisted exemplar slug from list_examples.' },
+          path: { type: 'string', description: 'File path within the exemplar (e.g. SPEC.md or game.ts).' },
+          encoding: { type: 'string', enum: ['utf8', 'base64'], description: 'utf8 for text (default).' },
+        },
+        required: ['slug', 'path'],
+      },
+      handler: async (args, ctx) => {
+        const auth = await resolveAuth(ctx, args);
+        if (!('channelToken' in auth)) return auth;
+        const slug = typeof args.slug === 'string' ? args.slug.trim() : '';
+        const path = typeof args.path === 'string' ? args.path.trim() : '';
+        if (!slug) return toolErr('slug is required');
+        if (!path) return toolErr('path is required — call list_example_files to see what an exemplar contains');
+        const query = new URLSearchParams({ path });
+        if (args.encoding === 'utf8' || args.encoding === 'base64') query.set('encoding', args.encoding);
+        const res = await injectChannel(
+          ctx.request,
+          'GET',
+          `/api/agent/build/examples/${encodeURIComponent(slug)}/file?${query.toString()}`,
+          auth.channelToken,
+        );
+        const body = res.json() as { error?: string; message?: string };
+        if (res.statusCode !== 200) {
+          return toolErr(body.message ?? body.error ?? `example file failed (${res.statusCode})`, body);
         }
         return toolOk(body);
       },
@@ -2430,10 +2514,15 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         required: ['available', 'deliveryId'],
       },
       description:
-        'Fetch the media the gate itself produced for a delivery (default: latest): capture screenshots and a ' +
-        'gameplay MP4 as short-lived signed URLs, plus the opening frame attached inline as an image. ' +
-        'Use it when you cannot run the game yourself — check the frames for visual defects (blank canvas, ' +
-        'missing sprites) before resubmitting, and share the screenshots/video with the creator. ' +
+        'Fetch the media the gate itself produced for a delivery (default: latest). Screenshots come back ' +
+        'BOTH as attached images (no fetching needed — use these) and as short-lived signed URLs; the ' +
+        'gameplay MP4 is a URL only. ' +
+        'Use it when you cannot run the game yourself — look at the attached frames for visual defects ' +
+        '(blank canvas, missing sprites) before resubmitting, and show them to the creator. ' +
+        'frames=opening (default) attaches one frame; frames=all attaches up to 3; frames=none skips them ' +
+        'when you only want the URLs. ' +
+        'If your client cannot open URLs, do not try and do not report the video as broken — hand the link ' +
+        'to the creator, who can, and describe the game from the attached frames. ' +
         'Read-only over the gate run that already happened; it never triggers a build, and media exists only ' +
         'after a delivery has been gated. Terminal receipt: like get_gate_verdict, the latest delivery stays ' +
         'readable after green closes the round. ' +
@@ -2443,6 +2532,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         properties: {
           sessionKey: SESSION_KEY_PROP,
           deliveryId: { type: 'string', description: "Delivery version id; default is the job's latest." },
+          frames: {
+            type: 'string',
+            enum: ['opening', 'all', 'none'],
+            description:
+              'How many screenshots to attach as images: opening (default, one), all (up to 3), none (URLs only).',
+          },
         },
         required: [],
       },
@@ -2452,28 +2547,34 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
         const deliveryId =
           typeof args.deliveryId === 'string' && args.deliveryId.trim() ? args.deliveryId.trim() : null;
-        const path = deliveryId
-          ? `/api/agent/build/media?version=${encodeURIComponent(deliveryId)}`
-          : '/api/agent/build/media';
-        const res = await injectChannel(ctx.request, 'GET', path, auth.channelToken);
+        const frames = args.frames === 'all' || args.frames === 'none' ? args.frames : 'opening';
+        const query = new URLSearchParams({ frames });
+        if (deliveryId) query.set('version', deliveryId);
+        const res = await injectChannel(
+          ctx.request,
+          'GET',
+          `/api/agent/build/media?${query.toString()}`,
+          auth.channelToken,
+        );
         const body = res.json() as Record<string, unknown> & {
           error?: string;
-          openingShot?: { file?: string; png?: string };
+          frames?: Array<{ file?: string; name?: string; png?: string }>;
         };
         if (res.statusCode !== 200) {
           return toolErr(body.error ?? `gate media failed (${res.statusCode})`);
         }
-        // The inline frame travels as an MCP image block, not inside the JSON body —
-        // duplicating ~700 KB of base64 into the text content would bloat every client's
-        // context for no benefit, and image blocks are the shape chat surfaces render.
-        const { openingShot, ...rest } = body;
+        // Frames travel as MCP image blocks, never inside the JSON body: base64 in the
+        // text content would double the cost and no client renders it. The structured
+        // half keeps the names so the model can talk about what it was shown.
+        const { frames: inlineFrames, ...rest } = body;
+        const attached = (inlineFrames ?? []).filter((frame) => typeof frame.png === 'string' && frame.png);
         const structured = {
           ...rest,
-          ...(openingShot?.file ? { openingShot: { file: openingShot.file, attached: Boolean(openingShot.png) } } : {}),
+          frames: attached.map((frame) => ({ file: frame.file, name: frame.name, attached: true })),
         };
         const result = toolOk(structured);
-        if (openingShot?.png) {
-          result.content.push({ type: 'image', data: openingShot.png, mimeType: 'image/png' });
+        for (const frame of attached) {
+          result.content.push({ type: 'image', data: frame.png as string, mimeType: 'image/png' });
         }
         return result;
       },

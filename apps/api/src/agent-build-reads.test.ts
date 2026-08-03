@@ -373,4 +373,107 @@ describe('agent build reads (BY-04)', () => {
       tarballUrl: expect.stringContaining('examples%2Fblock-cascade.tgz'),
     });
   });
+
+  describe('exemplar files for fetchless agents (BY-28a)', () => {
+    const BLOCK = 512;
+
+    function entryBlocks(name: string, body: string): Buffer {
+      const payload = Buffer.from(body, 'utf8');
+      const header = Buffer.alloc(BLOCK);
+      header.write(name, 0, 100, 'utf8');
+      header.write(`${payload.length.toString(8).padStart(11, '0')} `, 124, 12, 'utf8');
+      header.write('0', 156, 1, 'utf8');
+      header.write('ustar\0', 257, 6, 'utf8');
+      const padding = Buffer.alloc((BLOCK - (payload.length % BLOCK)) % BLOCK);
+      return Buffer.concat([header, payload, padding]);
+    }
+
+    function exampleObjects() {
+      const tarball = gzipSync(
+        Buffer.concat([
+          entryBlocks('games/block-cascade/SPEC.md', '---\ntitle: Block Cascade\n---\n'),
+          entryBlocks('games/block-cascade/game.ts', 'export const tick = () => {};'),
+          Buffer.alloc(BLOCK * 2),
+        ]),
+      );
+      return new Map<string, Buffer>([
+        ['examples/block-cascade.tgz', tarball],
+        // Present in the bucket, absent from the allowlist — must stay unreachable.
+        ['examples/secret-creator-game.tgz', tarball],
+      ]);
+    }
+
+    it('lists and reads an allowlisted exemplar without any fetching', async () => {
+      const store = new InMemoryStore();
+      await seedJob(store);
+      app = await createApp(store, mockObjectStore(exampleObjects()));
+
+      const list = await app.inject({
+        method: 'GET',
+        url: '/api/agent/build/examples/block-cascade/files',
+        headers: agentHeaders(),
+      });
+      expect(list.statusCode).toBe(200);
+      expect(list.json()).toMatchObject({ slug: 'block-cascade', total: 2, truncated: false });
+      expect(list.json().files.map((f: { path: string }) => f.path)).toEqual([
+        'games/block-cascade/game.ts',
+        'games/block-cascade/SPEC.md',
+      ]);
+
+      // Relative path, as an agent would paste it from a listing.
+      const read = await app.inject({
+        method: 'GET',
+        url: '/api/agent/build/examples/block-cascade/file?path=game.ts',
+        headers: agentHeaders(),
+      });
+      expect(read.statusCode).toBe(200);
+      expect(read.json()).toMatchObject({
+        slug: 'block-cascade',
+        path: 'games/block-cascade/game.ts',
+        encoding: 'utf8',
+        content: 'export const tick = () => {};',
+      });
+    });
+
+    it('applies the same allowlist as the tarball route, and refuses traversal', async () => {
+      const store = new InMemoryStore();
+      await seedJob(store);
+      app = await createApp(store, mockObjectStore(exampleObjects()));
+
+      for (const url of [
+        '/api/agent/build/examples/secret-creator-game/files',
+        '/api/agent/build/examples/secret-creator-game/file?path=game.ts',
+      ]) {
+        const res = await app.inject({ method: 'GET', url, headers: agentHeaders() });
+        expect(res.statusCode, url).toBe(404);
+        expect(res.json().error).toBe('unknown_example');
+      }
+
+      const traversal = await app.inject({
+        method: 'GET',
+        url: '/api/agent/build/examples/block-cascade/file?path=../../kits/current.json',
+        headers: agentHeaders(),
+      });
+      expect(traversal.statusCode).toBe(400);
+      expect(traversal.json().error).toBe('example_path_invalid');
+    });
+
+    it('requires a build token like every other read', async () => {
+      const store = new InMemoryStore();
+      await seedJob(store);
+      app = await createApp(store, mockObjectStore(exampleObjects()));
+
+      for (const url of [
+        '/api/agent/build/examples/block-cascade/files',
+        '/api/agent/build/examples/block-cascade/file?path=game.ts',
+      ]) {
+        const none = await app.inject({ method: 'GET', url });
+        expect(none.statusCode, url).toBe(401);
+
+        const stale = await app.inject({ method: 'GET', url, headers: agentHeaders(ISSUE, 99) });
+        expect(stale.statusCode, url).toBe(401);
+        expect(stale.json().error).toBe(STALE_AGENT_TOKEN_REASON);
+      }
+    });
+  });
 });
