@@ -7,7 +7,7 @@
  * results by the MCP dispatcher.
  */
 
-export type NudgeCode = 'progress_stale' | 'inbox_pending';
+export type NudgeCode = 'progress_stale' | 'inbox_pending' | 'seed_unread';
 
 export interface NudgeWarning {
   code: NudgeCode;
@@ -20,6 +20,10 @@ export interface JobNudgeState {
   callsSinceProgress: number;
   pendingCount: number;
   lastInboxCheckAt: number | null;
+  /** True after a successful get_seed in this MCP session tracker. */
+  seedFetched: boolean;
+  /** Last known seedStatus from brief/seed payloads. */
+  seedStatus: 'pending' | 'available' | 'unavailable' | null;
 }
 
 /** No progress for this long (wall clock) → `progress_stale`. */
@@ -47,6 +51,7 @@ export const INBOX_PIGGYBACK_TOOLS = new Set([
   'list_kit_files',
   'search_kit_files',
   'read_kit_file',
+  'read_kit_files',
   'read_kit_file_fragment',
   'get_sources',
   'list_examples',
@@ -54,10 +59,22 @@ export const INBOX_PIGGYBACK_TOOLS = new Set([
   'get_seed',
 ]);
 
+/** Kit browse without get_seed while a draft is ready → seed_unread. */
+export const SEED_NUDGE_TOOLS = new Set([
+  'get_kit',
+  'list_kit_files',
+  'search_kit_files',
+  'read_kit_file',
+  'read_kit_files',
+  'read_kit_file_fragment',
+]);
+
 export interface McpNudgeTracker {
   ensure(jobId: number, nowMs: number): JobNudgeState;
   noteProgress(jobId: number, nowMs: number): void;
   noteInboxCheck(jobId: number, nowMs: number): void;
+  noteSeedFetch(jobId: number, nowMs: number): void;
+  noteSeedStatus(jobId: number, status: 'pending' | 'available' | 'unavailable' | null, nowMs: number): void;
   /** `nowMs` is only used if the job has never been ensured — callers should pass the injected clock. */
   notePendingCount(jobId: number, count: number, nowMs: number): void;
   noteToolSuccess(jobId: number, toolName: string, nowMs: number): void;
@@ -82,6 +99,8 @@ export function createMcpNudgeTracker(
         callsSinceProgress: 0,
         pendingCount: 0,
         lastInboxCheckAt: null,
+        seedFetched: false,
+        seedStatus: null,
       };
       states.set(jobId, state);
     }
@@ -99,6 +118,16 @@ export function createMcpNudgeTracker(
     state.lastInboxCheckAt = nowMs;
   }
 
+  function noteSeedFetch(jobId: number, nowMs: number): void {
+    const state = ensure(jobId, nowMs);
+    state.seedFetched = true;
+  }
+
+  function noteSeedStatus(jobId: number, status: 'pending' | 'available' | 'unavailable' | null, nowMs: number): void {
+    const state = ensure(jobId, nowMs);
+    state.seedStatus = status;
+  }
+
   function notePendingCount(jobId: number, count: number, nowMs: number): void {
     const state = ensure(jobId, nowMs);
     state.pendingCount = Math.max(0, count);
@@ -112,6 +141,9 @@ export function createMcpNudgeTracker(
     }
     if (toolName === 'read_inbox' || toolName === 'ack_inbox') {
       noteInboxCheck(jobId, nowMs);
+    }
+    if (toolName === 'get_seed') {
+      noteSeedFetch(jobId, nowMs);
     }
     if (!PROGRESS_NUDGE_EXEMPT.has(toolName)) {
       state.callsSinceProgress += 1;
@@ -142,6 +174,18 @@ export function createMcpNudgeTracker(
       });
     }
 
+    if (
+      SEED_NUDGE_TOOLS.has(toolName) &&
+      state.seedStatus === 'available' &&
+      !state.seedFetched &&
+      toolName !== 'get_seed'
+    ) {
+      warnings.push({
+        code: 'seed_unread',
+        message: 'A seed draft is available — call get_seed and continue that draft before scaffolding from the kit.',
+      });
+    }
+
     return warnings;
   }
 
@@ -149,6 +193,8 @@ export function createMcpNudgeTracker(
     ensure,
     noteProgress,
     noteInboxCheck,
+    noteSeedFetch,
+    noteSeedStatus,
     notePendingCount,
     noteToolSuccess,
     warningsFor,

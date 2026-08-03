@@ -28,6 +28,7 @@ import {
   listKitFiles,
   readKitFile,
   readKitFileFragment,
+  readKitFiles,
   searchKitFiles,
 } from './kit-files.js';
 import {
@@ -38,6 +39,7 @@ import {
   parseKitRegistry,
   parseKitSidecar,
 } from './kit-registry.js';
+import { seedPayload } from './seed-status.js';
 import { type CreatorMessage, type Store, type SubmissionRecord } from './store.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from './submission-status.js';
 
@@ -1099,6 +1101,7 @@ export async function registerAgentChannelRoutes(
       const { issueNumber, record } = resolved;
 
       const pending = await store!.listPendingCreatorMessages(issueNumber);
+      const seed = seedPayload(record);
       return reply.send({
         title: record.title,
         slug: record.slug ?? null,
@@ -1107,7 +1110,7 @@ export async function registerAgentChannelRoutes(
         rules: AGENT_BUILD_RULES_DIGEST,
         constraints: buildConstraints(DEFAULT_BUILD_ORIENTATION),
         locales: briefLocales(record.locale),
-        seedAvailable: Boolean(record.seed),
+        ...seed,
         pendingMessages: pending.map((message) => ({
           id: message.id,
           text: message.text,
@@ -1119,7 +1122,8 @@ export async function registerAgentChannelRoutes(
 
   /**
    * Round-0 seed draft stored on the job (self builds and platform seeds that persisted).
-   * 404-shaped `{ available: false }` when none — not an auth failure.
+   * 404-shaped `{ available: false }` when none and not pending — not an auth failure.
+   * Pending seeds return 200 so MCP clients recheck instead of scaffolding.
    */
   app.get(
     '/api/agent/build/seed',
@@ -1128,15 +1132,35 @@ export async function registerAgentChannelRoutes(
       const resolved = await resolveBuild(request, reply);
       if (!resolved) return reply;
       const { record } = resolved;
+      const seed = seedPayload(record);
 
-      if (!record.seed) {
-        return reply.status(404).send({ available: false, files: [], references: [], notes: null });
+      if (record.seed) {
+        return reply.send({
+          available: true,
+          status: seed.seedStatus,
+          notice: seed.seedNotice,
+          files: record.seed.files,
+          references: record.seed.references,
+          notes: record.seed.notes ?? null,
+        });
       }
-      return reply.send({
-        available: true,
-        files: record.seed.files,
-        references: record.seed.references,
-        notes: record.seed.notes ?? null,
+      if (seed.seedStatus === 'pending') {
+        return reply.send({
+          available: false,
+          status: 'pending',
+          notice: seed.seedNotice,
+          files: [],
+          references: [],
+          notes: null,
+        });
+      }
+      return reply.status(404).send({
+        available: false,
+        status: 'unavailable',
+        notice: null,
+        files: [],
+        references: [],
+        notes: null,
       });
     },
   );
@@ -1198,6 +1222,7 @@ export async function registerAgentChannelRoutes(
             list: 'list_kit_files',
             search: 'search_kit_files',
             read: 'read_kit_file',
+            readMany: 'read_kit_files',
             fragment: 'read_kit_file_fragment',
           },
         });
@@ -1299,6 +1324,43 @@ export async function registerAgentChannelRoutes(
         const encoding = query.encoding === 'base64' || query.encoding === 'utf8' ? query.encoding : undefined;
         const tree = await kitFileStore.loadTree(query.engineRef);
         return reply.send(readKitFile(tree, query.path, { encoding }));
+      } catch (error) {
+        const sent = sendKitFilesError(reply, error);
+        if (sent) return sent;
+        throw error;
+      }
+    },
+  );
+
+  /**
+   * Read several small kit files in one request — collapses ChatGPT/Claude per-turn
+   * tool-call budgets when browsing a scaffold.
+   */
+  app.post(
+    '/api/agent/build/kit/files/read',
+    { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      if (!kitFileStore) {
+        return reply.status(503).send({ error: 'kit_store_unavailable', message: 'the kit store is not configured' });
+      }
+      try {
+        const body = (request.body ?? {}) as {
+          paths?: unknown;
+          encoding?: string;
+          engineRef?: string;
+        };
+        if (!Array.isArray(body.paths)) {
+          return reply.status(400).send({ error: 'kit_query_invalid', message: 'paths must be an array of strings' });
+        }
+        const paths = body.paths.filter((path): path is string => typeof path === 'string');
+        if (paths.length === 0) {
+          return reply.status(400).send({ error: 'kit_query_invalid', message: 'paths must be a non-empty array' });
+        }
+        const encoding = body.encoding === 'base64' || body.encoding === 'utf8' ? body.encoding : undefined;
+        const tree = await kitFileStore.loadTree(body.engineRef);
+        return reply.send(readKitFiles(tree, paths, { encoding }));
       } catch (error) {
         const sent = sendKitFilesError(reply, error);
         if (sent) return sent;

@@ -165,6 +165,8 @@ describe('agent build reads (BY-04)', () => {
       constraints: { maxProjectBytes: MAX_PROJECT_BYTES, orientation: 'any' },
       locales: ['pl', 'en'],
       seedAvailable: true,
+      seedStatus: 'available',
+      seedNotice: expect.stringMatching(/get_seed/i),
     });
     expect(res.json().pendingMessages).toEqual([expect.objectContaining({ text: 'Make it harder' })]);
   });
@@ -176,7 +178,23 @@ describe('agent build reads (BY-04)', () => {
 
     const empty = await app.inject({ method: 'GET', url: '/api/agent/build/seed', headers: agentHeaders() });
     expect(empty.statusCode).toBe(404);
-    expect(empty.json()).toEqual({ available: false, files: [], references: [], notes: null });
+    expect(empty.json()).toEqual({
+      available: false,
+      status: 'unavailable',
+      notice: null,
+      files: [],
+      references: [],
+      notes: null,
+    });
+
+    await store.setSeedStatus(ISSUE, 'pending');
+    const pending = await app.inject({ method: 'GET', url: '/api/agent/build/seed', headers: agentHeaders() });
+    expect(pending.statusCode).toBe(200);
+    expect(pending.json()).toMatchObject({
+      available: false,
+      status: 'pending',
+      notice: expect.stringMatching(/get_seed/i),
+    });
 
     await store.setSubmissionSeed(ISSUE, {
       slug: 'comet-courier',
@@ -190,8 +208,10 @@ describe('agent build reads (BY-04)', () => {
 
     const present = await app.inject({ method: 'GET', url: '/api/agent/build/seed', headers: agentHeaders() });
     expect(present.statusCode).toBe(200);
-    expect(present.json()).toEqual({
+    expect(present.json()).toMatchObject({
       available: true,
+      status: 'available',
+      notice: expect.stringMatching(/get_seed/i),
       files: [
         { path: 'SPEC.md', content: '# Spec' },
         { path: 'game.ts', content: 'export {}' },
@@ -238,6 +258,7 @@ describe('agent build reads (BY-04)', () => {
       list: 'list_kit_files',
       search: 'search_kit_files',
       read: 'read_kit_file',
+      readMany: 'read_kit_files',
       fragment: 'read_kit_file_fragment',
     });
     expect(signReadUrl).toHaveBeenCalledWith(`kits/${ENGINE}.tgz`, expect.any(Number));
@@ -303,6 +324,17 @@ describe('agent build reads (BY-04)', () => {
     expect(fragment.statusCode).toBe(200);
     expect(fragment.json().content).toBe('# Kit');
     expect(fragment.json().eof).toBe(false);
+
+    const batch = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/kit/files/read',
+      headers: { ...agentHeaders(), 'content-type': 'application/json' },
+      payload: { paths: ['SKILL.md', 'shared/modules/core.ts', 'missing.md'] },
+    });
+    expect(batch.statusCode).toBe(200);
+    expect(batch.json().files).toHaveLength(3);
+    expect(batch.json().files[0]).toMatchObject({ ok: true, path: `${KIT_ROOT_DIR}/SKILL.md` });
+    expect(batch.json().files[2]).toMatchObject({ ok: false, error: 'kit_file_missing' });
   });
 
   it('returns a machine-readable error when kits/current.json is missing', async () => {

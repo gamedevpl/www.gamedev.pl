@@ -303,6 +303,7 @@ describe('POST /api/mcp (BY-05)', () => {
         'list_kit_files',
         'search_kit_files',
         'read_kit_file',
+        'read_kit_files',
         'read_kit_file_fragment',
         'get_sources',
         'list_examples',
@@ -334,10 +335,11 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(getKit?.description).toMatch(/gamedevpl-creator-kit/);
     expect(getKit?.description).toMatch(/entry=gamedevpl-creator-kit\/SKILL\.md/);
     expect(getKit?.description).toMatch(/do not assume a `cd` persists/i);
-    expect(getKit?.description).toMatch(/list_kit_files|read_kit_file/);
+    expect(getKit?.description).toMatch(/read_kit_files|list_kit_files|read_kit_file/);
     expect(tools.find((t) => t.name === 'list_kit_files')?.description).toMatch(/prefix|glob/i);
     expect(tools.find((t) => t.name === 'search_kit_files')?.description).toMatch(/substring/i);
-    expect(tools.find((t) => t.name === 'read_kit_file')?.description).toMatch(/48 KiB|fragment/i);
+    expect(tools.find((t) => t.name === 'read_kit_file')?.description).toMatch(/48 KiB|fragment|read_kit_files/i);
+    expect(tools.find((t) => t.name === 'read_kit_files')?.description).toMatch(/12|128 KiB|batch|several/i);
     expect(tools.find((t) => t.name === 'read_kit_file_fragment')?.description).toMatch(/lines|bytes/i);
 
     const gateVerdict = tools.find((t) => t.name === 'get_gate_verdict');
@@ -373,6 +375,13 @@ describe('POST /api/mcp (BY-05)', () => {
       title: 'Comet Courier',
       slug: 'comet-courier',
       seedAvailable: true,
+      seedStatus: 'available',
+      seedNotice: expect.stringMatching(/get_seed/i),
+    });
+    expect(started.structured).toMatchObject({
+      seedAvailable: true,
+      seedStatus: 'available',
+      seedNotice: expect.stringMatching(/get_seed/i),
     });
   });
 
@@ -412,7 +421,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(joined).toMatch(/available:true/);
     expect(joined).toMatch(/never scaffold over them/i);
     expect(joined).toMatch(/get_kit/);
-    expect(joined).toMatch(/list_kit_files|read_kit_file/);
+    expect(joined).toMatch(/read_kit_files|list_kit_files|read_kit_file/);
     expect(joined).toMatch(/send_screenshot/);
     expect(joined).toMatch(/submit_sources/);
     expect(joined).toMatch(/get_gate_verdict/);
@@ -847,10 +856,14 @@ describe('POST /api/mcp (BY-05)', () => {
     const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
 
     const brief = await callTool(app, 'get_brief', { sessionKey }, { 'mcp-session-id': sessionId });
-    expect(brief.structured).toMatchObject({ seedAvailable: true, slug: 'comet-courier' });
+    expect(brief.structured).toMatchObject({
+      seedAvailable: true,
+      seedStatus: 'available',
+      slug: 'comet-courier',
+    });
 
     const seed = await callTool(app, 'get_seed', { sessionKey }, { 'mcp-session-id': sessionId });
-    expect(seed.structured).toMatchObject({ available: true });
+    expect(seed.structured).toMatchObject({ available: true, status: 'available' });
 
     const submitted = await callTool(
       app,
@@ -1374,6 +1387,7 @@ describe('POST /api/mcp (BY-05)', () => {
       'list_kit_files',
       'search_kit_files',
       'read_kit_file',
+      'read_kit_files',
       'read_kit_file_fragment',
       'get_sources',
       'list_examples',
