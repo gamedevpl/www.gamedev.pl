@@ -44,6 +44,7 @@ import {
   newMcpSessionId,
   verifyMcpSessionKey,
 } from './mcp-session-key.js';
+import { mcpSessionStartedFields, mcpToolRefusalFields, toolErrorReason } from './mcp-debug-log.js';
 import {
   MCP_MISSING_CREDENTIAL_HINT,
   sendMcpOAuthChallenge,
@@ -1803,6 +1804,16 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
     // Non-initialize requests: require session header when we issued one (transport only).
     if (sessionHeader && !transportSessions.has(sessionHeader)) {
+      // In-memory map miss (multi-instance, prune, or client inventing an id). ChatGPT
+      // often hides the 404 body — log so GCP can show the correlator that was refused.
+      request.log.warn(
+        {
+          event: 'mcp_unknown_session',
+          transportSessionId: sessionHeader,
+          userAgent: headerValue(request.headers['user-agent'])?.slice(0, 120) ?? undefined,
+        },
+        'mcp unknown session',
+      );
       return reply.status(404).send({ error: 'unknown MCP session' });
     }
 
@@ -1843,6 +1854,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         return reply.send(jsonRpcError(message.id, -32601, `unknown tool: ${name}`));
       }
       const args = params.arguments && typeof params.arguments === 'object' ? params.arguments : {};
+      const sessionKeyArg = typeof args.sessionKey === 'string' ? args.sessionKey.trim() : '';
+      const userAgent = headerValue(request.headers['user-agent']);
       try {
         const result = await tool.handler(args, ctx);
         // Echo session id on tool responses when we have one (transport correlator).
@@ -1852,9 +1865,47 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           const sid = (result.structuredContent as { sessionId?: string }).sessionId;
           if (sid) reply.header('Mcp-Session-Id', sid);
         }
+
+        // Connectors often omit isError payloads from the chat transcript. These lines
+        // are the durable signal in Cloud Logging — never include sessionKey / bearer.
+        const reason = toolErrorReason(result);
+        if (reason) {
+          request.log.warn(
+            mcpToolRefusalFields({
+              tool: name,
+              reason,
+              bearer: bearerToken,
+              sessionKey: sessionKeyArg,
+              transportSessionId: sessionHeader,
+              agentTokenSecret,
+              userAgent,
+            }),
+            'mcp tool refused',
+          );
+        } else if (name === 'start' && result.structuredContent && typeof result.structuredContent === 'object') {
+          const started = result.structuredContent as {
+            jobId?: unknown;
+            slug?: unknown;
+            sessionId?: unknown;
+            round?: unknown;
+          };
+          if (typeof started.jobId === 'number' && typeof started.sessionId === 'string') {
+            request.log.info(
+              mcpSessionStartedFields({
+                jobId: started.jobId,
+                slug: typeof started.slug === 'string' ? started.slug : null,
+                sessionId: started.sessionId,
+                round: typeof started.round === 'number' ? started.round : 0,
+                userAgent,
+              }),
+              'mcp session started',
+            );
+          }
+        }
+
         return reply.send(jsonRpcResult(message.id, result));
       } catch (error) {
-        app.log.error({ err: error }, 'MCP tool handler failed');
+        app.log.error({ err: error, tool: name }, 'MCP tool handler failed');
         return reply.send(
           jsonRpcResult(message.id, toolErr(error instanceof Error ? error.message : 'internal error')),
         );
@@ -1888,6 +1939,19 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
     const message = body as JsonRpcRequest;
     if (shouldIssueMcpOAuthChallenge(request, message)) {
+      const tool =
+        message.method === 'tools/call' && message.params && typeof message.params === 'object'
+          ? String((message.params as { name?: unknown }).name ?? '')
+          : '';
+      request.log.warn(
+        {
+          event: 'mcp_oauth_challenge',
+          tool: tool || undefined,
+          method: message.method,
+          userAgent: headerValue(request.headers['user-agent'])?.slice(0, 120) ?? undefined,
+        },
+        'mcp oauth challenge',
+      );
       return sendMcpOAuthChallenge(reply);
     }
 
