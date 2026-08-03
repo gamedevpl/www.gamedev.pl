@@ -10,7 +10,10 @@ import {
   type ConnectPayload,
 } from './connectApi.js';
 import { isConnectCollapsed, setConnectCollapsed } from './connectCollapse.js';
+import type { ConnectCardMode } from './selfBuildCopy.js';
 import { recordStudioStep } from './visitTelemetry.js';
+
+export type { ConnectCardMode };
 
 const CLIENT_LABEL_KEY: Record<ConnectClient, string> = {
   claudeCode: 'connect.clients.claudeCode',
@@ -24,8 +27,8 @@ const AUTH_MODE_STORAGE_KEY = 'gamedev_connect_auth_mode';
 
 type ConnectAuthMode = 'key' | 'oauth';
 
-/** First attach vs mid-round re-attach after quiet / gate green. */
-export type ConnectCardMode = 'setup' | 'resume';
+/** Reasons the connect endpoint returns 409 that mean "no card belongs here". */
+const QUIET_UNAVAILABLE = new Set(['not_self_round', 'inactive_round']);
 
 function loadAuthMode(): ConnectAuthMode {
   try {
@@ -122,9 +125,15 @@ export function StudioConnectCard({
       .catch((err: unknown) => {
         if (cancelled) return;
         const apiErr = err as ConnectApiError;
-        // 409 connect_unavailable = platform / inactive round — Details mounts us
-        // opportunistically and should stay quiet. Other failures still surface.
-        if (hideIfUnavailable && (apiErr.status === 409 || apiErr.message === 'connect_unavailable')) {
+        // Details mounts us for every open draft — stay quiet only when the round is
+        // plainly not a self connect (platform / inactive). missing_slug and other
+        // 409s still surface so a broken self round is not silently empty.
+        if (
+          hideIfUnavailable &&
+          apiErr.message === 'connect_unavailable' &&
+          apiErr.reason != null &&
+          QUIET_UNAVAILABLE.has(apiErr.reason)
+        ) {
           setUnavailable(true);
           setLoading(false);
           return;

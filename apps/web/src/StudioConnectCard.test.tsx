@@ -530,6 +530,36 @@ describe('StudioConnectCard', () => {
     await act(async () => root.unmount());
   });
 
+  it('surfaces missing_slug instead of hiding when hideIfUnavailable', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: false,
+        status: 409,
+        json: async () => ({ error: 'connect_unavailable', reason: 'missing_slug', builder: 'self' }),
+      })),
+    );
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(StudioConnectCard, { token: 'slugless', hideIfUnavailable: true, collapsible: false }));
+      await flush();
+    });
+    await act(async () => {
+      await flush();
+    });
+
+    expect(container.querySelector('.studio-connect.is-error')).not.toBeNull();
+    expect(container.textContent).toContain("couldn't load the connect steps");
+
+    await act(async () => root.unmount());
+  });
+
   it('resume mode leads with the kickoff and tucks MCP install under details', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');

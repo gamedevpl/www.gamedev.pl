@@ -4502,12 +4502,26 @@ a.user-name--profile:focus-visible {
   background: rgba(0, 228, 172, 0.1);
 }
 
-/* Solid turquoise CTA — Playtest must read louder than the outlined Details toggle. */
+/* Solid turquoise CTA — Play must read louder than the icon-only Details toggle. */
 .studio-head-action.is-primary {
   background: var(--turquoise);
   border-color: var(--turquoise);
   color: #08241d;
   font-weight: 700;
+}
+
+/* Claude-shaped cluster: Edit / Details / Claim are icons; the accessible name stays
+   in a clipped label so AT and tests that read textContent still see the word. */
+.studio-head-action.is-icon-only .studio-head-action-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .studio-head-action--claim {

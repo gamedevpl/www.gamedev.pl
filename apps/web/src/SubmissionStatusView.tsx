@@ -597,22 +597,6 @@ export function SubmissionStatusView({
           t('statusView.gallery.caption'),
         )
       : [];
-    const reported = status?.events?.find((event) => event.progress)?.progress;
-    const checklist = status?.progress?.checklist ?? [];
-    const done = reported?.done ?? checklist.filter((item) => item.checked).length;
-    const total = reported?.total ?? checklist.length;
-
-    // Short play verb in the foot — the phase already says live vs draft, so
-    // "Play your game" / "Play the draft" were two long peers of the quieter playtest path.
-    const playable =
-      status?.status === 'published' && status.slug
-        ? { label: t('statusView.playShort'), onClick: () => setPlaying('published') }
-        : preview
-          ? { label: t('statusView.playShort'), onClick: openDraft }
-          : channelHtml
-            ? { label: t('statusView.playShort'), onClick: openChannel }
-            : undefined;
-
     return (
       <>
         <div className="studio-thread">
@@ -697,22 +681,12 @@ export function SubmissionStatusView({
                   </button>
                 ) : null}
 
-                {/* Checklist fraction earns its keep while work remains; once every
-                    item is checked it only restates the phase. Slug lives in the studio
-                    header — repeating it here is infra chrome.
-                    Abandon lives in Details (Claude-Code side panel), not beside the
-                    composer. When Studio provides playtest, that is the one Play verb —
-                    the header already owns the same action; no second "play with a note". */}
+                {/* Claude-shaped foot: phase + heartbeat only. Play lives in the header
+                    icon cluster; abandon / checklist / connect live in Details. */}
                 <ThreadContextBar
                   phase={t(`statusView.states.${status.status}.label`)}
                   heartbeatAt={heartbeatAt}
                   active={!TERMINAL_STATUSES.has(status.status)}
-                  {...(total > 0 && done < total ? { progress: { done, total } } : {})}
-                  {...(playable
-                    ? {
-                        primary: onPlaytest ? { label: t('statusView.playShort'), onClick: onPlaytest } : playable,
-                      }
-                    : {})}
                 />
 
                 {/* Before the first agent signal there is nobody to receive a note — the

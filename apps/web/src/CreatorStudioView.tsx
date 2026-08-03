@@ -669,25 +669,22 @@ export function CreatorStudioView({
                       {tabAvailable(activeGame, 'edit') ? (
                         <button
                           type="button"
-                          className={`studio-head-action${tab === 'edit' ? ' is-active' : ''}`}
+                          className={`studio-head-action is-icon-only${tab === 'edit' ? ' is-active' : ''}`}
                           aria-pressed={tab === 'edit'}
+                          aria-label={t('studioPanel.tabs.edit')}
                           onClick={() => openTab(tab === 'edit' ? 'thread' : 'edit')}
                         >
                           <PixelIcon name="pencil" size={12} />{' '}
                           <span className="studio-head-action-label">{t('studioPanel.tabs.edit')}</span>
                         </button>
                       ) : null}
-                      {/* Play is the next action after a build — one verb with Details as
-                        the side-panel toggle beside it. When already open (empty/error
-                        keeps chrome visible), clicking again returns to the thread. */}
-                      {/* Labels are wrapped rather than left as bare text so a phone can
-                        hide the word and keep the icon — and hide it the way that leaves
-                        the button still named for a screen reader, not display: none. */}
+                      {/* Claude-shaped cluster: one primary Play verb, icon-only peers for
+                        Edit / Details (side panel). Labels stay in the DOM for AT. */}
                       {!user?.handle &&
                       (activeGame.lastKnownStatus === 'in_review' || activeGame.lastKnownStatus === 'publishing') ? (
                         <button
                           type="button"
-                          className="studio-head-action studio-head-action--claim"
+                          className="studio-head-action is-icon-only studio-head-action--claim"
                           onClick={() => setClaimOpen(true)}
                           aria-label={t('creatorProfile.publishGateTitle')}
                         >
@@ -706,8 +703,9 @@ export function CreatorStudioView({
                       </button>
                       <button
                         type="button"
-                        className={`studio-head-action${tab === 'details' ? ' is-active' : ''}`}
+                        className={`studio-head-action is-icon-only${tab === 'details' ? ' is-active' : ''}`}
                         aria-pressed={tab === 'details'}
+                        aria-label={t('studioPanel.tabs.details')}
                         onClick={() => openTab(tab === 'details' ? 'thread' : 'details')}
                       >
                         <PixelIcon name="expand" size={12} />{' '}

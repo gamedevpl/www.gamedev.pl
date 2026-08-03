@@ -142,7 +142,7 @@ describe('SubmissionStatusView', () => {
     });
   });
 
-  it('routes the one Play verb to playtest when Studio provides that surface', async () => {
+  it('keeps Play out of the embedded foot — the Studio header owns that verb', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'building',
@@ -163,16 +163,10 @@ describe('SubmissionStatusView', () => {
       await flushEffects();
     });
 
-    // Header and foot share one Play verb — no second "play with a note" peer.
-    const play = container.querySelector<HTMLButtonElement>('.status-play-cta');
-    expect(play?.textContent?.trim()).toMatch(/^Play$/);
+    // Thread foot is phase/heartbeat only — no Play peer of the composer.
+    expect(container.querySelector('.status-play-cta')).toBeNull();
     expect(container.querySelector('.status-playtest-cta')).toBeNull();
-
-    await act(async () => {
-      play?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      await flushEffects();
-    });
-    expect(onPlaytest).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('.studio-context-progress')).toBeNull();
 
     await act(async () => {
       root.unmount();
@@ -451,17 +445,10 @@ describe('SubmissionStatusView', () => {
 
     expect(mockedGetSubmissionPreview).toHaveBeenCalledWith('self-ready-token');
     expect(mockedGetChannelPlayable).not.toHaveBeenCalled();
-    const playDraft = container.querySelector<HTMLButtonElement>('.studio-thread-context .status-play-cta');
-    // Foot uses the short play verb; phase already says this is still a draft.
-    expect(playDraft?.textContent?.trim()).toMatch(/^Play$/);
-
-    await act(async () => {
-      playDraft?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      await flushEffects();
-    });
-    const iframe = container.querySelector('iframe');
-    expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts allow-pointer-lock');
-    expect(iframe?.getAttribute('srcdoc') ?? '').toContain('id="game"');
+    // Embedded foot no longer carries Play — open the draft from a thread media/version
+    // path is covered elsewhere; here we only assert the preview loaded for Studio.
+    expect(container.querySelector('.studio-thread-context .status-play-cta')).toBeNull();
+    expect(mockedGetSubmissionPreview.mock.results[0]?.value).toBeTruthy();
 
     await act(async () => {
       root.unmount();
@@ -570,6 +557,7 @@ describe('SubmissionStatusView', () => {
 
   it('shows the connect card while a self round awaits its agent, then hides it on signal', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    localStorage.clear();
     vi.useFakeTimers();
     const connectFetch = vi.fn(async () => ({
       ok: true,
@@ -1247,10 +1235,10 @@ describe('SubmissionStatusView', () => {
 
     expect(container.querySelector('.studio-thread-context.is-active')).not.toBeNull();
     expect(container.querySelector('.studio-context-phase-spinner')).not.toBeNull();
-    // Abandon is Details-only — not a destructive peer of the composer.
+    // Abandon / checklist / Play stay out of the foot — Claude-shaped chrome.
     expect(container.querySelector('.studio-context-stop')).toBeNull();
-    // Incomplete checklist still shows; slug does not (header owns identity).
-    expect(container.querySelector('.studio-context-progress')?.textContent).toContain('4 of 6 done');
+    expect(container.querySelector('.studio-context-progress')).toBeNull();
+    expect(container.querySelector('.status-play-cta')).toBeNull();
     expect(container.querySelector('.studio-thread-context .studio-slug')).toBeNull();
 
     await act(async () => {
@@ -1287,7 +1275,7 @@ describe('SubmissionStatusView', () => {
 
     expect(container.querySelector('.studio-context-progress')).toBeNull();
     expect(container.querySelector('.studio-thread-context .studio-slug')).toBeNull();
-    expect(container.querySelector('.status-play-cta')?.textContent?.trim()).toMatch(/Play$/);
+    expect(container.querySelector('.status-play-cta')).toBeNull();
 
     await act(async () => {
       root.unmount();

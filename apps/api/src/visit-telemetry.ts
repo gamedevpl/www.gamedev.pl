@@ -66,6 +66,8 @@ const StudioStepSchema = z.enum([
   'builder_chosen',
   'connect_copied',
   'connect_deeplink',
+  'connect_dismissed',
+  'connect_restored',
   'agent_signaled',
   'gate_verdict',
   'round_opened',

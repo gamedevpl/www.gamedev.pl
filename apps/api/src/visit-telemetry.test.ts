@@ -290,6 +290,8 @@ describe('POST /api/telemetry/visit', () => {
           detail: 'header',
           msSinceStart: 260,
         },
+        { type: 'studio_step', step: 'connect_dismissed', builder: 'self', msSinceStart: 270 },
+        { type: 'studio_step', step: 'connect_restored', builder: 'self', msSinceStart: 280 },
         { type: 'studio_step', step: 'agent_signaled', builder: 'self', msSinceStart: 12_000 },
         {
           type: 'studio_step',
@@ -328,6 +330,16 @@ describe('POST /api/telemetry/visit', () => {
           step: 'connect_copied',
           builder: 'self',
           detail: 'header',
+        }),
+        expect.objectContaining({
+          type: 'studio_step',
+          step: 'connect_dismissed',
+          builder: 'self',
+        }),
+        expect.objectContaining({
+          type: 'studio_step',
+          step: 'connect_restored',
+          builder: 'self',
         }),
         expect.objectContaining({
           type: 'studio_step',

@@ -196,14 +196,12 @@ describe('CreatorStudioView publish→improve handoff', () => {
         expect.objectContaining({ credentials: 'include' }),
       );
 
-      // Playtest must follow the handoff token too — otherwise pause-feedback would
+      // Play must follow the handoff token too — otherwise pause-feedback would
       // call submitImprovement on the published job and open a second concurrent round.
       await act(async () => {
-        const playtestTab = Array.from(container.querySelectorAll('button')).find((btn) =>
-          /playtest/i.test(btn.textContent ?? ''),
-        );
-        expect(playtestTab).toBeTruthy();
-        playtestTab!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        const playTab = Array.from(container.querySelectorAll('.studio-head-action.is-primary')).find(Boolean);
+        expect(playTab).toBeTruthy();
+        playTab!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         await flushEffects();
         await flushEffects();
       });
