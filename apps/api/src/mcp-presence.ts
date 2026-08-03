@@ -40,11 +40,34 @@ const PRESENCE_COPY: Record<string, string> = {
 
 export function shouldPulseMcpPresence(toolName: string): boolean {
   if (NO_PULSE.has(toolName)) return false;
-  return toolName in PRESENCE_COPY;
+  // Own-property only — `in` would also match inherited keys like `toString`.
+  return Object.hasOwn(PRESENCE_COPY, toolName);
 }
 
 export function mcpPresenceText(toolName: string): string | null {
-  return PRESENCE_COPY[toolName] ?? null;
+  return Object.hasOwn(PRESENCE_COPY, toolName) ? PRESENCE_COPY[toolName]! : null;
+}
+
+/** Cap for the in-process last-pulse map — oldest entries drop first (insertion order). */
+export const MAX_PRESENCE_PULSE_JOBS = 2_000;
+
+/**
+ * Record a pulse timestamp with a simple LRU cap so long-lived instances cannot grow
+ * the map without bound. Pure aside from mutating `pulses`.
+ */
+export function noteMcpPresencePulse(
+  pulses: Map<number, number>,
+  jobId: number,
+  atMs: number,
+  maxJobs: number = MAX_PRESENCE_PULSE_JOBS,
+): void {
+  pulses.delete(jobId);
+  pulses.set(jobId, atMs);
+  while (pulses.size > maxJobs) {
+    const oldest = pulses.keys().next().value;
+    if (oldest === undefined) break;
+    pulses.delete(oldest);
+  }
 }
 
 /**

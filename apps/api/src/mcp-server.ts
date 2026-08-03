@@ -27,7 +27,12 @@ import {
   resolveGameAgentKeyForStart,
   verifyDurableGameAgentKey,
 } from './agent-game-key-resolve.js';
-import { mcpPresenceText, shouldEmitMcpPresencePulse, shouldPulseMcpPresence } from './mcp-presence.js';
+import {
+  mcpPresenceText,
+  noteMcpPresencePulse,
+  shouldEmitMcpPresencePulse,
+  shouldPulseMcpPresence,
+} from './mcp-presence.js';
 import {
   classifyAgentTokenAccess,
   InvalidAgentTokenError,
@@ -2387,7 +2392,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           if (presenceText && jobId !== null) {
             const at = now();
             if (shouldEmitMcpPresencePulse(presencePulseByJob.get(jobId), at)) {
-              presencePulseByJob.set(jobId, at);
+              noteMcpPresencePulse(presencePulseByJob, jobId, at);
               try {
                 await store.appendBuildEvent(jobId, { kind: 'step', text: presenceText });
               } catch (pulseError) {

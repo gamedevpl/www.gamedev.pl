@@ -1044,7 +1044,10 @@ export async function registerSubmissionRoutes(
       if (!input.undelivered && previous?.workspace && previous.workspace !== result.workspace) {
         await releaseWorkspace(input.issueNumber, previous.workspace, input.log);
       }
-      const transition = record?.state
+      // Pass `record.state` even when undefined — planObservedStatusTransition adopts
+      // legacy/partial records into `building`. Guarding on truthy state skipped that
+      // and left continue_draft / feedback with a live dispatch but no durable move.
+      const transition = record
         ? planObservedStatusTransition(
             record.state,
             'building',
@@ -1186,6 +1189,7 @@ export async function registerSubmissionRoutes(
       return { ok: true, jobId: input.issueNumber, alreadyOpen: true };
     }
     // Only states where a new round is the honest next step. Canceled/abandoned stay dead.
+    // `undefined` is a legacy/partial record — resumeBuild adopts it into `building`.
     const state = record.state;
     const continuable =
       state === 'ready_for_review' ||

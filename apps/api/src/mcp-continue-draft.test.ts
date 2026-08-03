@@ -255,4 +255,24 @@ describe('MCP continue_draft', () => {
     expect((structured as { error: string }).error).toMatch(/publishing/i);
     expect((structured as { error: string }).error).not.toBe(DRAFT_NOT_CONTINUABLE_REASON);
   });
+
+  it('adopts a legacy draft with no state into building', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(DRAFT_ISSUE, OWNER, 'Legacy Draft');
+    await store.setSubmissionSlug(DRAFT_ISSUE, SLUG);
+    await store.setRoundBuilder(DRAFT_ISSUE, 'self');
+    await store.ensureGameAgentKey(SLUG, OWNER, '2026-08-01T12:00:00.000Z');
+    // No recordJobTransition — state stays undefined (pre-job-model shape).
+    expect((await store.getSubmission(DRAFT_ISSUE))?.state).toBeUndefined();
+    app = await createApp(store);
+
+    const { structured, isError } = await callTool(app, 'continue_draft', {
+      key: gameKey(),
+      feedback: 'Pick up this legacy draft and keep going.',
+    });
+    expect(isError).toBe(false);
+    expect(structured).toMatchObject({ jobId: DRAFT_ISSUE, alreadyOpen: false });
+    const job = await store.getSubmission(DRAFT_ISSUE);
+    expect(job?.state).toBe('building');
+  });
 });
