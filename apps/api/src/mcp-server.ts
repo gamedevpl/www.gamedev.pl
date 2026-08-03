@@ -640,8 +640,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     {
       description: string;
       inputSchema: Record<string, unknown>;
-      /** Declared only where this file builds the payload — see TOOL_ANNOTATIONS. */
-      outputSchema?: Record<string, unknown>;
+      outputSchema: Record<string, unknown>;
       annotations?: Record<string, unknown>;
       handler: ToolHandler;
     }
@@ -2565,7 +2564,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             name,
             description: tool.description,
             inputSchema: tool.inputSchema,
-            ...(tool.outputSchema ? { outputSchema: tool.outputSchema } : {}),
+            outputSchema: tool.outputSchema,
             ...(tool.annotations ? { annotations: tool.annotations } : {}),
           })),
         }),
