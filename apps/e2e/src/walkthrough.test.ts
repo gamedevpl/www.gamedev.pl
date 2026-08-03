@@ -209,7 +209,7 @@ describe.skipIf(!prereq.ok)('signed-in walkthrough', () => {
     // element alone is the stronger guard — "accessible" under art. 16 is a claim
     // about a path, and an auto-hide that swallowed the only route would pass a
     // test that merely looked for the link.
-    const pill = page.locator('.theater-peek-pill');
+    const pill = page.locator('.theater-peek-btn, .theater-peek-pill');
     await pill.waitFor({ state: 'visible', timeout: 15_000 });
     await pill.click();
 
