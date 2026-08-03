@@ -212,6 +212,24 @@ const EXPECTED_NOISE: { pattern: RegExp; why: string }[] = [
     pattern: /Provider's accounts list is empty|\[GSI_LOGGER\]: FedCM get\(\) rejects with NetworkError/,
     why: 'a fresh CI browser has no Google session, so FedCM cannot mint a token',
   },
+  {
+    // Newer Chromium also surfaces Google's own report-only frame-ancestors CSP when
+    // GSI briefly frames accounts.google.com during button init. The directive is
+    // report-only ("violation has been logged, but no further action has been taken"),
+    // so the splash still works — confirmed on the 2026-08-03 #500 deploy where the
+    // anonymous splash assertions passed and only this console line failed the gate.
+    // Narrow to accounts.google.com + report-only wording so a real frame-ancestors
+    // block on our own origin would still fail loudly.
+    pattern: /Framing 'https:\/\/accounts\.google\.com\/' violates the following report-only Content Security Policy/,
+    why: "GSI's report-only frame-ancestors probe on accounts.google.com; not enforced",
+  },
+  {
+    // The companion report POST to Google's CSP collector is blocked by ORB in headless
+    // Chromium (opaque cross-origin response). Same GSI init path as above; the report
+    // never needed to succeed for sign-in to work.
+    pattern: /csp\.withgoogle\.com\/csp\/frame-ancestors\/\S+ :: net::ERR_BLOCKED_BY_ORB/,
+    why: 'Chromium ORB blocks Google CSP report beacons from headless CI',
+  },
 ];
 
 function isExpected(text: string): boolean {
