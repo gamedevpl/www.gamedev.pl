@@ -54,12 +54,23 @@ import {
   newMcpSessionId,
   verifyMcpSessionKey,
 } from './mcp-session-key.js';
-import { mcpSessionStartedFields, mcpToolRefusalFields, toolErrorReason } from './mcp-debug-log.js';
+import {
+  mcpSessionStartedFields,
+  mcpToolRefusalFields,
+  peekMcpSessionKeyForLog,
+  toolErrorReason,
+} from './mcp-debug-log.js';
 import {
   MCP_MISSING_CREDENTIAL_HINT,
   sendMcpOAuthChallenge,
   shouldIssueMcpOAuthChallenge,
 } from './mcp-oauth-metadata.js';
+import {
+  INBOX_PIGGYBACK_TOOLS,
+  createMcpNudgeTracker,
+  pendingCountFromPayload,
+  type NudgeWarning,
+} from './mcp-session-nudges.js';
 import { looksLikeAsAccessToken, verifyAsAccessToken } from './oauth-tokens.js';
 import { MCP_ENDPOINT_PATH } from './self-build-connect.js';
 import { BUILD_STEPS, sanitizeCreatorText } from './submission-status.js';
@@ -276,13 +287,13 @@ function stopFromChannel(body: { control?: { stop?: boolean; reason?: string } }
 }
 
 const BEHAVIOURAL_CONTRACT = [
-  'Report progress before and after long steps.',
+  'Report progress before and after long steps (and whenever a reply carries warnings with code progress_stale).',
   'Send a screenshot as soon as the game draws anything playable.',
   'Run kit checks green (at least check:static) before submit_sources when you have a local kit checkout; otherwise submit and let the gate run checks.',
   'Honour stop immediately — do not continue after stop:true.',
   'When get_brief.seedAvailable is true, continue the seed (get_seed) rather than scaffolding from scratch.',
   'Every write reply carries pendingMessages — when that array is non-empty, read_inbox and apply before continuing.',
-  'Do not schedule background or recurring inbox polls; drain pendingMessages from write replies as you go.',
+  'Do not schedule background or recurring inbox polls; drain pendingMessages from write replies (and kit/browse replies that piggyback them) as you go. Honour warnings.code=inbox_pending.',
   'A green gate verdict ends the round — END immediately; the key retires and new work arrives as a fresh kickoff.',
 ].join(' ');
 
@@ -384,6 +395,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
   const invalidStartsByIp = new Map<string, number[]>();
   /** Last synthetic Studio presence pulse per job — coarse MCP activity, not 1:1 tools. */
   const presencePulseByJob = new Map<number, number>();
+  const nudgeTracker = createMcpNudgeTracker();
 
   function pruneTransportSessions(currentTime: number): void {
     for (const [id, meta] of transportSessions) {
@@ -581,6 +593,87 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     };
   }
 
+  function resolveNudgeJobId(
+    args: Record<string, unknown>,
+    ctx: ToolContext,
+    payload: Record<string, unknown>,
+  ): number | null {
+    if (typeof payload.jobId === 'number' && Number.isFinite(payload.jobId)) {
+      return payload.jobId;
+    }
+    const sessionKeyArg = typeof args.sessionKey === 'string' ? args.sessionKey.trim() : '';
+    const peeked = peekMcpSessionKeyForLog(sessionKeyArg, agentTokenSecret);
+    if (peeked) return peeked.jobId;
+    if (ctx.bearerToken && agentTokenSecret) {
+      try {
+        return verifyAgentToken(ctx.bearerToken, agentTokenSecret).jobId;
+      } catch {
+        // Not a round token — ignore.
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Merge soft warnings (and inbox piggyback on hot reads) into a successful tool result.
+   * Never flips isError — ChatGPT already mishandles hard errors in the transcript.
+   */
+  async function applySessionNudges(
+    toolName: string,
+    args: Record<string, unknown>,
+    ctx: ToolContext,
+    result: ToolResult,
+  ): Promise<ToolResult> {
+    if (result.isError) return result;
+    if (!result.structuredContent || typeof result.structuredContent !== 'object') return result;
+    if (Array.isArray(result.structuredContent)) return result;
+
+    let data: Record<string, unknown> = { ...(result.structuredContent as Record<string, unknown>) };
+    const jobId = resolveNudgeJobId(args, ctx, data);
+    if (jobId === null) return result;
+
+    const nowMs = now();
+    nudgeTracker.ensure(jobId, nowMs);
+
+    let piggybacked = false;
+    if (INBOX_PIGGYBACK_TOOLS.has(toolName) && !Array.isArray(data.pendingMessages)) {
+      const auth = await resolveAuth(ctx, args);
+      if ('channelToken' in auth) {
+        const piggy = await writePiggyback(ctx.request, auth.channelToken);
+        data = {
+          ...data,
+          pendingMessages: piggy.pendingMessages,
+          stop: piggy.stop,
+          ...(piggy.reason ? { reason: piggy.reason } : {}),
+        };
+        piggybacked = true;
+      }
+    }
+
+    const pending = pendingCountFromPayload(data);
+    if (pending !== null) {
+      nudgeTracker.notePendingCount(jobId, pending, nowMs);
+    }
+
+    nudgeTracker.noteToolSuccess(jobId, toolName, nowMs);
+    const warnings: NudgeWarning[] = nudgeTracker.warningsFor(jobId, toolName, nowMs);
+    if (warnings.length === 0 && !piggybacked) {
+      return result;
+    }
+    if (warnings.length > 0) {
+      data = { ...data, warnings };
+    }
+    // Keep non-text content (e.g. get_gate_media's inline opening screenshot). Rebuilding
+    // via toolOk() would drop those blocks whenever a warning or piggyback lands.
+    return {
+      content: [
+        { type: 'text' as const, text: JSON.stringify(data) },
+        ...result.content.filter((block) => block.type !== 'text'),
+      ],
+      structuredContent: data,
+    };
+  }
+
   /**
    * Tool annotations, and why every tool needs them.
    *
@@ -622,6 +715,23 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     openWorldHint: false,
   } as const;
 
+  /** Soft nudges — advisory, never isError. */
+  const WARNINGS_PROP = {
+    warnings: {
+      type: 'array',
+      description:
+        'Soft session nudges (progress_stale, inbox_pending). Not errors — act on them, then continue the workflow.',
+      items: {
+        type: 'object',
+        properties: {
+          code: { type: 'string', enum: ['progress_stale', 'inbox_pending'] },
+          message: { type: 'string' },
+        },
+        required: ['code', 'message'],
+      },
+    },
+  } as const;
+
   /** Every mutating reply carries these two, so the model can plan around them. */
   const REPLY_CONTROL = {
     stop: { type: 'boolean', description: 'When true, stop immediately.' },
@@ -633,6 +743,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         properties: { id: { type: 'string' }, text: { type: 'string' }, createdAt: { type: 'string' } },
       },
     },
+    ...WARNINGS_PROP,
   } as const;
 
   const tools: Record<
@@ -2341,7 +2452,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       const sessionKeyArg = typeof args.sessionKey === 'string' ? args.sessionKey.trim() : '';
       const userAgent = headerValue(request.headers['user-agent']);
       try {
-        const result = await tool.handler(args, ctx);
+        const rawResult = await tool.handler(args, ctx);
+        const result = await applySessionNudges(name, args, ctx, rawResult);
         // Echo session id on tool responses when we have one (transport correlator).
         if (sessionHeader) {
           reply.header('Mcp-Session-Id', sessionHeader);
