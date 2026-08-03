@@ -11,6 +11,7 @@
     "actors",
     "gfx",
     "gfx3d",
+    "racing",
     "effects",
     "audio",
     "party",
@@ -28,10 +29,7 @@
   "maxProjectBytes": 486387,
   "audio": {
     "musicField": "string",
-    "musicCatalogRequiredKeys": [
-      "version",
-      "tracks"
-    ],
+    "musicCatalogRequiredKeys": ["version", "tracks"],
     "injectedGlobals": {
       "assets": "__GAME_AUDIO_ASSETS__",
       "defaultMusic": "__GAME_AUDIO_MUSIC__",
