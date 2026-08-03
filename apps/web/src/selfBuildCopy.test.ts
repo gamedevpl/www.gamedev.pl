@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import enLocale from './i18n/locales/en.json';
 import plLocale from './i18n/locales/pl.json';
-import { selfComposerRoute, selfStatusCopy, shouldShowConnectCard } from './selfBuildCopy.js';
+import { connectCardMode, selfComposerRoute, selfStatusCopy, shouldShowConnectCard } from './selfBuildCopy.js';
 
 describe('selfStatusCopy', () => {
   it('is null for platform rounds', () => {
@@ -55,6 +55,22 @@ describe('shouldShowConnectCard', () => {
     ).toBe(false);
     expect(shouldShowConnectCard({ builder: 'self', stall: null })).toBe(false);
     expect(shouldShowConnectCard({ builder: 'platform', stall: 'quiet' })).toBe(false);
+  });
+});
+
+describe('connectCardMode', () => {
+  it('is setup before the first agent signal', () => {
+    expect(connectCardMode({ builder: 'self', stall: 'no_agent_yet' })).toBe('setup');
+  });
+
+  it('is resume after quiet or gate-green — not a full first-time install', () => {
+    expect(connectCardMode({ builder: 'self', stall: 'quiet' })).toBe('resume');
+    expect(connectCardMode({ builder: 'self', phase: 'ready_for_review' })).toBe('resume');
+  });
+
+  it('is null when the connect card should not show', () => {
+    expect(connectCardMode({ builder: 'self', stall: null })).toBeNull();
+    expect(connectCardMode({ builder: 'platform', stall: 'quiet' })).toBeNull();
   });
 });
 

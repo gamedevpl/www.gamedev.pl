@@ -46,11 +46,27 @@ export function selfStatusCopy(input: SelfBuildCopyInput): SelfStatusCopy | null
  * quiet — gamedev.pl cannot wake it, so the paste-ready prompt is the resume path.
  * Also shown after a green gate closes the round: Studio still looks "live", but no
  * session will check the inbox until the creator starts their agent again.
+ *
+ * Quiet / gate-green use {@link connectCardMode} `resume` (kickoff-first), not the
+ * full first-time MCP install chrome.
  */
 export function shouldShowConnectCard(input: SelfBuildCopyInput): boolean {
   const copy = selfStatusCopy(input);
   if (copy === 'no_agent_yet' || copy === 'quiet_agent') return true;
   return input.builder === 'self' && input.phase === 'ready_for_review';
+}
+
+/** Shape of the connect card when it is on screen, or null when it should not show. */
+export type ConnectCardMode = 'setup' | 'resume';
+
+/**
+ * First attach gets the full install + kickoff. Quiet / gate-green already had a
+ * connection — show the continue prompt first and tuck MCP re-install under details.
+ */
+export function connectCardMode(input: SelfBuildCopyInput): ConnectCardMode | null {
+  if (!shouldShowConnectCard(input)) return null;
+  if (selfStatusCopy(input) === 'no_agent_yet') return 'setup';
+  return 'resume';
 }
 
 /**

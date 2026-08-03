@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
 import {
@@ -21,6 +21,9 @@ const CLIENT_LABEL_KEY: Record<ConnectClient, string> = {
 const AUTH_MODE_STORAGE_KEY = 'gamedev_connect_auth_mode';
 
 type ConnectAuthMode = 'key' | 'oauth';
+
+/** First attach vs mid-round re-attach after quiet / gate green. */
+export type ConnectCardMode = 'setup' | 'resume';
 
 function loadAuthMode(): ConnectAuthMode {
   try {
@@ -47,6 +50,12 @@ type StudioConnectCardProps = {
    * status poll.
    */
   agentConnected?: boolean;
+  /**
+   * `setup` (default): full MCP install + kickoff for the first connect.
+   * `resume`: kickoff-first after quiet / gate-green — install stays under a details
+   * disclosure so a mid-round stall does not look like a project reset.
+   */
+  mode?: ConnectCardMode;
 };
 
 /**
@@ -57,7 +66,7 @@ type StudioConnectCardProps = {
  * Step 2: paste the keyless kickoff prompt (slug only; never a secret).
  * The full Authorization value is held in memory for Copy and never rendered.
  */
-export function StudioConnectCard({ token, agentConnected = false }: StudioConnectCardProps) {
+export function StudioConnectCard({ token, agentConnected = false, mode = 'setup' }: StudioConnectCardProps) {
   const { t, i18n } = useTranslation();
   const baseId = useId();
   const authHeaderRef = useRef<string | null>(null);
@@ -70,6 +79,8 @@ export function StudioConnectCard({ token, agentConnected = false }: StudioConne
   const [rotateArmed, setRotateArmed] = useState(false);
   const [rotating, setRotating] = useState(false);
   const [rotateError, setRotateError] = useState<string | null>(null);
+
+  const isResume = mode === 'resume';
 
   useEffect(() => {
     let cancelled = false;
@@ -98,9 +109,9 @@ export function StudioConnectCard({ token, agentConnected = false }: StudioConne
     return null;
   }
 
-  const chooseAuthMode = (mode: ConnectAuthMode) => {
-    setAuthMode(mode);
-    saveAuthMode(mode);
+  const chooseAuthMode = (next: ConnectAuthMode) => {
+    setAuthMode(next);
+    saveAuthMode(next);
   };
 
   const copyText = async (text: string, which: 'config' | 'kickoff') => {
@@ -161,206 +172,219 @@ export function StudioConnectCard({ token, agentConnected = false }: StudioConne
   const installLinks = payload?.installLinks;
   const showInstallLinks = Boolean(installLinks?.cursor && installLinks?.vscode);
 
+  const installLinksBlock =
+    showInstallLinks && installLinks ? (
+      <>
+        <p className="studio-connect-same">{t('connect.installLinks.hint')}</p>
+        <div className="studio-connect-install-links" data-testid="connect-install-links">
+          <a
+            className="studio-connect-install-link"
+            href={installLinks.cursor}
+            data-testid="connect-install-cursor"
+            onClick={() => recordDeeplinkClick('cursor')}
+          >
+            {t('connect.installLinks.cursor')}
+          </a>
+          <a
+            className="studio-connect-install-link"
+            href={installLinks.vscode}
+            data-testid="connect-install-vscode"
+            onClick={() => recordDeeplinkClick('vscode')}
+          >
+            {t('connect.installLinks.vscode')}
+          </a>
+        </div>
+      </>
+    ) : null;
+
+  const installPanel: ReactNode = payload ? (
+    <>
+      <div className="studio-connect-tabs" role="tablist" aria-label={t('connect.authMode.label')}>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={authMode === 'key'}
+          className={`studio-connect-tab${authMode === 'key' ? ' is-active' : ''}`}
+          onClick={() => chooseAuthMode('key')}
+        >
+          {t('connect.authMode.key')}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={authMode === 'oauth'}
+          className={`studio-connect-tab${authMode === 'oauth' ? ' is-active' : ''}`}
+          onClick={() => chooseAuthMode('oauth')}
+        >
+          {t('connect.authMode.oauth')}
+        </button>
+      </div>
+
+      {authMode === 'key' ? (
+        <div className="studio-connect-step">
+          <div className="studio-connect-step-head">
+            {!isResume ? (
+              <span className="studio-connect-step-num" aria-hidden="true">
+                1
+              </span>
+            ) : null}
+            <h4 className="studio-connect-step-title">{t('connect.step1.title')}</h4>
+          </div>
+          {installLinksBlock}
+          <p className="studio-connect-same">{t('connect.step1.configHint')}</p>
+          <div className="studio-connect-tabs" role="tablist" aria-label={t('connect.step1.clients')}>
+            {CONNECT_CLIENTS.map((id) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={client === id}
+                className={`studio-connect-tab${client === id ? ' is-active' : ''}`}
+                onClick={() => setClient(id)}
+              >
+                {t(CLIENT_LABEL_KEY[id])}
+              </button>
+            ))}
+          </div>
+          <pre className="studio-connect-snippet" tabIndex={0} data-testid="connect-config-snippet">
+            {installSnippet}
+          </pre>
+          <p className="studio-connect-expiry" data-testid="connect-key-meta">
+            {t('connect.step1.meta', {
+              fingerprint: payload.fingerprint,
+              when: expiresLabel,
+              generation: payload.keyGeneration,
+            })}
+          </p>
+          <div className="studio-connect-actions">
+            <button type="button" className="status-share-copy" onClick={() => void copyConfig()}>
+              <PixelIcon name={copied === 'config' ? 'check' : 'sparkle'} size={12} />{' '}
+              {copied === 'config' ? t('connect.copied') : t('connect.copyConfig')}
+            </button>
+            {!rotateArmed ? (
+              <button type="button" className="studio-connect-skip" onClick={() => setRotateArmed(true)}>
+                {t('connect.rotate.start')}
+              </button>
+            ) : (
+              <span className="studio-connect-rotate-confirm">
+                <span>{t('connect.rotate.confirm')}</span>
+                <button
+                  type="button"
+                  className="studio-connect-skip is-danger"
+                  disabled={rotating}
+                  onClick={() => void handleRotate()}
+                >
+                  {rotating ? t('connect.rotate.sending') : t('connect.rotate.yes')}
+                </button>
+                <button
+                  type="button"
+                  className="studio-connect-skip"
+                  disabled={rotating}
+                  onClick={() => setRotateArmed(false)}
+                >
+                  {t('connect.rotate.no')}
+                </button>
+              </span>
+            )}
+          </div>
+          {rotateError ? <p className="error">{rotateError}</p> : null}
+        </div>
+      ) : (
+        <div className="studio-connect-step">
+          <div className="studio-connect-step-head">
+            {!isResume ? (
+              <span className="studio-connect-step-num" aria-hidden="true">
+                1
+              </span>
+            ) : null}
+            <h4 className="studio-connect-step-title">{t('connect.oauth.title')}</h4>
+          </div>
+          {installLinksBlock}
+          <p className="studio-connect-same">{t('connect.oauth.hint')}</p>
+          <pre className="studio-connect-snippet" tabIndex={0}>
+            {payload.mcpUrl}
+          </pre>
+          <div className="studio-connect-actions">
+            <button type="button" className="status-share-copy" onClick={() => void copyText(payload.mcpUrl, 'config')}>
+              <PixelIcon name={copied === 'config' ? 'check' : 'sparkle'} size={12} />{' '}
+              {copied === 'config' ? t('connect.copied') : t('connect.copyUrl')}
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  ) : null;
+
+  const kickoffPanel: ReactNode = payload ? (
+    <div className="studio-connect-step">
+      <div className="studio-connect-step-head">
+        {!isResume ? (
+          <span className="studio-connect-step-num" aria-hidden="true">
+            2
+          </span>
+        ) : null}
+        <h4 className="studio-connect-step-title">
+          {isResume ? t('connect.resume.kickoffTitle') : t('connect.step2.title')}
+        </h4>
+      </div>
+      <p className="studio-connect-same">
+        {isResume ? t('connect.resume.kickoffHint') : t('connect.step2.sameConnection')}
+      </p>
+      <pre className="studio-connect-snippet studio-connect-kickoff" tabIndex={0} data-testid="connect-kickoff">
+        {payload.kickoffPrompt}
+      </pre>
+      <div className="studio-connect-actions">
+        <button
+          type="button"
+          className="status-share-copy"
+          onClick={() => void copyText(payload.kickoffPrompt, 'kickoff')}
+        >
+          <PixelIcon name={copied === 'kickoff' ? 'check' : 'sparkle'} size={12} />{' '}
+          {copied === 'kickoff' ? t('connect.copied') : t('connect.copyKickoff')}
+        </button>
+      </div>
+    </div>
+  ) : null;
+
   return (
-    <section className={`studio-connect${error ? ' is-error' : ''}`} aria-labelledby={`${baseId}-title`}>
+    <section
+      className={`studio-connect${error ? ' is-error' : ''}${isResume ? ' is-resume' : ''}`}
+      aria-labelledby={`${baseId}-title`}
+      data-connect-mode={mode}
+    >
       <h3 id={`${baseId}-title`} className="studio-connect-title">
-        {t('connect.title')}
+        {isResume ? t('connect.resume.title') : t('connect.title')}
       </h3>
       {/* Lead is setup guidance — drop it once we only have an error, so a phone foot/thread
           is not mostly paragraph + red line. */}
-      {!error ? <p className="studio-connect-lead">{t('connect.lead')}</p> : null}
+      {!error ? <p className="studio-connect-lead">{isResume ? t('connect.resume.lead') : t('connect.lead')}</p> : null}
 
       {loading ? <p className="studio-connect-state">{t('connect.loading')}</p> : null}
       {error ? <p className="error">{error}</p> : null}
 
       {payload && !loading ? (
-        <>
-          <div className="studio-connect-tabs" role="tablist" aria-label={t('connect.authMode.label')}>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={authMode === 'key'}
-              className={`studio-connect-tab${authMode === 'key' ? ' is-active' : ''}`}
-              onClick={() => chooseAuthMode('key')}
-            >
-              {t('connect.authMode.key')}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={authMode === 'oauth'}
-              className={`studio-connect-tab${authMode === 'oauth' ? ' is-active' : ''}`}
-              onClick={() => chooseAuthMode('oauth')}
-            >
-              {t('connect.authMode.oauth')}
-            </button>
-          </div>
-
-          {authMode === 'key' ? (
-            <div className="studio-connect-step">
-              <div className="studio-connect-step-head">
-                <span className="studio-connect-step-num" aria-hidden="true">
-                  1
-                </span>
-                <h4 className="studio-connect-step-title">{t('connect.step1.title')}</h4>
-              </div>
-              {showInstallLinks && installLinks ? (
-                <>
-                  <p className="studio-connect-same">{t('connect.installLinks.hint')}</p>
-                  <div className="studio-connect-install-links" data-testid="connect-install-links">
-                    <a
-                      className="studio-connect-install-link"
-                      href={installLinks.cursor}
-                      data-testid="connect-install-cursor"
-                      onClick={() => recordDeeplinkClick('cursor')}
-                    >
-                      {t('connect.installLinks.cursor')}
-                    </a>
-                    <a
-                      className="studio-connect-install-link"
-                      href={installLinks.vscode}
-                      data-testid="connect-install-vscode"
-                      onClick={() => recordDeeplinkClick('vscode')}
-                    >
-                      {t('connect.installLinks.vscode')}
-                    </a>
-                  </div>
-                </>
-              ) : null}
-              <p className="studio-connect-same">{t('connect.step1.configHint')}</p>
-              <div className="studio-connect-tabs" role="tablist" aria-label={t('connect.step1.clients')}>
-                {CONNECT_CLIENTS.map((id) => (
-                  <button
-                    key={id}
-                    type="button"
-                    role="tab"
-                    aria-selected={client === id}
-                    className={`studio-connect-tab${client === id ? ' is-active' : ''}`}
-                    onClick={() => setClient(id)}
-                  >
-                    {t(CLIENT_LABEL_KEY[id])}
-                  </button>
-                ))}
-              </div>
-              <pre className="studio-connect-snippet" tabIndex={0} data-testid="connect-config-snippet">
-                {installSnippet}
-              </pre>
-              <p className="studio-connect-expiry" data-testid="connect-key-meta">
-                {t('connect.step1.meta', {
-                  fingerprint: payload.fingerprint,
-                  when: expiresLabel,
-                  generation: payload.keyGeneration,
-                })}
-              </p>
-              <div className="studio-connect-actions">
-                <button type="button" className="status-share-copy" onClick={() => void copyConfig()}>
-                  <PixelIcon name={copied === 'config' ? 'check' : 'sparkle'} size={12} />{' '}
-                  {copied === 'config' ? t('connect.copied') : t('connect.copyConfig')}
-                </button>
-                {!rotateArmed ? (
-                  <button type="button" className="studio-connect-skip" onClick={() => setRotateArmed(true)}>
-                    {t('connect.rotate.start')}
-                  </button>
-                ) : (
-                  <span className="studio-connect-rotate-confirm">
-                    <span>{t('connect.rotate.confirm')}</span>
-                    <button
-                      type="button"
-                      className="studio-connect-skip is-danger"
-                      disabled={rotating}
-                      onClick={() => void handleRotate()}
-                    >
-                      {rotating ? t('connect.rotate.sending') : t('connect.rotate.yes')}
-                    </button>
-                    <button
-                      type="button"
-                      className="studio-connect-skip"
-                      disabled={rotating}
-                      onClick={() => setRotateArmed(false)}
-                    >
-                      {t('connect.rotate.no')}
-                    </button>
-                  </span>
-                )}
-              </div>
-              {rotateError ? <p className="error">{rotateError}</p> : null}
-            </div>
-          ) : (
-            <div className="studio-connect-step">
-              <div className="studio-connect-step-head">
-                <span className="studio-connect-step-num" aria-hidden="true">
-                  1
-                </span>
-                <h4 className="studio-connect-step-title">{t('connect.oauth.title')}</h4>
-              </div>
-              {showInstallLinks && installLinks ? (
-                <>
-                  <p className="studio-connect-same">{t('connect.installLinks.hint')}</p>
-                  <div className="studio-connect-install-links" data-testid="connect-install-links">
-                    <a
-                      className="studio-connect-install-link"
-                      href={installLinks.cursor}
-                      data-testid="connect-install-cursor"
-                      onClick={() => recordDeeplinkClick('cursor')}
-                    >
-                      {t('connect.installLinks.cursor')}
-                    </a>
-                    <a
-                      className="studio-connect-install-link"
-                      href={installLinks.vscode}
-                      data-testid="connect-install-vscode"
-                      onClick={() => recordDeeplinkClick('vscode')}
-                    >
-                      {t('connect.installLinks.vscode')}
-                    </a>
-                  </div>
-                </>
-              ) : null}
-              <p className="studio-connect-same">{t('connect.oauth.hint')}</p>
-              <pre className="studio-connect-snippet" tabIndex={0}>
-                {payload.mcpUrl}
-              </pre>
-              <div className="studio-connect-actions">
-                <button
-                  type="button"
-                  className="status-share-copy"
-                  onClick={() => void copyText(payload.mcpUrl, 'config')}
-                >
-                  <PixelIcon name={copied === 'config' ? 'check' : 'sparkle'} size={12} />{' '}
-                  {copied === 'config' ? t('connect.copied') : t('connect.copyUrl')}
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div className="studio-connect-step">
-            <div className="studio-connect-step-head">
-              <span className="studio-connect-step-num" aria-hidden="true">
-                2
-              </span>
-              <h4 className="studio-connect-step-title">{t('connect.step2.title')}</h4>
-            </div>
-            <p className="studio-connect-same">{t('connect.step2.sameConnection')}</p>
-            <pre className="studio-connect-snippet studio-connect-kickoff" tabIndex={0} data-testid="connect-kickoff">
-              {payload.kickoffPrompt}
-            </pre>
-            <div className="studio-connect-actions">
-              <button
-                type="button"
-                className="status-share-copy"
-                onClick={() => void copyText(payload.kickoffPrompt, 'kickoff')}
-              >
-                <PixelIcon name={copied === 'kickoff' ? 'check' : 'sparkle'} size={12} />{' '}
-                {copied === 'kickoff' ? t('connect.copied') : t('connect.copyKickoff')}
-              </button>
-            </div>
-          </div>
-
-          <p className="studio-connect-waiting" aria-live="polite">
-            <span className="studio-connect-pulse" aria-hidden="true" />
-            {t('connect.waiting')}
-          </p>
-        </>
+        isResume ? (
+          <>
+            {kickoffPanel}
+            <p className="studio-connect-waiting" aria-live="polite">
+              <span className="studio-connect-pulse" aria-hidden="true" />
+              {t('connect.resume.waiting')}
+            </p>
+            <details className="studio-connect-setup-details" data-testid="connect-setup-details">
+              <summary>{t('connect.resume.setupDetails')}</summary>
+              <div className="studio-connect-setup-body">{installPanel}</div>
+            </details>
+          </>
+        ) : (
+          <>
+            {installPanel}
+            {kickoffPanel}
+            <p className="studio-connect-waiting" aria-live="polite">
+              <span className="studio-connect-pulse" aria-hidden="true" />
+              {t('connect.waiting')}
+            </p>
+          </>
+        )
       ) : null}
     </section>
   );

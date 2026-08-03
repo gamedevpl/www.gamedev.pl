@@ -276,7 +276,7 @@
     "tabs": {
       "thread": "Wątek",
       "details": "Szczegóły",
-      "playtest": "Testuj",
+      "playtest": "Zagraj",
       "edit": "Edytuj"
     },
     "editor": {
@@ -325,9 +325,9 @@
       "sessions": "Ostatnia gra",
       "play": "gry",
       "openBuild": "Otwórz build",
-      "playtest": "Playtest i prompt",
-      "abandon": "Zatrzymaj build",
-      "abandonConfirm": "Potwierdź zatrzymanie"
+      "playtest": "Zagraj i notatka",
+      "abandon": "Porzuć ten build",
+      "abandonConfirm": "Tak, porzuć — odrzuć tę rundę"
     },
     "share": {
       "title": "Udostępnij wersję roboczą",
@@ -648,13 +648,13 @@
     },
     "tryAgain": "Spróbuj z tym pomysłem jeszcze raz",
     "abandon": {
-      "start": "Zatrzymaj tę grę",
-      "compact": "Zatrzymaj",
-      "confirm": "Zatrzymać tworzenie tej gry?",
-      "yes": "Tak, zatrzymaj",
+      "start": "Porzuć ten build",
+      "compact": "Porzuć",
+      "confirm": "Porzucić tę rundę? Dotychczasowa praca agenta zostanie odrzucona.",
+      "yes": "Tak, porzuć",
       "no": "Twórz dalej",
-      "sending": "Zatrzymuję…",
-      "error": "Nie udało się teraz zatrzymać tej gry. Spróbuj ponownie za chwilę."
+      "sending": "Porzucam…",
+      "error": "Nie udało się teraz porzucić tego buildu. Spróbuj ponownie za chwilę."
     },
     "playableHint": "Wczesna wersja prosto z warsztatu — surowa, niedokończona i już grywalna. Powiedz, co zmienić, póki to łatwe."
   },
@@ -964,6 +964,14 @@
       "no": "Anuluj",
       "sending": "Obracanie…",
       "error": "Nie udało się teraz obrócić klucza. Spróbuj za chwilę."
+    },
+    "resume": {
+      "title": "Wznów pracę z agentem",
+      "lead": "Twój agent umilkł. Wklej ten prompt do tej samej sesji — albo uruchom nową z istniejącym połączeniem gamedev.pl.",
+      "kickoffTitle": "Prompt wznowienia",
+      "kickoffHint": "Ten prompt niesie tylko slug gry. Połączenie MCP zostaje w konfiguracji agenta.",
+      "setupDetails": "Trzeba ponownie podłączyć MCP?",
+      "waiting": "Czekamy, aż Twój agent znów się odezwie…"
     }
   },
   "agentKey": {

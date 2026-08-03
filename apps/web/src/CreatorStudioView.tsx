@@ -676,10 +676,9 @@ export function CreatorStudioView({
                           <span className="studio-head-action-label">{t('studioPanel.tabs.edit')}</span>
                         </button>
                       ) : null}
-                      {/* Playtest is the next action after a build — same weight as Send
-                        feedback, not a peer of the Details toggle beside it. When already
-                        open (empty/error keeps chrome visible), clicking again returns to
-                        the thread so creators are never stuck without a Build tab. */}
+                      {/* Play is the next action after a build — one verb with Details as
+                        the side-panel toggle beside it. When already open (empty/error
+                        keeps chrome visible), clicking again returns to the thread. */}
                       {/* Labels are wrapped rather than left as bare text so a phone can
                         hide the word and keep the icon — and hide it the way that leaves
                         the button still named for a screen reader, not display: none. */}

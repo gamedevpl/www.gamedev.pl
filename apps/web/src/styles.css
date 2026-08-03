@@ -5584,6 +5584,42 @@ a.user-name--profile:focus-visible {
   }
 }
 
+/* Mid-round resume: kickoff first; full MCP install tucked under a disclosure so a
+   quiet stall does not look like first-time onboarding. */
+.studio-connect.is-resume {
+  gap: 12px;
+}
+
+.studio-connect-setup-details {
+  margin: 0;
+  padding-top: 4px;
+  border-top: 1px solid var(--panel-border, #33383d);
+}
+
+.studio-connect-setup-details > summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.82rem;
+  color: var(--muted, #94a3b8);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.studio-connect-setup-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.studio-connect-setup-details > summary:hover {
+  color: var(--text, #e2e8f0);
+}
+
+.studio-connect-setup-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 12px;
+}
+
 /* Naming the game — the step the build waits on, so it leads the panel and is sized
    like a decision rather than like one more field among the clarifying questions. */
 .qa-name {

@@ -22,7 +22,7 @@ import {
 } from './submissionApi.js';
 import { NAVIGATE_EVENT, statusPath, studioPath } from './router.js';
 import { formatRelativeTime } from './relativeTime.js';
-import { selfComposerRoute, selfStatusCopy, shouldShowConnectCard } from './selfBuildCopy.js';
+import { connectCardMode, selfComposerRoute, selfStatusCopy, shouldShowConnectCard } from './selfBuildCopy.js';
 import { StudioConnectCard } from './StudioConnectCard.js';
 import { submitImprovement } from './studioApi.js';
 import { recordStudioStep, type StudioStepDetail } from './visitTelemetry.js';
@@ -643,7 +643,11 @@ export function SubmissionStatusView({
                 stickNonce={isAwaitingOwnAgent(status) ? pendingRevisions.length + 1 : 0}
                 after={
                   isAwaitingOwnAgent(status) ? (
-                    <StudioConnectCard key={`connect-${pendingRevisions.length}`} token={token} />
+                    <StudioConnectCard
+                      key={`connect-${pendingRevisions.length}`}
+                      token={token}
+                      mode={connectCardMode(copyInputFromStatus(status)) ?? 'setup'}
+                    />
                   ) : null
                 }
               />
@@ -695,16 +699,19 @@ export function SubmissionStatusView({
 
                 {/* Checklist fraction earns its keep while work remains; once every
                     item is checked it only restates the phase. Slug lives in the studio
-                    header — repeating it here is infra chrome. */}
+                    header — repeating it here is infra chrome.
+                    Abandon lives in Details (Claude-Code side panel), not beside the
+                    composer. When Studio provides playtest, that is the one Play verb —
+                    the header already owns the same action; no second "play with a note". */}
                 <ThreadContextBar
                   phase={t(`statusView.states.${status.status}.label`)}
                   heartbeatAt={heartbeatAt}
                   active={!TERMINAL_STATUSES.has(status.status)}
-                  {...(!TERMINAL_STATUSES.has(status.status) ? { stopToken: token } : {})}
                   {...(total > 0 && done < total ? { progress: { done, total } } : {})}
-                  {...(playable ? { primary: playable } : {})}
-                  {...(onPlaytest && playable
-                    ? { secondary: { label: t('statusView.playtestCta'), onClick: onPlaytest } }
+                  {...(playable
+                    ? {
+                        primary: onPlaytest ? { label: t('statusView.playShort'), onClick: onPlaytest } : playable,
+                      }
                     : {})}
                 />
 
@@ -817,7 +824,11 @@ export function SubmissionStatusView({
             ) : null}
 
             {isAwaitingOwnAgent(status) ? (
-              <StudioConnectCard key={`connect-${pendingRevisions.length}`} token={token} />
+              <StudioConnectCard
+                key={`connect-${pendingRevisions.length}`}
+                token={token}
+                mode={connectCardMode(copyInputFromStatus(status)) ?? 'setup'}
+              />
             ) : null}
 
             {TERMINAL_STATUSES.has(status.status) && status.status !== 'published' && submittedConcept && onRetry ? (
@@ -1174,12 +1185,11 @@ function FeedbackPanel({
       : composerRoute === 'waiting'
         ? 'statusView.feedback.sentSelfWaiting'
         : null;
-  const routeNoteKey =
-    composerRoute === 'active'
-      ? 'statusView.feedback.routeSelfActive'
-      : composerRoute === 'waiting'
-        ? 'statusView.feedback.routeSelfWaiting'
-        : null;
+  // Active self rounds already imply a listening agent — repeating that above the
+  // box is chrome noise (the placeholder covers "what to write"). Waiting is the
+  // case that still needs a sentence: the note will not be read until they start
+  // their agent again.
+  const routeNoteKey = composerRoute === 'waiting' ? 'statusView.feedback.routeSelfWaiting' : null;
 
   // The composer grows with what is typed, which is what replaced the resize grip: once
   // the send button moved inside the box, a drag handle in the middle of its right edge
@@ -1539,19 +1549,14 @@ function ThreadContextBar({
   heartbeatAt,
   progress,
   primary,
-  secondary,
   active = false,
-  stopToken,
 }: {
   phase: string;
   heartbeatAt: number | null;
   progress?: { done: number; total: number };
   primary?: { label: string; onClick: () => void };
-  secondary?: { label: string; onClick: () => void };
   /** Agent is mid-build — show motion so "Writing code" does not read as stuck text. */
   active?: boolean;
-  /** When set, offer a two-step stop control for the running build. */
-  stopToken?: string;
 }) {
   const { t } = useTranslation();
 
@@ -1573,12 +1578,6 @@ function ThreadContextBar({
           <span className="studio-context-progress">
             {t('statusView.progress.checklistCount', { done: progress.done, total: progress.total })}
           </span>
-        ) : null}
-        {stopToken ? <AbandonControl token={stopToken} compact /> : null}
-        {secondary ? (
-          <button type="button" className="studio-context-link status-playtest-cta" onClick={secondary.onClick}>
-            {secondary.label}
-          </button>
         ) : null}
         {primary ? (
           <button type="button" className="primary-btn status-play-cta" onClick={primary.onClick}>

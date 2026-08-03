@@ -426,4 +426,36 @@ describe('StudioConnectCard', () => {
       await act(async () => root.unmount());
     }
   });
+
+  it('resume mode leads with the kickoff and tucks MCP install under details', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(StudioConnectCard, { token: 'status-tok', mode: 'resume' }));
+      await flush();
+    });
+    await act(async () => {
+      await flush();
+    });
+
+    expect(container.querySelector('[data-connect-mode="resume"]')).not.toBeNull();
+    expect(container.querySelector('.studio-connect-title')?.textContent).toContain('Continue with your agent');
+    expect(container.textContent).not.toContain('Connect your coding agent');
+    expect(container.querySelector('[data-testid="connect-kickoff"]')?.textContent).toContain('slug: sky-dodge');
+    // Install stays under a closed disclosure — still in the DOM (jsdom keeps details
+    // content), but not the primary chrome a quiet mid-round should lead with.
+    const details = container.querySelector<HTMLDetailsElement>('[data-testid="connect-setup-details"]');
+    expect(details).not.toBeNull();
+    expect(details?.open).toBe(false);
+    expect(details?.textContent).toContain('Need to reconnect MCP?');
+    expect(details?.querySelector('[data-testid="connect-install-cursor"]')).not.toBeNull();
+    expect(container.innerHTML).not.toContain(FULL_KEY);
+
+    await act(async () => root.unmount());
+  });
 });

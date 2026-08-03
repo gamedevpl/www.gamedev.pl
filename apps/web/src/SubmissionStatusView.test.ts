@@ -142,7 +142,7 @@ describe('SubmissionStatusView', () => {
     });
   });
 
-  it('offers playtesting as a quiet link next to Play, once there is something to play', async () => {
+  it('routes the one Play verb to playtest when Studio provides that surface', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'building',
@@ -163,15 +163,13 @@ describe('SubmissionStatusView', () => {
       await flushEffects();
     });
 
-    // One play verb in the foot; playtest is a quieter path, not a peer button.
+    // Header and foot share one Play verb — no second "play with a note" peer.
     const play = container.querySelector<HTMLButtonElement>('.status-play-cta');
     expect(play?.textContent?.trim()).toMatch(/^Play$/);
-    const playtest = container.querySelector<HTMLButtonElement>('.status-playtest-cta');
-    expect(playtest?.classList.contains('studio-context-link')).toBe(true);
-    expect(playtest?.textContent).toContain('Play with a note');
+    expect(container.querySelector('.status-playtest-cta')).toBeNull();
 
     await act(async () => {
-      playtest?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      play?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushEffects();
     });
     expect(onPlaytest).toHaveBeenCalledTimes(1);
@@ -645,8 +643,10 @@ describe('SubmissionStatusView', () => {
       });
 
       expect(container.querySelector('.studio-connect')).toBeNull();
-      // Active self round: composer routing says the agent will pick the note up.
-      expect(container.textContent).toContain('picks this up on its next check-in');
+      // Active self round: composer is back; the always-on "picks this up" line is gone —
+      // that was chrome noise once an agent is already listening.
+      expect(container.querySelector('.status-composer')).not.toBeNull();
+      expect(container.querySelector('.status-feedback-route')).toBeNull();
     } finally {
       await act(async () => {
         root.unmount();
@@ -707,7 +707,13 @@ describe('SubmissionStatusView', () => {
       });
 
       expect(container.querySelector('.status-warning')?.textContent).toContain("can't start it from here");
-      expect(container.querySelector('.studio-connect')).not.toBeNull();
+      expect(container.querySelector('.studio-connect.is-resume')).not.toBeNull();
+      expect(container.textContent).toContain('Continue with your agent');
+      expect(container.textContent).not.toContain('Connect your coding agent');
+      // Full first-time install stays under a closed disclosure — continue, not a reset.
+      const details = container.querySelector<HTMLDetailsElement>('[data-testid="connect-setup-details"]');
+      expect(details).not.toBeNull();
+      expect(details?.open).toBe(false);
       expect(container.textContent).toContain('your agent will get this when you start it');
       expect(container.textContent?.toLowerCase()).not.toMatch(/\btoken\b/);
     } finally {
@@ -1208,7 +1214,7 @@ describe('SubmissionStatusView', () => {
     });
   });
 
-  it('shows a build pulse and a stop control on the studio thread bar while building', async () => {
+  it('shows a build pulse and checklist fraction on the studio thread bar while building', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'building',
@@ -1241,7 +1247,8 @@ describe('SubmissionStatusView', () => {
 
     expect(container.querySelector('.studio-thread-context.is-active')).not.toBeNull();
     expect(container.querySelector('.studio-context-phase-spinner')).not.toBeNull();
-    expect(container.querySelector('.studio-context-stop')?.textContent).toContain('Stop');
+    // Abandon is Details-only — not a destructive peer of the composer.
+    expect(container.querySelector('.studio-context-stop')).toBeNull();
     // Incomplete checklist still shows; slug does not (header owns identity).
     expect(container.querySelector('.studio-context-progress')?.textContent).toContain('4 of 6 done');
     expect(container.querySelector('.studio-thread-context .studio-slug')).toBeNull();
@@ -1655,7 +1662,7 @@ describe('SubmissionStatusView stop & retry', () => {
     });
 
     const arm = container.querySelector<HTMLButtonElement>('.status-abandon');
-    expect(arm?.textContent).toContain('Stop this build');
+    expect(arm?.textContent).toContain('Abandon this build');
 
     // Arming must not call the API — this is the mis-tap guard.
     await act(async () => {
@@ -1663,7 +1670,7 @@ describe('SubmissionStatusView stop & retry', () => {
       await flushEffects();
     });
     expect(mockedAbandonSubmission).not.toHaveBeenCalled();
-    expect(container.textContent).toContain('Stop building this game?');
+    expect(container.textContent).toContain('Abandon this round?');
 
     await act(async () => {
       container
