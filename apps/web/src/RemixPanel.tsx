@@ -14,7 +14,9 @@ import {
   type RemixSession,
   type RemixSuggestion,
 } from './remixApi.js';
-import type { EditorLabel, EditorParamValue } from './studioApi.js';
+import { RemixPainter } from './RemixPainter.js';
+import type { EditorContentDoc, EditorLabel, EditorParamValue } from './studioApi.js';
+import type { RemixPaintedVia } from './visitTelemetry.js';
 
 /**
  * Remix: a player bends a published game while playing it.
@@ -143,6 +145,14 @@ export function RemixPanel(props: {
   onClose: () => void;
   /** Shared values from a `?remix=` link, already parsed. */
   initialParams?: Record<string, EditorParamValue> | null;
+  /**
+   * The More-menu door to the painter: bumped by the theater when "Level
+   * editor" is chosen. A nonce rather than a boolean so choosing it again
+   * reopens a painter the player closed.
+   */
+  painterRequest?: number;
+  /** Tells the theater whether this game has a painter to put in its menu. */
+  onCapabilities?: (caps: { painter: boolean }) => void;
 }) {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
@@ -167,21 +177,78 @@ export function RemixPanel(props: {
   const [failed, setFailed] = useState<'unsupported' | 'error' | null>(null);
   const valuesRef = useRef(values);
   valuesRef.current = values;
+  /**
+   * The painter's document — the game's declared collections, seeded from the
+   * declaration's defaults. Client-only: painted content reaches the game over
+   * the bridge and never travels to the server (decision 3.2 in the ops plan —
+   * remixes stay ephemeral; the session is the only home this has).
+   */
+  const [contentDoc, setContentDoc] = useState<EditorContentDoc>({});
+  const contentDocRef = useRef(contentDoc);
+  contentDocRef.current = contentDoc;
+  const [painterOpen, setPainterOpen] = useState(false);
+  /** Whether the router proposed the painter and the offer is still on screen. */
+  const [painterOffer, setPainterOffer] = useState(false);
+  /** First door wins — matches the telemetry dedupe, which keeps the first via. */
+  const painterDoorRef = useRef<RemixPaintedVia | null>(null);
+  const contentEditedRef = useRef(false);
+  const contentPushTimer = useRef<number | null>(null);
 
   const label = useCallback(
     (both: EditorLabel | undefined) => (both ? (i18n.language?.startsWith('pl') ? both.pl : both.en) : ''),
     [i18n.language],
   );
 
-  /** Push the whole params document into the running game. */
+  /**
+   * Push the whole content document into the running game.
+   *
+   * Whole, not partial, because the game-side module *replaces* its content
+   * with what arrives — it never merges with the build-inlined defaults. A
+   * params-only push to a game that also declares collections used to hand it
+   * a document with no maps, and the game's next restart read them off a
+   * content object that no longer had any.
+   */
   const pushToGame = useCallback(
-    (next: Record<string, EditorParamValue>) => {
+    (next: Record<string, EditorParamValue>, contentOverride?: EditorContentDoc) => {
+      const collections = contentOverride ?? contentDocRef.current;
       props.frameRef.current?.contentWindow?.postMessage(
-        { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, t: 'editor:content', content: { params: next } },
+        { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, t: 'editor:content', content: { ...collections, params: next } },
         '*',
       );
     },
     [props.frameRef],
+  );
+
+  /**
+   * A painting burst is many cell taps in a second, and the pilot game restarts
+   * its round on every content change it sees — so painted content lands on a
+   * short debounce while a slider stays instant. Half a second is long enough
+   * to absorb a stroke and short enough that "paint, look up, play" never waits.
+   */
+  const pushContentSoon = useCallback(
+    (next: EditorContentDoc) => {
+      if (contentPushTimer.current !== null) window.clearTimeout(contentPushTimer.current);
+      contentPushTimer.current = window.setTimeout(() => {
+        contentPushTimer.current = null;
+        pushToGame(valuesRef.current, next);
+      }, 500);
+    },
+    [pushToGame],
+  );
+
+  // Flush, not just cancel: the frame outlives the sheet, and a player who
+  // paints and immediately closes the panel is exactly the player who wants to
+  // go play what they painted — cancelling the only scheduled push would lose
+  // their last stroke with the panel state that held it.
+  useEffect(
+    () => () => {
+      if (contentPushTimer.current !== null) {
+        window.clearTimeout(contentPushTimer.current);
+        contentPushTimer.current = null;
+        pushToGame(valuesRef.current);
+      }
+    },
+    [pushToGame],
   );
 
   // The panel is open the moment it renders, signed in or not. Recorded here
@@ -197,7 +264,10 @@ export function RemixPanel(props: {
   // about the viewer it depends on is which account they are. Keying on the
   // object would re-run — and re-mint — on any render that hands back a fresh
   // one, and a game that declares no values makes that loop self-sustaining.
+  // `onCapabilities` sits in the deps for lint's sake, so the parent MUST hand
+  // down a stable callback — an inline arrow here re-mints the session per render.
   const uid = user?.uid ?? null;
+  const onCapabilities = props.onCapabilities;
   useEffect(() => {
     // No session without a session: the API 401s signed out, and the composer
     // needs nothing from the server until send — so a visitor can type first.
@@ -213,6 +283,15 @@ export function RemixPanel(props: {
             ? coerceSharedParams(started.params, { ...base, ...props.initialParams })
             : base;
         setValues(merged);
+        // The painter's starting point is the declaration's own defaults. Set on
+        // the ref synchronously as well, so a push scheduled in this same tick
+        // (the shared-link one below) already carries the maps.
+        const contentDefaults: EditorContentDoc = started.content
+          ? Object.fromEntries(Object.entries(started.content).map(([key, spec]) => [key, spec.defaults]))
+          : {};
+        contentDocRef.current = contentDefaults;
+        setContentDoc(contentDefaults);
+        onCapabilities?.({ painter: Boolean(started.content) });
         // A shared link's values are live the moment the game is listening.
         if (props.initialParams) window.setTimeout(() => pushToGame(merged), 300);
       })
@@ -224,7 +303,21 @@ export function RemixPanel(props: {
     return () => {
       cancelled = true;
     };
-  }, [props.slug, props.initialParams, pushToGame, uid]);
+  }, [props.slug, props.initialParams, pushToGame, uid, onCapabilities]);
+
+  /** Open the painter, remembering which door was first — telemetry keeps that one. */
+  const openPainter = useCallback((door: RemixPaintedVia) => {
+    if (painterDoorRef.current === null) painterDoorRef.current = door;
+    setPainterOffer(false);
+    setPainterOpen(true);
+  }, []);
+
+  // The More-menu door. A nonce: the same entry chosen again reopens a painter
+  // the player closed, which a boolean prop cannot express.
+  const painterRequest = props.painterRequest ?? 0;
+  useEffect(() => {
+    if (painterRequest > 0) openPainter('menu');
+  }, [painterRequest, openPainter]);
 
   // The reward lands the second they're through the wall: once the session
   // exists and a stashed request is waiting, run it with no further taps.
@@ -253,10 +346,18 @@ export function RemixPanel(props: {
   // A panel that opened onto nothing. Recorded against the same `opened`
   // denominator so the share of visits that met a game with no way in is a
   // number rather than an anecdote — it is the difference between "people are
-  // not interested" and "we showed them a door that does not open".
+  // not interested" and "we showed them a door that does not open". A painter
+  // is a way in, so a collections game never counts here — and while the model
+  // flags are off it is the *only* lane, so the panel opens straight onto it
+  // rather than onto a composer that cannot answer.
   useEffect(() => {
-    if (session && !session.canAssist && !session.canCode) recordRemixStep('no_lane');
-  }, [session]);
+    if (!session || session.canAssist || session.canCode) return;
+    if (session.content) {
+      openPainter('panel');
+      return;
+    }
+    recordRemixStep('no_lane');
+  }, [session, openPainter]);
 
   /**
    * A suggestion, written out in the player's language.
@@ -342,7 +443,18 @@ export function RemixPanel(props: {
           setNote({ kind: 'error', text: label(result.summary) || t('remix.refused') });
           return;
         }
-        // `code` or `content`: falls through to the code lane below.
+        // A content-shaped request, and this game has a painter: the honest
+        // answer is the brush, not a rebuild. The refusal this lane used to be
+        // becomes a proposal (ops plan, decision 3.1) — the prompt stays the
+        // one door, and the painter is where this conversation lands. No model
+        // ever emits map cells; the router only classified.
+        if (result.lane === 'content' && active.content) {
+          setLane('idle');
+          setPainterOffer(true);
+          setNote({ kind: 'info', text: label(result.summary) || t('remix.editorOffer') });
+          return;
+        }
+        // `code` (or `content` with nothing to paint): falls through to the code lane below.
         if (!active.canCode) {
           setLane('idle');
           recordRemixStep('handoff');
@@ -432,6 +544,15 @@ export function RemixPanel(props: {
     setChanged(null);
   }
 
+  /** The player painted — update the doc, tell the funnel, and land it after the stroke. */
+  function paintContent(next: EditorContentDoc) {
+    setContentDoc(next);
+    contentDocRef.current = next;
+    contentEditedRef.current = true;
+    recordRemixStep('painted', { via: painterDoorRef.current ?? 'menu' });
+    pushContentSoon(next);
+  }
+
   async function share() {
     if (!session) return;
     try {
@@ -440,9 +561,17 @@ export function RemixPanel(props: {
       setShareUrl(url);
       recordRemixStep('shared');
       await navigator.clipboard?.writeText(url).catch(() => {});
+      // A link carries declared values only. Painted maps stay behind for the
+      // same reason code edits do — the share payload is schema-bounded params
+      // until the age-rating question is answered (ops plan §4) — and leaving
+      // that unsaid would promise a level the link does not deliver.
       setNote({
         kind: 'ok',
-        text: result.codeEditsExcluded ? t('remix.sharedWithoutCode') : t('remix.shared'),
+        text: result.codeEditsExcluded
+          ? t('remix.sharedWithoutCode')
+          : contentEditedRef.current
+            ? t('remix.sharedWithoutContent')
+            : t('remix.shared'),
       });
     } catch {
       setNote({ kind: 'error', text: t('remix.shareFailed') });
@@ -521,6 +650,18 @@ export function RemixPanel(props: {
           ×
         </button>
       </div>
+
+      {painterOpen && session?.content && lane !== 'building' ? (
+        <div className="remix-painter-host">
+          <div className="remix-painter-head">
+            <span className="remix-painter-title">{t('remix.editorTitle')}</span>
+            <button type="button" className="remix-btn is-quiet" onClick={() => setPainterOpen(false)}>
+              {t('remix.editorHide')}
+            </button>
+          </div>
+          <RemixPainter content={session.content} doc={contentDoc} onChange={paintContent} />
+        </div>
+      ) : null}
 
       {lane === 'building' ? (
         /*
@@ -604,12 +745,14 @@ export function RemixPanel(props: {
             </div>
           ) : null}
         </>
-      ) : (
+      ) : session?.content ? null : (
         /*
-         * No lane answers here — the game declares no parameters and its code
-         * cannot be assembled. The panel has to say so: a surface whose whole
-         * promise is "say what you want" cannot open with no place to say it and
-         * no explanation, which reads as broken rather than as not-yet.
+         * No lane answers here — the game declares no parameters, its code
+         * cannot be assembled, and there is nothing to paint. The panel has to
+         * say so: a surface whose whole promise is "say what you want" cannot
+         * open with no place to say it and no explanation, which reads as
+         * broken rather than as not-yet. (A game with declared content skips
+         * this branch — its painter opened above, and it is a full answer.)
          */
         <p className="remix-note is-info" role="status">
           {t('remix.notHere')}
@@ -620,6 +763,13 @@ export function RemixPanel(props: {
         <p className={`remix-note is-${note.kind}`} role="status">
           {note.text}
         </p>
+      ) : null}
+      {painterOffer && !painterOpen && session?.content ? (
+        <div className="remix-actions-row">
+          <button type="button" className="remix-btn is-primary" onClick={() => openPainter('redirect')}>
+            {t('remix.openEditor')}
+          </button>
+        </div>
       ) : null}
 
       {expert && specs ? (

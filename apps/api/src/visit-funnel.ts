@@ -86,6 +86,16 @@ export interface VisitFunnel {
   /** The remix loop, against `opened`. See REMIX_STEPS for what the order means. */
   remixing: Array<{ step: RemixStep; visits: number }>;
   /**
+   * Which door brought painting visits to the brush: the router proposing the
+   * painter after a content-shaped request (`redirect`), the theater's More
+   * menu (`menu`), or the panel opening it as the game's only lane (`panel` —
+   * every collections game while the model flags are off). All doors always
+   * present, zeroes included, `unknown` only when a client outlived the deploy
+   * that added the dimension. The doors are the hypothesis of
+   * remix-content-editing-plan §3.1; this is what settles it.
+   */
+  remixPaintedVia: Array<{ via: 'redirect' | 'menu' | 'panel' | 'unknown'; visits: number }>;
+  /**
    * How to play card usage — the numbers that decide whether a richer per-game format
    * is worth building (github.com/gamedevpl/www.gamedev.pl/issues/395).
    *
@@ -187,6 +197,11 @@ export const REMIX_STEPS = [
   'wall_shown',
   'signed_in',
   'tuned',
+  // `tuned`'s sibling for declared content: this visit changed a map in the
+  // remix painter. Beside it rather than below it — a visit may paint without
+  // ever touching a slider, and both answer the same "did they touch anything"
+  // question the surface's bet rests on.
+  'painted',
   'asked',
   'applied',
   'handoff',
@@ -205,6 +220,8 @@ interface VisitRollup {
   waitlistSteps: Set<string>;
   /** Editor steps this visit reached. Separate again, for the same reason. */
   editorSteps: Set<string>;
+  /** The door on this visit's `painted`, first one wins (the client dedupes). */
+  paintedVia?: string;
   assistSteps: Set<string>;
   remixSteps: Set<string>;
   entry?: string;
@@ -273,6 +290,9 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       if (event.step) rollup.assistSteps.add(event.step);
     } else if (event.type === 'remix_step') {
       if (event.step) rollup.remixSteps.add(event.step);
+      if (event.step === 'painted' && rollup.paintedVia === undefined) {
+        rollup.paintedVia = event.via ?? 'unknown';
+      }
     } else if (event.type === 'play_started') {
       rollup.plays += 1;
       // Earliest wins: a flush can deliver events out of order, and "time to first
@@ -439,6 +459,17 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       step,
       visits: rollups.filter((rollup) => rollup.remixSteps.has(step)).length,
     })),
+    remixPaintedVia: (() => {
+      const doors = ['redirect', 'menu', 'panel'] as const;
+      const painting = rollups.filter((rollup) => rollup.remixSteps.has('painted'));
+      const rows: Array<{ via: 'redirect' | 'menu' | 'panel' | 'unknown'; visits: number }> = doors.map((via) => ({
+        via,
+        visits: painting.filter((rollup) => rollup.paintedVia === via).length,
+      }));
+      const unknown = painting.filter((rollup) => !doors.includes(rollup.paintedVia as (typeof doors)[number])).length;
+      if (unknown > 0) rows.push({ via: 'unknown', visits: unknown });
+      return rows;
+    })(),
     howToPlay: {
       opens: howToOpens,
       visits: openedHowTo.length,

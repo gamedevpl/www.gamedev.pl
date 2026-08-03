@@ -1053,6 +1053,12 @@
       "faster": "niech będzie szybciej",
       "look": "zmień kolory",
       "harder": "niech będzie trudniej"
-    }
+    },
+    "editorOffer": "To zmiana mapy — edytor poziomów to potrafi.",
+    "openEditor": "Otwórz edytor poziomów",
+    "editorTitle": "Edytor poziomów",
+    "editorHide": "Ukryj",
+    "editorButton": "Edytor poziomów",
+    "sharedWithoutContent": "Skopiowano link — zawiera Twoje ustawienia; namalowane mapy zostają w tym remiksie."
   }
 }

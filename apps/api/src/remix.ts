@@ -142,6 +142,12 @@ function ownerTag(uid: string): string {
   return createHash('sha256').update(uid).digest('base64url').slice(0, 12);
 }
 
+/** The declaration's collections at their defaults — the base every params-only document sits on. */
+function defaultCollections(definition: EditorDefinition | null): Record<string, unknown> {
+  if (!definition) return {};
+  return Object.fromEntries(Object.entries(definition.content).map(([key, spec]) => [key, spec.defaults]));
+}
+
 /**
  * `1.<owner>.<expiry>.<nonce>.<slug>` — every part URL-safe, none containing a
  * dot, so it travels as a path segment without escaping. Deliberately not
@@ -408,6 +414,12 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         values: definition?.params
           ? Object.fromEntries(Object.entries(definition.params).map(([key, spec]) => [key, spec.default]))
           : null,
+        // The collections half of the declaration, defaults included — what the
+        // painter renders. Already validated (it parsed), already public (it
+        // ships inside the game's own bundle), and edits to it never come back
+        // to this server: painted content lives in the player's session and
+        // reaches the game over the bridge, exactly like params.
+        content: definition && Object.keys(definition.content).length > 0 ? definition.content : null,
         canAssist,
         canCode,
         // What is worth saying here, derived from what this game can do.
@@ -446,7 +458,11 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
 
       if (!(await spendEditSlot(request, reply))) return;
 
-      const content = { [PARAMS_KEY]: body.data.params ?? {} };
+      // Seeded with the declaration's own default collections, not params
+      // alone: `applyAssistPatches` validates the whole document, and a game
+      // that declares maps would otherwise fail that validation on every
+      // request — dropping perfectly good tuning patches into the code lane.
+      const content = { ...defaultCollections(session.definition), [PARAMS_KEY]: body.data.params ?? {} };
       try {
         const result = await options.assistant.assist({
           definition: session.definition,
@@ -668,10 +684,15 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         }
       }
       // Validated against the declaration, so a hand-edited link cannot smuggle a
-      // value the game never allowed.
+      // value the game never allowed. Seeded with the default collections for
+      // the same reason as the assist route: the validator judges the whole
+      // document, and a link would otherwise share nothing on a game with maps.
       const { patches } = applyAssistPatches(
         session.definition!,
-        { [PARAMS_KEY]: Object.fromEntries(Object.entries(specs).map(([key, spec]) => [key, spec.default])) },
+        {
+          ...defaultCollections(session.definition),
+          [PARAMS_KEY]: Object.fromEntries(Object.entries(specs).map(([key, spec]) => [key, spec.default])),
+        },
         Object.entries(values).map(([key, value]) => ({ key, value })),
       );
       const shared = Object.fromEntries(patches.map((patch) => [patch.key, patch.value]));
