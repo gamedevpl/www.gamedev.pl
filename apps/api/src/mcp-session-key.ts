@@ -67,6 +67,11 @@ export function mcpSessionKeyTtlHours(): number {
 /** Visible ASCII without `.` — the token wire format uses `.` as a field delimiter. */
 const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 
+/** Shape check for a transport `Mcp-Session-Id` (and the id embedded in a sessionKey). */
+export function looksLikeMcpSessionId(candidate: string): boolean {
+  return SESSION_ID_RE.test(candidate);
+}
+
 export function mintMcpSessionKey(secret: string, options: MintMcpSessionKeyOptions): string {
   if (!options.sessionId || !SESSION_ID_RE.test(options.sessionId)) {
     throw new InvalidAgentTokenError('invalid session id');
