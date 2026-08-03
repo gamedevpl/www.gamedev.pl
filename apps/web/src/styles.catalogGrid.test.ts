@@ -15,11 +15,10 @@ function ruleBody(selector: string): string {
   return match![1]!;
 }
 
-describe('catalog grid next to in-progress cards', () => {
+describe('catalog grid layout', () => {
   /**
-   * Regression: an in-progress "Yours" card in the first row stretched the published
-   * neighbours to its height. Those cards are only a 16:9 video, so the stretch showed
-   * up as empty padding under the preview.
+   * Cards in a row must not stretch to a taller neighbour — published cards are a
+   * single 16:9 media box, and any leftover empty padding under the preview looks broken.
    */
   it('does not stretch cards in a row to the tallest neighbour', () => {
     const rule = ruleBody('.catalog-grid');

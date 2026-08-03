@@ -522,7 +522,7 @@ describe('ArcadeCatalog soft-refresh failure', () => {
   });
 });
 
-describe('ArcadeCatalog in-progress builds', () => {
+describe('ArcadeCatalog Studio chip', () => {
   beforeEach(async () => {
     installIntersectionObserverMock();
     sessionStorage.setItem(
@@ -540,37 +540,21 @@ describe('ArcadeCatalog in-progress builds', () => {
     vi.restoreAllMocks();
   });
 
-  it('passes slug or token to onOpenStatus when opening an in-progress card', async () => {
+  it('keeps in-progress builds out of the grid and surfaces them on the Studio chip', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.spyOn(AuthContextModule, 'useAuth').mockReturnValue({
       user: { uid: 'test-user', tier: 'standard' },
       loading: false,
       privateBeta: false,
     } as ReturnType<typeof AuthContextModule.useAuth>);
+
+    let resolveMine: ((value: Response) => void) | undefined;
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
       if (url.includes('/api/submissions/mine')) {
-        return new Response(
-          JSON.stringify({
-            submissions: [
-              {
-                token: 'token-with-slug',
-                title: 'Building Game 1',
-                createdAt: new Date().toISOString(),
-                lastKnownStatus: 'building',
-                slug: 'my-cool-game',
-              },
-              {
-                token: 'token-without-slug',
-                title: 'Building Game 2',
-                createdAt: new Date(Date.now() - 1000).toISOString(),
-                lastKnownStatus: 'queued',
-                slug: null,
-              },
-            ],
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } },
-        );
+        return new Promise<Response>((resolve) => {
+          resolveMine = resolve;
+        });
       }
       return new Response(JSON.stringify({ items: [] }), {
         status: 200,
@@ -578,7 +562,7 @@ describe('ArcadeCatalog in-progress builds', () => {
       });
     });
 
-    const onOpenStatus = vi.fn();
+    const onOpenStudio = vi.fn();
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -592,24 +576,54 @@ describe('ArcadeCatalog in-progress builds', () => {
           onPlayGame: vi.fn(),
           onPlayTogether: vi.fn(),
           onRetryCatalog: vi.fn(),
-          onOpenStatus,
+          onOpenStudio,
         }),
       );
       await flushEffects();
     });
 
-    const openButtons = container.querySelectorAll<HTMLButtonElement>('.catalog-build-card .primary-btn');
-    expect(openButtons).toHaveLength(2);
+    // Published grid paints without waiting on the shelf — no shove when builds arrive.
+    expect(container.querySelectorAll('.catalog-card')).toHaveLength(2);
+    expect(container.querySelector('.catalog-studio-chip')).toBeNull();
 
     await act(async () => {
-      openButtons[0]?.click();
+      resolveMine?.(
+        new Response(
+          JSON.stringify({
+            submissions: [
+              {
+                token: 'tok-build',
+                title: 'Building Game',
+                createdAt: new Date().toISOString(),
+                lastKnownStatus: 'building',
+                slug: 'building-game',
+              },
+              {
+                token: 'tok-queued',
+                title: 'Queued Game',
+                createdAt: new Date(Date.now() - 1000).toISOString(),
+                lastKnownStatus: 'queued',
+                slug: null,
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+      await flushEffects();
     });
-    expect(onOpenStatus).toHaveBeenLastCalledWith('my-cool-game');
+
+    expect(container.querySelectorAll('.catalog-card')).toHaveLength(2);
+    expect(container.querySelectorAll('.catalog-build-card')).toHaveLength(0);
+    const chip = container.querySelector<HTMLButtonElement>('.catalog-studio-chip');
+    expect(chip?.classList.contains('is-live')).toBe(true);
+    expect(chip?.textContent).toMatch(/2 in progress/i);
+    expect(chip?.textContent).toMatch(/Studio/i);
 
     await act(async () => {
-      openButtons[1]?.click();
+      chip?.click();
     });
-    expect(onOpenStatus).toHaveBeenLastCalledWith('token-without-slug');
+    expect(onOpenStudio).toHaveBeenCalledOnce();
 
     await act(async () => {
       root.unmount();
