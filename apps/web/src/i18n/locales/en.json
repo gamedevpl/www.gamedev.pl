@@ -327,6 +327,13 @@
       "abandon": "Abandon this build",
       "abandonConfirm": "Yes, abandon — discard this round"
     },
+    "rail": {
+      "connect": "Connect your agent",
+      "build": "Build progress",
+      "credentials": "Keys & connected agents",
+      "credentialsHint": "Creator key, legacy per-game key, and agents you’ve approved.",
+      "kickoffDetails": "Build prompt"
+    },
     "share": {
       "title": "Share the draft",
       "on": "On",

@@ -50,47 +50,49 @@ export function StudioDetailsBuildProgress({ token }: { token: string }) {
   const note = events[0]?.text ?? progress?.note;
 
   return (
-    <div className="studio-details-progress" data-testid="studio-details-progress">
+    <section className="studio-rail-section" data-testid="studio-details-progress">
       <div className="build-progress-heading-row">
-        <h3 className="build-progress-heading">{t('statusView.progress.checklistTitle')}</h3>
+        <h4 className="studio-rail-section-title">{t('studioPanel.rail.build')}</h4>
         <span className="build-progress-count">
           {t('statusView.progress.checklistCount', { done: doneCount, total: totalCount })}
         </span>
       </div>
-      <div
-        className="build-progress-bar"
-        role="progressbar"
-        aria-valuenow={doneCount}
-        aria-valuemin={0}
-        aria-valuemax={totalCount}
-      >
-        <div className="build-progress-bar-fill" style={{ width: `${donePercent}%` }} />
+      <div className="studio-details-progress">
+        <div
+          className="build-progress-bar"
+          role="progressbar"
+          aria-valuenow={doneCount}
+          aria-valuemin={0}
+          aria-valuemax={totalCount}
+        >
+          <div className="build-progress-bar-fill" style={{ width: `${donePercent}%` }} />
+        </div>
+        {note ? (
+          <p className="studio-details-progress-note">
+            <span className="build-progress-note-label">
+              {events[0]?.step ? t(`statusView.progress.steps.${events[0].step}`) : t('statusView.progress.agentSays')}
+            </span>
+            <span className="build-progress-note-text">{note}</span>
+          </p>
+        ) : currentStep ? (
+          <p className="build-progress-current">
+            <span className="build-progress-current-spinner" aria-hidden="true" />
+            {t('statusView.progress.currentStep', { step: currentStep.text })}
+          </p>
+        ) : null}
+        {checklist.length > 0 ? (
+          <ul className="studio-details-checklist">
+            {checklist.map((item, index) => (
+              <li key={index} className={item.checked ? 'checklist-done' : 'checklist-pending'}>
+                <span aria-hidden="true">
+                  <PixelIcon name={item.checked ? 'check' : 'checkbox'} size={12} />
+                </span>{' '}
+                {item.text}
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </div>
-      {note ? (
-        <p className="studio-details-progress-note">
-          <span className="build-progress-note-label">
-            {events[0]?.step ? t(`statusView.progress.steps.${events[0].step}`) : t('statusView.progress.agentSays')}
-          </span>
-          <span className="build-progress-note-text">{note}</span>
-        </p>
-      ) : currentStep ? (
-        <p className="build-progress-current">
-          <span className="build-progress-current-spinner" aria-hidden="true" />
-          {t('statusView.progress.currentStep', { step: currentStep.text })}
-        </p>
-      ) : null}
-      {checklist.length > 0 ? (
-        <ul className="studio-details-checklist">
-          {checklist.map((item, index) => (
-            <li key={index} className={item.checked ? 'checklist-done' : 'checklist-pending'}>
-              <span aria-hidden="true">
-                <PixelIcon name={item.checked ? 'check' : 'checkbox'} size={12} />
-              </span>{' '}
-              {item.text}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </div>
+    </section>
   );
 }

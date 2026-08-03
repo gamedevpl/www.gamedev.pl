@@ -998,90 +998,115 @@ function DetailsPanel({
     }
   }
 
+  const showConnect = game.lastKnownStatus !== 'abandoned' && game.lastKnownStatus !== 'published';
+  const showProgress = showConnect;
+  const showLegacyKey = Boolean(game.slug && game.lastKnownStatus !== 'abandoned');
+
   return (
     <div className="studio-overview">
-      <ul className="funnel-stats studio-facts">
-        <li>
-          <span className="funnel-stat-value">{formatRelativeTime(Date.parse(game.createdAt), i18n.language)}</span>
-          <span className="funnel-stat-label">{t('studioPanel.overview.created')}</span>
-        </li>
-        {publishedAt ? (
+      <section className="studio-rail-section" aria-label={t('studioPanel.overview.status')}>
+        <ul className="funnel-stats studio-facts">
           <li>
-            <span className="funnel-stat-value">{formatRelativeTime(Date.parse(publishedAt), i18n.language)}</span>
-            <span className="funnel-stat-label">{t('studioPanel.overview.published')}</span>
+            <span className="funnel-stat-value">{formatRelativeTime(Date.parse(game.createdAt), i18n.language)}</span>
+            <span className="funnel-stat-label">{t('studioPanel.overview.created')}</span>
           </li>
-        ) : null}
-        {health ? (
-          <li>
-            <span className="funnel-stat-value">
-              {health.sessions}
-              <span className="studio-fact-suffix">
-                · {formatSeconds(health.totalPlaySeconds)} {t('studioPanel.overview.play')}
+          {publishedAt ? (
+            <li>
+              <span className="funnel-stat-value">{formatRelativeTime(Date.parse(publishedAt), i18n.language)}</span>
+              <span className="funnel-stat-label">{t('studioPanel.overview.published')}</span>
+            </li>
+          ) : null}
+          {health ? (
+            <li>
+              <span className="funnel-stat-value">
+                {health.sessions}
+                <span className="studio-fact-suffix">
+                  · {formatSeconds(health.totalPlaySeconds)} {t('studioPanel.overview.play')}
+                </span>
               </span>
-            </span>
-            <span className="funnel-stat-label">{t('studioPanel.overview.sessions')}</span>
-          </li>
-        ) : null}
-      </ul>
+              <span className="funnel-stat-label">{t('studioPanel.overview.sessions')}</span>
+            </li>
+          ) : null}
+        </ul>
 
-      <div className="studio-actions">
-        {/* Nothing here to reopen the build with: the thread is on the screen already,
-            beside this panel. Playing a published game is the one action that is not
-            simply "look left". */}
-        {catalogLive && game.slug ? (
-          <button type="button" className="primary-btn" onClick={onPlay}>
-            <PixelIcon name="play" size={12} /> {t('myGames.play')}
+        <div className="studio-actions">
+          {/* Nothing here to reopen the build with: the thread is on the screen already,
+              beside this panel. Playing a published game is the one action that is not
+              simply "look left". */}
+          {catalogLive && game.slug ? (
+            <button type="button" className="primary-btn" onClick={onPlay}>
+              <PixelIcon name="play" size={12} /> {t('myGames.play')}
+            </button>
+          ) : null}
+          <button type="button" className="secondary-btn" onClick={onOpenPlaytest}>
+            <PixelIcon name="play" size={12} /> {t('studioPanel.overview.playtest')}
           </button>
-        ) : null}
-        <button type="button" className="secondary-btn" onClick={onOpenPlaytest}>
-          <PixelIcon name="play" size={12} /> {t('studioPanel.overview.playtest')}
-        </button>
-        {!publishedJob && game.lastKnownStatus !== 'abandoned' ? (
-          <button
-            type="button"
-            className={`status-abandon${abandonArmed ? ' is-danger' : ''}`}
-            onClick={() => void handleAbandon()}
-            disabled={abandoning}
-          >
-            {abandonArmed ? t('studioPanel.overview.abandonConfirm') : t('studioPanel.overview.abandon')}
-          </button>
-        ) : null}
-      </div>
+          {!publishedJob && game.lastKnownStatus !== 'abandoned' ? (
+            <button
+              type="button"
+              className={`status-abandon${abandonArmed ? ' is-danger' : ''}`}
+              onClick={() => void handleAbandon()}
+              disabled={abandoning}
+            >
+              {abandonArmed ? t('studioPanel.overview.abandonConfirm') : t('studioPanel.overview.abandon')}
+            </button>
+          ) : null}
+        </div>
+      </section>
 
       {/* Draft share is for pre-catalog games. A revise tip on a live slug already has a
           public play link — offering a second "share the draft" switch would lie. */}
-      {!catalogLive && game.slug && game.lastKnownStatus !== 'abandoned' ? <DraftShareControl game={game} /> : null}
-
-      {/* Checklist fraction left the thread foot — Details is where Claude-style chrome
-          keeps build meta without crowding the composer. */}
-      {game.lastKnownStatus !== 'abandoned' && game.lastKnownStatus !== 'published' ? (
-        <StudioDetailsBuildProgress token={game.token} />
+      {!catalogLive && game.slug && game.lastKnownStatus !== 'abandoned' ? (
+        <section className="studio-rail-section" aria-label={t('studioPanel.share.title')}>
+          <DraftShareControl game={game} />
+        </section>
       ) : null}
 
-      {/* Self-build connect steps live here too so the thread can dismiss them without
-          losing the path back — hideIfUnavailable keeps platform rounds silent. */}
-      {game.lastKnownStatus !== 'abandoned' && game.lastKnownStatus !== 'published' ? (
-        <StudioConnectCard token={game.token} collapsible={false} hideIfUnavailable />
+      {/* Checklist fraction left the thread foot — Details keeps build meta without
+          crowding the composer. Heading lives inside the component so an empty
+          checklist does not leave a stranded section title. */}
+      {showProgress ? <StudioDetailsBuildProgress token={game.token} /> : null}
+
+      {/* Self-build connect — panel density so install is scannable; hideIfUnavailable
+          keeps platform rounds silent (returns null — no orphan heading). */}
+      {showConnect ? (
+        <StudioConnectCard
+          token={game.token}
+          collapsible={false}
+          hideIfUnavailable
+          density="panel"
+          panelHeading={t('studioPanel.rail.connect')}
+        />
       ) : null}
 
-      {game.slug && game.lastKnownStatus !== 'abandoned' ? <StudioAgentKeyPanel token={game.token} /> : null}
-
-      <StudioCreatorAgentKeyPanel />
-      <StudioOAuthClientsPanel />
+      {/* Keys and OAuth grants are rare ops — collapsed so they do not own the rail. */}
+      <details className="studio-rail-credentials" data-testid="studio-rail-credentials">
+        <summary>
+          <span className="studio-rail-section-title">{t('studioPanel.rail.credentials')}</span>
+          <span className="studio-rail-credentials-hint">{t('studioPanel.rail.credentialsHint')}</span>
+        </summary>
+        <div className="studio-rail-credentials-body">
+          {showLegacyKey ? <StudioAgentKeyPanel token={game.token} /> : null}
+          <StudioCreatorAgentKeyPanel />
+          <StudioOAuthClientsPanel />
+        </div>
+      </details>
 
       {/* Only once there is play to report on. Before a game is live every one of these
           numbers is zero, and a wall of zeroes reads as a verdict rather than as
           "nobody has played it yet, because nobody can". */}
       {catalogLive ? (
-        <StatsSection
-          game={game}
-          health={health}
-          days={days}
-          healthDays={healthDays}
-          truncated={truncated}
-          scorecard={scorecard}
-          onDaysChange={onDaysChange}
-        />
+        <section className="studio-rail-section">
+          <StatsSection
+            game={game}
+            health={health}
+            days={days}
+            healthDays={healthDays}
+            truncated={truncated}
+            scorecard={scorecard}
+            onDaysChange={onDaysChange}
+          />
+        </section>
       ) : null}
     </div>
   );
