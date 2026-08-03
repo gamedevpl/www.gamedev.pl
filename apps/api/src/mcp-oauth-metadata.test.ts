@@ -9,6 +9,7 @@ import {
   MCP_MISSING_CREDENTIAL_HINT,
   OAUTH_PROTECTED_RESOURCE_PATH,
   oauthProtectedResourceMetadataUrl,
+  oauthProtectedResourcePathForMcp,
 } from './mcp-oauth-metadata.js';
 import { MCP_ENDPOINT_PATH } from './self-build-connect.js';
 import { InMemoryStore } from './store.js';
@@ -126,6 +127,17 @@ describe('GET /.well-known/oauth-protected-resource (BY-18a)', () => {
     const res = await app.inject({ method: 'GET', url: OAUTH_PROTECTED_RESOURCE_PATH });
     expect(res.statusCode).toBe(200);
     expect(res.json().resource).toBe(`https://www.gamedev.pl${MCP_ENDPOINT_PATH}`);
+  });
+
+  it('serves the same document at the RFC 9728 path-suffixed URL clients probe first', async () => {
+    process.env.CANONICAL_HOST = 'www.gamedev.pl';
+    process.env.MCP_AUTHORIZATION_SERVERS = 'https://www.gamedev.pl';
+    app = await buildApp({ store: new InMemoryStore(), sessionSecret: 'dev-session-secret-change-me' });
+    const path = oauthProtectedResourcePathForMcp();
+    expect(path).toBe('/.well-known/oauth-protected-resource/api/mcp');
+    const res = await app.inject({ method: 'GET', url: path });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual(buildOAuthProtectedResourceDocument());
   });
 });
 

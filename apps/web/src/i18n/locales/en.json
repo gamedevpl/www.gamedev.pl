@@ -937,7 +937,7 @@
     },
     "oauth": {
       "title": "Sign in from your agent",
-      "hint": "Or copy this MCP URL into any other agent, then sign in when it asks. Pass the game slug from the prompt below when you start."
+      "hint": "Or copy this MCP URL into any other agent, then sign in when it asks. Pass the game slug from the prompt below when you start. If Cursor shows Unauthorized without opening a browser, open the authorize URL from Output → MCP logs (known Cursor bug), or use Paste header."
     },
     "clients": {
       "claudeCode": "Claude Code",

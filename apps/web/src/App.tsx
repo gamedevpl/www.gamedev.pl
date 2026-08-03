@@ -60,6 +60,7 @@ import { AppLoadingScreen } from './AppLoadingScreen.js';
 import { ControllerView } from './mp/ControllerView.js';
 import { PartyStage } from './mp/PartyStage.js';
 import { createPartySession, type PartySession } from './mp/mpApi.js';
+import { parseOAuthReturnParam } from './oauthReturn.js';
 
 type StageContent =
   | { type: 'catalog'; game: CatalogEntry }
@@ -476,6 +477,19 @@ export function App() {
 
     return () => window.clearInterval(timer);
   }, [pendingScrollTarget, route.view]);
+
+  // MCP OAuth: `/oauth/authorize` redirects here when the browser has no session.
+  // After sign-in, resume the authorize URL so the agent gets its PKCE code.
+  useEffect(() => {
+    if (authLoading) return;
+    const oauthReturn = parseOAuthReturnParam(window.location.search);
+    if (!oauthReturn) return;
+    if (!user) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+    window.location.replace(oauthReturn);
+  }, [authLoading, user]);
 
   async function handleGenerateMock(text: string) {
     if (!user) {

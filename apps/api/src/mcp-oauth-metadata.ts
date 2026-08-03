@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { readBearerToken } from './bearer.js';
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
-import { mcpEndpointUrl } from './self-build-connect.js';
+import { MCP_ENDPOINT_PATH, mcpEndpointUrl } from './self-build-connect.js';
 
 /** RFC 9728 protected-resource metadata document (BY-18a). */
 export const OAUTH_PROTECTED_RESOURCE_PATH = '/.well-known/oauth-protected-resource';
@@ -116,11 +116,26 @@ export function sendMcpOAuthChallenge(reply: FastifyReply): FastifyReply {
     .send({ error: 'authentication required', hint: MCP_MISSING_CREDENTIAL_HINT });
 }
 
+/**
+ * RFC 9728 path insertion: for resource `https://host/api/mcp`, clients also probe
+ * `/.well-known/oauth-protected-resource/api/mcp`. Claude Code and Cursor hit the
+ * path-suffixed URL first; a 404 is recoverable (they fall back to the root document)
+ * but wastes a round trip and breaks callers that lose the WWW-Authenticate
+ * `resource_metadata` URL across the OAuth redirect (Cursor forum #151331).
+ */
+export function oauthProtectedResourcePathForMcp(): string {
+  const suffix = MCP_ENDPOINT_PATH.replace(/^\/+/, '');
+  return `${OAUTH_PROTECTED_RESOURCE_PATH}/${suffix}`;
+}
+
 export function registerOAuthProtectedResourceRoutes(app: FastifyInstance): void {
-  app.get(OAUTH_PROTECTED_RESOURCE_PATH, async (_request, reply) => {
+  const sendDocument = async (_request: FastifyRequest, reply: FastifyReply) => {
     return reply
       .header('Cache-Control', METADATA_CACHE_CONTROL)
       .type('application/json')
       .send(buildOAuthProtectedResourceDocument());
-  });
+  };
+
+  app.get(OAUTH_PROTECTED_RESOURCE_PATH, sendDocument);
+  app.get(oauthProtectedResourcePathForMcp(), sendDocument);
 }
