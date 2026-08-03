@@ -1393,7 +1393,7 @@ describe('POST /api/mcp (BY-05)', () => {
           deliveryId: string;
           screenshots: Array<{ file: string; url: string }>;
           video: { file: string; url: string };
-          openingShot?: { file: string; attached: boolean };
+          frames?: Array<{ file: string; name: string; attached: boolean }>;
         };
         isError?: boolean;
       };
@@ -1411,7 +1411,7 @@ describe('POST /api/mcp (BY-05)', () => {
           file: 'gameplay.mp4',
           url: 'https://signed.example/games/comet-courier/versions/v1/media/gameplay.mp4?sig=1',
         },
-        openingShot: { file: 'opening.png', attached: true },
+        frames: [{ file: 'opening.png', name: 'opening', attached: true }],
       });
 
       const image = result.content.find((part) => part.type === 'image');

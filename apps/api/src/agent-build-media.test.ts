@@ -190,8 +190,66 @@ describe('GET /api/agent/build/media (BY-28)', () => {
       expect(name).toMatch(new RegExp(`^games/${SLUG}/versions/${VERSION}/media/`));
     }
     // The inline frame is the opening shot, so a client that cannot fetch a URL still
-    // sees the game.
-    expect(body.openingShot).toEqual({ file: 'opening.png', png: PNG.toString('base64') });
+    // sees the game. Default is one frame, not all of them.
+    expect(body.frames).toEqual([{ file: 'opening.png', name: 'opening', png: PNG.toString('base64') }]);
+    // The video is URL-only, and the payload says so — the agent that needs to know is
+    // the one that cannot test a URL to find out.
+    expect(body.videoNote).toMatch(/only as a URL/i);
+  });
+
+  it('attaches every frame on frames=all, one on the default, none on frames=none', async () => {
+    // A ChatGPT-side connector can call our tools and nothing else — no shell, no fetch
+    // (owner test, 2026-08-03). For that client a signed URL is a blank experience, so
+    // the bytes have to ride the reply. Bounded, because each frame costs context.
+    const store = new InMemoryStore();
+    await seedDeliveredJob(store);
+    app = await createApp(store, stubGamesStore(), stubObjectStore().objectStore);
+
+    const all = await app.inject({
+      method: 'GET',
+      url: '/api/agent/build/media?frames=all',
+      headers: agentHeaders(),
+    });
+    expect(all.json().frames.map((f: { name: string }) => f.name)).toEqual(['opening', 'engagement']);
+
+    const none = await app.inject({
+      method: 'GET',
+      url: '/api/agent/build/media?frames=none',
+      headers: agentHeaders(),
+    });
+    expect(none.json().frames).toEqual([]);
+    // URLs are unaffected by the frame budget — a shell-capable agent still gets both.
+    expect(none.json().screenshots).toHaveLength(2);
+
+    const dflt = await app.inject({ method: 'GET', url: '/api/agent/build/media', headers: agentHeaders() });
+    expect(dflt.json().frames).toHaveLength(1);
+    expect(dflt.json().frames[0].name).toBe('opening');
+  });
+
+  it('reports frames the budget dropped rather than silently truncating', async () => {
+    // A caller told it has every frame when it has three is worse off than one that
+    // knows it is looking at a subset.
+    const store = new InMemoryStore();
+    await seedDeliveredJob(store);
+    const many = {
+      captures: Object.fromEntries(
+        ['opening', 'a', 'b', 'c', 'd'].map((name) => [name, { file: `${name === 'opening' ? 'opening' : name}.png` }]),
+      ),
+    };
+    const artifacts = new Map<string, Buffer>([['media/metadata.json', Buffer.from(JSON.stringify(many))]]);
+    for (const name of ['opening', 'a', 'b', 'c', 'd']) artifacts.set(`media/${name}.png`, PNG);
+    app = await createApp(store, stubGamesStore({ artifacts }), stubObjectStore().objectStore);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/agent/build/media?frames=all',
+      headers: agentHeaders(),
+    });
+
+    expect(res.json().frames).toHaveLength(3);
+    expect(res.json().framesOmitted).toBe(2);
+    // All five are still reachable by URL for a client that can follow one.
+    expect(res.json().screenshots).toHaveLength(5);
   });
 
   it('serves only filenames the validated metadata declares', async () => {

@@ -100,6 +100,17 @@ const MAX_SHOT_LABEL = 120;
  * number alone or uploads pass validation and 500 at `.set()`.
  */
 const maxShotBytes = 700 * 1024;
+/**
+ * Ceilings on frames carried inline by the gate-media read.
+ *
+ * Not a bandwidth limit — a context limit. Every inlined frame is base64 in a tool
+ * reply that some model has to hold, so `frames=all` on an eight-frame capture would
+ * cost more than it informs. Two frames answer nearly every question an agent has
+ * about how its game looks; the rest stay one signed URL away for clients that can
+ * follow one.
+ */
+const MAX_INLINE_FRAMES = 3;
+const MAX_INLINE_FRAME_BYTES = 1_400 * 1024;
 /** Fastify rejects before the handler when the JSON body exceeds this. */
 const shotBodyLimit = Math.ceil((maxShotBytes * 4) / 3) + 4096;
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -1481,7 +1492,7 @@ export async function registerAgentChannelRoutes(
         return reply.status(503).send({ error: 'the media store is not configured' });
       }
 
-      const query = request.query as { version?: string };
+      const query = request.query as { version?: string; frames?: string };
       const requestedVersion = typeof query.version === 'string' && query.version.trim() ? query.version.trim() : null;
       const version = requestedVersion ?? record.deliveredVersion ?? null;
 
@@ -1592,17 +1603,47 @@ export async function registerAgentChannelRoutes(
           }
         : null;
 
-      // One frame inline, for clients that can render an image but not fetch a URL.
-      // Best effort and bounded: an absent or oversized frame degrades to URLs-only.
-      const openingFile = (storedShots.find((shot) => shot.name === 'opening') ?? storedShots[0])?.file;
-      let openingShot: { file: string; png: string } | null = null;
-      if (openingFile) {
-        const body = await options.gamesStore
-          .getDerivedArtifact(slug, version, `media/${openingFile}`)
-          .catch(() => null);
-        if (body && body.length > 0 && body.length <= maxShotBytes) {
-          openingShot = { file: openingFile, png: body.toString('base64') };
+      // Frames carried *through* the channel, not pointed at.
+      //
+      // A signed URL assumes the reader can open a socket. The agent this endpoint was
+      // built for cannot: a ChatGPT-side connector runs our tools and nothing else — no
+      // shell, no fetch, no egress at all (owner test, 2026-08-03). For that client a
+      // URL is not a degraded experience, it is a blank one, and the same is true of
+      // `get_kit`'s tarball (which is why #510 added file-reading tools rather than
+      // another link). So the bytes ride the reply.
+      //
+      // Bounded, because context is the cost here rather than bandwidth: capture stores
+      // up to eight frames and each may be ~700 KB, which no client should be made to
+      // swallow by default. `opening` answers "did it draw"; `all` is for "show the
+      // creator what it looks like". Whatever the budget drops is reported — a caller
+      // told it has every frame when it has three is worse off than one that knows.
+      const requestedFrames = typeof query.frames === 'string' ? query.frames : 'opening';
+      const frameMode: 'opening' | 'all' | 'none' =
+        requestedFrames === 'all' || requestedFrames === 'none' ? requestedFrames : 'opening';
+
+      const openingFirst = [
+        ...storedShots.filter((shot) => shot.name === 'opening'),
+        ...storedShots.filter((shot) => shot.name !== 'opening'),
+      ];
+      const wanted = frameMode === 'none' ? [] : frameMode === 'all' ? openingFirst : openingFirst.slice(0, 1);
+
+      const frames: Array<{ file: string; name: string; png: string }> = [];
+      let framesOmitted = 0;
+      let inlineBytes = 0;
+      for (const shot of wanted) {
+        if (frames.length >= MAX_INLINE_FRAMES || inlineBytes >= MAX_INLINE_FRAME_BYTES) {
+          framesOmitted += 1;
+          continue;
         }
+        const body = await options.gamesStore.getDerivedArtifact(slug, version, `media/${shot.file}`).catch(() => null);
+        // An unreadable or oversized frame is skipped, not fatal: the URLs still stand
+        // for clients that can use them, and a partial answer beats a 500.
+        if (!body || body.length === 0 || body.length > maxShotBytes) {
+          framesOmitted += 1;
+          continue;
+        }
+        inlineBytes += body.length;
+        frames.push({ file: shot.file, name: shot.name, png: body.toString('base64') });
       }
 
       return reply.send({
@@ -1619,7 +1660,17 @@ export async function registerAgentChannelRoutes(
           : {}),
         screenshots,
         video,
-        ...(openingShot ? { openingShot } : {}),
+        frames,
+        ...(framesOmitted > 0 ? { framesOmitted } : {}),
+        // Said in the payload, not only in the tool description, because the agent that
+        // needs to know is the one that cannot test a URL to find out.
+        ...(video
+          ? {
+              videoNote:
+                'The video is available only as a URL. If you cannot fetch URLs, do not try — ' +
+                'give the link to the creator, who can open it, and describe the game from the frames.',
+            }
+          : {}),
         expiresInSeconds: DEFAULT_SIGNED_URL_TTL_SECONDS,
         access,
       });
