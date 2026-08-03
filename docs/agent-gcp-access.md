@@ -90,7 +90,7 @@ response”. The API writes structured lines for that path (never the `sessionKe
 Bearer secret):
 
 ```bash
-# Tool-level refusals: reason, tool, bearerKind, sessionKeyShape, jobId, sessionIdMismatch, ua
+# Tool-level refusals: reason, tool, bearerKind, sessionKeyShape, jobId, sessionIdMismatch, userAgent
 node infra/gcp-read.mjs logs 'jsonPayload.event="mcp_tool_refused" OR jsonPayload.msg="mcp tool refused"' --since 6h --limit 50
 
 # Successful start() binds (jobId, slug, transport sessionId)

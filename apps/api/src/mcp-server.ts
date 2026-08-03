@@ -417,7 +417,14 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         assertMcpSessionKeyUnexpired(sessionClaims, now());
       } catch (error) {
         if (error instanceof InvalidAgentTokenError) {
-          return toolErr(error.message || FINISHED_REASON);
+          // Expired keys carry STALE_AGENT_TOKEN_REASON (correct: round is done).
+          // Forge/malformed throws InvalidAgentTokenError with the generic default —
+          // do not rewrite that as "finished" or agents will chase the wrong fix.
+          return toolErr(
+            error.message === STALE_AGENT_TOKEN_REASON
+              ? STALE_AGENT_TOKEN_REASON
+              : 'invalid sessionKey — call start() again',
+          );
         }
         throw error;
       }

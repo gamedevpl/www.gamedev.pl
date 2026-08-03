@@ -433,6 +433,8 @@ describe('POST /api/mcp (BY-05)', () => {
 
     const bad = await callTool(app, 'get_brief', { sessionKey: forgedKey }, { 'mcp-session-id': sessionId });
     expect(bad.isError).toBe(true);
+    expect(JSON.stringify(bad.structured)).toMatch(/invalid sessionKey/i);
+    expect(JSON.stringify(bad.structured)).not.toMatch(/finished/i);
   });
 
   // CP-2 N4: the opener-in-sessionKey-slot refusals name the credential ("this creator
