@@ -1,32 +1,44 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from './AuthContext.js';
 import { catalogMediaUrl, isPlatformAuthor, normalizeCatalogEntry, type CatalogEntry } from './catalog.js';
 import { fetchCreatorPage, type PublicCreatorProfile } from './creatorProfileApi.js';
+import { EditProfileModal } from './EditProfileModal.js';
 import { PixelIcon } from './PixelIcon.js';
 import { creatorPath, playPath } from './router.js';
+import { StudioCreatorProfileProvider } from './studioCreatorProfile.js';
 
 /**
  * Public creator profile — identity header + published games grid.
  * Reachable without a session (same posture as contact/legal).
+ * Owners edit via a modal here — not via Studio chrome.
  */
 export function CreatorProfilePage({
   handle,
   onBack,
   onPlay,
+  onNavigate,
   onProfileLoaded,
 }: {
   handle: string;
   onBack: () => void;
   onPlay: (slug: string) => void;
+  /** After the owner renames their handle — App should route to the new URL. */
+  onNavigate?: (path: string) => void;
   /** Lets App set document.title once the display name is known. */
   onProfileLoaded?: (profile: PublicCreatorProfile) => void;
 }) {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [profile, setProfile] = useState<PublicCreatorProfile | null>(null);
   const [games, setGames] = useState<CatalogEntry[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading');
+  const [editOpen, setEditOpen] = useState(false);
+  const [reloadToken, setReloadToken] = useState(0);
 
-  useEffect(() => {
+  const isOwner = Boolean(user?.handle && user.handle.toLowerCase() === handle.toLowerCase());
+
+  const load = useCallback(() => {
     let cancelled = false;
     setState('loading');
     setProfile(null);
@@ -50,6 +62,10 @@ export function CreatorProfilePage({
       cancelled = true;
     };
   }, [handle]);
+
+  useEffect(() => {
+    return load();
+  }, [load, reloadToken]);
 
   useEffect(() => {
     if (profile) onProfileLoaded?.(profile);
@@ -86,6 +102,13 @@ export function CreatorProfilePage({
               <p className="creator-profile-share">
                 <a href={creatorPath(profile.handle)}>{t('creatorProfile.shareHint')}</a>
               </p>
+              {isOwner ? (
+                <p className="creator-profile-owner-actions">
+                  <button type="button" className="secondary-btn" onClick={() => setEditOpen(true)}>
+                    <PixelIcon name="pencil" size={12} /> {t('creatorProfile.editProfile')}
+                  </button>
+                </p>
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -132,6 +155,20 @@ export function CreatorProfilePage({
             </ul>
           )}
         </section>
+      ) : null}
+
+      {isOwner ? (
+        <StudioCreatorProfileProvider>
+          <EditProfileModal
+            isOpen={editOpen}
+            onClose={() => setEditOpen(false)}
+            onSaved={() => setReloadToken((n) => n + 1)}
+            onHandleChanged={(nextHandle) => {
+              setEditOpen(false);
+              onNavigate?.(creatorPath(nextHandle));
+            }}
+          />
+        </StudioCreatorProfileProvider>
       ) : null}
     </article>
   );

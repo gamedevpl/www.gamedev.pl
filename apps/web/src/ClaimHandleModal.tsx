@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useEffect, useId, useRef, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useStudioCreatorProfile } from './studioCreatorProfile.js';
@@ -16,6 +16,8 @@ export function ClaimHandleModal({ isOpen, onClose }: { isOpen: boolean; onClose
   const { t } = useTranslation();
   const formId = useId();
   const cardRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  const clearMessageRef = useRef<() => void>(() => undefined);
   const {
     me,
     status,
@@ -29,19 +31,24 @@ export function ClaimHandleModal({ isOpen, onClose }: { isOpen: boolean; onClose
     clearMessage,
   } = useStudioCreatorProfile();
 
+  onCloseRef.current = onClose;
+  clearMessageRef.current = clearMessage;
+
   useEffect(() => {
     if (isOpen && me?.publishReady) onClose();
   }, [isOpen, me?.publishReady, onClose]);
 
   // Escape, focus trap, and restore focus to whatever opened the dialog (the claim CTA).
+  // Depend only on `isOpen` so typing (provider re-renders) does not re-run cleanup and
+  // yank focus back to the opener mid-edit.
   useEffect(() => {
     if (!isOpen) return;
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        clearMessage();
-        onClose();
+        clearMessageRef.current();
+        onCloseRef.current();
         return;
       }
       if (event.key !== 'Tab') return;
@@ -69,7 +76,7 @@ export function ClaimHandleModal({ isOpen, onClose }: { isOpen: boolean; onClose
       window.removeEventListener('keydown', onKeyDown);
       previouslyFocused?.focus?.();
     };
-  }, [isOpen, onClose, clearMessage]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -87,11 +94,6 @@ export function ClaimHandleModal({ isOpen, onClose }: { isOpen: boolean; onClose
     onClose();
   };
 
-  const stopCardKey = (event: ReactKeyboardEvent) => {
-    // Backdrop click closes; keep key events on the card from bubbling oddly.
-    event.stopPropagation();
-  };
-
   return createPortal(
     <div className="modal-backdrop claim-handle-modal-backdrop" onClick={handleClose} role="presentation">
       <div
@@ -101,7 +103,6 @@ export function ClaimHandleModal({ isOpen, onClose }: { isOpen: boolean; onClose
         aria-modal="true"
         aria-labelledby={`${formId}-heading`}
         onClick={(event) => event.stopPropagation()}
-        onKeyDown={stopCardKey}
       >
         <button type="button" className="modal-close-btn" onClick={handleClose} aria-label={t('studioPanel.close')}>
           &times;

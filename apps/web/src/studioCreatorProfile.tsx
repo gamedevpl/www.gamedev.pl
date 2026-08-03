@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
 import {
@@ -26,8 +26,8 @@ export type StudioCreatorProfile = {
   setNameInput: (value: string) => void;
   setBioInput: (value: string) => void;
   setAvatarMode: (value: AvatarMode) => void;
-  onClaim: (event: FormEvent) => Promise<void>;
-  onSaveDetails: (event: FormEvent) => Promise<void>;
+  onClaim: (event: FormEvent) => Promise<MeProfile | null>;
+  onSaveDetails: (event: FormEvent) => Promise<boolean>;
   refusalCopy: (code: HandleClaimError) => string;
   clearMessage: () => void;
 };
@@ -35,8 +35,7 @@ export type StudioCreatorProfile = {
 const StudioCreatorProfileContext = createContext<StudioCreatorProfile | null>(null);
 
 /**
- * Shared Studio profile store — chrome chip and claim modal both read/write here so a
- * claim reveals `@handle` without remounting.
+ * Shared creator-profile store for claim/edit modals (Studio publish gate + public page).
  */
 export function StudioCreatorProfileProvider({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
@@ -119,7 +118,7 @@ export function StudioCreatorProfileProvider({ children }: { children: ReactNode
     setAvatarMode(next.avatarMode ?? 'letter');
   };
 
-  const onClaim = async (event: FormEvent) => {
+  const onClaim = async (event: FormEvent): Promise<MeProfile | null> => {
     event.preventDefault();
     setStatus('saving');
     setMessage(null);
@@ -129,16 +128,18 @@ export function StudioCreatorProfileProvider({ children }: { children: ReactNode
       setMessage(t('creatorProfile.claimed'));
       setStatus('ready');
       await refreshUser();
+      return next;
     } catch (err) {
       const code = ((err as { code?: HandleClaimError }).code ?? 'unknown') as HandleClaimError;
       setMessage(refusalCopy(code));
       setStatus('ready');
+      return null;
     }
   };
 
-  const onSaveDetails = async (event: FormEvent) => {
+  const onSaveDetails = async (event: FormEvent): Promise<boolean> => {
     event.preventDefault();
-    if (!me?.handle) return;
+    if (!me?.handle) return false;
     setStatus('saving');
     setMessage(null);
     try {
@@ -151,11 +152,15 @@ export function StudioCreatorProfileProvider({ children }: { children: ReactNode
       setMessage(t('creatorProfile.saved'));
       setStatus('ready');
       await refreshUser();
+      return true;
     } catch {
       setMessage(t('creatorProfile.errors.unknown'));
       setStatus('ready');
+      return false;
     }
   };
+
+  const clearMessage = useCallback(() => setMessage(null), []);
 
   const value: StudioCreatorProfile = {
     me,
@@ -173,7 +178,7 @@ export function StudioCreatorProfileProvider({ children }: { children: ReactNode
     onClaim,
     onSaveDetails,
     refusalCopy,
-    clearMessage: () => setMessage(null),
+    clearMessage,
   };
 
   return <StudioCreatorProfileContext.Provider value={value}>{children}</StudioCreatorProfileContext.Provider>;

@@ -862,6 +862,7 @@ export function App() {
             handle={route.handle}
             onBack={() => navigate('/')}
             onPlay={(slug) => navigate(playPath(slug))}
+            onNavigate={navigate}
             onProfileLoaded={(profile: PublicCreatorProfile) => setCreatorName(profile.profileName)}
           />
         </main>
