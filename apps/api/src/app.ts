@@ -232,6 +232,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     ...options.submissionRoutes,
     store,
     contentChecker,
+    // So /api/mcp can tell a visitor the product is closed rather than sending them to
+    // hunt for a key that cannot exist yet. Not a gate — the endpoint stays reachable
+    // through the beta wall on purpose.
+    privateBeta,
     // Same allowlist the console is gated on: the people who can see the queue are the
     // people its alerts are addressed to. Two lists would drift, and the failure mode of
     // drift here is an alert nobody receives.

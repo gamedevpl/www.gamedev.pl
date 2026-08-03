@@ -61,11 +61,7 @@ import {
   peekMcpSessionKeyForLog,
   toolErrorReason,
 } from './mcp-debug-log.js';
-import {
-  MCP_MISSING_CREDENTIAL_HINT,
-  sendMcpOAuthChallenge,
-  shouldIssueMcpOAuthChallenge,
-} from './mcp-oauth-metadata.js';
+import { mcpMissingCredentialHint, sendMcpOAuthChallenge, shouldIssueMcpOAuthChallenge } from './mcp-oauth-metadata.js';
 import {
   INBOX_PIGGYBACK_TOOLS,
   createMcpNudgeTracker,
@@ -118,6 +114,13 @@ export interface McpServerOptions {
   store?: Store;
   agentTokenSecret?: string;
   now?: () => number;
+  /**
+   * Closed beta, so the endpoint can say so. The beta wall itself sits on sign-in, not
+   * here — `/api/mcp` stays reachable through it deliberately — but a visitor who cannot
+   * sign in still deserves to be told that, rather than being sent to hunt for a key that
+   * cannot exist for them. Copy only; this gates no access.
+   */
+  privateBeta?: boolean;
   gamesStore?: GamesStore;
   objectStore?: GcsObjectStore;
   /**
@@ -391,6 +394,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
   const contentChecker = options.contentChecker;
   const dailyImprovementQuota = options.dailyImprovementQuota ?? Number(process.env.DAILY_IMPROVEMENT_QUOTA ?? '2');
   const dailyFeedbackQuota = options.dailyFeedbackQuota ?? 20;
+  const privateBeta = options.privateBeta ?? (process.env.PRIVATE_BETA ?? '').toLowerCase() === 'true';
+  const missingCredentialHint = mcpMissingCredentialHint(privateBeta);
 
   /** Transport sessions only — never consulted for authorization. */
   const transportSessions = new Map<string, { createdAt: number }>();
@@ -562,7 +567,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       channelToken = bearer;
     } else {
       // Possession of Mcp-Session-Id alone authorizes nothing.
-      return toolErr(MCP_MISSING_CREDENTIAL_HINT);
+      return toolErr(missingCredentialHint);
     }
 
     const record = await store.getSubmission(claims.jobId);
@@ -2785,6 +2790,13 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             version: '1.0.0',
           },
           instructions:
+            // Closed beta first, because this string is the only thing every client
+            // receives *before* anything fails. Everything below assumes an account.
+            (privateBeta
+              ? 'NOTE: gamedev.pl is in closed beta. These tools need a creator account; if you do not have ' +
+                'one, join the waitlist at https://www.gamedev.pl/ — listing tools here does not mean you can ' +
+                'use them yet. '
+              : '') +
             'Making a NEW game? Call create_game first — start needs a slug, and a new game has none yet. ' +
             'Otherwise call the gamedevpl start tool first. With a creator key configured in Authorization: Bearer, pass only ' +
             "the game slug — nothing else is needed. A per-game or legacy key from the creator's Studio kickoff " +
@@ -2987,7 +2999,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         },
         'mcp oauth challenge',
       );
-      return sendMcpOAuthChallenge(reply);
+      return sendMcpOAuthChallenge(reply, privateBeta);
     }
 
     // Single message only (streamable HTTP 2025-11-25 dropped batching).
@@ -2999,7 +3011,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       return reply.status(403).send({ error: 'forbidden origin' });
     }
     if (!readBearerToken(request.headers.authorization)) {
-      return sendMcpOAuthChallenge(reply);
+      return sendMcpOAuthChallenge(reply, privateBeta);
     }
     // No server-initiated SSE in v1 — clients drive via POST tools/call.
     return reply.status(405).send({ error: 'SSE listen not offered; use POST for JSON-RPC' });

@@ -660,6 +660,33 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(res.statusCode).not.toBe(401);
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ jsonrpc: '2.0', id: 1 });
+
+    // Reachable is not the same as usable. Since the wall lets the handshake through, a
+    // visitor who cannot sign in sees 14 healthy-looking tools; `instructions` is the one
+    // string every client gets before anything fails, so the closed door is named there.
+    const instructions = (res.json().result as { instructions?: string }).instructions ?? '';
+    expect(instructions).toMatch(/closed beta/i);
+    expect(instructions).toMatch(/waitlist/i);
+  });
+
+  it('leaves the closed-beta note out of instructions when the site is open', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/mcp',
+      headers: { 'content-type': 'application/json' },
+      payload: {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'open-site', version: '0' } },
+      },
+    });
+    const instructions = (res.json().result as { instructions?: string }).instructions ?? '';
+    expect(instructions).not.toMatch(/closed beta/i);
+    expect(instructions).toMatch(/create_game/);
   });
 
   it('Bearer mode authenticates tools without sessionKey', async () => {
