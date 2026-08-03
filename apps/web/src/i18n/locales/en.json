@@ -1058,6 +1058,7 @@
     "sharedWithoutContent": "Link copied — it carries your settings; painted maps stay in this remix.",
     "undone": "Put back the way it was.",
     "undoFailed": "Couldn't go back just now.",
-    "brokeIt": "That change stopped the game working. Put it back?"
+    "brokeIt": "That change stopped the game working. Put it back?",
+    "changeStanding": "Your change is running."
   }
 }

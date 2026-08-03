@@ -7,6 +7,7 @@ import { useGameTelemetry } from './gamePlayer.js';
 import { rememberRecentPlay } from './recentPlays.js';
 import { recordGamePlayed } from './recommendationsApi.js';
 import { RemixPanel } from './RemixPanel.js';
+import type { RemixSession } from './remixApi.js';
 import { readSharedParams } from './remixApi.js';
 
 type PublishedGameFrameProps = {
@@ -62,6 +63,17 @@ export function PublishedGameFrame({
    * the remix returns the player to the published game rather than to a reload.
    */
   const [remixHtml, setRemixHtml] = useState<string | null>(null);
+  /**
+   * The remix session, held above the panel so closing the sheet does not end it.
+   *
+   * The panel unmounts on Close while the remixed document keeps running, so a
+   * session owned by the panel meant the most natural sequence there is — change
+   * something, close the sheet to play it, find it broken, reopen — came back to
+   * a fresh session with no history and no way back. The session outlives the
+   * sheet because the *change* does.
+   */
+  const [remixSession, setRemixSession] = useState<RemixSession | null>(null);
+  const [remixUndoable, setRemixUndoable] = useState(false);
   const [remixOpen, setRemixOpen] = useState(false);
   /**
    * Remix is an invitation, revealed in the gaps rather than at second zero:
@@ -164,6 +176,10 @@ export function PublishedGameFrame({
           frameRef={activeFrameRef}
           initialParams={sharedParams}
           onSwapDocument={setRemixHtml}
+          session={remixSession}
+          onSession={setRemixSession}
+          undoable={remixUndoable}
+          onUndoable={setRemixUndoable}
           onClose={() => setRemixOpen(false)}
           painterRequest={painterNonce}
           onCapabilities={onRemixCapabilities}

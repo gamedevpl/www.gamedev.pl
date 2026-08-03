@@ -96,6 +96,12 @@ export type CodeLaneOutcome =
       detail?: string;
       summary?: { en: string; pl: string };
       tokens: { input: number; output: number };
+      /**
+       * Present only under `REMIX_DEBUG` — and on failures above all. A flag
+       * that traced only the runs that worked would be silent on exactly the
+       * ones it exists to explain.
+       */
+      trace?: CodeLaneTrace;
     };
 
 /** Compiles a candidate. Injected so the lane is testable without esbuild or GitHub. */
@@ -162,7 +168,13 @@ export class VertexCodeLane {
       rounds: [],
     };
     if (regions.length === 0) {
-      return { ok: false, reason: 'no_region', detail: 'this game has no editable source regions', tokens };
+      return {
+        ok: false,
+        reason: 'no_region',
+        detail: 'this game has no editable source regions',
+        tokens,
+        ...(debug ? { trace } : {}),
+      };
     }
 
     let picked: z.infer<typeof PickSchema>;
@@ -172,7 +184,7 @@ export class VertexCodeLane {
         .signal(AbortSignal.timeout(this.options.pickTimeoutMs ?? DEFAULT_PICK_TIMEOUT_MS))
         .json((value) => PickSchema.parse(value));
     } catch (error) {
-      return { ok: false, reason: 'error', detail: String(error), tokens };
+      return { ok: false, reason: 'error', detail: String(error), tokens, ...(debug ? { trace } : {}) };
     }
 
     if (picked.decision === 'reject') {
@@ -181,6 +193,7 @@ export class VertexCodeLane {
         reason: 'refused',
         ...(bilingual(picked.summary) ? { summary: bilingual(picked.summary)! } : {}),
         tokens,
+        ...(debug ? { trace } : {}),
       };
     }
     const region = picked.file && picked.name ? findRegion(regions, picked.file, picked.name) : null;
@@ -194,7 +207,7 @@ export class VertexCodeLane {
       // A named region that does not exist is a hallucination, and there is
       // nothing to edit. Reported as "needs a bigger change" rather than as an
       // error, because from the player's side that is what it means.
-      return { ok: false, reason: 'no_region', tokens };
+      return { ok: false, reason: 'no_region', tokens, ...(debug ? { trace } : {}) };
     }
 
     const original = request.sources[region.file];
@@ -211,7 +224,14 @@ export class VertexCodeLane {
           .signal(AbortSignal.timeout(this.options.editTimeoutMs ?? DEFAULT_EDIT_TIMEOUT_MS))
           .json((value) => EditSchema.parse(value));
       } catch (error) {
-        return { ok: false, reason: 'error', detail: String(error), ...(summary ? { summary } : {}), tokens };
+        return {
+          ok: false,
+          reason: 'error',
+          detail: String(error),
+          ...(summary ? { summary } : {}),
+          tokens,
+          ...(debug ? { trace } : {}),
+        };
       }
       summary = bilingual(edit.summary) ?? summary;
 
@@ -247,6 +267,7 @@ export class VertexCodeLane {
       reason: 'did_not_compile',
       detail: errors.join('; ').slice(0, 400),
       ...(summary ? { summary } : {}),
+      ...(debug ? { trace } : {}),
       tokens,
     };
   }

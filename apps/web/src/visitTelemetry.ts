@@ -188,6 +188,8 @@ export type RemixStep =
   | 'painted' // changed declared content in the remix painter — `tuned`'s sibling
   | 'asked'
   | 'applied'
+  | 'broken' // the swapped build threw — counted as applied a moment earlier
+  | 'undone' // and taken back, which is the safety flow working
   | 'handoff'
   | 'refused'
   | 'shared'

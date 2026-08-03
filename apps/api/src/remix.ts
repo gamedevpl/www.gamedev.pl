@@ -618,10 +618,26 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
           },
         );
 
+        if (codeLaneDebugEnabled()) {
+          // Before the success branch, deliberately: a trace that only ever
+          // described the runs that worked would be silent on the ones the flag
+          // exists to explain.
+          request.log.info(
+            {
+              slug: session.slug,
+              utterance: body.data.utterance,
+              ok: outcome.ok,
+              ...(outcome.ok ? { region: outcome.region } : { reason: outcome.reason, detail: outcome.detail }),
+              trace: outcome.trace,
+            },
+            'remix code lane trace',
+          );
+        }
         if (!outcome.ok) {
           return reply.send({
             ok: false,
             reason: outcome.reason,
+            ...(codeLaneDebugEnabled() && outcome.trace ? { debug: outcome.trace } : {}),
             ...(outcome.summary ? { summary: outcome.summary } : {}),
           });
         }
@@ -648,15 +664,6 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         session.expiresAt = now() + REMIX_TTL_MS;
         const html = await rebuild(session);
         if (!html) return reply.status(500).send({ ok: false, reason: 'error' });
-        if (codeLaneDebugEnabled()) {
-          // Temporary, flag-gated: the whole run, in the log and in the answer.
-          // The response is the useful half — it is where a failure is already
-          // being read from. Delete both with the flag.
-          request.log.info(
-            { slug: session.slug, utterance: body.data.utterance, region: outcome.region, trace: outcome.trace },
-            'remix code lane trace',
-          );
-        }
         return reply.send({
           ok: true,
           html,
@@ -700,10 +707,16 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       const restored = session.overrides;
       session.overrides = previous;
       session.codeEdits = Math.max(0, session.codeEdits - 1);
-      const html = await rebuild(session);
+      // Put it back rather than leaving the session in a state the player cannot
+      // see: a failed undo must not silently become a third version, and an
+      // assembler that *throws* fails exactly as much as one that returns null.
+      let html: string | null = null;
+      try {
+        html = await rebuild(session);
+      } catch (error) {
+        request.log.error({ err: error, slug: session.slug }, 'remix undo could not rebuild');
+      }
       if (!html) {
-        // Put it back rather than leaving the session in a state the player
-        // cannot see: a failed undo must not silently become a third version.
         session.overrides = restored;
         session.history.push(previous);
         session.codeEdits += 1;

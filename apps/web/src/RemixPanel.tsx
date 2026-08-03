@@ -176,6 +176,18 @@ export function RemixPanel(props: {
   /** Shared values from a `?remix=` link, already parsed. */
   initialParams?: Record<string, EditorParamValue> | null;
   /**
+   * The session, owned by the parent so it outlives this sheet.
+   *
+   * Closing the panel does not end a remix — the changed document keeps running
+   * — so minting a session per mount stranded the player: reopen after a
+   * play-test and the history that held their way back was gone.
+   */
+  session?: RemixSession | null;
+  onSession?: (session: RemixSession) => void;
+  /** Whether the server still has a step to give back. */
+  undoable?: boolean;
+  onUndoable?: (undoable: boolean) => void;
+  /**
    * The More-menu door to the painter: bumped by the theater when "Level
    * editor" is chosen. A nonce rather than a boolean so choosing it again
    * reopens a painter the player closed.
@@ -186,7 +198,16 @@ export function RemixPanel(props: {
 }) {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
-  const [session, setSession] = useState<RemixSession | null>(null);
+  const [ownSession, setOwnSession] = useState<RemixSession | null>(props.session ?? null);
+  const session = props.session ?? ownSession;
+  const setSession = useCallback(
+    (next: RemixSession) => {
+      setOwnSession(next);
+      props.onSession?.(next);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the callback prop is stable in practice
+    [],
+  );
   const [authOpen, setAuthOpen] = useState(false);
   /** Sliders and share stay tucked away unless explicitly asked for. */
   const expert = useMemo(() => new URLSearchParams(window.location.search).has('remixExpert'), []);
@@ -307,6 +328,9 @@ export function RemixPanel(props: {
     // No session without a session: the API 401s signed out, and the composer
     // needs nothing from the server until send — so a visitor can type first.
     if (!uid) return;
+    // Already have one from a previous opening of this sheet — reusing it is the
+    // whole point: its history is the player's way back.
+    if (props.session) return;
     let cancelled = false;
     startRemix(props.slug)
       .then((started) => {
@@ -338,7 +362,7 @@ export function RemixPanel(props: {
     return () => {
       cancelled = true;
     };
-  }, [props.slug, props.initialParams, pushToGame, uid, onCapabilities]);
+  }, [props.slug, props.initialParams, props.session, setSession, pushToGame, uid, onCapabilities]);
 
   /** Open the painter, remembering which door was first — telemetry keeps that one. */
   const openPainter = useCallback((door: RemixPaintedVia) => {
@@ -377,6 +401,15 @@ export function RemixPanel(props: {
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, MAX_INPUT_HEIGHT)}px`;
   }, [utterance, changed]);
+
+  // Reopened over a change that is still running: the way back is the first
+  // thing this sheet owes the player, before they ask for anything else.
+  useEffect(() => {
+    if (props.undoable && !changed) {
+      setChanged({ text: t('remix.changeStanding'), canShare: false, undoCode: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on arrival
+  }, [props.undoable]);
 
   // A panel that opened onto nothing. Recorded against the same `opened`
   // denominator so the share of visits that met a game with no way in is a
@@ -538,6 +571,7 @@ export function RemixPanel(props: {
           // cannot tell the difference. One tap back is the safety net.
           undoCode: result.undoable !== false,
         });
+        props.onUndoable?.(result.undoable !== false);
         setUndo(null);
         // The swap replaces the whole document, so the new build boots fresh and
         // the values the player has set are re-sent once it says hello.
@@ -602,7 +636,11 @@ export function RemixPanel(props: {
       const result = await remixUndo(active.remixId);
       props.onSwapDocument(result.html);
       window.setTimeout(() => pushToGame(valuesRef.current), 400);
-      setChanged(null);
+      recordRemixStep('undone');
+      props.onUndoable?.(result.undoable);
+      // More history behind it: the button stays, because the server can still
+      // give another step back and the player has no other way to ask for it.
+      setChanged(result.undoable ? { text: t('remix.changeStanding'), canShare: false, undoCode: true } : null);
       setNote({ kind: 'ok', text: t('remix.undone') });
     } catch {
       props.frameRef.current?.contentWindow?.postMessage({ source: 'gdpl-host', type: 'resume' }, '*');
@@ -622,6 +660,10 @@ export function RemixPanel(props: {
       const data = event.data as { source?: string; type?: string } | null;
       if (data?.source !== 'gdpl-player' || data.type !== 'error') return;
       stop();
+      // `applied` was recorded when the rebuild arrived, a moment before the
+      // game ran a frame. Without this the funnel counts a broken build as a
+      // success and can never say whether the safety flow is working.
+      recordRemixStep('broken');
       setChanged((current) => (current ? { ...current, broke: true, canShare: false } : current));
     }
     function stop() {

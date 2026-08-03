@@ -523,6 +523,40 @@ describe('RemixPanel', () => {
     expect(container.querySelector('.remix-btn.is-primary')?.textContent).toBe('Undo');
   });
 
+  it('keeps the way back when the sheet is reopened over a running change', async () => {
+    // Close the sheet, play-test the change, find it broken, reopen — the most
+    // natural sequence there is, and the one a session owned by this panel could
+    // not survive: the change keeps running while the history that undoes it
+    // was thrown away with the unmount.
+    const session = {
+      remixId: 'r1',
+      params: null,
+      values: null,
+      canAssist: false,
+      canCode: true,
+      suggestions: [],
+      expiresInMs: 3_600_000,
+    };
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(
+        <RemixPanel
+          slug="dog-dash"
+          frameRef={frameRef as never}
+          onSwapDocument={(html) => swapped.push(html)}
+          onClose={() => {}}
+          session={session as never}
+          undoable
+        />,
+      );
+    });
+
+    // No second session was minted for the reopening...
+    expect(remixApi.startRemix).not.toHaveBeenCalled();
+    // ...and the way back is offered before anything else is asked for.
+    expect(container.querySelector('.remix-btn')?.textContent).toBe('Undo');
+  });
+
   async function send(text: string) {
     const input = container.querySelector('.remix-ask textarea') as HTMLTextAreaElement;
     await act(async () => {
