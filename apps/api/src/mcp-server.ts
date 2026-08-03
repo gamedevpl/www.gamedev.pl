@@ -1478,10 +1478,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             version: '1.0.0',
           },
           instructions:
-            "Install is URL-only. Start with the gamedevpl start tool using the key from the creator's Studio kickoff prompt; " +
-            'pass the returned sessionKey on every later tool call. start returns your workflow (the ordered start→done ' +
-            'loop) — follow it: honour stop; screenshot early; kit-check before submit; poll get_gate_verdict until green, ' +
-            'then finish. Do not poll the inbox on a schedule; a green verdict ends the round and the key retires.',
+            'Call the gamedevpl start tool first. With a creator key configured in Authorization: Bearer, pass only ' +
+            "the game slug — nothing else is needed. A per-game or legacy key from the creator's Studio kickoff " +
+            'prompt goes in the key argument instead. start returns a sessionKey — pass it on every later tool call — ' +
+            'and your workflow (the ordered start→done loop): follow it; honour stop; screenshot early; kit-check ' +
+            'before submit; poll get_gate_verdict until green, then finish. Do not poll the inbox on a schedule; ' +
+            'a green verdict ends the round and the key retires.',
         }),
       );
     }

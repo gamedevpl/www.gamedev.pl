@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import enLocale from './i18n/locales/en.json';
+import plLocale from './i18n/locales/pl.json';
 import { selfComposerRoute, selfStatusCopy, shouldShowConnectCard } from './selfBuildCopy.js';
 
 describe('selfStatusCopy', () => {
@@ -76,5 +78,37 @@ describe('selfComposerRoute', () => {
         failureReason: 'self_build_delivery_cap',
       }),
     ).toBe('waiting');
+  });
+});
+
+// CP-2 confirmed this pair on a live failed round: the banner told the creator that
+// sending feedback starts another round, while the helper directly beneath it said
+// their agent would pick the note up on its next check-in. A creator could not tell
+// whether they were starting something or feeding something already running.
+//
+// The helper is the accurate one — a gate_red self round stays open, and the agent
+// resubmits on the same key — so the banner must not claim a new round begins.
+describe('the failed-round card reads as one story', () => {
+  const en = enLocale.statusView as {
+    failure: Record<string, string>;
+    feedback: Record<string, string>;
+  };
+  const pl = plLocale.statusView as {
+    failure: Record<string, string>;
+    feedback: Record<string, string>;
+  };
+
+  it('routes a failed self round to the composer that says the agent picks it up', () => {
+    // Establishes that these two strings really do render together.
+    expect(selfComposerRoute({ builder: 'self', failureReason: 'gate_red' })).toBe('active');
+    expect(selfStatusCopy({ builder: 'self', stall: null })).toBeNull();
+  });
+
+  it('does not tell the creator they start a round the agent is already in', () => {
+    expect(en.failure.gate_red).not.toMatch(/start another round/i);
+    expect(pl.failure.gate_red).not.toMatch(/rozpocząć kolejną rundę/i);
+    // Still has to say what to do, or removing the claim would just leave a dead end.
+    expect(en.failure.gate_red).toMatch(/below/i);
+    expect(en.feedback.routeSelfActive).toMatch(/picks this up/i);
   });
 });
