@@ -123,7 +123,8 @@ export interface McpServerOptions {
     ip: string;
     payload: unknown;
     acceptLanguage?: string;
-    log: { error: (context: object, message: string) => void };
+    openedBy?: 'creator' | 'agent';
+    log: { error: (context: object, message: string) => void; info?: (context: object, message: string) => void };
   }) => Promise<
     { ok: true; jobId: number; slug: string } | { ok: false; status: number; error: string; category?: string }
   >;
@@ -821,6 +822,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const created = await createGame({
           uid: creatorUid,
           ip: ctx.request.ip,
+          // Studio forwards the browser's preference; without this an agent that omits
+          // locale silently pins the creator's own game to English.
+          acceptLanguage: ctx.request.headers['accept-language'],
+          openedBy: 'agent',
           payload: {
             title: typeof args.title === 'string' ? args.title : '',
             concept: typeof args.concept === 'string' ? args.concept : '',
@@ -1625,7 +1630,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             version: '1.0.0',
           },
           instructions:
-            'Call the gamedevpl start tool first. With a creator key configured in Authorization: Bearer, pass only ' +
+            'Making a NEW game? Call create_game first — start needs a slug, and a new game has none yet. ' +
+            'Otherwise call the gamedevpl start tool first. With a creator key configured in Authorization: Bearer, pass only ' +
             "the game slug — nothing else is needed. A per-game or legacy key from the creator's Studio kickoff " +
             'prompt goes in the key argument instead. start returns a sessionKey — pass it on every later tool call — ' +
             'and your workflow (the ordered start→done loop): follow it; honour stop; screenshot early; kit-check ' +

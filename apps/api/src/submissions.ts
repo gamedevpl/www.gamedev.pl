@@ -1963,7 +1963,15 @@ export async function registerSubmissionRoutes(
     ip: string;
     payload: unknown;
     acceptLanguage?: string;
-    log: { error: (context: object, message: string) => void };
+    /**
+     * Who asked. Recorded on the queued transition exactly as `agent_open_round` is, so
+     * a game created through a coding agent is distinguishable from a Studio one in the
+     * job history without a new field or a second telemetry path. MCP creation is
+     * otherwise indistinguishable from a Studio self-build, which makes adoption of the
+     * chat-client flow unmeasurable.
+     */
+    openedBy?: 'creator' | 'agent';
+    log: { error: (context: object, message: string) => void; info?: (context: object, message: string) => void };
   }): Promise<
     { ok: true; jobId: number; slug: string } | { ok: false; status: number; error: string; category?: string }
   > {
@@ -2079,8 +2087,8 @@ export async function registerSubmissionRoutes(
       await store.recordJobTransition(jobId, {
         to: 'queued',
         at: new Date(now()).toISOString(),
-        by: 'creator',
-        reason: 'submitted',
+        by: input.openedBy === 'agent' ? 'agent' : 'creator',
+        reason: input.openedBy === 'agent' ? 'agent_create_game' : 'submitted',
       });
 
       const dispatchLog = input.log;
@@ -2098,6 +2106,10 @@ export async function registerSubmissionRoutes(
         dispatchLog.error({ err: error, issueNumber: jobId }, 'background dispatch failed');
       });
 
+      input.log.info?.(
+        { issueNumber: jobId, slug, via: input.openedBy === 'agent' ? 'mcp' : 'studio' },
+        'game created',
+      );
       return { ok: true, jobId, slug };
     } catch (error) {
       input.log.error({ err: error }, 'failed to create submission');

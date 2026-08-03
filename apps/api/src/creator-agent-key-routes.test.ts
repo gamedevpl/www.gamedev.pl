@@ -793,6 +793,9 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
     expect(job?.ownerUid).toBe(OWNER);
     // The caller's own agent builds it — that is what this tool is for.
     expect(job?.builder).toBe('self');
+    // The queued transition carries where it came from, mirroring agent_open_round, so
+    // adoption of the chat-client flow is measurable instead of looking like Studio.
+    expect(job?.transitions?.[0]).toMatchObject({ to: 'queued', by: 'agent', reason: 'agent_create_game' });
     // The concept is persisted as the brief, so get_brief has something to serve.
     expect(job?.spec).toContain('television station');
 
@@ -865,5 +868,25 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
     );
     expect(tooShort.isError).toBe(true);
     expect((tooShort.structured as { error: string }).error).toMatch(/at least 3 characters|title must be/i);
+  });
+
+  it("keeps the creator's language when the client sends it as a header", async () => {
+    const store = new InMemoryStore();
+    app = await createApp(store);
+    const minted = await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
+    const creatorKey = minted.json().key as string;
+
+    // No locale argument — only the header, exactly as Studio's browser sends it.
+    const res = await mcpCall(
+      app,
+      'tools/call',
+      { name: 'create_game', arguments: { title: 'Po polsku', concept: GAME_CONCEPT } },
+      { authorization: `Bearer ${creatorKey}`, 'accept-language': 'pl-PL,pl;q=0.9' },
+    );
+    const structured = JSON.parse((res.json().result as { content: Array<{ text: string }> }).content[0]!.text) as {
+      jobId: number;
+    };
+    const job = await store.getSubmission(structured.jobId);
+    expect(job?.locale).toBe('pl');
   });
 });
