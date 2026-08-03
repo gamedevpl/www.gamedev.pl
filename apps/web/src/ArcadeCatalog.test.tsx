@@ -129,7 +129,7 @@ describe('ArcadeCatalog lazy media', () => {
     vi.restoreAllMocks();
   });
 
-  it('does not attach image or video sources until a card enters the viewport', async () => {
+  it('loads posters near the fold but arms video only on preview intent', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ items: [] })));
     const container = document.createElement('div');
@@ -162,16 +162,118 @@ describe('ArcadeCatalog lazy media', () => {
       await flushEffects();
     });
 
+    // Near-fold: poster image only — no MP4 fetch until hover / play.
+    expect(container.querySelectorAll('video')).toHaveLength(0);
+    const poster = container.querySelector<HTMLImageElement>('img.catalog-preview');
+    expect(poster?.getAttribute('src')).toBe('/api/games/above-fold/media/opening.png');
+    expect(container.querySelectorAll('.catalog-moment')).toHaveLength(2);
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.preview-toggle')?.click();
+      await flushEffects();
+    });
+
     const preview = container.querySelector<HTMLVideoElement>('video.catalog-preview');
     expect(preview?.getAttribute('src')).toBe('/api/games/above-fold/media/gameplay.mp4');
     expect(preview?.getAttribute('poster')).toBe('/api/games/above-fold/media/opening.png');
-    expect(container.querySelectorAll('.catalog-moment')).toHaveLength(2);
 
     // The second card still has no media srcs — it never intersected.
     expect(container.querySelectorAll('video')).toHaveLength(1);
     expect(container.querySelectorAll('.catalog-moment img')).toHaveLength(2);
     const momentSrcs = [...container.querySelectorAll<HTMLImageElement>('.catalog-moment img')].map((img) => img.src);
     expect(momentSrcs.every((src) => src.includes('/api/games/above-fold/'))).toBe(true);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('unloads poster and video when a card leaves the viewport', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ items: [] })));
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(ArcadeCatalog, {
+          catalogStatus: 'ready',
+          catalogError: null,
+          catalogEntries: entries,
+          onPlayGame: vi.fn(),
+          onPlayTogether: vi.fn(),
+          onRetryCatalog: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    const firstMedia = container.querySelectorAll('.catalog-media')[0]!;
+    await act(async () => {
+      intersect(observers[0]!, firstMedia, true);
+      await flushEffects();
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.preview-toggle')?.click();
+      await flushEffects();
+    });
+    expect(container.querySelector('video.catalog-preview')).not.toBeNull();
+
+    await act(async () => {
+      intersect(observers[0]!, firstMedia, false);
+      await flushEffects();
+    });
+
+    expect(container.querySelectorAll('video')).toHaveLength(0);
+    expect(container.querySelectorAll('img.catalog-preview')).toHaveLength(0);
+    expect(container.querySelectorAll('.catalog-moment')).toHaveLength(0);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('renders the grid immediately without waiting for sort signals', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    sessionStorage.clear();
+    let resolveSignals: ((value: Response) => void) | undefined;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveSignals = resolve;
+        }),
+    );
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(ArcadeCatalog, {
+          catalogStatus: 'ready',
+          catalogError: null,
+          catalogEntries: entries,
+          onPlayGame: vi.fn(),
+          onPlayTogether: vi.fn(),
+          onRetryCatalog: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    expect(container.querySelectorAll('.catalog-card')).toHaveLength(2);
+    expect(container.querySelector('.catalog-state')).toBeNull();
+
+    await act(async () => {
+      resolveSignals?.(
+        new Response(JSON.stringify({ items: [], popularity: [], lastPlayed: [], newest: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+      await flushEffects();
+    });
 
     await act(async () => {
       root.unmount();

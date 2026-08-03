@@ -1190,6 +1190,9 @@ button:disabled {
   border: 1px solid var(--panel-border);
   border-radius: 14px;
   background: var(--panel-card);
+  /* Skip layout/paint for off-screen cards while scrolling a ~100-game grid. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 160px;
   transition:
     transform 0.2s,
     border-color 0.2s,

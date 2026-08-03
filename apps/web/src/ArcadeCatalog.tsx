@@ -5,7 +5,6 @@ import { catalogMediaUrl, isPlatformAuthor, type CatalogEntry } from './catalog.
 import {
   applyCatalogFilters,
   CATALOG_SORT_MODES,
-  catalogSortNeedsSignals,
   DEFAULT_CATALOG_SORT,
   EMPTY_CATALOG_SORT_SIGNALS,
   orderCatalogEntries,
@@ -73,34 +72,61 @@ function CatalogCard({
 }) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
-  // Defer preview media until the card is near the viewport — below-fold cards
-  // must not fetch posters/videos on initial home load.
-  const { ref: mediaRef, inView } = useInView<HTMLDivElement>({ rootMargin: '200px 0px', once: true });
+  // Poster when near the fold; video `src` only on hover/play. Leave-view unloads
+  // so scrolled-away cards do not keep decoders and MP4 buffers alive.
+  const { ref: mediaRef, inView } = useInView<HTMLDivElement>({ rootMargin: '200px 0px', once: false });
   const [selectedScreenshot, setSelectedScreenshot] = useState(0);
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
   const [isPreviewPinned, setIsPreviewPinned] = useState(false);
+  const [videoArmed, setVideoArmed] = useState(false);
   const screenshots = entry.media?.screenshots ?? [];
   const selected = screenshots[selectedScreenshot] ?? screenshots[0];
   const posterUrl = selected && inView ? catalogMediaUrl(entry.slug, selected.file) : undefined;
-  const videoUrl = entry.media?.video && inView ? catalogMediaUrl(entry.slug, entry.media.video) : null;
   const hasVideo = Boolean(entry.media?.video);
+  const videoUrl =
+    hasVideo && inView && videoArmed && entry.media?.video ? catalogMediaUrl(entry.slug, entry.media.video) : null;
 
-  function playPreview() {
+  useEffect(() => {
+    if (inView) return;
+    setVideoArmed(false);
+    setIsPreviewPlaying(false);
+    setIsPreviewPinned(false);
+  }, [inView]);
+
+  useEffect(() => {
+    if (!videoUrl) return;
     const video = videoRef.current;
     if (!video) return;
     void video.play().then(
       () => setIsPreviewPlaying(true),
       () => setIsPreviewPlaying(false),
     );
+  }, [videoUrl]);
+
+  function armPreview() {
+    setVideoArmed(true);
+    const video = videoRef.current;
+    if (!video?.src) return;
+    void video.play().then(
+      () => setIsPreviewPlaying(true),
+      () => setIsPreviewPlaying(false),
+    );
   }
 
-  function pausePreview(reset = false) {
+  function stopPreview() {
     const video = videoRef.current;
-    if (!video) return;
-    video.pause();
-    if (reset) {
-      video.currentTime = 0;
+    if (video) {
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
     }
+    setVideoArmed(false);
+    setIsPreviewPlaying(false);
+  }
+
+  function pausePreview() {
+    const video = videoRef.current;
+    if (video) video.pause();
     setIsPreviewPlaying(false);
   }
 
@@ -110,14 +136,14 @@ function CatalogCard({
       pausePreview();
     } else {
       setIsPreviewPinned(true);
-      playPreview();
+      armPreview();
     }
   }
 
   function selectScreenshot(index: number) {
     setSelectedScreenshot(index);
     setIsPreviewPinned(false);
-    pausePreview(true);
+    stopPreview();
   }
 
   return (
@@ -129,21 +155,21 @@ function CatalogCard({
         onPointerEnter={
           hasVideo
             ? (event) => {
-                if (event.pointerType === 'mouse') playPreview();
+                if (event.pointerType === 'mouse') armPreview();
               }
             : undefined
         }
         onPointerLeave={
           hasVideo
             ? (event) => {
-                if (event.pointerType === 'mouse' && !isPreviewPinned) pausePreview(true);
+                if (event.pointerType === 'mouse' && !isPreviewPinned) stopPreview();
               }
             : undefined
         }
         onFocus={
           hasVideo
             ? (event) => {
-                if (event.target === event.currentTarget) playPreview();
+                if (event.target === event.currentTarget) armPreview();
               }
             : undefined
         }
@@ -152,7 +178,7 @@ function CatalogCard({
             ? (event) => {
                 if (!event.currentTarget.contains(event.relatedTarget)) {
                   setIsPreviewPinned(false);
-                  pausePreview(true);
+                  stopPreview();
                 }
               }
             : undefined
@@ -160,7 +186,6 @@ function CatalogCard({
       >
         {videoUrl ? (
           <video
-            key={posterUrl}
             ref={videoRef}
             className="catalog-preview"
             src={videoUrl}
@@ -168,7 +193,7 @@ function CatalogCard({
             muted
             loop
             playsInline
-            preload="metadata"
+            preload="auto"
             aria-label={t('catalog.previewVideo', { title: entry.title })}
             onPlay={() => setIsPreviewPlaying(true)}
             onPause={() => setIsPreviewPlaying(false)}
@@ -341,13 +366,10 @@ function payloadToSignals(payload: CatalogSortPayload): CatalogSortSignals {
   };
 }
 
-function initialSignals(): { signals: CatalogSortSignals; ready: boolean } {
-  if (typeof sessionStorage === 'undefined') {
-    return { signals: EMPTY_CATALOG_SORT_SIGNALS, ready: false };
-  }
+function initialSignals(): CatalogSortSignals {
+  if (typeof sessionStorage === 'undefined') return EMPTY_CATALOG_SORT_SIGNALS;
   const cached = readCachedCatalogSortPayload();
-  if (!cached) return { signals: EMPTY_CATALOG_SORT_SIGNALS, ready: false };
-  return { signals: payloadToSignals(cached), ready: true };
+  return cached ? payloadToSignals(cached) : EMPTY_CATALOG_SORT_SIGNALS;
 }
 
 function InProgressCard({ item, onOpen }: { item: CreatorGameItem; onOpen: (address: string) => void }) {
@@ -401,9 +423,7 @@ export function ArcadeCatalog({
   );
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const sortMenuRef = useRef<HTMLDivElement | null>(null);
-  const initial = initialSignals();
-  const [signals, setSignals] = useState<CatalogSortSignals>(initial.signals);
-  const [signalsReady, setSignalsReady] = useState(initial.ready);
+  const [signals, setSignals] = useState<CatalogSortSignals>(initialSignals);
   const [creatorItems, setCreatorItems] = useState<CreatorGameItem[]>([]);
 
   useEffect(() => {
@@ -414,7 +434,6 @@ export function ArcadeCatalog({
     void fetchCatalogSortSignals(getRecentPlays()).then((payload) => {
       if (cancelled) return;
       setSignals(payloadToSignals(payload));
-      setSignalsReady(true);
     });
     return () => {
       cancelled = true;
@@ -512,9 +531,6 @@ export function ArcadeCatalog({
       return next;
     });
   }
-  const awaitingSignals =
-    catalogStatus === 'ready' && catalogEntries.length > 0 && catalogSortNeedsSignals(sortMode) && !signalsReady;
-
   const emptyMessage =
     yourGamesOnly && notPlayedOnly && (catalogEntries.length > 0 || mySlugs.size > 0)
       ? t('catalog.emptyYourGamesNotPlayed')
@@ -524,11 +540,7 @@ export function ArcadeCatalog({
           ? t('catalog.emptyNotPlayed')
           : t('catalog.empty');
   const showEmpty =
-    !awaitingSignals &&
-    catalogStatus !== 'loading' &&
-    catalogStatus !== 'error' &&
-    orderedEntries.length === 0 &&
-    inProgress.length === 0;
+    catalogStatus !== 'loading' && catalogStatus !== 'error' && orderedEntries.length === 0 && inProgress.length === 0;
 
   return (
     <section id="arcade" className="arcade-section">
@@ -621,7 +633,7 @@ export function ArcadeCatalog({
         </div>
       ) : null}
 
-      {catalogStatus === 'loading' || awaitingSignals ? (
+      {catalogStatus === 'loading' ? (
         <MascotMoment className="catalog-state" emotion="busy" size={56} title={t('mascot.busyAlt')}>
           <p>{t('catalog.loading')}</p>
         </MascotMoment>

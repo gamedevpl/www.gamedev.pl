@@ -2265,6 +2265,40 @@ describe('published game media route', () => {
     await app.close();
   });
 
+  it('honours byte Range requests so video clients need not pull the whole file', async () => {
+    const body = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    const { githubClient } = createGithubClientStub({
+      catalog: [catalogEntry('foo', { media })],
+      gameMedia: body,
+    });
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
+
+    const full = await app.inject({ method: 'GET', url: '/api/games/foo/media/gameplay.mp4' });
+    expect(full.statusCode).toBe(200);
+    expect(full.headers['accept-ranges']).toBe('bytes');
+    expect(full.headers['content-length']).toBe(String(body.length));
+
+    const ranged = await app.inject({
+      method: 'GET',
+      url: '/api/games/foo/media/gameplay.mp4',
+      headers: { range: 'bytes=2-5' },
+    });
+    expect(ranged.statusCode).toBe(206);
+    expect(ranged.headers['content-range']).toBe('bytes 2-5/10');
+    expect(ranged.headers['content-length']).toBe('4');
+    expect(Buffer.from(ranged.rawPayload)).toEqual(Buffer.from([2, 3, 4, 5]));
+
+    const unsatisfiable = await app.inject({
+      method: 'GET',
+      url: '/api/games/foo/media/gameplay.mp4',
+      headers: { range: 'bytes=99-100' },
+    });
+    expect(unsatisfiable.statusCode).toBe(416);
+    expect(unsatisfiable.headers['content-range']).toBe('bytes */10');
+
+    await app.close();
+  });
+
   it('does not expose unlisted media or media from unpublished games', async () => {
     const { githubClient, getGameMedia } = createGithubClientStub({
       catalog: [catalogEntry('foo', { media }), catalogEntry('draft', { status: 'draft', media })],

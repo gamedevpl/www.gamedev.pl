@@ -3,7 +3,10 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 export type UseInViewOptions = {
   /** Expand the root intersection box so media can prefetch before it enters view. */
   rootMargin?: string;
-  /** Once true, stay true — catalog media should not unload after scrolling away. */
+  /**
+   * When true (default), stay true after the first intersection.
+   * Catalog cards pass false so off-screen preview media can unload.
+   */
   once?: boolean;
 };
 
