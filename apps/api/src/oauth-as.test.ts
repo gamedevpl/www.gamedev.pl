@@ -59,10 +59,22 @@ async function seedSelfRound(store: InMemoryStore, issue = 42, owner = 'g:creato
   });
 }
 
+/**
+ * Registers a client from its own source IP.
+ *
+ * `/oauth/register` is rate limited per IP and the whole suite shares 127.0.0.1, so
+ * whether a given test got a 201 or a 429 depended on how many registrations ran before
+ * it — which is file order, which differs between a local run and CI. That is how a
+ * green local suite went red on the runner. Each caller now gets its own bucket.
+ */
+let registrarIp = 0;
+
 async function registerClient(app: FastifyInstance, redirectUri = 'http://127.0.0.1/callback') {
+  registrarIp += 1;
   const res = await app.inject({
     method: 'POST',
     url: '/oauth/register',
+    remoteAddress: `10.9.${Math.floor(registrarIp / 250)}.${(registrarIp % 250) + 1}`,
     headers: { 'content-type': 'application/json' },
     payload: {
       redirect_uris: [redirectUri],
@@ -633,6 +645,10 @@ describe('oauth token helpers', () => {
     // It says what the grant permits, and for how long.
     expect(page.body).toMatch(/build rounds on games you own/i);
     expect(page.body).toMatch(/until you revoke it/i);
+    // The grant also dies on its own after 90 days of inactivity — refresh rotation only
+    // resets that clock. Saying "until you revoke it" alone would be a promise the
+    // refresh TTL breaks, which is the same defect as #488's "rotating stops every agent".
+    expect(page.body).toMatch(/90 days without connecting/i);
     // The site is dark; a consent page that looks foreign is one nobody can vet.
     expect(page.body).toContain('#0f1418');
 
@@ -712,20 +728,7 @@ describe('oauth token helpers', () => {
       },
     });
 
-    // Distinct source IP: /oauth/register is rate limited per IP and the suite shares one.
-    const reg = await app.inject({
-      method: 'POST',
-      url: '/oauth/register',
-      remoteAddress: '10.1.2.3',
-      headers: { 'content-type': 'application/json' },
-      payload: {
-        redirect_uris: ['http://127.0.0.1/rotate'],
-        client_name: 'Rotation Agent',
-        token_endpoint_auth_method: 'none',
-      },
-    });
-    expect(reg.statusCode).toBe(201);
-    const clientId = reg.json().client_id as string;
+    const clientId = await registerClient(app, 'http://127.0.0.1/rotate');
     const verifier = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
     const challenge = pkceChallengeS256(verifier);
     const fields = {

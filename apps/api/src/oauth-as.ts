@@ -171,6 +171,15 @@ function clientLabel(client: OAuthClientRecord, redirectUri?: string): string {
 }
 
 /**
+ * Days of inactivity after which a grant dies on its own.
+ *
+ * Derived, not typed as a number: the consent screen states this as a promise, and a
+ * promise that drifts from the constant enforcing it is the defect this whole screen
+ * exists to stop making.
+ */
+const INACTIVITY_DAYS = Math.round(AS_REFRESH_TOKEN_TTL_MS / (24 * 60 * 60 * 1000));
+
+/**
  * Binds the consent form to the session that was shown it.
  *
  * `POST /oauth/authorize` mints a real, durable grant, and its only protection was the
@@ -226,7 +235,7 @@ function consentHtml(input: {
           cannot: ['Dotykać gier, których nie jesteś właścicielem', 'Zmieniać Twojego konta ani logowania'],
           redirect: 'Wrócisz na',
           redirectHint: 'To powinien być agent, którego przed chwilą użyłeś. Jeśli go nie rozpoznajesz — odmów.',
-          duration: 'Dostęp trwa, dopóki go nie cofniesz w Studio.',
+          duration: `Dostęp trwa, dopóki go nie cofniesz w Studio — albo dopóki agent nie połączy się przez ${INACTIVITY_DAYS} dni.`,
           approve: 'Zatwierdź',
           deny: 'Odmów',
           bail: 'Nie łączyłeś przed chwilą agenta? Naciśnij Odmów — nic nie zostanie udostępnione.',
@@ -246,7 +255,7 @@ function consentHtml(input: {
           cannot: ['Touch games you do not own', 'Change your account or how you sign in'],
           redirect: "You'll be sent back to",
           redirectHint: 'This should be the agent you just used. If you do not recognise it, deny.',
-          duration: 'Access lasts until you revoke it in Studio.',
+          duration: `Access lasts until you revoke it in Studio, or until the agent goes ${INACTIVITY_DAYS} days without connecting.`,
           approve: 'Approve',
           deny: 'Deny',
           bail: 'Did not just connect an agent? Press Deny — nothing is shared unless you approve.',
