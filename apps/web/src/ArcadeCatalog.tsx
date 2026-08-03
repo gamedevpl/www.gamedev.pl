@@ -36,6 +36,7 @@ import {
 } from './recommendationsApi.js';
 import { formatRelativeTime } from './relativeTime.js';
 import { useInView } from './useInView.js';
+import { isCatalogScrolling, watchCatalogScrollIdle, whenCatalogScrollIdle } from './catalogScrollIdle.js';
 
 type ArcadeCatalogProps = {
   catalogStatus: 'loading' | 'ready' | 'error';
@@ -66,6 +67,9 @@ function defaultScreenshotIndex(screenshots: Array<{ name: string }>): number {
   return idx >= 0 ? idx : 0;
 }
 
+/** Hover must dwell this long before we fetch moments / arm video — scroll sweeps skip it. */
+const HOVER_INTENT_MS = 240;
+
 function CatalogCard({
   entry,
   isYours = false,
@@ -79,22 +83,36 @@ function CatalogCard({
 }) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
-  // Poster when near the fold; video `src` only on hover/play. Leave-view unloads
-  // so scrolled-away cards do not keep decoders and MP4 buffers alive.
-  const { ref: mediaRef, inView } = useInView<HTMLDivElement>({ rootMargin: '200px 0px', once: false });
+  const hoverTimerRef = useRef<number | null>(null);
+  const hoveringRef = useRef(false);
+  const cancelIdleWaitRef = useRef<(() => void) | null>(null);
+  // Poster when near the fold; video/moments only after deliberate engage (dwell hover,
+  // keyboard focus, or play). Leave-view unloads so scrolled-away cards stay light.
+  const { ref: mediaRef, inView } = useInView<HTMLDivElement>({ rootMargin: '80px 0px', once: false });
   const screenshots = entry.media?.screenshots ?? [];
   const [selectedScreenshot, setSelectedScreenshot] = useState(() => defaultScreenshotIndex(screenshots));
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
   const [isPreviewPinned, setIsPreviewPinned] = useState(false);
   const [videoArmed, setVideoArmed] = useState(false);
+  const [extrasOpen, setExtrasOpen] = useState(false);
   const selected = screenshots[selectedScreenshot] ?? screenshots[0];
   const posterUrl = selected && inView ? catalogMediaUrl(entry.slug, selected.file) : undefined;
   const hasVideo = Boolean(entry.media?.video);
+  const hasMoments = screenshots.length > 1;
   const videoUrl =
     hasVideo && inView && videoArmed && entry.media?.video ? catalogMediaUrl(entry.slug, entry.media.video) : null;
+  const showMoments = extrasOpen && inView && hasMoments;
 
   useEffect(() => {
     if (inView) return;
+    hoveringRef.current = false;
+    if (hoverTimerRef.current != null) {
+      window.clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+    cancelIdleWaitRef.current?.();
+    cancelIdleWaitRef.current = null;
+    setExtrasOpen(false);
     setVideoArmed(false);
     setIsPreviewPlaying(false);
     setIsPreviewPinned(false);
@@ -113,6 +131,16 @@ function CatalogCard({
       setIsPreviewPlaying(false);
     }
   }, [videoUrl]);
+
+  useEffect(
+    () => () => {
+      hoveringRef.current = false;
+      if (hoverTimerRef.current != null) window.clearTimeout(hoverTimerRef.current);
+      cancelIdleWaitRef.current?.();
+      cancelIdleWaitRef.current = null;
+    },
+    [],
+  );
 
   function armPreview() {
     setVideoArmed(true);
@@ -145,13 +173,72 @@ function CatalogCard({
     setIsPreviewPlaying(false);
   }
 
+  function clearHoverIntent() {
+    if (hoverTimerRef.current != null) {
+      window.clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+    cancelIdleWaitRef.current?.();
+    cancelIdleWaitRef.current = null;
+  }
+
+  /** Open moments (and arm video when present) once the pointer is idle over the card. */
+  function armExtrasFromHover() {
+    if (!hoveringRef.current) return;
+    if (isCatalogScrolling()) {
+      // Inertial scroll can leave the cursor parked on the same card — wait for idle
+      // instead of discarding the intent until the user re-enters.
+      cancelIdleWaitRef.current?.();
+      cancelIdleWaitRef.current = whenCatalogScrollIdle(() => {
+        cancelIdleWaitRef.current = null;
+        armExtrasFromHover();
+      });
+      return;
+    }
+    setExtrasOpen(true);
+    if (hasVideo) armPreview();
+  }
+
+  function scheduleHoverIntent() {
+    clearHoverIntent();
+    hoveringRef.current = true;
+    hoverTimerRef.current = window.setTimeout(() => {
+      hoverTimerRef.current = null;
+      armExtrasFromHover();
+    }, HOVER_INTENT_MS);
+  }
+
+  function endHoverIntent() {
+    hoveringRef.current = false;
+    clearHoverIntent();
+    if (isPreviewPinned) return;
+    setExtrasOpen(false);
+    stopPreview();
+  }
+
   function togglePreview() {
+    hoveringRef.current = false;
+    clearHoverIntent();
     if (isPreviewPlaying) {
       setIsPreviewPinned(false);
       pausePreview();
     } else {
+      setExtrasOpen(true);
       setIsPreviewPinned(true);
       armPreview();
+    }
+  }
+
+  /** Video-less cards have no play toggle — pin/unpin the moment strip explicitly. */
+  function toggleMoments() {
+    hoveringRef.current = false;
+    clearHoverIntent();
+    if (extrasOpen) {
+      setIsPreviewPinned(false);
+      setExtrasOpen(false);
+    } else {
+      setExtrasOpen(true);
+      setIsPreviewPinned(true);
     }
   }
 
@@ -166,38 +253,26 @@ function CatalogCard({
       <div
         ref={mediaRef}
         className="catalog-media"
-        tabIndex={hasVideo ? 0 : undefined}
-        onPointerEnter={
-          hasVideo
-            ? (event) => {
-                if (event.pointerType === 'mouse') armPreview();
-              }
-            : undefined
-        }
-        onPointerLeave={
-          hasVideo
-            ? (event) => {
-                if (event.pointerType === 'mouse' && !isPreviewPinned) stopPreview();
-              }
-            : undefined
-        }
-        onFocus={
-          hasVideo
-            ? (event) => {
-                if (event.target === event.currentTarget) armPreview();
-              }
-            : undefined
-        }
-        onBlur={
-          hasVideo
-            ? (event) => {
-                if (!event.currentTarget.contains(event.relatedTarget)) {
-                  setIsPreviewPinned(false);
-                  stopPreview();
-                }
-              }
-            : undefined
-        }
+        tabIndex={hasVideo || hasMoments ? 0 : undefined}
+        onPointerEnter={(event) => {
+          if (event.pointerType === 'mouse') scheduleHoverIntent();
+        }}
+        onPointerLeave={(event) => {
+          if (event.pointerType === 'mouse') endHoverIntent();
+        }}
+        onFocus={(event) => {
+          if (event.target !== event.currentTarget) return;
+          setExtrasOpen(true);
+          if (hasVideo) armPreview();
+        }}
+        onBlur={(event) => {
+          if (event.currentTarget.contains(event.relatedTarget)) return;
+          hoveringRef.current = false;
+          clearHoverIntent();
+          setIsPreviewPinned(false);
+          setExtrasOpen(false);
+          stopPreview();
+        }}
       >
         {videoUrl ? (
           <video
@@ -256,6 +331,24 @@ function CatalogCard({
             </button>
           )}
 
+          {/* Cards without a trailer still need a deliberate, accessible way to open
+              the moment strip — hover dwell is mouse-only and media focus is easy to
+              miss on touch. Reuse the preview-toggle chrome so the badge column stays
+              one shape. */}
+          {!hasVideo && hasMoments && (
+            <button
+              type="button"
+              className="preview-toggle"
+              aria-pressed={extrasOpen}
+              aria-label={extrasOpen ? t('catalog.hideMoments') : t('catalog.showMoments')}
+              disabled={!inView}
+              onClick={toggleMoments}
+            >
+              <PixelIcon name="image" size={11} />
+              <span className="btn-label">{extrasOpen ? t('catalog.hideMoments') : t('catalog.showMoments')}</span>
+            </button>
+          )}
+
           {/* The one thing a phone visitor needs from the derived `touch` class: a game
               its own source says cannot be driven by a finger. Only 'none' earns a
               badge — 'gamekit'/'native' are the norm for nearly every game, so labelling
@@ -284,7 +377,7 @@ function CatalogCard({
 
         <span className="genre-pill">{entry.genre}</span>
 
-        {inView && screenshots.length > 1 && (
+        {showMoments && (
           <div className="catalog-moments" aria-label={t('catalog.gameMoments', { title: entry.title })}>
             {screenshots.slice(0, 4).map((screenshot, index) => (
               <button
@@ -463,6 +556,8 @@ export function ArcadeCatalog({
   const [signals, setSignals] = useState<CatalogSortSignals>(() => initialSignals(viewerUid).signals);
   const [signalsReady, setSignalsReady] = useState(() => initialSignals(viewerUid).ready);
   const [creatorItems, setCreatorItems] = useState<CreatorGameItem[]>([]);
+
+  useEffect(() => watchCatalogScrollIdle(), []);
 
   // Fetch sort signals as soon as the arcade mounts — in parallel with App's
   // catalog fetch — so cold load waits for max(catalog, signals), not their sum.

@@ -185,6 +185,8 @@
     "watchPreview": "Obejrzyj podgląd",
     "pausePreview": "Wstrzymaj podgląd",
     "gameMoments": "Moment rozgrywki z {{title}}",
+    "showMoments": "Pokaż momenty",
+    "hideMoments": "Ukryj momenty",
     "viewMoment": "Zobacz {{moment}} z {{title}}",
     "keyboardOnly": "Tylko klawiatura",
     "keyboardOnlyTooltip": "Ta gra nie ma sterowania dotykowego — wymaga klawiatury.",

@@ -91,7 +91,7 @@ describe('catalog playback', () => {
     // Default still prefers a mid-capture over `opening`.
     const poster = container.querySelector<HTMLImageElement>('img.catalog-preview');
     expect(poster?.getAttribute('src')).toBe('/api/games/sky-dodge/media/close-call.png');
-    expect(container.querySelectorAll('.catalog-moment')).toHaveLength(2);
+    expect(container.querySelectorAll('.catalog-moment')).toHaveLength(0);
 
     const previewButton = container.querySelector<HTMLButtonElement>('.preview-toggle');
     await act(async () => {
@@ -103,6 +103,7 @@ describe('catalog playback', () => {
     expect(preview?.getAttribute('src')).toBe('/api/games/sky-dodge/media/gameplay.mp4');
     expect(preview?.getAttribute('poster')).toBe('/api/games/sky-dodge/media/close-call.png');
     expect(previewButton?.textContent).toContain('Pause preview');
+    expect(container.querySelectorAll('.catalog-moment')).toHaveLength(2);
 
     // history.pushState fires nothing, so in-app navigation is announced explicitly
     // for listeners outside App (analytics). Without it their only option is to
