@@ -101,6 +101,82 @@ async function callStart(app: FastifyInstance, args: Record<string, unknown>, he
   return { structured, isError: Boolean(body.result?.isError), sessionId };
 }
 
+const PUBLISHED_ISSUE = 90;
+
+async function callOpenRound(
+  app: FastifyInstance,
+  args: Record<string, unknown>,
+  headers: Record<string, string> = {},
+) {
+  const res = await mcpCall(app, 'tools/call', { name: 'open_round', arguments: args }, headers);
+  expect(res.statusCode).toBe(200);
+  const body = res.json() as {
+    result?: { content?: Array<{ text: string }>; structuredContent?: unknown; isError?: boolean };
+  };
+  const structured =
+    body.result?.structuredContent ??
+    (body.result?.content?.[0]?.text ? JSON.parse(body.result.content[0].text) : undefined);
+  return { structured, isError: Boolean(body.result?.isError) };
+}
+
+async function seedPublishedGame(store: InMemoryStore) {
+  await store.createSubmission(PUBLISHED_ISSUE, OWNER, 'Jagged Alliance');
+  await store.setSubmissionSlug(PUBLISHED_ISSUE, SLUG);
+  await store.setRoundBuilder(PUBLISHED_ISSUE, 'self');
+  await store.setSubmissionPublishedAt(PUBLISHED_ISSUE, '2026-07-01T00:00:00.000Z');
+  await store.recordJobTransition(PUBLISHED_ISSUE, {
+    to: 'published',
+    at: '2026-07-01T00:00:00.000Z',
+    by: 'operator',
+    reason: 'published',
+  });
+}
+
+/** Full CIMD-free OAuth flow: register, approve, exchange — returns an access token. */
+async function oauthAccessToken(app: FastifyInstance): Promise<string> {
+  const register = await app.inject({
+    method: 'POST',
+    url: '/oauth/register',
+    headers: { 'content-type': 'application/json' },
+    payload: {
+      redirect_uris: ['http://127.0.0.1/callback'],
+      client_name: 'Loop Agent',
+      token_endpoint_auth_method: 'none',
+    },
+  });
+  const clientId = register.json().client_id as string;
+  const verifier = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
+  const approve = await app.inject({
+    method: 'POST',
+    url: '/oauth/authorize',
+    headers: { cookie: authHeaders().cookie, 'content-type': 'application/x-www-form-urlencoded' },
+    payload: new URLSearchParams({
+      response_type: 'code',
+      client_id: clientId,
+      redirect_uri: 'http://127.0.0.1/callback',
+      scope: 'mcp',
+      state: 'xyz',
+      code_challenge: pkceChallengeS256(verifier),
+      code_challenge_method: 'S256',
+      action: 'approve',
+    }).toString(),
+  });
+  const code = new URL(approve.headers.location as string).searchParams.get('code');
+  const tokenRes = await app.inject({
+    method: 'POST',
+    url: '/oauth/token',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    payload: new URLSearchParams({
+      grant_type: 'authorization_code',
+      code: code!,
+      redirect_uri: 'http://127.0.0.1/callback',
+      client_id: clientId,
+      code_verifier: verifier,
+    }).toString(),
+  });
+  return tokenRes.json().access_token as string;
+}
+
 describe('creator agent key routes + MCP start (BY-27a)', () => {
   let app: FastifyInstance | null = null;
 
@@ -631,5 +707,48 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
     // And it is stable again from here, rather than drifting on every visit.
     const again = await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
     expect((again.json() as { key: string }).key).toBe(body.key);
+  });
+
+  // CP-2 addendum: `start` accepted OAuth but `open_round` did not, so an OAuth-connected
+  // agent could join a round and never open the next one. After a round closed it went
+  // idle waiting for a human — the opposite of the promise that only a slug is needed.
+  it('opens an improvement round over OAuth, the same as a creator key does', async () => {
+    const store = new InMemoryStore();
+    await seedPublishedGame(store);
+    app = await createApp(store);
+
+    const accessToken = await oauthAccessToken(app);
+    const { structured, isError } = await callOpenRound(
+      app,
+      { slug: SLUG, feedback: 'Tighten the jump arc.' },
+      { authorization: `Bearer ${accessToken}` },
+    );
+
+    expect(isError).toBe(false);
+    expect(structured).toMatchObject({ slug: SLUG, alreadyOpen: false });
+    const jobId = (structured as { jobId: number }).jobId;
+    const job = await store.getSubmission(jobId);
+    expect(job?.ownerUid).toBe(OWNER);
+    // The change request still lands as the round brief on this path (#486).
+    expect(job?.spec).toBe('Tighten the jump arc.');
+  });
+
+  it('refuses an unowned slug over OAuth with the same reason the creator key gives', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(77, OTHER, 'Not Yours');
+    await store.setSubmissionSlug(77, 'not-yours');
+    await store.setSubmissionPublishedAt(77, '2026-07-01T00:00:00.000Z');
+    app = await createApp(store);
+
+    const accessToken = await oauthAccessToken(app);
+    const { structured, isError } = await callOpenRound(
+      app,
+      { slug: 'not-yours', feedback: 'Change something.' },
+      { authorization: `Bearer ${accessToken}` },
+    );
+
+    expect(isError).toBe(true);
+    // Names the slug, never the credential — a mistype must not push a destructive rotate.
+    expect((structured as { error: string }).error).toBe(SLUG_NOT_ON_ACCOUNT_REASON);
   });
 });

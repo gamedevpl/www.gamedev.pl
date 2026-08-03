@@ -19,7 +19,7 @@
 
 import path from 'node:path';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { VertexCodeLane, type CodeLaneEditContext, type CodeLaneOutcome } from '../src/code-lane.js';
+import { DEFAULT_EDIT_CONTEXT, VertexCodeLane, type CodeLaneEditContext, type CodeLaneOutcome } from '../src/code-lane.js';
 import type { SymbolRegion } from '../src/symbol-map.js';
 import { REF, assembleGame, gameKit, github, typeCheck } from './remix-lane-bench.js';
 
@@ -180,7 +180,9 @@ async function main() {
   });
 
   const options: RunOptions = {
-    variant: (flag('variant') as CodeLaneEditContext) ?? 'region',
+    // Defaults to whatever production defaults to. A bench whose default
+    // differed from the serve path would measure a configuration nobody runs.
+    variant: (flag('variant') as CodeLaneEditContext) ?? DEFAULT_EDIT_CONTEXT,
     typecheck: has('typecheck'),
     observeOnly: has('observe-only'),
     showMap: has('map'),

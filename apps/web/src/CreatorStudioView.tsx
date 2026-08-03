@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState, type RefObject } from 'rea
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
 import { AuthModal } from './AuthModal.js';
-import { CreatorProfileEditor } from './CreatorProfileEditor.js';
+import { CreatorProfileEditor, StudioCreatorProfileProvider } from './CreatorProfileEditor.js';
 import type { GameHealth } from './healthApi.js';
 import { PixelIcon } from './PixelIcon.js';
 import { formatRelativeTime } from './relativeTime.js';
@@ -517,296 +517,303 @@ export function CreatorStudioView({
   );
 
   return (
-    <section className={`studio-panel${tab === 'playtest' ? ' is-playtesting' : ''}${activeGame ? ' is-focused' : ''}`}>
-      <header className="studio-panel-header">
-        <div>
-          <p className="studio-kicker">{t('studioPanel.kicker')}</p>
-          <h1 className="section-title">{t('studioPanel.title')}</h1>
-          <p className="panel-copy">{t('studioPanel.subtitle')}</p>
-        </div>
-        <button type="button" className="studio-home-link" onClick={() => onNavigate('/')}>
-          <PixelIcon name="undo" size={12} /> {t('studioPanel.backHome')}
-        </button>
-      </header>
+    <StudioCreatorProfileProvider>
+      <section
+        className={`studio-panel${tab === 'playtest' ? ' is-playtesting' : ''}${activeGame ? ' is-focused' : ''}`}
+      >
+        <header className="studio-panel-header">
+          <div>
+            <p className="studio-kicker">{t('studioPanel.kicker')}</p>
+            <h1 className="section-title">{t('studioPanel.title')}</h1>
+            <p className="panel-copy">{t('studioPanel.subtitle')}</p>
+          </div>
+          <button type="button" className="studio-home-link" onClick={() => onNavigate('/')}>
+            <PixelIcon name="undo" size={12} /> {t('studioPanel.backHome')}
+          </button>
+        </header>
 
-      {!loading && user ? (
-        <CreatorProfileEditor
-          publishNudge={shelfGames.some(
-            (game) => game.lastKnownStatus === 'in_review' || game.lastKnownStatus === 'publishing',
-          )}
-        />
-      ) : null}
+        {/* Quiet @handle chip only — claim lives on the game waiting to publish.
+          Both surfaces share StudioCreatorProfileProvider so a claim on the gate
+          reveals this chip without a reload. */}
+        {!loading ? <CreatorProfileEditor surface="chrome" /> : null}
 
-      {loading ? (
-        <>
-          {/* Claims the app shell for the length of the shelf fetch so the marketing
+        {loading ? (
+          <>
+            {/* Claims the app shell for the length of the shelf fetch so the marketing
               footer (and this panel's lid) do not paint and then vanish the moment a
               game opens — bare /studio auto-picks one without naming it in the URL. */}
-          <div className="studio-shell-pending" hidden />
-          <p className="studio-empty">{t('studioPanel.loading')}</p>
-        </>
-      ) : null}
-      {error ? <p className="studio-empty studio-error">{error}</p> : null}
+            <div className="studio-shell-pending" hidden />
+            <p className="studio-empty">{t('studioPanel.loading')}</p>
+          </>
+        ) : null}
+        {error ? <p className="studio-empty studio-error">{error}</p> : null}
 
-      {!loading && !error && shelfGames.length === 0 ? (
-        <div className="studio-empty-state">
-          <p>{t('studioPanel.empty')}</p>
-          <button type="button" className="primary-btn" onClick={() => onNavigate('/')}>
-            <PixelIcon name="sparkle" size={14} /> {t('studioPanel.createFirst')}
-          </button>
-        </div>
-      ) : null}
+        {!loading && !error && shelfGames.length === 0 ? (
+          <div className="studio-empty-state">
+            <p>{t('studioPanel.empty')}</p>
+            <button type="button" className="primary-btn" onClick={() => onNavigate('/')}>
+              <PixelIcon name="sparkle" size={14} /> {t('studioPanel.createFirst')}
+            </button>
+          </div>
+        ) : null}
 
-      {!loading && shelfGames.length > 0 ? (
-        <div
-          className={[
-            'studio-layout',
-            activeGame ? 'is-game-open' : '',
-            // Long shelf on a desktop: collapse to a left-edge rail of dots after pick.
-            // Phones ignore this — they always use the drawer once a game is open.
-            activeGame && showShelfTools ? 'is-compact-shelf' : '',
-            shelfOpen ? 'is-shelf-open' : '',
-          ]
-            .filter(Boolean)
-            .join(' ')}
-        >
-          {activeGame && shelfOpen ? (
-            <div
-              className="modal-backdrop studio-shelf-backdrop"
-              role="presentation"
-              onClick={() => closeShelf({ restoreFocus: shelfIsDrawer })}
-            />
-          ) : null}
+        {!loading && shelfGames.length > 0 ? (
+          <div
+            className={[
+              'studio-layout',
+              activeGame ? 'is-game-open' : '',
+              // Long shelf on a desktop: collapse to a left-edge rail of dots after pick.
+              // Phones ignore this — they always use the drawer once a game is open.
+              activeGame && showShelfTools ? 'is-compact-shelf' : '',
+              shelfOpen ? 'is-shelf-open' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+          >
+            {activeGame && shelfOpen ? (
+              <div
+                className="modal-backdrop studio-shelf-backdrop"
+                role="presentation"
+                onClick={() => closeShelf({ restoreFocus: shelfIsDrawer })}
+              />
+            ) : null}
 
-          {/* Phone drawer, closed: keep it out of the tab order and the accessibility tree.
+            {/* Phone drawer, closed: keep it out of the tab order and the accessibility tree.
               Desktop compact rail stays interactive while collapsed — only the drawer is
               off-canvas. `inert` is set via the DOM (React 18 does not wire the prop);
               aria-hidden covers AT that skips inert. */}
-          <aside
-            className="studio-shelf"
-            aria-label={t('studioPanel.shelfAria')}
-            aria-hidden={activeGame && shelfIsDrawer && !shelfOpen ? true : undefined}
-            ref={(el) => {
-              if (!el) return;
-              const closed = Boolean(activeGame && shelfIsDrawer && !shelfOpen);
-              if (closed) el.setAttribute('inert', '');
-              else el.removeAttribute('inert');
-            }}
-          >
-            <div className="studio-shelf-head">
-              <h2 className="studio-shelf-heading">{t('studioPanel.shelf.heading')}</h2>
-              <span className="studio-shelf-count">
-                {shelfTruncated
-                  ? t('studioPanel.shelf.countTruncated', { shown: shelfGames.length, total: totalGames })
-                  : t('studioPanel.shelf.count', { count: shelfGames.length })}
-              </span>
-              {activeGame ? (
-                <button
-                  type="button"
-                  className="studio-shelf-edge-toggle"
-                  onClick={() => {
-                    if (shelfOpen) closeShelf({ restoreFocus: shelfIsDrawer });
-                    else setShelfOpen(true);
-                  }}
-                  aria-expanded={shelfOpen}
-                  aria-label={shelfOpen ? t('studioPanel.shelf.collapseShelf') : t('studioPanel.shelf.expandShelf')}
-                >
-                  <PixelIcon name={shelfOpen ? 'collapse' : 'expand'} size={12} />
-                </button>
-              ) : null}
-            </div>
-            <button type="button" className="studio-shelf-new" onClick={() => onNavigate('/')}>
-              <PixelIcon name="sparkle" size={12} />{' '}
-              <span className="studio-shelf-new-label">{t('studioPanel.shelf.newGame')}</span>
-            </button>
-            <StudioShelfControls
-              searchInputId={shelfSearchId}
-              searchRef={shelfSearchRef}
-              query={shelfQuery}
-              filter={shelfFilter}
-              showTools={showShelfTools || (shelfOpen && shelfGames.length > 1)}
-              buildingCount={buildingCount}
-              liveCount={liveCount}
-              totalCount={shelfGames.length}
-              onQueryChange={setShelfQuery}
-              onFilterChange={setShelfFilter}
-            />
-            {shelfTruncated ? <p className="studio-shelf-truncated">{t('studioPanel.shelf.truncated')}</p> : null}
-            {shelfList}
-          </aside>
+            <aside
+              className="studio-shelf"
+              aria-label={t('studioPanel.shelfAria')}
+              aria-hidden={activeGame && shelfIsDrawer && !shelfOpen ? true : undefined}
+              ref={(el) => {
+                if (!el) return;
+                const closed = Boolean(activeGame && shelfIsDrawer && !shelfOpen);
+                if (closed) el.setAttribute('inert', '');
+                else el.removeAttribute('inert');
+              }}
+            >
+              <div className="studio-shelf-head">
+                <h2 className="studio-shelf-heading">{t('studioPanel.shelf.heading')}</h2>
+                <span className="studio-shelf-count">
+                  {shelfTruncated
+                    ? t('studioPanel.shelf.countTruncated', { shown: shelfGames.length, total: totalGames })
+                    : t('studioPanel.shelf.count', { count: shelfGames.length })}
+                </span>
+                {activeGame ? (
+                  <button
+                    type="button"
+                    className="studio-shelf-edge-toggle"
+                    onClick={() => {
+                      if (shelfOpen) closeShelf({ restoreFocus: shelfIsDrawer });
+                      else setShelfOpen(true);
+                    }}
+                    aria-expanded={shelfOpen}
+                    aria-label={shelfOpen ? t('studioPanel.shelf.collapseShelf') : t('studioPanel.shelf.expandShelf')}
+                  >
+                    <PixelIcon name={shelfOpen ? 'collapse' : 'expand'} size={12} />
+                  </button>
+                ) : null}
+              </div>
+              <button type="button" className="studio-shelf-new" onClick={() => onNavigate('/')}>
+                <PixelIcon name="sparkle" size={12} />{' '}
+                <span className="studio-shelf-new-label">{t('studioPanel.shelf.newGame')}</span>
+              </button>
+              <StudioShelfControls
+                searchInputId={shelfSearchId}
+                searchRef={shelfSearchRef}
+                query={shelfQuery}
+                filter={shelfFilter}
+                showTools={showShelfTools || (shelfOpen && shelfGames.length > 1)}
+                buildingCount={buildingCount}
+                liveCount={liveCount}
+                totalCount={shelfGames.length}
+                onQueryChange={setShelfQuery}
+                onFilterChange={setShelfFilter}
+              />
+              {shelfTruncated ? <p className="studio-shelf-truncated">{t('studioPanel.shelf.truncated')}</p> : null}
+              {shelfList}
+            </aside>
 
-          {missingGame ? <p className="studio-empty studio-error">{t('studioPanel.gameNotFound')}</p> : null}
+            {missingGame ? <p className="studio-empty studio-error">{t('studioPanel.gameNotFound')}</p> : null}
 
-          {activeGame ? (
-            <div className="studio-detail">
-              <div className="studio-detail-head">
-                <button
-                  type="button"
-                  className="studio-shelf-open"
-                  ref={shelfOpenRef}
-                  onClick={() => setShelfOpen(true)}
-                  aria-expanded={shelfOpen}
-                  aria-label={t('studioPanel.shelf.openShelf')}
-                >
-                  <PixelIcon name="folder" size={12} />
-                  <span className="studio-shelf-open-label">{t('studioPanel.shelf.openShelf')}</span>
-                </button>
-                <div className="studio-detail-title-row">
-                  <div className="studio-detail-title-block">
-                    <h2>{activeGame.title}</h2>
-                    {activeGame.slug ? <code className="studio-slug">{activeGame.slug}</code> : null}
-                  </div>
-                  {/* Actions, not tabs. A tab strip across the work surface says the
+            {activeGame ? (
+              <div className="studio-detail">
+                <div className="studio-detail-head">
+                  <button
+                    type="button"
+                    className="studio-shelf-open"
+                    ref={shelfOpenRef}
+                    onClick={() => setShelfOpen(true)}
+                    aria-expanded={shelfOpen}
+                    aria-label={t('studioPanel.shelf.openShelf')}
+                  >
+                    <PixelIcon name="folder" size={12} />
+                    <span className="studio-shelf-open-label">{t('studioPanel.shelf.openShelf')}</span>
+                  </button>
+                  <div className="studio-detail-title-row">
+                    <div className="studio-detail-title-block">
+                      <h2>{activeGame.title}</h2>
+                      {activeGame.slug ? <code className="studio-slug">{activeGame.slug}</code> : null}
+                    </div>
+                    {/* Actions, not tabs. A tab strip across the work surface says the
                       surfaces are peers; the thread is not a peer of the panel listing
                       when the game was made. These open things beside it and leave it
                       where it is. */}
-                  <div className="studio-head-actions">
-                    {/* Rendered only for games whose delivered version ships an editor
+                    <div className="studio-head-actions">
+                      {/* Rendered only for games whose delivered version ships an editor
                         definition (EditorKit) — for every other game this row is
                         byte-for-byte what it always was. */}
-                    {tabAvailable(activeGame, 'edit') ? (
-                      <button
-                        type="button"
-                        className={`studio-head-action${tab === 'edit' ? ' is-active' : ''}`}
-                        aria-pressed={tab === 'edit'}
-                        onClick={() => openTab(tab === 'edit' ? 'thread' : 'edit')}
-                      >
-                        <PixelIcon name="pencil" size={12} />{' '}
-                        <span className="studio-head-action-label">{t('studioPanel.tabs.edit')}</span>
-                      </button>
-                    ) : null}
-                    {/* Playtest is the next action after a build — same weight as Send
+                      {tabAvailable(activeGame, 'edit') ? (
+                        <button
+                          type="button"
+                          className={`studio-head-action${tab === 'edit' ? ' is-active' : ''}`}
+                          aria-pressed={tab === 'edit'}
+                          onClick={() => openTab(tab === 'edit' ? 'thread' : 'edit')}
+                        >
+                          <PixelIcon name="pencil" size={12} />{' '}
+                          <span className="studio-head-action-label">{t('studioPanel.tabs.edit')}</span>
+                        </button>
+                      ) : null}
+                      {/* Playtest is the next action after a build — same weight as Send
                         feedback, not a peer of the Details toggle beside it. When already
                         open (empty/error keeps chrome visible), clicking again returns to
                         the thread so creators are never stuck without a Build tab. */}
-                    {/* Labels are wrapped rather than left as bare text so a phone can
+                      {/* Labels are wrapped rather than left as bare text so a phone can
                         hide the word and keep the icon — and hide it the way that leaves
                         the button still named for a screen reader, not display: none. */}
-                    <button
-                      type="button"
-                      className={`studio-head-action is-primary${tab === 'playtest' ? ' is-active' : ''}`}
-                      aria-pressed={tab === 'playtest'}
-                      onClick={() => openTab(tab === 'playtest' ? 'thread' : 'playtest')}
-                    >
-                      <PixelIcon name="play" size={12} />{' '}
-                      <span className="studio-head-action-label">{t('studioPanel.tabs.playtest')}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={`studio-head-action${tab === 'details' ? ' is-active' : ''}`}
-                      aria-pressed={tab === 'details'}
-                      onClick={() => openTab(tab === 'details' ? 'thread' : 'details')}
-                    >
-                      <PixelIcon name="expand" size={12} />{' '}
-                      <span className="studio-head-action-label">{t('studioPanel.tabs.details')}</span>
-                    </button>
+                      <button
+                        type="button"
+                        className={`studio-head-action is-primary${tab === 'playtest' ? ' is-active' : ''}`}
+                        aria-pressed={tab === 'playtest'}
+                        onClick={() => openTab(tab === 'playtest' ? 'thread' : 'playtest')}
+                      >
+                        <PixelIcon name="play" size={12} />{' '}
+                        <span className="studio-head-action-label">{t('studioPanel.tabs.playtest')}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`studio-head-action${tab === 'details' ? ' is-active' : ''}`}
+                        aria-pressed={tab === 'details'}
+                        onClick={() => openTab(tab === 'details' ? 'thread' : 'details')}
+                      >
+                        <PixelIcon name="expand" size={12} />{' '}
+                        <span className="studio-head-action-label">{t('studioPanel.tabs.details')}</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* The thread stays put. Details opens beside it on a wide screen and over
+                {/* Profile is required only to publish — show the claim form on this game
+                  when it is waiting on review / publishing, not as Studio page chrome. */}
+                {user && (activeGame.lastKnownStatus === 'in_review' || activeGame.lastKnownStatus === 'publishing') ? (
+                  <CreatorProfileEditor surface="publish-gate" />
+                ) : null}
+
+                {/* The thread stays put. Details opens beside it on a wide screen and over
                   it on a narrow one; only playtest, which needs the whole viewport to be
                   a game, replaces it. */}
-              <div className={`studio-workspace${tab === 'details' ? ' is-details-open' : ''}`}>
-                {tab === 'edit' ? (
-                  <EditorPanel
-                    key={activeGame.token}
-                    game={activeGame}
-                    onOpenPlaytest={() => openTab('playtest')}
-                    onBack={() => openTab('thread')}
-                  />
-                ) : null}
-
-                {tab !== 'playtest' && tab !== 'edit' ? (
-                  <div className="studio-build">
-                    <SubmissionStatusView
-                      key={threadToken ?? activeGame.token}
-                      token={threadToken ?? activeGame.token}
-                      embedded
-                      justHandedOff={handoffToken != null}
-                      onImproved={(newToken) => setHandoffToken(newToken)}
-                      onPlaytest={() => openTab('playtest')}
-                      onRetry={
-                        onRetryConcept
-                          ? (concept) => {
-                              onRetryConcept(concept);
-                              onNavigate('/');
-                            }
-                          : undefined
-                      }
+                <div className={`studio-workspace${tab === 'details' ? ' is-details-open' : ''}`}>
+                  {tab === 'edit' ? (
+                    <EditorPanel
+                      key={activeGame.token}
+                      game={activeGame}
+                      onOpenPlaytest={() => openTab('playtest')}
+                      onBack={() => openTab('thread')}
                     />
-                  </div>
-                ) : null}
+                  ) : null}
 
-                {tab === 'playtest' && playtestGame ? (
-                  <StudioPlaytestPanel
-                    game={playtestGame}
-                    published={playtestPublished}
-                    onExit={() => openTab('thread')}
-                    shelfOpen={shelfOpen}
-                  />
-                ) : null}
+                  {tab !== 'playtest' && tab !== 'edit' ? (
+                    <div className="studio-build">
+                      <SubmissionStatusView
+                        key={threadToken ?? activeGame.token}
+                        token={threadToken ?? activeGame.token}
+                        embedded
+                        justHandedOff={handoffToken != null}
+                        onImproved={(newToken) => setHandoffToken(newToken)}
+                        onPlaytest={() => openTab('playtest')}
+                        onRetry={
+                          onRetryConcept
+                            ? (concept) => {
+                                onRetryConcept(concept);
+                                onNavigate('/');
+                              }
+                            : undefined
+                        }
+                      />
+                    </div>
+                  ) : null}
 
-                {/* Everything that is about the game rather than said to it: when it was
+                  {tab === 'playtest' && playtestGame ? (
+                    <StudioPlaytestPanel
+                      game={playtestGame}
+                      published={playtestPublished}
+                      onExit={() => openTab('thread')}
+                      shelfOpen={shelfOpen}
+                    />
+                  ) : null}
+
+                  {/* Everything that is about the game rather than said to it: when it was
                     made, who can play it, how it is doing, and how to stop it. */}
-                {tab === 'details' ? (
-                  <>
-                    {detailsIsSheet ? (
-                      <div
-                        className="modal-backdrop studio-rail-backdrop"
-                        role="presentation"
-                        onClick={() => openTab('thread')}
-                      />
-                    ) : null}
-                    <aside
-                      className="studio-rail"
-                      aria-label={t('studioPanel.tabs.details')}
-                      {...(detailsIsSheet ? { role: 'dialog', 'aria-modal': true } : {})}
-                    >
-                      <div className="studio-rail-head">
-                        <h3>{t('studioPanel.tabs.details')}</h3>
-                        <button
-                          type="button"
-                          className="modal-close-btn"
+                  {tab === 'details' ? (
+                    <>
+                      {detailsIsSheet ? (
+                        <div
+                          className="modal-backdrop studio-rail-backdrop"
+                          role="presentation"
                           onClick={() => openTab('thread')}
-                          aria-label={t('studioPanel.close')}
-                        >
-                          <PixelIcon name="close" size={14} />
-                        </button>
-                      </div>
-                      <DetailsPanel
-                        // Keyed on the game, so switching to another one gives a fresh
-                        // panel rather than reusing this one's state. Without it every
-                        // `useState(game.…)` initialiser inside keeps the previous game's
-                        // value — the share switch reading the wrong game's setting, and,
-                        // worse, an armed Stop-build carrying across to a game the creator
-                        // never armed it on. Reachable by any move between two `/details`
-                        // URLs, browser Back included.
-                        key={activeGame.token}
-                        game={activeGame}
-                        health={selectedHealth}
-                        days={days}
-                        healthDays={healthDays}
-                        truncated={truncated}
-                        scorecard={selectedScorecard}
-                        onDaysChange={setDays}
-                        onOpenPlaytest={() => openTab('playtest')}
-                        onPlay={() => activeGame.slug && onPlay(activeGame.slug)}
-                        onRemoved={(token) => {
-                          setGames((prev) => prev.filter((game) => game.token !== token));
-                          setSelected((current) => (current === token ? null : current));
-                          onNavigate(studioPath());
-                        }}
-                      />
-                    </aside>
-                  </>
-                ) : null}
+                        />
+                      ) : null}
+                      <aside
+                        className="studio-rail"
+                        aria-label={t('studioPanel.tabs.details')}
+                        {...(detailsIsSheet ? { role: 'dialog', 'aria-modal': true } : {})}
+                      >
+                        <div className="studio-rail-head">
+                          <h3>{t('studioPanel.tabs.details')}</h3>
+                          <button
+                            type="button"
+                            className="modal-close-btn"
+                            onClick={() => openTab('thread')}
+                            aria-label={t('studioPanel.close')}
+                          >
+                            <PixelIcon name="close" size={14} />
+                          </button>
+                        </div>
+                        <DetailsPanel
+                          // Keyed on the game, so switching to another one gives a fresh
+                          // panel rather than reusing this one's state. Without it every
+                          // `useState(game.…)` initialiser inside keeps the previous game's
+                          // value — the share switch reading the wrong game's setting, and,
+                          // worse, an armed Stop-build carrying across to a game the creator
+                          // never armed it on. Reachable by any move between two `/details`
+                          // URLs, browser Back included.
+                          key={activeGame.token}
+                          game={activeGame}
+                          health={selectedHealth}
+                          days={days}
+                          healthDays={healthDays}
+                          truncated={truncated}
+                          scorecard={selectedScorecard}
+                          onDaysChange={setDays}
+                          onOpenPlaytest={() => openTab('playtest')}
+                          onPlay={() => activeGame.slug && onPlay(activeGame.slug)}
+                          onRemoved={(token) => {
+                            setGames((prev) => prev.filter((game) => game.token !== token));
+                            setSelected((current) => (current === token ? null : current));
+                            onNavigate(studioPath());
+                          }}
+                        />
+                      </aside>
+                    </>
+                  ) : null}
+                </div>
               </div>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-    </section>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
+    </StudioCreatorProfileProvider>
   );
 }
 
