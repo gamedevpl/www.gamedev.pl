@@ -193,8 +193,14 @@ jobs:
           # to answer one question: how often does the lane actually land, and
           # why does it miss? It is not a permanent setting. It carries the
           # player's own utterance, so leaving it on past that question turns a
-          # window into a habit — clear `vars.REMIX_DEBUG` to close it, and no
-          # deploy is needed to do so.
+          # window into a habit.
+          #
+          # This variable only *opens* the window, and opening it should be slow
+          # and deliberate: the value is read here, at deploy time, so clearing
+          # it leaves the running revision exactly as it was until the next
+          # release. To *close* the window, set `remixTracePaused` on the
+          # creation-limits document — same place as the spend breaker, in
+          # effect within its TTL, no deploy involved.
           #
           # Threaded rather than hand-set for the same reason as everything here:
           # --set-env-vars replaces the whole map, so a value typed onto the
