@@ -243,7 +243,7 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
   // before the games-repo tip merges them. If a local-only module is NOT in this
   // list, it means games-repo dropped or rolled it back — that is drift, not an
   // intentional lead. (Codex review — PR #379.)
-  const DECLARED_AHEAD_MODULES: ReadonlySet<string> = new Set(['sensing', 'voice', 'editor']);
+  const DECLARED_AHEAD_MODULES: ReadonlySet<string> = new Set(['sensing', 'voice', 'editor', 'racing']);
   const websiteExtras = localModules.filter((m) => !remoteModules.includes(m));
   const undeclaredExtras = websiteExtras.filter((m) => !DECLARED_AHEAD_MODULES.has(m));
   if (undeclaredExtras.length > 0) {
