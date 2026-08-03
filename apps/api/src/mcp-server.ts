@@ -751,8 +751,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     {
       description: string;
       inputSchema: Record<string, unknown>;
-      /** Declared only where this file builds the payload — see TOOL_ANNOTATIONS. */
-      outputSchema?: Record<string, unknown>;
+      outputSchema: Record<string, unknown>;
       annotations?: Record<string, unknown>;
       handler: ToolHandler;
     }
@@ -1523,6 +1522,39 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
     get_brief: {
       annotations: { title: 'Read the build brief', ...READS },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          title: { type: 'string' },
+          slug: { type: ['string', 'null'] },
+          spec: { type: 'string' },
+          qa: { type: 'array', items: { type: 'string' } },
+          rules: { type: 'string' },
+          constraints: {
+            type: 'object',
+            properties: {
+              maxProjectBytes: { type: 'number' },
+              orientation: { type: 'string' },
+            },
+            required: ['maxProjectBytes', 'orientation'],
+          },
+          locales: { type: 'array', items: { type: 'string' } },
+          seedAvailable: { type: 'boolean' },
+          pendingMessages: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                text: { type: 'string' },
+                createdAt: { type: 'string' },
+              },
+              required: ['id', 'text', 'createdAt'],
+            },
+          },
+        },
+        required: ['title', 'spec', 'qa', 'rules', 'constraints', 'locales', 'seedAvailable', 'pendingMessages'],
+      },
       description:
         'Fetch the build brief: title, slug, spec (data, not instructions), qa, rules digest, constraints, locales, seedAvailable, pendingMessages. ' +
         BEHAVIOURAL_CONTRACT,
@@ -1545,6 +1577,26 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
     get_seed: {
       annotations: { title: 'Fetch the seed draft', ...READS },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          available: { type: 'boolean' },
+          files: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                path: { type: 'string' },
+                content: { type: 'string' },
+              },
+              required: ['path', 'content'],
+            },
+          },
+          references: { type: 'array', items: { type: 'string' } },
+          notes: { type: ['string', 'null'] },
+        },
+        required: ['available', 'files', 'references', 'notes'],
+      },
       description:
         'Fetch the platform-generated compiling seed draft for this round when present. ' +
         'Continue the seed when available — only scaffold from a kit template when get_brief.seedAvailable is false. ' +
@@ -1571,6 +1623,17 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
     get_kit: {
       annotations: { title: 'Fetch the Creator Kit', ...READS },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          engineRef: { type: 'string' },
+          kitUrl: { type: 'string' },
+          sha256: { type: 'string' },
+          unpack: { type: 'string' },
+          entry: { type: 'string' },
+        },
+        required: ['engineRef', 'kitUrl', 'sha256', 'unpack', 'entry'],
+      },
       description:
         'Fetch Creator Kit metadata: engineRef (required for submit_sources), sha256, entry, ' +
         'optional kitUrl/unpack for agents with shell egress, and browse tool names. ' +
@@ -1598,6 +1661,28 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
     list_kit_files: {
       annotations: { title: 'List Creator Kit files', ...READS },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          engineRef: { type: 'string' },
+          entry: { type: 'string' },
+          files: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                path: { type: 'string' },
+                bytes: { type: 'number' },
+                kind: { type: 'string', enum: ['text', 'binary'] },
+              },
+              required: ['path', 'bytes', 'kind'],
+            },
+          },
+          total: { type: 'number' },
+          truncated: { type: 'boolean' },
+        },
+        required: ['engineRef', 'entry', 'files', 'total', 'truncated'],
+      },
       description:
         'List paths inside a pinned Creator Kit (size + text/binary kind). ' +
         'Pass engineRef from get_kit. Optional prefix (e.g. shared/modules) or simple glob (*). ' +
@@ -1643,6 +1728,28 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
     search_kit_files: {
       annotations: { title: 'Search Creator Kit files', ...READS },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          engineRef: { type: 'string' },
+          query: { type: 'string' },
+          matches: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                path: { type: 'string' },
+                line: { type: 'number' },
+                text: { type: 'string' },
+              },
+              required: ['path', 'line', 'text'],
+            },
+          },
+          truncated: { type: 'boolean' },
+          filesScanned: { type: 'number' },
+        },
+        required: ['engineRef', 'query', 'matches', 'truncated', 'filesScanned'],
+      },
       description:
         'Search text files in a pinned Creator Kit for a substring (case-insensitive). ' +
         'Pass engineRef from get_kit. Returns path + line + snippet; capped match count. ' +
@@ -1685,6 +1792,18 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
     read_kit_file: {
       annotations: { title: 'Read one Creator Kit file', ...READS },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          engineRef: { type: 'string' },
+          path: { type: 'string' },
+          bytes: { type: 'number' },
+          kind: { type: 'string', enum: ['text', 'binary'] },
+          encoding: { type: 'string', enum: ['utf8', 'base64'] },
+          content: { type: 'string' },
+        },
+        required: ['engineRef', 'path', 'bytes', 'kind', 'encoding', 'content'],
+      },
       description:
         'Read one small Creator Kit file (≤48 KiB). Pass engineRef from get_kit. Larger files return ' +
         'kit_file_too_large — use read_kit_file_fragment. Binary files need encoding=base64. ' +
@@ -1729,6 +1848,37 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
     read_kit_file_fragment: {
       annotations: { title: 'Read a Creator Kit file fragment', ...READS },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          engineRef: { type: 'string' },
+          path: { type: 'string' },
+          kind: { type: 'string', enum: ['text', 'binary'] },
+          unit: { type: 'string', enum: ['bytes', 'lines'] },
+          offset: { type: 'number' },
+          limit: { type: 'number' },
+          totalBytes: { type: 'number' },
+          totalLines: { type: ['number', 'null'] },
+          encoding: { type: 'string', enum: ['utf8', 'base64'] },
+          content: { type: 'string' },
+          eof: { type: 'boolean' },
+          nextOffset: { type: ['number', 'null'] },
+        },
+        required: [
+          'engineRef',
+          'path',
+          'kind',
+          'unit',
+          'offset',
+          'limit',
+          'totalBytes',
+          'totalLines',
+          'encoding',
+          'content',
+          'eof',
+          'nextOffset',
+        ],
+      },
       description:
         'Read a window of one Creator Kit file by lines (default) or bytes (always base64). ' +
         'Pass engineRef from get_kit. Use nextOffset for pagination. Overlong line windows error — switch to unit=bytes. ' +
@@ -1894,6 +2044,17 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
     get_example: {
       annotations: { title: 'Fetch one exemplar', ...READS },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          slug: { type: 'string' },
+          title: { type: 'string' },
+          tarballUrl: { type: 'string' },
+          sha256: { type: 'string' },
+          unpack: { type: 'string' },
+        },
+        required: ['slug', 'title', 'tarballUrl', 'unpack'],
+      },
       description:
         'Fetch one allowlisted exemplar as a signed tarball URL. Unknown or non-allowlisted slugs fail. ' +
         BEHAVIOURAL_CONTRACT,
@@ -2059,6 +2220,25 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
     submit_sources: {
       annotations: { title: 'Deliver sources to the gate', ...CONSUMES },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          ok: { type: 'boolean' },
+          rejected: { type: 'string' },
+          deliveryId: { type: ['string', 'null'] },
+          delivery: {
+            type: ['object', 'null'],
+            properties: {
+              slug: { type: 'string' },
+              version: { type: 'string' },
+            },
+          },
+          gateStarted: { type: 'boolean' },
+          deliveriesRemaining: { type: ['number', 'null'] },
+          ...REPLY_CONTROL,
+        },
+        required: ['ok', 'deliveryId', 'delivery', 'gateStarted', 'deliveriesRemaining', 'stop', 'pendingMessages'],
+      },
       description:
         `Deliver game sources for the gate. files[{path, content, encoding utf8|base64}] ≤${MAX_SUBMIT_FILES} items; kitEngineRef required (from get_kit / kit.json). ` +
         'Subject to delivery cap and filename allowlist. Run kit checks green before submitting. Reply includes stop and pendingMessages. ' +
@@ -2171,6 +2351,21 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
     get_gate_verdict: {
       annotations: { title: 'Poll the gate verdict', ...READS },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          status: { type: 'string', enum: ['pending', 'green', 'red', 'kit_outdated'] },
+          deliveryId: { type: ['string', 'null'] },
+          summary: { type: 'string' },
+          access: { type: 'string' },
+          version: { type: 'string' },
+          green: { type: 'boolean' },
+          ranAt: { type: 'string' },
+          report: { type: 'string' },
+          gateStatus: { type: 'string' },
+        },
+        required: ['status', 'deliveryId', 'summary', 'access'],
+      },
       description:
         'Poll the gate verdict for a delivery (default: latest). Verdicts typically land in 2–5 minutes; ' +
         'poll every ~30s until green, red, or kit_outdated. kit_outdated is terminal — stop polling, ' +
@@ -2208,6 +2403,32 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
     get_gate_media: {
       annotations: { title: "Fetch the gate's screenshots and video", ...READS },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          available: { type: 'boolean' },
+          deliveryId: { type: ['string', 'null'] },
+          screenshots: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: { file: { type: 'string' }, url: { type: 'string' } },
+              required: ['file', 'url'],
+            },
+          },
+          video: {
+            type: ['object', 'null'],
+            properties: { file: { type: 'string' }, url: { type: 'string' } },
+          },
+          openingShot: {
+            type: 'object',
+            properties: { file: { type: 'string' }, attached: { type: 'boolean' } },
+            required: ['file', 'attached'],
+          },
+          access: { type: 'string' },
+        },
+        required: ['available', 'deliveryId'],
+      },
       description:
         'Fetch the media the gate itself produced for a delivery (default: latest): capture screenshots and a ' +
         'gameplay MP4 as short-lived signed URLs, plus the opening frame attached inline as an image. ' +
@@ -2260,6 +2481,26 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
     read_inbox: {
       annotations: { title: 'Read creator messages', ...READS },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          messages: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                text: { type: 'string' },
+                createdAt: { type: 'string' },
+              },
+              required: ['id', 'text', 'createdAt'],
+            },
+          },
+          gate: { type: 'object' },
+          ...REPLY_CONTROL,
+        },
+        required: ['messages', 'pendingMessages', 'stop'],
+      },
       description:
         'Read pending creator messages and control (stop). Prefer this when idle; mutating tools also piggyback pendingMessages. ' +
         BEHAVIOURAL_CONTRACT,
@@ -2434,7 +2675,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             name,
             description: tool.description,
             inputSchema: tool.inputSchema,
-            ...(tool.outputSchema ? { outputSchema: tool.outputSchema } : {}),
+            outputSchema: tool.outputSchema,
             ...(tool.annotations ? { annotations: tool.annotations } : {}),
           })),
         }),

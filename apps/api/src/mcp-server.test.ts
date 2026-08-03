@@ -173,6 +173,62 @@ async function initialize(app: FastifyInstance) {
   return String(sessionId);
 }
 
+function validateValueAgainstSchema(value: unknown, schema: Record<string, unknown>, path = '$'): string[] {
+  const errors: string[] = [];
+  if (!schema) return errors;
+
+  if (schema.type) {
+    const types = Array.isArray(schema.type) ? schema.type : [schema.type];
+    const matches = types.some((type) => {
+      if (type === 'string') return typeof value === 'string';
+      if (type === 'number') return typeof value === 'number';
+      if (type === 'integer') return typeof value === 'number' && Number.isInteger(value);
+      if (type === 'boolean') return typeof value === 'boolean';
+      if (type === 'null') return value === null;
+      if (type === 'object') return typeof value === 'object' && value !== null && !Array.isArray(value);
+      if (type === 'array') return Array.isArray(value);
+      return true;
+    });
+    if (!matches) {
+      errors.push(
+        `${path}: expected type ${JSON.stringify(schema.type)}, got ${typeof value} (${JSON.stringify(value)})`,
+      );
+      return errors;
+    }
+  }
+
+  if (Array.isArray(schema.enum)) {
+    if (!schema.enum.includes(value as never)) {
+      errors.push(`${path}: value ${JSON.stringify(value)} not in enum ${JSON.stringify(schema.enum)}`);
+    }
+  }
+
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    const obj = value as Record<string, unknown>;
+    const required = Array.isArray(schema.required) ? (schema.required as string[]) : [];
+    for (const reqKey of required) {
+      if (!(reqKey in obj) || obj[reqKey] === undefined) {
+        errors.push(`${path}: missing required property "${reqKey}"`);
+      }
+    }
+
+    const properties = (schema.properties as Record<string, Record<string, unknown>>) || {};
+    for (const [key, val] of Object.entries(obj)) {
+      if (val !== undefined && properties[key]) {
+        errors.push(...validateValueAgainstSchema(val, properties[key]!, `${path}.${key}`));
+      }
+    }
+  }
+
+  if (Array.isArray(value) && schema.items && typeof schema.items === 'object') {
+    value.forEach((item, index) => {
+      errors.push(...validateValueAgainstSchema(item, schema.items as Record<string, unknown>, `${path}[${index}]`));
+    });
+  }
+
+  return errors;
+}
+
 async function callTool(
   app: FastifyInstance,
   name: string,
@@ -189,7 +245,20 @@ async function callTool(
   const structured =
     body.result?.structuredContent ??
     (body.result?.content?.[0]?.text ? JSON.parse(body.result.content[0].text) : undefined);
-  return { res, structured, isError: Boolean(body.result?.isError) };
+  const isError = Boolean(body.result?.isError);
+
+  if (!isError && structured !== undefined) {
+    const listed = await mcpCall(app, 'tools/list', undefined, headers);
+    const toolDef = (
+      listed.json().result as { tools: Array<{ name: string; outputSchema?: Record<string, unknown> }> }
+    )?.tools?.find((t) => t.name === name);
+    if (toolDef?.outputSchema) {
+      const validationErrors = validateValueAgainstSchema(structured, toolDef.outputSchema, name);
+      expect(validationErrors, `Output of ${name} does not match its outputSchema`).toEqual([]);
+    }
+  }
+
+  return { res, structured, isError };
 }
 
 describe('classifyAgentTokenAccess (terminal receipt)', () => {
@@ -1301,7 +1370,7 @@ describe('POST /api/mcp (BY-05)', () => {
     }
   });
 
-  it('declares an outputSchema wherever this file builds the payload', async () => {
+  it('declares an outputSchema for every tool', async () => {
     const store = new InMemoryStore();
     await seedJob(store);
     app = await createApp(store);
@@ -1310,18 +1379,9 @@ describe('POST /api/mcp (BY-05)', () => {
     const res = await mcpCall(app, 'tools/list', undefined, { 'mcp-session-id': sessionId });
     const tools = (res.json().result as { tools: Array<{ name: string; outputSchema?: { type?: string } }> }).tools;
 
-    // Only these: the rest return the channel's body verbatim, and declaring a shape
-    // this file does not construct would be asserting a contract it cannot keep.
-    for (const name of [
-      'start',
-      'create_game',
-      'open_round',
-      'continue_draft',
-      'get_sources',
-      'list_examples',
-      'report_progress',
-    ]) {
-      expect(tools.find((tool) => tool.name === name)?.outputSchema?.type, name).toBe('object');
+    expect(tools.length).toBeGreaterThan(0);
+    for (const tool of tools) {
+      expect(tool.outputSchema?.type, tool.name).toBe('object');
     }
     const startSchema = tools.find((tool) => tool.name === 'start')?.outputSchema as {
       properties?: Record<string, unknown>;
