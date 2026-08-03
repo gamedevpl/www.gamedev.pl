@@ -3554,6 +3554,18 @@ body.player-open {
   color: var(--text);
 }
 
+a.user-name--profile {
+  text-decoration: none;
+  color: var(--text);
+}
+
+a.user-name--profile:hover,
+a.user-name--profile:focus-visible {
+  color: var(--turquoise, #3dd6c6);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .logout-btn {
   background: none;
   border: none;
@@ -4538,6 +4550,11 @@ body.player-open {
   border-color: var(--turquoise);
   color: #08241d;
   font-weight: 700;
+}
+
+.studio-head-action--claim {
+  border-color: rgba(0, 228, 172, 0.45);
+  color: #c8f5da;
 }
 
 .studio-head-action.is-primary:hover {
@@ -10903,6 +10920,67 @@ body.player-open {
   margin: 0;
   font-size: 0.85rem;
   opacity: 0.7;
+}
+
+/* Phone + on-screen keyboard: the visual viewport shrinks; keep the claim action reachable. */
+.claim-handle-modal-backdrop {
+  align-items: safe center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1rem 0;
+}
+
+.claim-handle-modal-card {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 1.5rem 1.35rem 1.35rem;
+  max-width: 520px;
+  width: min(92vw, 520px);
+  max-height: min(92dvh, 92vh);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  text-align: left;
+  margin: auto;
+}
+
+.claim-handle-modal-head h2 {
+  margin: 0 0 0.4rem;
+  font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.claim-handle-modal-head p {
+  margin: 0 0 0.35rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.claim-handle-modal-aside {
+  font-size: 0.85rem !important;
+  opacity: 0.85;
+}
+
+.claim-handle-modal-body {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+@media (min-width: 640px) {
+  .claim-handle-modal-body {
+    grid-template-columns: 1fr minmax(10rem, 11.5rem);
+    align-items: start;
+  }
+
+  .claim-handle-modal-body .creator-profile-message {
+    grid-column: 1 / -1;
+  }
 }
 
 .creator-profile-chip-row {

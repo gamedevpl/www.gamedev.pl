@@ -2,7 +2,9 @@ import { useEffect, useId, useMemo, useRef, useState, type RefObject } from 'rea
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
 import { AuthModal } from './AuthModal.js';
-import { CreatorProfileEditor, StudioCreatorProfileProvider } from './CreatorProfileEditor.js';
+import { ClaimHandleModal } from './ClaimHandleModal.js';
+import { CreatorProfileEditor } from './CreatorProfileEditor.js';
+import { StudioCreatorProfileProvider } from './studioCreatorProfile.js';
 import type { GameHealth } from './healthApi.js';
 import { PixelIcon } from './PixelIcon.js';
 import { formatRelativeTime } from './relativeTime.js';
@@ -166,6 +168,8 @@ export function CreatorStudioView({
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const [authOpen, setAuthOpen] = useState(false);
+  /** Claim-handle modal — only opened when the creator asks to clear the publish gate. */
+  const [claimOpen, setClaimOpen] = useState(false);
   const [games, setGames] = useState<StudioGame[]>([]);
   const [healthRows, setHealthRows] = useState<GameHealth[]>([]);
   const [scorecards, setScorecards] = useState<StudioScorecard[]>([]);
@@ -532,10 +536,9 @@ export function CreatorStudioView({
           </button>
         </header>
 
-        {/* Quiet @handle chip only — claim lives on the game waiting to publish.
-          Both surfaces share StudioCreatorProfileProvider so a claim on the gate
-          reveals this chip without a reload. */}
-        {!loading ? <CreatorProfileEditor surface="chrome" /> : null}
+        {/* Quiet @handle chip once claimed. Claiming is a modal at publish need. */}
+        {!loading ? <CreatorProfileEditor /> : null}
+        <ClaimHandleModal isOpen={claimOpen} onClose={() => setClaimOpen(false)} />
 
         {loading ? (
           <>
@@ -682,6 +685,18 @@ export function CreatorStudioView({
                       {/* Labels are wrapped rather than left as bare text so a phone can
                         hide the word and keep the icon — and hide it the way that leaves
                         the button still named for a screen reader, not display: none. */}
+                      {!user?.handle &&
+                      (activeGame.lastKnownStatus === 'in_review' || activeGame.lastKnownStatus === 'publishing') ? (
+                        <button
+                          type="button"
+                          className="studio-head-action studio-head-action--claim"
+                          onClick={() => setClaimOpen(true)}
+                          aria-label={t('creatorProfile.publishGateTitle')}
+                        >
+                          <PixelIcon name="sparkle" size={12} />{' '}
+                          <span className="studio-head-action-label">{t('creatorProfile.publishGateTitle')}</span>
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className={`studio-head-action is-primary${tab === 'playtest' ? ' is-active' : ''}`}
@@ -703,12 +718,6 @@ export function CreatorStudioView({
                     </div>
                   </div>
                 </div>
-
-                {/* Profile is required only to publish — show the claim form on this game
-                  when it is waiting on review / publishing, not as Studio page chrome. */}
-                {user && (activeGame.lastKnownStatus === 'in_review' || activeGame.lastKnownStatus === 'publishing') ? (
-                  <CreatorProfileEditor surface="publish-gate" />
-                ) : null}
 
                 {/* The thread stays put. Details opens beside it on a wide screen and over
                   it on a narrow one; only playtest, which needs the whole viewport to be

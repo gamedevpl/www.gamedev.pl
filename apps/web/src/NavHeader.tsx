@@ -7,6 +7,7 @@ import { Mascot } from './Mascot.js';
 import { NotificationBell } from './NotificationBell.js';
 import { PixelIcon } from './PixelIcon.js';
 import { fetchAdminSummary } from './adminApi.js';
+import { creatorPath } from './router.js';
 import { usePageScrolling } from './usePageScrolling.js';
 import githubIcon from './assets/github-mark-white.svg';
 
@@ -130,7 +131,13 @@ export function NavHeader({
                 <PixelIcon name="user" size={16} />
               </span>
             )}
-            <span className="user-name">{user.name || user.email || 'User'}</span>
+            {user.handle ? (
+              <a className="user-name user-name--profile" href={creatorPath(user.handle)}>
+                {user.profileName || `@${user.handle}`}
+              </a>
+            ) : (
+              <span className="user-name">{user.name || user.email || 'User'}</span>
+            )}
             <NotificationBell />
             <button className="logout-btn" onClick={logout} title={t('header.signOut')}>
               {t('header.signOut')}

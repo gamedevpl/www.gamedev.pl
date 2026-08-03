@@ -19,11 +19,9 @@ vi.mock('./AuthContext.js', () => ({
   useAuth: () => ({ refreshUser: vi.fn(), user: { uid: 'g:test' } }),
 }));
 
-import {
-  CreatorProfileEditor,
-  StudioCreatorProfileProvider,
-  type CreatorProfileSurface,
-} from './CreatorProfileEditor.js';
+import { ClaimHandleModal } from './ClaimHandleModal.js';
+import { CreatorProfileEditor } from './CreatorProfileEditor.js';
+import { StudioCreatorProfileProvider } from './studioCreatorProfile.js';
 
 let container: HTMLDivElement;
 let root: Root | null = null;
@@ -45,14 +43,15 @@ afterEach(() => {
   });
   root = null;
   container.remove();
+  document.body.querySelectorAll('.claim-handle-modal-card, .modal-backdrop').forEach((node) => node.remove());
 });
 
-async function draw(surface: CreatorProfileSurface): Promise<void> {
+async function drawChrome(): Promise<void> {
   root = createRoot(container);
   await act(async () => {
     root!.render(
       <StudioCreatorProfileProvider>
-        <CreatorProfileEditor surface={surface} />
+        <CreatorProfileEditor />
       </StudioCreatorProfileProvider>,
     );
   });
@@ -61,13 +60,13 @@ async function draw(surface: CreatorProfileSurface): Promise<void> {
   });
 }
 
-async function drawBoth(): Promise<void> {
+async function drawChromeAndModal(open = true): Promise<void> {
   root = createRoot(container);
   await act(async () => {
     root!.render(
       <StudioCreatorProfileProvider>
-        <CreatorProfileEditor surface="chrome" />
-        <CreatorProfileEditor surface="publish-gate" />
+        <CreatorProfileEditor />
+        <ClaimHandleModal isOpen={open} onClose={() => undefined} />
       </StudioCreatorProfileProvider>,
     );
   });
@@ -84,47 +83,9 @@ describe('CreatorProfileEditor', () => {
       picture: null,
     });
 
-    await draw('chrome');
+    await drawChrome();
 
     expect(container.textContent?.trim() ?? '').toBe('');
-    expect(container.querySelector('.creator-profile-editor')).toBeNull();
-  });
-
-  it('shows the claim form on the publish gate when a handle is missing', async () => {
-    profileApi.fetchMyProfile.mockResolvedValue({
-      profile: null,
-      publishReady: false,
-      picture: null,
-    });
-
-    await draw('publish-gate');
-
-    expect(container.textContent).toContain('Claim a handle to publish');
-    expect(container.textContent).toContain('claim a handle so it can go live');
-    expect(container.querySelector('.creator-profile-editor.is-publish-gate')).toBeTruthy();
-    expect(container.querySelector('.creator-profile-preview')).toBeTruthy();
-    expect(container.querySelector('button.primary-btn')?.textContent).toContain('Claim handle');
-    expect(container.querySelectorAll('button.primary-btn')).toHaveLength(1);
-  });
-
-  it('hides the publish gate once a profile is publish-ready', async () => {
-    profileApi.fetchMyProfile.mockResolvedValue({
-      profile: {
-        handle: 'ada',
-        profileName: 'Ada',
-        bio: '',
-        avatarUrl: null,
-        profileCreatedAt: '2026-08-01T00:00:00.000Z',
-      },
-      publishReady: true,
-      handle: 'ada',
-      profileName: 'Ada',
-      avatarMode: 'letter',
-      picture: null,
-    });
-
-    await draw('publish-gate');
-
     expect(container.querySelector('.creator-profile-editor')).toBeNull();
   });
 
@@ -144,7 +105,7 @@ describe('CreatorProfileEditor', () => {
       picture: null,
     });
 
-    await draw('chrome');
+    await drawChrome();
 
     expect(container.querySelector('.creator-profile-editor.is-collapsed')).toBeTruthy();
     expect(container.textContent).toContain('@ada');
@@ -168,7 +129,7 @@ describe('CreatorProfileEditor', () => {
       picture: null,
     });
 
-    await draw('chrome');
+    await drawChrome();
     const chip = container.querySelector('.creator-profile-chip') as HTMLButtonElement;
     await act(async () => {
       chip.click();
@@ -178,8 +139,60 @@ describe('CreatorProfileEditor', () => {
     expect(container.querySelector('button.primary-btn')?.textContent).toContain('Save profile');
     expect(container.querySelector('details.creator-profile-rename')).toBeTruthy();
   });
+});
 
-  it('shows the chrome chip after a claim on the publish gate without remounting', async () => {
+describe('ClaimHandleModal', () => {
+  it('shows the claim form in a modal when open and a handle is missing', async () => {
+    profileApi.fetchMyProfile.mockResolvedValue({
+      profile: null,
+      publishReady: false,
+      picture: null,
+    });
+
+    await drawChromeAndModal(true);
+
+    const dialog = document.body.querySelector('.claim-handle-modal-card');
+    expect(dialog?.textContent).toContain('Claim a handle to publish');
+    expect(dialog?.textContent).toContain('Pick a unique handle');
+    expect(dialog?.querySelector('button.primary-btn')?.textContent).toContain('Claim handle');
+  });
+
+  it('closes on Escape', async () => {
+    profileApi.fetchMyProfile.mockResolvedValue({
+      profile: null,
+      publishReady: false,
+      picture: null,
+    });
+    let open = true;
+    root = createRoot(container);
+    const render = () => {
+      root!.render(
+        <StudioCreatorProfileProvider>
+          <ClaimHandleModal
+            isOpen={open}
+            onClose={() => {
+              open = false;
+            }}
+          />
+        </StudioCreatorProfileProvider>,
+      );
+    };
+    await act(async () => {
+      render();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(document.body.querySelector('.claim-handle-modal-card')).not.toBeNull();
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      render();
+      await Promise.resolve();
+    });
+    expect(open).toBe(false);
+  });
+
+  it('reveals the chrome chip after a successful claim without remounting', async () => {
     profileApi.fetchMyProfile.mockResolvedValue({
       profile: null,
       publishReady: false,
@@ -200,27 +213,32 @@ describe('CreatorProfileEditor', () => {
       picture: null,
     });
 
-    await drawBoth();
-    expect(container.querySelector('.creator-profile-editor.is-publish-gate')).toBeTruthy();
-    expect(container.querySelector('.creator-profile-editor.is-chrome')).toBeNull();
-
-    const input = container.querySelector('.creator-profile-input') as HTMLInputElement;
+    root = createRoot(container);
     await act(async () => {
-      // Simulate feeds the synthetic event into React's onChange; set the DOM value too
-      // so a stale read of input.value cannot win.
+      root!.render(
+        <StudioCreatorProfileProvider>
+          <CreatorProfileEditor />
+          <ClaimHandleModal isOpen onClose={() => undefined} />
+        </StudioCreatorProfileProvider>,
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('.creator-profile-editor.is-chrome')).toBeNull();
+    const input = document.body.querySelector('.claim-handle-modal-card .creator-profile-input') as HTMLInputElement;
+    await act(async () => {
       input.value = 'ada';
       Simulate.change(input);
     });
-
     await act(async () => {
-      Simulate.submit(container.querySelector('form.creator-profile-form') as HTMLFormElement);
+      Simulate.submit(document.body.querySelector('.claim-handle-modal-card form') as HTMLFormElement);
       await Promise.resolve();
     });
 
     expect(profileApi.claimHandle).toHaveBeenCalledWith('ada');
-    expect(container.querySelector('.creator-profile-editor.is-publish-gate')).toBeNull();
     expect(container.querySelector('.creator-profile-editor.is-chrome')).toBeTruthy();
     expect(container.textContent).toContain('@ada');
-    expect(container.textContent).toContain('Edit profile');
   });
 });
