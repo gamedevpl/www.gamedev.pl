@@ -1943,19 +1943,46 @@ export async function registerSubmissionRoutes(
     }
   }
 
-  app.post('/api/submissions', async (request, reply) => {
+  /**
+   * Creates a game. The whole of it: beta/blocked check, payload validation, per-IP
+   * limit, moderation, the global creation circuit-breaker, per-user quota, slug mint
+   * and claim, brief persistence, and dispatch — in that order, for the reasons each
+   * step documents.
+   *
+   * Lifted out of the HTTP route so the MCP `create_game` tool runs the identical
+   * sequence instead of a second copy of it. A creator reaching this through their
+   * coding agent is spending the same quota against the same limits as one reaching it
+   * through Studio, and two implementations of that is how the two drift into having
+   * different rules.
+   *
+   * Returns a result rather than writing to a reply, so the caller maps it to whatever
+   * its transport uses — status codes here, tool errors over MCP.
+   */
+  async function createGame(input: {
+    uid: string;
+    ip: string;
+    payload: unknown;
+    acceptLanguage?: string;
+    /**
+     * Who asked. Recorded on the queued transition exactly as `agent_open_round` is, so
+     * a game created through a coding agent is distinguishable from a Studio one in the
+     * job history without a new field or a second telemetry path. MCP creation is
+     * otherwise indistinguishable from a Studio self-build, which makes adoption of the
+     * chat-client flow unmeasurable.
+     */
+    openedBy?: 'creator' | 'agent';
+    log: { error: (context: object, message: string) => void; info?: (context: object, message: string) => void };
+  }): Promise<
+    { ok: true; jobId: number; slug: string } | { ok: false; status: number; error: string; category?: string }
+  > {
     if (!githubClient || !submissionTokenSecret) {
-      return reply.status(503).send({ error: 'submissions are not configured' });
-    }
-
-    if (!checkUserAccess(request, reply)) {
-      return;
+      return { ok: false, status: 503, error: 'submissions are not configured' };
     }
 
     // 1. Validate request payload first
-    const parsed = CreateSubmissionRequestSchema.safeParse(request.body);
+    const parsed = CreateSubmissionRequestSchema.safeParse(input.payload);
     if (!parsed.success) {
-      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
+      return { ok: false, status: 400, error: parsed.error.issues[0]?.message ?? 'invalid request' };
     }
 
     const currentTime = now();
@@ -1965,8 +1992,8 @@ export async function registerSubmissionRoutes(
     // `checkFields`, which is one *paid* Vertex call per field (two for a title and a
     // concept), so a limiter that ran after it would cap submissions created while
     // leaving the spend itself unbounded.
-    if (isRateLimited(submissionsByIp, request.ip, currentTime, maxSubmissionsPerWindow, rateLimitWindowMs)) {
-      return reply.status(429).send({ error: 'too many submissions, please try again later' });
+    if (isRateLimited(submissionsByIp, input.ip, currentTime, maxSubmissionsPerWindow, rateLimitWindowMs)) {
+      return { ok: false, status: 429, error: 'too many submissions, please try again later' };
     }
 
     // 3. Quota headroom, read-only — same reason as the limiter above: an account with
@@ -1974,55 +2001,40 @@ export async function registerSubmissionRoutes(
     // recorded further down, after moderation, so rejected content still costs the
     // creator nothing.
     if (store) {
-      const headroom = await peekQuota(store, request.user!.uid, dateStr, dailySubmissionQuota, 'submissions');
+      const headroom = await peekQuota(store, input.uid, dateStr, dailySubmissionQuota, 'submissions');
       if (!headroom.allowed) {
-        if (headroom.tier === 'blocked') {
-          return reply.status(403).send({ error: 'account is blocked' });
-        }
-        return reply.status(429).send({ error: 'daily submission quota exceeded' });
+        if (headroom.tier === 'blocked') return { ok: false, status: 403, error: 'account is blocked' };
+        return { ok: false, status: 429, error: 'daily submission quota exceeded' };
       }
     }
 
     // 4. Content moderation, before any quota is spent (docs/content-safety-plan.md Layer 1 & 1b)
     const moderation = await contentChecker.checkFields([parsed.data.title, parsed.data.concept]);
     if (!moderation.allowed) {
-      logModerationRejection(request.log, {
-        surface: 'submission',
-        uid: request.user?.uid,
-        category: moderation.category,
-      });
-      return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
+      logModerationRejection(app.log, { surface: 'submission', uid: input.uid, category: moderation.category });
+      return { ok: false, status: 422, error: 'content_rejected', category: moderation.category };
     }
 
     // 5. The global circuit-breaker: the pause switch and everyone's shared daily
     // ceiling (creation-limits.ts). Deliberately ahead of the per-user quota and of
-    // every GitHub write, so a request refused here costs the creator nothing — which
-    // is precisely what the message they get promises. `bot:` accounts are outside it;
-    // the reason is in creation-limits.ts.
+    // every GitHub write, so a request refused here costs the creator nothing.
     if (creationGate) {
-      const gate = await creationGate.checkAndSpend(request.user!.uid, dateStr);
+      const gate = await creationGate.checkAndSpend(input.uid, dateStr);
       if (!gate.allowed) {
-        // A distinct code rather than the shared "quota" wording: the creator's own
-        // allowance is intact, and a message implying otherwise would be a lie they
-        // could check.
-        return reply.status(429).send({ error: CREATION_REFUSAL_CODES[gate.reason] });
+        return { ok: false, status: 429, error: CREATION_REFUSAL_CODES[gate.reason] };
       }
     }
 
     // 6. User daily quota check (only increment after payload & IP checks pass)
     if (store) {
-      const quota = await store.checkAndIncrementQuota(request.user!.uid, dateStr, dailySubmissionQuota, 'submissions');
+      const quota = await store.checkAndIncrementQuota(input.uid, dateStr, dailySubmissionQuota, 'submissions');
       if (!quota.allowed) {
-        if (quota.tier === 'blocked') {
-          return reply.status(403).send({ error: 'account is blocked' });
-        }
-        return reply.status(429).send({ error: 'daily submission quota exceeded' });
+        if (quota.tier === 'blocked') return { ok: false, status: 403, error: 'account is blocked' };
+        return { ok: false, status: 429, error: 'daily submission quota exceeded' };
       }
     }
 
-    // Falls back to the browser's own preference, so a creator who never touched the
-    // language switcher still gets progress updates written in their language.
-    const creatorLocale = normalizeLocale(parsed.data.locale ?? request.headers['accept-language']?.split(',')[0]);
+    const creatorLocale = normalizeLocale(parsed.data.locale ?? input.acceptLanguage?.split(',')[0]);
     const sanitizedTitle = sanitizeCreatorText(parsed.data.title, { singleLine: true });
     const sanitizedConcept = sanitizeCreatorText(parsed.data.concept, { singleLine: false });
     const sanitizedDisplayName = parsed.data.displayName
@@ -2048,50 +2060,25 @@ export async function registerSubmissionRoutes(
     ].join('\n');
 
     try {
-      // Job identity is ours now. It used to be a GitHub issue number, which meant we
-      // could not name our own job until a work item existed in someone else's system —
-      // and made every store key, every token and the whole build channel depend on that
-      // call. Nothing is filed on GitHub here any more; the brief goes straight to an
-      // agent, and `issueBody` survives only as the human-readable spec inside it.
       if (!store) {
-        return reply.status(503).send({ error: 'submissions are unavailable' });
+        return { ok: false, status: 503, error: 'submissions are unavailable' };
       }
-      // The game's address, minted from the title the creator just confirmed and fixed
-      // for the game's whole life. It used to be the agent's to choose and was learned
-      // only on its first delivery, which left every build with a stretch — minutes at
-      // best — where the thing being built had no name a URL could use. That is why the
-      // creator's own studio addressed their game by a capability token.
       const wanted = await mintGameSlug(sanitizedTitle, (candidate) => isSlugClaimed(candidate));
 
       const jobId = await store.allocateJobId();
-      await store.createSubmission(jobId, request.user!.uid, sanitizedTitle);
+      await store.createSubmission(jobId, input.uid, sanitizedTitle);
       await store.setSubmissionSlug(jobId, wanted);
 
-      // Minting is a read then a write, so two submissions of the same title can both be
-      // told a name is free. Nothing about that is visible until much later and then it
-      // is severe: both agents deliver into one games-store slug, interleaving two
-      // different games' sources under it, and whichever job loses the by-slug lookup
-      // becomes unplayable to its own creator. So the claim is read back and the loser
-      // finds out here — before an agent has been dispatched, before the creator has been
-      // given an address, while a different name still costs nothing.
       const slug = await confirmSlugClaim(jobId, wanted, sanitizedTitle);
       if (!slug) {
-        // Both attempts lost, which means something is racing us persistently rather
-        // than by coincidence. Fail loudly instead of building a game that cannot be
-        // addressed: the creator can try again, and their quota is the price of the
-        // agent time this never spent.
         await store.setSubmissionAbandoned(jobId, new Date(now()).toISOString());
-        request.log.error({ issueNumber: jobId, slug: wanted }, 'could not claim a slug for a new submission');
-        return reply.status(409).send({ error: 'name_unavailable' });
+        input.log.error({ issueNumber: jobId, slug: wanted }, 'could not claim a slug for a new submission');
+        return { ok: false, status: 409, error: 'name_unavailable' };
       }
 
       await store.setSubmissionLocale(jobId, creatorLocale);
       // Raw, not sanitized: the sanitizer strips the '##' that marks the block.
       await store.setSubmissionClarificationCount(jobId, countCreatorClarifications(parsed.data.concept));
-      // Brief persistence for GET /api/agent/build/brief — split before sanitize so the
-      // clarifications marker survives, then store the sanitized free-text as spec.
-      // Do not fall back to the full concept: that would re-merge QA bullets into `spec`
-      // when the free-text half sanitizes empty (clarifications-only submission).
       {
         const { spec: rawSpec, qa } = splitConceptBrief(parsed.data.concept);
         const briefSpec = sanitizeCreatorText(rawSpec, { singleLine: false });
@@ -2100,37 +2087,16 @@ export async function registerSubmissionRoutes(
       await store.recordJobTransition(jobId, {
         to: 'queued',
         at: new Date(now()).toISOString(),
-        by: 'creator',
-        reason: 'submitted',
+        by: input.openedBy === 'agent' ? 'agent' : 'creator',
+        reason: input.openedBy === 'agent' ? 'agent_create_game' : 'submitted',
       });
 
-      // Deliberately not awaited. The job exists, is slugged, and is `queued` by now —
-      // everything the creator's status page needs — and dispatch is minutes of work
-      // that used to happen while they watched a "Submitting…" button: an agent-tasks
-      // round trip, and since seeding, a model writing a first draft of the game
-      // (~1 minute, or ~2 with a repair round). Holding the response for that made a
-      // submission look hung and put it within reach of a request timeout, which would
-      // have shown an error for a build that was in fact starting normally.
-      //
-      // Nothing is lost by letting go: a job whose dispatch has not landed yet is
-      // exactly the `queued` state the reconciler already reports as `not_dispatched`
-      // once it has waited long enough, and dispatchBuild swallows its own failures for
-      // that reason. The catch here is belt-and-braces against an unhandled rejection.
-      //
-      // The logger is lifted out first: a closure over `request` would hold the whole
-      // Fastify request — headers, body, reply — alive for as long as dispatch runs,
-      // which since seeding is minutes rather than milliseconds, on every submission.
-      const dispatchLog = request.log;
+      const dispatchLog = input.log;
       const builder: BuilderKind = parsed.data.builder ?? 'platform';
-      // Persist before the response returns. Connect (and Studio) read `record.builder`
-      // immediately; if we only wrote it inside background dispatch, a fast /connect
-      // after submit saw platform and returned a permanent-looking 409 (Codex P2).
+      // Persist before returning: Connect and Studio read `record.builder` immediately.
       await store.setRoundBuilder(jobId, builder, { resetRoundBudget: false });
       void dispatchBuild({
         issueNumber: jobId,
-        // The agent is told where to build rather than left to name the place itself.
-        // Its brief previously read "games/(the slug named in your first progress
-        // report)/", which is a sentence, not a path.
         slug,
         spec: issueBody,
         locale: creatorLocale,
@@ -2140,14 +2106,50 @@ export async function registerSubmissionRoutes(
         dispatchLog.error({ err: error, issueNumber: jobId }, 'background dispatch failed');
       });
 
-      const token = mintToken(jobId, submissionTokenSecret);
-      // The slug travels back so the app can go straight to `/studio/<slug>` instead of
-      // putting a capability token in the URL bar and in the creator's history.
-      return reply.send({ token, slug, statusUrl: `/api/submissions/${token}` });
+      input.log.info?.(
+        { issueNumber: jobId, slug, via: input.openedBy === 'agent' ? 'mcp' : 'studio' },
+        'game created',
+      );
+      return { ok: true, jobId, slug };
     } catch (error) {
-      request.log.error({ err: error }, 'failed to create submission');
-      return reply.status(502).send({ error: 'failed to submit game spec' });
+      input.log.error({ err: error }, 'failed to create submission');
+      return { ok: false, status: 502, error: 'failed to submit game spec' };
     }
+  }
+
+  app.post('/api/submissions', async (request, reply) => {
+    // Ahead of the auth check, as it always was: an unconfigured server is not the
+    // caller's problem to authenticate for, and a test pins the order.
+    if (!githubClient || !submissionTokenSecret) {
+      return reply.status(503).send({ error: 'submissions are not configured' });
+    }
+
+    if (!checkUserAccess(request, reply)) {
+      return;
+    }
+
+    const created = await createGame({
+      uid: request.user!.uid,
+      ip: request.ip,
+      payload: request.body,
+      acceptLanguage: request.headers['accept-language'],
+      log: request.log,
+    });
+    if (!created.ok) {
+      // Normalized here, at the send site, on purpose: `category` is optional on a
+      // verdict and JSON drops undefined, so a checker that refuses without classifying
+      // would produce a 422 the client cannot look up. moderation-metrics.test.ts scans
+      // for exactly this shape across every moderating route.
+      if (created.error === 'content_rejected') {
+        return reply.status(created.status).send({ error: created.error, category: created.category ?? 'other' });
+      }
+      return reply.status(created.status).send({ error: created.error });
+    }
+
+    const token = mintToken(created.jobId, submissionTokenSecret!);
+    // The slug travels back so the app can go straight to `/studio/<slug>` instead of
+    // putting a capability token in the URL bar and in the creator's history.
+    return reply.send({ token, slug: created.slug, statusUrl: `/api/submissions/${token}` });
   });
 
   // The agent's build log is English; a creator reading the site in another language
@@ -4272,6 +4274,7 @@ export async function registerSubmissionRoutes(
     gamesStore: options.agentChannel?.gamesStore,
     objectStore: options.agentChannel?.objectStore,
     startImprovementRound,
+    createGame,
     contentChecker,
     dailyImprovementQuota,
   });

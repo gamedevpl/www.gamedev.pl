@@ -1065,6 +1065,10 @@ describe('POST /api/mcp (BY-05)', () => {
     });
     const instructions = (res.json().result as { instructions: string }).instructions;
 
+    // A client following these instructions for a brand-new game must not be sent to
+    // start, which needs a slug that does not exist yet — the dead end create_game exists
+    // to remove.
+    expect(instructions).toMatch(/create_game first/i);
     expect(instructions).toMatch(/creator key/i);
     expect(instructions).toMatch(/only the game slug/i);
     // The kickoff-prompt key is still real, but it is the alternative, not the default.
