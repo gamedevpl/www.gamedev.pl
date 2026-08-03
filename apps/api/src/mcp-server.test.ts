@@ -326,6 +326,12 @@ describe('POST /api/mcp (BY-05)', () => {
     const joined = workflow.join('\n');
     expect(joined).toMatch(/get_brief/);
     expect(joined).toMatch(/get_seed/);
+    // CP-2: an improvement round has no seed and a brief that is only the change
+    // request, so without this step the loop reads as "scaffold from the kit" and an
+    // agent following it overwrites the published game it was asked to improve.
+    expect(joined).toMatch(/get_sources/);
+    expect(joined).toMatch(/available:true/);
+    expect(joined).toMatch(/never scaffold over them/i);
     expect(joined).toMatch(/get_kit/);
     expect(joined).toMatch(/send_screenshot/);
     expect(joined).toMatch(/submit_sources/);
@@ -427,6 +433,39 @@ describe('POST /api/mcp (BY-05)', () => {
 
     const bad = await callTool(app, 'get_brief', { sessionKey: forgedKey }, { 'mcp-session-id': sessionId });
     expect(bad.isError).toBe(true);
+  });
+
+  // CP-2 N4: the opener-in-sessionKey-slot refusals name the credential ("this creator
+  // key only opens a session via start()"), but the mirror case fell through to
+  // "key is required" — which tells an agent nothing was sent when something was.
+  it('names the sessionKey when one is offered where start wants an opener', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+    const sessionKey = mintMcpSessionKey(secret, {
+      sessionId,
+      jobId: ISSUE,
+      roundGeneration: 1,
+      now: Date.now(),
+      ttlHours: 1,
+    });
+
+    for (const attempt of [
+      { args: { key: sessionKey }, headers: {} as Record<string, string> },
+      { args: {}, headers: { authorization: `Bearer ${sessionKey}` } },
+    ]) {
+      const res = await callTool(app, 'start', attempt.args, {
+        'mcp-session-id': sessionId,
+        ...attempt.headers,
+      });
+      expect(res.isError).toBe(true);
+      const text = JSON.stringify(res);
+      expect(text).toMatch(/that is a sessionKey from an earlier start\(\)/i);
+      // It must not claim nothing arrived, and must not blame the creator's key.
+      expect(text).not.toMatch(/key is required/i);
+      expect(text).not.toMatch(/rotated/i);
+    }
   });
 
   it('rejects an expired sessionKey', async () => {

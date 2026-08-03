@@ -8,6 +8,7 @@ import {
   NO_OPEN_ROUND_REASON,
   OPEN_ROUND_IN_PROGRESS_REASON,
   PLATFORM_ROUND_REASON,
+  SESSION_KEY_IS_NOT_AN_OPENER_REASON,
   SLUG_NOT_ON_ACCOUNT_REASON,
 } from './agent-game-key.js';
 import {
@@ -32,6 +33,7 @@ import { MAX_UPLOAD_FILES, type GamesStore } from './games-store.js';
 import type { GcsObjectStore } from './gcs-sign.js';
 import {
   assertMcpSessionKeyUnexpired,
+  looksLikeMcpSessionKey,
   mintMcpSessionKey,
   newMcpSessionId,
   verifyMcpSessionKey,
@@ -223,8 +225,14 @@ const BEHAVIOURAL_CONTRACT = [
  */
 const SESSION_WORKFLOW: readonly string[] = [
   'get_brief — read the brief; if seedAvailable, get_seed and continue that draft rather than scaffolding from scratch.',
+  // An improvement round has no seed (seeds are a new-game facility) and its brief is
+  // the change request alone, so nothing above this told the agent a game already
+  // existed. Following the loop literally, it scaffolded a fresh game over a published
+  // one. get_sources is cheap and answers available:false on a new game, so it is
+  // unconditional rather than gated on a round type the agent cannot see.
+  'get_sources — when it returns available:true this round improves an existing game: continue those files. Never scaffold over them.',
   'get_kit — unpack the tarball, open entry (gamedevpl-creator-kit/SKILL.md), and follow it. Keep the engineRef it returns for submit_sources.',
-  'Build the game from the kit; report_progress before and after long steps.',
+  'Build the game — continuing the seed or sources you fetched, otherwise from the kit; report_progress before and after long steps.',
   'send_screenshot as soon as the game draws anything playable.',
   'Run the kit checks green (at least check:static) before delivering.',
   'submit_sources with the kitEngineRef get_kit returned.',
@@ -611,6 +619,15 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         if (key && looksLikeCreatorAgentKey(key)) {
           noteInvalidStart(ctx.request);
           return toolErr('creator key must be sent as Authorization Bearer, not as the key argument');
+        }
+
+        // A sessionKey in either opener slot is a specific mistake with a specific fix,
+        // and the generic refusals below both misdescribe it: "key is required" reads as
+        // "you sent nothing" when something was sent, and the legacy path would call it
+        // an invalid build key. Name what was supplied instead.
+        if (looksLikeMcpSessionKey(key || bearer || '')) {
+          noteInvalidStart(ctx.request);
+          return toolErr(SESSION_KEY_IS_NOT_AN_OPENER_REASON);
         }
 
         if (!key) {

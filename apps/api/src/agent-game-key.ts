@@ -41,6 +41,15 @@ export const PLATFORM_ROUND_REASON =
 export const SLUG_NOT_ON_ACCOUNT_REASON =
   'no game with that slug on your account — check the slug in your Studio thread';
 
+/**
+ * A sessionKey offered where an opener belongs — the mirror of the opener-in-sessionKey
+ * refusals. Says which credential arrived, because the generic "key is required" claims
+ * nothing was sent and sends an agent looking for a key it already has.
+ */
+export const SESSION_KEY_IS_NOT_AN_OPENER_REASON =
+  'that is a sessionKey from an earlier start() — start needs an opener: a game key, or ' +
+  'Authorization Bearer (creator key or OAuth) with the game slug';
+
 /** Rotated or generation-mismatched durable key. */
 export const ROTATED_GAME_KEY_REASON =
   'this game key was rotated — get a fresh prompt from the Studio thread for this game';

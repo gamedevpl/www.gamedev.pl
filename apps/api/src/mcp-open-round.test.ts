@@ -307,6 +307,36 @@ describe('MCP open_round (BY-24 / BY-27b)', () => {
     expect(job?.ownerUid).not.toBe('g:previous');
   });
 
+  // CP-2: the feedback reached dispatchBuild but was never persisted as the round's
+  // brief, so a self round — which has no backend to read the dispatch prompt — served
+  // get_brief with spec:"" and the agent never learned what the creator asked for.
+  it('persists the change request as the new round brief so get_brief can serve it', async () => {
+    const store = new InMemoryStore();
+    await seedPublishedGame(store);
+    const at = new Date().toISOString();
+    await store.ensureCreatorAgentKey(OWNER, at);
+    const creatorKey = mintCreatorAgentKey(secret, {
+      creatorUid: OWNER,
+      keyGeneration: 1,
+      now: Date.parse('2026-08-01T12:00:00.000Z'),
+    });
+    app = await createApp(store);
+
+    const { structured, isError } = await callOpenRound(
+      app,
+      { slug: SLUG, feedback: 'Make the title screen background a solid coloured rectangle.' },
+      { authorization: `Bearer ${creatorKey}` },
+    );
+    expect(isError).toBe(false);
+    const jobId = (structured as { jobId: number }).jobId;
+
+    const job = await store.getSubmission(jobId);
+    expect(job?.spec).toBe('Make the title screen background a solid coloured rectangle.');
+    expect(job?.spec).not.toBe('');
+    // The change request is free text, not a clarifications block.
+    expect(job?.qa).toEqual([]);
+  });
+
   it('admits only one concurrent open_round per slug', async () => {
     const store = new InMemoryStore();
     await seedPublishedGame(store);
