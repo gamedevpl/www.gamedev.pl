@@ -165,7 +165,7 @@ describe('ArcadeCatalog lazy media', () => {
     // Near-fold: poster only — no moment thumbs and no MP4 until engage.
     expect(container.querySelectorAll('video')).toHaveLength(0);
     const poster = container.querySelector<HTMLImageElement>('img.catalog-preview');
-    expect(poster?.getAttribute('src')).toBe('/api/games/above-fold/media/mid.png');
+    expect(poster?.getAttribute('src')).toBe('/api/games/above-fold/media/mid.png?w=640');
     expect(container.querySelectorAll('.catalog-moment')).toHaveLength(0);
 
     await act(async () => {
@@ -175,14 +175,15 @@ describe('ArcadeCatalog lazy media', () => {
 
     const preview = container.querySelector<HTMLVideoElement>('video.catalog-preview');
     expect(preview?.getAttribute('src')).toBe('/api/games/above-fold/media/gameplay.mp4');
-    expect(preview?.getAttribute('poster')).toBe('/api/games/above-fold/media/mid.png');
+    expect(preview?.getAttribute('poster')).toBe('/api/games/above-fold/media/mid.png?w=640');
     expect(container.querySelectorAll('.catalog-moment')).toHaveLength(2);
 
     // The second card still has no media srcs — it never intersected.
     expect(container.querySelectorAll('video')).toHaveLength(1);
-    expect(container.querySelectorAll('.catalog-moment img')).toHaveLength(2);
-    const momentSrcs = [...container.querySelectorAll<HTMLImageElement>('.catalog-moment img')].map((img) => img.src);
-    expect(momentSrcs.every((src) => src.includes('/api/games/above-fold/'))).toBe(true);
+    const moments = [...container.querySelectorAll<HTMLImageElement>('.catalog-moment img')];
+    expect(moments).toHaveLength(2);
+    expect(moments.every((img) => img.src.includes('/api/games/above-fold/'))).toBe(true);
+    expect(moments.every((img) => img.getAttribute('src')?.endsWith('?w=96'))).toBe(true);
 
     await act(async () => {
       root.unmount();
