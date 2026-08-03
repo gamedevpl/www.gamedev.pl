@@ -18,7 +18,7 @@ vi.mock('./AuthContext.js', () => ({
   useAuth: () => ({ refreshUser: vi.fn(), user: { uid: 'g:test' } }),
 }));
 
-import { CreatorProfileEditor } from './CreatorProfileEditor.js';
+import { CreatorProfileEditor, type CreatorProfileSurface } from './CreatorProfileEditor.js';
 
 let container: HTMLDivElement;
 let root: Root | null = null;
@@ -42,36 +42,48 @@ afterEach(() => {
   container.remove();
 });
 
-async function draw(publishNudge = false): Promise<void> {
+async function draw(surface: CreatorProfileSurface): Promise<void> {
   root = createRoot(container);
   await act(async () => {
-    root!.render(<CreatorProfileEditor publishNudge={publishNudge} />);
+    root!.render(<CreatorProfileEditor surface={surface} />);
   });
-  // Let the profile fetch settle.
   await act(async () => {
     await Promise.resolve();
   });
 }
 
 describe('CreatorProfileEditor', () => {
-  it('expands the claim form when the creator has no handle', async () => {
+  it('renders nothing in chrome when the creator has no handle', async () => {
     profileApi.fetchMyProfile.mockResolvedValue({
       profile: null,
       publishReady: false,
       picture: null,
     });
 
-    await draw(true);
+    await draw('chrome');
 
-    expect(container.textContent).toContain('Claim a unique handle');
+    expect(container.textContent?.trim() ?? '').toBe('');
+    expect(container.querySelector('.creator-profile-editor')).toBeNull();
+  });
+
+  it('shows the claim form on the publish gate when a handle is missing', async () => {
+    profileApi.fetchMyProfile.mockResolvedValue({
+      profile: null,
+      publishReady: false,
+      picture: null,
+    });
+
+    await draw('publish-gate');
+
+    expect(container.textContent).toContain('Claim a handle to publish');
     expect(container.textContent).toContain('claim a handle so it can go live');
+    expect(container.querySelector('.creator-profile-editor.is-publish-gate')).toBeTruthy();
     expect(container.querySelector('.creator-profile-preview')).toBeTruthy();
     expect(container.querySelector('button.primary-btn')?.textContent).toContain('Claim handle');
-    // One primary CTA — rename lives elsewhere after claim.
     expect(container.querySelectorAll('button.primary-btn')).toHaveLength(1);
   });
 
-  it('collapses to an @handle chip once a profile is publish-ready', async () => {
+  it('hides the publish gate once a profile is publish-ready', async () => {
     profileApi.fetchMyProfile.mockResolvedValue({
       profile: {
         handle: 'ada',
@@ -87,7 +99,28 @@ describe('CreatorProfileEditor', () => {
       picture: null,
     });
 
-    await draw();
+    await draw('publish-gate');
+
+    expect(container.querySelector('.creator-profile-editor')).toBeNull();
+  });
+
+  it('collapses chrome to an @handle chip once a profile is publish-ready', async () => {
+    profileApi.fetchMyProfile.mockResolvedValue({
+      profile: {
+        handle: 'ada',
+        profileName: 'Ada',
+        bio: '',
+        avatarUrl: null,
+        profileCreatedAt: '2026-08-01T00:00:00.000Z',
+      },
+      publishReady: true,
+      handle: 'ada',
+      profileName: 'Ada',
+      avatarMode: 'letter',
+      picture: null,
+    });
+
+    await draw('chrome');
 
     expect(container.querySelector('.creator-profile-editor.is-collapsed')).toBeTruthy();
     expect(container.textContent).toContain('@ada');
@@ -95,7 +128,7 @@ describe('CreatorProfileEditor', () => {
     expect(container.querySelector('button.primary-btn')).toBeNull();
   });
 
-  it('opens the editor from the chip without a second primary CTA in the thread', async () => {
+  it('opens the chrome editor from the chip without a second primary CTA', async () => {
     profileApi.fetchMyProfile.mockResolvedValue({
       profile: {
         handle: 'ada',
@@ -111,7 +144,7 @@ describe('CreatorProfileEditor', () => {
       picture: null,
     });
 
-    await draw();
+    await draw('chrome');
     const chip = container.querySelector('.creator-profile-chip') as HTMLButtonElement;
     await act(async () => {
       chip.click();
@@ -119,7 +152,6 @@ describe('CreatorProfileEditor', () => {
 
     expect(container.querySelector('.creator-profile-editor.is-expanded')).toBeTruthy();
     expect(container.querySelector('button.primary-btn')?.textContent).toContain('Save profile');
-    // Rename is tucked under details, not a competing green button.
     expect(container.querySelector('details.creator-profile-rename')).toBeTruthy();
   });
 });

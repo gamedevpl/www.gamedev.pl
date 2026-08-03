@@ -529,13 +529,8 @@ export function CreatorStudioView({
         </button>
       </header>
 
-      {!loading && user ? (
-        <CreatorProfileEditor
-          publishNudge={shelfGames.some(
-            (game) => game.lastKnownStatus === 'in_review' || game.lastKnownStatus === 'publishing',
-          )}
-        />
-      ) : null}
+      {/* Quiet @handle chip only — claim lives on the game waiting to publish. */}
+      {!loading && user ? <CreatorProfileEditor surface="chrome" /> : null}
 
       {loading ? (
         <>
@@ -703,6 +698,12 @@ export function CreatorStudioView({
                   </div>
                 </div>
               </div>
+
+              {/* Profile is required only to publish — show the claim form on this game
+                  when it is waiting on review / publishing, not as Studio page chrome. */}
+              {user && (activeGame.lastKnownStatus === 'in_review' || activeGame.lastKnownStatus === 'publishing') ? (
+                <CreatorProfileEditor surface="publish-gate" />
+              ) : null}
 
               {/* The thread stays put. Details opens beside it on a wide screen and over
                   it on a narrow one; only playtest, which needs the whole viewport to be

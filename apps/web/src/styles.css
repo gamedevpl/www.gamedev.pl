@@ -10901,9 +10901,13 @@ body.player-open {
   opacity: 1;
 }
 
-/* Studio profile strip: chip when ready, panel only when publish needs a handle. */
+/* Studio profile: quiet chrome chip, or claim panel on a game waiting to publish. */
 .creator-profile-editor {
   margin: 0 0 0.85rem;
+}
+
+.creator-profile-editor.is-publish-gate {
+  margin: 0 0 1rem;
 }
 
 .creator-profile-editor.is-collapsed {
