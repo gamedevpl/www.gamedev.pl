@@ -49,6 +49,8 @@ export interface ContractCheckOptions {
   log?: (message: string) => void;
   /** Test seam — replaced so retry backoff does not slow the suite. */
   sleep?: (ms: number) => Promise<void>;
+  /** Test seam for expiring website-first module rollout exceptions. */
+  now?: () => number;
 }
 
 /** Attempts per file, including the first. Bounded so a dead remote fails fast. */
@@ -239,20 +241,26 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
     };
   }
 
-  // Declared website-ahead modules: explicitly list modules this side has added
-  // before the games-repo tip merges them. If a local-only module is NOT in this
-  // list, it means games-repo dropped or rolled it back — that is drift, not an
-  // intentional lead. (Codex review — PR #379.)
-  const DECLARED_AHEAD_MODULES: ReadonlySet<string> = new Set(['sensing', 'voice', 'editor', 'racing', 'football']);
+  // Website-first exceptions must expire. A permanent allowlist would turn a later
+  // games-repo rollback into an apparently intentional rollout state. Remove an entry
+  // as soon as its paired games change lands; the deadline is the fail-closed backstop.
+  const WEBSITE_AHEAD_EXPIRY: ReadonlyMap<string, number> = new Map([
+    ['football', Date.parse('2026-08-10T00:00:00.000Z')],
+  ]);
   const websiteExtras = localModules.filter((m) => !remoteModules.includes(m));
-  const undeclaredExtras = websiteExtras.filter((m) => !DECLARED_AHEAD_MODULES.has(m));
-  if (undeclaredExtras.length > 0) {
+  const now = options.now?.() ?? Date.now();
+  const invalidExtras = websiteExtras.filter((m) => {
+    const expiry = WEBSITE_AHEAD_EXPIRY.get(m);
+    return expiry === undefined || now >= expiry;
+  });
+  if (invalidExtras.length > 0) {
     return {
       kind: 'drift',
       reason:
-        `Undeclared website-ahead modules: ${undeclaredExtras.join(', ')}.\n` +
-        `  If these are intentional new modules, add them to DECLARED_AHEAD_MODULES in ` +
-        `games-repo-contract-check.ts. If games-repo removed them, update GAME_KIT_MODULES.`,
+        `Undeclared or expired website-ahead modules: ${invalidExtras.join(', ')}.\n` +
+        `  If these are intentional new modules, add a short-lived deadline to ` +
+        `WEBSITE_AHEAD_EXPIRY in games-repo-contract-check.ts. Remove it as soon as the paired ` +
+        `games change lands; if games-repo removed the module, update GAME_KIT_MODULES.`,
     };
   }
   if (remoteModules.join(',') !== localModules.join(',')) {
