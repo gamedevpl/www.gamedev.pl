@@ -107,8 +107,8 @@ export function shouldIssueMcpOAuthChallenge(request: FastifyRequest, message: J
  * drift into saying different things.
  */
 export const MCP_MISSING_CREDENTIAL_HINT =
-  'missing credential: pass sessionKey from start(), or configure Authorization: Bearer with a creator key, ' +
-  'a game key, or OAuth access and call start() first';
+  'missing credential: pass sessionKey from start(), or call start() first — a game key goes in its key ' +
+  'argument; a creator key or OAuth access goes in Authorization: Bearer with your game slug';
 
 export function sendMcpOAuthChallenge(reply: FastifyReply): FastifyReply {
   return reply

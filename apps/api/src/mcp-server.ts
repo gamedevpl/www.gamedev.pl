@@ -4,6 +4,7 @@ import { looksLikeCreatorAgentKey } from './agent-creator-key.js';
 import { resolveCreatorAgentKeyForOpenRound, resolveCreatorAgentKeyForStart } from './agent-creator-key-resolve.js';
 import {
   looksLikeGameAgentKey,
+  GAME_KEY_GOES_IN_KEY_ARG_REASON,
   IMPROVEMENT_QUOTA_EXHAUSTED_REASON,
   NO_OPEN_ROUND_REASON,
   OPEN_ROUND_IN_PROGRESS_REASON,
@@ -628,6 +629,14 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         if (looksLikeMcpSessionKey(key || bearer || '')) {
           noteInvalidStart(ctx.request);
           return toolErr(SESSION_KEY_IS_NOT_AN_OPENER_REASON);
+        }
+
+        // Every other tool answers a Bearer game key with "only opens a session via
+        // start()". Falling through to "key is required" here made those two refusals
+        // a loop with no exit.
+        if (!key && bearer && looksLikeGameAgentKey(bearer)) {
+          noteInvalidStart(ctx.request);
+          return toolErr(GAME_KEY_GOES_IN_KEY_ARG_REASON);
         }
 
         if (!key) {

@@ -455,17 +455,44 @@ describe('POST /api/mcp (BY-05)', () => {
       { args: { key: sessionKey }, headers: {} as Record<string, string> },
       { args: {}, headers: { authorization: `Bearer ${sessionKey}` } },
     ]) {
-      const res = await callTool(app, 'start', attempt.args, {
+      const { structured, isError } = await callTool(app, 'start', attempt.args, {
         'mcp-session-id': sessionId,
         ...attempt.headers,
       });
-      expect(res.isError).toBe(true);
-      const text = JSON.stringify(res);
-      expect(text).toMatch(/that is a sessionKey from an earlier start\(\)/i);
+      expect(isError).toBe(true);
+      const { error } = structured as { error: string };
+      expect(error).toMatch(/that is a sessionKey from an earlier start\(\)/i);
       // It must not claim nothing arrived, and must not blame the creator's key.
-      expect(text).not.toMatch(/key is required/i);
-      expect(text).not.toMatch(/rotated/i);
+      expect(error).not.toMatch(/key is required/i);
+      expect(error).not.toMatch(/rotated/i);
     }
+  });
+
+  // A Bearer game key is recognised everywhere else ("only opens a session via
+  // start()"), so start must not answer it with "key is required" — that pair of
+  // refusals sends the agent back and forth with no way out.
+  it('routes a Bearer game key to the key argument instead of claiming none was sent', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+    const gameKey = mintGameAgentKey(secret, {
+      slug: 'comet-courier',
+      creatorUid: 'g:owner',
+      keyGeneration: 1,
+      now: Date.now(),
+    });
+
+    const { structured, isError } = await callTool(
+      app,
+      'start',
+      {},
+      { 'mcp-session-id': sessionId, authorization: `Bearer ${gameKey}` },
+    );
+    expect(isError).toBe(true);
+    const { error } = structured as { error: string };
+    expect(error).toMatch(/key argument/i);
+    expect(error).not.toMatch(/key is required/i);
   });
 
   it('rejects an expired sessionKey', async () => {
