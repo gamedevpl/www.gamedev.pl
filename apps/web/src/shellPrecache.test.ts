@@ -133,6 +133,39 @@ describe('the worker source this module rewrites', () => {
     expect(SW_SOURCE).toContain("url.pathname.startsWith('/api/')");
   });
 
+  // Executes the shipped predicate rather than matching its source text: this rule is
+  // the difference between a consent screen and a 404, and a substring assertion would
+  // pass on a version that never reaches the fetch handler.
+  it('lets server-rendered routes reach the origin, so OAuth consent is not a 404', () => {
+    const source = SW_SOURCE.match(/function isServerRenderedRoute[\s\S]*?\n}/)?.[0];
+    expect(source, 'isServerRenderedRoute must exist in the shipped worker').toBeTruthy();
+    const isServerRenderedRoute = new Function('url', `${source}\nreturn isServerRenderedRoute(url);`) as (
+      url: URL,
+    ) => boolean;
+
+    // CP-2 found every returning creator got the SPA NotFound page here, because the
+    // shell answered the navigation and the server never saw it.
+    expect(isServerRenderedRoute(new URL('https://www.gamedev.pl/oauth/authorize?client_id=x'))).toBe(true);
+    expect(isServerRenderedRoute(new URL('https://www.gamedev.pl/.well-known/oauth-authorization-server'))).toBe(true);
+
+    // Real SPA routes must keep being served from the shell — that is the whole point
+    // of the worker, and exempting them would give up offline deep links.
+    expect(isServerRenderedRoute(new URL('https://www.gamedev.pl/studio'))).toBe(false);
+    expect(isServerRenderedRoute(new URL('https://www.gamedev.pl/play/tv-tycoon'))).toBe(false);
+    expect(isServerRenderedRoute(new URL('https://www.gamedev.pl/'))).toBe(false);
+    // Not a prefix match on the bare word: /oauthorize is an SPA path, not our route.
+    expect(isServerRenderedRoute(new URL('https://www.gamedev.pl/oauthorize'))).toBe(false);
+  });
+
+  it('applies the server-route exemption before the navigation branch', () => {
+    const handler = SW_SOURCE.slice(SW_SOURCE.indexOf("self.addEventListener('fetch'"));
+    const exemption = handler.indexOf('isServerRenderedRoute(url)');
+    const navigation = handler.indexOf("request.mode === 'navigate'");
+    expect(exemption).toBeGreaterThan(-1);
+    // Order is the bug: the navigation branch answers everything it reaches.
+    expect(exemption).toBeLessThan(navigation);
+  });
+
   it('stores its navigable documents rebuilt, never straight from cache.add', () => {
     // Found in a browser, not in review: `npx serve` 301s /index.html to /index, so
     // `cache.add` stored a redirected response — and answering a navigation with one

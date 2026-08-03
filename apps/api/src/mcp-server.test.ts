@@ -1048,4 +1048,30 @@ describe('POST /api/mcp (BY-05)', () => {
     );
     expect(progress.isError).toBe(false);
   });
+
+  // Every client reads this before it sees a tool. It described the pre-BYOCA model —
+  // "using the key from the creator's Studio kickoff prompt" — which is exactly what a
+  // creator key removes, so the first thing a keyless client was told was to go find a
+  // key that no longer exists in the prompt.
+  it('initialize tells a creator-key client to pass only a slug', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+
+    const res = await mcpCall(app, 'initialize', {
+      protocolVersion: '2025-11-25',
+      capabilities: {},
+      clientInfo: { name: 'test', version: '0' },
+    });
+    const instructions = (res.json().result as { instructions: string }).instructions;
+
+    expect(instructions).toMatch(/creator key/i);
+    expect(instructions).toMatch(/only the game slug/i);
+    // The kickoff-prompt key is still real, but it is the alternative, not the default.
+    expect(instructions).not.toMatch(/Start with the gamedevpl start tool using the key/i);
+    // The rest of the loop must survive the rewrite.
+    expect(instructions).toMatch(/sessionKey/);
+    expect(instructions).toMatch(/get_gate_verdict/);
+    expect(instructions).toMatch(/honour stop/i);
+  });
 });

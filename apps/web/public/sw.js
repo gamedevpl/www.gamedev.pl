@@ -125,6 +125,20 @@ function isApiRequest(url) {
   return url.pathname === '/api' || url.pathname.startsWith('/api/');
 }
 
+/**
+ * Server-rendered routes that are NOT part of the SPA. These must reach the origin even
+ * as navigations, because the router has no route for them: answering from the shell
+ * renders the NotFound page behind an HTTP 200 and the server never sees the request.
+ *
+ * `/oauth/authorize` is the case that proved this matters — the MCP consent screen is
+ * server-rendered, so every creator who had ever loaded the site (which is all of them;
+ * minting a key requires Studio) got a 404 page instead of a consent prompt. It looked
+ * healthy to curl and in a fresh incognito window, because neither runs this worker.
+ */
+function isServerRenderedRoute(url) {
+  return url.pathname === '/oauth' || url.pathname.startsWith('/oauth/') || url.pathname.startsWith('/.well-known/');
+}
+
 self.addEventListener('fetch', (event) => {
   const request = event.request;
 
@@ -136,6 +150,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
   if (isApiRequest(url)) return;
+  if (isServerRenderedRoute(url)) return;
 
   if (request.mode === 'navigate') {
     event.respondWith(navigationResponse(request));

@@ -1,6 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
-import { assertCreatorAgentKeyActive, looksLikeCreatorAgentKey, verifyCreatorAgentKey } from './agent-creator-key.js';
+import {
+  assertCreatorAgentKeyActive,
+  DEFAULT_CREATOR_AGENT_KEY_TTL_DAYS,
+  looksLikeCreatorAgentKey,
+  verifyCreatorAgentKey,
+} from './agent-creator-key.js';
 import { NO_OPEN_ROUND_REASON, PLATFORM_ROUND_REASON, SLUG_NOT_ON_ACCOUNT_REASON } from './agent-game-key.js';
 import { mintGameAgentKey } from './agent-game-key.js';
 import { mintAgentToken } from './agent-token.js';
@@ -10,6 +15,7 @@ import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } f
 import { mintMcpSessionKey } from './mcp-session-key.js';
 import { pkceChallengeS256 } from './oauth-pkce.js';
 import { InMemoryStore } from './store.js';
+import type { CreatorAgentKeyRecord } from './store.js';
 import { NoopTranslator } from './translate.js';
 
 const secret = 'creator-agent-routes-secret';
@@ -443,5 +449,187 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
       roundGeneration: 1,
     });
     expect(sessionKey).toBeTruthy();
+  });
+
+  // CP-2, against production: the Studio panel promises "rotating stops every agent still
+  // using the old key". It did not. A sessionKey minted before the rotation authenticates
+  // on the round's generation and never consults the creator key, so report_progress kept
+  // succeeding afterwards and the write landed in the creator's thread.
+  it('rotating the creator key ends sessions already holding a sessionKey', async () => {
+    const store = new InMemoryStore();
+    app = await createApp(store);
+
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'Rotate Kills', concept: CONCEPT, builder: 'self' },
+    });
+    expect(submit.statusCode).toBe(200);
+    const record = (await store.listSubmissionsByOwner(OWNER))[0]!;
+    await store.setSubmissionSlug(record.issueNumber, SLUG);
+    await store.ensureRoundGeneration(record.issueNumber);
+
+    const minted = await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
+    const creatorKey = minted.json().key as string;
+    const started = await callStart(app, { slug: SLUG }, { authorization: `Bearer ${creatorKey}` });
+    expect(started.isError).toBe(false);
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const writeProgress = async () => {
+      const res = await mcpCall(
+        app,
+        'tools/call',
+        { name: 'report_progress', arguments: { sessionKey, step: 'planning', text: 'still here' } },
+        { 'mcp-session-id': started.sessionId },
+      );
+      return (res.json() as { result?: { isError?: boolean } }).result?.isError === true;
+    };
+
+    // The session is live before the rotation — otherwise this test proves nothing.
+    expect(await writeProgress()).toBe(false);
+
+    const rotated = await app.inject({
+      method: 'POST',
+      url: '/api/me/creator-agent-key/rotate',
+      headers: authHeaders(),
+    });
+    expect(rotated.statusCode).toBe(200);
+    expect((rotated.json() as { sessionsEnded: number }).sessionsEnded).toBe(1);
+
+    // The write capability is gone, which is what the panel told the creator would happen.
+    expect(await writeProgress()).toBe(true);
+  });
+
+  // The panel showed a different "Ends in ..." tail on every visit, because GET re-minted
+  // at the wall clock. A creator comparing it against their agent's header always saw a
+  // mismatch, and the remedy the panel offers for a mismatch is Rotate — destructive.
+  it('mints one stable key per generation, so the displayed tail matches the pasted header', async () => {
+    const store = new InMemoryStore();
+    app = await createApp(store);
+
+    // Backdate the generation, the way it is for any creator who minted last week.
+    // Two back-to-back reads are identical even without the fix — `exp` has second
+    // granularity — so a same-second probe could never have produced the failure.
+    await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
+    const MINTED_AT = '2026-07-01T00:00:00.000Z';
+    const records = (store as unknown as { creatorAgentKeys: Map<string, CreatorAgentKeyRecord> }).creatorAgentKeys;
+    records.set(OWNER, { ...records.get(OWNER)!, updatedAt: MINTED_AT });
+
+    const first = await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
+    const second = await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
+
+    const a = first.json() as { key: string; fingerprint: string; expiresAt: number; keyGeneration: number };
+    const b = second.json() as { key: string; fingerprint: string; expiresAt: number; keyGeneration: number };
+
+    // The key belongs to the generation, not to the moment the panel was opened: its
+    // expiry is measured from when the generation was minted.
+    expect(b.expiresAt).toBe(
+      Math.floor(Date.parse(MINTED_AT) / 1000) + DEFAULT_CREATOR_AGENT_KEY_TTL_DAYS * 24 * 60 * 60,
+    );
+    expect(verifyCreatorAgentKey(b.key, secret).exp).toBe(b.expiresAt);
+
+    expect(b.keyGeneration).toBe(a.keyGeneration);
+    expect(b.key).toBe(a.key);
+    expect(b.fingerprint).toBe(a.fingerprint);
+    // The stated expiry is a real deadline, not one that slid forward on every page load.
+    expect(b.expiresAt).toBe(a.expiresAt);
+
+    // Rotation still produces a genuinely different key.
+    const rotated = await app.inject({
+      method: 'POST',
+      url: '/api/me/creator-agent-key/rotate',
+      headers: authHeaders(),
+    });
+    const c = rotated.json() as { key: string; keyGeneration: number };
+    expect(c.keyGeneration).toBe(a.keyGeneration + 1);
+    expect(c.key).not.toBe(a.key);
+  });
+
+  // Review (#488): the creator key cannot even open a platform round, so bumping a
+  // platform build's generation revokes nothing the key could reach — it just stalls
+  // a build the creator did not ask to stop.
+  it('leaves a platform-built round alone when the creator key is rotated', async () => {
+    const store = new InMemoryStore();
+    app = await createApp(store);
+
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'Platform Build', concept: CONCEPT, builder: 'platform' },
+    });
+    expect(submit.statusCode).toBe(200);
+    const record = (await store.listSubmissionsByOwner(OWNER))[0]!;
+    await store.setSubmissionSlug(record.issueNumber, SLUG);
+    await store.setRoundBuilder(record.issueNumber, 'platform');
+    await store.ensureRoundGeneration(record.issueNumber);
+    const before = (await store.getSubmission(record.issueNumber))?.roundGeneration;
+
+    const rotated = await app.inject({
+      method: 'POST',
+      url: '/api/me/creator-agent-key/rotate',
+      headers: authHeaders(),
+    });
+    expect(rotated.statusCode).toBe(200);
+    expect((rotated.json() as { sessionsEnded: number }).sessionsEnded).toBe(0);
+    expect((await store.getSubmission(record.issueNumber))?.roundGeneration).toBe(before);
+  });
+
+  // Review (#488): if the revocation persisted but ending sessions then failed, a 404
+  // on retry would strand those sessions writable forever — no retry could reach the
+  // cleanup again.
+  it('finishes the session cleanup when revoke is retried on an already-revoked key', async () => {
+    const store = new InMemoryStore();
+    app = await createApp(store);
+
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'Retry Revoke', concept: CONCEPT, builder: 'self' },
+    });
+    expect(submit.statusCode).toBe(200);
+    const record = (await store.listSubmissionsByOwner(OWNER))[0]!;
+    await store.setSubmissionSlug(record.issueNumber, SLUG);
+    await store.ensureRoundGeneration(record.issueNumber);
+
+    // Stand in for the interrupted attempt: revocation persisted, cleanup never ran.
+    await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
+    await store.revokeCreatorAgentKey(OWNER, new Date().toISOString());
+    const stranded = (await store.getSubmission(record.issueNumber))?.roundGeneration;
+
+    const retry = await app.inject({
+      method: 'DELETE',
+      url: '/api/me/creator-agent-key',
+      headers: authHeaders(),
+    });
+    expect(retry.statusCode).toBe(204);
+    expect((await store.getSubmission(record.issueNumber))?.roundGeneration).toBe((stranded ?? 1) + 1);
+  });
+
+  // Review (#488): anchoring every mint to updatedAt means a generation older than the
+  // TTL would mint an already-expired key forever, while the panel still offered it for
+  // copying and the only remedy on screen is the destructive Rotate.
+  it('re-dates a generation whose key has expired instead of serving a dead one', async () => {
+    const store = new InMemoryStore();
+    app = await createApp(store);
+
+    await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
+    const records = (store as unknown as { creatorAgentKeys: Map<string, CreatorAgentKeyRecord> }).creatorAgentKeys;
+    const aged = new Date(Date.now() - (DEFAULT_CREATOR_AGENT_KEY_TTL_DAYS + 30) * 24 * 60 * 60 * 1000);
+    records.set(OWNER, { ...records.get(OWNER)!, updatedAt: aged.toISOString() });
+
+    const res = await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
+    const body = res.json() as { key: string; keyGeneration: number; expiresAt: number };
+
+    // Same generation — nothing that was dead comes back, every key of it had expired.
+    expect(body.keyGeneration).toBe(1);
+    expect(body.expiresAt * 1000).toBeGreaterThan(Date.now());
+    expect(verifyCreatorAgentKey(body.key, secret).exp).toBe(body.expiresAt);
+
+    // And it is stable again from here, rather than drifting on every visit.
+    const again = await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
+    expect((again.json() as { key: string }).key).toBe(body.key);
   });
 });
