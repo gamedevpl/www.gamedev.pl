@@ -27,7 +27,8 @@ export const DEFAULT_GAME_AGENT_KEY_TTL_DAYS = 90;
  * there is simply no self-build round open for the agent to join.
  */
 export const NO_OPEN_ROUND_REASON =
-  'no build round is open for this game; ask the creator to request a change in their Studio thread';
+  'no build round is open for this game; for an unpublished draft call continue_draft({ feedback }) then start(), ' +
+  'or ask the creator to request a change in their Studio thread';
 
 /** Active round exists but is platform-built — not the creator's agent's turn. */
 export const PLATFORM_ROUND_REASON =
@@ -65,7 +66,17 @@ export const ROTATED_GAME_KEY_REASON =
   'this game key was rotated — get a fresh prompt from the Studio thread for this game';
 
 /** `open_round` only applies after the game has shipped. */
-export const GAME_NOT_PUBLISHED_REASON = 'this game is not published yet — improvement rounds open only after publish';
+export const GAME_NOT_PUBLISHED_REASON =
+  'this game is not published yet — improvement rounds open only after publish; ' +
+  'to keep iterating on the draft call continue_draft({ feedback }) then start()';
+
+/** `continue_draft` only applies before the game has shipped. */
+export const GAME_ALREADY_PUBLISHED_REASON =
+  'this game is already published — call open_round({ feedback }) then start() for an improvement round';
+
+/** Draft job exists but cannot be reopened from its current state. */
+export const DRAFT_NOT_CONTINUABLE_REASON =
+  'this draft cannot be continued right now — wait for the current step to finish, or ask the creator in Studio';
 
 /** Creator daily improvement quota exhausted on the agent-open path. */
 export const IMPROVEMENT_QUOTA_EXHAUSTED_REASON =

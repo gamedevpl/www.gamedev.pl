@@ -9,6 +9,8 @@ import {
 } from './agent-creator-key-resolve.js';
 import {
   looksLikeGameAgentKey,
+  DRAFT_NOT_CONTINUABLE_REASON,
+  GAME_ALREADY_PUBLISHED_REASON,
   GAME_KEY_GOES_IN_KEY_ARG_REASON,
   IMPROVEMENT_QUOTA_EXHAUSTED_REASON,
   NO_OPEN_ROUND_REASON,
@@ -20,9 +22,17 @@ import {
 import {
   creatorOwnsSlug,
   findActiveRoundForSlug,
+  findDraftJobForSlug,
   resolveGameAgentKeyForOpenRound,
   resolveGameAgentKeyForStart,
+  verifyDurableGameAgentKey,
 } from './agent-game-key-resolve.js';
+import {
+  mcpPresenceText,
+  noteMcpPresencePulse,
+  shouldEmitMcpPresencePulse,
+  shouldPulseMcpPresence,
+} from './mcp-presence.js';
 import {
   classifyAgentTokenAccess,
   InvalidAgentTokenError,
@@ -115,6 +125,17 @@ export interface McpServerOptions {
     ownerUid?: string;
   }) => Promise<{ route: 'job'; jobId: number } | null>;
   /**
+   * Reopens an unpublished draft after a closed round (gate-green ready_for_review, etc.).
+   * Injected from submissions so MCP and Studio feedback share the same resume path.
+   */
+  continueDraftRound?: (input: {
+    issueNumber: number;
+    feedback: string;
+    locale: string;
+    log: { error: (context: object, message: string) => void };
+    openedBy?: 'creator' | 'agent';
+  }) => Promise<{ ok: true; jobId: number; alreadyOpen: boolean } | { ok: false; reason: string }>;
+  /**
    * Creates a game, running the identical sequence Studio's POST /api/submissions runs.
    * Injected rather than reimplemented so the two surfaces cannot drift on beta gating,
    * moderation, the creation circuit-breaker or quota.
@@ -131,6 +152,7 @@ export interface McpServerOptions {
   >;
   contentChecker?: ContentChecker;
   dailyImprovementQuota?: number;
+  dailyFeedbackQuota?: number;
 }
 
 interface JsonRpcRequest {
@@ -195,6 +217,25 @@ function toolErr(message: string, data?: unknown): ToolResult {
     structuredContent: payload,
     isError: true,
   };
+}
+
+/** Job id for a coarse presence pulse — sessionKey preferred, else round Bearer. */
+function resolvePresenceJobId(sessionKey: string, bearer: string | null, secret: string): number | null {
+  if (sessionKey && looksLikeMcpSessionKey(sessionKey)) {
+    try {
+      return verifyMcpSessionKey(sessionKey, secret).jobId;
+    } catch {
+      return null;
+    }
+  }
+  if (bearer) {
+    try {
+      return verifyAgentToken(bearer, secret).jobId;
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 function pruneHits(buckets: Map<string, number[]>, key: string, currentTime: number): number[] {
@@ -271,7 +312,8 @@ const SESSION_WORKFLOW: readonly string[] = [
   // Green closes the round before the next tool call; writes and non-receipt reads then
   // reject the retired key (terminal-receipt tests). Any final progress/inbox work must
   // happen on earlier write replies — do not instruct post-green tools (Codex P1).
-  'green: the round is complete — END the session immediately. Do not report_progress, read_inbox, or ack after green; the key retired with that transition (get_gate_verdict and get_gate_media may still answer via terminal receipt).',
+  'green: the round is complete — END the session immediately. Do not report_progress, read_inbox, or ack after green; the key retired with that transition (get_gate_verdict and get_gate_media may still answer via terminal receipt). ' +
+    'If the creator wants more changes before publish, call continue_draft({ feedback }) then start() — do not call open_round on an unpublished draft.',
 ];
 
 /**
@@ -290,8 +332,9 @@ const INBOX_POLICY =
  */
 const RETIRED_KEY_ETIQUETTE =
   'If a call is refused because the round finished, no round is open, or the key was rotated, do not retry and do not ' +
-  "report an outage. Tell the creator to open the game's Studio thread — start a new round if none is open, or copy " +
-  'the current kickoff only if they rotated the key; the gamedev.pl MCP connection itself is unchanged.';
+  'report an outage. For an unpublished draft call continue_draft({ feedback }) then start(); for a published game ' +
+  "call open_round({ feedback }) then start(); or tell the creator to open the game's Studio thread. Copy the " +
+  'current kickoff only if they rotated the key — the gamedev.pl MCP connection itself is unchanged.';
 
 /** Human-readable session loop for the text body of `start`. */
 const SESSION_WORKFLOW_TEXT = [
@@ -330,13 +373,17 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
   const now = options.now ?? Date.now;
   const allowedOrigins = options.allowedOrigins ?? parseAllowedOrigins();
   const startImprovementRound = options.startImprovementRound;
+  const continueDraftRound = options.continueDraftRound;
   const createGame = options.createGame;
   const contentChecker = options.contentChecker;
   const dailyImprovementQuota = options.dailyImprovementQuota ?? Number(process.env.DAILY_IMPROVEMENT_QUOTA ?? '2');
+  const dailyFeedbackQuota = options.dailyFeedbackQuota ?? 20;
 
   /** Transport sessions only — never consulted for authorization. */
   const transportSessions = new Map<string, { createdAt: number }>();
   const invalidStartsByIp = new Map<string, number[]>();
+  /** Last synthetic Studio presence pulse per job — coarse MCP activity, not 1:1 tools. */
+  const presencePulseByJob = new Map<number, number>();
 
   function pruneTransportSessions(currentTime: number): void {
     for (const [id, meta] of transportSessions) {
@@ -1186,6 +1233,180 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         } finally {
           await store.finishAgentOpenRound(resolved.slug, at);
         }
+      },
+    },
+
+    continue_draft: {
+      annotations: { title: 'Continue an unpublished draft', ...WRITES_ONCE },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          jobId: { type: 'number' },
+          slug: { type: 'string' },
+          alreadyOpen: { type: 'boolean', description: 'True when a round was already open; not an error.' },
+          next: { type: 'string' },
+        },
+        required: ['jobId', 'slug', 'alreadyOpen'],
+      },
+      description:
+        'Reopen an unpublished draft after a closed round (typically after a green gate). ' +
+        'Accepts a durable per-game key, or Authorization: Bearer (creator key or OAuth access) + slug. ' +
+        'Not for published games — use open_round after publish. ' +
+        'Returns jobId only — call start() next for a sessionKey. Idempotent while a round is already open.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          key: {
+            type: 'string',
+            description:
+              'Durable per-game key. Optional when using Authorization Bearer (creator key or OAuth) + slug.',
+          },
+          slug: {
+            type: 'string',
+            description: 'Game slug. Required with a creator-key or OAuth Bearer; ignored with a per-game key.',
+          },
+          feedback: {
+            type: 'string',
+            description:
+              'Creator change request for this draft round (≤2000 chars). Treated as untrusted creator text.',
+          },
+        },
+        required: ['feedback'],
+      },
+      handler: async (args, ctx) => {
+        if (!store || !agentTokenSecret || !continueDraftRound || !contentChecker) {
+          return toolErr('the MCP build endpoint is not configured');
+        }
+
+        const key = typeof args.key === 'string' ? args.key.trim() : '';
+        const slugArg = typeof args.slug === 'string' ? args.slug.trim() : '';
+        const bearer = ctx.bearerToken;
+
+        const feedbackRaw = typeof args.feedback === 'string' ? args.feedback.trim() : '';
+        if (!feedbackRaw) {
+          return toolErr('feedback is required — relay what the creator wants changed');
+        }
+        if (feedbackRaw.length > 2000) {
+          return toolErr('feedback is too long (max 2000 characters)');
+        }
+
+        type ContinueResolved = { creatorUid: string; slug: string; draft: SubmissionRecord };
+
+        let resolved: ContinueResolved;
+
+        if (!key && bearer && looksLikeCreatorAgentKey(bearer)) {
+          if (!slugArg) {
+            return toolErr('slug is required when using a creator key — pass the game slug to continue');
+          }
+          const verified = await verifyDurableCreatorAgentKey(store, bearer, agentTokenSecret, now());
+          if (!verified.ok) return toolErr(verified.reason);
+          if (!(await creatorOwnsSlug(store, slugArg, verified.claims.creatorUid))) {
+            return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
+          }
+          if (await store.getPublishedSubmissionBySlug(slugArg)) {
+            return toolErr(GAME_ALREADY_PUBLISHED_REASON);
+          }
+          const draft = await findDraftJobForSlug(store, slugArg, verified.claims.creatorUid);
+          if (!draft) return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
+          resolved = { creatorUid: verified.claims.creatorUid, slug: slugArg, draft };
+        } else if (!key && bearer && looksLikeAsAccessToken(bearer)) {
+          const asAccess = await verifyAsAccessToken(store, bearer, now());
+          if (!asAccess) {
+            return toolErr('invalid OAuth access — sign in again from your coding agent');
+          }
+          if (!slugArg) {
+            return toolErr('slug is required when using OAuth — pass the game slug to continue');
+          }
+          if (!(await creatorOwnsSlug(store, slugArg, asAccess.ownerUid))) {
+            return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
+          }
+          if (await store.getPublishedSubmissionBySlug(slugArg)) {
+            return toolErr(GAME_ALREADY_PUBLISHED_REASON);
+          }
+          const draft = await findDraftJobForSlug(store, slugArg, asAccess.ownerUid);
+          if (!draft) return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
+          resolved = { creatorUid: asAccess.ownerUid, slug: slugArg, draft };
+        } else if (key && looksLikeGameAgentKey(key)) {
+          const verified = await verifyDurableGameAgentKey(store, key, agentTokenSecret, now());
+          if (!verified.ok) return toolErr(verified.reason);
+          if (await store.getPublishedSubmissionBySlug(verified.claims.slug)) {
+            return toolErr(GAME_ALREADY_PUBLISHED_REASON);
+          }
+          const draft = await findDraftJobForSlug(store, verified.claims.slug, verified.claims.creatorUid);
+          if (!draft) return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
+          resolved = {
+            creatorUid: verified.claims.creatorUid,
+            slug: verified.claims.slug,
+            draft,
+          };
+        } else if (key && looksLikeCreatorAgentKey(key)) {
+          return toolErr('creator key must be sent as Authorization Bearer, not as the key argument');
+        } else if (key) {
+          return toolErr(
+            'continue_draft requires a durable per-game key, or Authorization Bearer (creator key or OAuth) + slug',
+          );
+        } else {
+          return toolErr('pass a durable per-game key, or Authorization Bearer (creator key or OAuth) + slug');
+        }
+
+        // Publishing is still an "active round" for inbox steering, but it must not be
+        // rejoined — the bake owns the job until it finishes or falls back.
+        if (resolved.draft.state === 'publishing') {
+          return toolErr('this game is currently publishing — try again in a moment');
+        }
+
+        const active = await findActiveRoundForSlug(store, resolved.slug, resolved.creatorUid);
+        if (active) {
+          return toolOk({
+            jobId: active.issueNumber,
+            slug: resolved.slug,
+            alreadyOpen: true,
+            next: 'call start({ slug }) to join the build round',
+          });
+        }
+
+        const moderation = await contentChecker.checkFields([feedbackRaw]);
+        if (!moderation.allowed) {
+          logModerationRejection(ctx.request.log, {
+            surface: 'creator_feedback',
+            uid: resolved.creatorUid,
+            category: moderation.category,
+          });
+          return toolErr('content_rejected', { category: moderation.category ?? 'other' });
+        }
+
+        const dateStr = new Date(now()).toISOString().slice(0, 10);
+        const quota = await store.checkAndIncrementQuota(resolved.creatorUid, dateStr, dailyFeedbackQuota, 'feedback');
+        if (!quota.allowed) {
+          if (quota.tier === 'blocked') {
+            return toolErr('account is blocked');
+          }
+          return toolErr("today's feedback limit is used up — try again tomorrow, or from the Studio");
+        }
+
+        const sanitizedFeedback = sanitizeCreatorText(feedbackRaw, { singleLine: false });
+        const continued = await continueDraftRound({
+          issueNumber: resolved.draft.issueNumber,
+          feedback: sanitizedFeedback,
+          locale: resolved.draft.locale ?? 'en',
+          log: ctx.request.log,
+          openedBy: 'agent',
+        });
+        if (!continued.ok) {
+          if (continued.reason === 'already_published') return toolErr(GAME_ALREADY_PUBLISHED_REASON);
+          if (continued.reason === 'publishing') {
+            return toolErr('this game is currently publishing — try again in a moment');
+          }
+          if (continued.reason === 'not_continuable') return toolErr(DRAFT_NOT_CONTINUABLE_REASON);
+          return toolErr('could not continue this draft — try again shortly, or ask the creator in Studio');
+        }
+
+        return toolOk({
+          jobId: continued.jobId,
+          slug: resolved.slug,
+          alreadyOpen: continued.alreadyOpen,
+          next: 'call start({ slug }) to join the build round',
+        });
       },
     },
 
@@ -2163,6 +2384,21 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
               }),
               'mcp session started',
             );
+          }
+        } else if (store && agentTokenSecret && shouldPulseMcpPresence(name)) {
+          // Coarse Studio presence for read-heavy Apps loops that skip report_progress.
+          const presenceText = mcpPresenceText(name);
+          const jobId = resolvePresenceJobId(sessionKeyArg, bearerToken, agentTokenSecret);
+          if (presenceText && jobId !== null) {
+            const at = now();
+            if (shouldEmitMcpPresencePulse(presencePulseByJob.get(jobId), at)) {
+              noteMcpPresencePulse(presencePulseByJob, jobId, at);
+              try {
+                await store.appendBuildEvent(jobId, { kind: 'step', text: presenceText });
+              } catch (pulseError) {
+                request.log.warn({ err: pulseError, jobId, tool: name }, 'mcp presence pulse failed');
+              }
+            }
           }
         }
 

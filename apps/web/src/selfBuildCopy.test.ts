@@ -79,6 +79,11 @@ describe('selfComposerRoute', () => {
       }),
     ).toBe('waiting');
   });
+
+  it('is waiting after a green gate closes the round', () => {
+    expect(selfComposerRoute({ builder: 'self', phase: 'ready_for_review', stall: null })).toBe('waiting');
+    expect(shouldShowConnectCard({ builder: 'self', phase: 'ready_for_review' })).toBe(true);
+  });
 });
 
 // CP-2 confirmed this pair on a live failed round: the banner told the creator that

@@ -1044,7 +1044,10 @@ export async function registerSubmissionRoutes(
       if (!input.undelivered && previous?.workspace && previous.workspace !== result.workspace) {
         await releaseWorkspace(input.issueNumber, previous.workspace, input.log);
       }
-      const transition = record?.state
+      // Pass `record.state` even when undefined — planObservedStatusTransition adopts
+      // legacy/partial records into `building`. Guarding on truthy state skipped that
+      // and left continue_draft / feedback with a live dispatch but no durable move.
+      const transition = record
         ? planObservedStatusTransition(
             record.state,
             'building',
@@ -1155,6 +1158,72 @@ export async function registerSubmissionRoutes(
     // queue already reports as `not_dispatched` — a visible stall rather than a silently
     // dead request.
     return dispatched ? { route: 'job', jobId } : null;
+  }
+
+  /**
+   * Reopens an unpublished draft after the previous round closed (typically gate-green
+   * `ready_for_review`). Same job, new round — not a post-publish improvement.
+   *
+   * Shared by MCP `continue_draft` so Studio feedback and the agent path cannot disagree
+   * about how a closed green draft starts moving again.
+   */
+  async function continueDraftRound(input: {
+    issueNumber: number;
+    feedback: string;
+    locale: string;
+    log: { error: (context: object, message: string) => void };
+    openedBy?: 'creator' | 'agent';
+  }): Promise<{ ok: true; jobId: number; alreadyOpen: boolean } | { ok: false; reason: string }> {
+    if (!store) return { ok: false, reason: 'not_configured' };
+    const record = await store.getSubmission(input.issueNumber);
+    if (!record || record.abandonedAt) {
+      return { ok: false, reason: 'draft_not_found' };
+    }
+    if (record.publishedAt) {
+      return { ok: false, reason: 'already_published' };
+    }
+    if (record.state === 'publishing') {
+      return { ok: false, reason: 'publishing' };
+    }
+    if (isActiveBuildRound(record)) {
+      return { ok: true, jobId: input.issueNumber, alreadyOpen: true };
+    }
+    // Only states where a new round is the honest next step. Canceled/abandoned stay dead.
+    // `undefined` is a legacy/partial record — resumeBuild adopts it into `building`.
+    const state = record.state;
+    const continuable =
+      state === 'ready_for_review' ||
+      state === 'failed' ||
+      state === 'needs_changes' ||
+      state === 'queued' ||
+      state === undefined;
+    if (!continuable) {
+      return { ok: false, reason: 'not_continuable' };
+    }
+
+    try {
+      await store.appendCreatorMessage(input.issueNumber, input.feedback);
+    } catch (queueError) {
+      input.log.error({ err: queueError, issueNumber: input.issueNumber }, 'failed to queue continue_draft feedback');
+      return { ok: false, reason: 'queue_failed' };
+    }
+
+    const outcome = await resumeBuild({
+      issueNumber: input.issueNumber,
+      feedback: input.feedback,
+      locale: input.locale,
+      log: input.log,
+      ...(record.deliveredVersion ? {} : { undelivered: true }),
+      builder: 'self',
+      transition: {
+        by: input.openedBy === 'agent' ? 'agent' : 'creator',
+        reason: 'continue_draft',
+      },
+    });
+    if (!outcome.started) {
+      return { ok: false, reason: outcome.reason ?? 'resume_failed' };
+    }
+    return { ok: true, jobId: input.issueNumber, alreadyOpen: false };
   }
 
   /**
@@ -2887,6 +2956,9 @@ export async function registerSubmissionRoutes(
         log: request.log,
         ...(record?.deliveredVersion ? {} : { undelivered: true }),
         ...(requestedBuilder && isBuilderKind(requestedBuilder) ? { builder: requestedBuilder } : {}),
+        // Name the actor so a ready_for_review → building reopen does not look like a
+        // GitHub-derived observation in the job history.
+        transition: { by: 'creator', reason: 'creator_feedback' },
       });
 
       // Accepted, and honest about what it bought. The message is kept either way — it is
@@ -4295,9 +4367,11 @@ export async function registerSubmissionRoutes(
     gamesStore: options.agentChannel?.gamesStore,
     objectStore: options.agentChannel?.objectStore,
     startImprovementRound,
+    continueDraftRound,
     createGame,
     contentChecker,
     dailyImprovementQuota,
+    dailyFeedbackQuota,
   });
 
   return { githubClient, startImprovementRound };
