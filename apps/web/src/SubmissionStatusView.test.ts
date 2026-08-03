@@ -694,7 +694,8 @@ describe('SubmissionStatusView', () => {
         await flushEffects();
       });
 
-      expect(container.querySelector('.status-warning')?.textContent).toContain("can't start it from here");
+      // Connect card lead covers quiet — no second amber chip under the composer.
+      expect(container.querySelector('.studio-status-chip')).toBeNull();
       expect(container.querySelector('.studio-connect.is-resume')).not.toBeNull();
       expect(container.textContent).toContain('Continue with your agent');
       expect(container.textContent).not.toContain('Connect your coding agent');
@@ -702,7 +703,10 @@ describe('SubmissionStatusView', () => {
       const details = container.querySelector<HTMLDetailsElement>('[data-testid="connect-setup-details"]');
       expect(details).not.toBeNull();
       expect(details?.open).toBe(false);
-      expect(container.textContent).toContain('your agent will get this when you start it');
+      // One waiting caption in the foot — not "Writing code" while we wait on the agent.
+      expect(container.querySelector('.studio-context-phase')?.textContent).toMatch(/Waiting for your agent/i);
+      expect(container.querySelector('.studio-context-phase-spinner')).toBeNull();
+      expect(container.querySelector('.status-feedback-route')).toBeNull();
       expect(container.textContent?.toLowerCase()).not.toMatch(/\btoken\b/);
     } finally {
       await act(async () => {

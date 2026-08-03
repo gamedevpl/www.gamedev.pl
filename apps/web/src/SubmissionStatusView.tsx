@@ -247,6 +247,10 @@ type SubmissionStatusViewProps = {
    */
   onPlaytest?: () => void;
   /**
+   * Opens Studio Details for MCP install — keeps tall connect chrome out of the thread.
+   */
+  onOpenConnect?: () => void;
+  /**
    * When true, this view is nested inside Creator Studio (the Build tab). The
    * outer studio chrome already names the game — skip the page-level heading /
    * save-link lecture and point share URLs at `/studio/:token`.
@@ -275,6 +279,7 @@ export function SubmissionStatusView({
   trackingUrl,
   onRetry,
   onPlaytest,
+  onOpenConnect,
   embedded = false,
   onImproved,
   justHandedOff = false,
@@ -660,6 +665,7 @@ export function SubmissionStatusView({
                       key={`connect-${pendingRevisions.length}`}
                       token={token}
                       mode={connectCardMode(copyInputFromStatus(status)) ?? 'setup'}
+                      {...(onOpenConnect ? { onOpenInstall: onOpenConnect } : {})}
                     />
                   ) : null
                 }
@@ -675,7 +681,8 @@ export function SubmissionStatusView({
                     notes and used to look like nothing was wrong.
                     Self rounds: no-agent-yet / quiet / gate-green resurface the connect
                     card inside the transcript scroller (not this foot) so a phone still
-                    has room for the conversation. Delivery-cap is a failure sentence. */}
+                    has room for the conversation. Delivery-cap is a failure sentence.
+                    When that card is up, skip the quiet chip — the card lead already says it. */}
                 {status.failure ? (
                   <ThreadStatusChip chipKey={`failure:${status.failure.reason}`}>
                     <PixelIcon name="signal" size={13} />
@@ -686,12 +693,7 @@ export function SubmissionStatusView({
                     <PixelIcon name="signal" size={13} />
                     <span>{t('statusView.states.needs_changes.description')}</span>
                   </ThreadStatusChip>
-                ) : selfCopy === 'no_agent_yet' ? null : selfCopy === 'quiet_agent' ? (
-                  <ThreadStatusChip chipKey="quiet_self">
-                    <PixelIcon name="signal" size={13} />
-                    <span>{t('statusView.stall.quietSelf')}</span>
-                  </ThreadStatusChip>
-                ) : status.stall ? (
+                ) : isAwaitingOwnAgent(status) ? null : status.stall ? (
                   <ThreadStatusChip chipKey={`stall:${status.stall}`}>
                     <PixelIcon name="signal" size={13} />
                     <span>{t(`statusView.stall.${status.stall}`)}</span>
@@ -714,12 +716,18 @@ export function SubmissionStatusView({
                   </button>
                 ) : null}
 
-                {/* Claude-shaped foot: phase + heartbeat only. Play lives in the header
-                    icon cluster; abandon / checklist / connect live in Details. */}
+                {/* One waiting caption. While the connect card owns the thread, do not
+                    also spin "Writing code" — the agent is not writing; we are waiting. */}
                 <ThreadContextBar
-                  phase={t(`statusView.states.${status.status}.label`)}
-                  heartbeatAt={heartbeatAt}
-                  active={!TERMINAL_STATUSES.has(status.status)}
+                  phase={
+                    isAwaitingOwnAgent(status)
+                      ? selfCopy === 'no_agent_yet'
+                        ? t('connect.waiting')
+                        : t('connect.resume.waiting')
+                      : t(`statusView.states.${status.status}.label`)
+                  }
+                  heartbeatAt={isAwaitingOwnAgent(status) ? null : heartbeatAt}
+                  active={!TERMINAL_STATUSES.has(status.status) && !isAwaitingOwnAgent(status)}
                 />
 
                 {/* Before the first agent signal there is nobody to receive a note — the
@@ -737,6 +745,7 @@ export function SubmissionStatusView({
                     stall={status.stall}
                     failureReason={status.failure?.reason}
                     phase={status.phase}
+                    suppressRouteNote={isAwaitingOwnAgent(status)}
                     onSent={(text) => setPendingRevisions((current) => [...current, { text, at: Date.now() }])}
                     onPublishedImprove={handleImproved}
                   />
@@ -1124,6 +1133,7 @@ function FeedbackPanel({
   stall,
   failureReason,
   phase,
+  suppressRouteNote = false,
   onSent,
   onPublishedImprove,
 }: {
@@ -1142,6 +1152,11 @@ function FeedbackPanel({
   failureReason?: string;
   /** Internal job phase — gate-green drafts need honest "start your agent" routing. */
   phase?: SubmissionStatus['phase'];
+  /**
+   * Hide the "saved until you start your agent" line — the connect card above already
+   * says we are waiting, so a third copy under the box is noise.
+   */
+  suppressRouteNote?: boolean;
   onSent: (text: string) => void;
   /**
    * A published-game improvement opened a new job; called with its token so the view
@@ -1195,8 +1210,9 @@ function FeedbackPanel({
   // Active self rounds already imply a listening agent — repeating that above the
   // box is chrome noise (the placeholder covers "what to write"). Waiting is the
   // case that still needs a sentence: the note will not be read until they start
-  // their agent again.
-  const routeNoteKey = composerRoute === 'waiting' ? 'statusView.feedback.routeSelfWaiting' : null;
+  // their agent again — unless the connect card already said that (`suppressRouteNote`).
+  const routeNoteKey =
+    !suppressRouteNote && composerRoute === 'waiting' ? 'statusView.feedback.routeSelfWaiting' : null;
 
   // The composer grows with what is typed, which is what replaced the resize grip: once
   // the send button moved inside the box, a drag handle in the middle of its right edge

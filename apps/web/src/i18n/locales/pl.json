@@ -924,6 +924,7 @@
     "waiting": "Czekamy, aż Twój agent się odezwie…",
     "hide": "Ukryj na razie",
     "show": "Pokaż kroki połączenia",
+    "openInstall": "Otwórz kroki połączenia",
     "collapsed": {
       "title": "Czekamy na Twojego agenta",
       "hint": "Zawsze też w Szczegółach."
@@ -977,6 +978,7 @@
       "kickoffTitle": "Prompt wznowienia",
       "kickoffHint": "Ten prompt niesie tylko slug gry. Połączenie MCP zostaje w konfiguracji agenta.",
       "setupDetails": "Trzeba ponownie podłączyć MCP?",
+      "openInstall": "Podłącz MCP w Szczegółach",
       "waiting": "Czekamy, aż Twój agent znów się odezwie…"
     }
   },

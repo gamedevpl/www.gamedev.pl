@@ -738,6 +738,7 @@ export function CreatorStudioView({
                         justHandedOff={handoffToken != null}
                         onImproved={(newToken) => setHandoffToken(newToken)}
                         onPlaytest={() => openTab('playtest')}
+                        onOpenConnect={() => openTab('details')}
                         onRetry={
                           onRetryConcept
                             ? (concept) => {

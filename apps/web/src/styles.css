@@ -5056,6 +5056,11 @@ a.user-name--profile:focus-visible {
   flex: 1;
   min-height: 0;
   height: auto;
+  /* Claude-like reading column — full-bleed thread chrome made prompts and chips
+     stretch edge-to-edge on a wide desktop. */
+  width: 100%;
+  max-width: 44rem;
+  margin-inline: auto;
 }
 
 .app:has(.studio-layout.is-game-open) .studio-thread-scroll {
@@ -5790,6 +5795,41 @@ a.user-name--profile:focus-visible {
   flex-direction: column;
   gap: 14px;
   margin-top: 12px;
+}
+
+/* Studio thread: send MCP install to Details instead of expanding it inline. */
+.studio-connect-open-install {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  align-self: flex-start;
+  min-height: 36px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--panel-border, #33383d);
+  background: transparent;
+  color: var(--muted, #94a3b8);
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.studio-connect-open-install:hover {
+  color: var(--text, #e2e8f0);
+  border-color: rgba(148, 163, 184, 0.45);
+}
+
+.studio-connect-open-install.is-primary {
+  border-color: rgba(0, 228, 172, 0.45);
+  background: rgba(0, 228, 172, 0.1);
+  color: var(--turquoise, #00e4ac);
+}
+
+.studio-connect-open-install.is-primary:hover {
+  background: rgba(0, 228, 172, 0.16);
 }
 
 /* Naming the game — the step the build waits on, so it leads the panel and is sized
