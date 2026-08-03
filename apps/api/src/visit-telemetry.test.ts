@@ -239,6 +239,30 @@ describe('POST /api/telemetry/visit', () => {
     expect(bad.statusCode).toBe(400);
   });
 
+  it('carries which control opened a remix, and refuses a control it does not know', async () => {
+    const ok = await post(app, {
+      visitId,
+      flushMsSinceStart: 30_000,
+      events: [
+        { type: 'remix_step', step: 'offered', msSinceStart: 0 },
+        { type: 'remix_step', step: 'opened', control: 'bar', msSinceStart: 28_000 },
+      ],
+    });
+    expect(ok.statusCode).toBe(202);
+    const stored = await store.listVisitEvents(today());
+    expect(stored[0]).toMatchObject({ type: 'remix_step', step: 'offered' });
+    expect(stored[1]).toMatchObject({ type: 'remix_step', step: 'opened', control: 'bar', msSinceStart: 28_000 });
+
+    // Closed enum, like every other value that reaches a grouping key on an
+    // endpoint anyone can reach.
+    const bad = await post(app, {
+      visitId,
+      flushMsSinceStart: 0,
+      events: [{ type: 'remix_step', step: 'opened', control: 'floating_pill', msSinceStart: 0 }],
+    });
+    expect(bad.statusCode).toBe(400);
+  });
+
   it('records a studio step with builder (and optional detail) and rejects bad enums', async () => {
     const ok = await post(app, {
       visitId,

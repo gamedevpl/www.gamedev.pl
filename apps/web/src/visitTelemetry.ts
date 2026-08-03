@@ -68,7 +68,7 @@ export type VisitEvent =
   | { type: 'studio_step'; step: StudioStep; builder: BuilderDimension; detail?: StudioStepDetail }
   | { type: 'editor_step'; step: EditorStep }
   | { type: 'assist_step'; step: AssistStep }
-  | { type: 'remix_step'; step: RemixStep; via?: RemixPaintedVia };
+  | { type: 'remix_step'; step: RemixStep; via?: RemixPaintedVia; control?: RemixControl };
 
 /**
  * The creation funnel, in the order a creator meets it.
@@ -179,6 +179,13 @@ export type AssistStep = 'asked' | 'applied' | 'handoff' | 'rejected';
  * visitor or a creator.
  */
 export type RemixStep =
+  // The denominator for every rung below it: this visit was *shown* the way in.
+  // Recorded when the control renders, not when it is looked at — we cannot know
+  // the latter, and a rate against "could have clicked" is the honest version of
+  // the question anyway. It exists because the entry moved out of the player's
+  // path and onto the chrome bar, and a quieter door is only a good trade if the
+  // click-through it costs is visible rather than assumed.
+  | 'offered'
   | 'opened'
   | 'no_lane' // opened, and this game offered no way in — see the note below
   | 'typed' // wrote a request and hit send — desire exists, regardless of auth
@@ -205,6 +212,17 @@ export type RemixStep =
  * and this dimension is what settles it.
  */
 export type RemixPaintedVia = 'redirect' | 'menu' | 'panel';
+
+/**
+ * Which door was used to open a remix: the chrome bar, or the overflow menu it
+ * sheds into on narrow screens. Recorded on `offered` and `opened` only.
+ *
+ * A separate field from `via` rather than more members on it. `via` answers
+ * "what led someone to the painter" and this answers "which control did they
+ * press"; one name covering both would make every historical row ambiguous the
+ * day a third door appears.
+ */
+export type RemixControl = 'bar' | 'more';
 
 const FLUSH_AT = 5;
 const MAX_BATCH = 25;
@@ -528,13 +546,20 @@ export function recordAssistStep(step: AssistStep): void {
 
 let recordedRemixSteps = new Set<string>();
 
-export function recordRemixStep(step: RemixStep, options?: { via?: RemixPaintedVia }): void {
+export function recordRemixStep(step: RemixStep, options?: { via?: RemixPaintedVia; control?: RemixControl }): void {
   if (!currentSession) return;
   if (recordedRemixSteps.has(step)) return;
   recordedRemixSteps.add(step);
   // Dedupe means the via is the *first* door of the visit — which is the right
   // reading: the question is which door brought someone to the brush at all.
-  currentSession.record({ type: 'remix_step', step, ...(options?.via ? { via: options.via } : {}) });
+  // The same applies to `control`, and the offset the session stamps on the event
+  // is therefore the time to the *first* open, which is the "when" worth having.
+  currentSession.record({
+    type: 'remix_step',
+    step,
+    ...(options?.via ? { via: options.via } : {}),
+    ...(options?.control ? { control: options.control } : {}),
+  });
 }
 
 /** Test seam: installs a session without touching the DOM. */

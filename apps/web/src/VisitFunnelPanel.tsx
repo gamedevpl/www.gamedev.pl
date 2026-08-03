@@ -313,6 +313,31 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
                 .join(' · ')}
             </p>
           ) : null}
+          {funnel.remixEntry ? (
+            /*
+             * Is the entry earning its place? The control moved off the game and
+             * onto the chrome bar, which is quieter by design — this is the line
+             * that says what quieter cost. `offered` is every visit shown it.
+             *
+             * `—` rather than `0s` when nobody opened one: no evidence is not a
+             * measurement of instant interest, and this panel renders the
+             * distinction everywhere else too.
+             */
+            <p className="health-note">
+              Remix entry: {funnel.remixEntry.opened} of {funnel.remixEntry.offered} visits shown it opened it (
+              {percent(funnel.remixEntry.opened, funnel.remixEntry.offered)})
+              {funnel.remixEntry.opened > 0 ? (
+                <>
+                  {' · '}
+                  {funnel.remixEntry.byControl.map((row) => `${row.control} ${row.visits}`).join(' · ')}
+                  {' · median '}
+                  {funnel.remixEntry.medianSecondsToOpen === null
+                    ? '—'
+                    : `${funnel.remixEntry.medianSecondsToOpen}s into the visit`}
+                </>
+              ) : null}
+            </p>
+          ) : null}
         </div>
 
         <div className="funnel-block">

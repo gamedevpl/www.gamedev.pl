@@ -90,7 +90,14 @@ signed in. Both telemetry streams are the anonymous half.
 - **Derive, don't declare.** Prefer metrics computed from observed behavior over
   self-reported flags (the same principle as deriving touch support from game source).
 - **Stable names.** Event types and progress labels are an API: renaming one breaks
-  every time series that contains it. Extend deliberately; never repurpose.
+  every time series that contains it. Extend deliberately; never repurpose. This binds
+  _fields_ as much as event names, and `VisitEvent` is one flat bag shared by every
+  event type — so its field names are already spoken for across the whole stream.
+  `entry` is the route a visit landed on; `via` is which surface opened a thing;
+  `step`, `route`, `builder`, `detail`, `reopen` likewise. A new dimension gets a new
+  name (`control` for which remix button was pressed), never a second meaning on an
+  existing one — a field that means two things makes every row written before the
+  second meaning ambiguous, and no migration can tell them apart afterwards.
 - **Bots are not people, and the data must know it.** Automation accounts live in the
   `bot:` uid namespace ([`docs/agent-access-tokens.md`](../../docs/agent-access-tokens.md)).
   A token-authenticated request records no `activeDays` entry, and `bot:` submissions are

@@ -675,6 +675,17 @@ export interface VisitEvent {
    */
   via?: string;
   /**
+   * `remix_step` with `step: 'offered'` or `'opened'`: which control it was —
+   * `bar` (the chrome bar) or `more` (the overflow menu it sheds into on narrow
+   * screens).
+   *
+   * Its own field rather than a new meaning for `via` (what led someone to the
+   * painter) or `entry` (the route a visit landed on) — both already mean
+   * something, and a field with two meanings makes every historical row
+   * ambiguous. Absent on events recorded before it existed; never a game identity.
+   */
+  control?: string;
+  /**
    * `how_to_play_opened`: true when this open is a second-or-later open of the *same*
    * theater card (same published play). Absent means first open — or a legacy event
    * recorded before the field existed. Never a game identity.

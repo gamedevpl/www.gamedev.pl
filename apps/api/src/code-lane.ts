@@ -420,6 +420,17 @@ export class VertexCodeLane {
     if (debug) trace.slice = clip(slice);
     let errors: string[] = [];
     let summary = bilingual(picked.summary);
+    /**
+     * Whether a round has already described the change in the player's terms.
+     *
+     * Only the first readable edit does. A repair round is the lane fixing its
+     * own mistake, and its summary says so — a player who asked for a yellow car
+     * was being told "Fixed type error in startGame by removing invalid property
+     * reference on RaceScene3D", which is a note to a compiler wearing the
+     * costume of an answer. The repair is supposed to preserve the intent of the
+     * edit it repairs, so the first description stays the true one.
+     */
+    let described = false;
 
     for (let round = 0; round <= (this.options.maxRepairRounds ?? MAX_REPAIR_ROUNDS); round += 1) {
       let edit: z.infer<typeof EditSchema>;
@@ -454,7 +465,10 @@ export class VertexCodeLane {
         if (debug) trace.rounds.push({ round, replacement: '', buildErrors: errors });
         continue;
       }
-      summary = bilingual(edit.summary) ?? summary;
+      if (!described) {
+        summary = bilingual(edit.summary) ?? summary;
+        described = true;
+      }
       this.options.observe?.replacement?.(round, edit.replacement);
 
       if (debug) trace.rounds.push({ round, replacement: clip(edit.replacement), buildErrors: [] });

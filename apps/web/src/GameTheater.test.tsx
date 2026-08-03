@@ -462,6 +462,39 @@ describe('GameTheater how-to-play visit telemetry', () => {
     expect(opens[0]).not.toHaveProperty('reopen');
   });
 
+  it('records the remix entry as offered on sight and opened with the control that was pressed', async () => {
+    await draw();
+    session.flush();
+    let steps = batches.flatMap((batch) => batch.events).filter((event) => event.type === 'remix_step');
+    // Shown it, has not touched it. This is the denominator the whole move to a
+    // quieter entry has to be judged against.
+    expect(steps).toEqual([expect.objectContaining({ type: 'remix_step', step: 'offered' })]);
+
+    await click(container.querySelector('.remix-btn'));
+    session.flush();
+    steps = batches.flatMap((batch) => batch.events).filter((event) => event.type === 'remix_step');
+    expect(steps).toContainEqual(expect.objectContaining({ type: 'remix_step', step: 'opened', control: 'bar' }));
+  });
+
+  it('does not offer a remix entry on a theater with no published slug', async () => {
+    // Same rule as how-to-play: drafts and generated playtests share the chrome
+    // but must not enter a numerator whose denominator is published plays.
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(
+        <GameTheater
+          title="Draft"
+          badge={{ icon: 'wrench', label: 'Draft' }}
+          source={{ html: '<html><body>draft</body></html>' }}
+          onExit={() => {}}
+        />,
+      );
+    });
+    session.flush();
+    expect(batches.flatMap((batch) => batch.events).filter((event) => event.type === 'remix_step')).toEqual([]);
+    expect(container.querySelector('.remix-btn')).toBeNull();
+  });
+
   it('does not record how_to_play_opened for a draft theater', async () => {
     // Draft / generated theaters share the card UI but must not enter the open-rate
     // numerator against a denominator that only counts published plays.

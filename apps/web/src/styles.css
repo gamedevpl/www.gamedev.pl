@@ -10422,26 +10422,42 @@ body.player-open {
   cursor: default;
 }
 
-/* Three things worth saying, tappable. Full-width rows: a thumb target, not a chip. */
+/*
+ * Three things worth saying — inline pills rather than the full-width rows they
+ * were.
+ *
+ * The rows read as a menu you were already aiming at, sat directly under a
+ * composer that grows as you type, and arrived late with the session. All three
+ * put a tap target under a moving finger. Pills are smaller and plainly
+ * secondary to the box above them; `min-height` holds the space before the
+ * suggestions arrive so nothing below them jumps when they do; and
+ * `.is-arming` keeps them inert for the first moments after the panel opens,
+ * while the gesture that opened it is still landing.
+ */
 .remix-tries {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: 6px;
+  min-height: 32px;
+  transition: opacity 0.18s ease;
+}
+
+.remix-tries.is-arming {
+  opacity: 0.5;
 }
 
 .remix-try {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 9px 11px;
+  gap: 7px;
+  padding: 5px 11px;
   text-align: left;
   background: none;
   border: 1px solid var(--panel-border, #24313d);
-  border-radius: 10px;
-  color: inherit;
+  border-radius: 999px;
+  color: var(--muted);
   font: inherit;
-  font-size: 0.88rem;
+  font-size: 0.82rem;
   cursor: pointer;
 }
 
@@ -10455,9 +10471,14 @@ body.player-open {
   flex: none;
 }
 
-.remix-try:hover,
+.remix-try:hover:not(:disabled),
 .remix-try:focus-visible {
   border-color: var(--accent, #62dcff);
+  color: inherit;
+}
+
+.remix-try:disabled {
+  cursor: default;
 }
 
 /*
@@ -10715,50 +10736,12 @@ body.player-open {
   }
 }
 
-.remix-open {
-  position: absolute;
-  z-index: 4;
-  right: 8px;
-  bottom: 8px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 36px;
-  padding: 0 12px;
-  border-radius: 6px;
-  border: 1px solid var(--panel-border, #24313d);
-  background: #131b23;
-  color: inherit;
-  font-size: 0.82rem;
-  cursor: pointer;
-}
+/* The floating Remix pill lived here. It moved onto the chrome bar (GameTheater's
+   `remixControl`): an invitation that pulses over the game it is advertising is
+   the one element on the screen moving for its own sake, and the reveal timers
+   that fed it went with it. `offered` / `opened` on the visit stream is what now
+   answers whether the quieter door still gets used. */
 
-/* The invitation's arrival: two gentle pulses, then stillness. Never mid-action
-   by construction — the reveal only fires on end/progress signals or the 60s
-   one-time timer, and reduced-motion users get no pulse at all. */
-.remix-open.is-revealed {
-  animation: remix-invite 1.6s ease-in-out 2;
-}
-
-@keyframes remix-invite {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.06);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .remix-open.is-revealed {
-    animation: none;
-  }
-}
-
-/* The way back when play owns the screen: a thin, always-visible pill at the
-   top edge. Deliberately quiet, deliberately generous to a thumb — hidden
-   chrome must never mean gone chrome. */
 .theater-peek-pill {
   position: absolute;
   top: 6px;
