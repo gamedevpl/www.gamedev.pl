@@ -8,14 +8,15 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
 export type OperatorAlertKind =
-  'review_ready' | 'build_failed' | 'build_stalled' | 'feedback_undelivered' | 'game_unhealthy';
+  'review_ready' | 'build_failed' | 'build_stalled' | 'feedback_undelivered' | 'game_unhealthy' | 'seeding_degraded';
 
 export interface OperatorAlert {
   id: string;
   kind: OperatorAlertKind;
-  issueNumber: number;
+  /** Absent on alerts that are about the platform rather than one job. */
+  issueNumber?: number;
   title: string;
-  ownerUid: string;
+  ownerUid?: string;
   slug?: string;
   since: string;
   stall?: 'awaiting_input' | 'not_dispatched' | 'quiet' | 'gate_not_started';

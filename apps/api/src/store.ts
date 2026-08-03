@@ -259,6 +259,19 @@ export interface SubmissionRecord {
    */
   costs?: JobCostEntry[];
   /**
+   * What the generated round 0 actually did, for the jobs that got one.
+   *
+   * The cost ledger already books what a seed *spent*; this books what it *achieved*,
+   * which is a different question and was previously answerable only from Cloud Logging.
+   * That gap is not academic: the first live seeded build generated a draft and then
+   * failed to place it — a mis-scoped credential — and the only evidence was a log line
+   * nobody was reading. Absent means the job was never seeded.
+   *
+   * Distinct from `seed`, which holds a self build's draft *files*: this is the record
+   * of what a platform seed did, not the draft itself.
+   */
+  seedOutcome?: JobSeedOutcome;
+  /**
    * Active build-channel token generation for this job.
    *
    * Round-scoped channel tokens HMAC over this value; closing a round bumps it
@@ -304,6 +317,29 @@ export interface SubmissionRecord {
    * Empty when the creator skipped the panel or it had nothing to ask.
    */
   qa?: string[];
+}
+
+/**
+ * One seeded build's outcome.
+ *
+ * `staged` is the one that matters operationally: a draft that was generated but could
+ * not be placed is money spent for nothing, and it is invisible from the creator's side
+ * because seeding fails open. `compiles` is the quality signal — it decides whether the
+ * creator ever saw a round-0 preview — and `repaired` says whether reaching that verdict
+ * took a second model call.
+ */
+export interface JobSeedOutcome {
+  at: string;
+  /** Published games put in front of the model, in pick order. */
+  references: string[];
+  /** Wall-clock for the whole seed, including any repair round. */
+  ms: number;
+  /** Whether the draft's TypeScript bundled — the round-0 preview depends on it. */
+  compiles: boolean;
+  /** Whether a repair round ran before that verdict. */
+  repaired: boolean;
+  /** Whether a backend could place the draft. False is a fault, not a quality signal. */
+  staged: boolean;
 }
 
 /**
@@ -728,6 +764,11 @@ export type NotificationType =
   | 'operator.feedback_undelivered'
   /** A health re-gate came back red: a live game no longer passes on the current engine. */
   | 'operator.game_unhealthy'
+  /**
+   * Seeded builds are generating drafts nobody can place. Not about one job — those
+   * jobs are fine, they just built unseeded — but about a platform fault that costs a
+   * paid model call per submission and shows no symptom anywhere a person looks.
+   */
   /**
    * Someone asked to join the closed beta. Not a job alert — there is no issue number —
    * but it is still an operator action: approve (or not) via the waitlist tooling.
@@ -1329,6 +1370,21 @@ export interface Store {
    * is dropping a build to keep the books.
    */
   recordJobCost(issueNumber: number, entry: JobCostEntry): Promise<void>;
+  /**
+   * Records what a seeded build's draft achieved. Written once, after dispatch, because
+   * that is the first moment both halves are known: the generator says whether it
+   * compiles, and only the backend can say whether it was placed.
+   */
+  recordSeedOutcome(issueNumber: number, outcome: JobSeedOutcome): Promise<void>;
+  /**
+   * Every seed outcome recorded at or after `since`, newest first.
+   *
+   * Its own query rather than a filter over `listActiveSubmissions`, because that set
+   * drops published jobs — and a *successful* seed is exactly the one whose job is most
+   * likely to have published within the window. Reading the alert off that set would
+   * quietly hide the successes and report degradation that is not happening.
+   */
+  listSeedOutcomesSince(since: string): Promise<JobSeedOutcome[]>;
   /**
    * Overwrites the credits on an existing `agent_session` ledger entry identified by
    * `ref`, once the vendor has reported real usage. No-op when no matching entry exists.
@@ -2338,6 +2394,19 @@ export class InMemoryStore implements Store {
     const dispatch = { ...sub.dispatch };
     delete dispatch.seedWorkspace;
     this.submissions.set(issueNumber, { ...sub, dispatch });
+  }
+
+  async recordSeedOutcome(issueNumber: number, outcome: JobSeedOutcome): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub) return;
+    this.submissions.set(issueNumber, { ...sub, seedOutcome: outcome });
+  }
+
+  async listSeedOutcomesSince(since: string): Promise<JobSeedOutcome[]> {
+    return [...this.submissions.values()]
+      .map((sub) => sub.seedOutcome)
+      .filter((outcome): outcome is JobSeedOutcome => Boolean(outcome) && outcome!.at >= since)
+      .sort((a, b) => b.at.localeCompare(a.at));
   }
 
   async recordJobCost(issueNumber: number, entry: JobCostEntry): Promise<void> {
@@ -3972,6 +4041,26 @@ export class FirestoreStore implements Store {
         { merge: true },
       );
     });
+  }
+
+  async recordSeedOutcome(issueNumber: number, outcome: JobSeedOutcome): Promise<void> {
+    // A plain merge: one writer, once per job, so there is nothing here to race.
+    await this.db.collection('submissions').doc(String(issueNumber)).set({ seedOutcome: outcome }, { merge: true });
+  }
+
+  async listSeedOutcomesSince(since: string): Promise<JobSeedOutcome[]> {
+    // A real range query, unlike most reads here: `seedOutcome.at` is a map subfield and
+    // Firestore indexes those automatically, so this costs the documents in the window
+    // rather than the collection. Ordering by the same field it filters on needs no
+    // composite index.
+    const snap = await this.db
+      .collection('submissions')
+      .where('seedOutcome.at', '>=', since)
+      .orderBy('seedOutcome.at', 'desc')
+      .get();
+    return snap.docs
+      .map((d) => (d.data() as SubmissionRecord).seedOutcome)
+      .filter((outcome): outcome is JobSeedOutcome => Boolean(outcome));
   }
 
   async recordJobCost(issueNumber: number, entry: JobCostEntry): Promise<void> {

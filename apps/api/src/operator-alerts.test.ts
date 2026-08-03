@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { detectOperatorAlerts, FAILED_ALERT_WINDOW_MS, FEEDBACK_STALL_MS } from './operator-alerts.js';
-import type { SubmissionRecord } from './store.js';
+import {
+  detectOperatorAlerts,
+  detectSeedingDegraded,
+  FAILED_ALERT_WINDOW_MS,
+  FEEDBACK_STALL_MS,
+  SEEDING_DEGRADED_WINDOW_MS,
+} from './operator-alerts.js';
+import type { JobSeedOutcome, SubmissionRecord } from './store.js';
 
 const NOW = Date.parse('2026-07-30T12:00:00Z');
 const MINUTE = 60_000;
@@ -177,5 +183,78 @@ describe('detectOperatorAlerts — records the state machine cannot read', () =>
     );
 
     expect(alerts).toEqual([]);
+  });
+});
+
+describe('detectSeedingDegraded', () => {
+  const outcome = (overrides: Partial<JobSeedOutcome> & { at: string }): JobSeedOutcome => ({
+    references: ['comet-courier'],
+    ms: 40_000,
+    compiles: true,
+    repaired: false,
+    staged: false,
+    ...overrides,
+  });
+
+  it('says nothing when seeding has never run', () => {
+    expect(detectSeedingDegraded([], NOW)).toBeNull();
+  });
+
+  it('says nothing about one failure — GitHub has bad minutes', () => {
+    expect(detectSeedingDegraded([outcome({ at: ago(MINUTE) })], NOW)).toBeNull();
+  });
+
+  it('raises once two in a row could not be placed', () => {
+    const alert = detectSeedingDegraded([outcome({ at: ago(MINUTE) }), outcome({ at: ago(30 * MINUTE) })], NOW);
+
+    expect(alert).toMatchObject({
+      kind: 'seeding_degraded',
+      id: 'op-seeding-degraded-2026-07-30',
+      // The oldest of the run, so the age reads as how long this has been broken rather
+      // than how long ago the last build was.
+      since: ago(30 * MINUTE),
+    });
+    // No job to point at: this is about the platform, and rendering #0 would send an
+    // operator looking for a job that does not exist.
+    expect(alert?.issueNumber).toBeUndefined();
+  });
+
+  it('stays quiet when placing plainly works for some of them', () => {
+    // A mix is a per-draft problem, not a broken credential — and alerting on it would
+    // mean the one channel that says "your plumbing is down" also says other things.
+    const alert = detectSeedingDegraded(
+      [outcome({ at: ago(MINUTE) }), outcome({ at: ago(2 * MINUTE) }), outcome({ at: ago(30 * MINUTE), staged: true })],
+      NOW,
+    );
+
+    expect(alert).toBeNull();
+  });
+
+  it('forgets failures older than the window', () => {
+    const alert = detectSeedingDegraded(
+      [outcome({ at: ago(SEEDING_DEGRADED_WINDOW_MS + MINUTE) }), outcome({ at: ago(SEEDING_DEGRADED_WINDOW_MS * 2) })],
+      NOW,
+    );
+
+    expect(alert).toBeNull();
+  });
+
+  it('ignores an unreadable timestamp rather than counting it', () => {
+    const alert = detectSeedingDegraded([outcome({ at: 'not a date' }), outcome({ at: ago(MINUTE) })], NOW);
+
+    expect(alert).toBeNull();
+  });
+
+  it('re-alerts the next day, not the next sweep', () => {
+    const outcomes = [outcome({ at: ago(MINUTE) }), outcome({ at: ago(30 * MINUTE) })];
+    const first = detectSeedingDegraded(outcomes, NOW);
+    const sameSweepAgain = detectSeedingDegraded(outcomes, NOW + MINUTE);
+    const nextDay = detectSeedingDegraded(
+      [outcome({ at: ago(-20 * 60 * MINUTE) }), ...outcomes],
+      NOW + 20 * 60 * MINUTE,
+    );
+
+    expect(sameSweepAgain?.id).toBe(first?.id);
+    expect(nextDay?.id).toBe('op-seeding-degraded-2026-07-31');
   });
 });

@@ -3968,6 +3968,74 @@ describe('seeded dispatch', () => {
     await app.close();
   });
 
+  it('records what the seed achieved, including that a backend placed it', async () => {
+    const stub = createGithubClientStub({});
+    const briefs: BuildBrief[] = [];
+    const backend: AgentBackend = {
+      name: 'stub',
+      dispatch: async (brief) => {
+        briefs.push(brief);
+        return { ref: 'task-1', workspace: 'copilot/x', seedWorkspace: 'seed/job-9' };
+      },
+      resume: async () => ({ ref: 'task-2' }),
+      observe: async () => null,
+      cancel: async () => ({ enforced: false }),
+    };
+    const { app, store, response } = await submitOne('Comet Courier', {
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      gameSeeder: seederStub({ compiles: true, repaired: true }),
+    });
+
+    expect(response.statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
+    const outcome = await vi.waitFor(async () => {
+      const record = await store.getSubmission(briefs[0].issueNumber);
+      expect(record?.seedOutcome).toBeDefined();
+      return record!.seedOutcome!;
+    });
+
+    expect(outcome).toMatchObject({
+      references: ['apex-sprint'],
+      ms: 41_000,
+      compiles: true,
+      repaired: true,
+      staged: true,
+    });
+
+    await app.close();
+  });
+
+  it('records a generated draft the backend could not place as unstaged', async () => {
+    // The failure the record exists for: seeding fails open, so from every other angle
+    // this build looks normal — it just quietly paid for a draft nobody can use.
+    const stub = createGithubClientStub({});
+    const { backend, briefs } = createBackendStub();
+    const { app, store, response } = await submitOne('Comet Courier', {
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      gameSeeder: seederStub({}),
+    });
+
+    expect(response.statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
+    const outcome = await vi.waitFor(async () => {
+      const record = await store.getSubmission(briefs[0].issueNumber);
+      expect(record?.seedOutcome).toBeDefined();
+      return record!.seedOutcome!;
+    });
+
+    expect(outcome.staged).toBe(false);
+    // And the store can find it again by time, which is what the degradation alert reads.
+    const recent = await store.listSeedOutcomesSince(new Date(Date.now() - 60_000).toISOString());
+    expect(recent).toHaveLength(1);
+    expect(recent[0].staged).toBe(false);
+
+    await app.close();
+  });
+
   it('dispatches unseeded when the seeder declines, and still builds the game', async () => {
     const stub = createGithubClientStub({});
     const { backend, briefs } = createBackendStub();

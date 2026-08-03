@@ -17,7 +17,7 @@ import {
   type OperatorEmailParams,
 } from './email-templates.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
-import type { OperatorAlert } from './operator-alerts.js';
+import type { JobAlert } from './operator-alerts.js';
 import { createPusherFromEnv, type Pusher } from './pusher.js';
 import type {
   NotificationType,
@@ -226,7 +226,7 @@ function digestEmailParams(
  */
 export async function emitOperatorAlert(
   deps: EmitDeps & { adminUids: Iterable<string> },
-  alert: OperatorAlert,
+  alert: JobAlert,
 ): Promise<{ created: number }> {
   const createdAt = deps.now ? new Date(deps.now()).toISOString() : new Date().toISOString();
   const type: OperatorNotificationType = `operator.${alert.kind}`;

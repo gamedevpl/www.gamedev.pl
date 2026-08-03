@@ -49,6 +49,7 @@ import {
   type JobState,
   type JobTransition,
 } from './job-state.js';
+import { logSeedStagingFailure } from './seed-metrics.js';
 import { createSelfBuildBackend } from './self-build-backend.js';
 import { mintConnectPayload, mintGameKeyKickoff } from './self-build-connect.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo.js';
@@ -809,10 +810,33 @@ export async function registerSubmissionRoutes(
       // absence of seedWorkspace is expected and must not mute the seeder.
       if (seed && !result.seedWorkspace && builder === 'platform') {
         seedStagingMutedUntil = now() + SEED_STAGING_COOLDOWN_MS;
-        input.log.error(
-          { issueNumber: input.issueNumber, mutedForMs: SEED_STAGING_COOLDOWN_MS },
-          'the generated seed could not be staged; pausing seeding rather than generating drafts nobody can place',
-        );
+        // Through seed-metrics rather than inline, because this line is what alert A23
+        // counts: the message is a contract with infra/setup-monitoring.sh, and a prose
+        // error message is exactly the kind of thing that gets reworded.
+        logSeedStagingFailure(input.log, {
+          issueNumber: input.issueNumber,
+          compiles: draft?.compiles ?? false,
+          ms: draft?.elapsedMs ?? 0,
+          mutedForMs: SEED_STAGING_COOLDOWN_MS,
+        });
+      }
+      // Both halves of the seed's story are known here — what generation produced, and
+      // whether dispatch could place it — so the record is written once, from the one
+      // place that has both. Without this the only trace a seed ever left was a log line,
+      // which is exactly why the first live failure could only be diagnosed by hand.
+      if (draft) {
+        try {
+          await store.recordSeedOutcome(input.issueNumber, {
+            at: new Date(now()).toISOString(),
+            references: draft.references,
+            ms: draft.elapsedMs,
+            compiles: draft.compiles,
+            repaired: draft.repaired,
+            staged: Boolean(result.seedWorkspace),
+          });
+        } catch (error) {
+          input.log.error({ err: error, issueNumber: input.issueNumber }, 'could not record the seed outcome');
+        }
       }
       await store.recordDispatch(input.issueNumber, {
         backend: selected.name,
@@ -3376,6 +3400,12 @@ export async function registerSubmissionRoutes(
       // observable. Idempotent per job and kind, so re-running it does not re-notify.
       let alerted = 0;
       const alerts = detectOperatorAlerts(active, now(), pendingFeedback);
+      // Seeding degradation is deliberately NOT emitted here. It is watched by Cloud
+      // Monitoring instead (alert A23, over the log line seed-metrics.ts emits), because
+      // an alert about the platform's own plumbing that travels through this sweep, the
+      // store, the notification table and the mail provider shares a fate with the thing
+      // it is watching. It still reaches the console badge through /api/admin/summary,
+      // which is where an operator would act on it.
       if (adminUids && adminUids.size > 0) {
         for (const alert of alerts) {
           try {
