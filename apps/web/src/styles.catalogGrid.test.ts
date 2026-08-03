@@ -28,4 +28,10 @@ describe('catalog grid layout', () => {
   it('keeps published cards as a single 16:9 media box', () => {
     expect(ruleBody('.catalog-media')).toMatch(/aspect-ratio:\s*16\s*\/\s*9/);
   });
+
+  it('hides trailer/moment chrome on coarse pointers so cards keep one Play CTA', () => {
+    expect(css).toMatch(
+      /@media\s*\(\s*pointer:\s*coarse\s*\)\s*,\s*\(\s*max-width:\s*768px\s*\)\s*\{[^}]*\.preview-toggle\s*,\s*\.catalog-moments\s*\{[^}]*display:\s*none/s,
+    );
+  });
 });

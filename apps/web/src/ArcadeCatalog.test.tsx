@@ -582,9 +582,9 @@ describe('ArcadeCatalog Studio chip', () => {
       await flushEffects();
     });
 
-    // Published grid paints without waiting on the shelf — no shove when builds arrive.
-    expect(container.querySelectorAll('.catalog-card')).toHaveLength(2);
-    expect(container.querySelector('.catalog-studio-chip')).toBeNull();
+    // Signed-in paint waits for the shelf so Yours pins + Studio chip land with the grid.
+    expect(container.querySelectorAll('.catalog-card')).toHaveLength(0);
+    expect(container.querySelector('.catalog-state')?.textContent).toMatch(/Loading/i);
 
     await act(async () => {
       resolveMine?.(
@@ -624,6 +624,84 @@ describe('ArcadeCatalog Studio chip', () => {
       chip?.click();
     });
     expect(onOpenStudio).toHaveBeenCalledOnce();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('does not reshuffle the grid when the network recommendations differ from the cache', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    sessionStorage.setItem(
+      'gdpl.catalogSortSignals',
+      JSON.stringify({
+        viewer: '',
+        items: [
+          { slug: 'above-fold', reason: 'popular' },
+          { slug: 'below-fold', reason: 'popular' },
+        ],
+        popularity: [],
+        lastPlayed: [],
+        newest: ['above-fold', 'below-fold'],
+      }),
+    );
+
+    let resolveSignals: ((value: Response) => void) | undefined;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/api/recommendations')) {
+        return new Promise<Response>((resolve) => {
+          resolveSignals = resolve;
+        });
+      }
+      return new Response(JSON.stringify({ items: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(ArcadeCatalog, {
+          catalogStatus: 'ready',
+          catalogError: null,
+          catalogEntries: entries,
+          onPlayGame: vi.fn(),
+          onPlayTogether: vi.fn(),
+          onRetryCatalog: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    // Cache is enough for first paint.
+    const firstOrder = [...container.querySelectorAll('.card-title')].map((el) => el.textContent);
+    expect(firstOrder[0]).toMatch(/Above Fold/);
+
+    await act(async () => {
+      resolveSignals?.(
+        new Response(
+          JSON.stringify({
+            items: [
+              { slug: 'below-fold', reason: 'popular' },
+              { slug: 'above-fold', reason: 'popular' },
+            ],
+            popularity: [],
+            lastPlayed: [],
+            newest: ['below-fold', 'above-fold'],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+      await flushEffects();
+    });
+
+    const secondOrder = [...container.querySelectorAll('.card-title')].map((el) => el.textContent);
+    expect(secondOrder).toEqual(firstOrder);
 
     await act(async () => {
       root.unmount();

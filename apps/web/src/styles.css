@@ -1343,74 +1343,29 @@ button:disabled {
   text-transform: uppercase;
 }
 
-/* The two overlay controls on a card are sized for a mouse: the preview toggle is a
-   28px pill and each moment thumbnail is 42x26. Both are real tap targets, so on a
-   finger they grow to the 44px iOS HIG floor. Gated rather than applied everywhere
-   because at grid density a 44px pill and four 44px thumbnails on top of every
-   preview is a lot of furniture for a pointer that doesn't need it. Both conditions
-   are listed: `pointer: coarse` catches a large tablet, the width catches a phone
-   (and a narrow desktop window, harmlessly). */
+/* Phone / coarse pointer: the card already has a primary Zagraj CTA. A second 44px
+   play circle for trailer preview (plus moment thumbs) stacked the AI disclosure over
+   gameplay HUDs and read as two competing Play affordances. Hover-to-preview is a
+   mouse behaviour — on a finger, leave the art alone and keep only the disclosures. */
 @media (pointer: coarse), (max-width: 768px) {
-  /* Icon-only, because the labelled pill at 44px tall is 127px wide in English and
-     wider in Polish — enough to reach the moment thumbnails on the far side of a
-     351px card. A round 44px button clears them at every label length. */
-  .preview-toggle {
-    justify-content: center;
-    width: 44px;
-    height: 44px;
-    padding: 0;
-  }
-
-  .preview-toggle .btn-label {
+  .preview-toggle,
+  .catalog-moments {
     display: none;
   }
 
-  .catalog-moment {
-    width: 48px;
-    height: 44px;
-  }
-
-  /* A 320px card is only 167px tall, and the row growing from 26px to 44px pushed
-     its bottom edge into the title. Tuck it up against the genre chip instead: the
-     free band runs from that chip's bottom (29px) to the title's top (79px on the
-     shortest card), and 33px puts the row inside it with the narrowest card as the
-     binding case — every wider card has more room below. */
-  .catalog-moments {
-    top: 33px;
+  .catalog-badges-top-left {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    max-width: calc(100% - 8.5rem);
   }
 
   .touch-warning-pill {
     display: inline-flex;
   }
-}
 
-/* Below 360px the card is a 296x167 box already carrying a 44px preview toggle, the
-   AI disclosure, a genre chip, a title that wraps to two lines, and a 44px Play
-   button. Two things give way rather than fight over it. */
-@media (max-width: 360px) {
-  /* The frame picker is the only thing on the card that is a convenience rather than
-     information, and at thumb size it covers the gameplay it is advertising — so the
-     smallest phones lose it instead of gaining four more 44px boxes stacked on the
-     art. It comes back above 360px, where the taller card has the room. */
-  .catalog-moments {
-    display: none;
-  }
-
-  /* Side by side, not stacked: at 44px the toggle made this column 68px tall, and a
-     title that wrapped to two lines climbed under it — the AI disclosure ended up
-     drawn over the first word of the title, which is exactly the thing a mandatory
-     disclosure must never do. A row ends 103px in, which clears both a two-line title
-     below it and the genre chip, which the 40% cap keeps to the right of that. */
-  .catalog-badges-top-left {
-    flex-direction: row;
-    align-items: center;
-  }
-
-  /* A card carrying the keyboard-only warning has a third badge in that row, which
-     at 320px reaches across to where the genre chip starts. Genre is the least
-     important thing on a card — the art and the title say more — and it is the only
-     other claimant on that corner, so on the rare card that has to warn somebody, it
-     is what gives way. Scoped with :has() so every other card keeps its chip. */
+  /* Keyboard-only + AI + Yours can crowd the genre chip on a narrow card. Genre is
+     the least important corner claim — drop it when the warning is present. */
   .catalog-media:has(.touch-warning-pill) .genre-pill {
     display: none;
   }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
 import { catalogMediaUrl, isPlatformAuthor, type CatalogEntry } from './catalog.js';
@@ -524,6 +524,14 @@ export function ArcadeCatalog({
   const [signals, setSignals] = useState<CatalogSortSignals>(() => initialSignals(viewerUid).signals);
   const [signalsReady, setSignalsReady] = useState(() => initialSignals(viewerUid).ready);
   const [creatorItems, setCreatorItems] = useState<CreatorGameItem[]>([]);
+  // Signed-in "Yours" pins + Studio chip land with the first grid paint — waiting for
+  // the shelf (in parallel with catalog/signals) avoids pinning mid-scroll after the
+  // published order was already on screen.
+  const [creatorGamesReady, setCreatorGamesReady] = useState(() => !viewerUid);
+  /** Grid order committed for the current sort/filter/viewer; later signal refresh must not reshuffle. */
+  const [displayedEntries, setDisplayedEntries] = useState<CatalogEntry[]>([]);
+  const desiredOrderRef = useRef<CatalogEntry[]>([]);
+  const paintedOrderKeyRef = useRef<string | null>(null);
 
   useEffect(() => watchCatalogScrollIdle(), []);
 
@@ -563,16 +571,23 @@ export function ArcadeCatalog({
     };
   }, [recommendationsRefreshKey, viewerUid]);
 
-  // Creator shelf feeds the Studio chip and "Yours" pins — never the grid itself.
-  // Fetch in parallel; when it lands the chip appears without shoving published cards.
   useEffect(() => {
     if (!viewerUid) {
       setCreatorItems([]);
+      setCreatorGamesReady(true);
       return;
     }
+    setCreatorGamesReady(false);
+  }, [viewerUid, locale]);
+
+  // Creator shelf feeds the Studio chip and "Yours" pins — never the grid itself.
+  useEffect(() => {
+    if (!viewerUid) return;
     let cancelled = false;
     void loadCreatorGames(locale).then((items) => {
-      if (!cancelled) setCreatorItems(items);
+      if (cancelled) return;
+      setCreatorItems(items);
+      setCreatorGamesReady(true);
     });
     const timer = window.setInterval(() => {
       void loadCreatorGames(locale).then((items) => {
@@ -623,13 +638,36 @@ export function ArcadeCatalog({
   const notPlayedOnly = filters.has('not_played');
   const filtersActive = yourGamesOnly || notPlayedOnly;
 
-  const orderedEntries = useMemo(() => {
+  const desiredOrder = useMemo(() => {
     // Ignore a sticky your_games pref when signed out or you have nothing yours —
     // otherwise the whole catalog would look empty for no good reason.
     const activeFilters = canFilterYourGames ? filters : new Set([...filters].filter((id) => id !== 'your_games'));
     const filtered = applyCatalogFilters(catalogEntries, activeFilters, signals.affinityLastPlayed, mySlugs);
     return orderCatalogEntries(filtered, sortMode, signals, mySlugs);
   }, [catalogEntries, sortMode, filters, signals, mySlugs, canFilterYourGames]);
+  desiredOrderRef.current = desiredOrder;
+
+  const filterKey = [...filters].sort().join(',');
+  // recommendationsRefreshKey: post-play re-rank is deliberate user-visible intent.
+  const userOrderKey = `${sortMode}|${filterKey}|${viewerUid ?? ''}|r${recommendationsRefreshKey}`;
+
+  const awaitingSignals =
+    catalogStatus === 'ready' && catalogEntries.length > 0 && catalogSortNeedsSignals(sortMode) && !signalsReady;
+  const awaitingCreatorShelf = Boolean(viewerUid) && !creatorGamesReady;
+  const layoutReady = catalogStatus === 'ready' && !awaitingSignals && !awaitingCreatorShelf;
+
+  // Commit order once per sort/filter/viewer (and when the shelf/signals first land).
+  // A later recommendations refresh that differs from the sessionStorage cache must
+  // not reshuffle cards under the reader's thumb.
+  useLayoutEffect(() => {
+    if (!layoutReady) {
+      paintedOrderKeyRef.current = null;
+      return;
+    }
+    if (paintedOrderKeyRef.current === userOrderKey) return;
+    paintedOrderKeyRef.current = userOrderKey;
+    setDisplayedEntries(desiredOrderRef.current);
+  }, [layoutReady, userOrderKey]);
 
   function handleSortChange(mode: CatalogSortMode) {
     setSortMode(mode);
@@ -654,8 +692,6 @@ export function ArcadeCatalog({
       return next;
     });
   }
-  const awaitingSignals =
-    catalogStatus === 'ready' && catalogEntries.length > 0 && catalogSortNeedsSignals(sortMode) && !signalsReady;
 
   const emptyMessage =
     yourGamesOnly && notPlayedOnly && (catalogEntries.length > 0 || mySlugs.size > 0)
@@ -665,8 +701,7 @@ export function ArcadeCatalog({
         : notPlayedOnly && catalogEntries.length > 0
           ? t('catalog.emptyNotPlayed')
           : t('catalog.empty');
-  const showEmpty =
-    !awaitingSignals && catalogStatus !== 'loading' && catalogStatus !== 'error' && orderedEntries.length === 0;
+  const showEmpty = layoutReady && displayedEntries.length === 0;
 
   const studioChipLabel =
     liveCount > 0
@@ -766,7 +801,7 @@ export function ArcadeCatalog({
         </div>
       ) : null}
 
-      {catalogStatus === 'loading' || awaitingSignals ? (
+      {catalogStatus === 'loading' || awaitingSignals || awaitingCreatorShelf ? (
         <MascotMoment className="catalog-state" emotion="busy" size={56} title={t('mascot.busyAlt')}>
           <p>{t('catalog.loading')}</p>
         </MascotMoment>
@@ -790,7 +825,7 @@ export function ArcadeCatalog({
         </MascotMoment>
       ) : (
         <div className="catalog-grid">
-          {orderedEntries.map((entry) => (
+          {displayedEntries.map((entry) => (
             <CatalogCard
               key={entry.slug}
               entry={entry}
