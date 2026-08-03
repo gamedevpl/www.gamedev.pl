@@ -19,12 +19,19 @@ as of 2026-08; we intentionally ship the official registry shape instead.
 
 ## Artifacts in this folder
 
-| Path                                                                                 | Target                           | Where it would go (when cleared)                                                                         |
-| ------------------------------------------------------------------------------------ | -------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| [`official-registry/server.json`](./official-registry/server.json)                   | Official MCP Registry            | Publish via `mcp-publisher` / registry API — see https://modelcontextprotocol.io/registry/remote-servers |
-| [`cursor-directory/listing.md`](./cursor-directory/listing.md)                       | Cursor directory / marketplace   | https://cursor.directory and/or Cursor Marketplace (plugins path)                                        |
-| [`claude-connectors-directory/listing.md`](./claude-connectors-directory/listing.md) | Claude Connectors Directory      | Portal at https://claude.ai/admin-settings/directory/submissions/new (Team/Enterprise)                   |
-| [`chatgpt-apps-connector/listing.md`](./chatgpt-apps-connector/listing.md)           | ChatGPT Apps / plugins connector | OpenAI plugin submission portal — https://developers.openai.com/plugins/deploy/submission                |
+| Path                                                                                 | Target                                 | Where it would go (when cleared)                                                                         |
+| ------------------------------------------------------------------------------------ | -------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| [`official-registry/server.json`](./official-registry/server.json)                   | Official MCP Registry                  | Publish via `mcp-publisher` under `pl.gamedev/*` (DNS TXT or `/.well-known/mcp-registry-auth` domain proof) — https://modelcontextprotocol.io/registry/remote-servers |
+| [`cursor-directory/listing.md`](./cursor-directory/listing.md)                       | Cursor Marketplace + cursor.directory  | https://cursor.com/marketplace/publish (official, reviewed) and https://cursor.directory/plugins/new (community) |
+| [`claude-connectors-directory/listing.md`](./claude-connectors-directory/listing.md) | Claude Connectors Directory            | Portal at https://claude.ai/admin-settings/directory/submissions/new (**requires Team/Enterprise org**)   |
+| [`chatgpt-apps-connector/listing.md`](./chatgpt-apps-connector/listing.md)           | ChatGPT + Codex Plugin directory       | https://platform.openai.com/plugins (identity-verified Platform org)                                      |
+| [`github-mcp-registry/listing.md`](./github-mcp-registry/listing.md)                 | GitHub MCP Registry (Copilot, VS Code) | Publish to the official registry first, then curation request to partnerships@github.com                  |
+
+Not pursued: the **Gemini CLI extensions gallery** would be self-serve (public manifest
+repo + `gemini-cli-extension` topic, crawled daily), but listing there requires a
+dedicated repo because the manifest must sit at a repo root — too much standing surface
+for the reach that surface has today. The consumer Gemini app has no third-party MCP
+channel at all. Revisit only if Gemini CLI adoption changes.
 
 ## One-click install (product surface, not a listing)
 

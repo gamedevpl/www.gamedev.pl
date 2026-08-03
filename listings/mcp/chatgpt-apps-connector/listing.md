@@ -31,11 +31,30 @@ OpenAI may require a challenge file at `/.well-known/openai-apps-challenge` on t
 host (or parent). **Do not add that route until the owner starts a real submission** —
 the token is issued by the portal per submission.
 
-## Tool annotation gap (flag for owner)
+## Directory change (2026-07-09) and submission notes
+
+- The App Directory was replaced by a universal **Plugin directory** shared by ChatGPT
+  **and Codex**; a plugin = skills + MCP server + optional Apps-SDK UI. Existing apps
+  were auto-migrated. Portal: https://platform.openai.com/plugins (overview:
+  https://developers.openai.com/plugins, help: https://help.openai.com/en/articles/20001256).
+- Submission requires completed **developer identity verification** on the Platform org,
+  a **demo account with no MFA and no signup steps** (either causes rejection), 3–5
+  screenshots taken inside ChatGPT developer mode, and a 512×512 PNG icon.
+- Third-party reports put review at roughly 5–10 business days; no official SLA.
+
+## Tool annotations: requirement met
 
 ChatGPT directory review requires `readOnlyHint`, `openWorldHint`, and `destructiveHint`
-(with justifications) on every tool. Confirm the live `/api/mcp` tool descriptors meet
-that bar before submitting; fixing annotations is out of scope for BY-18c.
+on every tool. The live `/api/mcp` descriptors carry `title` plus all four hints on all
+tools; the earlier gap flagged during BY-18c has been closed.
+
+Verify before submitting:
+
+- Annotation sets are the `READS` / `WRITES` / `WRITES_ONCE` / `CONSUMES` constants in
+  `apps/api/src/mcp-server.ts` (~L521–551), spread into each tool's `annotations`.
+- The regression test is `apps/api/src/mcp-server.test.ts` → _"annotates every tool, so a
+  reader is not advertised as destructive"_ (~L1149), which asserts every tool has
+  `title` + a boolean `destructiveHint`, and pins the reader/writer split per tool name.
 
 ## Test cases (placeholders)
 

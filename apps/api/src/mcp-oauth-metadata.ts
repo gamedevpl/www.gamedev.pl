@@ -113,11 +113,33 @@ export const MCP_MISSING_CREDENTIAL_HINT =
   'missing credential: pass sessionKey from start(), or call start() first — a game key goes in its key ' +
   'argument; a creator key or OAuth access goes in Authorization: Bearer with your game slug';
 
-export function sendMcpOAuthChallenge(reply: FastifyReply): FastifyReply {
+/**
+ * Closed beta changes what "missing credential" means, so the hint has to change with it.
+ *
+ * The sentence above tells an agent to go find a key. During private beta a visitor
+ * without an account cannot obtain one at all, so following that advice is a dead end —
+ * and a directory listing puts exactly that visitor here: anonymous `initialize` and
+ * `tools/list` succeed, all tools look healthy, and the first write is where they learn
+ * the product is closed. Say it in this string specifically, because it is the only
+ * explanation that reaches a client which never opens a browser — headless agents, and
+ * Cursor desktop while its OAuth stalls after DCR.
+ *
+ * This is product state, not a per-user verdict: it says the door is closed, never
+ * whether a particular account is on the allowlist.
+ */
+export const MCP_CLOSED_BETA_HINT =
+  'gamedev.pl is in closed beta — if you do not have a creator account yet there is no key to pass. ' +
+  'Join the waitlist at https://www.gamedev.pl/ and connect again once you are approved';
+
+export function mcpMissingCredentialHint(privateBeta = false): string {
+  return privateBeta ? `${MCP_MISSING_CREDENTIAL_HINT}. ${MCP_CLOSED_BETA_HINT}` : MCP_MISSING_CREDENTIAL_HINT;
+}
+
+export function sendMcpOAuthChallenge(reply: FastifyReply, privateBeta = false): FastifyReply {
   return reply
     .status(401)
     .header('WWW-Authenticate', buildMcpOAuthAuthenticateHeader())
-    .send({ error: 'authentication required', hint: MCP_MISSING_CREDENTIAL_HINT });
+    .send({ error: 'authentication required', hint: mcpMissingCredentialHint(privateBeta) });
 }
 
 /**

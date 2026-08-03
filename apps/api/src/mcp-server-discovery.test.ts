@@ -42,6 +42,21 @@ describe('buildMcpServerJsonDocument (BY-18c)', () => {
     expect(typeof doc.description).toBe('string');
     expect((doc.description as string).length).toBeLessThanOrEqual(100);
   });
+
+  // A directory entry is built from this description, so the gate belongs in front of the
+  // install rather than behind it. Both variants have to clear the schema's 100-char cap.
+  it('says creating is closed beta while the beta is on, and drops it when open', () => {
+    process.env.CANONICAL_HOST = 'www.gamedev.pl';
+
+    const beta = buildMcpServerJsonDocument({ privateBeta: true }).description as string;
+    expect(beta).toMatch(/closed beta/i);
+    expect(beta).toMatch(/waitlist/i);
+    expect(beta.length).toBeLessThanOrEqual(100);
+
+    const open = buildMcpServerJsonDocument({ privateBeta: false }).description as string;
+    expect(open).not.toMatch(/beta/i);
+    expect(open.length).toBeLessThanOrEqual(100);
+  });
 });
 
 describe(`GET ${MCP_SERVER_JSON_PATH} (BY-18c)`, () => {

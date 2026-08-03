@@ -6,7 +6,9 @@ import { mintGameAgentKey } from './agent-game-key.js';
 import {
   buildMcpOAuthAuthenticateHeader,
   buildOAuthProtectedResourceDocument,
+  MCP_CLOSED_BETA_HINT,
   MCP_MISSING_CREDENTIAL_HINT,
+  mcpMissingCredentialHint,
   OAUTH_PROTECTED_RESOURCE_PATH,
   oauthProtectedResourceMetadataUrl,
   oauthProtectedResourcePathForMcp,
@@ -220,6 +222,63 @@ describe('MCP OAuth 401 challenge (BY-18a)', () => {
       hint: MCP_MISSING_CREDENTIAL_HINT,
     });
     expect(MCP_MISSING_CREDENTIAL_HINT).toMatch(/sessionKey from start\(\)/);
+  });
+
+  it('names the closed beta in the 401 hint, so a visitor is not sent hunting for a key that cannot exist', async () => {
+    process.env.CANONICAL_HOST = 'www.gamedev.pl';
+    const store = new InMemoryStore();
+    await seedJob(store);
+    // Passing an allowlist is what buildApp reads as "private beta is on".
+    app = await buildApp({
+      store,
+      betaAllowedUids: 'g:someone-else',
+      sessionSecret: 'dev-session-secret-change-me',
+      submissionRoutes: {
+        githubClient: {
+          createIssue: async () => ({ number: 42 }),
+          getIssueState: async () => ({ state: 'open' as const }),
+          findLinkedPR: async () => null,
+          createIssueComment: async () => ({ id: 1 }),
+          updateIssueBody: async () => {},
+          closeIssue: async () => {},
+          closePullRequest: async () => {},
+          ensureOpenPullRequest: async () => ({ number: 1 }),
+          deleteBranch: async () => {},
+          getGameSources: async () => null,
+          getGameMedia: async () => null,
+          getCatalog: async () => [],
+          getProgressNotes: async () => null,
+        },
+        githubToken: 'gh-token',
+        submissionTokenSecret: secret,
+        translator: new NoopTranslator(),
+        agentChannel: {},
+      },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: MCP_ENDPOINT_PATH,
+      headers: { 'content-type': 'application/json' },
+      payload: {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'get_brief', arguments: {} },
+      },
+    });
+
+    expect(res.statusCode).toBe(401);
+    // The original instruction survives — an account holder who merely dropped sessionKey
+    // still needs it — and the beta sentence is added, not substituted.
+    expect(res.json().hint).toContain(MCP_MISSING_CREDENTIAL_HINT);
+    expect(res.json().hint).toContain(MCP_CLOSED_BETA_HINT);
+    expect(res.json().hint).toMatch(/waitlist/i);
+  });
+
+  it('says nothing about beta when the site is open', () => {
+    expect(mcpMissingCredentialHint(false)).toBe(MCP_MISSING_CREDENTIAL_HINT);
+    expect(mcpMissingCredentialHint(false)).not.toMatch(/beta/i);
   });
 
   it('returns 401 for unauthenticated GET /api/mcp', async () => {

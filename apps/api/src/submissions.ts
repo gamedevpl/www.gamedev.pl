@@ -239,6 +239,8 @@ export interface SubmissionRoutesOptions {
   githubToken?: string;
   gamesRepo?: string;
   submissionTokenSecret?: string;
+  /** Forwarded to the MCP routes so the endpoint can say the product is closed. Copy only. */
+  privateBeta?: boolean;
   githubClient?: GitHubClient;
   fetchImpl?: typeof fetch;
   now?: () => number;
@@ -4388,6 +4390,7 @@ export async function registerSubmissionRoutes(
     store,
     agentTokenSecret: submissionTokenSecret,
     now,
+    privateBeta: options.privateBeta,
     gamesStore: options.agentChannel?.gamesStore,
     objectStore: options.agentChannel?.objectStore,
     startImprovementRound,
