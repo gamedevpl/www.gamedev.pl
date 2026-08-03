@@ -745,7 +745,7 @@ export function SubmissionStatusView({
                     stall={status.stall}
                     failureReason={status.failure?.reason}
                     phase={status.phase}
-                    suppressRouteNote={isAwaitingOwnAgent(status)}
+                    suppressRouteNote={isAwaitingOwnAgent(status) || status.phase === 'ready_for_review'}
                     onSent={(text) => setPendingRevisions((current) => [...current, { text, at: Date.now() }])}
                     onPublishedImprove={handleImproved}
                   />

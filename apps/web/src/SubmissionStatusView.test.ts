@@ -449,6 +449,12 @@ describe('SubmissionStatusView', () => {
     // path is covered elsewhere; here we only assert the preview loaded for Studio.
     expect(container.querySelector('.studio-thread-context .status-play-cta')).toBeNull();
     expect(mockedGetSubmissionPreview.mock.results[0]?.value).toBeTruthy();
+    // Gate-green is Done — do not mount connect (endpoint is inactive_round and used
+    // to render a red "could not load connect steps" over a finished delivery).
+    expect(container.querySelector('.studio-connect')).toBeNull();
+    expect(container.textContent).not.toContain('Continue with your agent');
+    expect(container.textContent).not.toMatch(/could not load the connect steps/i);
+    expect(container.querySelector('.status-feedback-route')).toBeNull();
 
     await act(async () => {
       root.unmount();
