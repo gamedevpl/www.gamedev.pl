@@ -54,11 +54,21 @@ COPY packages/game-generator/package.json packages/game-generator/
 COPY packages/zone-core/package.json packages/zone-core/
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
-# --omit=optional keeps `isolated-vm` out of THIS image. It is zone-core's only external
-# dependency and it is optional precisely so that consumers who never open a cage skip a
-# native build. The API only mints tickets and parses schemas; the cage runs in the
-# separate world service, which has its own Dockerfile and installs it there.
-RUN npm ci --omit=dev --omit=optional --ignore-scripts
+# NOT --omit=optional, and the reason is worth the paragraph. It used to be here to keep
+# `isolated-vm` (zone-core's optional dependency, needed only by the world service) out of
+# this image — but esbuild ships its native engine the same way, as optional per-platform
+# packages (`@esbuild/linux-x64`), with its postinstall as the only fallback. Combined with
+# --ignore-scripts, that flag installed esbuild's JavaScript wrapper and none of its engine,
+# so every `build()` and `transform()` in this container threw at runtime.
+#
+# Nothing noticed for months: published games are served from the pre-baked snapshot, so the
+# server never assembled one. The remix code lane is the first feature that needs to, and it
+# answered "this game cannot be remixed that deeply yet" for every game on the site.
+#
+# --ignore-scripts still does the job the flag was reached for: isolated-vm arrives as source
+# and is never compiled, which costs disk and nothing else, while esbuild's engine is a
+# prebuilt binary that needs no script to work. Keep both flags off this line together.
+RUN npm ci --omit=dev --ignore-scripts
 
 # Built output: API dist, game-generator dist + runtime templates, and the static web bundle.
 COPY --from=builder /app/packages/game-generator/dist packages/game-generator/dist
