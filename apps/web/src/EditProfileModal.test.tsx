@@ -83,7 +83,7 @@ describe('EditProfileModal', () => {
     expect(dialog?.querySelector('details.creator-profile-rename')).toBeTruthy();
   });
 
-  it('closes on Escape', async () => {
+  it('closes on Escape from a focused field inside the dialog', async () => {
     profileApi.fetchMyProfile.mockResolvedValue(readyProfile);
     let open = true;
     root = createRoot(container);
@@ -105,12 +105,41 @@ describe('EditProfileModal', () => {
     await act(async () => {
       await Promise.resolve();
     });
+    const nameInput = document.body.querySelector(
+      '.edit-profile-modal-card input.creator-profile-input',
+    ) as HTMLInputElement;
     await act(async () => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      nameInput.focus();
+      nameInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       render();
       await Promise.resolve();
     });
     expect(open).toBe(false);
+  });
+
+  it('keeps focus in the name field while typing', async () => {
+    profileApi.fetchMyProfile.mockResolvedValue(readyProfile);
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(
+        <StudioCreatorProfileProvider>
+          <EditProfileModal isOpen onClose={() => undefined} />
+        </StudioCreatorProfileProvider>,
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const nameInput = document.body.querySelector(
+      '.edit-profile-modal-card input.creator-profile-input',
+    ) as HTMLInputElement;
+    await act(async () => {
+      nameInput.focus();
+      nameInput.value = 'Ada';
+      Simulate.change(nameInput);
+    });
+    expect(document.activeElement).toBe(nameInput);
   });
 
   it('saves details and notifies the parent', async () => {

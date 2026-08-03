@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useEffect, useId, useRef, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useStudioCreatorProfile } from './studioCreatorProfile.js';
@@ -28,6 +28,8 @@ export function EditProfileModal({
   const { t } = useTranslation();
   const formId = useId();
   const cardRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  const clearMessageRef = useRef<() => void>(() => undefined);
   const {
     me,
     status,
@@ -47,14 +49,19 @@ export function EditProfileModal({
     clearMessage,
   } = useStudioCreatorProfile();
 
+  onCloseRef.current = onClose;
+  clearMessageRef.current = clearMessage;
+
+  // Only re-bind when the dialog opens/closes — not on every keystroke — or cleanup
+  // restores focus to the opener mid-edit.
   useEffect(() => {
     if (!isOpen) return;
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        clearMessage();
-        onClose();
+        clearMessageRef.current();
+        onCloseRef.current();
         return;
       }
       if (event.key !== 'Tab') return;
@@ -81,7 +88,7 @@ export function EditProfileModal({
       window.removeEventListener('keydown', onKeyDown);
       previouslyFocused?.focus?.();
     };
-  }, [isOpen, onClose, clearMessage]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -116,10 +123,6 @@ export function EditProfileModal({
     onClose();
   };
 
-  const stopCardKey = (event: ReactKeyboardEvent) => {
-    event.stopPropagation();
-  };
-
   return createPortal(
     <div className="modal-backdrop claim-handle-modal-backdrop" onClick={handleClose} role="presentation">
       <div
@@ -129,7 +132,6 @@ export function EditProfileModal({
         aria-modal="true"
         aria-labelledby={`${formId}-heading`}
         onClick={(event) => event.stopPropagation()}
-        onKeyDown={stopCardKey}
       >
         <button type="button" className="modal-close-btn" onClick={handleClose} aria-label={t('studioPanel.close')}>
           &times;

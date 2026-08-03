@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
 import {
@@ -35,8 +35,7 @@ export type StudioCreatorProfile = {
 const StudioCreatorProfileContext = createContext<StudioCreatorProfile | null>(null);
 
 /**
- * Shared Studio profile store — chrome chip and claim modal both read/write here so a
- * claim reveals `@handle` without remounting.
+ * Shared creator-profile store for claim/edit modals (Studio publish gate + public page).
  */
 export function StudioCreatorProfileProvider({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
@@ -161,6 +160,8 @@ export function StudioCreatorProfileProvider({ children }: { children: ReactNode
     }
   };
 
+  const clearMessage = useCallback(() => setMessage(null), []);
+
   const value: StudioCreatorProfile = {
     me,
     status,
@@ -177,7 +178,7 @@ export function StudioCreatorProfileProvider({ children }: { children: ReactNode
     onClaim,
     onSaveDetails,
     refusalCopy,
-    clearMessage: () => setMessage(null),
+    clearMessage,
   };
 
   return <StudioCreatorProfileContext.Provider value={value}>{children}</StudioCreatorProfileContext.Provider>;
