@@ -71,7 +71,14 @@ function stubGamesStore(
     ]);
   const manifest =
     overrides.manifest === undefined
-      ? { slug: SLUG, version: VERSION, gate: { green: true, ranAt: '2026-08-03T10:20:00.000Z' } }
+      ? {
+          slug: SLUG,
+          version: VERSION,
+          // The job that produced this delivery — the ownership check, since a slug
+          // is shared by every improvement round on the same game.
+          issueNumber: ISSUE,
+          gate: { green: true, ranAt: '2026-08-03T10:20:00.000Z' },
+        }
       : overrides.manifest;
   return {
     getManifest: async (slug: string, version: string) => (slug === SLUG && version === VERSION ? manifest : null),
@@ -85,11 +92,15 @@ function stubGamesStore(
   } as unknown as GamesStore;
 }
 
-function stubObjectStore(signReadUrl = vi.fn(async (name: string) => `https://signed.example/${name}?sig=1`)) {
+function stubObjectStore(
+  signReadUrl = vi.fn(async (name: string) => `https://signed.example/${name}?sig=1`),
+  /** Which objects actually landed; the gate tolerates a per-file upload failure. */
+  objectExists: (name: string) => Promise<boolean> = async () => true,
+) {
   return {
     objectStore: {
       readObject: async () => null,
-      objectExists: async () => true,
+      objectExists,
       signReadUrl,
     } as GcsObjectStore,
     signReadUrl,
@@ -213,6 +224,7 @@ describe('GET /api/agent/build/media (BY-28)', () => {
     const manifest = {
       slug: SLUG,
       version: VERSION,
+      issueNumber: ISSUE,
       gate: { green: false, ranAt: '2026-08-03T10:20:00.000Z', screenshot: 'media/opening.png' },
     };
     app = await createApp(store, stubGamesStore({ artifacts, manifest }), stubObjectStore().objectStore);
@@ -263,7 +275,7 @@ describe('GET /api/agent/build/media (BY-28)', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ available: false, reason: 'no such delivery' });
+    expect(res.json()).toMatchObject({ available: false, reason: 'no such delivery for this build' });
     expect(signReadUrl).not.toHaveBeenCalled();
   });
 
@@ -319,6 +331,89 @@ describe('GET /api/agent/build/media (BY-28)', () => {
 
     expect(res.statusCode).toBe(401);
     expect(res.json().error).toBe(STALE_AGENT_TOKEN_REASON);
+  });
+
+  it('refuses a version delivered by a different job on the same slug', async () => {
+    // Every improvement round is a new job that inherits the published slug, so an
+    // earlier round's version resolves fine under this one's slug — and after a slug
+    // transfer that earlier job can belong to a different creator. The manifest's own
+    // issueNumber is the ownership check; the slug never was one. Codex #506 P2.
+    const store = new InMemoryStore();
+    await seedDeliveredJob(store);
+    const EARLIER_JOB_VERSION = 'v20260101T090000000-aaaaaa';
+    const gamesStore = {
+      getManifest: async (slug: string, version: string) =>
+        slug === SLUG && version === EARLIER_JOB_VERSION
+          ? // Same slug, different job — a predecessor round's delivery.
+            { slug: SLUG, version: EARLIER_JOB_VERSION, issueNumber: ISSUE - 7, gate: { green: true, ranAt: 'x' } }
+          : null,
+      getDerivedArtifact: async () => Buffer.from(METADATA),
+      getSourceFile: async () => null,
+      putCandidateSources: async () => ({ version: VERSION, manifest: {} as never }),
+      putGateResult: async () => {},
+      putDerivedArtifact: async () => {},
+      getKitRegistry: async () => null,
+    } as unknown as GamesStore;
+    const { objectStore, signReadUrl } = stubObjectStore();
+    app = await createApp(store, gamesStore, objectStore);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/agent/build/media?version=${EARLIER_JOB_VERSION}`,
+      headers: agentHeaders(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ available: false, reason: 'no such delivery for this build' });
+    // Nothing was signed — the refusal happens before any URL exists.
+    expect(signReadUrl).not.toHaveBeenCalled();
+    // Absent and not-yours read identically, so a round cannot enumerate what its
+    // predecessors delivered.
+    const absent = await app.inject({
+      method: 'GET',
+      url: '/api/agent/build/media?version=v20260101T000000000-ffffff',
+      headers: agentHeaders(),
+    });
+    expect(absent.json().reason).toBe(res.json().reason);
+  });
+
+  it('does not advertise media whose upload never landed', async () => {
+    // The gate writes each media file independently and swallows a per-file failure to
+    // protect the verdict, so metadata.json can name an mp4 that is not in the bucket.
+    // Signing it would hand the agent a dead URL to show the creator. Codex #506 P2.
+    const store = new InMemoryStore();
+    await seedDeliveredJob(store);
+    const { objectStore, signReadUrl } = stubObjectStore(
+      vi.fn(async (name: string) => `https://signed.example/${name}?sig=1`),
+      async (name: string) => !name.endsWith('gameplay.mp4') && !name.endsWith('engagement.png'),
+    );
+    app = await createApp(store, stubGamesStore(), objectStore);
+
+    const res = await app.inject({ method: 'GET', url: '/api/agent/build/media', headers: agentHeaders() });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().video).toBeNull();
+    expect(res.json().screenshots).toEqual([
+      { name: 'opening', file: 'opening.png', url: expect.stringContaining('opening.png') },
+    ]);
+    expect(signReadUrl).not.toHaveBeenCalledWith(expect.stringContaining('gameplay.mp4'), expect.anything());
+    expect(signReadUrl).not.toHaveBeenCalledWith(expect.stringContaining('engagement.png'), expect.anything());
+  });
+
+  it('reports unavailable when metadata names files but none of them landed', async () => {
+    const store = new InMemoryStore();
+    await seedDeliveredJob(store);
+    const { objectStore, signReadUrl } = stubObjectStore(
+      vi.fn(async (name: string) => `https://signed.example/${name}?sig=1`),
+      async () => false,
+    );
+    app = await createApp(store, stubGamesStore(), objectStore);
+
+    const res = await app.inject({ method: 'GET', url: '/api/agent/build/media', headers: agentHeaders() });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ available: false, reason: 'the gate stored no media for this delivery' });
+    expect(signReadUrl).not.toHaveBeenCalled();
   });
 
   it('answers 503 rather than half a result when the media store is unconfigured', async () => {

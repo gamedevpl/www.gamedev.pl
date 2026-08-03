@@ -1277,7 +1277,9 @@ describe('POST /api/mcp (BY-05)', () => {
       return {
         getManifest: async (slug: string, version: string) =>
           slug === 'comet-courier' && version === 'v1'
-            ? { slug, version, gate: { green, ranAt: '2026-08-01T12:00:00.000Z' } }
+            ? // issueNumber is the ownership check the route makes — a slug is shared
+              // by every improvement round on the same game.
+              { slug, version, issueNumber: ISSUE, gate: { green, ranAt: '2026-08-01T12:00:00.000Z' } }
             : null,
         getDerivedArtifact: async (slug: string, version: string, name: string) =>
           slug === 'comet-courier' && version === 'v1' ? (artifacts.get(name) ?? null) : null,

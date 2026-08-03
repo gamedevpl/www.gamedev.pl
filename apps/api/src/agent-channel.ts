@@ -1508,11 +1508,23 @@ export async function registerAgentChannelRoutes(
       }
 
       const slug = record.slug;
-      // The manifest is the proof this version exists under this job's slug; a version
-      // id from anywhere else simply does not resolve here, so nothing gets signed.
+      // The manifest proves this version exists — but a slug is not a job. Every
+      // improvement round is a *new* job that inherits the published slug, so a
+      // version delivered by an earlier round resolves perfectly well under this
+      // one's slug, and after a slug transfer that earlier job can belong to a
+      // different creator entirely. The manifest records the job that produced it;
+      // that is the ownership check, and the slug never was one.
+      //
+      // Absent and not-yours answer identically on purpose: distinguishing them
+      // would let a round enumerate which versions its predecessors delivered.
       const manifest = await options.gamesStore.getManifest(slug, version);
-      if (!manifest) {
-        return reply.send({ available: false, deliveryId: version, reason: 'no such delivery', access });
+      if (!manifest || manifest.issueNumber !== record.issueNumber) {
+        return reply.send({
+          available: false,
+          deliveryId: version,
+          reason: 'no such delivery for this build',
+          access,
+        });
       }
 
       const metadataBody = await options.gamesStore.getDerivedArtifact(slug, version, 'media/metadata.json');
@@ -1542,22 +1554,47 @@ export async function registerAgentChannelRoutes(
       }
 
       const mediaObject = (file: string) => `games/${slug}/versions/${version}/media/${file}`;
+
+      // Metadata names what capture *intended* to store, which is not the same as what
+      // landed: the gate writes each media file independently and swallows a per-file
+      // failure to protect the verdict (gate-runner `storeCaptureMedia`), so a run can
+      // store metadata.json and lose the mp4. Signing a name we never confirmed hands
+      // the agent a URL that 404s — and the agent then tells the creator their video is
+      // ready. Probe before advertising; a signed URL is a promise about bytes.
+      const probed = await Promise.all(
+        screenshotFiles.map(async (shot) =>
+          (await options.objectStore!.objectExists(mediaObject(shot.file))) ? shot : null,
+        ),
+      );
+      const storedShots = probed.filter((shot): shot is { name: string; file: string } => shot !== null);
+      const storedVideo =
+        videoFile && (await options.objectStore.objectExists(mediaObject(videoFile))) ? videoFile : null;
+
+      if (storedShots.length === 0 && !storedVideo) {
+        return reply.send({
+          available: false,
+          deliveryId: version,
+          reason: 'the gate stored no media for this delivery',
+          access,
+        });
+      }
+
       const screenshots = await Promise.all(
-        screenshotFiles.map(async (shot) => ({
+        storedShots.map(async (shot) => ({
           ...shot,
           url: await options.objectStore!.signReadUrl(mediaObject(shot.file), DEFAULT_SIGNED_URL_TTL_SECONDS),
         })),
       );
-      const video = videoFile
+      const video = storedVideo
         ? {
-            file: videoFile,
-            url: await options.objectStore.signReadUrl(mediaObject(videoFile), DEFAULT_SIGNED_URL_TTL_SECONDS),
+            file: storedVideo,
+            url: await options.objectStore.signReadUrl(mediaObject(storedVideo), DEFAULT_SIGNED_URL_TTL_SECONDS),
           }
         : null;
 
       // One frame inline, for clients that can render an image but not fetch a URL.
       // Best effort and bounded: an absent or oversized frame degrades to URLs-only.
-      const openingFile = (screenshotFiles.find((shot) => shot.name === 'opening') ?? screenshotFiles[0])?.file;
+      const openingFile = (storedShots.find((shot) => shot.name === 'opening') ?? storedShots[0])?.file;
       let openingShot: { file: string; png: string } | null = null;
       if (openingFile) {
         const body = await options.gamesStore
