@@ -78,10 +78,10 @@ describe('runGamesRepoContractCheck', () => {
     expect(outcome.kind === 'drift' && outcome.reason).toContain('GAME_KIT_MODULES mismatch');
   });
 
-  it('allows the website to list modules the games tip has not shipped yet', async () => {
+  it('allows a short-lived website-first module rollout', async () => {
     // Website-first adds: GAME_KIT_MODULES here already includes these modules, but
     // main's assemble.ts may still list the older order. That window must stay green.
-    const aheadModules = new Set(['voice', 'racing']);
+    const aheadModules = new Set(['football']);
     const withoutAheadExtras = GAME_KIT_MODULES.filter((name) => !aheadModules.has(name));
     const olderAssemble = `
       const GAME_KIT_MODULES = [${withoutAheadExtras.map((name) => `'${name}'`).join(', ')}];
@@ -94,7 +94,31 @@ describe('runGamesRepoContractCheck', () => {
       'tools/validate.ts': [ok(VALIDATE_SOURCE)],
     });
 
-    await expect(runGamesRepoContractCheck({ ...BASE, fetchImpl })).resolves.toEqual({ kind: 'ok' });
+    await expect(
+      runGamesRepoContractCheck({ ...BASE, fetchImpl, now: () => Date.parse('2026-08-04T00:00:00.000Z') }),
+    ).resolves.toEqual({ kind: 'ok' });
+  });
+
+  it('fails closed when a website-first module rollout expires', async () => {
+    const remoteWithoutFootball = GAME_KIT_MODULES.filter((name) => name !== 'football');
+    const olderAssemble = `
+      const GAME_KIT_MODULES = [${remoteWithoutFootball.map((name) => `'${name}'`).join(', ')}];
+      const catalog = readMusicCatalog();
+      const track = catalog.tracks[name];
+      out += 'window.__GAME_AUDIO_MUSIC__ = ' + JSON.stringify(name);
+    `;
+    const { fetchImpl } = createFetch({
+      'tools/lib/assemble.ts': [ok(olderAssemble)],
+      'tools/validate.ts': [ok(VALIDATE_SOURCE)],
+    });
+
+    const outcome = await runGamesRepoContractCheck({
+      ...BASE,
+      fetchImpl,
+      now: () => Date.parse('2026-08-10T00:00:00.000Z'),
+    });
+    expect(outcome.kind).toBe('drift');
+    expect(outcome.kind === 'drift' && outcome.reason).toContain('expired website-ahead modules: football');
   });
 
   it('reports drift when a local-only module is not in the declared-ahead list', async () => {
@@ -114,7 +138,7 @@ describe('runGamesRepoContractCheck', () => {
 
     const outcome = await runGamesRepoContractCheck({ ...BASE, fetchImpl });
     expect(outcome.kind).toBe('drift');
-    expect(outcome.kind === 'drift' && outcome.reason).toContain('Undeclared website-ahead modules');
+    expect(outcome.kind === 'drift' && outcome.reason).toContain('Undeclared or expired website-ahead modules');
     expect(outcome.kind === 'drift' && outcome.reason).toContain('collision');
   });
 

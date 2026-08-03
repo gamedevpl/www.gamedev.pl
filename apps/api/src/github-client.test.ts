@@ -727,13 +727,13 @@ describe('getGameSources', () => {
     expect(() => new Function(sources?.gameJs ?? '')).not.toThrow();
   });
 
-  it('bundles an opt-in GameKit vertical from its private TypeScript graph', async () => {
+  it('bundles opt-in GameKit verticals from their private TypeScript graphs', async () => {
     const files = new Map<string, string | Uint8Array>([
       ['games/racer/index.html', '<canvas id="game"></canvas>'],
-      ['games/racer/game.ts', 'GameKit.mount({ vertical: GameKit.circuitRacer });'],
+      ['games/racer/game.ts', 'GameKit.mount({ verticals: [GameKit.circuitRacer, GameKit.arcadeFootball] });'],
       ['games/racer/style.css', '.game {}'],
       ['games/racer/SPEC.md', specMd({ title: 'Racer' })],
-      ['games/racer/GAME.json', JSON.stringify({ engine: { modules: ['racing'] } })],
+      ['games/racer/GAME.json', JSON.stringify({ engine: { modules: ['racing', 'football'] } })],
       ['shared/game-shell.css', '.shell {}'],
       ['shared/modules/core.ts', 'window.GameKit = { mount() {} };'],
       [
@@ -741,6 +741,14 @@ describe('getGameSources', () => {
         "import { createRace } from './simulation.ts'; Object.assign(GameKit, { circuitRacer: { createRace } });",
       ],
       ['shared/verticals/racing/simulation.ts', "export function createRace(): string { return 'vertical-loaded'; }"],
+      [
+        'shared/verticals/football/index.ts',
+        "import { createMatch } from './simulation.ts'; Object.assign(GameKit, { arcadeFootball: { createMatch } });",
+      ],
+      [
+        'shared/verticals/football/simulation.ts',
+        "export function createMatch(): string { return 'football-vertical-loaded'; }",
+      ],
     ]);
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
       const pathname = new URL(String(input)).pathname;
@@ -754,6 +762,7 @@ describe('getGameSources', () => {
     const sources = await client.getGameSources('main', 'racer');
 
     expect(sources?.gameJs).toContain('vertical-loaded');
+    expect(sources?.gameJs).toContain('football-vertical-loaded');
     expect(sources?.gameJs).not.toContain('import ');
     expect(() => new Function(sources?.gameJs ?? '')).not.toThrow();
   });
