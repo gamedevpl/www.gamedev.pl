@@ -21,7 +21,7 @@ import path from 'node:path';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { VertexCodeLane, type CodeLaneEditContext, type CodeLaneOutcome } from '../src/code-lane.js';
 import type { SymbolRegion } from '../src/symbol-map.js';
-import { REF, assembleGame, github, typeCheck } from './remix-lane-bench.js';
+import { REF, assembleGame, gameKit, github, typeCheck } from './remix-lane-bench.js';
 
 export interface ProbeCase {
   slug: string;
@@ -99,13 +99,25 @@ async function probe(testCase: ProbeCase, options: RunOptions): Promise<ProbeRes
     },
   });
 
+  const kit = await gameKit();
+  // Same two inputs the route supplies, for the same reason: the kit says what
+  // exists anywhere, the module list says what exists *here*.
+  const manifest = await github.getGameFile(REF, testCase.slug, 'GAME.json');
+  const modules: string[] = (() => {
+    try {
+      const value = (JSON.parse(manifest ?? '{}') as { modules?: unknown }).modules;
+      return Array.isArray(value) ? value.filter((name): name is string => typeof name === 'string') : [];
+    } catch {
+      return [];
+    }
+  })();
   const outcome: CodeLaneOutcome = await lane.run(
-    { slug: testCase.slug, sources, utterance: testCase.utterance },
+    { slug: testCase.slug, sources, utterance: testCase.utterance, modules, ...(kit ? { kit } : {}) },
     async (candidate) => {
       // Type-check first when asked: it is the cheaper answer and its message is
       // the more useful one to hand a repair round.
       if (options.typecheck) {
-        const checked = typeCheck(testCase.slug, candidate);
+        const checked = await typeCheck(testCase.slug, { ...sources, ...candidate });
         if (!checked.ok) {
           typeErrors.push(...checked.errors);
           if (!options.observeOnly) return checked;

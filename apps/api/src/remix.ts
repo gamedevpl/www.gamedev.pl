@@ -5,6 +5,7 @@ import { PARAMS_KEY, parseEditorDefinition, type EditorDefinition } from './edit
 import { EDITOR_FILE } from './editor-contract.js';
 import { applyAssistPatches, assistEnabled, MAX_UTTERANCE_LENGTH, type EditorAssistant } from './editor-assist.js';
 import { codeLaneDebugEnabled, codeLaneEnabled, type VertexCodeLane } from './code-lane.js';
+import { typeCheckGame } from './type-check.js';
 import { buildSuggestions } from './remix-suggestions.js';
 import type { GamesStore } from './games-store.js';
 import type { Store } from './store.js';
@@ -365,6 +366,26 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
     };
   }
 
+  /**
+   * The optional GameKit modules a game declares, or none.
+   *
+   * Read from `GAME.json`, which is the same source the assembler bundles from,
+   * so the list the editing call is told matches the list the game actually
+   * gets. Any failure here is answered with an empty list: a missing manifest
+   * should make the lane more conservative, never crash an edit.
+   */
+  async function readGameKitModules(client: GitHubClient, ref: string, slug: string): Promise<string[]> {
+    try {
+      const raw = await client.getGameFile(ref, slug, 'GAME.json');
+      if (!raw) return [];
+      const parsed: unknown = JSON.parse(raw);
+      const modules = (parsed as { modules?: unknown } | null)?.modules;
+      return Array.isArray(modules) ? modules.filter((name): name is string => typeof name === 'string') : [];
+    } catch {
+      return [];
+    }
+  }
+
   /** Rebuild the whole document with the session's edits applied. */
   async function rebuild(session: RemixSession, extra: Record<string, string> = {}): Promise<string | null> {
     if (!options.githubClient) return null;
@@ -603,9 +624,36 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       session.codeInFlight = true;
       try {
         const current = { ...session.sources, ...session.overrides };
+        // The kit is wanted twice — to show the editing call what `GameKit`
+        // actually offers, and to type-check what comes back — so it is fetched
+        // once and cached per ref by the client. A ref without one is not fatal:
+        // the edit is made with less to go on and the gate stands down.
+        const kit = options.githubClient ? await options.githubClient.getGameKitDeclaration(session.ref) : null;
+        // Which optional modules this game loads. The kit declaration is the
+        // union of all of them, so without this the editing call will happily
+        // use a real, correctly-typed API that this particular game does not
+        // have — a failure no compiler or type-check can see.
+        const modules = options.githubClient
+          ? await readGameKitModules(options.githubClient, session.ref, session.slug)
+          : [];
         const outcome = await options.codeLane.run(
-          { slug: session.slug, sources: current, utterance: body.data.utterance, game: { title: session.title } },
+          {
+            slug: session.slug,
+            sources: current,
+            utterance: body.data.utterance,
+            game: { title: session.title },
+            ...(kit ? { kit } : {}),
+            modules,
+          },
           async (candidate) => {
+            // Type-check before building. esbuild only transpiles, so a wrong
+            // property name assembles into a perfectly valid document that
+            // breaks the game on the first frame — or worse, quietly draws
+            // nothing. This is the only step that can see that, and its message
+            // is the one a repair round can act on, so it goes first and its
+            // errors are what the model is handed.
+            const checked = typeCheckGame({ ...current, ...candidate }, kit);
+            if (!checked.ok) return checked;
             // "Does it build" is answered by building the real document — the same
             // assembler, CSP and caps the play path applies — so a green answer here
             // means the frame can actually run it.

@@ -456,6 +456,18 @@ export interface GitHubClient {
    */
   getGameSourceMap(ref: string, slug: string): Promise<Record<string, string> | null>;
   /**
+   * `shared/game-kit.d.ts` — the ambient declaration every game is written
+   * against.
+   *
+   * Not part of any game's sources (it is ambient, and the bundler never loads
+   * it), but it is what a game's code actually has to satisfy, so the code lane
+   * needs it twice over: to show the editing call what `GameKit` really offers
+   * instead of letting it guess, and to type-check the result. Cached per ref
+   * because it changes only when the engine does, and both uses are on the
+   * player's critical path.
+   */
+  getGameKitDeclaration(ref: string): Promise<string | null>;
+  /**
    * Reads the agent's own progress journal for a game on `ref`
    * (`games/<slug>/PROGRESS.md`). This is how the coding agent narrates what it is
    * doing in words a creator understands, instead of us inferring it from commit
@@ -752,6 +764,13 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
   // (`games-repo-archive.ts`) so a whole snapshot costs one download instead of a
   // read per file, and every line of assembly below stays the same either way.
   const readRawFile = options.files ? options.files.readText : readRawFileFromApi;
+  /**
+   * The kit declaration by ref. Immutable for a given ref by definition, ~77KB,
+   * and read on every code edit — so it is held for the process's life rather
+   * than re-fetched per request. `null` is cached too: a ref without one will
+   * not grow one.
+   */
+  const gameKitByRef = new Map<string, string | null>();
   const readRawBytes = options.files ? options.files.readBytes : readRawBytesFromApi;
 
   async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -1164,6 +1183,14 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       // of", and the two would drift the first time an import convention moved.
       await bundleGameTypeScript(entry, ref, slug, undefined, collected);
       return Object.fromEntries(collected);
+    },
+
+    async getGameKitDeclaration(ref) {
+      const cached = gameKitByRef.get(ref);
+      if (cached !== undefined) return cached;
+      const source = await readRawFile('shared/game-kit.d.ts', ref);
+      gameKitByRef.set(ref, source);
+      return source;
     },
 
     async getGameFile(ref, slug, path) {

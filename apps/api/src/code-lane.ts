@@ -39,6 +39,15 @@ export const DEFAULT_PICK_TIMEOUT_MS = 8000;
 export const DEFAULT_EDIT_TIMEOUT_MS = 20000;
 /** Rounds of "here is the compiler error, try again" before giving up. */
 export const MAX_REPAIR_ROUNDS = 2;
+/**
+ * Ceiling on the kit declaration in a prompt (~20k tokens at 4 chars/token).
+ *
+ * The kit is ~77KB today and comfortably inside a 32k-token budget, but it is a
+ * file that grows, and an unbounded prompt is a latency cliff waiting to happen.
+ * Truncation degrades the edit rather than failing it — the gate still catches
+ * anything the model invents past the cut.
+ */
+export const MAX_KIT_CHARS = 80_000;
 
 /**
  * Temporary: trace every step of a lane run into the response and the log.
@@ -86,6 +95,30 @@ export interface CodeLaneRequest {
   sources: Record<string, string>;
   utterance: string;
   game?: { title?: string; genre?: string };
+  /**
+   * `shared/game-kit.d.ts`, when the caller has it.
+   *
+   * Every game is written against `GameKit`, and until this was passed the
+   * editing call had to guess at it — which is exactly what it did, reaching for
+   * `kit.time`, `kit.flash` and `GameKitDrawStyle.color`, none of which exist.
+   * Those guesses cost nothing at build time and broke the game at runtime.
+   * Optional because a caller without it should still get an edit, just a
+   * less-informed one.
+   */
+  kit?: string;
+  /**
+   * The optional `GameKit` modules this game actually loads, from its
+   * `GAME.json`.
+   *
+   * The declaration in `kit` describes the *union* of every module; a game only
+   * gets the ones its manifest names, plus the always-present core. Showing the
+   * whole declaration without this is actively misleading — the bench caught the
+   * editing call reaching for `GameKit.createComboChain`, which is real, is
+   * correctly typed, passes a type-check, and is not present at runtime for a
+   * game that does not load `gameplay`. That failure is invisible to every gate
+   * we have, because the declaration says it exists.
+   */
+  modules?: string[];
 }
 
 export type CodeLaneOutcome =
@@ -223,6 +256,8 @@ export type CodeLaneEditContext =
   | 'region'
   /** The region plus a digest of every other region's type and signature. */
   | 'types'
+  /** `types`, plus the `GameKit` declaration the game is written against. */
+  | 'kit'
   /** The whole file the region lives in, with the region marked. */
   | 'file';
 
@@ -236,17 +271,18 @@ export type CodeLaneEditContext =
  * have caught and esbuild has no opinion about.
  *
  * The digest fixes the half of that class where the invented property belongs to
- * *the game's own* types, which is most of it — the model can no longer invent a
- * field on a type it can see. It does **not** fix the other half, where the
- * property belongs to `GameKit` (`kit.time`, `kit.flash`), because the kit is an
- * ambient 77KB declaration that is not part of a game's sources. Only a
- * type-check gate catches those.
+ * *the game's own* types — the model can no longer invent a field on a type it
+ * can see — and `kit` adds `shared/game-kit.d.ts`, which closes the other half:
+ * the properties it invented on `GameKit` itself.
  *
- * Costs about 9% more tokens per edit (~3.0k → ~3.3k) and preserves the property
- * the two-call shape exists for: nowhere near the ~12k a whole game would cost.
- * Set `editContext: 'region'` to go back.
+ * Widening this turned out to make the lane *faster*, not slower, which is the
+ * opposite of what the original cost argument assumed. Output tokens dominate
+ * latency, and a model that can see what it must satisfy writes the short
+ * correct thing once instead of writing something hedged and then spending
+ * repair rounds on it: mean 14.5s → 7.0s on the bench. Set `editContext:
+ * 'region'` to go back to the narrow original.
  */
-export const DEFAULT_EDIT_CONTEXT: CodeLaneEditContext = 'types';
+export const DEFAULT_EDIT_CONTEXT: CodeLaneEditContext = 'kit';
 
 /**
  * Observation points for the local bench, which needs to see every prompt and
@@ -541,6 +577,38 @@ ${request.utterance}
    */
   private editContextBlock(request: CodeLaneRequest, region: SymbolRegion, regions: SymbolRegion[]): string {
     const context = this.options.editContext ?? DEFAULT_EDIT_CONTEXT;
+    if (context === 'kit') {
+      const digest = renderApiDigest(request.sources, regions, region);
+      // The kit first: it is the vocabulary, and the game's own types are
+      // written in it. Nothing is stripped — the doc comments on the kit's
+      // members are what say which of two similar-looking calls is the right
+      // one, and they are the cheapest correctness signal in the prompt.
+      // The module warning has to come *before* the declaration, because by the
+      // time the model has read 2,000 lines of API it has already decided what
+      // to reach for.
+      const loaded = request.modules?.length ? request.modules.join(', ') : 'none';
+      return `
+This game loads these optional GameKit modules and NO others: ${loaded}.
+The declaration below describes every module that exists anywhere. Anything
+belonging to a module this game does not load is NOT present at runtime — using
+it compiles and type-checks cleanly and then throws "is not a function". If what
+you need is not available, write it inside the region by hand instead.
+
+The \`GameKit\` API. If a property is not declared here, it does not exist:
+\`\`\`ts
+${(request.kit ?? '').slice(0, MAX_KIT_CHARS)}
+\`\`\`
+${
+  digest
+    ? `
+The rest of this game's own API — types in full, everything else by signature:
+\`\`\`ts
+${digest}
+\`\`\`
+`
+    : ''
+}`;
+    }
     if (context === 'types') {
       const digest = renderApiDigest(request.sources, regions, region);
       return digest
