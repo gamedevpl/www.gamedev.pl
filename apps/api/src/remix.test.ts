@@ -426,6 +426,67 @@ describe('remix routes', () => {
     }
   });
 
+  it('stops emitting the trace when the operator closes the window, without a deploy', async () => {
+    // Clearing the repository variable changes nothing on a revision already
+    // running, and the wait for the next deploy would be spent logging players'
+    // own words. So closing it is a runtime read, not a release.
+    const store = new InMemoryStore();
+    await store.setPublication({
+      slug: 'dog-dash',
+      state: 'published',
+      currentVersion: 'v1',
+      publishedAt: new Date(0).toISOString(),
+    });
+    const instance = Fastify({ routerOptions: { maxParamLength: MAX_REMIX_ID_LENGTH } });
+    instance.decorateRequest('user', null);
+    instance.addHook('onRequest', async (request) => {
+      const uid = request.headers['x-test-uid'];
+      (request as { user?: unknown }).user = typeof uid === 'string' ? { uid, tier: 'standard' } : null;
+    });
+    let tracePaused = false;
+    await registerRemixRoutes(instance, {
+      store,
+      gamesStore: stubGamesStore(),
+      githubClient: stubGitHubClient([]),
+      publishedRef: 'main',
+      editingGate: {
+        checkAndSpend: async () => ({ allowed: true }),
+        isTracePaused: async () => tracePaused,
+      },
+      codeLane: {
+        run: async (_request: unknown, build: (o: Record<string, string>) => Promise<{ ok: boolean }>) => {
+          const good = { 'game/runtime.ts': 'export function startGame() {\n  return 0.08;\n}\n' };
+          await build(good);
+          return {
+            ok: true,
+            overrides: good,
+            region: { file: 'game/runtime.ts', name: 'startGame' },
+            rounds: 0,
+            tokens: { input: 1, output: 1 },
+            trace: { regionCount: 3, picked: { decision: 'edit', found: true }, rounds: [] },
+          };
+        },
+      } as never,
+    });
+    await instance.ready();
+    app = instance;
+
+    const { remixId } = (
+      await instance.inject({ method: 'POST', url: '/api/games/dog-dash/remix', headers: alice })
+    ).json();
+    const url = `/api/remixes/${remixId}/code`;
+    const payload = { utterance: 'make it twice as fast' };
+
+    process.env.REMIX_DEBUG = 'true';
+    try {
+      expect((await instance.inject({ method: 'POST', url, headers: alice, payload })).json().debug).toBeTruthy();
+      tracePaused = true;
+      expect((await instance.inject({ method: 'POST', url, headers: alice, payload })).json().debug).toBeUndefined();
+    } finally {
+      delete process.env.REMIX_DEBUG;
+    }
+  });
+
   it('reports a failed code edit without swapping anything', async () => {
     const codeLane = {
       run: async () => ({ ok: false, reason: 'did_not_compile', tokens: { input: 1, output: 1 } }),

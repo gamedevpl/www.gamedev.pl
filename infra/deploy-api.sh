@@ -205,6 +205,18 @@ if [ -n "${GAMES_STORE_BUCKET:-}" ]; then
   # would pile up stored and unverified with nothing in the logs saying why.
   ENV_VARS="${ENV_VARS}|GATE_BUILD_PROJECT=${PROJECT_ID}"
 fi
+# The remix code-lane trace. Threaded here as well as in the Actions workflow,
+# because --set-env-vars replaces the whole map: a deploy from this script would
+# otherwise drop a flag the workflow had set, and the trace would stop with
+# nothing to say why. Both supported paths carry it or neither should.
+#
+# Note this only opens the window. Closing it does not wait for either path —
+# `remixTracePaused` on the creation-limits document stops emission within the
+# breaker's TTL, because the interval between deciding to stop and stopping is
+# spent writing players' own words to the log.
+if [ -n "${REMIX_DEBUG:-}" ]; then
+  ENV_VARS="${ENV_VARS}|REMIX_DEBUG=${REMIX_DEBUG}"
+fi
 if [ -n "${CANONICAL_HOST:-}" ]; then
   ENV_VARS="${ENV_VARS}|CANONICAL_HOST=${CANONICAL_HOST}"
 fi
