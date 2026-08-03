@@ -132,6 +132,24 @@ async function seedPublishedGame(store: InMemoryStore) {
   });
 }
 
+async function callCreateGame(
+  app: FastifyInstance,
+  args: Record<string, unknown>,
+  headers: Record<string, string> = {},
+) {
+  const res = await mcpCall(app, 'tools/call', { name: 'create_game', arguments: args }, headers);
+  expect(res.statusCode).toBe(200);
+  const body = res.json() as {
+    result?: { content?: Array<{ text: string }>; structuredContent?: unknown; isError?: boolean };
+  };
+  const structured =
+    body.result?.structuredContent ??
+    (body.result?.content?.[0]?.text ? JSON.parse(body.result.content[0].text) : undefined);
+  return { structured, isError: Boolean(body.result?.isError) };
+}
+
+const GAME_CONCEPT = 'A tycoon game where you run a small television station, buy shows, and keep the audience awake.';
+
 /** Full CIMD-free OAuth flow: register, approve, exchange — returns an access token. */
 async function oauthAccessToken(app: FastifyInstance): Promise<string> {
   const register = await app.inject({
@@ -750,5 +768,102 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
     expect(isError).toBe(true);
     // Names the slug, never the credential — a mistype must not push a destructive rotate.
     expect((structured as { error: string }).error).toBe(SLUG_NOT_ON_ACCOUNT_REASON);
+  });
+
+  // The gap CP-2's ChatGPT screenshot showed: a connected client could join a round on
+  // a game that already existed, and had no way to make one — so "let's build a game"
+  // dead-ended on a slug that did not exist.
+  it('creates a game from a creator key and returns a slug start() accepts', async () => {
+    const store = new InMemoryStore();
+    app = await createApp(store);
+
+    const minted = await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
+    const creatorKey = minted.json().key as string;
+
+    const { structured, isError } = await callCreateGame(
+      app,
+      { title: 'TV Tycoon', concept: GAME_CONCEPT },
+      { authorization: `Bearer ${creatorKey}` },
+    );
+    expect(isError).toBe(false);
+    const { slug, jobId } = structured as { slug: string; jobId: number };
+    expect(slug).toBeTruthy();
+
+    const job = await store.getSubmission(jobId);
+    expect(job?.ownerUid).toBe(OWNER);
+    // The caller's own agent builds it — that is what this tool is for.
+    expect(job?.builder).toBe('self');
+    // The concept is persisted as the brief, so get_brief has something to serve.
+    expect(job?.spec).toContain('television station');
+
+    // The whole point: the slug it returns is one start() will take.
+    const started = await callStart(app, { slug }, { authorization: `Bearer ${creatorKey}` });
+    expect(started.isError).toBe(false);
+    expect((started.structured as { slug: string }).slug).toBe(slug);
+  });
+
+  it('creates a game over OAuth too, so a chat client is not second class', async () => {
+    const store = new InMemoryStore();
+    app = await createApp(store);
+    const accessToken = await oauthAccessToken(app);
+
+    const { structured, isError } = await callCreateGame(
+      app,
+      { title: 'Chat Built', concept: GAME_CONCEPT },
+      { authorization: `Bearer ${accessToken}` },
+    );
+    expect(isError).toBe(false);
+    const job = await store.getSubmission((structured as { jobId: number }).jobId);
+    expect(job?.ownerUid).toBe(OWNER);
+  });
+
+  it('refuses a per-game key and a sessionKey, which cannot widen into creation', async () => {
+    const store = new InMemoryStore();
+    await seedPublishedGame(store);
+    app = await createApp(store);
+
+    const gameKey = mintGameAgentKey(secret, { slug: SLUG, creatorUid: OWNER, keyGeneration: 1 });
+    const viaGameKey = await callCreateGame(
+      app,
+      { title: 'Sneaky', concept: GAME_CONCEPT },
+      { authorization: `Bearer ${gameKey}` },
+    );
+    expect(viaGameKey.isError).toBe(true);
+    expect((viaGameKey.structured as { error: string }).error).toMatch(/per-game key cannot create a game/i);
+
+    const sessionKey = mintMcpSessionKey(secret, { sessionId: 'sess-create', jobId: 1, roundGeneration: 1 });
+    const viaSession = await callCreateGame(
+      app,
+      { title: 'Sneaky', concept: GAME_CONCEPT },
+      { authorization: `Bearer ${sessionKey}` },
+    );
+    expect(viaSession.isError).toBe(true);
+    expect((viaSession.structured as { error: string }).error).toMatch(/sessionKey/i);
+
+    // With no credential at all the HTTP layer challenges before the tool runs, which
+    // is the behaviour BY-18a added — a 401 carrying the OAuth discovery header.
+    const anonymous = await mcpCall(app, 'tools/call', {
+      name: 'create_game',
+      arguments: { title: 'Sneaky', concept: GAME_CONCEPT },
+    });
+    expect(anonymous.statusCode).toBe(401);
+    expect(anonymous.headers['www-authenticate']).toMatch(/resource_metadata="/);
+  });
+
+  // Same sequence as Studio means the same refusals — a short concept is rejected by the
+  // shared schema, not by a second copy of the rules that could drift from it.
+  it('applies the same validation Studio applies', async () => {
+    const store = new InMemoryStore();
+    app = await createApp(store);
+    const minted = await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
+    const creatorKey = minted.json().key as string;
+
+    const tooShort = await callCreateGame(
+      app,
+      { title: 'X', concept: 'too short' },
+      { authorization: `Bearer ${creatorKey}` },
+    );
+    expect(tooShort.isError).toBe(true);
+    expect((tooShort.structured as { error: string }).error).toMatch(/at least 3 characters|title must be/i);
   });
 });
