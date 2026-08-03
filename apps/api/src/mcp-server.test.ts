@@ -1142,4 +1142,74 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(described).toMatch(/same Mcp-Session-Id/i);
     expect(described).toMatch(/call start\(\) again/i);
   });
+
+  // ChatGPT badged read-only tools DESTRUCTIVE, because MCP's defaults are not "unknown":
+  // an un-annotated tool reads as readOnlyHint:false + destructiveHint:true. Nothing here
+  // deletes anything.
+  it('annotates every tool, so a reader is not advertised as destructive', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+
+    const res = await mcpCall(app, 'tools/list', undefined, { 'mcp-session-id': sessionId });
+    const tools = (
+      res.json().result as {
+        tools: Array<{
+          name: string;
+          annotations?: { title?: string; readOnlyHint?: boolean; destructiveHint?: boolean };
+          outputSchema?: { type?: string };
+        }>;
+      }
+    ).tools;
+
+    // No tool may go out unannotated — that is what produced the badge.
+    for (const tool of tools) {
+      expect(tool.annotations, `${tool.name} has no annotations`).toBeTruthy();
+      expect(tool.annotations?.title, `${tool.name} has no title`).toBeTruthy();
+      expect(typeof tool.annotations?.destructiveHint, `${tool.name} has no destructiveHint`).toBe('boolean');
+    }
+
+    // `destructiveHint: false` is a claim that the tool is purely *additive*, and a
+    // client may skip its approval prompt on that basis — so a tool that consumes a
+    // capped delivery, moves the pointer deciding what publishes, or makes creator
+    // messages stop appearing has to say so, even though nothing is erased.
+    for (const name of ['submit_sources', 'ack_inbox']) {
+      expect(tools.find((tool) => tool.name === name)?.annotations?.destructiveHint, name).toBe(true);
+    }
+    for (const name of ['get_brief', 'list_examples', 'start', 'open_round', 'report_progress']) {
+      expect(tools.find((tool) => tool.name === name)?.annotations?.destructiveHint, name).toBe(false);
+    }
+
+    const readers = ['get_brief', 'get_seed', 'get_kit', 'get_sources', 'list_examples', 'get_example', 'read_inbox'];
+    for (const name of readers) {
+      expect(tools.find((tool) => tool.name === name)?.annotations?.readOnlyHint, name).toBe(true);
+    }
+    const writers = ['start', 'open_round', 'report_progress', 'send_screenshot', 'submit_sources', 'ack_inbox'];
+    for (const name of writers) {
+      expect(tools.find((tool) => tool.name === name)?.annotations?.readOnlyHint, name).toBe(false);
+    }
+  });
+
+  it('declares an outputSchema wherever this file builds the payload', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+
+    const res = await mcpCall(app, 'tools/list', undefined, { 'mcp-session-id': sessionId });
+    const tools = (res.json().result as { tools: Array<{ name: string; outputSchema?: { type?: string } }> }).tools;
+
+    // Only these: the rest return the channel's body verbatim, and declaring a shape
+    // this file does not construct would be asserting a contract it cannot keep.
+    for (const name of ['start', 'open_round', 'get_sources', 'list_examples', 'report_progress']) {
+      expect(tools.find((tool) => tool.name === name)?.outputSchema?.type, name).toBe('object');
+    }
+    const startSchema = tools.find((tool) => tool.name === 'start')?.outputSchema as {
+      properties?: Record<string, unknown>;
+      required?: string[];
+    };
+    expect(startSchema.properties?.sessionKey).toBeTruthy();
+    expect(startSchema.required).toContain('sessionKey');
+  });
 });
