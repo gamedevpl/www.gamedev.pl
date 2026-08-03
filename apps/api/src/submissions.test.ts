@@ -1063,6 +1063,15 @@ describe('submission routes', () => {
     expect(response.statusCode).toBe(200);
     expect(briefs.at(-1)?.undelivered).toBeUndefined();
     expect(briefs.at(-1)?.feedback).toContain('Make the parcels bigger');
+    // Gate-green closed the round; feedback must reopen the job, not leave it stuck
+    // in ready_for_review while a session quietly starts underneath.
+    const after = await store.getSubmission(job.issueNumber);
+    expect(after?.state).toBe('building');
+    expect(after?.transitions?.at(-1)).toMatchObject({
+      to: 'building',
+      by: 'creator',
+      reason: 'creator_feedback',
+    });
 
     await app.close();
   });

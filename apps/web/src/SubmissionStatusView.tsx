@@ -32,6 +32,7 @@ function copyInputFromStatus(status: SubmissionStatus | null | undefined) {
     builder: status?.builder,
     stall: status?.stall,
     failureReason: status?.failure?.reason,
+    phase: status?.phase,
   };
 }
 
@@ -712,6 +713,7 @@ export function SubmissionStatusView({
                     roundBuilder={status.builder && isBuilderKind(status.builder) ? status.builder : undefined}
                     stall={status.stall}
                     failureReason={status.failure?.reason}
+                    phase={status.phase}
                     onSent={(text) => setPendingRevisions((current) => [...current, { text, at: Date.now() }])}
                     onPublishedImprove={handleImproved}
                   />
@@ -888,6 +890,7 @@ export function SubmissionStatusView({
                 roundBuilder={status.builder && isBuilderKind(status.builder) ? status.builder : undefined}
                 stall={status.stall}
                 failureReason={status.failure?.reason}
+                phase={status.phase}
                 onSent={(text) => setPendingRevisions((current) => [...current, { text, at: Date.now() }])}
                 onPublishedImprove={handleImproved}
               />
@@ -1093,6 +1096,7 @@ function FeedbackPanel({
   roundBuilder,
   stall,
   failureReason,
+  phase,
   onSent,
   onPublishedImprove,
 }: {
@@ -1109,6 +1113,8 @@ function FeedbackPanel({
   roundBuilder?: BuilderKind;
   stall?: SubmissionStatus['stall'];
   failureReason?: string;
+  /** Internal job phase — gate-green drafts need honest "start your agent" routing. */
+  phase?: SubmissionStatus['phase'];
   onSent: (text: string) => void;
   /**
    * A published-game improvement opened a new job; called with its token so the view
@@ -1151,6 +1157,7 @@ function FeedbackPanel({
     builder: routeBuilder,
     stall: chooseBuilder ? null : stall,
     failureReason: chooseBuilder ? null : failureReason,
+    phase: chooseBuilder ? null : phase,
   });
   const sentSelfKey =
     composerRoute === 'active'

@@ -1214,7 +1214,7 @@ describe('POST /api/mcp (BY-05)', () => {
     for (const name of ['submit_sources', 'ack_inbox']) {
       expect(tools.find((tool) => tool.name === name)?.annotations?.destructiveHint, name).toBe(true);
     }
-    for (const name of ['get_brief', 'list_examples', 'start', 'open_round', 'report_progress']) {
+    for (const name of ['get_brief', 'list_examples', 'start', 'open_round', 'continue_draft', 'report_progress']) {
       expect(tools.find((tool) => tool.name === name)?.annotations?.destructiveHint, name).toBe(false);
     }
 
@@ -1234,7 +1234,15 @@ describe('POST /api/mcp (BY-05)', () => {
     for (const name of readers) {
       expect(tools.find((tool) => tool.name === name)?.annotations?.readOnlyHint, name).toBe(true);
     }
-    const writers = ['start', 'open_round', 'report_progress', 'send_screenshot', 'submit_sources', 'ack_inbox'];
+    const writers = [
+      'start',
+      'open_round',
+      'continue_draft',
+      'report_progress',
+      'send_screenshot',
+      'submit_sources',
+      'ack_inbox',
+    ];
     for (const name of writers) {
       expect(tools.find((tool) => tool.name === name)?.annotations?.readOnlyHint, name).toBe(false);
     }
@@ -1251,7 +1259,15 @@ describe('POST /api/mcp (BY-05)', () => {
 
     // Only these: the rest return the channel's body verbatim, and declaring a shape
     // this file does not construct would be asserting a contract it cannot keep.
-    for (const name of ['start', 'create_game', 'open_round', 'get_sources', 'list_examples', 'report_progress']) {
+    for (const name of [
+      'start',
+      'create_game',
+      'open_round',
+      'continue_draft',
+      'get_sources',
+      'list_examples',
+      'report_progress',
+    ]) {
       expect(tools.find((tool) => tool.name === name)?.outputSchema?.type, name).toBe('object');
     }
     const startSchema = tools.find((tool) => tool.name === 'start')?.outputSchema as {

@@ -88,7 +88,11 @@ const ALLOWED_TRANSITIONS: Readonly<Record<JobState, readonly JobState[]>> = {
   // long as the creator kept the page open.
   submitted: ['gating', 'ready_for_review', 'needs_changes', 'failed', 'canceled', 'abandoned'],
   gating: ['ready_for_review', 'needs_changes', 'failed', 'canceled', 'abandoned'],
-  ready_for_review: ['publishing', 'needs_changes', 'canceled', 'abandoned'],
+  // `building` (and the queue/dispatch that precede a fresh round) let a creator or
+  // their agent continue iterating after a green gate without waiting on publish —
+  // Studio feedback and MCP `continue_draft` both land here. Reviewer reject still
+  // goes through `needs_changes`; publish still goes through `publishing`.
+  ready_for_review: ['publishing', 'needs_changes', 'building', 'queued', 'dispatched', 'canceled', 'abandoned'],
   // A failed bake must be able to fall back, or a job strands with no way home.
   publishing: ['published', 'needs_changes', 'failed'],
   // Improvements start a *new* job, so publishing is terminal for this one.

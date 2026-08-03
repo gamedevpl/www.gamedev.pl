@@ -64,6 +64,19 @@ export async function findActiveRoundForSlug(
 }
 
 /**
+ * Newest unpublished draft job for this slug owned by the creator, or null.
+ * Used by MCP `continue_draft` — post-publish work uses `open_round` instead.
+ */
+export async function findDraftJobForSlug(
+  store: Store,
+  slug: string,
+  creatorUid: string,
+): Promise<SubmissionRecord | null> {
+  const bySlug = await store.listSubmissionsBySlug(slug);
+  return bySlug.find((job) => job.ownerUid === creatorUid && !job.abandonedAt && !job.publishedAt) ?? null;
+}
+
+/**
  * Signature, generation, expiry, and slug ownership — shared by `start` and `open_round`.
  * Does not require an open round or a published game.
  */

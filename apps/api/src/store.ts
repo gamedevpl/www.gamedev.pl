@@ -2330,7 +2330,12 @@ export class InMemoryStore implements Store {
       transitions: [...(sub.transitions ?? []), transition].slice(-MAX_JOB_TRANSITIONS),
       ...(closes ? { roundGeneration: nextRoundGeneration(sub.roundGeneration), roundDeliveryCount: 0 } : {}),
     };
-    if (closes) delete next.seed;
+    if (closes) {
+      delete next.seed;
+      // Signals belong to the round that closed — keeping them makes the next self
+      // round look "connected" before any agent has joined.
+      delete next.lastAgentSignalAt;
+    }
     this.submissions.set(issueNumber, next);
     return true;
   }
@@ -2341,6 +2346,7 @@ export class InMemoryStore implements Store {
     const roundGeneration = nextRoundGeneration(sub.roundGeneration);
     const next: SubmissionRecord = { ...sub, roundGeneration, roundDeliveryCount: 0 };
     delete next.seed;
+    delete next.lastAgentSignalAt;
     this.submissions.set(issueNumber, next);
     return roundGeneration;
   }
@@ -3942,6 +3948,7 @@ export class FirestoreStore implements Store {
           roundDeliveryCount: 0,
         };
         delete next.seed;
+        delete next.lastAgentSignalAt;
         tx.set(ref, next);
       } else {
         tx.set(
@@ -3967,6 +3974,7 @@ export class FirestoreStore implements Store {
       const roundGeneration = nextRoundGeneration(current.roundGeneration);
       const next: SubmissionRecord = { ...current, roundGeneration, roundDeliveryCount: 0 };
       delete next.seed;
+      delete next.lastAgentSignalAt;
       tx.set(ref, next);
       return roundGeneration;
     });

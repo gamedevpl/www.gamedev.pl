@@ -101,6 +101,16 @@ describe('transition rules', () => {
     expect(canTransition('ready_for_review', 'needs_changes')).toBe(true);
   });
 
+  it('lets a green draft reopen into another build round before publish', () => {
+    // Studio feedback and MCP continue_draft resume the same job; without this the
+    // dispatch succeeds and the state stays ready_for_review forever.
+    expect(canTransition('ready_for_review', 'building')).toBe(true);
+    expect(canTransition('ready_for_review', 'queued')).toBe(true);
+    expect(canTransition('ready_for_review', 'dispatched')).toBe(true);
+    // Still no shortcut past moderation into a live game.
+    expect(canTransition('ready_for_review', 'published')).toBe(false);
+  });
+
   // A gate-red round is not always over: `mustFixGate` tells the live session to fix the
   // cause and deliver again without a new dispatch. agent-channel records that upload
   // only when this holds, so refusing it stranded a game the agent had already repaired.

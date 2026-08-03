@@ -74,7 +74,10 @@ export function mcpRequestLacksCredential(request: FastifyRequest, message: Json
   if (nonEmptyString(args.sessionKey)) return false;
 
   const toolName = nonEmptyString(toolParams.name);
-  if ((toolName === 'start' || toolName === 'open_round') && nonEmptyString(args.key)) {
+  if (
+    (toolName === 'start' || toolName === 'open_round' || toolName === 'continue_draft') &&
+    nonEmptyString(args.key)
+  ) {
     return false;
   }
 
