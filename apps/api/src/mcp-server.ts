@@ -253,7 +253,7 @@ const SESSION_WORKFLOW: readonly string[] = [
   // one. get_sources is cheap and answers available:false on a new game, so it is
   // unconditional rather than gated on a round type the agent cannot see.
   'get_sources — when it returns available:true this round improves an existing game: continue those files. Never scaffold over them.',
-  'get_kit — keep engineRef for submit_sources. Prefer list_kit_files / search_kit_files / read_kit_file / read_kit_file_fragment (start at entry) when shell unpack is unavailable; otherwise unpack via the returned one-liner and follow SKILL.md locally. Never dump the whole kit into context.',
+  'get_kit — keep engineRef for submit_sources and pass it on every list_kit_files / search_kit_files / read_kit_file / read_kit_file_fragment call (start at entry) when shell unpack is unavailable; otherwise unpack via the returned one-liner and follow SKILL.md locally. Never dump the whole kit into context.',
   'Build the game — continuing the seed or sources you fetched, otherwise from the kit; report_progress before and after long steps.',
   'send_screenshot as soon as the game draws anything playable.',
   'Run the kit checks green (at least check:static) before delivering when you have a local kit checkout; otherwise deliver and let the gate run checks.',
@@ -308,6 +308,13 @@ const SESSION_KEY_PROP = {
   type: 'string' as const,
   description:
     'Short-lived session capability from start(). Present this argument OR configure Authorization: Bearer <round key> — not both required. Send it with the same Mcp-Session-Id header start() used: that header alone is never authority, but a sessionKey is bound to the session that minted it, so a different one is refused. If the transport session is lost, call start() again — it re-binds and re-mints.',
+};
+
+/** Pin kit browse/read calls to the engineRef get_kit returned (N/N−1 window). */
+const KIT_ENGINE_REF_PROP = {
+  type: 'string' as const,
+  description:
+    'Creator Kit engineRef from get_kit. Pass on every browse/read call so a mid-round registry bump cannot mix kit revisions.',
 };
 
 export async function registerMcpServerRoutes(app: FastifyInstance, options: McpServerOptions = {}): Promise<void> {
@@ -1253,14 +1260,15 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     list_kit_files: {
       annotations: { title: 'List Creator Kit files', ...READS },
       description:
-        'List paths inside the current Creator Kit (size + text/binary kind). ' +
-        'Optional prefix (e.g. shared/modules) or simple glob (*). Paginate with limit/offset. ' +
-        'Start from get_kit.entry via read_kit_file. ' +
+        'List paths inside a pinned Creator Kit (size + text/binary kind). ' +
+        'Pass engineRef from get_kit. Optional prefix (e.g. shared/modules) or simple glob (*). ' +
+        'Paginate with limit/offset. Start from get_kit.entry via read_kit_file. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
         type: 'object',
         properties: {
           sessionKey: SESSION_KEY_PROP,
+          engineRef: KIT_ENGINE_REF_PROP,
           prefix: { type: 'string', description: 'Path prefix under the kit root (or full gamedevpl-creator-kit/…).' },
           glob: { type: 'string', description: 'Simple glob with * wildcards (e.g. **/*.md or shared/modules/*.ts).' },
           limit: { type: 'integer', description: 'Max paths to return (default 200, max 500).' },
@@ -1272,6 +1280,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
         const params = new URLSearchParams();
+        if (typeof args.engineRef === 'string' && args.engineRef.trim()) {
+          params.set('engineRef', args.engineRef.trim());
+        }
         if (typeof args.prefix === 'string' && args.prefix.trim()) params.set('prefix', args.prefix.trim());
         if (typeof args.glob === 'string' && args.glob.trim()) params.set('glob', args.glob.trim());
         if (typeof args.limit === 'number' && Number.isFinite(args.limit)) params.set('limit', String(args.limit));
@@ -1294,13 +1305,14 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     search_kit_files: {
       annotations: { title: 'Search Creator Kit files', ...READS },
       description:
-        'Search text files in the current Creator Kit for a substring (case-insensitive). ' +
-        'Returns path + line + snippet; capped match count. Prefer this over reading many files. ' +
+        'Search text files in a pinned Creator Kit for a substring (case-insensitive). ' +
+        'Pass engineRef from get_kit. Returns path + line + snippet; capped match count. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
         type: 'object',
         properties: {
           sessionKey: SESSION_KEY_PROP,
+          engineRef: KIT_ENGINE_REF_PROP,
           query: { type: 'string', description: 'Substring to find (2–120 chars).' },
           prefix: { type: 'string', description: 'Optional path prefix to narrow the search.' },
           limit: { type: 'integer', description: 'Max matches (default/max 40).' },
@@ -1313,6 +1325,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const query = typeof args.query === 'string' ? args.query.trim() : '';
         if (!query) return toolErr('query is required');
         const params = new URLSearchParams({ q: query });
+        if (typeof args.engineRef === 'string' && args.engineRef.trim()) {
+          params.set('engineRef', args.engineRef.trim());
+        }
         if (typeof args.prefix === 'string' && args.prefix.trim()) params.set('prefix', args.prefix.trim());
         if (typeof args.limit === 'number' && Number.isFinite(args.limit)) params.set('limit', String(args.limit));
         const res = await injectChannel(
@@ -1332,14 +1347,14 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     read_kit_file: {
       annotations: { title: 'Read one Creator Kit file', ...READS },
       description:
-        'Read one small Creator Kit file (≤48 KiB). Larger files return kit_file_too_large — use ' +
-        'read_kit_file_fragment. Binary files need encoding=base64. Paths may be kit-relative or ' +
-        'gamedevpl-creator-kit/…. ' +
+        'Read one small Creator Kit file (≤48 KiB). Pass engineRef from get_kit. Larger files return ' +
+        'kit_file_too_large — use read_kit_file_fragment. Binary files need encoding=base64. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
         type: 'object',
         properties: {
           sessionKey: SESSION_KEY_PROP,
+          engineRef: KIT_ENGINE_REF_PROP,
           path: { type: 'string', description: 'Kit file path (e.g. SKILL.md or gamedevpl-creator-kit/SKILL.md).' },
           encoding: {
             type: 'string',
@@ -1355,6 +1370,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const path = typeof args.path === 'string' ? args.path.trim() : '';
         if (!path) return toolErr('path is required');
         const params = new URLSearchParams({ path });
+        if (typeof args.engineRef === 'string' && args.engineRef.trim()) {
+          params.set('engineRef', args.engineRef.trim());
+        }
         if (args.encoding === 'base64' || args.encoding === 'utf8') params.set('encoding', args.encoding);
         const res = await injectChannel(
           ctx.request,
@@ -1373,18 +1391,27 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     read_kit_file_fragment: {
       annotations: { title: 'Read a Creator Kit file fragment', ...READS },
       description:
-        'Read a window of one Creator Kit file by lines (default) or bytes. Use for large modules/skills. ' +
-        'offset is 0-based; response includes eof, totalBytes, totalLines. ' +
+        'Read a window of one Creator Kit file by lines (default) or bytes (always base64). ' +
+        'Pass engineRef from get_kit. Use nextOffset for pagination. Overlong line windows error — switch to unit=bytes. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
         type: 'object',
         properties: {
           sessionKey: SESSION_KEY_PROP,
+          engineRef: KIT_ENGINE_REF_PROP,
           path: { type: 'string', description: 'Kit file path.' },
-          offset: { type: 'integer', description: '0-based start line or byte.' },
+          offset: { type: 'integer', description: '0-based start line or byte (use nextOffset from the prior reply).' },
           limit: { type: 'integer', description: 'Max lines (≤200) or bytes (≤32 KiB).' },
-          unit: { type: 'string', enum: ['lines', 'bytes'], description: 'Default lines; bytes required for binary.' },
-          encoding: { type: 'string', enum: ['utf8', 'base64'], description: 'base64 required for binary.' },
+          unit: {
+            type: 'string',
+            enum: ['lines', 'bytes'],
+            description: 'Default lines; bytes required for binary and always returns base64.',
+          },
+          encoding: {
+            type: 'string',
+            enum: ['utf8', 'base64'],
+            description: 'utf8 for lines; base64 required for unit=bytes.',
+          },
         },
         required: ['path'],
       },
@@ -1394,6 +1421,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const path = typeof args.path === 'string' ? args.path.trim() : '';
         if (!path) return toolErr('path is required');
         const params = new URLSearchParams({ path });
+        if (typeof args.engineRef === 'string' && args.engineRef.trim()) {
+          params.set('engineRef', args.engineRef.trim());
+        }
         if (typeof args.offset === 'number' && Number.isFinite(args.offset)) params.set('offset', String(args.offset));
         if (typeof args.limit === 'number' && Number.isFinite(args.limit)) params.set('limit', String(args.limit));
         if (args.unit === 'lines' || args.unit === 'bytes') params.set('unit', args.unit);

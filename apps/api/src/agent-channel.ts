@@ -329,7 +329,9 @@ export async function registerAgentChannelRoutes(
               error.code === 'kit_artifact_missing' ||
               error.code === 'kit_file_missing'
             ? 404
-            : 400;
+            : error.code === 'kit_revision_unsupported'
+              ? 409
+              : 400;
       return reply.status(status).send({ error: error.code, message: error.message });
     }
     if (error instanceof KitRegistryError) {
@@ -1200,8 +1202,9 @@ export async function registerAgentChannelRoutes(
           glob?: string;
           limit?: string;
           offset?: string;
+          engineRef?: string;
         };
-        const tree = await kitFileStore.loadCurrentTree();
+        const tree = await kitFileStore.loadTree(query.engineRef);
         return reply.send(
           listKitFiles(tree, {
             prefix: query.prefix,
@@ -1229,8 +1232,14 @@ export async function registerAgentChannelRoutes(
         return reply.status(503).send({ error: 'kit_store_unavailable', message: 'the kit store is not configured' });
       }
       try {
-        const query = request.query as { q?: string; query?: string; prefix?: string; limit?: string };
-        const tree = await kitFileStore.loadCurrentTree();
+        const query = request.query as {
+          q?: string;
+          query?: string;
+          prefix?: string;
+          limit?: string;
+          engineRef?: string;
+        };
+        const tree = await kitFileStore.loadTree(query.engineRef);
         return reply.send(
           searchKitFiles(tree, {
             query: query.q ?? query.query ?? '',
@@ -1257,12 +1266,12 @@ export async function registerAgentChannelRoutes(
         return reply.status(503).send({ error: 'kit_store_unavailable', message: 'the kit store is not configured' });
       }
       try {
-        const query = request.query as { path?: string; encoding?: string };
+        const query = request.query as { path?: string; encoding?: string; engineRef?: string };
         if (!query.path?.trim()) {
           return reply.status(400).send({ error: 'kit_path_invalid', message: 'path is required' });
         }
         const encoding = query.encoding === 'base64' || query.encoding === 'utf8' ? query.encoding : undefined;
-        const tree = await kitFileStore.loadCurrentTree();
+        const tree = await kitFileStore.loadTree(query.engineRef);
         return reply.send(readKitFile(tree, query.path, { encoding }));
       } catch (error) {
         const sent = sendKitFilesError(reply, error);
@@ -1289,13 +1298,14 @@ export async function registerAgentChannelRoutes(
           limit?: string;
           unit?: string;
           encoding?: string;
+          engineRef?: string;
         };
         if (!query.path?.trim()) {
           return reply.status(400).send({ error: 'kit_path_invalid', message: 'path is required' });
         }
         const encoding = query.encoding === 'base64' || query.encoding === 'utf8' ? query.encoding : undefined;
         const unit = query.unit === 'bytes' || query.unit === 'lines' ? query.unit : undefined;
-        const tree = await kitFileStore.loadCurrentTree();
+        const tree = await kitFileStore.loadTree(query.engineRef);
         return reply.send(
           readKitFileFragment(tree, query.path, {
             offset: optionalFiniteQuery(query.offset),

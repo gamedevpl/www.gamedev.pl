@@ -122,6 +122,7 @@ describe('kit file ops', () => {
     expect(lines.content.split('\n')).toHaveLength(2);
     expect(lines.totalLines).toBeGreaterThan(2);
     expect(lines.eof).toBe(false);
+    expect(lines.nextOffset).toBe(2);
 
     const rest = readKitFileFragment(tree, 'SKILL.md', {
       unit: 'lines',
@@ -129,14 +130,25 @@ describe('kit file ops', () => {
       limit: lines.totalLines ?? 99,
     });
     expect(rest.eof).toBe(true);
+    expect(rest.nextOffset).toBeNull();
 
     const bytes = readKitFileFragment(tree, 'shared/audio/beep.wav', {
       unit: 'bytes',
       offset: 0,
       limit: 4,
-      encoding: 'base64',
     });
+    expect(bytes.encoding).toBe('base64');
     expect(Buffer.from(bytes.content, 'base64').toString('ascii')).toBe('RIFF');
+    expect(() =>
+      readKitFileFragment(tree, 'SKILL.md', { unit: 'bytes', encoding: 'utf8', offset: 0, limit: 4 }),
+    ).toThrow(/base64/);
+  });
+
+  it('rejects overlong line windows instead of truncating', () => {
+    const big = treeFrom({
+      'wide.md': `${'x'.repeat(KIT_READ_MAX_BYTES)}\n`,
+    });
+    expect(() => readKitFileFragment(big, 'wide.md', { unit: 'lines', offset: 0, limit: 1 })).toThrow(/unit=bytes/);
   });
 
   it('classifies by extension and NUL probe', () => {
@@ -147,6 +159,9 @@ describe('kit file ops', () => {
 });
 
 describe('createKitFileStore', () => {
+  const PREV = 'cafebabe0123456789abcdef0123456789abcdef';
+  const PREV_SHA = 'b'.repeat(64);
+
   it('unpacks the current kit tarball once and serves from cache', async () => {
     const tgz = kitTarball({
       'SKILL.md': '# hi\n',
@@ -174,7 +189,34 @@ describe('createKitFileStore', () => {
     const second = await kits.loadCurrentTree();
     expect(first.files.get(`${KIT_ROOT_DIR}/SKILL.md`)?.toString('utf8')).toBe('# hi\n');
     expect(second).toBe(first);
-    // registry+sidecar on each loadCurrentTree, but tarball only once
+    // registry+sidecar on each loadTree, but tarball only once
     expect(reads).toBe(5); // 2+2 registry/sidecar + 1 tgz
+  });
+
+  it('pins browse to engineRef and rejects revisions outside N/N−1', async () => {
+    const currentTgz = kitTarball({ 'SKILL.md': '# current\n' });
+    const prevTgz = kitTarball({ 'SKILL.md': '# previous\n' });
+    const objects = new Map<string, Buffer>([
+      [
+        'kits/current.json',
+        Buffer.from(JSON.stringify({ current: ENGINE, previous: PREV, updatedAt: '2026-08-03T00:00:00.000Z' })),
+      ],
+      [`kits/${ENGINE}.json`, Buffer.from(JSON.stringify({ sha256: SHA }))],
+      [`kits/${ENGINE}.tgz`, currentTgz],
+      [`kits/${PREV}.json`, Buffer.from(JSON.stringify({ sha256: PREV_SHA }))],
+      [`kits/${PREV}.tgz`, prevTgz],
+    ]);
+    const store: GcsObjectStore = {
+      readObject: async (name) => objects.get(name) ?? null,
+      objectExists: async (name) => objects.has(name),
+      signReadUrl: async () => 'https://signed.example/kit.tgz',
+    };
+    const kits = createKitFileStore(store);
+    const pinned = await kits.loadTree(PREV);
+    expect(pinned.engineRef).toBe(PREV);
+    expect(pinned.files.get(`${KIT_ROOT_DIR}/SKILL.md`)?.toString('utf8')).toBe('# previous\n');
+    await expect(kits.loadTree('deadbeefdeadbeefdeadbeefdeadbeefdeadbeef')).rejects.toMatchObject({
+      code: 'kit_revision_unsupported',
+    });
   });
 });

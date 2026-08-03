@@ -78,6 +78,7 @@ export class KitFilesError extends Error {
     | 'kit_registry_missing'
     | 'kit_registry_invalid'
     | 'kit_artifact_missing'
+    | 'kit_revision_unsupported'
     | 'kit_path_invalid'
     | 'kit_file_missing'
     | 'kit_file_too_large'
@@ -287,6 +288,8 @@ export function readKitFileFragment(
   encoding: 'utf8' | 'base64';
   content: string;
   eof: boolean;
+  /** Pass as the next call's offset; null at EOF. */
+  nextOffset: number | null;
 } {
   const path = normalizeKitPath(rawPath);
   const bytes = tree.files.get(path);
@@ -296,13 +299,21 @@ export function readKitFileFragment(
   const kind = kitFileKind(path, bytes);
   const unit = options.unit ?? 'lines';
   const offset = Math.max(0, finiteOrUndefined(options.offset) ?? 0);
-  const encoding = options.encoding ?? (kind === 'binary' ? 'base64' : 'utf8');
+  // Byte windows are opaque slices — always base64 so multi-byte UTF-8 (Polish, emoji)
+  // is never split across fragments. Line mode is the text path.
+  const encoding = options.encoding ?? (unit === 'bytes' || kind === 'binary' ? 'base64' : 'utf8');
 
   if (kind === 'binary' && encoding !== 'base64') {
     throw new KitFilesError('kit_file_binary', `${path} is binary — pass encoding=base64`);
   }
   if (kind === 'binary' && unit === 'lines') {
     throw new KitFilesError('kit_query_invalid', 'binary files only support unit=bytes');
+  }
+  if (unit === 'bytes' && encoding !== 'base64') {
+    throw new KitFilesError(
+      'kit_query_invalid',
+      'unit=bytes requires encoding=base64 (utf8 would split multi-byte characters at fragment boundaries)',
+    );
   }
 
   if (unit === 'bytes') {
@@ -323,9 +334,10 @@ export function readKitFileFragment(
       limit,
       totalBytes: bytes.length,
       totalLines: null,
-      encoding,
-      content: encoding === 'base64' ? Buffer.from(slice).toString('base64') : Buffer.from(slice).toString('utf8'),
+      encoding: 'base64',
+      content: Buffer.from(slice).toString('base64'),
       eof: offset + slice.length >= bytes.length,
+      nextOffset: offset + slice.length >= bytes.length ? null : offset + slice.length,
     };
   }
 
@@ -340,22 +352,14 @@ export function readKitFileFragment(
   // but keep interior newlines. For fragments, a trailing `\n` between lines is fine.
   const content = slice.join('\n');
   if (Buffer.byteLength(content, 'utf8') > KIT_FRAGMENT_MAX_BYTES) {
-    // Rare: few very long lines. Fall back to a byte-capped prefix of the joined text.
-    const buf = Buffer.from(content, 'utf8').subarray(0, KIT_FRAGMENT_MAX_BYTES);
-    return {
-      engineRef: tree.engineRef,
-      path,
-      kind,
-      unit,
-      offset,
-      limit: slice.length,
-      totalBytes: bytes.length,
-      totalLines: lines.length,
-      encoding: 'utf8',
-      content: buf.toString('utf8'),
-      eof: false,
-    };
+    // Do not silently drop the remainder of an overlong line — that would skip bytes
+    // on the next line-mode page. Callers must switch to byte mode.
+    throw new KitFilesError(
+      'kit_query_invalid',
+      `line window at offset ${offset} exceeds ${KIT_FRAGMENT_MAX_BYTES} bytes — use unit=bytes with encoding=base64`,
+    );
   }
+  const eof = offset + slice.length >= lines.length;
   return {
     engineRef: tree.engineRef,
     path,
@@ -367,7 +371,8 @@ export function readKitFileFragment(
     totalLines: lines.length,
     encoding: 'utf8',
     content,
-    eof: offset + slice.length >= lines.length,
+    eof,
+    nextOffset: eof ? null : offset + slice.length,
   };
 }
 
@@ -388,9 +393,16 @@ async function unpackKitTarball(tarball: Buffer): Promise<Map<string, Buffer>> {
 }
 
 export interface KitFileStore {
-  /** Metadata + signed URL path still used by get_kit — does not unpack. */
-  loadRegistry(): Promise<{ engineRef: string; sha256: string }>;
-  /** Unpack (or return cached) tree for the current registry entry. */
+  /** Metadata for the current registry entry — does not unpack. */
+  loadRegistry(): Promise<{ engineRef: string; previous: string | null; sha256: string }>;
+  /**
+   * Unpack (or return cached) tree for a kit revision.
+   * When `engineRef` is omitted, uses `kits/current.json.current`.
+   * When provided, must be current or previous (N / N−1) — pins a browse session
+   * so a mid-round registry bump cannot mix files from two kits.
+   */
+  loadTree(engineRef?: string): Promise<KitTree>;
+  /** @deprecated Prefer {@link loadTree}; alias for `loadTree()`. */
   loadCurrentTree(): Promise<KitTree>;
 }
 
@@ -399,16 +411,15 @@ export function createKitFileStore(objectStore: GcsObjectStore): KitFileStore {
 
   function remember(tree: KitTree): KitTree {
     cache.set(tree.engineRef, tree);
-    if (cache.size > KIT_TREE_CACHE_CAPACITY) {
+    while (cache.size > KIT_TREE_CACHE_CAPACITY) {
       const oldest = cache.keys().next().value;
-      if (oldest !== undefined && oldest !== tree.engineRef) {
-        cache.delete(oldest);
-      }
+      if (oldest === undefined || oldest === tree.engineRef) break;
+      cache.delete(oldest);
     }
     return tree;
   }
 
-  async function loadRegistry(): Promise<{ engineRef: string; sha256: string }> {
+  async function readWindow(): Promise<{ current: string; previous: string | null }> {
     const registryBody = await objectStore.readObject('kits/current.json');
     if (!registryBody) {
       throw new KitFilesError(
@@ -416,16 +427,18 @@ export function createKitFileStore(objectStore: GcsObjectStore): KitFileStore {
         'kits/current.json is not published yet — the games-repo kit publisher has not run',
       );
     }
-    let registry;
     try {
-      registry = parseKitRegistry(registryBody.toString('utf8'));
+      const registry = parseKitRegistry(registryBody.toString('utf8'));
+      return { current: registry.current, previous: registry.previous };
     } catch (error) {
       if (error instanceof KitRegistryError) {
         throw new KitFilesError(error.code, error.message, { cause: error });
       }
       throw error;
     }
-    const engineRef = registry.current;
+  }
+
+  async function loadSidecar(engineRef: string): Promise<string> {
     const sidecarBody = await objectStore.readObject(`kits/${engineRef}.json`);
     if (!sidecarBody) {
       throw new KitFilesError(
@@ -433,34 +446,52 @@ export function createKitFileStore(objectStore: GcsObjectStore): KitFileStore {
         `kits/${engineRef}.json sidecar is missing for the current registry entry`,
       );
     }
-    let sidecar;
     try {
-      sidecar = parseKitSidecar(sidecarBody.toString('utf8'));
+      return parseKitSidecar(sidecarBody.toString('utf8')).sha256;
     } catch (error) {
       if (error instanceof KitRegistryError) {
         throw new KitFilesError(error.code, error.message, { cause: error });
       }
       throw error;
     }
-    return { engineRef, sha256: sidecar.sha256 };
   }
 
-  async function loadCurrentTree(): Promise<KitTree> {
-    const { engineRef, sha256 } = await loadRegistry();
-    const cached = cache.get(engineRef);
+  async function loadRegistry(): Promise<{ engineRef: string; previous: string | null; sha256: string }> {
+    const window = await readWindow();
+    const sha256 = await loadSidecar(window.current);
+    return { engineRef: window.current, previous: window.previous, sha256 };
+  }
+
+  async function loadTree(engineRef?: string): Promise<KitTree> {
+    const window = await readWindow();
+    const requested = engineRef?.trim() || window.current;
+    if (requested !== window.current && requested !== window.previous) {
+      throw new KitFilesError(
+        'kit_revision_unsupported',
+        `engineRef ${requested} is outside the supported N/N−1 window (current=${window.current}` +
+          (window.previous ? `, previous=${window.previous}` : '') +
+          ') — re-run get_kit',
+      );
+    }
+    const sha256 = await loadSidecar(requested);
+    const cached = cache.get(requested);
     if (cached && cached.sha256 === sha256) {
       return cached;
     }
-    const tarball = await objectStore.readObject(`kits/${engineRef}.tgz`);
+    const tarball = await objectStore.readObject(`kits/${requested}.tgz`);
     if (!tarball) {
       throw new KitFilesError(
         'kit_artifact_missing',
-        `kits/${engineRef}.tgz is missing for the current registry entry`,
+        `kits/${requested}.tgz is missing for the requested registry entry`,
       );
     }
     const files = await unpackKitTarball(tarball);
-    return remember({ engineRef, sha256, files });
+    return remember({ engineRef: requested, sha256, files });
   }
 
-  return { loadRegistry, loadCurrentTree };
+  return {
+    loadRegistry,
+    loadTree,
+    loadCurrentTree: () => loadTree(),
+  };
 }
