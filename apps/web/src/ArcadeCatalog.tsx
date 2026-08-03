@@ -36,6 +36,7 @@ import {
 } from './recommendationsApi.js';
 import { formatRelativeTime } from './relativeTime.js';
 import { useInView } from './useInView.js';
+import { isCatalogScrolling, watchCatalogScrollIdle } from './catalogScrollIdle.js';
 
 type ArcadeCatalogProps = {
   catalogStatus: 'loading' | 'ready' | 'error';
@@ -66,6 +67,9 @@ function defaultScreenshotIndex(screenshots: Array<{ name: string }>): number {
   return idx >= 0 ? idx : 0;
 }
 
+/** Hover must dwell this long before we fetch moments / arm video — scroll sweeps skip it. */
+const HOVER_INTENT_MS = 240;
+
 function CatalogCard({
   entry,
   isYours = false,
@@ -79,22 +83,30 @@ function CatalogCard({
 }) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
-  // Poster when near the fold; video `src` only on hover/play. Leave-view unloads
-  // so scrolled-away cards do not keep decoders and MP4 buffers alive.
-  const { ref: mediaRef, inView } = useInView<HTMLDivElement>({ rootMargin: '200px 0px', once: false });
+  const hoverTimerRef = useRef<number | null>(null);
+  // Poster when near the fold; video/moments only after deliberate engage (dwell hover,
+  // keyboard focus, or play). Leave-view unloads so scrolled-away cards stay light.
+  const { ref: mediaRef, inView } = useInView<HTMLDivElement>({ rootMargin: '80px 0px', once: false });
   const screenshots = entry.media?.screenshots ?? [];
   const [selectedScreenshot, setSelectedScreenshot] = useState(() => defaultScreenshotIndex(screenshots));
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
   const [isPreviewPinned, setIsPreviewPinned] = useState(false);
   const [videoArmed, setVideoArmed] = useState(false);
+  const [extrasOpen, setExtrasOpen] = useState(false);
   const selected = screenshots[selectedScreenshot] ?? screenshots[0];
   const posterUrl = selected && inView ? catalogMediaUrl(entry.slug, selected.file) : undefined;
   const hasVideo = Boolean(entry.media?.video);
   const videoUrl =
     hasVideo && inView && videoArmed && entry.media?.video ? catalogMediaUrl(entry.slug, entry.media.video) : null;
+  const showMoments = extrasOpen && inView && screenshots.length > 1;
 
   useEffect(() => {
     if (inView) return;
+    if (hoverTimerRef.current != null) {
+      window.clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+    setExtrasOpen(false);
     setVideoArmed(false);
     setIsPreviewPlaying(false);
     setIsPreviewPinned(false);
@@ -113,6 +125,13 @@ function CatalogCard({
       setIsPreviewPlaying(false);
     }
   }, [videoUrl]);
+
+  useEffect(
+    () => () => {
+      if (hoverTimerRef.current != null) window.clearTimeout(hoverTimerRef.current);
+    },
+    [],
+  );
 
   function armPreview() {
     setVideoArmed(true);
@@ -145,11 +164,37 @@ function CatalogCard({
     setIsPreviewPlaying(false);
   }
 
+  function clearHoverIntent() {
+    if (hoverTimerRef.current != null) {
+      window.clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+  }
+
+  function scheduleHoverIntent() {
+    clearHoverIntent();
+    hoverTimerRef.current = window.setTimeout(() => {
+      hoverTimerRef.current = null;
+      if (isCatalogScrolling()) return;
+      setExtrasOpen(true);
+      if (hasVideo) armPreview();
+    }, HOVER_INTENT_MS);
+  }
+
+  function endHoverIntent() {
+    clearHoverIntent();
+    if (isPreviewPinned) return;
+    setExtrasOpen(false);
+    stopPreview();
+  }
+
   function togglePreview() {
+    clearHoverIntent();
     if (isPreviewPlaying) {
       setIsPreviewPinned(false);
       pausePreview();
     } else {
+      setExtrasOpen(true);
       setIsPreviewPinned(true);
       armPreview();
     }
@@ -167,37 +212,23 @@ function CatalogCard({
         ref={mediaRef}
         className="catalog-media"
         tabIndex={hasVideo ? 0 : undefined}
-        onPointerEnter={
-          hasVideo
-            ? (event) => {
-                if (event.pointerType === 'mouse') armPreview();
-              }
-            : undefined
-        }
-        onPointerLeave={
-          hasVideo
-            ? (event) => {
-                if (event.pointerType === 'mouse' && !isPreviewPinned) stopPreview();
-              }
-            : undefined
-        }
-        onFocus={
-          hasVideo
-            ? (event) => {
-                if (event.target === event.currentTarget) armPreview();
-              }
-            : undefined
-        }
-        onBlur={
-          hasVideo
-            ? (event) => {
-                if (!event.currentTarget.contains(event.relatedTarget)) {
-                  setIsPreviewPinned(false);
-                  stopPreview();
-                }
-              }
-            : undefined
-        }
+        onPointerEnter={(event) => {
+          if (event.pointerType === 'mouse') scheduleHoverIntent();
+        }}
+        onPointerLeave={(event) => {
+          if (event.pointerType === 'mouse') endHoverIntent();
+        }}
+        onFocus={(event) => {
+          if (event.target !== event.currentTarget) return;
+          setExtrasOpen(true);
+          if (hasVideo) armPreview();
+        }}
+        onBlur={(event) => {
+          if (event.currentTarget.contains(event.relatedTarget)) return;
+          setIsPreviewPinned(false);
+          setExtrasOpen(false);
+          stopPreview();
+        }}
       >
         {videoUrl ? (
           <video
@@ -284,7 +315,7 @@ function CatalogCard({
 
         <span className="genre-pill">{entry.genre}</span>
 
-        {inView && screenshots.length > 1 && (
+        {showMoments && (
           <div className="catalog-moments" aria-label={t('catalog.gameMoments', { title: entry.title })}>
             {screenshots.slice(0, 4).map((screenshot, index) => (
               <button
@@ -463,6 +494,8 @@ export function ArcadeCatalog({
   const [signals, setSignals] = useState<CatalogSortSignals>(() => initialSignals(viewerUid).signals);
   const [signalsReady, setSignalsReady] = useState(() => initialSignals(viewerUid).ready);
   const [creatorItems, setCreatorItems] = useState<CreatorGameItem[]>([]);
+
+  useEffect(() => watchCatalogScrollIdle(), []);
 
   // Fetch sort signals as soon as the arcade mounts — in parallel with App's
   // catalog fetch — so cold load waits for max(catalog, signals), not their sum.

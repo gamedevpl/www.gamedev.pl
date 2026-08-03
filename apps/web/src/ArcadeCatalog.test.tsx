@@ -129,7 +129,7 @@ describe('ArcadeCatalog lazy media', () => {
     vi.restoreAllMocks();
   });
 
-  it('loads posters near the fold but arms video only on preview intent', async () => {
+  it('loads posters near the fold but arms video and moments only on preview intent', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ items: [] })));
     const container = document.createElement('div');
@@ -162,12 +162,11 @@ describe('ArcadeCatalog lazy media', () => {
       await flushEffects();
     });
 
-    // Near-fold: poster image only — no MP4 fetch until hover / play.
-    // Default still prefers a mid-capture over `opening` (often an empty ready frame).
+    // Near-fold: poster only — no moment thumbs and no MP4 until engage.
     expect(container.querySelectorAll('video')).toHaveLength(0);
     const poster = container.querySelector<HTMLImageElement>('img.catalog-preview');
     expect(poster?.getAttribute('src')).toBe('/api/games/above-fold/media/mid.png');
-    expect(container.querySelectorAll('.catalog-moment')).toHaveLength(2);
+    expect(container.querySelectorAll('.catalog-moment')).toHaveLength(0);
 
     await act(async () => {
       container.querySelector<HTMLButtonElement>('.preview-toggle')?.click();
@@ -177,6 +176,7 @@ describe('ArcadeCatalog lazy media', () => {
     const preview = container.querySelector<HTMLVideoElement>('video.catalog-preview');
     expect(preview?.getAttribute('src')).toBe('/api/games/above-fold/media/gameplay.mp4');
     expect(preview?.getAttribute('poster')).toBe('/api/games/above-fold/media/mid.png');
+    expect(container.querySelectorAll('.catalog-moment')).toHaveLength(2);
 
     // The second card still has no media srcs — it never intersected.
     expect(container.querySelectorAll('video')).toHaveLength(1);
