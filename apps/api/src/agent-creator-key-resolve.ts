@@ -128,7 +128,34 @@ export async function resolveCreatorAgentKeyForOpenRound(
   const verified = await verifyDurableCreatorAgentKey(store, key, secret, nowMs);
   if (!verified.ok) return verified;
 
-  if (!(await creatorOwnsSlug(store, slug, verified.claims.creatorUid))) {
+  const owned = await resolveOwnedSlugForOpenRound(store, slug, verified.claims.creatorUid);
+  if (!owned.ok) return owned;
+  return {
+    ok: true,
+    claims: verified.claims,
+    publishedRecord: owned.publishedRecord,
+    activeRound: owned.activeRound,
+    slug: owned.slug,
+  };
+}
+
+/**
+ * Everything `open_round` needs once the caller's identity is known, whatever proved it.
+ *
+ * Split out of the creator-key resolver so the OAuth path can reach it. Both credentials
+ * answer the same question — *which creator is this* — and from there the slug ownership,
+ * publish state and active-round lookups are identical. Duplicating them is how the two
+ * paths drift into refusing different things for the same situation.
+ */
+export async function resolveOwnedSlugForOpenRound(
+  store: Store,
+  slug: string,
+  creatorUid: string,
+): Promise<
+  | { ok: true; publishedRecord: SubmissionRecord; activeRound: SubmissionRecord | null; slug: string }
+  | { ok: false; reason: string }
+> {
+  if (!(await creatorOwnsSlug(store, slug, creatorUid))) {
     return { ok: false, reason: SLUG_NOT_ON_ACCOUNT_REASON };
   }
 
@@ -137,6 +164,6 @@ export async function resolveCreatorAgentKeyForOpenRound(
     return { ok: false, reason: GAME_NOT_PUBLISHED_REASON };
   }
 
-  const activeRound = await findActiveRoundForSlug(store, slug, verified.claims.creatorUid);
-  return { ok: true, claims: verified.claims, publishedRecord, activeRound, slug };
+  const activeRound = await findActiveRoundForSlug(store, slug, creatorUid);
+  return { ok: true, publishedRecord, activeRound, slug };
 }
