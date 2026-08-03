@@ -1202,7 +1202,7 @@ describe('POST /api/mcp (BY-05)', () => {
 
     // Only these: the rest return the channel's body verbatim, and declaring a shape
     // this file does not construct would be asserting a contract it cannot keep.
-    for (const name of ['start', 'open_round', 'get_sources', 'list_examples', 'report_progress']) {
+    for (const name of ['start', 'create_game', 'open_round', 'get_sources', 'list_examples', 'report_progress']) {
       expect(tools.find((tool) => tool.name === name)?.outputSchema?.type, name).toBe('object');
     }
     const startSchema = tools.find((tool) => tool.name === 'start')?.outputSchema as {
