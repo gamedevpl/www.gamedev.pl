@@ -577,6 +577,30 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(brief.structured).toMatchObject({ title: 'Comet Courier' });
   });
 
+  // Codex P2 on #504: preferring sessionKey over a valid round Bearer broke reconnects
+  // that still had a stale sessionKey in tool args from an earlier transport session.
+  it('round Bearer still wins when a stale mismatched sessionKey is also present', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const sessionA = await initialize(app);
+    const sessionB = await initialize(app);
+    const staleKey = mintMcpSessionKey(secret, {
+      sessionId: sessionA,
+      jobId: ISSUE,
+      roundGeneration: 1,
+    });
+
+    const brief = await callTool(
+      app,
+      'get_brief',
+      { sessionKey: staleKey },
+      { 'mcp-session-id': sessionB, authorization: `Bearer ${roundKey()}` },
+    );
+    expect(brief.isError).toBe(false);
+    expect(brief.structured).toMatchObject({ title: 'Comet Courier' });
+  });
+
   it('piggybacks stop and pendingMessages on every write including ack_inbox', async () => {
     const store = new InMemoryStore();
     await seedJob(store);

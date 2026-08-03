@@ -392,12 +392,15 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
     // Paste-once MCP config leaves Authorization: Bearer <opener or OAuth access> on
     // every request (ChatGPT Apps, Claude connectors, Studio "connect" snippets).
-    // When the tool also passes sessionKey, prefer that — openers and OAuth access
-    // never authorize writes by themselves.
+    // Those credentials never authorize writes — prefer sessionKey when present.
+    // A round-scoped Bearer is different: it is itself a write credential, and must
+    // keep working even if the client also echoes a stale sessionKey from an earlier
+    // transport session (reconnect with retained tool args).
     const bearerIsOpener = Boolean(bearer) && (looksLikeGameAgentKey(bearer!) || looksLikeCreatorAgentKey(bearer!));
     const bearerIsOAuth = Boolean(bearer) && looksLikeAsAccessToken(bearer!);
+    const preferSessionKey = Boolean(sessionKeyArg) && (!bearer || bearerIsOAuth || bearerIsOpener);
 
-    if (sessionKeyArg) {
+    if (preferSessionKey) {
       if (looksLikeGameAgentKey(sessionKeyArg)) {
         return toolErr(
           'this game key only opens a session via start() — pass the sessionKey start returned for later tools',
