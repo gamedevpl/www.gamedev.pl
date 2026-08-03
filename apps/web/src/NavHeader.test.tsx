@@ -227,3 +227,106 @@ describe('NavHeader operator link', () => {
     await act(async () => root.unmount());
   });
 });
+
+describe('NavHeader profile link', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+    vi.restoreAllMocks();
+  });
+
+  it('links the signed-in name to /creators/:handle when a handle is claimed', async () => {
+    await i18n.changeLanguage('en');
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/me')) {
+        return new Response(
+          JSON.stringify({
+            user: {
+              uid: 'g:ada',
+              tier: 'standard',
+              name: 'Ada Lovelace',
+              handle: 'ada',
+              profileName: 'Ada',
+            },
+          }),
+        );
+      }
+      if (url.endsWith('/api/health')) {
+        return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: false }));
+      }
+      return new Response('{}', { status: 404 });
+    });
+
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        createElement(
+          AuthProvider,
+          null,
+          createElement(NavHeader, {
+            activeBuildCount: 0,
+            onNavigate: vi.fn(),
+            onHome: vi.fn(),
+            onStudio: vi.fn(),
+            onAdmin: vi.fn(),
+            upTarget: null,
+          }),
+        ),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const profile = container.querySelector<HTMLAnchorElement>('a.user-name--profile');
+    expect(profile).not.toBeNull();
+    expect(profile?.getAttribute('href')).toBe('/creators/ada');
+    expect(profile?.textContent).toBe('Ada');
+
+    await act(async () => root.unmount());
+  });
+
+  it('does not link the account name when no handle is claimed', async () => {
+    await i18n.changeLanguage('en');
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/me')) {
+        return new Response(JSON.stringify({ user: { uid: 'g:ada', tier: 'standard', name: 'Ada Lovelace' } }));
+      }
+      if (url.endsWith('/api/health')) {
+        return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: false }));
+      }
+      return new Response('{}', { status: 404 });
+    });
+
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        createElement(
+          AuthProvider,
+          null,
+          createElement(NavHeader, {
+            activeBuildCount: 0,
+            onNavigate: vi.fn(),
+            onHome: vi.fn(),
+            onStudio: vi.fn(),
+            onAdmin: vi.fn(),
+            upTarget: null,
+          }),
+        ),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('a.user-name--profile')).toBeNull();
+    expect(container.querySelector('.user-name')?.textContent).toBe('Ada Lovelace');
+
+    await act(async () => root.unmount());
+  });
+});
