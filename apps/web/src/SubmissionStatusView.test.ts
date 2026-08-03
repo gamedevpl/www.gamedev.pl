@@ -624,6 +624,10 @@ describe('SubmissionStatusView', () => {
       expect(container.querySelector('.studio-connect')).not.toBeNull();
       expect(container.textContent).toContain('Connect your coding agent');
       expect(container.textContent?.toLowerCase()).not.toMatch(/\btoken\b/);
+      // Tall connect UI scrolls with the transcript — pinning it in the foot crushed
+      // the conversation to a sliver on a phone (connect + play CTAs + composer).
+      expect(container.querySelector('.studio-thread-scroll .studio-connect')).not.toBeNull();
+      expect(container.querySelector('.studio-thread-foot .studio-connect')).toBeNull();
       expect(connectFetch).toHaveBeenCalledWith(
         expect.stringContaining('/api/submissions/await-token/connect'),
         expect.objectContaining({ credentials: 'include' }),

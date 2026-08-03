@@ -5113,12 +5113,17 @@ a.user-name--profile:focus-visible {
 
   .app:has(.studio-layout.is-game-open) .studio-head-actions {
     flex: none;
+    flex-wrap: nowrap;
   }
 
-  /* Details keeps its icon and loses its word. Clipped rather than display: none, so the
-     button is still called "Details" by a screen reader. Playtest keeps both — it is the
-     thing most people came to do. */
-  .app:has(.studio-layout.is-game-open) .studio-head-action:not(.is-primary) .studio-head-action-label {
+  .app:has(.studio-layout.is-game-open) .studio-head-action {
+    padding: 6px 10px;
+  }
+
+  /* Icon-only in the title row — Playtest's word plus Details (and Claim) was enough to
+     shove the trailing control past the right edge on a 390px phone with a long title.
+     Clipped rather than display: none so the button keeps its accessible name. */
+  .app:has(.studio-layout.is-game-open) .studio-head-action .studio-head-action-label {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -5391,14 +5396,21 @@ a.user-name--profile:focus-visible {
   }
 }
 
-/* Self-build connect steps in the Studio thread. Interaction container, not card chrome. */
+/* Self-build connect steps in the Studio thread. Interaction container, not card chrome.
+   Lives inside `.studio-thread-scroll` so a tall connect surface scrolls with the
+   conversation instead of pinning the composer halfway up a phone. */
 .studio-connect {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  margin: 0 0 10px;
-  padding: 14px 0 4px;
+  margin: 12px 0 4px;
+  padding: 14px 0 8px;
   border-top: 1px solid var(--panel-border, #33383d);
+}
+
+.studio-connect.is-error {
+  gap: 8px;
+  padding-bottom: 4px;
 }
 
 .studio-connect-title {

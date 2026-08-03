@@ -636,7 +636,17 @@ export function SubmissionStatusView({
             </div>
           ) : status ? (
             <>
-              <ThreadStream token={token} entries={activity} emptyLabel={stateDescription} />
+              <ThreadStream
+                token={token}
+                entries={activity}
+                emptyLabel={stateDescription}
+                stickNonce={isAwaitingOwnAgent(status) ? pendingRevisions.length + 1 : 0}
+                after={
+                  isAwaitingOwnAgent(status) ? (
+                    <StudioConnectCard key={`connect-${pendingRevisions.length}`} token={token} />
+                  ) : null
+                }
+              />
 
               <div className="studio-thread-foot">
                 {/* Trouble is said once, immediately above the box the creator would use
@@ -646,9 +656,9 @@ export function SubmissionStatusView({
                     needs a sentence here — the thread's emptyLabel only shows when there
                     are no turns, which is exactly when a bounced build still has planning
                     notes and used to look like nothing was wrong.
-                    Self rounds: no-agent-yet is the connect card alone; quiet keeps a
-                    self-specific warning *and* resurfaces the card (we cannot wake the
-                    agent). Delivery-cap is a failure sentence, not a stall. */}
+                    Self rounds: no-agent-yet / quiet / gate-green resurface the connect
+                    card inside the transcript scroller (not this foot) so a phone still
+                    has room for the conversation. Delivery-cap is a failure sentence. */}
                 {status.failure ? (
                   <p className="status-warning">
                     <PixelIcon name="signal" size={13} />{' '}
@@ -670,10 +680,6 @@ export function SubmissionStatusView({
                   <p className="status-warning">
                     <PixelIcon name="signal" size={13} /> {t('statusView.checksFailed')}
                   </p>
-                ) : null}
-
-                {isAwaitingOwnAgent(status) ? (
-                  <StudioConnectCard key={`connect-${pendingRevisions.length}`} token={token} />
                 ) : null}
 
                 {previewError && !preview && !channelHtml ? <p className="error">{previewError}</p> : null}
@@ -1425,7 +1431,22 @@ function FeedbackPanel({
  * bottom as the agent talks — unless the reader has scrolled up, which is them saying
  * they are reading something and would like it to stay put.
  */
-function ThreadStream({ token, entries, emptyLabel }: { token: string; entries: ActivityEntry[]; emptyLabel: string }) {
+function ThreadStream({
+  token,
+  entries,
+  emptyLabel,
+  after,
+  stickNonce = 0,
+}: {
+  token: string;
+  entries: ActivityEntry[];
+  emptyLabel: string;
+  /** Renders inside the scroller after the turns — tall surfaces (connect card) belong
+   *  here, not in the pinned foot, or a phone has no room left for the conversation. */
+  after?: ReactNode;
+  /** Bump when `after` appears/disappears so a stick-to-bottom reader still sees it. */
+  stickNonce?: number;
+}) {
   const { t, i18n } = useTranslation();
   const [zoomed, setZoomed] = useState<BuildMediaItem | null>(null);
   const [broken, setBroken] = useState<string[]>([]);
@@ -1444,7 +1465,7 @@ function ThreadStream({ token, entries, emptyLabel }: { token: string; entries: 
     const pane = scrollRef.current;
     if (!pane || !stickToBottomRef.current) return;
     pane.scrollTop = pane.scrollHeight;
-  }, [entries.length]);
+  }, [entries.length, stickNonce]);
 
   return (
     <div className="studio-thread-scroll" ref={scrollRef} onScroll={onScroll}>
@@ -1495,6 +1516,7 @@ function ThreadStream({ token, entries, emptyLabel }: { token: string; entries: 
           );
         })}
       </ol>
+      {after}
       {zoomed ? <ShotLightbox token={token} item={zoomed} onClose={() => setZoomed(null)} /> : null}
     </div>
   );

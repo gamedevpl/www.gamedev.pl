@@ -162,11 +162,13 @@ export function StudioConnectCard({ token, agentConnected = false }: StudioConne
   const showInstallLinks = Boolean(installLinks?.cursor && installLinks?.vscode);
 
   return (
-    <section className="studio-connect" aria-labelledby={`${baseId}-title`}>
+    <section className={`studio-connect${error ? ' is-error' : ''}`} aria-labelledby={`${baseId}-title`}>
       <h3 id={`${baseId}-title`} className="studio-connect-title">
         {t('connect.title')}
       </h3>
-      <p className="studio-connect-lead">{t('connect.lead')}</p>
+      {/* Lead is setup guidance — drop it once we only have an error, so a phone foot/thread
+          is not mostly paragraph + red line. */}
+      {!error ? <p className="studio-connect-lead">{t('connect.lead')}</p> : null}
 
       {loading ? <p className="studio-connect-state">{t('connect.loading')}</p> : null}
       {error ? <p className="error">{error}</p> : null}
