@@ -1202,7 +1202,7 @@ describe('SubmissionStatusView', () => {
     });
   });
 
-  it('shows a build pulse and checklist fraction on the studio thread bar while building', async () => {
+  it('keeps build pulse in the foot without checklist fraction, stop, or Play', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'building',
@@ -1240,6 +1240,43 @@ describe('SubmissionStatusView', () => {
     expect(container.querySelector('.studio-context-progress')).toBeNull();
     expect(container.querySelector('.status-play-cta')).toBeNull();
     expect(container.querySelector('.studio-thread-context .studio-slug')).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('lets the creator dismiss a stall chip above the composer', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      stall: 'quiet',
+      builder: 'platform',
+      progress: { headSha: 'sha-1', commits: [], checklist: [] },
+    });
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'chip-dismiss', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    const chip = container.querySelector('.studio-status-chip');
+    expect(chip?.textContent).toContain('quiet for a while');
+    const dismiss = container.querySelector<HTMLButtonElement>('.studio-status-chip-dismiss');
+    expect(dismiss).not.toBeNull();
+
+    await act(async () => {
+      dismiss?.click();
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.studio-status-chip')).toBeNull();
 
     await act(async () => {
       root.unmount();

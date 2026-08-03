@@ -25,6 +25,7 @@ import {
 import { StudioAgentKeyPanel } from './StudioAgentKeyPanel.js';
 import { StudioConnectCard } from './StudioConnectCard.js';
 import { StudioCreatorAgentKeyPanel } from './StudioCreatorAgentKeyPanel.js';
+import { StudioDetailsBuildProgress } from './StudioDetailsBuildProgress.js';
 import { StudioOAuthClientsPanel } from './StudioOAuthClientsPanel.js';
 import { SubmissionStatusView } from './SubmissionStatusView.js';
 import {
@@ -1049,6 +1050,12 @@ function DetailsPanel({
       {/* Draft share is for pre-catalog games. A revise tip on a live slug already has a
           public play link — offering a second "share the draft" switch would lie. */}
       {!catalogLive && game.slug && game.lastKnownStatus !== 'abandoned' ? <DraftShareControl game={game} /> : null}
+
+      {/* Checklist fraction left the thread foot — Details is where Claude-style chrome
+          keeps build meta without crowding the composer. */}
+      {game.lastKnownStatus !== 'abandoned' && game.lastKnownStatus !== 'published' ? (
+        <StudioDetailsBuildProgress token={game.token} />
+      ) : null}
 
       {/* Self-build connect steps live here too so the thread can dismiss them without
           losing the path back — hideIfUnavailable keeps platform rounds silent. */}

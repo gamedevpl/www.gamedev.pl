@@ -205,6 +205,35 @@ function failureCopyKey(reason: string): string {
   return FAILURE_COPY_KEYS.has(reason) ? reason : 'generic';
 }
 
+/**
+ * Claude-shaped status chip above the composer: one sentence, dismissible with ×.
+ * Reappears when the underlying condition changes (`chipKey`).
+ */
+function ThreadStatusChip({ chipKey, children }: { chipKey: string; children: ReactNode }) {
+  const { t } = useTranslation();
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    setDismissed(false);
+  }, [chipKey]);
+
+  if (dismissed) return null;
+
+  return (
+    <div className="studio-status-chip status-warning" role="status" data-chip-key={chipKey}>
+      <span className="studio-status-chip-body">{children}</span>
+      <button
+        type="button"
+        className="studio-status-chip-dismiss"
+        onClick={() => setDismissed(true)}
+        aria-label={t('notifications.dismiss')}
+      >
+        <PixelIcon name="close" size={12} />
+      </button>
+    </div>
+  );
+}
+
 type SubmissionStatusViewProps = {
   token: string;
   submittedTitle?: string;
@@ -648,26 +677,30 @@ export function SubmissionStatusView({
                     card inside the transcript scroller (not this foot) so a phone still
                     has room for the conversation. Delivery-cap is a failure sentence. */}
                 {status.failure ? (
-                  <p className="status-warning">
-                    <PixelIcon name="signal" size={13} />{' '}
-                    {t(`statusView.failure.${failureCopyKey(status.failure.reason)}`)}
-                  </p>
+                  <ThreadStatusChip chipKey={`failure:${status.failure.reason}`}>
+                    <PixelIcon name="signal" size={13} />
+                    <span>{t(`statusView.failure.${failureCopyKey(status.failure.reason)}`)}</span>
+                  </ThreadStatusChip>
                 ) : status.status === 'needs_changes' ? (
-                  <p className="status-warning">
-                    <PixelIcon name="signal" size={13} /> {t('statusView.states.needs_changes.description')}
-                  </p>
+                  <ThreadStatusChip chipKey="needs_changes">
+                    <PixelIcon name="signal" size={13} />
+                    <span>{t('statusView.states.needs_changes.description')}</span>
+                  </ThreadStatusChip>
                 ) : selfCopy === 'no_agent_yet' ? null : selfCopy === 'quiet_agent' ? (
-                  <p className="status-warning">
-                    <PixelIcon name="signal" size={13} /> {t('statusView.stall.quietSelf')}
-                  </p>
+                  <ThreadStatusChip chipKey="quiet_self">
+                    <PixelIcon name="signal" size={13} />
+                    <span>{t('statusView.stall.quietSelf')}</span>
+                  </ThreadStatusChip>
                 ) : status.stall ? (
-                  <p className="status-warning">
-                    <PixelIcon name="signal" size={13} /> {t(`statusView.stall.${status.stall}`)}
-                  </p>
+                  <ThreadStatusChip chipKey={`stall:${status.stall}`}>
+                    <PixelIcon name="signal" size={13} />
+                    <span>{t(`statusView.stall.${status.stall}`)}</span>
+                  </ThreadStatusChip>
                 ) : status.progress?.checks === 'FAILURE' ? (
-                  <p className="status-warning">
-                    <PixelIcon name="signal" size={13} /> {t('statusView.checksFailed')}
-                  </p>
+                  <ThreadStatusChip chipKey="checks_failure">
+                    <PixelIcon name="signal" size={13} />
+                    <span>{t('statusView.checksFailed')}</span>
+                  </ThreadStatusChip>
                 ) : null}
 
                 {previewError && !preview && !channelHtml ? <p className="error">{previewError}</p> : null}
