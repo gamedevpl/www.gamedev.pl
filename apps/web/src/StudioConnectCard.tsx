@@ -33,9 +33,10 @@ const QUIET_UNAVAILABLE = new Set(['not_self_round', 'inactive_round']);
 function loadAuthMode(): ConnectAuthMode {
   try {
     const raw = localStorage.getItem(AUTH_MODE_STORAGE_KEY);
-    return raw === 'oauth' ? 'oauth' : 'key';
+    // Sign-in is the default path — paste-header is the escape hatch (Cursor bugs, CLI).
+    return raw === 'key' ? 'key' : 'oauth';
   } catch {
-    return 'key';
+    return 'oauth';
   }
 }
 
@@ -71,6 +72,12 @@ type StudioConnectCardProps = {
    * (Details mounts this for every open game; only self rounds have a payload).
    */
   hideIfUnavailable?: boolean;
+  /**
+   * Studio thread: open the Details rail for MCP install instead of expanding it
+   * inline (Claude-shaped — install lives in the side panel, not the transcript).
+   * Standalone `/status` leaves this unset and keeps the inline disclosure.
+   */
+  onOpenInstall?: () => void;
 };
 
 /**
@@ -87,6 +94,7 @@ export function StudioConnectCard({
   mode = 'setup',
   collapsible = true,
   hideIfUnavailable = false,
+  onOpenInstall,
 }: StudioConnectCardProps) {
   const { t, i18n } = useTranslation();
   const baseId = useId();
@@ -278,20 +286,20 @@ export function StudioConnectCard({
         <button
           type="button"
           role="tab"
-          aria-selected={authMode === 'key'}
-          className={`studio-connect-tab${authMode === 'key' ? ' is-active' : ''}`}
-          onClick={() => chooseAuthMode('key')}
-        >
-          {t('connect.authMode.key')}
-        </button>
-        <button
-          type="button"
-          role="tab"
           aria-selected={authMode === 'oauth'}
           className={`studio-connect-tab${authMode === 'oauth' ? ' is-active' : ''}`}
           onClick={() => chooseAuthMode('oauth')}
         >
           {t('connect.authMode.oauth')}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={authMode === 'key'}
+          className={`studio-connect-tab${authMode === 'key' ? ' is-active' : ''}`}
+          onClick={() => chooseAuthMode('key')}
+        >
+          {t('connect.authMode.key')}
         </button>
       </div>
 
@@ -455,14 +463,41 @@ export function StudioConnectCard({
         isResume ? (
           <>
             {kickoffPanel}
-            <p className="studio-connect-waiting" aria-live="polite">
-              <span className="studio-connect-pulse" aria-hidden="true" />
-              {t('connect.resume.waiting')}
-            </p>
-            <details className="studio-connect-setup-details" data-testid="connect-setup-details">
-              <summary>{t('connect.resume.setupDetails')}</summary>
-              <div className="studio-connect-setup-body">{installPanel}</div>
-            </details>
+            {/* Studio foot owns the single waiting caption — a second pulse here
+                ("Czekamy…") next to "Powstaje kod" was the same fact twice. */}
+            {onOpenInstall ? (
+              <button
+                type="button"
+                className="studio-connect-open-install"
+                onClick={onOpenInstall}
+                data-testid="connect-open-install"
+              >
+                <PixelIcon name="expand" size={12} /> {t('connect.resume.openInstall')}
+              </button>
+            ) : (
+              <>
+                <p className="studio-connect-waiting" aria-live="polite">
+                  <span className="studio-connect-pulse" aria-hidden="true" />
+                  {t('connect.resume.waiting')}
+                </p>
+                <details className="studio-connect-setup-details" data-testid="connect-setup-details">
+                  <summary>{t('connect.resume.setupDetails')}</summary>
+                  <div className="studio-connect-setup-body">{installPanel}</div>
+                </details>
+              </>
+            )}
+          </>
+        ) : onOpenInstall ? (
+          <>
+            <button
+              type="button"
+              className="studio-connect-open-install is-primary"
+              onClick={onOpenInstall}
+              data-testid="connect-open-install"
+            >
+              <PixelIcon name="expand" size={12} /> {t('connect.openInstall')}
+            </button>
+            {kickoffPanel}
           </>
         ) : (
           <>

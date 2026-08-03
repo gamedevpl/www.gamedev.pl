@@ -422,6 +422,8 @@ describe('SubmissionStatusView', () => {
       status: 'in_review',
       phase: 'ready_for_review',
       builder: 'self',
+      // Stale quiet can linger after gate-green — must not resurface as a stall chip.
+      stall: 'quiet',
       slug: 'studio-play',
       preview: { slug: 'studio-play' },
       progress: { headSha: 'v1', commits: [], checklist: [] },
@@ -449,6 +451,15 @@ describe('SubmissionStatusView', () => {
     // path is covered elsewhere; here we only assert the preview loaded for Studio.
     expect(container.querySelector('.studio-thread-context .status-play-cta')).toBeNull();
     expect(mockedGetSubmissionPreview.mock.results[0]?.value).toBeTruthy();
+    // Gate-green is Done — do not mount connect (endpoint is inactive_round and used
+    // to render a red "could not load connect steps" over a finished delivery).
+    expect(container.querySelector('.studio-connect')).toBeNull();
+    expect(container.textContent).not.toContain('Continue with your agent');
+    expect(container.textContent).not.toMatch(/could not load the connect steps/i);
+    expect(container.querySelector('.status-feedback-route')).toBeNull();
+    expect(container.querySelector('.studio-status-chip')).toBeNull();
+    expect(container.textContent).not.toMatch(/quiet for a while|can't start it from here/i);
+    expect(container.querySelector('.studio-context-phase')?.textContent).toMatch(/Final check/i);
 
     await act(async () => {
       root.unmount();
@@ -694,7 +705,8 @@ describe('SubmissionStatusView', () => {
         await flushEffects();
       });
 
-      expect(container.querySelector('.status-warning')?.textContent).toContain("can't start it from here");
+      // Connect card lead covers quiet — no second amber chip under the composer.
+      expect(container.querySelector('.studio-status-chip')).toBeNull();
       expect(container.querySelector('.studio-connect.is-resume')).not.toBeNull();
       expect(container.textContent).toContain('Continue with your agent');
       expect(container.textContent).not.toContain('Connect your coding agent');
@@ -702,7 +714,10 @@ describe('SubmissionStatusView', () => {
       const details = container.querySelector<HTMLDetailsElement>('[data-testid="connect-setup-details"]');
       expect(details).not.toBeNull();
       expect(details?.open).toBe(false);
-      expect(container.textContent).toContain('your agent will get this when you start it');
+      // One waiting caption in the foot — not "Writing code" while we wait on the agent.
+      expect(container.querySelector('.studio-context-phase')?.textContent).toMatch(/Waiting for your agent/i);
+      expect(container.querySelector('.studio-context-phase-spinner')).toBeNull();
+      expect(container.querySelector('.status-feedback-route')).toBeNull();
       expect(container.textContent?.toLowerCase()).not.toMatch(/\btoken\b/);
     } finally {
       await act(async () => {

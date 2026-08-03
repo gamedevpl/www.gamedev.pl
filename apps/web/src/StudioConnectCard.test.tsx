@@ -92,7 +92,7 @@ describe('StudioConnectCard', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders masked config + keyless kickoff and never puts the full key in markup', async () => {
+  it('defaults to Sign in and never puts the full key in markup', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
 
@@ -113,15 +113,12 @@ describe('StudioConnectCard', () => {
       expect.objectContaining({ credentials: 'include' }),
     );
     expect(container.querySelector('.studio-connect-title')?.textContent).toContain('Connect your coding agent');
-    expect(container.textContent).toContain('Add gamedev.pl to your agent');
+    expect(container.textContent).toMatch(/Sign in from your agent/i);
     expect(container.textContent).toContain('Tell your agent what to build');
     expect(container.textContent).toContain('slug: sky-dodge');
     expect(container.textContent).not.toContain('key:');
-    expect(container.innerHTML).toContain(MASKED);
     expect(container.innerHTML).not.toContain(FULL_KEY);
-    expect(container.querySelector('[data-testid="connect-config-snippet"]')?.textContent).not.toContain(FULL_KEY);
     expect(container.querySelector('[data-testid="connect-kickoff"]')?.textContent).toContain('slug: sky-dodge');
-    expect(container.textContent).toMatch(/Ends in 9a10e/);
     expect(container.textContent?.toLowerCase()).not.toMatch(/\btoken\b/);
     expect(container.querySelector('.studio-connect-waiting')).not.toBeNull();
 
@@ -134,8 +131,19 @@ describe('StudioConnectCard', () => {
     expect(vscodeLink?.getAttribute('href')).not.toContain(FULL_KEY);
     expect(cursorLink?.getAttribute('href')).not.toMatch(/Authorization|Bearer|headers/i);
     expect(vscodeLink?.getAttribute('href')).not.toMatch(/Authorization|Bearer|headers/i);
-    // Hand-copy config path stays for clients without a deep link.
-    expect(container.querySelector('[data-testid="connect-config-snippet"]')).not.toBeNull();
+
+    // Paste-header path still available as the escape hatch.
+    const keyTab = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((tab) =>
+      tab.textContent?.includes('Paste header'),
+    );
+    await act(async () => {
+      keyTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flush();
+    });
+    expect(container.textContent).toContain('Add gamedev.pl to your agent');
+    expect(container.innerHTML).toContain(MASKED);
+    expect(container.querySelector('[data-testid="connect-config-snippet"]')?.textContent).not.toContain(FULL_KEY);
+    expect(container.textContent).toMatch(/Ends in 9a10e/);
     expect(container.textContent).toContain('Claude Code');
 
     await act(async () => root.unmount());
@@ -144,6 +152,7 @@ describe('StudioConnectCard', () => {
   it('Copy config puts the real Authorization header on the clipboard', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
+    localStorage.setItem('gamedev_connect_auth_mode', 'key');
 
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -174,6 +183,7 @@ describe('StudioConnectCard', () => {
   it('Copy config replaces Bearer-only masks in Codex and Cursor snippets', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
+    localStorage.setItem('gamedev_connect_auth_mode', 'key');
 
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -219,7 +229,7 @@ describe('StudioConnectCard', () => {
     await act(async () => root.unmount());
   });
 
-  it('remembers auth mode choice between Paste header and Sign in', async () => {
+  it('defaults to Sign in and remembers a Paste header choice', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
 
@@ -235,15 +245,17 @@ describe('StudioConnectCard', () => {
       await flush();
     });
 
-    const oauthTab = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((tab) =>
-      tab.textContent?.includes('Sign in'),
+    expect(container.textContent).toMatch(/Sign in from your agent/i);
+
+    const keyTab = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((tab) =>
+      tab.textContent?.includes('Paste header'),
     );
     await act(async () => {
-      oauthTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      keyTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flush();
     });
-    expect(localStorage.getItem('gamedev_connect_auth_mode')).toBe('oauth');
-    expect(container.textContent).toMatch(/Sign in from your agent/i);
+    expect(localStorage.getItem('gamedev_connect_auth_mode')).toBe('key');
+    expect(container.textContent).toContain('Add gamedev.pl to your agent');
 
     await act(async () => root.unmount());
   });
@@ -251,6 +263,7 @@ describe('StudioConnectCard', () => {
   it('rotate uses the creator-key rotate endpoint', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
+    localStorage.setItem('gamedev_connect_auth_mode', 'key');
 
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -588,6 +601,36 @@ describe('StudioConnectCard', () => {
     expect(details?.textContent).toContain('Need to reconnect MCP?');
     expect(details?.querySelector('[data-testid="connect-install-cursor"]')).not.toBeNull();
     expect(container.innerHTML).not.toContain(FULL_KEY);
+
+    await act(async () => root.unmount());
+  });
+
+  it('Studio resume sends MCP install to Details instead of expanding inline', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    const onOpenInstall = vi.fn();
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(StudioConnectCard, { token: 'status-tok', mode: 'resume', onOpenInstall }));
+      await flush();
+    });
+    await act(async () => {
+      await flush();
+    });
+
+    expect(container.querySelector('[data-testid="connect-setup-details"]')).toBeNull();
+    expect(container.querySelector('.studio-connect-waiting')).toBeNull();
+    const open = container.querySelector<HTMLButtonElement>('[data-testid="connect-open-install"]');
+    expect(open?.textContent).toContain('Reconnect MCP in Details');
+    await act(async () => {
+      open?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flush();
+    });
+    expect(onOpenInstall).toHaveBeenCalledOnce();
 
     await act(async () => root.unmount());
   });

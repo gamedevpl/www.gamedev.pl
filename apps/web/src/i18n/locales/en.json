@@ -920,6 +920,7 @@
     "waiting": "Waiting for your agent to check in…",
     "hide": "Hide for now",
     "show": "Show connect steps",
+    "openInstall": "Open connect steps",
     "collapsed": {
       "title": "Waiting for your coding agent",
       "hint": "Also in Details anytime."
@@ -973,6 +974,7 @@
       "kickoffTitle": "Continue prompt",
       "kickoffHint": "This prompt carries only the game slug. Your MCP connection stays in the agent config.",
       "setupDetails": "Need to reconnect MCP?",
+      "openInstall": "Reconnect MCP in Details",
       "waiting": "Waiting for your agent to check in again…"
     }
   },

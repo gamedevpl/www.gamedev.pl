@@ -56,6 +56,11 @@ describe('shouldShowConnectCard', () => {
     expect(shouldShowConnectCard({ builder: 'self', stall: null })).toBe(false);
     expect(shouldShowConnectCard({ builder: 'platform', stall: 'quiet' })).toBe(false);
   });
+
+  it('hides after gate-green — even with a stale quiet stall (connect would 409)', () => {
+    expect(shouldShowConnectCard({ builder: 'self', phase: 'ready_for_review' })).toBe(false);
+    expect(shouldShowConnectCard({ builder: 'self', phase: 'ready_for_review', stall: 'quiet' })).toBe(false);
+  });
 });
 
 describe('connectCardMode', () => {
@@ -63,13 +68,13 @@ describe('connectCardMode', () => {
     expect(connectCardMode({ builder: 'self', stall: 'no_agent_yet' })).toBe('setup');
   });
 
-  it('is resume after quiet or gate-green — not a full first-time install', () => {
+  it('is resume after quiet — not a full first-time install', () => {
     expect(connectCardMode({ builder: 'self', stall: 'quiet' })).toBe('resume');
-    expect(connectCardMode({ builder: 'self', phase: 'ready_for_review' })).toBe('resume');
   });
 
   it('is null when the connect card should not show', () => {
     expect(connectCardMode({ builder: 'self', stall: null })).toBeNull();
+    expect(connectCardMode({ builder: 'self', phase: 'ready_for_review' })).toBeNull();
     expect(connectCardMode({ builder: 'platform', stall: 'quiet' })).toBeNull();
   });
 });
@@ -96,9 +101,9 @@ describe('selfComposerRoute', () => {
     ).toBe('waiting');
   });
 
-  it('is waiting after a green gate closes the round', () => {
+  it('is waiting after a green gate closes the round, without a connect card', () => {
     expect(selfComposerRoute({ builder: 'self', phase: 'ready_for_review', stall: null })).toBe('waiting');
-    expect(shouldShowConnectCard({ builder: 'self', phase: 'ready_for_review' })).toBe(true);
+    expect(shouldShowConnectCard({ builder: 'self', phase: 'ready_for_review' })).toBe(false);
   });
 });
 
