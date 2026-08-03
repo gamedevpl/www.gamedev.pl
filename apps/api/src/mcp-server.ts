@@ -231,7 +231,7 @@ function stopFromChannel(body: { control?: { stop?: boolean; reason?: string } }
 const BEHAVIOURAL_CONTRACT = [
   'Report progress before and after long steps.',
   'Send a screenshot as soon as the game draws anything playable.',
-  'Run kit checks green (at least check:static) before submit_sources.',
+  'Run kit checks green (at least check:static) before submit_sources when you have a local kit checkout; otherwise submit and let the gate run checks.',
   'Honour stop immediately — do not continue after stop:true.',
   'When get_brief.seedAvailable is true, continue the seed (get_seed) rather than scaffolding from scratch.',
   'Every write reply carries pendingMessages — when that array is non-empty, read_inbox and apply before continuing.',
@@ -253,10 +253,10 @@ const SESSION_WORKFLOW: readonly string[] = [
   // one. get_sources is cheap and answers available:false on a new game, so it is
   // unconditional rather than gated on a round type the agent cannot see.
   'get_sources — when it returns available:true this round improves an existing game: continue those files. Never scaffold over them.',
-  'get_kit — unpack the tarball, open entry (gamedevpl-creator-kit/SKILL.md), and follow it. Keep the engineRef it returns for submit_sources.',
+  'get_kit — keep engineRef for submit_sources. Prefer list_kit_files / search_kit_files / read_kit_file / read_kit_file_fragment (start at entry) when shell unpack is unavailable; otherwise unpack via the returned one-liner and follow SKILL.md locally. Never dump the whole kit into context.',
   'Build the game — continuing the seed or sources you fetched, otherwise from the kit; report_progress before and after long steps.',
   'send_screenshot as soon as the game draws anything playable.',
-  'Run the kit checks green (at least check:static) before delivering.',
+  'Run the kit checks green (at least check:static) before delivering when you have a local kit checkout; otherwise deliver and let the gate run checks.',
   'submit_sources with the kitEngineRef get_kit returned.',
   'Poll get_gate_verdict about every 30s until it is green, red, or kit_outdated.',
   'red: read the report, fix, and resubmit on the SAME key.',
@@ -1226,10 +1226,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     get_kit: {
       annotations: { title: 'Fetch the Creator Kit', ...READS },
       description:
-        'Fetch the current Creator Kit: engineRef, signed kitUrl, sha256, unpack one-liner, ' +
-        'entry=gamedevpl-creator-kit/SKILL.md (path from the unpack working directory — ' +
-        'tarball roots at gamedevpl-creator-kit/; do not assume a `cd` persists across tool calls). ' +
-        'Unpack, open entry, follow SKILL.md. Run kit checks green before submit_sources. ' +
+        'Fetch Creator Kit metadata: engineRef (required for submit_sources), sha256, entry, ' +
+        'optional kitUrl/unpack for agents with shell egress, and browse tool names. ' +
+        'Prefer list_kit_files / search_kit_files / read_kit_file / read_kit_file_fragment over ' +
+        'downloading the tarball when curl/unpack is unavailable — do not pull the whole kit into context. ' +
+        'entry=gamedevpl-creator-kit/SKILL.md (tarball roots at gamedevpl-creator-kit/; ' +
+        'do not assume a `cd` persists across tool calls). ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
         type: 'object',
@@ -1243,6 +1245,168 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const body = res.json() as { error?: string; message?: string };
         if (res.statusCode !== 200) {
           return toolErr(body.message ?? body.error ?? `kit failed (${res.statusCode})`, body);
+        }
+        return toolOk(body);
+      },
+    },
+
+    list_kit_files: {
+      annotations: { title: 'List Creator Kit files', ...READS },
+      description:
+        'List paths inside the current Creator Kit (size + text/binary kind). ' +
+        'Optional prefix (e.g. shared/modules) or simple glob (*). Paginate with limit/offset. ' +
+        'Start from get_kit.entry via read_kit_file. ' +
+        BEHAVIOURAL_CONTRACT,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          sessionKey: SESSION_KEY_PROP,
+          prefix: { type: 'string', description: 'Path prefix under the kit root (or full gamedevpl-creator-kit/…).' },
+          glob: { type: 'string', description: 'Simple glob with * wildcards (e.g. **/*.md or shared/modules/*.ts).' },
+          limit: { type: 'integer', description: 'Max paths to return (default 200, max 500).' },
+          offset: { type: 'integer', description: 'Skip this many matching paths.' },
+        },
+        required: [],
+      },
+      handler: async (args, ctx) => {
+        const auth = await resolveAuth(ctx, args);
+        if (!('channelToken' in auth)) return auth;
+        const params = new URLSearchParams();
+        if (typeof args.prefix === 'string' && args.prefix.trim()) params.set('prefix', args.prefix.trim());
+        if (typeof args.glob === 'string' && args.glob.trim()) params.set('glob', args.glob.trim());
+        if (typeof args.limit === 'number' && Number.isFinite(args.limit)) params.set('limit', String(args.limit));
+        if (typeof args.offset === 'number' && Number.isFinite(args.offset)) params.set('offset', String(args.offset));
+        const qs = params.toString();
+        const res = await injectChannel(
+          ctx.request,
+          'GET',
+          `/api/agent/build/kit/files${qs ? `?${qs}` : ''}`,
+          auth.channelToken,
+        );
+        const body = res.json() as { error?: string; message?: string };
+        if (res.statusCode !== 200) {
+          return toolErr(body.message ?? body.error ?? `list_kit_files failed (${res.statusCode})`, body);
+        }
+        return toolOk(body);
+      },
+    },
+
+    search_kit_files: {
+      annotations: { title: 'Search Creator Kit files', ...READS },
+      description:
+        'Search text files in the current Creator Kit for a substring (case-insensitive). ' +
+        'Returns path + line + snippet; capped match count. Prefer this over reading many files. ' +
+        BEHAVIOURAL_CONTRACT,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          sessionKey: SESSION_KEY_PROP,
+          query: { type: 'string', description: 'Substring to find (2–120 chars).' },
+          prefix: { type: 'string', description: 'Optional path prefix to narrow the search.' },
+          limit: { type: 'integer', description: 'Max matches (default/max 40).' },
+        },
+        required: ['query'],
+      },
+      handler: async (args, ctx) => {
+        const auth = await resolveAuth(ctx, args);
+        if (!('channelToken' in auth)) return auth;
+        const query = typeof args.query === 'string' ? args.query.trim() : '';
+        if (!query) return toolErr('query is required');
+        const params = new URLSearchParams({ q: query });
+        if (typeof args.prefix === 'string' && args.prefix.trim()) params.set('prefix', args.prefix.trim());
+        if (typeof args.limit === 'number' && Number.isFinite(args.limit)) params.set('limit', String(args.limit));
+        const res = await injectChannel(
+          ctx.request,
+          'GET',
+          `/api/agent/build/kit/search?${params.toString()}`,
+          auth.channelToken,
+        );
+        const body = res.json() as { error?: string; message?: string };
+        if (res.statusCode !== 200) {
+          return toolErr(body.message ?? body.error ?? `search_kit_files failed (${res.statusCode})`, body);
+        }
+        return toolOk(body);
+      },
+    },
+
+    read_kit_file: {
+      annotations: { title: 'Read one Creator Kit file', ...READS },
+      description:
+        'Read one small Creator Kit file (≤48 KiB). Larger files return kit_file_too_large — use ' +
+        'read_kit_file_fragment. Binary files need encoding=base64. Paths may be kit-relative or ' +
+        'gamedevpl-creator-kit/…. ' +
+        BEHAVIOURAL_CONTRACT,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          sessionKey: SESSION_KEY_PROP,
+          path: { type: 'string', description: 'Kit file path (e.g. SKILL.md or gamedevpl-creator-kit/SKILL.md).' },
+          encoding: {
+            type: 'string',
+            enum: ['utf8', 'base64'],
+            description: 'utf8 for text (default); base64 required for binary.',
+          },
+        },
+        required: ['path'],
+      },
+      handler: async (args, ctx) => {
+        const auth = await resolveAuth(ctx, args);
+        if (!('channelToken' in auth)) return auth;
+        const path = typeof args.path === 'string' ? args.path.trim() : '';
+        if (!path) return toolErr('path is required');
+        const params = new URLSearchParams({ path });
+        if (args.encoding === 'base64' || args.encoding === 'utf8') params.set('encoding', args.encoding);
+        const res = await injectChannel(
+          ctx.request,
+          'GET',
+          `/api/agent/build/kit/file?${params.toString()}`,
+          auth.channelToken,
+        );
+        const body = res.json() as { error?: string; message?: string };
+        if (res.statusCode !== 200) {
+          return toolErr(body.message ?? body.error ?? `read_kit_file failed (${res.statusCode})`, body);
+        }
+        return toolOk(body);
+      },
+    },
+
+    read_kit_file_fragment: {
+      annotations: { title: 'Read a Creator Kit file fragment', ...READS },
+      description:
+        'Read a window of one Creator Kit file by lines (default) or bytes. Use for large modules/skills. ' +
+        'offset is 0-based; response includes eof, totalBytes, totalLines. ' +
+        BEHAVIOURAL_CONTRACT,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          sessionKey: SESSION_KEY_PROP,
+          path: { type: 'string', description: 'Kit file path.' },
+          offset: { type: 'integer', description: '0-based start line or byte.' },
+          limit: { type: 'integer', description: 'Max lines (≤200) or bytes (≤32 KiB).' },
+          unit: { type: 'string', enum: ['lines', 'bytes'], description: 'Default lines; bytes required for binary.' },
+          encoding: { type: 'string', enum: ['utf8', 'base64'], description: 'base64 required for binary.' },
+        },
+        required: ['path'],
+      },
+      handler: async (args, ctx) => {
+        const auth = await resolveAuth(ctx, args);
+        if (!('channelToken' in auth)) return auth;
+        const path = typeof args.path === 'string' ? args.path.trim() : '';
+        if (!path) return toolErr('path is required');
+        const params = new URLSearchParams({ path });
+        if (typeof args.offset === 'number' && Number.isFinite(args.offset)) params.set('offset', String(args.offset));
+        if (typeof args.limit === 'number' && Number.isFinite(args.limit)) params.set('limit', String(args.limit));
+        if (args.unit === 'lines' || args.unit === 'bytes') params.set('unit', args.unit);
+        if (args.encoding === 'base64' || args.encoding === 'utf8') params.set('encoding', args.encoding);
+        const res = await injectChannel(
+          ctx.request,
+          'GET',
+          `/api/agent/build/kit/file/fragment?${params.toString()}`,
+          auth.channelToken,
+        );
+        const body = res.json() as { error?: string; message?: string };
+        if (res.statusCode !== 200) {
+          return toolErr(body.message ?? body.error ?? `read_kit_file_fragment failed (${res.statusCode})`, body);
         }
         return toolOk(body);
       },
