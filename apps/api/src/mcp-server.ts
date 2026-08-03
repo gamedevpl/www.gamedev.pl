@@ -507,14 +507,32 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     idempotentHint: true,
     openWorldHint: false,
   } as const;
+  /**
+   * A write whose effect is purely additive: it creates something that was not there,
+   * and nothing previously observable stops being observable.
+   */
   const WRITES = {
     readOnlyHint: false,
     destructiveHint: false,
     idempotentHint: false,
     openWorldHint: false,
   } as const;
-  /** A write that can be repeated with the same effect — re-binding, re-opening. */
+  /** Additive, and repeatable with the same effect — re-binding, re-opening. */
   const WRITES_ONCE = { ...WRITES, idempotentHint: true } as const;
+  /**
+   * A write that consumes or overwrites rather than adds. `destructiveHint` does not
+   * mean "deletes" — the spec's opposite of destructive is *additive*, and a client may
+   * skip its approval prompt for anything marked non-destructive. Burning one of a
+   * capped number of deliveries, moving the pointer that decides what publishes, or
+   * making creator messages stop appearing all fail that test, so they are marked
+   * honestly even though nothing is erased.
+   */
+  const CONSUMES = {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  } as const;
 
   /** Every mutating reply carries these two, so the model can plan around them. */
   const REPLY_CONTROL = {
@@ -1377,7 +1395,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     },
 
     submit_sources: {
-      annotations: { title: 'Deliver sources to the gate', ...WRITES },
+      annotations: { title: 'Deliver sources to the gate', ...CONSUMES },
       description:
         `Deliver game sources for the gate. files[{path, content, encoding utf8|base64}] ≤${MAX_SUBMIT_FILES} items; kitEngineRef required (from get_kit / kit.json). ` +
         'Subject to delivery cap and filename allowlist. Run kit checks green before submitting. Reply includes stop and pendingMessages. ' +
@@ -1563,7 +1581,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         properties: { ok: { type: 'boolean' }, reason: { type: 'string' }, ...REPLY_CONTROL },
         required: ['ok'],
       },
-      annotations: { title: 'Acknowledge creator messages', ...WRITES_ONCE },
+      annotations: { title: 'Acknowledge creator messages', ...CONSUMES, idempotentHint: true },
       description:
         'Acknowledge creator inbox message ids after you have applied them. This is a write — the reply includes stop and pendingMessages ' +
         'so a concurrent stop or newly queued message is visible without a separate poll. ' +

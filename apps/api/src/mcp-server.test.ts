@@ -1163,7 +1163,18 @@ describe('POST /api/mcp (BY-05)', () => {
     for (const tool of tools) {
       expect(tool.annotations, `${tool.name} has no annotations`).toBeTruthy();
       expect(tool.annotations?.title, `${tool.name} has no title`).toBeTruthy();
-      expect(tool.annotations?.destructiveHint, `${tool.name} claims to be destructive`).toBe(false);
+      expect(typeof tool.annotations?.destructiveHint, `${tool.name} has no destructiveHint`).toBe('boolean');
+    }
+
+    // `destructiveHint: false` is a claim that the tool is purely *additive*, and a
+    // client may skip its approval prompt on that basis — so a tool that consumes a
+    // capped delivery, moves the pointer deciding what publishes, or makes creator
+    // messages stop appearing has to say so, even though nothing is erased.
+    for (const name of ['submit_sources', 'ack_inbox']) {
+      expect(tools.find((tool) => tool.name === name)?.annotations?.destructiveHint, name).toBe(true);
+    }
+    for (const name of ['get_brief', 'list_examples', 'start', 'open_round', 'report_progress']) {
+      expect(tools.find((tool) => tool.name === name)?.annotations?.destructiveHint, name).toBe(false);
     }
 
     const readers = ['get_brief', 'get_seed', 'get_kit', 'get_sources', 'list_examples', 'get_example', 'read_inbox'];
