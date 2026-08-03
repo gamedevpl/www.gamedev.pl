@@ -30,10 +30,20 @@ cursor://anysphere.cursor-deeplink/mcp/install?name=gamedevpl&config=eyJ1cmwiOiJ
 
 Decoded `config`: `{"url":"https://www.gamedev.pl/api/mcp"}` — no headers, no secrets.
 
-## Submission notes
+## Submission notes (updated 2026-08-03)
 
-- Cursor directory / marketplace submission UX is product-side; there is no self-serve
-  API documented for third-party remote HTTP servers comparable to the official MCP
-  Registry publisher. Owner decides the channel (directory vs Marketplace plugin).
+- The old official feed repo `github.com/cursor/mcp-servers` was **archived 2026-03-19**;
+  its README redirects community submissions to **cursor.directory/plugins/new**.
+- Current official path is the **Cursor Marketplace** (https://cursor.com/marketplace):
+  publish portal at https://cursor.com/marketplace/publish. Requires an **open-source**
+  repo with a `.cursor-plugin/plugin.json` manifest (lowercase kebab-case name,
+  displayName, author, description, keywords, license, version; template:
+  https://github.com/cursor/plugin-template). **Manual review by the Cursor team on
+  initial submission and on every update**; no published SLA, no fee.
+- Community tier: https://cursor.directory/plugins/new (self-serve, light review).
+- The deep link needs no approval at all and can be placed on our own pages today.
 - Deep-link click behaviour on Cursor desktop: **unknown** in this environment (no GUI
   Cursor install to observe). Format is DOCUMENTED only.
+- Cursor OAuth redirect allowlist (if static client registration ever replaces DCR):
+  `https://www.cursor.com/agents/mcp/oauth/callback` (web/cloud) and
+  `http://localhost:8787/callback` (desktop).
