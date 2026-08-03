@@ -428,7 +428,7 @@ describe('GameTheater how-to-play visit telemetry', () => {
       });
       // Play owns the screen; the pill is the way back.
       expect(container.querySelector('.game-theater-bar')).toBeNull();
-      const pill = container.querySelector('.theater-peek-pill') as HTMLButtonElement | null;
+      const pill = container.querySelector('.theater-peek-btn') as HTMLButtonElement | null;
       expect(pill).not.toBeNull();
 
       // Enter/Space on a focused button emit `click` and no pointer events at

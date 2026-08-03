@@ -10728,24 +10728,71 @@ body.player-open {
    that fed it went with it. `offered` / `opened` on the visit stream is what now
    answers whether the quieter door still gets used. */
 
-.theater-peek-pill {
-  position: absolute;
-  top: 6px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 6;
-  width: 64px;
-  height: 18px;
-  padding: 0;
-  border: none;
-  border-radius: 9px;
-  background: rgba(140, 170, 190, 0.28);
-  cursor: pointer;
+<<<<<<< HEAD
+=======
+/* The invitation's arrival: two gentle pulses, then stillness. Never mid-action
+   by construction — the reveal only fires on end/progress signals or the 60s
+   one-time timer, and reduced-motion users get no pulse at all. */
+.remix-open.is-revealed {
+  animation: remix-invite 1.6s ease-in-out 2;
 }
 
+@keyframes remix-invite {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .remix-open.is-revealed {
+    animation: none;
+  }
+}
+
+/* The way back when play owns the screen: a thin, always-visible pill at the
+   top edge. Deliberately quiet, deliberately generous to a thumb — hidden
+   chrome must never mean gone chrome. */
+.theater-peek-btn,
+.theater-peek-pill {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 6;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.7);
+  color: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    transform 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.theater-peek-btn:hover,
+.theater-peek-btn:focus-visible,
 .theater-peek-pill:hover,
 .theater-peek-pill:focus-visible {
-  background: rgba(140, 170, 190, 0.5);
+  background: rgba(30, 41, 59, 0.9);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: scale(1.06);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
 
 /* —— Creator profiles —— */
