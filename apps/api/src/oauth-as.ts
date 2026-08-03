@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
@@ -170,29 +170,86 @@ function clientLabel(client: OAuthClientRecord, redirectUri?: string): string {
   return client.clientId;
 }
 
+/**
+ * Binds the consent form to the session that was shown it.
+ *
+ * `POST /oauth/authorize` mints a real, durable grant, and its only protection was the
+ * session cookie's `sameSite: 'lax'` — which does not cover a top-level form POST from
+ * another origin. That is the one request on this server where a cross-site submit is
+ * worth mounting: it hands a coding agent standing write access to someone's games
+ * without the consent screen ever rendering.
+ *
+ * Stateless on purpose: the HMAC covers the uid together with the exact request being
+ * consented to, so a token cannot be lifted from one creator's form onto another's, nor
+ * replayed against a different client or PKCE challenge.
+ */
+export function consentToken(input: { uid: string; clientId: string; codeChallenge: string; secret: string }): string {
+  return createHmac('sha256', input.secret)
+    .update(`oauth-consent-v1:${input.uid}:${input.clientId}:${input.codeChallenge}`)
+    .digest('hex');
+}
+
+function consentTokenValid(candidate: string, expected: string): boolean {
+  const a = Buffer.from(candidate, 'utf8');
+  const b = Buffer.from(expected, 'utf8');
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 function consentHtml(input: {
   lang: 'en' | 'pl';
   redirectUri: string;
   clientId: string;
+  clientName?: string;
+  account?: string;
   state?: string;
   codeChallenge: string;
   scope: string;
+  consentToken: string;
 }): string {
+  // Falls back to the client_id when a client registered without a name. Better a URL
+  // the creator can read than "a coding agent", which every client would say.
+  const client = input.clientName?.trim() || input.clientId;
   const copy =
     input.lang === 'pl'
       ? {
-          title: 'Połącz agenta kodującego',
-          lead: 'Agent kodujący prosi o dostęp do Twojego konta gamedev.pl.',
-          redirect: 'Po zatwierdzeniu zostaniesz przekierowany na:',
+          title: `Połącz ${client}`,
+          lead: `${client} prosi o budowanie gier na Twoim koncie.`,
+          as: 'Zatwierdzasz jako',
+          canTitle: 'Będzie mógł',
+          can: [
+            'Rozpoczynać i kontynuować rundy budowania Twoich gier',
+            'Zużywać Twój dzienny limit poprawek',
+            'Czytać i zastępować źródła Twoich gier',
+            'Publikować nowe wersje w arcade',
+          ],
+          cannotTitle: 'Nie będzie mógł',
+          cannot: ['Dotykać gier, których nie jesteś właścicielem', 'Zmieniać Twojego konta ani logowania'],
+          redirect: 'Wrócisz na',
+          redirectHint: 'To powinien być agent, którego przed chwilą użyłeś. Jeśli go nie rozpoznajesz — odmów.',
+          duration: 'Dostęp trwa, dopóki go nie cofniesz w Studio.',
           approve: 'Zatwierdź',
           deny: 'Odmów',
+          bail: 'Nie łączyłeś przed chwilą agenta? Naciśnij Odmów — nic nie zostanie udostępnione.',
         }
       : {
-          title: 'Connect your coding agent',
-          lead: 'A coding agent is asking to access your gamedev.pl account.',
-          redirect: 'After you approve, you will be sent back to:',
+          title: `Connect ${client}`,
+          lead: `${client} is asking to build games on your account.`,
+          as: 'Granting as',
+          canTitle: 'It will be able to',
+          can: [
+            'Start and continue build rounds on games you own',
+            'Use your daily improvement rounds',
+            'Read and replace the sources of your games',
+            'Publish new versions to the arcade',
+          ],
+          cannotTitle: 'It will not be able to',
+          cannot: ['Touch games you do not own', 'Change your account or how you sign in'],
+          redirect: "You'll be sent back to",
+          redirectHint: 'This should be the agent you just used. If you do not recognise it, deny.',
+          duration: 'Access lasts until you revoke it in Studio.',
           approve: 'Approve',
           deny: 'Deny',
+          bail: 'Did not just connect an agent? Press Deny — nothing is shared unless you approve.',
         };
 
   const hidden = [
@@ -203,37 +260,102 @@ function consentHtml(input: {
     `<input type="hidden" name="code_challenge_method" value="S256" />`,
     `<input type="hidden" name="scope" value="${escapeHtml(input.scope)}" />`,
     `<input type="hidden" name="response_type" value="code" />`,
+    `<input type="hidden" name="consent_token" value="${escapeHtml(input.consentToken)}" />`,
   ].join('\n');
+
+  const list = (items: string[]) => items.map((item) => `<li>${escapeHtml(item)}</li>`).join('\n      ');
 
   return `<!doctype html>
 <html lang="${input.lang}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${copy.title}</title>
-  <style>
-    body { font-family: system-ui, sans-serif; max-width: 36rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
-    .redirect { font-family: ui-monospace, monospace; word-break: break-all; background: #f4f4f5; padding: 0.75rem; border-radius: 0.5rem; }
-    .actions { display: flex; gap: 0.75rem; margin-top: 1.5rem; }
-    button { font: inherit; padding: 0.5rem 1rem; border-radius: 0.5rem; border: 1px solid #ccc; cursor: pointer; }
-    .approve { background: #111; color: #fff; border-color: #111; }
-  </style>
+  <title>${escapeHtml(copy.title)}</title>
+  ${CONSENT_STYLES}
 </head>
 <body>
-  <h1>${copy.title}</h1>
-  <p>${copy.lead}</p>
-  <p><strong>${copy.redirect}</strong></p>
-  <p class="redirect">${escapeHtml(input.redirectUri)}</p>
-  <form method="post" action="/oauth/authorize">
-    ${hidden}
-    <div class="actions">
-      <button type="submit" name="action" value="approve" class="approve">${copy.approve}</button>
-      <button type="submit" name="action" value="deny">${copy.deny}</button>
-    </div>
-  </form>
+  <main>
+    <p class="brand">gamedev.pl</p>
+    <h1>${escapeHtml(copy.title)}</h1>
+    <p class="lead">${escapeHtml(copy.lead)}</p>
+    ${input.account ? `<p class="who">${escapeHtml(copy.as)} <strong>${escapeHtml(input.account)}</strong></p>` : ''}
+
+    <h2>${escapeHtml(copy.canTitle)}</h2>
+    <ul class="can">
+      ${list(copy.can)}
+    </ul>
+
+    <h2>${escapeHtml(copy.cannotTitle)}</h2>
+    <ul class="cannot">
+      ${list(copy.cannot)}
+    </ul>
+
+    <h2>${escapeHtml(copy.redirect)}</h2>
+    <p class="redirect">${escapeHtml(input.redirectUri)}</p>
+    <p class="hint">${escapeHtml(copy.redirectHint)}</p>
+
+    <p class="duration">${escapeHtml(copy.duration)}</p>
+
+    <form method="post" action="/oauth/authorize">
+      ${hidden}
+      <div class="actions">
+        <button type="submit" name="action" value="approve" class="approve">${escapeHtml(copy.approve)}</button>
+        <button type="submit" name="action" value="deny">${escapeHtml(copy.deny)}</button>
+      </div>
+    </form>
+
+    <p class="bail">${escapeHtml(copy.bail)}</p>
+  </main>
 </body>
 </html>`;
 }
+
+/**
+ * The site's own tokens, copied from apps/web/src/styles.css.
+ *
+ * This page is server-rendered and never met the design system, so it shipped on the
+ * browser default white while gamedev.pl is dark. That is not only ugly: a consent
+ * screen is where someone decides whether a page is really the site it claims to be,
+ * and one that looks nothing like the site removes the only cue they have.
+ */
+const CONSENT_STYLES = `<style>
+    :root {
+      --bg: #0f1418; --panel: #161c22; --panel-border: #232c35; --panel-card: #1c242c;
+      --text: #f0f4f8; --muted: #94a3b8; --turquoise: #00e4ac; --warn: #e5b76a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 2rem 1rem 4rem; background: var(--bg);
+      background-image: radial-gradient(circle at 50% 0%, #1a232b 0%, #0f1418 70%);
+      background-attachment: fixed; color: var(--text);
+      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; line-height: 1.55;
+    }
+    main { max-width: 34rem; margin: 0 auto; background: var(--panel);
+      border: 1px solid var(--panel-border); border-radius: 14px; padding: 2rem; }
+    .brand { margin: 0 0 1.25rem; font-size: 0.8rem; font-weight: 700; color: var(--turquoise); }
+    h1 { font-size: 1.5rem; line-height: 1.2; margin: 0 0 0.75rem; }
+    h2 { font-size: 0.9rem; margin: 1.5rem 0 0.5rem; }
+    .lead { margin: 0 0 1rem; }
+    .who { margin: 0 0 1rem; padding: 0.75rem 0; color: var(--muted); font-size: 0.9rem;
+      border-top: 1px solid var(--panel-border); border-bottom: 1px solid var(--panel-border); }
+    .who strong { color: var(--text); }
+    ul { margin: 0; padding-left: 1.1rem; }
+    ul.can li { margin: 0.25rem 0; }
+    ul.cannot li { margin: 0.25rem 0; color: var(--muted); font-size: 0.92rem; }
+    .redirect { font-family: ui-monospace, monospace; word-break: break-all;
+      background: var(--panel-card); border: 1px solid var(--panel-border);
+      padding: 0.75rem; border-radius: 0.5rem; margin: 0; }
+    .hint, .duration { color: var(--muted); font-size: 0.85rem; }
+    .duration { background: var(--panel-card); padding: 0.7rem 0.8rem; border-radius: 0.5rem; margin: 1.25rem 0 0; }
+    .waiting { display: inline-block; margin: 0 0 0.75rem; padding: 0.25rem 0.75rem; border-radius: 999px;
+      background: rgba(229,183,106,0.14); color: var(--warn); font-size: 0.8rem; font-weight: 700; }
+    .actions { display: flex; gap: 0.75rem; margin-top: 1.5rem; flex-wrap: wrap; }
+    button { font: inherit; font-weight: 700; padding: 0.6rem 1.25rem; border-radius: 0.55rem;
+      border: 1px solid var(--panel-border); background: transparent; color: var(--text); cursor: pointer; }
+    .approve { background: var(--turquoise); color: #0b1017; border-color: var(--turquoise); }
+    .bail { margin: 1.25rem 0 0; padding-top: 1rem; border-top: 1px solid var(--panel-border);
+      color: var(--muted); font-size: 0.85rem; }
+  </style>`;
 
 function escapeHtml(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -384,15 +506,34 @@ export function registerOAuthAuthorizationServerRoutes(
       return reply.status(validated.status).send({ error: validated.error });
     }
 
-    const { params } = validated;
+    const { params, client } = validated;
+    const lang = pickLang(request);
+    const user = await store.getUser(uid);
+
+    // NOT gated on beta access here, deliberately. A waitlisted creator can still approve
+    // and then meet the wall at their agent's first call, which is a bad late failure —
+    // but the access rule in auth.ts is three-way (betaAllowedUids, betaAllowedEmails,
+    // then the waitlist), and checking only the waitlist would refuse every creator
+    // allowlisted by environment, which is most of the ones using this. Fixing the late
+    // failure means extracting that predicate so both places share it, not copying a
+    // third of it here.
+
     return reply.type('text/html').send(
       consentHtml({
-        lang: pickLang(request),
+        lang,
         redirectUri: params.redirect_uri,
         clientId: params.client_id,
+        clientName: client?.clientName,
+        account: user?.email,
         state: params.state,
         codeChallenge: params.code_challenge,
         scope: params.scope ?? MCP_SCOPE,
+        consentToken: consentToken({
+          uid,
+          clientId: params.client_id,
+          codeChallenge: params.code_challenge,
+          secret: sessionSecret,
+        }),
       }),
     );
   });
@@ -409,6 +550,24 @@ export function registerOAuthAuthorizationServerRoutes(
     }
 
     const { params } = validated;
+
+    // A grant is durable write access to someone's games, and `sameSite: 'lax'` does not
+    // stop a top-level cross-site form POST — so without this the screen above could be
+    // skipped entirely. Checked before the action is even read.
+    const submittedToken =
+      typeof (request.body as { consent_token?: string }).consent_token === 'string'
+        ? (request.body as { consent_token: string }).consent_token
+        : '';
+    const expectedToken = consentToken({
+      uid,
+      clientId: params.client_id,
+      codeChallenge: params.code_challenge,
+      secret: sessionSecret,
+    });
+    if (!consentTokenValid(submittedToken, expectedToken)) {
+      return reply.status(403).send({ error: 'invalid_consent' });
+    }
+
     const action =
       typeof (request.body as { action?: string }).action === 'string'
         ? (request.body as { action: string }).action
