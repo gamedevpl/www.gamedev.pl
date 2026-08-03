@@ -981,49 +981,54 @@ button:disabled {
   min-width: 0;
 }
 
-.catalog-live-count {
+/* Compact Studio entry next to Games — live count + wrench in one control so
+   in-progress work never owns a catalog grid cell (or shoves published cards). */
+.catalog-studio-chip {
+  display: inline-flex;
   flex: none;
-  font-size: 0.8rem;
-}
-
-.catalog-studio-btn {
-  flex: none;
+  align-items: center;
+  gap: 7px;
   min-height: 36px;
   padding: 0.35rem 0.75rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  background: var(--panel-card);
+  color: var(--text);
   font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
 }
 
-.catalog-build-card {
-  justify-content: center;
-  min-height: 180px;
+.catalog-studio-chip:hover,
+.catalog-studio-chip:focus-visible {
+  border-color: var(--turquoise);
+  color: var(--turquoise);
 }
 
-.catalog-build-card.is-live {
-  border-color: rgba(45, 212, 191, 0.4);
-  box-shadow: 0 0 18px rgba(45, 212, 191, 0.08);
+.catalog-studio-chip.is-live {
+  border-color: rgba(56, 189, 248, 0.35);
+  background: rgba(56, 189, 248, 0.1);
+  color: var(--accent-blue);
 }
 
-.catalog-build-body {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 18px;
+.catalog-studio-chip.is-live:hover,
+.catalog-studio-chip.is-live:focus-visible {
+  border-color: var(--turquoise);
+  color: var(--turquoise);
 }
 
-.catalog-build-yours {
-  /* Static badge on build cards — not over media. */
-  position: static;
+.catalog-studio-chip-count {
+  font-weight: 700;
 }
 
-.catalog-build-meta {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.85rem;
+.catalog-studio-chip .live-dot {
+  background: var(--accent-blue);
 }
 
-.catalog-build-body .primary-btn {
-  margin-top: auto;
+@media (pointer: coarse), (max-width: 768px) {
+  .catalog-studio-chip {
+    min-height: 44px;
+  }
 }
 
 .arcade-subtitle {
@@ -1175,10 +1180,8 @@ button:disabled {
   display: grid;
   gap: 20px;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  /* Published cards are a single 16:9 media box. A build card in the same row is often
-     taller (status + title + Open), and the grid's default stretch would grow every
-     neighbour to match — leaving empty panel padding under their videos. Keep each
-     card at its own height. */
+  /* Published cards are a single 16:9 media box. Keep each card at its own height so
+     a taller neighbour cannot stretch the row and leave empty padding under previews. */
   align-items: start;
 }
 

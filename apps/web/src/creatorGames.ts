@@ -3,9 +3,9 @@ import { getSubmissionStatus, listMySubmissions, type SubmissionState } from './
 import type { PixelIconName } from './PixelIcon.js';
 
 /**
- * Creator-owned games for the home gallery. Published ones pin at the front of
- * the catalog; in-progress builds render as cards in the same grid so there is
- * no separate "Your games" section.
+ * Creator-owned games for the home arcade. Published ones pin at the front of
+ * the catalog and earn a "Yours" badge; in-progress builds feed the Studio chip
+ * beside the Games heading (not the grid — mixing them shoved published cards).
  *
  * Statuses come from the store (kept current by the notify sweep) — one list
  * request, no per-card GitHub reads. Locally saved specs fill gaps for
@@ -22,14 +22,9 @@ export const CREATOR_STATUS_ICONS: Record<SubmissionState, PixelIconName> = {
   abandoned: 'trash',
 };
 
-export const CREATOR_LIVE_STATUSES = new Set<SubmissionState>([
-  'queued',
-  'building',
-  'in_review',
-  'publishing',
-]);
+export const CREATOR_LIVE_STATUSES = new Set<SubmissionState>(['queued', 'building', 'in_review', 'publishing']);
 
-/** How many in-progress builds the home gallery shows. Full shelf is Studio. */
+/** Cap kept for callers that still want a short in-progress list. Full shelf is Studio. */
 export const MAX_IN_PROGRESS_IN_GALLERY = 4;
 
 export type CreatorGameItem = {
@@ -89,16 +84,12 @@ export async function loadCreatorGames(locale: string): Promise<CreatorGameItem[
   return visible.map((item) => byToken.get(item.token) ?? item).filter((item) => item.status !== 'abandoned');
 }
 
-/** Builds still in flight — shown as cards ahead of the published catalog. */
+/** Builds still in flight (capped). The arcade uses a count for the Studio chip. */
 export function inProgressCreatorGames(items: CreatorGameItem[]): CreatorGameItem[] {
-  return items
-    .filter((item) => item.status !== 'published')
-    .slice(0, MAX_IN_PROGRESS_IN_GALLERY);
+  return items.filter((item) => item.status !== 'published').slice(0, MAX_IN_PROGRESS_IN_GALLERY);
 }
 
 /** Published slugs owned by the creator — pin these first in the catalog grid. */
 export function publishedCreatorSlugs(items: CreatorGameItem[]): Set<string> {
-  return new Set(
-    items.flatMap((item) => (item.status === 'published' && item.slug ? [item.slug] : [])),
-  );
+  return new Set(items.flatMap((item) => (item.status === 'published' && item.slug ? [item.slug] : [])));
 }

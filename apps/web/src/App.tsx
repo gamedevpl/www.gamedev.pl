@@ -1050,7 +1050,6 @@ export function App() {
                 onRetryCatalog={handleRetryCatalog}
                 recommendationsRefreshKey={recommendationsRefreshKey}
                 creatorGamesRefreshKey={myGamesRefreshKey}
-                onOpenStatus={(address) => navigate(studioPath(address))}
                 onOpenStudio={() => navigate(studioPath())}
               />
             )}
