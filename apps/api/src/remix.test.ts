@@ -486,6 +486,49 @@ describe('remix across the two catalog eras', () => {
     expect(mapCalls).toEqual(['dog-dash']);
   });
 
+  it('separates a broken pipeline from a game it cannot edit', async () => {
+    // The two used to arrive as the same sentence, and that is how a working
+    // feature reads as a missing one: a game with an entry point and a failing
+    // bundle looked exactly like a game we had chosen not to support.
+    const store = new InMemoryStore();
+    const instance = Fastify({ routerOptions: { maxParamLength: MAX_REMIX_ID_LENGTH } });
+    instance.decorateRequest('user', null);
+    instance.addHook('onRequest', async (request) => {
+      const uid = request.headers['x-test-uid'];
+      (request as { user?: unknown }).user = typeof uid === 'string' ? { uid, tier: 'standard' } : null;
+    });
+    const client = stubGitHubClient([]) as GitHubClient & {
+      getGameSourceMap: (ref: string, slug: string) => Promise<Record<string, string> | null>;
+    };
+    client.getGameSourceMap = async () => {
+      throw new Error('github said no');
+    };
+    await registerRemixRoutes(instance, {
+      store,
+      gamesStore: stubGamesStore(),
+      githubClient: client,
+      publishedRef: 'main',
+      assistant: { assist: async () => ({ lane: 'params' }) } as EditorAssistant,
+      codeLane: { run: async () => ({ ok: true }) } as never,
+    });
+    await instance.ready();
+    app = instance;
+
+    const { remixId } = (
+      await instance.inject({ method: 'POST', url: '/api/games/dog-dash/remix', headers: alice })
+    ).json();
+    const response = await instance.inject({
+      method: 'POST',
+      url: `/api/remixes/${remixId}/code`,
+      headers: alice,
+      payload: { utterance: 'add a double jump' },
+    });
+
+    // Ours, not the game's: a fault the player can retry, not a limit they cannot.
+    expect(response.statusCode).toBe(503);
+    expect(response.json().reason).toBe('sources_unavailable');
+  });
+
   it('declines the deep lane for a game whose sources will not assemble', async () => {
     app = await repoEraApp({ codeLane: { run: async () => ({ ok: true }) } });
     // `no-sources` has a manifest and a declaration but no assemblable code.

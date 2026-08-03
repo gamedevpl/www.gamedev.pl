@@ -1149,20 +1149,20 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
     async getGameSourceMap(ref, slug) {
       if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) return null;
       const entry = await readRawFile(`games/${slug}/game.ts`, ref);
+      // No entry point is the only absence this reports. Everything else — a read
+      // that fails, a bundle that will not build — *throws*, because the first
+      // version of this swallowed both into the same null and the caller turned
+      // that null into "this game cannot be remixed that deeply yet". A game with
+      // an entry point and a broken pipeline then looked exactly like a game we
+      // had chosen not to support, which is the same laundering that made every
+      // remix answer "game not found" (see the note on `getGameFile`).
       if (entry === null) return null;
       const collected = new Map<string, string>([['game.ts', entry]]);
-      try {
-        // The bundle output is discarded — this runs the walk for its trail. Doing
-        // it any other way (a directory listing, a hand-rolled import parser)
-        // would be a second, quietly different answer to "what is this game made
-        // of", and the two would drift the first time an import convention moved.
-        await bundleGameTypeScript(entry, ref, slug, undefined, collected);
-      } catch {
-        // A game that cannot be bundled cannot be edited either — the lane needs
-        // a baseline that builds, and saying so here keeps the caller's answer
-        // "not this game" rather than a failure halfway through an edit.
-        return null;
-      }
+      // The bundle output is discarded — this runs the walk for its trail. Doing
+      // it any other way (a directory listing, a hand-rolled import parser)
+      // would be a second, quietly different answer to "what is this game made
+      // of", and the two would drift the first time an import convention moved.
+      await bundleGameTypeScript(entry, ref, slug, undefined, collected);
       return Object.fromEntries(collected);
     },
 
