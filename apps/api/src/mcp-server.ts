@@ -394,6 +394,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
   /** Transport sessions only — never consulted for authorization. */
   const transportSessions = new Map<string, { createdAt: number }>();
+  /**
+   * Correlators explicitly terminated via DELETE on this instance. Prevents the
+   * multi-instance adopt path from resurrecting a session the client just closed.
+   * Best-effort across instances (in-memory); same TTL as live correlators.
+   */
+  const terminatedTransportSessions = new Map<string, number>();
   const invalidStartsByIp = new Map<string, number[]>();
   /** Last synthetic Studio presence pulse per job — coarse MCP activity, not 1:1 tools. */
   const presencePulseByJob = new Map<number, number>();
@@ -403,6 +409,11 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     for (const [id, meta] of transportSessions) {
       if (currentTime - meta.createdAt > TRANSPORT_SESSION_TTL_MS) {
         transportSessions.delete(id);
+      }
+    }
+    for (const [id, terminatedAt] of terminatedTransportSessions) {
+      if (currentTime - terminatedAt > TRANSPORT_SESSION_TTL_MS) {
+        terminatedTransportSessions.delete(id);
       }
     }
     if (transportSessions.size <= MAX_TRANSPORT_SESSIONS) return;
@@ -2788,8 +2799,21 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     // Non-initialize requests: adopt a well-formed correlator we have not seen on this
     // instance. Cloud Run is multi-instance and ChatGPT does not pin to one revision —
     // a 404 here made every post-initialize tool call a coin flip. Inventing an id
-    // grants nothing: sessionKey / Bearer still authorize every tool.
+    // grants nothing: sessionKey / Bearer still authorize every tool. Exception:
+    // IDs this instance explicitly terminated via DELETE stay dead (tombstone).
     if (sessionHeader && !transportSessions.has(sessionHeader)) {
+      pruneTransportSessions(now());
+      if (terminatedTransportSessions.has(sessionHeader)) {
+        request.log.warn(
+          {
+            event: 'mcp_terminated_session',
+            transportSessionId: sessionHeader.slice(0, 16),
+            userAgent: headerValue(request.headers['user-agent'])?.slice(0, 120) ?? undefined,
+          },
+          'mcp terminated session refused',
+        );
+        return reply.status(404).send({ error: 'unknown MCP session' });
+      }
       if (!looksLikeMcpSessionId(sessionHeader)) {
         request.log.warn(
           {
@@ -2801,7 +2825,6 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         );
         return reply.status(404).send({ error: 'unknown MCP session' });
       }
-      pruneTransportSessions(now());
       transportSessions.set(sessionHeader, { createdAt: now() });
       request.log.info(
         {
@@ -2994,6 +3017,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         return reply.status(400).send({ error: 'Mcp-Session-Id required to terminate a session' });
       }
       transportSessions.delete(sessionHeader);
+      // Tombstone so a concurrent/retry POST with the same id is not re-adopted.
+      pruneTransportSessions(now());
+      terminatedTransportSessions.set(sessionHeader, now());
       return reply.status(204).send();
     },
   );

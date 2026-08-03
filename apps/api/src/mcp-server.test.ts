@@ -987,9 +987,9 @@ describe('POST /api/mcp (BY-05)', () => {
     });
   });
 
-  it('DELETE drops the local correlator; a well-formed id is re-adopted on the next call', async () => {
-    // Multi-instance Cloud Run cannot treat DELETE as a hard kill — the next revision
-    // would just 404 a still-valid ChatGPT session. Adopt restores the correlator.
+  it('DELETE tombstones the correlator so it is not re-adopted on this instance', async () => {
+    // Multi-instance still cannot share tombstones, but on the instance that saw DELETE
+    // a concurrent/retry POST must not resurrect the terminated id (Codex P2).
     const store = new InMemoryStore();
     await seedJob(store);
     app = await createApp(store);
@@ -1003,6 +1003,16 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(del.statusCode).toBe(204);
 
     const listed = await mcpCall(app, 'tools/list', {}, { 'mcp-session-id': sessionId });
+    expect(listed.statusCode).toBe(404);
+  });
+
+  it('still adopts a well-formed correlator this instance never initialized or terminated', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const foreignSessionId = 'fedcba9876543210fedcba9876543210fedc';
+
+    const listed = await mcpCall(app, 'tools/list', {}, { 'mcp-session-id': foreignSessionId });
     expect(listed.statusCode).toBe(200);
   });
 
