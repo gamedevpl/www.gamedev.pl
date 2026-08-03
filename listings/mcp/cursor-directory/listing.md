@@ -30,6 +30,22 @@ cursor://anysphere.cursor-deeplink/mcp/install?name=gamedevpl&config=eyJ1cmwiOiJ
 
 Decoded `config`: `{"url":"https://www.gamedev.pl/api/mcp"}` — no headers, no secrets.
 
+### The link alone is not a working install on Cursor desktop today
+
+Cursor desktop was observed stalling after DCR and never completing OAuth against our AS
+(their known SDK bug, forum #160328). A creator who clicks the headerless link gets a
+server that connects, completes `initialize`, and lists tools — then fails the first
+write with a 401 whose OAuth recovery never finishes.
+
+So the published Cursor path is **two steps**:
+
+1. deep link installs the URL (credential-free, per the rule below), then
+2. the creator pastes their creator key into Cursor's `Authorization` header field —
+   observed working against live `/api/mcp`.
+
+One paste into **client config** (the BY-27 posture), not "zero-paste". Listing and
+Studio copy for Cursor must not claim one-click until Cursor ships the desktop OAuth fix.
+
 ## Submission notes (updated 2026-08-03)
 
 - The old official feed repo `github.com/cursor/mcp-servers` was **archived 2026-03-19**;

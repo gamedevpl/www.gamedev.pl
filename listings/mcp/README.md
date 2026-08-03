@@ -25,8 +25,13 @@ as of 2026-08; we intentionally ship the official registry shape instead.
 | [`cursor-directory/listing.md`](./cursor-directory/listing.md)                       | Cursor Marketplace + cursor.directory  | https://cursor.com/marketplace/publish (official, reviewed) and https://cursor.directory/plugins/new (community) |
 | [`claude-connectors-directory/listing.md`](./claude-connectors-directory/listing.md) | Claude Connectors Directory            | Portal at https://claude.ai/admin-settings/directory/submissions/new (**requires Team/Enterprise org**)   |
 | [`chatgpt-apps-connector/listing.md`](./chatgpt-apps-connector/listing.md)           | ChatGPT + Codex Plugin directory       | https://platform.openai.com/plugins (identity-verified Platform org)                                      |
-| [`gemini-cli-extension/listing.md`](./gemini-cli-extension/listing.md)               | Gemini CLI extensions gallery          | Public manifest repo + `gemini-cli-extension` topic; crawled daily, no form — https://geminicli.com/docs/extensions/releasing |
 | [`github-mcp-registry/listing.md`](./github-mcp-registry/listing.md)                 | GitHub MCP Registry (Copilot, VS Code) | Publish to the official registry first, then curation request to partnerships@github.com                  |
+
+Not pursued: the **Gemini CLI extensions gallery** would be self-serve (public manifest
+repo + `gemini-cli-extension` topic, crawled daily), but listing there requires a
+dedicated repo because the manifest must sit at a repo root — too much standing surface
+for the reach that surface has today. The consumer Gemini app has no third-party MCP
+channel at all. Revisit only if Gemini CLI adoption changes.
 
 ## One-click install (product surface, not a listing)
 

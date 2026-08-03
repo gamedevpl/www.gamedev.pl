@@ -46,8 +46,15 @@ the token is issued by the portal per submission.
 
 ChatGPT directory review requires `readOnlyHint`, `openWorldHint`, and `destructiveHint`
 on every tool. The live `/api/mcp` descriptors carry `title` plus all four hints on all
-tools (see `MCP_TOOL_ANNOTATION` constants in `apps/api/src/mcp-server.ts`); the earlier
-gap flagged during BY-18c has been closed.
+tools; the earlier gap flagged during BY-18c has been closed.
+
+Verify before submitting:
+
+- Annotation sets are the `READS` / `WRITES` / `WRITES_ONCE` / `CONSUMES` constants in
+  `apps/api/src/mcp-server.ts` (~L521–551), spread into each tool's `annotations`.
+- The regression test is `apps/api/src/mcp-server.test.ts` → _"annotates every tool, so a
+  reader is not advertised as destructive"_ (~L1149), which asserts every tool has
+  `title` + a boolean `destructiveHint`, and pins the reader/writer split per tool name.
 
 ## Test cases (placeholders)
 
