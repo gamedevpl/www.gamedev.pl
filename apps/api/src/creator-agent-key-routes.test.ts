@@ -1,6 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
-import { assertCreatorAgentKeyActive, looksLikeCreatorAgentKey, verifyCreatorAgentKey } from './agent-creator-key.js';
+import {
+  assertCreatorAgentKeyActive,
+  DEFAULT_CREATOR_AGENT_KEY_TTL_DAYS,
+  looksLikeCreatorAgentKey,
+  verifyCreatorAgentKey,
+} from './agent-creator-key.js';
 import { NO_OPEN_ROUND_REASON, PLATFORM_ROUND_REASON, SLUG_NOT_ON_ACCOUNT_REASON } from './agent-game-key.js';
 import { mintGameAgentKey } from './agent-game-key.js';
 import { mintAgentToken } from './agent-token.js';
@@ -10,6 +15,7 @@ import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } f
 import { mintMcpSessionKey } from './mcp-session-key.js';
 import { pkceChallengeS256 } from './oauth-pkce.js';
 import { InMemoryStore } from './store.js';
+import type { CreatorAgentKeyRecord } from './store.js';
 import { NoopTranslator } from './translate.js';
 
 const secret = 'creator-agent-routes-secret';
@@ -443,5 +449,100 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
       roundGeneration: 1,
     });
     expect(sessionKey).toBeTruthy();
+  });
+
+  // CP-2, against production: the Studio panel promises "rotating stops every agent still
+  // using the old key". It did not. A sessionKey minted before the rotation authenticates
+  // on the round's generation and never consults the creator key, so report_progress kept
+  // succeeding afterwards and the write landed in the creator's thread.
+  it('rotating the creator key ends sessions already holding a sessionKey', async () => {
+    const store = new InMemoryStore();
+    app = await createApp(store);
+
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'Rotate Kills', concept: CONCEPT, builder: 'self' },
+    });
+    expect(submit.statusCode).toBe(200);
+    const record = (await store.listSubmissionsByOwner(OWNER))[0]!;
+    await store.setSubmissionSlug(record.issueNumber, SLUG);
+    await store.ensureRoundGeneration(record.issueNumber);
+
+    const minted = await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
+    const creatorKey = minted.json().key as string;
+    const started = await callStart(app, { slug: SLUG }, { authorization: `Bearer ${creatorKey}` });
+    expect(started.isError).toBe(false);
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const writeProgress = async () => {
+      const res = await mcpCall(
+        app,
+        'tools/call',
+        { name: 'report_progress', arguments: { sessionKey, step: 'planning', text: 'still here' } },
+        { 'mcp-session-id': started.sessionId },
+      );
+      return (res.json() as { result?: { isError?: boolean } }).result?.isError === true;
+    };
+
+    // The session is live before the rotation — otherwise this test proves nothing.
+    expect(await writeProgress()).toBe(false);
+
+    const rotated = await app.inject({
+      method: 'POST',
+      url: '/api/me/creator-agent-key/rotate',
+      headers: authHeaders(),
+    });
+    expect(rotated.statusCode).toBe(200);
+    expect((rotated.json() as { sessionsEnded: number }).sessionsEnded).toBe(1);
+
+    // The write capability is gone, which is what the panel told the creator would happen.
+    expect(await writeProgress()).toBe(true);
+  });
+
+  // The panel showed a different "Ends in ..." tail on every visit, because GET re-minted
+  // at the wall clock. A creator comparing it against their agent's header always saw a
+  // mismatch, and the remedy the panel offers for a mismatch is Rotate — destructive.
+  it('mints one stable key per generation, so the displayed tail matches the pasted header', async () => {
+    const store = new InMemoryStore();
+    app = await createApp(store);
+
+    // Backdate the generation, the way it is for any creator who minted last week.
+    // Two back-to-back reads are identical even without the fix — `exp` has second
+    // granularity — so a same-second probe could never have produced the failure.
+    await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
+    const MINTED_AT = '2026-07-01T00:00:00.000Z';
+    const records = (store as unknown as { creatorAgentKeys: Map<string, CreatorAgentKeyRecord> }).creatorAgentKeys;
+    records.set(OWNER, { ...records.get(OWNER)!, updatedAt: MINTED_AT });
+
+    const first = await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
+    const second = await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
+
+    const a = first.json() as { key: string; fingerprint: string; expiresAt: number; keyGeneration: number };
+    const b = second.json() as { key: string; fingerprint: string; expiresAt: number; keyGeneration: number };
+
+    // The key belongs to the generation, not to the moment the panel was opened: its
+    // expiry is measured from when the generation was minted.
+    expect(b.expiresAt).toBe(
+      Math.floor(Date.parse(MINTED_AT) / 1000) + DEFAULT_CREATOR_AGENT_KEY_TTL_DAYS * 24 * 60 * 60,
+    );
+    expect(verifyCreatorAgentKey(b.key, secret).exp).toBe(b.expiresAt);
+
+    expect(b.keyGeneration).toBe(a.keyGeneration);
+    expect(b.key).toBe(a.key);
+    expect(b.fingerprint).toBe(a.fingerprint);
+    // The stated expiry is a real deadline, not one that slid forward on every page load.
+    expect(b.expiresAt).toBe(a.expiresAt);
+
+    // Rotation still produces a genuinely different key.
+    const rotated = await app.inject({
+      method: 'POST',
+      url: '/api/me/creator-agent-key/rotate',
+      headers: authHeaders(),
+    });
+    const c = rotated.json() as { key: string; keyGeneration: number };
+    expect(c.keyGeneration).toBe(a.keyGeneration + 1);
+    expect(c.key).not.toBe(a.key);
   });
 });

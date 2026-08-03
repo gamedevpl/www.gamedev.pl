@@ -12,7 +12,8 @@ import {
   mintCreatorAgentKey,
   verifyCreatorAgentKey,
 } from './agent-creator-key.js';
-import type { Store } from './store.js';
+import { isActiveBuildRound } from './builder.js';
+import type { CreatorAgentKeyRecord, Store } from './store.js';
 
 export interface CreatorAgentKeyRoutesOptions {
   store: Store;
@@ -47,6 +48,51 @@ function mintPayload(
   };
 }
 
+/**
+ * The instant a generation was minted — the anchor every mint of that generation uses.
+ *
+ * GET re-mints so the panel can offer "Copy header" without a second round trip, and
+ * minting at `now()` made every visit produce a *different* key. The displayed "Ends in …"
+ * tail therefore never matched the header the agent was actually holding, so a creator
+ * checking whether their agent was current always saw a mismatch — and the remedy the
+ * panel offers is Rotate, which is destructive. Anchoring to the generation's own
+ * timestamp makes a generation mint to exactly one key: the tail is stable, it is the
+ * tail of the key they pasted, and the stated expiry is the real one rather than a
+ * deadline that slid forward on every page load.
+ */
+function generationAnchor(record: CreatorAgentKeyRecord, fallbackMs: number): number {
+  const minted = Date.parse(record.updatedAt);
+  return Number.isFinite(minted) ? minted : fallbackMs;
+}
+
+/**
+ * Ends every agent session opened against this creator's still-open rounds.
+ *
+ * Bumping `keyGeneration` alone does not do what the Studio panel promises — "rotating
+ * stops every agent still using the old key". A `sessionKey` minted before the rotation
+ * authenticates on the *round's* generation and never consults the creator key at all, so
+ * it kept full write access for the rest of its 24-hour life. CP-2 confirmed it against
+ * production: `report_progress` succeeded after a rotation and the write landed in the
+ * creator's thread.
+ *
+ * Advancing `roundGeneration` is what actually cuts those sessions off. It is the same
+ * revocation the round-close path already performs, and `classifyAgentTokenAccess` already
+ * rejects a stale generation on every tool call, so nothing new has to be trusted.
+ *
+ * Deliberately broader than the sentence promises: this also ends sessions opened with a
+ * per-game key on those rounds. Rotation is a security action and should fail safe, and
+ * the cost is recoverable — the agent calls `start` again for a fresh session.
+ */
+async function endOpenAgentSessions(store: Store, ownerUid: string): Promise<number> {
+  const owned = await store.listSubmissionsByOwner(ownerUid);
+  const open = owned.filter((job) => !job.abandonedAt && isActiveBuildRound(job));
+  let ended = 0;
+  for (const job of open) {
+    if ((await store.bumpRoundGeneration(job.issueNumber)) !== null) ended += 1;
+  }
+  return ended;
+}
+
 export function registerCreatorAgentKeyRoutes(app: FastifyInstance, options: CreatorAgentKeyRoutesOptions): void {
   const { store, submissionTokenSecret } = options;
   const now = options.now ?? Date.now;
@@ -70,7 +116,7 @@ export function registerCreatorAgentKeyRoutes(app: FastifyInstance, options: Cre
     }
 
     const record = existing ?? (await store.ensureCreatorAgentKey(uid, at));
-    const payload = mintPayload(submissionTokenSecret, uid, record.keyGeneration, now());
+    const payload = mintPayload(submissionTokenSecret, uid, record.keyGeneration, generationAnchor(record, now()));
     return reply.header('Cache-Control', 'no-store').send(payload);
   });
 
@@ -87,7 +133,7 @@ export function registerCreatorAgentKeyRoutes(app: FastifyInstance, options: Cre
 
       const at = new Date(now()).toISOString();
       const record = await store.reactivateCreatorAgentKey(uid, at);
-      const payload = mintPayload(submissionTokenSecret, uid, record.keyGeneration, now());
+      const payload = mintPayload(submissionTokenSecret, uid, record.keyGeneration, generationAnchor(record, now()));
       return reply.header('Cache-Control', 'no-store').send(payload);
     },
   );
@@ -106,8 +152,9 @@ export function registerCreatorAgentKeyRoutes(app: FastifyInstance, options: Cre
       if (!rotated) {
         return reply.status(500).send({ error: 'could not rotate creator key' });
       }
-      const payload = mintPayload(submissionTokenSecret, uid, rotated.keyGeneration, now());
-      return reply.header('Cache-Control', 'no-store').send({ ...payload, rotated: true });
+      const sessionsEnded = await endOpenAgentSessions(store, uid);
+      const payload = mintPayload(submissionTokenSecret, uid, rotated.keyGeneration, generationAnchor(rotated, now()));
+      return reply.header('Cache-Control', 'no-store').send({ ...payload, rotated: true, sessionsEnded });
     },
   );
 
@@ -130,6 +177,9 @@ export function registerCreatorAgentKeyRoutes(app: FastifyInstance, options: Cre
       const at = new Date(now()).toISOString();
       const revoked = await store.revokeCreatorAgentKey(uid, at);
       if (!revoked) return reply.status(404).send({ error: 'not_found' });
+      // Revoke is the stronger of the two controls, so it must at least do what rotate
+      // does — a revoked key that leaves live sessions writing is not a revocation.
+      await endOpenAgentSessions(store, uid);
       return reply.status(204).send();
     },
   );
