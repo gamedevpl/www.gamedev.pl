@@ -2089,6 +2089,26 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
     list_example_files: {
       annotations: { title: 'List an exemplar’s files', ...READS },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          slug: { type: 'string' },
+          files: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                path: { type: 'string' },
+                bytes: { type: 'number' },
+                kind: { type: 'string', enum: ['text', 'binary'] },
+              },
+            },
+          },
+          total: { type: 'number' },
+          truncated: { type: 'boolean', description: 'True when the limit cut the listing short.' },
+        },
+        required: ['slug', 'files', 'total', 'truncated'],
+      },
       description:
         'List the source files inside an allowlisted exemplar game, without downloading its tarball. ' +
         'Use this (and read_example_file) when you cannot fetch URLs — get_example returns a link that ' +
@@ -2131,6 +2151,18 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
     read_example_file: {
       annotations: { title: 'Read one exemplar file', ...READS },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          slug: { type: 'string' },
+          path: { type: 'string' },
+          bytes: { type: 'number' },
+          kind: { type: 'string', enum: ['text', 'binary'] },
+          encoding: { type: 'string', enum: ['utf8', 'base64'] },
+          content: { type: 'string' },
+        },
+        required: ['slug', 'path', 'bytes', 'kind', 'encoding', 'content'],
+      },
       description:
         'Read one file from an allowlisted exemplar game, inline — no fetching required. ' +
         'Paths come from list_example_files and may be given relative (game.ts) or full (games/<slug>/game.ts). ' +
