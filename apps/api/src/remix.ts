@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { PARAMS_KEY, parseEditorDefinition, type EditorDefinition } from './editor-contract.js';
 import { EDITOR_FILE } from './editor-contract.js';
 import { applyAssistPatches, assistEnabled, MAX_UTTERANCE_LENGTH, type EditorAssistant } from './editor-assist.js';
-import { codeLaneEnabled, type VertexCodeLane } from './code-lane.js';
+import { codeLaneDebugEnabled, codeLaneEnabled, type VertexCodeLane } from './code-lane.js';
 import { buildSuggestions } from './remix-suggestions.js';
 import type { GamesStore } from './games-store.js';
 import type { Store } from './store.js';
@@ -648,11 +648,21 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         session.expiresAt = now() + REMIX_TTL_MS;
         const html = await rebuild(session);
         if (!html) return reply.status(500).send({ ok: false, reason: 'error' });
+        if (codeLaneDebugEnabled()) {
+          // Temporary, flag-gated: the whole run, in the log and in the answer.
+          // The response is the useful half — it is where a failure is already
+          // being read from. Delete both with the flag.
+          request.log.info(
+            { slug: session.slug, utterance: body.data.utterance, region: outcome.region, trace: outcome.trace },
+            'remix code lane trace',
+          );
+        }
         return reply.send({
           ok: true,
           html,
           undoable: true,
           region: outcome.region,
+          ...(codeLaneDebugEnabled() && outcome.trace ? { debug: outcome.trace } : {}),
           ...(outcome.summary ? { summary: outcome.summary } : {}),
         });
       } finally {

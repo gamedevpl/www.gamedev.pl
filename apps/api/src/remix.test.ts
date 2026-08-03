@@ -391,6 +391,41 @@ describe('remix routes', () => {
     expect(again.json().reason).toBe('nothing_to_undo');
   });
 
+  it('carries the lane trace into the answer only under the debug flag', async () => {
+    // Temporary and deliberately loud: it carries the utterance, so it must be a
+    // deploy-time decision rather than something a request can ask for.
+    const codeLane = {
+      run: async (_request: unknown, build: (o: Record<string, string>) => Promise<{ ok: boolean }>) => {
+        const good = { 'game/runtime.ts': 'export function startGame() {\n  return 0.08;\n}\n' };
+        await build(good);
+        return {
+          ok: true,
+          overrides: good,
+          region: { file: 'game/runtime.ts', name: 'startGame' },
+          rounds: 0,
+          tokens: { input: 1, output: 1 },
+          trace: { regionCount: 3, picked: { decision: 'edit', found: true }, rounds: [] },
+        };
+      },
+    };
+    const built = await buildTestApp({ codeLane });
+    app = built.app;
+    const { remixId } = (await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix', headers: alice })).json();
+    const url = `/api/remixes/${remixId}/code`;
+    const payload = { utterance: 'make it twice as fast' };
+
+    const quiet = await app.inject({ method: 'POST', url, headers: alice, payload });
+    expect(quiet.json().debug).toBeUndefined();
+
+    process.env.REMIX_DEBUG = 'true';
+    try {
+      const loud = await app.inject({ method: 'POST', url, headers: alice, payload });
+      expect(loud.json().debug).toMatchObject({ regionCount: 3, picked: { found: true } });
+    } finally {
+      delete process.env.REMIX_DEBUG;
+    }
+  });
+
   it('reports a failed code edit without swapping anything', async () => {
     const codeLane = {
       run: async () => ({ ok: false, reason: 'did_not_compile', tokens: { input: 1, output: 1 } }),

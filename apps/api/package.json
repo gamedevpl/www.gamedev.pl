@@ -12,6 +12,7 @@
     "contract:games-repo": "tsx scripts/check-games-repo-contract.ts",
     "snapshot:publish": "tsx scripts/publish-snapshot.ts",
     "gate:run": "tsx scripts/run-gate.ts",
+    "remix:probe": "tsx scripts/remix-lane-probe.ts",
     "beta:approve": "tsx scripts/beta-approve.ts",
     "beta:invite": "tsx scripts/beta-invite.ts",
     "token:mint": "tsx scripts/access-token.ts mint",

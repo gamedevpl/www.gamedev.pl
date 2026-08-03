@@ -39,6 +39,36 @@ export const DEFAULT_EDIT_TIMEOUT_MS = 20000;
 /** Rounds of "here is the compiler error, try again" before giving up. */
 export const MAX_REPAIR_ROUNDS = 2;
 
+/**
+ * Temporary: trace every step of a lane run into the response and the log.
+ *
+ * The lane is three moving parts and, until this existed, the only way to see
+ * any of them was to remix a real game and read the wreckage. Off by default,
+ * flipped by `REMIX_DEBUG` on a deploy, and meant to be deleted once the lane's
+ * hit rate is understood — `npm run remix:probe -w @gamedevpl/api` is the
+ * durable way to watch a run, since it costs no player a session.
+ *
+ * It carries the game's own source, which the player already has (the built
+ * document contains it) — but it also carries the utterance, so it must not
+ * outlive the question it was added to answer.
+ */
+export function codeLaneDebugEnabled(): boolean {
+  return process.env.REMIX_DEBUG === 'true';
+}
+
+/** Bounded so a trace cannot cost more than the answer it explains. */
+const TRACE_LIMIT = 4000;
+const clip = (text: string): string => (text.length > TRACE_LIMIT ? `${text.slice(0, TRACE_LIMIT)}…` : text);
+
+export interface CodeLaneTrace {
+  regionCount: number;
+  /** What call 1 chose, and whether that name existed. */
+  picked: { file?: string; name?: string; decision: string; found: boolean };
+  /** What call 2 was shown, and what it wrote back, per round. */
+  rounds: Array<{ round: number; replacement: string; buildErrors: string[] }>;
+  slice?: string;
+}
+
 export interface CodeLaneRequest {
   slug: string;
   /** Game-relative sources of the version being remixed. */
@@ -56,6 +86,8 @@ export type CodeLaneOutcome =
       summary?: { en: string; pl: string };
       rounds: number;
       tokens: { input: number; output: number };
+      /** Present only under `REMIX_DEBUG`. */
+      trace?: CodeLaneTrace;
     }
   | {
       ok: false;
@@ -122,7 +154,13 @@ export class VertexCodeLane {
    */
   async run(request: CodeLaneRequest, build: CodeLaneBuilder): Promise<CodeLaneOutcome> {
     const tokens = { input: 0, output: 0 };
+    const debug = codeLaneDebugEnabled();
     const regions = buildSymbolMap(request.sources);
+    const trace: CodeLaneTrace = {
+      regionCount: regions.length,
+      picked: { decision: 'none', found: false },
+      rounds: [],
+    };
     if (regions.length === 0) {
       return { ok: false, reason: 'no_region', detail: 'this game has no editable source regions', tokens };
     }
@@ -146,6 +184,12 @@ export class VertexCodeLane {
       };
     }
     const region = picked.file && picked.name ? findRegion(regions, picked.file, picked.name) : null;
+    trace.picked = {
+      ...(picked.file ? { file: picked.file } : {}),
+      ...(picked.name ? { name: picked.name } : {}),
+      decision: picked.decision,
+      found: region !== null,
+    };
     if (!region) {
       // A named region that does not exist is a hallucination, and there is
       // nothing to edit. Reported as "needs a bigger change" rather than as an
@@ -155,6 +199,7 @@ export class VertexCodeLane {
 
     const original = request.sources[region.file];
     const slice = sliceRegion(original, region);
+    if (debug) trace.slice = clip(slice);
     let errors: string[] = [];
     let summary = bilingual(picked.summary);
 
@@ -170,9 +215,11 @@ export class VertexCodeLane {
       }
       summary = bilingual(edit.summary) ?? summary;
 
+      if (debug) trace.rounds.push({ round, replacement: clip(edit.replacement), buildErrors: [] });
       const spliced = spliceRegion(original, region, edit.replacement);
       if (!spliced.ok) {
         errors = [spliced.error];
+        if (debug) trace.rounds.at(-1)!.buildErrors = errors;
         continue;
       }
       const overrides = { [region.file]: spliced.source };
@@ -185,12 +232,14 @@ export class VertexCodeLane {
           ...(summary ? { summary } : {}),
           rounds: round,
           tokens,
+          ...(debug ? { trace } : {}),
         };
       }
       // Only the errors go back — never the file again. The model still has the
       // region from its own last turn, and re-sending the source is what makes a
       // repair round cost as much as the first one.
       errors = built.errors.slice(0, 6);
+      if (debug) trace.rounds.at(-1)!.buildErrors = errors;
     }
 
     return {
