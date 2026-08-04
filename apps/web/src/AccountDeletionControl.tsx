@@ -93,6 +93,12 @@ export function AccountDeletionControl({ labelledBy }: { labelledBy?: string }) 
                       setStatus('deleting');
                       void deleteAccount()
                         .then(() => {
+                          // Do not depend on navigation to unmount this dialog. A
+                          // blocked popstate (or a host embedding the control without
+                          // App routing) must not leave a permanent deleting overlay.
+                          setOpen(false);
+                          setConfirmation('');
+                          setStatus('idle');
                           window.history.replaceState(null, '', '/');
                           window.dispatchEvent(new PopStateEvent('popstate'));
                         })

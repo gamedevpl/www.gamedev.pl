@@ -211,6 +211,13 @@ describe('EditProfileModal', () => {
       Simulate.change(input);
     });
     expect(confirm.disabled).toBe(false);
+
+    await act(async () => {
+      Simulate.click(confirm);
+      await Promise.resolve();
+    });
+    expect(deleteAccount).toHaveBeenCalledOnce();
+    expect(document.body.querySelector('.account-delete-dialog')).toBeNull();
   });
 });
 
