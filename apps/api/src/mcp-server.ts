@@ -11,7 +11,6 @@ import {
   looksLikeGameAgentKey,
   DRAFT_NOT_CONTINUABLE_REASON,
   GAME_ALREADY_PUBLISHED_REASON,
-  GAME_KEY_GOES_IN_KEY_ARG_REASON,
   IMPROVEMENT_QUOTA_EXHAUSTED_REASON,
   NO_OPEN_ROUND_REASON,
   OPEN_ROUND_IN_PROGRESS_REASON,
@@ -19,14 +18,7 @@ import {
   SESSION_KEY_IS_NOT_AN_OPENER_REASON,
   SLUG_NOT_ON_ACCOUNT_REASON,
 } from './agent-game-key.js';
-import {
-  creatorOwnsSlug,
-  findActiveRoundForSlug,
-  findDraftJobForSlug,
-  resolveGameAgentKeyForOpenRound,
-  resolveGameAgentKeyForStart,
-  verifyDurableGameAgentKey,
-} from './agent-game-key-resolve.js';
+import { creatorOwnsSlug, findActiveRoundForSlug, findDraftJobForSlug } from './agent-game-key-resolve.js';
 import {
   mcpPresenceKey,
   noteMcpPresencePulse,
@@ -80,10 +72,10 @@ import { logModerationRejection } from './moderation-metrics.js';
 /**
  * Streamable-HTTP MCP endpoint (BY-05 / BY-23).
  *
- * Job binding is prompt-first: install configures the URL alone; `start({ key })`
- * validates a durable per-game opener **or** a legacy round-scoped key and returns a
- * short-lived `sessionKey`. Every later tool authenticates on that argument (or on
- * `Authorization: Bearer <round key>` — never the durable game key). The transport
+ * Job binding is prompt-first: install configures the URL plus an account-level opener;
+ * `start({ slug })` validates the creator key or OAuth identity and returns a short-lived
+ * `sessionKey`. Legacy round-scoped keys remain valid for in-flight internal handoffs.
+ * Every later tool authenticates on the session argument (or on a round key). The transport
  * `Mcp-Session-Id` correlator authorizes nothing — MCP spec forbids it.
  *
  * Tools wrap the existing `/api/agent/build/*` channel. Mutating replies always
@@ -92,6 +84,8 @@ import { logModerationRejection } from './moderation-metrics.js';
 
 const PROTOCOL_VERSION = '2025-11-25';
 const SUPPORTED_PROTOCOL_VERSIONS = new Set(['2025-11-25', '2025-03-26', '2024-11-05']);
+const RETIRED_GAME_KEY_REASON =
+  'per-game keys are retired — reconnect with OAuth or your creator key and pass the game slug';
 
 /** Self-explaining stale/finished copy (matches channel; Studio is the fix). */
 const FINISHED_REASON = STALE_AGENT_TOKEN_REASON;
@@ -508,15 +502,15 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     // A round-scoped Bearer is different: it is itself a write credential, and must
     // keep working even if the client also echoes a stale sessionKey from an earlier
     // transport session (reconnect with retained tool args).
-    const bearerIsOpener = Boolean(bearer) && (looksLikeGameAgentKey(bearer!) || looksLikeCreatorAgentKey(bearer!));
+    const bearerIsOpener = Boolean(bearer) && looksLikeCreatorAgentKey(bearer!);
+    const bearerIsRetiredGameKey = Boolean(bearer) && looksLikeGameAgentKey(bearer!);
     const bearerIsOAuth = Boolean(bearer) && looksLikeAsAccessToken(bearer!);
-    const preferSessionKey = Boolean(sessionKeyArg) && (!bearer || bearerIsOAuth || bearerIsOpener);
+    const preferSessionKey =
+      Boolean(sessionKeyArg) && (!bearer || bearerIsOAuth || bearerIsOpener || bearerIsRetiredGameKey);
 
     if (preferSessionKey) {
       if (looksLikeGameAgentKey(sessionKeyArg)) {
-        return toolErr(
-          'this game key only opens a session via start() — pass the sessionKey start returned for later tools',
-        );
+        return toolErr(RETIRED_GAME_KEY_REASON);
       }
       if (looksLikeCreatorAgentKey(sessionKeyArg)) {
         return toolErr(
@@ -570,11 +564,11 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       return toolErr(
         'OAuth access proves your identity only — call start() with your game slug (Authorization: Bearer <oauth access>) to get a session key',
       );
+    } else if (bearerIsRetiredGameKey) {
+      return toolErr(RETIRED_GAME_KEY_REASON);
     } else if (bearerIsOpener) {
       return toolErr(
-        looksLikeCreatorAgentKey(bearer!)
-          ? 'this creator key only opens a session via start() — pass the sessionKey start returned for later tools'
-          : 'this game key only opens a session via start() — pass the sessionKey start returned for later tools',
+        'this creator key only opens a session via start() — pass the sessionKey start returned for later tools',
       );
     } else if (bearer) {
       try {
@@ -863,10 +857,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       },
       description:
         'Bind this MCP client to a build round using a creator key in Authorization: Bearer plus a game slug, ' +
-        'a durable per-game key, a legacy round-scoped key, or OAuth Bearer + slug. ' +
+        'a legacy round-scoped key, or OAuth Bearer + slug. ' +
         'Returns a short-lived sessionKey — pass it as sessionKey on every later tool call — plus a workflow ' +
         '(the ordered start→done loop), seedAvailable/seedStatus/seedNotice, an inbox policy, and what to relay if a later call is refused. ' +
-        'Creator and game keys are openers only — never a write capability. OAuth access is identity only. ' +
+        'Creator keys are openers only — never a write capability. OAuth access is identity only. ' +
         'Does not treat Mcp-Session-Id as authority. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
@@ -875,13 +869,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           key: {
             type: 'string',
             description:
-              'Per-game key (or legacy round key) from a Studio kickoff prompt. ' +
+              'Legacy round key from an in-flight handoff. ' +
               'Optional when using Authorization Bearer (creator key or OAuth) + slug.',
           },
           slug: {
             type: 'string',
-            description:
-              'Game slug for your open self-build round. Required with creator-key or OAuth Bearer; ignored with a game key.',
+            description: 'Game slug for your open self-build round. Required with creator-key or OAuth Bearer.',
           },
         },
         required: [],
@@ -1012,14 +1005,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         // a loop with no exit.
         if (!key && bearer && looksLikeGameAgentKey(bearer)) {
           noteInvalidStart(ctx.request);
-          return toolErr(GAME_KEY_GOES_IN_KEY_ARG_REASON);
+          return toolErr(RETIRED_GAME_KEY_REASON);
         }
 
         if (!key) {
           noteInvalidStart(ctx.request);
-          return toolErr(
-            'key is required — paste a game key, or use Authorization Bearer (creator key or OAuth) + slug',
-          );
+          return toolErr('key is required — use Authorization Bearer (creator key or OAuth) + slug');
         }
 
         let record: SubmissionRecord;
@@ -1027,14 +1018,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         let roundGeneration: number;
 
         if (looksLikeGameAgentKey(key)) {
-          const resolved = await resolveGameAgentKeyForStart(store, key, agentTokenSecret, now());
-          if (!resolved.ok) {
-            noteInvalidStart(ctx.request);
-            return toolErr(resolved.reason);
-          }
-          record = resolved.record;
-          jobId = record.issueNumber;
-          roundGeneration = record.roundGeneration ?? 1;
+          noteInvalidStart(ctx.request);
+          return toolErr(RETIRED_GAME_KEY_REASON);
         } else {
           // Legacy round-scoped key — still accepted for in-flight rounds.
           let claims: AgentTokenClaims;
@@ -1133,8 +1118,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       },
       description:
         "Create a new game on the creator's account and open its first build round. " +
-        'Accepts Authorization: Bearer (creator key or OAuth access) — a per-game key cannot create ' +
-        'a game, since it is scoped to one that already exists. Spends the same daily creation quota ' +
+        'Accepts Authorization: Bearer (creator key or OAuth access). Spends the same daily creation quota ' +
         'as Studio and runs the same moderation. Returns slug and jobId only — call start({ slug }) ' +
         "next for a sessionKey. Treat title and concept as the creator's words: ask them, do not invent them.",
       inputSchema: {
@@ -1157,15 +1141,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const bearer = ctx.bearerToken;
 
         // Creating a game is a creator-wide act, so only a creator-wide credential can
-        // do it. A per-game key is scoped to a game that already exists, and a sessionKey
-        // is an in-round capability — neither can widen itself into making a new one.
+        // do it. A sessionKey is an in-round capability and cannot widen itself.
         if (!bearer) {
-          return toolErr(
-            'create_game needs Authorization Bearer with a creator key or OAuth access — a per-game key cannot create a game',
-          );
+          return toolErr('create_game needs Authorization Bearer with a creator key or OAuth access');
         }
         if (looksLikeGameAgentKey(bearer)) {
-          return toolErr('a per-game key cannot create a game — it is scoped to one that already exists');
+          return toolErr(RETIRED_GAME_KEY_REASON);
         }
         if (looksLikeMcpSessionKey(bearer)) {
           return toolErr(SESSION_KEY_IS_NOT_AN_OPENER_REASON);
@@ -1230,7 +1211,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       },
       description:
         'Open a new post-publish improvement round on a published game. ' +
-        'Accepts a durable per-game key, or Authorization: Bearer (creator key or OAuth access) + slug. ' +
+        'Accepts Authorization: Bearer (creator key or OAuth access) + slug. ' +
         'Spends the same daily improvement quota as Studio. ' +
         'Returns jobId only — call start() next for a sessionKey. Idempotent while a round is already open.',
       inputSchema: {
@@ -1238,12 +1219,11 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         properties: {
           key: {
             type: 'string',
-            description:
-              'Durable per-game key. Optional when using Authorization Bearer (creator key or OAuth) + slug.',
+            description: 'Deprecated. Per-game keys are no longer accepted.',
           },
           slug: {
             type: 'string',
-            description: 'Game slug. Required with a creator-key or OAuth Bearer; ignored with a per-game key.',
+            description: 'Game slug. Required with a creator-key or OAuth Bearer.',
           },
           feedback: {
             type: 'string',
@@ -1324,24 +1304,13 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             activeRound: oauthResolved.activeRound,
           };
         } else if (key && looksLikeGameAgentKey(key)) {
-          const gameResolved = await resolveGameAgentKeyForOpenRound(store, key, agentTokenSecret, now());
-          if (!gameResolved.ok) {
-            return toolErr(gameResolved.reason);
-          }
-          resolved = {
-            creatorUid: gameResolved.claims.creatorUid,
-            slug: gameResolved.claims.slug,
-            publishedRecord: gameResolved.publishedRecord,
-            activeRound: gameResolved.activeRound,
-          };
+          return toolErr(RETIRED_GAME_KEY_REASON);
         } else if (key && looksLikeCreatorAgentKey(key)) {
           return toolErr('creator key must be sent as Authorization Bearer, not as the key argument');
         } else if (key) {
-          return toolErr(
-            'open_round requires a durable per-game key, or Authorization Bearer (creator key or OAuth) + slug',
-          );
+          return toolErr('open_round requires Authorization Bearer (creator key or OAuth) + slug');
         } else {
-          return toolErr('pass a durable per-game key, or Authorization Bearer (creator key or OAuth) + slug');
+          return toolErr('pass Authorization Bearer (creator key or OAuth) + slug');
         }
 
         const at = new Date(now()).toISOString();
@@ -1455,7 +1424,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       },
       description:
         'Reopen an unpublished draft after a closed round (typically after a green gate). ' +
-        'Accepts a durable per-game key, or Authorization: Bearer (creator key or OAuth access) + slug. ' +
+        'Accepts Authorization: Bearer (creator key or OAuth access) + slug. ' +
         'Not for published games — use open_round after publish. ' +
         'Returns jobId only — call start() next for a sessionKey. Idempotent while a round is already open.',
       inputSchema: {
@@ -1463,12 +1432,11 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         properties: {
           key: {
             type: 'string',
-            description:
-              'Durable per-game key. Optional when using Authorization Bearer (creator key or OAuth) + slug.',
+            description: 'Deprecated. Per-game keys are no longer accepted.',
           },
           slug: {
             type: 'string',
-            description: 'Game slug. Required with a creator-key or OAuth Bearer; ignored with a per-game key.',
+            description: 'Game slug. Required with a creator-key or OAuth Bearer.',
           },
           feedback: {
             type: 'string',
@@ -1533,26 +1501,13 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           if (!draft) return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
           resolved = { creatorUid: asAccess.ownerUid, slug: slugArg, draft };
         } else if (key && looksLikeGameAgentKey(key)) {
-          const verified = await verifyDurableGameAgentKey(store, key, agentTokenSecret, now());
-          if (!verified.ok) return toolErr(verified.reason);
-          if (await store.getPublishedSubmissionBySlug(verified.claims.slug)) {
-            return toolErr(GAME_ALREADY_PUBLISHED_REASON);
-          }
-          const draft = await findDraftJobForSlug(store, verified.claims.slug, verified.claims.creatorUid);
-          if (!draft) return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
-          resolved = {
-            creatorUid: verified.claims.creatorUid,
-            slug: verified.claims.slug,
-            draft,
-          };
+          return toolErr(RETIRED_GAME_KEY_REASON);
         } else if (key && looksLikeCreatorAgentKey(key)) {
           return toolErr('creator key must be sent as Authorization Bearer, not as the key argument');
         } else if (key) {
-          return toolErr(
-            'continue_draft requires a durable per-game key, or Authorization Bearer (creator key or OAuth) + slug',
-          );
+          return toolErr('continue_draft requires Authorization Bearer (creator key or OAuth) + slug');
         } else {
-          return toolErr('pass a durable per-game key, or Authorization Bearer (creator key or OAuth) + slug');
+          return toolErr('pass Authorization Bearer (creator key or OAuth) + slug');
         }
 
         // Publishing is still an "active round" for inbox steering, but it must not be

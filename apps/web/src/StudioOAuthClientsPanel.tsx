@@ -39,7 +39,7 @@ export function StudioOAuthClientsPanel() {
     try {
       await revokeOAuthGrant(grantId);
       setGrants((prev) => prev.filter((row) => row.grantId !== grantId));
-      setConfirmingId(null);
+      setConfirmingId((current) => (current === grantId ? null : current));
     } catch {
       setError(t('oauthClients.revokeError'));
     } finally {
@@ -105,6 +105,7 @@ export function StudioOAuthClientsPanel() {
                   <p>{t('oauthClients.confirm', { client: grant.clientLabel })}</p>
                   <div className="studio-credential-actions">
                     <button
+                      autoFocus
                       type="button"
                       className="studio-credential-action is-danger"
                       disabled={revokingId !== null}
@@ -126,6 +127,7 @@ export function StudioOAuthClientsPanel() {
                 <button
                   type="button"
                   className="studio-credential-action is-danger"
+                  disabled={revokingId !== null}
                   onClick={() => setConfirmingId(grant.grantId)}
                 >
                   {t('oauthClients.revoke')}

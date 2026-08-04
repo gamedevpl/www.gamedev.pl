@@ -179,11 +179,7 @@ export function StudioCreatorAgentKeyPanel() {
 
           {!rotateArmed && !revokeArmed ? (
             <div className="studio-credential-actions" aria-live="polite">
-              <button
-                type="button"
-                className="primary-btn studio-credential-action"
-                onClick={() => void copyHeader()}
-              >
+              <button type="button" className="primary-btn studio-credential-action" onClick={() => void copyHeader()}>
                 <PixelIcon name={copied ? 'check' : 'sparkle'} size={12} />{' '}
                 {copied ? t('creatorKey.copied') : t('creatorKey.copyHeader')}
               </button>
@@ -217,6 +213,7 @@ export function StudioCreatorAgentKeyPanel() {
               <p>{t('creatorKey.rotate.confirm')}</p>
               <div className="studio-credential-actions">
                 <button
+                  autoFocus
                   type="button"
                   className="studio-credential-action is-danger"
                   disabled={busy !== null}
@@ -241,6 +238,7 @@ export function StudioCreatorAgentKeyPanel() {
               <p>{t('creatorKey.revoke.confirm')}</p>
               <div className="studio-credential-actions">
                 <button
+                  autoFocus
                   type="button"
                   className="studio-credential-action is-danger"
                   disabled={busy !== null}

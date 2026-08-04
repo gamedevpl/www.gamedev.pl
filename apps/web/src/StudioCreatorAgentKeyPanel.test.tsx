@@ -91,6 +91,7 @@ describe('StudioCreatorAgentKeyPanel', () => {
     const rotate = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Rotate key');
     await act(async () => rotate?.click());
     expect(container.textContent).toContain('Every agent using the current key will lose access immediately');
+    expect(document.activeElement?.textContent).toBe('Yes, rotate key');
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     const cancel = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Cancel');
@@ -98,6 +99,7 @@ describe('StudioCreatorAgentKeyPanel', () => {
     const revoke = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Revoke key');
     await act(async () => revoke?.click());
     expect(container.textContent).toContain('You can create a new key later');
+    expect(document.activeElement?.textContent).toBe('Yes, revoke key');
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

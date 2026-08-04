@@ -37,6 +37,19 @@ _publish_ gate still retires the key; `end` is optional after green.
 
 Further channel writes after `end` clear `agentEndedAt` (agent resumed).
 
+## Credentials and immediate revocation
+
+- Current openers are a creator-wide key or OAuth access, both paired with the game slug.
+- Durable per-game keys are retired. Their former management routes return `410`, and
+  MCP tools refuse an already-issued key with a reconnect instruction. Do not restore a
+  per-game compatibility path in UI, API routes, or MCP tool handling.
+- An opener is checked by `start`; later calls use the returned round-scoped `sessionKey`.
+  Therefore revoking or rotating a creator key, revoking an OAuth grant, or detecting
+  refresh-token reuse must also advance every open self round for that creator via
+  `endOpenAgentSessions`. Revoking the opener alone would leave minted session keys live.
+- Platform rounds are excluded from that account-credential cleanup because these
+  credentials cannot open them.
+
 ## Soft warnings (never `isError`)
 
 Merged by `applySessionNudges` / submit handler. Act, then continue:
@@ -70,6 +83,7 @@ generation bump + seed from latest delivery. Do not auto-dispatch platform from 
 | Area                         | Path                                                        |
 | ---------------------------- | ----------------------------------------------------------- |
 | MCP tools                    | `apps/api/src/mcp-server.ts`                                |
+| Account-session invalidation | `apps/api/src/agent-session-revocation.ts`                  |
 | Channel (`POST …/end`, …)    | `apps/api/src/agent-channel.ts`                             |
 | Stall / `ended`              | `apps/api/src/job-state.ts` (`detectStall`)                 |
 | Handoff gate                 | `apps/api/src/builder.ts` (`allowsSelfToPlatformHandoff`)   |

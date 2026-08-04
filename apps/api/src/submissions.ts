@@ -53,7 +53,7 @@ import {
 import { isMcpPresenceEventText } from './mcp-presence.js';
 import { logSeedStagingFailure } from './seed-metrics.js';
 import { createSelfBuildBackend } from './self-build-backend.js';
-import { mintConnectPayload, mintGameKeyKickoff } from './self-build-connect.js';
+import { mintConnectPayload } from './self-build-connect.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
@@ -2471,7 +2471,7 @@ export async function registerSubmissionRoutes(
 
       const at = new Date(now()).toISOString();
       // BY-27b: connect hands out the creator-wide key (config header) + a keyless
-      // slug prompt. Per-game keys remain mintable via /agent-key for legacy setups.
+      // slug prompt. The former per-game key path is intentionally retired.
       const keyRecord = await store.ensureCreatorAgentKey(fresh.ownerUid, at);
 
       const pendingMessages = await store.listPendingCreatorMessages(issueNumber);
@@ -2490,64 +2490,15 @@ export async function registerSubmissionRoutes(
     },
   );
 
-  /**
-   * Durable per-game opener status + rotate (BY-23). Owner session only.
-   *
-   * GET returns whether a key is active, its generation, and a display kickoff (remint
-   * with fresh exp — does NOT rotate). POST bumps keyGeneration and returns a fresh
-   * kickoff; any agent still holding the old key is cut off.
-   */
+  /** Closed-beta retirement: old clients get an explicit upgrade response, never a key. */
   app.get(
     '/api/submissions/:id/agent-key',
     { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
     async (request, reply) => {
-      if (!submissionTokenSecret || !store) {
-        return reply.status(503).send({ error: 'submissions are not configured' });
-      }
       if (!checkUserAccess(request, reply)) return;
-
-      const id = z.string().parse((request.params as { id?: string }).id);
-      let issueNumber: number;
-      try {
-        issueNumber = verifyToken(id, submissionTokenSecret);
-      } catch (error) {
-        if (error instanceof InvalidTokenError) {
-          return reply.status(400).send({ error: 'invalid submission token' });
-        }
-        throw error;
-      }
-
-      const record = await store.getSubmission(issueNumber);
-      if (!record || record.ownerUid !== request.user!.uid) {
-        return reply.status(403).send({ error: 'only the creator can manage this game key' });
-      }
-      const slug = await ensureSubmissionSlug(issueNumber, record);
-      if (!slug) {
-        return reply.status(409).send({ error: 'game_key_unavailable', reason: 'missing_slug' });
-      }
-
-      const at = new Date(now()).toISOString();
-      const keyRecord = await store.ensureGameAgentKey(slug, record.ownerUid, at);
-      if (!keyRecord) {
-        return reply.status(403).send({ error: 'only the creator can manage this game key' });
-      }
-
-      const payload = mintGameKeyKickoff({
-        slug,
-        ownerUid: record.ownerUid,
-        keyGeneration: keyRecord.keyGeneration,
-        title: record.title,
-        submissionTokenSecret,
-        appBaseUrl: notifyAppBaseUrl,
-        now: now(),
-      });
-
-      return reply.header('Cache-Control', 'no-store').send({
-        slug,
-        keyGeneration: keyRecord.keyGeneration,
-        expiresAt: payload.expiresAt,
-        kickoffPrompt: payload.kickoffPrompt,
-        installSnippets: payload.installSnippets,
+      return reply.status(410).send({
+        error: 'per_game_keys_retired',
+        reason: 'Reconnect this coding agent from Studio using OAuth or the creator-wide key.',
       });
     },
   );
@@ -2556,59 +2507,10 @@ export async function registerSubmissionRoutes(
     '/api/submissions/:id/agent-key/rotate',
     { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } },
     async (request, reply) => {
-      if (!submissionTokenSecret || !store) {
-        return reply.status(503).send({ error: 'submissions are not configured' });
-      }
       if (!checkUserAccess(request, reply)) return;
-
-      const id = z.string().parse((request.params as { id?: string }).id);
-      let issueNumber: number;
-      try {
-        issueNumber = verifyToken(id, submissionTokenSecret);
-      } catch (error) {
-        if (error instanceof InvalidTokenError) {
-          return reply.status(400).send({ error: 'invalid submission token' });
-        }
-        throw error;
-      }
-
-      const record = await store.getSubmission(issueNumber);
-      if (!record || record.ownerUid !== request.user!.uid) {
-        return reply.status(403).send({ error: 'only the creator can rotate this game key' });
-      }
-      const slug = await ensureSubmissionSlug(issueNumber, record);
-      if (!slug) {
-        return reply.status(409).send({ error: 'game_key_unavailable', reason: 'missing_slug' });
-      }
-
-      const at = new Date(now()).toISOString();
-      // Ensure exists first so rotate has a generation to bump (first-time creators).
-      const ensured = await store.ensureGameAgentKey(slug, record.ownerUid, at);
-      if (!ensured) {
-        return reply.status(403).send({ error: 'only the creator can rotate this game key' });
-      }
-      const rotated = await store.rotateGameAgentKey(slug, record.ownerUid, at);
-      if (!rotated) {
-        return reply.status(403).send({ error: 'only the creator can rotate this game key' });
-      }
-
-      const payload = mintGameKeyKickoff({
-        slug,
-        ownerUid: record.ownerUid,
-        keyGeneration: rotated.keyGeneration,
-        title: record.title,
-        submissionTokenSecret,
-        appBaseUrl: notifyAppBaseUrl,
-        now: now(),
-      });
-
-      return reply.header('Cache-Control', 'no-store').send({
-        slug,
-        keyGeneration: rotated.keyGeneration,
-        expiresAt: payload.expiresAt,
-        kickoffPrompt: payload.kickoffPrompt,
-        installSnippets: payload.installSnippets,
-        rotated: true,
+      return reply.status(410).send({
+        error: 'per_game_keys_retired',
+        reason: 'Reconnect this coding agent from Studio using OAuth or the creator-wide key.',
       });
     },
   );

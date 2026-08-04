@@ -5,7 +5,7 @@ import {
   DEFAULT_CREATOR_AGENT_KEY_TTL_DAYS,
   verifyCreatorAgentKey,
 } from './agent-creator-key.js';
-import { assertGameAgentKeyActive, verifyGameAgentKey } from './agent-game-key.js';
+import { mintGameAgentKey, verifyGameAgentKey } from './agent-game-key.js';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
@@ -553,7 +553,7 @@ describe('GET /api/submissions/:id/connect (BY-03 / BY-27b)', () => {
     expect(claims).toMatchObject({ creatorUid: 'g:creator', keyGeneration: 1 });
   });
 
-  it('agent-key binds the minted key to the game keyGeneration, not the round generation', async () => {
+  it('retires the per-game key endpoint instead of minting another legacy credential', async () => {
     const created = await createApp();
     app = created.app;
     const { store } = created;
@@ -567,24 +567,15 @@ describe('GET /api/submissions/:id/connect (BY-03 / BY-27b)', () => {
       by: 'system',
     });
     await store.ensureRoundGeneration(77);
-    await store.ensureGameAgentKey('bound-round', 'g:creator', new Date().toISOString());
-    // Simulate a later round: roundGeneration 2 is active; game keyGeneration stays 1.
-    await store.bumpRoundGeneration(77);
-    const afterBump = await store.getSubmission(77);
-    expect(afterBump?.roundGeneration).toBe(2);
-
     const id = mintToken(77, secret);
     const response = await app.inject({
       method: 'GET',
       url: `/api/submissions/${id}/agent-key`,
       headers: authHeaders(),
     });
-    expect(response.statusCode).toBe(200);
-    const gameKey = (response.json().kickoffPrompt as string).match(/key: (\S+)/)![1]!;
-    const claims = verifyGameAgentKey(gameKey, secret);
-    expect(claims).toMatchObject({ slug: 'bound-round', creatorUid: 'g:creator', keyGeneration: 1 });
-    const keyRecord = await store.getGameAgentKey('bound-round');
-    expect(() => assertGameAgentKeyActive(claims, keyRecord!)).not.toThrow();
+    expect(response.statusCode).toBe(410);
+    expect(response.json()).toMatchObject({ error: 'per_game_keys_retired' });
+    expect(await store.getGameAgentKey('bound-round')).toBeNull();
   });
 
   it('embeds pending unacknowledged creator inbox messages in the kickoff', async () => {
@@ -666,11 +657,7 @@ async function mcpStart(
   return { ok: true, sessionKey: (structured as { sessionKey?: string })?.sessionKey };
 }
 
-function extractGameKey(kickoffPrompt: string): string {
-  return kickoffPrompt.match(/key: (\S+)/)![1]!;
-}
-
-describe('game agent key API (BY-23)', () => {
+describe('retired game agent key API', () => {
   let app: FastifyInstance | null = null;
 
   afterEach(async () => {
@@ -692,87 +679,70 @@ describe('game agent key API (BY-23)', () => {
     return { id, record };
   }
 
-  it('rotate bumps generation; old kickoff key fails start; new works', async () => {
+  it('returns 410 from both management routes and refuses an already-issued key at start', async () => {
     const created = await createApp();
     app = created.app;
     const { store } = created;
     const { id, record } = await submitSelfRound(store);
+    await store.ensureGameAgentKey(record.slug!, record.ownerUid, new Date().toISOString());
+    const oldKey = mintGameAgentKey(secret, {
+      slug: record.slug!,
+      creatorUid: record.ownerUid,
+      keyGeneration: 1,
+    });
 
     const agentKey = await app.inject({
       method: 'GET',
       url: `/api/submissions/${id}/agent-key`,
       headers: authHeaders(),
     });
-    expect(agentKey.statusCode).toBe(200);
-    const oldKey = extractGameKey(agentKey.json().kickoffPrompt as string);
+    expect(agentKey.statusCode).toBe(410);
+    expect(agentKey.json()).toMatchObject({ error: 'per_game_keys_retired' });
 
     const rotated = await app.inject({
       method: 'POST',
       url: `/api/submissions/${id}/agent-key/rotate`,
       headers: authHeaders(),
     });
-    expect(rotated.statusCode).toBe(200);
-    expect(rotated.json().keyGeneration).toBe(2);
-    const newKey = extractGameKey(rotated.json().kickoffPrompt as string);
+    expect(rotated.statusCode).toBe(410);
+    expect(rotated.json()).toMatchObject({ error: 'per_game_keys_retired' });
 
     const oldStart = await mcpStart(app, oldKey);
     expect(oldStart.ok).toBe(false);
-    expect(oldStart.error).toMatch(/rotated/i);
-
-    const newStart = await mcpStart(app, newKey);
-    expect(newStart.ok).toBe(true);
-    expect(newStart.sessionKey).toBeTruthy();
-    void record;
+    expect(oldStart.error).toMatch(/per-game keys are retired/i);
   });
 
-  it('GET agent-key remint does NOT bump generation', async () => {
+  it('still requires a signed-in creator before returning the retirement response', async () => {
     const created = await createApp();
     app = created.app;
     const { store } = created;
     const { id } = await submitSelfRound(store);
 
-    const first = await app.inject({
+    const response = await app.inject({
       method: 'GET',
       url: `/api/submissions/${id}/agent-key`,
-      headers: authHeaders(),
     });
-    expect(first.statusCode).toBe(200);
-    const gen1 = first.json().keyGeneration as number;
-
-    const second = await app.inject({
-      method: 'GET',
-      url: `/api/submissions/${id}/agent-key`,
-      headers: authHeaders(),
-    });
-    expect(second.statusCode).toBe(200);
-    expect(second.json().keyGeneration).toBe(gen1);
-
-    const keyRecord = await store.getGameAgentKey((await store.listSubmissionsByOwner('g:creator'))[0]!.slug!);
-    expect(keyRecord?.keyGeneration).toBe(gen1);
+    expect(response.statusCode).toBe(401);
   });
 
-  it('round close does not bump game keyGeneration', async () => {
+  it('does not rotate a stored legacy generation', async () => {
     const created = await createApp();
     app = created.app;
     const { store } = created;
     const { id, record } = await submitSelfRound(store);
 
-    await app.inject({
-      method: 'GET',
-      url: `/api/submissions/${id}/agent-key`,
-      headers: authHeaders(),
-    });
+    await store.ensureGameAgentKey(record.slug!, record.ownerUid, new Date().toISOString());
     const beforeClose = await store.getGameAgentKey(record.slug!);
     expect(beforeClose?.keyGeneration).toBe(1);
 
-    await store.recordJobTransition(record.issueNumber, {
-      to: 'ready_for_review',
-      at: new Date().toISOString(),
-      by: 'gate',
-      reason: 'gate_green',
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${id}/agent-key/rotate`,
+      headers: authHeaders(),
     });
+    expect(response.statusCode).toBe(410);
 
-    const afterClose = await store.getGameAgentKey(record.slug!);
-    expect(afterClose?.keyGeneration).toBe(1);
+    const afterAttempt = await store.getGameAgentKey(record.slug!);
+    expect(afterAttempt?.keyGeneration).toBe(1);
   });
 });

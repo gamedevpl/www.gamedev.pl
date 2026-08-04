@@ -2,6 +2,7 @@ import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
+import { endOpenAgentSessions } from './agent-session-revocation.js';
 import { InvalidSessionError, readSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { redirectUriAllowed } from './oauth-redirect.js';
 import { verifyPkceS256 } from './oauth-pkce.js';
@@ -746,6 +747,12 @@ export function registerOAuthAuthorizationServerRoutes(
       });
 
       if (!rotateResult.ok) {
+        // Refresh-token reuse revokes the whole grant in the store. Session keys minted
+        // before that revocation do not consult the grant, so advance the creator's open
+        // self rounds as well or the stolen capability would remain writable for 24h.
+        if (rotateResult.reason === 'reuse') {
+          await endOpenAgentSessions(store, grant.ownerUid);
+        }
         return reply.status(400).send({ error: 'invalid_grant' });
       }
 
@@ -793,8 +800,11 @@ export function registerOAuthAuthorizationServerRoutes(
 
     if (grantId) {
       const grant = await store.getOAuthGrant(grantId);
-      if (grant) {
-        await store.revokeOAuthGrant(grantId, grant.ownerUid);
+      // RFC 7009 revocation is idempotent. Do not let someone holding an already-revoked
+      // token repeatedly advance every self round as a denial-of-service primitive.
+      if (grant && !grant.revokedAt) {
+        const revoked = await store.revokeOAuthGrant(grantId, grant.ownerUid);
+        if (revoked) await endOpenAgentSessions(store, grant.ownerUid);
       }
     }
 
@@ -829,6 +839,10 @@ export function registerOAuthAuthorizationServerRoutes(
     const grantId = (request.params as { grantId: string }).grantId;
     const revoked = await store.revokeOAuthGrant(grantId, uid);
     if (!revoked) return reply.status(404).send({ error: 'not_found' });
+    // OAuth access is only checked by start(). The returned sessionKey is bound to the
+    // round generation, so revoking the grant must advance that generation just like a
+    // creator-key rotation/revoke does. This makes "disconnect immediately" truthful.
+    await endOpenAgentSessions(store, uid);
     return reply.status(204).send();
   });
 }

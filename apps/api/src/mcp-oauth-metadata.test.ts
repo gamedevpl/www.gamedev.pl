@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-token.js';
 import { mintGameAgentKey } from './agent-game-key.js';
+import { mintMcpSessionKey } from './mcp-session-key.js';
 import {
   buildMcpOAuthAuthenticateHeader,
   buildOAuthProtectedResourceDocument,
@@ -435,7 +436,7 @@ describe('MCP OAuth challenge regressions (BY-18a)', () => {
     expect(refusedBody.result?.structuredContent?.error).toBe(STALE_AGENT_TOKEN_REASON);
   });
 
-  it('does not challenge start with a durable game key or sessionKey tool calls', async () => {
+  it('does not issue an OAuth challenge for a retired game key or a valid sessionKey', async () => {
     const store = new InMemoryStore();
     await seedJob(store);
     const at = new Date().toISOString();
@@ -464,9 +465,17 @@ describe('MCP OAuth challenge regressions (BY-18a)', () => {
     });
     expect(started.statusCode).toBe(200);
     expect(started.headers['www-authenticate']).toBeUndefined();
-    const startedBody = started.json() as { result?: { structuredContent?: { sessionKey?: string } } };
-    const sessionKey = startedBody.result?.structuredContent?.sessionKey;
-    expect(typeof sessionKey).toBe('string');
+    const startedBody = started.json() as {
+      result?: { isError?: boolean; structuredContent?: { error?: string } };
+    };
+    expect(startedBody.result?.isError).toBe(true);
+    expect(startedBody.result?.structuredContent?.error).toMatch(/per-game keys are retired/i);
+
+    const sessionKey = mintMcpSessionKey(secret, {
+      sessionId,
+      jobId: ISSUE,
+      roundGeneration: 1,
+    });
 
     const brief = await app.inject({
       method: 'POST',

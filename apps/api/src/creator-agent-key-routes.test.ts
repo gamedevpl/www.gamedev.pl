@@ -512,7 +512,7 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
     expect(body.result?.isError).not.toBe(true);
   });
 
-  it('keeps legacy round keys and durable per-game keys working', async () => {
+  it('keeps legacy round keys working but retires durable per-game keys', async () => {
     const store = new InMemoryStore();
     app = await createApp(store);
 
@@ -534,13 +534,14 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
       keyGeneration: 1,
     });
     const gameStart = await callStart(app, { key: gameKey });
-    expect(gameStart.isError).toBe(false);
+    expect(gameStart.isError).toBe(true);
+    expect((gameStart.structured as { error: string }).error).toMatch(/per-game keys are retired/i);
 
     const roundKey = mintAgentToken(record.issueNumber, secret, { roundGeneration: 1 });
     const roundStart = await callStart(app, { key: roundKey });
     expect(roundStart.isError).toBe(false);
 
-    // sessionKey from game start still works as a write credential shape check
+    // The round-scoped session credential shape remains supported.
     const sessionKey = mintMcpSessionKey(secret, {
       sessionId: 'sess-legacy',
       jobId: record.issueNumber,
@@ -824,7 +825,7 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
     expect(job?.ownerUid).toBe(OWNER);
   });
 
-  it('refuses a per-game key and a sessionKey, which cannot widen into creation', async () => {
+  it('refuses a retired per-game key and a sessionKey, which cannot widen into creation', async () => {
     const store = new InMemoryStore();
     await seedPublishedGame(store);
     app = await createApp(store);
@@ -836,7 +837,7 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
       { authorization: `Bearer ${gameKey}` },
     );
     expect(viaGameKey.isError).toBe(true);
-    expect((viaGameKey.structured as { error: string }).error).toMatch(/per-game key cannot create a game/i);
+    expect((viaGameKey.structured as { error: string }).error).toMatch(/per-game keys are retired/i);
 
     const sessionKey = mintMcpSessionKey(secret, { sessionId: 'sess-create', jobId: 1, roundGeneration: 1 });
     const viaSession = await callCreateGame(
