@@ -26,8 +26,8 @@
     "editor"
   ],
   "authorBudgetBytes": 204800,
-  "platformCeilingBytes": 281587,
-  "maxProjectBytes": 486387,
+  "platformCeilingBytes": 313000,
+  "maxProjectBytes": 517800,
   "audio": {
     "musicField": "string",
     "musicCatalogRequiredKeys": ["version", "tracks"],
