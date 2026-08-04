@@ -741,7 +741,7 @@ export function CreatorStudioView({
                             data-testid="studio-head-share"
                             onClick={() => setShareMenuOpen((open) => !open)}
                           >
-                            <PixelIcon name="share" size={12} />{' '}
+                            <PixelIcon name="share" size={14} />{' '}
                             <span className="studio-head-action-label">{t('studioPanel.share.title')}</span>
                           </button>
                           {shareMenuOpen ? (
@@ -1132,141 +1132,139 @@ function DetailsPanel({
         </button>
       </div>
 
-      <div className="studio-rail-body">
-        <div className="studio-rail-pane studio-overview" data-testid={`studio-rail-pane-${activePane}`}>
-          {activePane === 'overview' ? (
-            <>
-              <section className="studio-rail-section" aria-label={t('studioPanel.overview.status')}>
-                <ul className="funnel-stats studio-facts">
+      <div className="studio-rail-pane studio-overview" data-testid={`studio-rail-pane-${activePane}`}>
+        {activePane === 'overview' ? (
+          <>
+            <section className="studio-rail-section" aria-label={t('studioPanel.overview.status')}>
+              <ul className="funnel-stats studio-facts">
+                <li>
+                  <span className="funnel-stat-value">
+                    {formatRelativeTime(Date.parse(game.createdAt), i18n.language)}
+                  </span>
+                  <span className="funnel-stat-label">{t('studioPanel.overview.created')}</span>
+                </li>
+                {publishedAt ? (
                   <li>
                     <span className="funnel-stat-value">
-                      {formatRelativeTime(Date.parse(game.createdAt), i18n.language)}
+                      {formatRelativeTime(Date.parse(publishedAt), i18n.language)}
                     </span>
-                    <span className="funnel-stat-label">{t('studioPanel.overview.created')}</span>
+                    <span className="funnel-stat-label">{t('studioPanel.overview.published')}</span>
                   </li>
-                  {publishedAt ? (
-                    <li>
-                      <span className="funnel-stat-value">
-                        {formatRelativeTime(Date.parse(publishedAt), i18n.language)}
+                ) : null}
+                {health ? (
+                  <li>
+                    <span className="funnel-stat-value">
+                      {health.sessions}
+                      <span className="studio-fact-suffix">
+                        · {formatSeconds(health.totalPlaySeconds)} {t('studioPanel.overview.play')}
                       </span>
-                      <span className="funnel-stat-label">{t('studioPanel.overview.published')}</span>
-                    </li>
-                  ) : null}
-                  {health ? (
-                    <li>
-                      <span className="funnel-stat-value">
-                        {health.sessions}
-                        <span className="studio-fact-suffix">
-                          · {formatSeconds(health.totalPlaySeconds)} {t('studioPanel.overview.play')}
-                        </span>
-                      </span>
-                      <span className="funnel-stat-label">{t('studioPanel.overview.sessions')}</span>
-                    </li>
-                  ) : null}
-                </ul>
+                    </span>
+                    <span className="funnel-stat-label">{t('studioPanel.overview.sessions')}</span>
+                  </li>
+                ) : null}
+              </ul>
 
-                <div className="studio-actions">
-                  {catalogLive && game.slug ? (
-                    <button type="button" className="primary-btn" onClick={onPlay}>
-                      <PixelIcon name="play" size={12} /> {t('myGames.play')}
-                    </button>
-                  ) : null}
-                  <button type="button" className="secondary-btn" onClick={onOpenPlaytest}>
-                    <PixelIcon name="play" size={12} /> {t('studioPanel.overview.playtest')}
+              <div className="studio-actions">
+                {catalogLive && game.slug ? (
+                  <button type="button" className="primary-btn" onClick={onPlay}>
+                    <PixelIcon name="play" size={12} /> {t('myGames.play')}
                   </button>
-                  {!publishedJob && game.lastKnownStatus !== 'abandoned' ? (
-                    <button
-                      type="button"
-                      className={`status-abandon${abandonArmed ? ' is-danger' : ''}`}
-                      onClick={() => void handleAbandon()}
-                      disabled={abandoning}
-                    >
-                      {abandonArmed ? t('studioPanel.overview.abandonConfirm') : t('studioPanel.overview.abandon')}
-                    </button>
-                  ) : null}
-                </div>
+                ) : null}
+                <button type="button" className="secondary-btn" onClick={onOpenPlaytest}>
+                  <PixelIcon name="play" size={12} /> {t('studioPanel.overview.playtest')}
+                </button>
+                {!publishedJob && game.lastKnownStatus !== 'abandoned' ? (
+                  <button
+                    type="button"
+                    className={`status-abandon${abandonArmed ? ' is-danger' : ''}`}
+                    onClick={() => void handleAbandon()}
+                    disabled={abandoning}
+                  >
+                    {abandonArmed ? t('studioPanel.overview.abandonConfirm') : t('studioPanel.overview.abandon')}
+                  </button>
+                ) : null}
+              </div>
+            </section>
+
+            {!catalogLive && game.slug && game.lastKnownStatus !== 'abandoned' ? (
+              <section className="studio-rail-section" aria-label={t('studioPanel.share.title')}>
+                <DraftShareControl game={game} onSharedChange={onDraftSharedChange} />
               </section>
+            ) : null}
+          </>
+        ) : null}
 
-              {!catalogLive && game.slug && game.lastKnownStatus !== 'abandoned' ? (
-                <section className="studio-rail-section" aria-label={t('studioPanel.share.title')}>
-                  <DraftShareControl game={game} onSharedChange={onDraftSharedChange} />
-                </section>
-              ) : null}
-            </>
-          ) : null}
-
-          {activePane === 'connect' ? (
-            showConnect ? (
-              <StudioConnectCard
-                token={game.token}
-                collapsible={false}
-                hideIfUnavailable
-                unavailableLabel={t('studioPanel.rail.connectEmpty')}
-                density="panel"
-              />
-            ) : (
-              <p className="studio-rail-empty">{t('studioPanel.rail.connectEmpty')}</p>
-            )
-          ) : null}
-
-          {activePane === 'build' ? (
-            showProgress ? (
-              <StudioDetailsBuildProgress token={game.token} emptyLabel={t('studioPanel.rail.buildEmpty')} />
-            ) : (
-              <p className="studio-rail-empty">{t('studioPanel.rail.buildEmpty')}</p>
-            )
-          ) : null}
-
-          {activePane === 'media' ? (
-            <StudioDetailsMedia token={shotToken} emptyLabel={t('studioPanel.rail.mediaEmpty')} />
-          ) : null}
-
-          {activePane === 'keys' ? (
-            <div className="studio-rail-credentials-body">
-              <p className="studio-rail-credentials-hint">{t('studioPanel.rail.credentialsHint')}</p>
-              {showLegacyKey ? <StudioAgentKeyPanel token={game.token} /> : null}
-              <StudioCreatorAgentKeyPanel />
-              <StudioOAuthClientsPanel />
-              {/* Working copy belongs in the credentials pane rather than the create
-                  flow: it is the same bring-your-own-agent corner, and a creator who
-                  wants their own IDE is already here fetching a key. It needs a slug —
-                  a game without one has nothing to check out yet. */}
-              {game.slug && game.lastKnownStatus !== 'abandoned' ? (
-                <StudioWorkspaceCheckoutPanel slug={game.slug} />
-              ) : null}
-            </div>
-          ) : null}
-
-          {activePane === 'stats' && catalogLive ? (
-            <StatsSection
-              game={game}
-              health={health}
-              days={days}
-              healthDays={healthDays}
-              truncated={truncated}
-              scorecard={scorecard}
-              onDaysChange={onDaysChange}
+        {activePane === 'connect' ? (
+          showConnect ? (
+            <StudioConnectCard
+              token={game.token}
+              collapsible={false}
+              hideIfUnavailable
+              unavailableLabel={t('studioPanel.rail.connectEmpty')}
+              density="panel"
             />
-          ) : null}
-        </div>
+          ) : (
+            <p className="studio-rail-empty">{t('studioPanel.rail.connectEmpty')}</p>
+          )
+        ) : null}
 
-        <nav className="studio-rail-icons" aria-label={t('studioPanel.tabs.details')}>
-          {panes.map((entry) => (
-            <button
-              key={entry.id}
-              type="button"
-              className={`studio-rail-icon${activePane === entry.id ? ' is-active' : ''}`}
-              aria-pressed={activePane === entry.id}
-              aria-label={t(entry.labelKey)}
-              title={t(entry.labelKey)}
-              data-testid={`studio-rail-icon-${entry.id}`}
-              onClick={() => onPaneChange(entry.id)}
-            >
-              <PixelIcon name={entry.icon} size={14} />
-            </button>
-          ))}
-        </nav>
+        {activePane === 'build' ? (
+          showProgress ? (
+            <StudioDetailsBuildProgress token={game.token} emptyLabel={t('studioPanel.rail.buildEmpty')} />
+          ) : (
+            <p className="studio-rail-empty">{t('studioPanel.rail.buildEmpty')}</p>
+          )
+        ) : null}
+
+        {activePane === 'media' ? (
+          <StudioDetailsMedia token={shotToken} emptyLabel={t('studioPanel.rail.mediaEmpty')} />
+        ) : null}
+
+        {activePane === 'keys' ? (
+          <div className="studio-rail-credentials-body">
+            <p className="studio-rail-credentials-hint">{t('studioPanel.rail.credentialsHint')}</p>
+            {showLegacyKey ? <StudioAgentKeyPanel token={game.token} /> : null}
+            <StudioCreatorAgentKeyPanel />
+            <StudioOAuthClientsPanel />
+            {/* Working copy belongs in the credentials pane rather than the create
+                flow: it is the same bring-your-own-agent corner, and a creator who
+                wants their own IDE is already here fetching a key. It needs a slug —
+                a game without one has nothing to check out yet. */}
+            {game.slug && game.lastKnownStatus !== 'abandoned' ? (
+              <StudioWorkspaceCheckoutPanel slug={game.slug} />
+            ) : null}
+          </div>
+        ) : null}
+
+        {activePane === 'stats' && catalogLive ? (
+          <StatsSection
+            game={game}
+            health={health}
+            days={days}
+            healthDays={healthDays}
+            truncated={truncated}
+            scorecard={scorecard}
+            onDaysChange={onDaysChange}
+          />
+        ) : null}
       </div>
+
+      <nav className="studio-rail-icons" aria-label={t('studioPanel.tabs.details')}>
+        {panes.map((entry) => (
+          <button
+            key={entry.id}
+            type="button"
+            className={`studio-rail-icon${activePane === entry.id ? ' is-active' : ''}`}
+            aria-pressed={activePane === entry.id}
+            aria-label={t(entry.labelKey)}
+            title={t(entry.labelKey)}
+            data-testid={`studio-rail-icon-${entry.id}`}
+            onClick={() => onPaneChange(entry.id)}
+          >
+            <PixelIcon name={entry.icon} size={14} />
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }
