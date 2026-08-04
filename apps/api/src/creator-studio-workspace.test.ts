@@ -192,6 +192,40 @@ describe('GET /api/me/studio/games/:slug/workspace', () => {
     expect(res.json().error).toBe('nothing_delivered');
   });
 
+  it('checks out the live publication when the newest round has delivered nothing yet', async () => {
+    // The shape of every post-publish improvement: a fresh empty job on a slug whose
+    // older job still points at what it delivered before publication. Handing back that
+    // older delivery would have the creator edit a superseded base and deliver over
+    // newer published work.
+    const store2 = new InMemoryStore();
+    await store2.upsertUser({ uid: 'g:creator' });
+    await store2.createSubmission(ISSUE, 'g:creator', 'Comet Courier');
+    await store2.setSubmissionSlug(ISSUE, SLUG);
+    await store2.setSubmissionDeliveredVersion(ISSUE, 'v-old');
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    await store2.createSubmission(ISSUE + 1, 'g:creator', 'Comet Courier');
+    await store2.setSubmissionSlug(ISSUE + 1, SLUG);
+    await store2.setPublication({
+      slug: SLUG,
+      state: 'published',
+      currentVersion: VERSION,
+      publishedAt: '2026-08-01T00:00:00.000Z',
+    });
+
+    const app = await createApp(store2, objectsWithScaffold());
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/me/studio/games/${SLUG}/workspace`,
+      headers: authHeaders('g:creator'),
+    });
+
+    // The stub only knows VERSION, so a 200 is itself the assertion: resolving to the
+    // older job's `v-old` would have failed the manifest read with a 502.
+    expect(res.statusCode).toBe(200);
+    const entries = await entriesOf(res.rawPayload);
+    expect(entries.some((item) => item.path === `games/${SLUG}/SPEC.md`)).toBe(true);
+  });
+
   it('503s rather than improvising when no scaffold is published for the current engine', async () => {
     const objects = objectsWithScaffold();
     objects.delete(`workspaces/${ENGINE}.tgz`);

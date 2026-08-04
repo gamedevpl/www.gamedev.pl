@@ -314,13 +314,23 @@ describe('runGamesRepoContractCheck — delivery contract', () => {
     expect(reason).toContain('extraModulePattern');
   });
 
-  it('reports drift when either cap moves, in either direction', async () => {
+  it('reports drift when a games-repo cap exceeds what this side accepts', async () => {
+    // The failing direction: deliveries sized for the games-repo cap 400 at upload.
     expect(driftReason((await check(deliverySource({ maxFiles: DELIVERY_MAX_FILES + 50 }))).outcome)).toContain(
       'maxFiles',
     );
     expect(
-      driftReason((await check(deliverySource({ maxUploadBytes: DELIVERY_MAX_UPLOAD_BYTES / 2 }))).outcome),
+      driftReason((await check(deliverySource({ maxUploadBytes: DELIVERY_MAX_UPLOAD_BYTES * 2 }))).outcome),
     ).toContain('maxUploadBytes');
+  });
+
+  it('passes with a note when this side accepts more than the games repo advertises', async () => {
+    // A website-first cap raise. Inert for deliveries, and failing it would make the
+    // documented safe merge order the one that reddens master — same asymmetry as the
+    // fixed-file list.
+    const { outcome } = await check(deliverySource({ maxUploadBytes: DELIVERY_MAX_UPLOAD_BYTES / 2 }));
+    expect(outcome.kind).toBe('ok');
+    expect((outcome as { notes?: string[] }).notes?.join('\n')).toContain('maxUploadBytes');
   });
 
   it('reports drift when the reserved segments diverge, but not when they are merely reordered', async () => {

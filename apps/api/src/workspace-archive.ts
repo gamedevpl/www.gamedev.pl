@@ -62,6 +62,13 @@ export class WorkspaceCompositionError extends Error {
  * we are about to emit rather than trusting the packer, because a bad scaffold
  * published once would otherwise be handed to every creator until someone noticed.
  */
+/**
+ * First path segments the scaffold may never use — the engine, the creator's own
+ * namespace, and installed output. Shared with {@link stripCommonRoot}, which must not
+ * mistake any of them for a packaging wrapper.
+ */
+const RESERVED_ROOTS = new Set(['shared', 'node_modules', 'games']);
+
 function assertNoEngineContent(path: string): void {
   const first = path.split('/')[0];
   if (first === 'shared' || first === 'node_modules') {
@@ -82,10 +89,19 @@ function assertNoEngineContent(path: string): void {
  * packed — a detail this side should tolerate rather than encode. Only an unambiguous
  * wrapper is stripped: every entry must share it, and there must be more than one path
  * segment to strip from.
+ *
+ * **A reserved root is never treated as a wrapper.** If the Creator Kit were ever
+ * published to the workspace object by mistake, every entry would share the root
+ * `shared/` — and stripping it would rewrite `shared/modules/gfx.ts` to
+ * `modules/gfx.ts`, walking the engine straight past {@link assertNoEngineContent} and
+ * into a creator's archive. Leaving the root on is what lets that check see it. The
+ * cost of the guard is refusing to unwrap a scaffold someone deliberately wrapped in a
+ * directory called `shared`, which is not a thing anyone should do.
  */
 export function stripCommonRoot(entries: TarEntry[]): TarEntry[] {
   if (entries.length === 0) return entries;
   const first = entries[0].path.split('/')[0];
+  if (RESERVED_ROOTS.has(first)) return entries;
   const wrapped = entries.every((entry) => {
     const segments = entry.path.split('/');
     return segments.length > 1 && segments[0] === first;

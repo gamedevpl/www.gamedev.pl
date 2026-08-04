@@ -344,10 +344,15 @@ export async function registerCreatorStudioRoutes(
       return reply.status(404).send({ error: 'no such game' });
     }
 
-    // Same preference order as the agent's own `get_sources`: the newest thing the
-    // creator has, which for an improvement round is the live publication rather than
-    // this job's (still empty) delivery.
-    let version = owned.map((record) => record.previewVersion ?? record.deliveredVersion).find(Boolean) ?? null;
+    // Same preference order as the agent's own `get_sources`, and it has to be read off
+    // the *newest* round rather than the first owned record that happens to carry a
+    // version. An improvement round starts empty on a slug whose older job still points
+    // at the version it delivered before publication; scanning all records would hand
+    // back that older delivery, and a creator who edited it and delivered would overwrite
+    // newer published work with something derived from a superseded base. When the newest
+    // round has nothing of its own, the live publication is what they last played.
+    const tip = [...owned].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    let version = tip.previewVersion ?? tip.deliveredVersion ?? null;
     if (!version) {
       const publication = await store.getPublication(slug);
       if (publication?.state === 'published') version = publication.currentVersion;

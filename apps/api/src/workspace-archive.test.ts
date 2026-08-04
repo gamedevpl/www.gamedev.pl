@@ -145,4 +145,22 @@ describe('stripCommonRoot', () => {
     const entries = [entry('README.md'), entry('docs/guide.md')];
     expect(stripCommonRoot(entries).map((item) => item.path)).toEqual(['README.md', 'docs/guide.md']);
   });
+
+  it('never mistakes a reserved root for a wrapper', () => {
+    // Publishing the kit to the workspace object by mistake makes every entry share
+    // `shared/`. Stripping it would rewrite shared/modules/gfx.ts to modules/gfx.ts and
+    // walk the engine past the no-engine check into a creator's archive.
+    const entries = [entry('shared/modules/gfx.ts'), entry('shared/game-kit.d.ts')];
+    expect(stripCommonRoot(entries).map((item) => item.path)).toEqual([
+      'shared/modules/gfx.ts',
+      'shared/game-kit.d.ts',
+    ]);
+  });
+
+  it('refuses a kit mispublished as the scaffold, wrapper or not', () => {
+    const kitish = [entry('shared/modules/gfx.ts', 'export {}'), entry('shared/game-kit.d.ts', 'declare const x: 1;')];
+    expect(() =>
+      composeWorkspaceArchive({ slug: 'comet-courier', lock: LOCK, scaffold: kitish, sources: SOURCES }),
+    ).toThrow(WorkspaceCompositionError);
+  });
 });

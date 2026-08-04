@@ -460,11 +460,26 @@ function describeDeliveryDrift(remote: DeliveryContract): { drift: string | null
     problems.push(`reservedSegments: games-repo=${remoteSegments.join(', ')} website=${localSegments.join(', ')}`);
   }
 
-  if (remote.maxFiles !== DELIVERY_MAX_FILES) {
-    problems.push(`maxFiles: games-repo=${remote.maxFiles} website=${DELIVERY_MAX_FILES}`);
-  }
-  if (remote.maxUploadBytes !== DELIVERY_MAX_UPLOAD_BYTES) {
-    problems.push(`maxUploadBytes: games-repo=${remote.maxUploadBytes} website=${DELIVERY_MAX_UPLOAD_BYTES}`);
+  // Caps get the same directional treatment as the file list, for the same reason: a
+  // games repo that advertises a *higher* cap than this side accepts sends deliveries
+  // that 400, while this side accepting more than the games repo advertises is inert and
+  // is what a website-first raise looks like in the middle. Comparing for equality would
+  // make the safe order red and the unsafe order comfortable.
+  for (const cap of [
+    { name: 'maxFiles', remote: remote.maxFiles, local: DELIVERY_MAX_FILES },
+    { name: 'maxUploadBytes', remote: remote.maxUploadBytes, local: DELIVERY_MAX_UPLOAD_BYTES },
+  ]) {
+    if (cap.remote > cap.local) {
+      problems.push(
+        `${cap.name}: games-repo=${cap.remote} exceeds website=${cap.local} — deliveries sized for the ` +
+          `games-repo cap are refused at upload. Raise this side first.`,
+      );
+    } else if (cap.remote < cap.local) {
+      notes.push(
+        `delivery contract: this side allows ${cap.name}=${cap.local} against the games repo's ${cap.remote}. ` +
+          `Harmless and expected mid-rollout (this side widens first); land the paired games-repo change.`,
+      );
+    }
   }
 
   if (problems.length === 0) {
