@@ -146,7 +146,11 @@ describe('StudioPlaytestPanel theater', () => {
     const previewHtml = '<!doctype html><html><body><canvas id="game"></canvas></body></html>';
     vi.mocked(getSubmissionPreview)
       .mockRejectedValueOnce(Object.assign(new Error('no preview available'), { status: 409 }))
-      .mockResolvedValueOnce({ html: previewHtml });
+      .mockResolvedValueOnce({
+        slug: 'sky-dodge',
+        title: 'Sky Dodge',
+        html: previewHtml,
+      });
 
     const onExit = vi.fn();
     const container = document.createElement('div');
