@@ -1382,11 +1382,18 @@ export async function registerSubmissionRoutes(
   // watchers of one build land together; without this each miss launched its own
   // fan-out of GitHub reads, multiplying the burst that gets the token limited.
   const statusRefreshes = new Map<string, Promise<SubmissionStatusResponse>>();
+  // Bumped on invalidate so a refresh that started on a stale snapshot cannot
+  // repopulate the cache after feedback/handoff cleared it.
+  const statusCacheEpoch = new Map<number, number>();
   /** Drop every locale variant so the next poll rebuilds from the job record. */
   function invalidateStatusCache(issueNumber: number): void {
     for (const key of [...statusCache.keys()]) {
       if (key.startsWith(`${issueNumber}:`)) statusCache.delete(key);
     }
+    for (const key of [...statusRefreshes.keys()]) {
+      if (key.startsWith(`${issueNumber}:`)) statusRefreshes.delete(key);
+    }
+    statusCacheEpoch.set(issueNumber, (statusCacheEpoch.get(issueNumber) ?? 0) + 1);
   }
   const translator = options.translator ?? createTranslatorFromEnv();
 
@@ -2736,6 +2743,7 @@ export async function registerSubmissionRoutes(
     const existing = statusRefreshes.get(cacheKey);
     if (existing) return existing;
 
+    const epochAtStart = statusCacheEpoch.get(issueNumber) ?? 0;
     const refresh = (async () => {
       // Every job answers from its own record: there is no issue to read, and the
       // GitHub round-trip it used to need is gone with the path that needed it.
@@ -2757,7 +2765,13 @@ export async function registerSubmissionRoutes(
       const status = record
         ? await localizeStatus(await nativeJobStatus(record), locale)
         : ({ status: 'queued' } as SubmissionStatusResponse);
-      statusCache.set(cacheKey, { value: status, expiresAt: now() + 60_000 });
+      // Session boot (`dispatched`) must re-observe Agent Tasks every few seconds —
+      // a 60s cache would freeze "Starting agent" while GitHub already reports
+      // `in_progress`. Skip writing when invalidate raced this refresh.
+      if ((statusCacheEpoch.get(issueNumber) ?? 0) === epochAtStart) {
+        const ttlMs = status.phase === 'dispatched' ? 2_000 : 60_000;
+        statusCache.set(cacheKey, { value: status, expiresAt: now() + ttlMs });
+      }
       if (store && record) {
         try {
           await notifyOnTransition(buildNotifyDeps(), record, status, token);
@@ -2765,8 +2779,6 @@ export async function registerSubmissionRoutes(
           app.log.error({ err: notifyError }, 'notification emit on status poll failed');
         }
       }
-      return status;
-
       return status;
     })().finally(() => {
       statusRefreshes.delete(cacheKey);

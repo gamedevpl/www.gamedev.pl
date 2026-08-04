@@ -384,6 +384,12 @@ export function SubmissionStatusView({
     const scheduleNext = (next: Pick<SubmissionStatus, 'status' | 'stall' | 'phase'>) => {
       const delay = pollDelayMs(next.status, next.stall, next.phase);
       if (delay === null || cancelled) return;
+      // Clear first: an in-flight poll and an immediate post-send refresh can both
+      // complete and schedule — without this, overlapping timers stack up.
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+        timeoutId = undefined;
+      }
       timeoutId = window.setTimeout(() => {
         void poll();
       }, delay);
