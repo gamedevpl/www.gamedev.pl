@@ -1256,7 +1256,7 @@ function StudioShelfList({
 }
 
 /** Cursor-style Details strip — one pane at a time, chosen by icon. */
-type DetailsPaneId = 'overview' | 'connect' | 'build' | 'media' | 'keys' | 'stats';
+type DetailsPaneId = 'overview' | 'connect' | 'build' | 'media' | 'workspace' | 'keys' | 'stats';
 
 type DetailsPaneDef = {
   id: DetailsPaneId;
@@ -1336,6 +1336,10 @@ function DetailsPanel({
     ...(showConnect ? [{ id: 'connect' as const, icon: 'signal' as const, labelKey: 'studioPanel.rail.connect' }] : []),
     ...(showProgress ? [{ id: 'build' as const, icon: 'wrench' as const, labelKey: 'studioPanel.rail.build' }] : []),
     { id: 'media', icon: 'image', labelKey: 'studioPanel.rail.media' },
+    // No slug means no sources yet, and the route would refuse it.
+    ...(game.slug && game.lastKnownStatus !== 'abandoned'
+      ? [{ id: 'workspace' as const, icon: 'download' as const, labelKey: 'studioPanel.rail.workspace' }]
+      : []),
     { id: 'keys', icon: 'lock', labelKey: 'studioPanel.rail.credentials' },
     ...(catalogLive ? [{ id: 'stats' as const, icon: 'star' as const, labelKey: 'studioPanel.rail.stats' }] : []),
   ];
@@ -1478,15 +1482,11 @@ function DetailsPanel({
             <p className="studio-rail-credentials-hint">{t('studioPanel.rail.credentialsHint')}</p>
             <StudioCreatorAgentKeyPanel />
             <StudioOAuthClientsPanel />
-            {/* Working copy belongs in the credentials pane rather than the create
-                flow: it is the same bring-your-own-agent corner, and a creator who
-                wants their own IDE is already here fetching a key. It needs a slug —
-                a game without one has nothing to check out yet. */}
-            {game.slug && game.lastKnownStatus !== 'abandoned' ? (
-              <StudioWorkspaceCheckoutPanel slug={game.slug} />
-            ) : null}
           </div>
         ) : null}
+
+        {/* Own pane: behind the keys icon it was undiscoverable. */}
+        {activePane === 'workspace' ? <StudioWorkspaceCheckoutPanel slug={game.slug as string} /> : null}
 
         {activePane === 'stats' && catalogLive ? (
           <StatsSection

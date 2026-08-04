@@ -901,7 +901,7 @@ describe('CreatorStudioView', () => {
     root.unmount();
   });
 
-  it('offers a working copy beside the agent keys, and only for a game there is one of', async () => {
+  it('gives the working copy its own rail pane, and only for a game there is one of', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
@@ -934,26 +934,26 @@ describe('CreatorStudioView', () => {
 
     const { container, root, rerender } = await renderStudio({ selectedGame: 'tv-tycoon', selectedTab: 'details' });
 
-    // The working copy lives in the credentials pane with the other bring-your-own-agent
-    // controls, so every assertion here has to open that pane first — the rail lands on
-    // overview.
-    const openKeys = async () => {
-      const keys = container.querySelector('[data-testid="studio-rail-icon-keys"]');
+    // Rail lands on overview; a missing icon is the assertion below.
+    const railIcon = () => container.querySelector('[data-testid="studio-rail-icon-workspace"]');
+    const openWorkspace = async () => {
       await act(async () => {
-        keys!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        railIcon()!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       });
     };
 
-    await openKeys();
+    expect(railIcon()).not.toBeNull();
+    await openWorkspace();
     expect(container.querySelector('[data-testid="workspace-checkout"]')).not.toBeNull();
     expect(container.textContent).toContain('Work on this game in your own IDE');
 
+    // No slug yet: no pane to open, so the rail must not advertise one.
     await rerender({ selectedGame: 'token-fresh', selectedTab: 'details' });
-    await openKeys();
+    expect(railIcon()).toBeNull();
     expect(container.querySelector('[data-testid="workspace-checkout"]')).toBeNull();
 
     await rerender({ selectedGame: 'dead-end', selectedTab: 'details' });
-    await openKeys();
+    expect(railIcon()).toBeNull();
     expect(container.querySelector('[data-testid="workspace-checkout"]')).toBeNull();
 
     root.unmount();
