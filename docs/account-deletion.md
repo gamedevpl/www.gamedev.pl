@@ -20,24 +20,20 @@ saves, and private drafts are erased.
 The sweep has its own OIDC audience so a token minted for another internal job cannot be
 replayed against it. It shares the existing `notify-sweep` service account.
 
+The normal GCP bootstrap provisions this automatically:
+
 ```bash
-SERVICE_URL="https://gamedev-app-334141807880.europe-west1.run.app"
-SWEEP_URL="${SERVICE_URL}/api/internal/account-deletion-sweep"
-SA="notify-sweep@gamedevpl.iam.gserviceaccount.com"
-
-gh variable set ACCOUNT_DELETION_SWEEP_AUDIENCE --repo gamedevpl/www.gamedev.pl --body "$SWEEP_URL"
-
-gcloud scheduler jobs create http account-deletion-sweep \
-  --location europe-west1 \
-  --project gamedevpl \
-  --schedule "17 3 * * *" \
-  --time-zone "Europe/Warsaw" \
-  --uri "$SWEEP_URL" \
-  --http-method POST \
-  --oidc-service-account-email "$SA" \
-  --oidc-token-audience "$SWEEP_URL"
+./infra/setup-gcp.sh
 ```
 
-If the job already exists, use `gcloud scheduler jobs update http` with the same arguments.
-The deployment must carry both `ACCOUNT_DELETION_SWEEP_AUDIENCE` and `NOTIFY_SWEEP_SA`; an
-unset value leaves the endpoint closed.
+For a focused reconciliation, without running the rest of the project bootstrap:
+
+```bash
+./infra/setup-account-deletion.sh
+```
+
+Both paths are idempotent: they create or update the `account-deletion-sweep` job and ensure
+its OIDC service account exists. The CI and manual deployment paths derive
+`ACCOUNT_DELETION_SWEEP_AUDIENCE` and `NOTIFY_SWEEP_SA` from the project automatically, so
+no GitHub Actions variable is required. Until a configured deployment reaches production,
+the endpoint remains closed and the scheduled job fails safely without deleting anything.

@@ -6,37 +6,40 @@
 # Usage:
 #   ./infra/setup-gcp.sh
 #
-# Override any of these via env if needed: PROJECT_ID, REGION, SA_NAME.
+# Override any of these via env if needed: PROJECT_ID, REGION, APP_REGION, SA_NAME.
 set -euo pipefail
 
 PROJECT_ID="${PROJECT_ID:-gamedevpl}"
 REGION="${REGION:-europe-central2}"
+APP_REGION="${APP_REGION:-europe-west1}"
 DEPLOYER_SA="${SA_NAME:-github-actions-deployer}@${PROJECT_ID}.iam.gserviceaccount.com"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-echo "==> 1/8 Enabling required GCP APIs"
+echo "==> 1/10 Enabling required GCP APIs"
 # storage.googleapis.com is needed by step 8 (the snapshot bucket) and by the Cloud
 # Run runtime that reads it. It is already on in most projects, but not guaranteed
 # on a fresh one — and without it step 8 fails after everything before it succeeded.
 gcloud services enable run.googleapis.com cloudbuild.googleapis.com \
   artifactregistry.googleapis.com secretmanager.googleapis.com firestore.googleapis.com \
   aiplatform.googleapis.com storage.googleapis.com iamcredentials.googleapis.com \
+  cloudscheduler.googleapis.com \
   --project "$PROJECT_ID"
 
-echo "==> 2/8 Provisioning Firestore (Native Mode) in ${REGION}"
+echo "==> 2/10 Provisioning Firestore (Native Mode) in ${REGION}"
 if gcloud firestore databases describe --project "$PROJECT_ID" >/dev/null 2>&1; then
   echo "    Firestore database already exists."
 else
   gcloud firestore databases create --location="$REGION" --type=firestore-native --project="$PROJECT_ID"
 fi
 
-echo "==> 3/8 Granting datastore.user role to Deployer SA (${DEPLOYER_SA})"
+echo "==> 3/10 Granting datastore.user role to Deployer SA (${DEPLOYER_SA})"
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:${DEPLOYER_SA}" \
   --role="roles/datastore.user" \
   --condition=None \
   >/dev/null
 
-echo "==> 4/8 Ensuring Cloud Run runtime SA has datastore.user and aiplatform.user roles"
+echo "==> 4/10 Ensuring Cloud Run runtime SA has datastore.user and aiplatform.user roles"
 PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format="value(projectNumber)")
 RUN_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
@@ -51,7 +54,7 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --condition=None \
   >/dev/null
 
-echo "==> 5/8 Ensuring session-secret exists in Secret Manager and granting secretAccessor"
+echo "==> 5/10 Ensuring session-secret exists in Secret Manager and granting secretAccessor"
 if gcloud secrets describe session-secret --project "$PROJECT_ID" >/dev/null 2>&1; then
   echo "    Secret 'session-secret' already exists."
 else
@@ -83,7 +86,7 @@ gcloud secrets add-iam-policy-binding session-secret \
 # `ttls list` reports only fields that already have a policy, so a name match is the
 # existence check. Verified against the live ACTIVE playEvents policy on 2026-07-25.
 TELEMETRY_GROUPS="playEvents visitEvents"
-echo "==> 6/8 Ensuring the 90-day TTL policy on each telemetry collection group"
+echo "==> 6/10 Ensuring the 90-day TTL policy on each telemetry collection group"
 EXISTING_TTLS="$(gcloud firestore fields ttls list --project="$PROJECT_ID" --format="value(name)" 2>/dev/null || true)"
 for GROUP in $TELEMETRY_GROUPS; do
   if printf '%s\n' "$EXISTING_TTLS" | grep -q "collectionGroups/${GROUP}/fields/expiresAt"; then
@@ -125,7 +128,7 @@ done
 # These are INDEXES, not TTL policies — they must NEVER be added to the TTL loop above.
 # Scorecards are the durable aggregate meant to outlive the raw play rows a TTL expires, and
 # feedback is a person's own words; a TTL on either would delete what we meant to keep.
-echo "==> 7/8 Ensuring the COLLECTION_GROUP indexes the operator reads need"
+echo "==> 7/10 Ensuring the COLLECTION_GROUP indexes the operator reads need"
 FIELD_ACCESS_TOKEN="$(gcloud auth print-access-token --project="$PROJECT_ID")"
 # group:field:order — one line per COLLECTION_GROUP single-field index.
 CG_INDEXES="scorecard:computedAt:DESCENDING playerFeedback:uid:ASCENDING worldEntries:ownerUid:ASCENDING"
@@ -159,7 +162,7 @@ done
 # cross-region read would put the latency back that baking was meant to remove.
 SNAPSHOT_BUCKET="${GAMES_SNAPSHOT_BUCKET:-${PROJECT_ID}-games-snapshots}"
 SNAPSHOT_BUCKET_REGION="${SNAPSHOT_BUCKET_REGION:-europe-west1}"
-echo "==> 8/9 Ensuring the games snapshot bucket gs://${SNAPSHOT_BUCKET} exists"
+echo "==> 8/10 Ensuring the games snapshot bucket gs://${SNAPSHOT_BUCKET} exists"
 if gcloud storage buckets describe "gs://${SNAPSHOT_BUCKET}" --project "$PROJECT_ID" >/dev/null 2>&1; then
   echo "    Bucket already exists."
 else
@@ -217,7 +220,7 @@ echo "    IAM (deployer: write, Cloud Run: read) and 90-day lifecycle applied."
 # Same region as the snapshot bucket and for the same reason: it is read while baking
 # and while serving previews.
 STORE_BUCKET="${GAMES_STORE_BUCKET:-${PROJECT_ID}-games-store}"
-echo "==> 9/9 Ensuring the games store bucket gs://${STORE_BUCKET} exists"
+echo "==> 9/10 Ensuring the games store bucket gs://${STORE_BUCKET} exists"
 if gcloud storage buckets describe "gs://${STORE_BUCKET}" --project "$PROJECT_ID" >/dev/null 2>&1; then
   echo "    Bucket already exists."
 else
@@ -400,5 +403,8 @@ grant_gate_with_retry gcloud iam service-accounts add-iam-policy-binding "${RUN_
   --project="$PROJECT_ID"
 echo "    Cloud Run may signBlob as itself for games-store signed URLs."
 
+echo "==> 10/10 Ensuring delayed account-deletion cleanup infrastructure"
+PROJECT_ID="$PROJECT_ID" REGION="$APP_REGION" "$SCRIPT_DIR/setup-account-deletion.sh"
+
 echo ""
-echo "==> Done. Firestore database, snapshot bucket, IAM roles (datastore.user, aiplatform.user), session-secret, telemetry TTL, scorecards read index, and gate-runner SA configured for project ${PROJECT_ID}."
+echo "==> Done. Firestore database, storage, IAM, deletion sweep, session secret, telemetry TTL, indexes, and gate-runner configured for project ${PROJECT_ID}."
