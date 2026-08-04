@@ -70,14 +70,25 @@ type StudioConnectCardProps = {
   /**
    * When true, a non-self / inactive round yields nothing instead of an error
    * (Details mounts this for every open game; only self rounds have a payload).
+   * Pair with `unavailableLabel` in the Details pane so the Connect icon does not
+   * open a blank rail for platform rounds.
    */
   hideIfUnavailable?: boolean;
+  /** Shown instead of null when `hideIfUnavailable` quiets a non-self round. */
+  unavailableLabel?: string;
   /**
    * Studio thread: open the Details rail for MCP install instead of expanding it
    * inline (Claude-shaped — install lives in the side panel, not the transcript).
    * Standalone `/status` leaves this unset and keeps the inline disclosure.
    */
   onOpenInstall?: () => void;
+  /**
+   * `panel`: denser Details-rail layout — no lead/waiting wall, kickoff tucked under
+   * a disclosure so install stays scannable. `thread` (default) keeps the full card.
+   */
+  density?: 'thread' | 'panel';
+  /** Section heading when `density="panel"` — omitted when the card returns null. */
+  panelHeading?: string;
 };
 
 /**
@@ -94,8 +105,12 @@ export function StudioConnectCard({
   mode = 'setup',
   collapsible = true,
   hideIfUnavailable = false,
+  unavailableLabel,
   onOpenInstall,
+  density = 'thread',
+  panelHeading,
 }: StudioConnectCardProps) {
+  const isPanel = density === 'panel';
   const { t, i18n } = useTranslation();
   const baseId = useId();
   const authHeaderRef = useRef<string | null>(null);
@@ -154,8 +169,11 @@ export function StudioConnectCard({
     };
   }, [token, t, hideIfUnavailable]);
 
-  if (agentConnected || unavailable) {
+  if (agentConnected) {
     return null;
+  }
+  if (unavailable) {
+    return unavailableLabel ? <p className="studio-rail-empty">{unavailableLabel}</p> : null;
   }
 
   const hideCard = () => {
@@ -306,7 +324,7 @@ export function StudioConnectCard({
       {authMode === 'key' ? (
         <div className="studio-connect-step">
           <div className="studio-connect-step-head">
-            {!isResume ? (
+            {!isResume && !isPanel ? (
               <span className="studio-connect-step-num" aria-hidden="true">
                 1
               </span>
@@ -375,7 +393,7 @@ export function StudioConnectCard({
       ) : (
         <div className="studio-connect-step">
           <div className="studio-connect-step-head">
-            {!isResume ? (
+            {!isResume && !isPanel ? (
               <span className="studio-connect-step-num" aria-hidden="true">
                 1
               </span>
@@ -401,7 +419,7 @@ export function StudioConnectCard({
   const kickoffPanel: ReactNode = payload ? (
     <div className="studio-connect-step">
       <div className="studio-connect-step-head">
-        {!isResume ? (
+        {!isResume && !isPanel ? (
           <span className="studio-connect-step-num" aria-hidden="true">
             2
           </span>
@@ -429,38 +447,63 @@ export function StudioConnectCard({
     </div>
   ) : null;
 
-  return (
+  const kickoffDisclosure =
+    payload && !loading ? (
+      <details className="studio-connect-setup-details" data-testid="connect-kickoff-details">
+        <summary>{t('studioPanel.rail.kickoffDetails')}</summary>
+        <div className="studio-connect-setup-body">{kickoffPanel}</div>
+      </details>
+    ) : null;
+
+  const card = (
     <section
-      className={`studio-connect${error ? ' is-error' : ''}${isResume ? ' is-resume' : ''}`}
-      aria-labelledby={`${baseId}-title`}
+      className={`studio-connect${error ? ' is-error' : ''}${isResume ? ' is-resume' : ''}${isPanel ? ' is-panel' : ''}`}
+      aria-labelledby={isPanel && panelHeading ? `${baseId}-panel` : isPanel ? undefined : `${baseId}-title`}
+      aria-label={isPanel && !panelHeading ? (isResume ? t('connect.resume.title') : t('connect.title')) : undefined}
       data-connect-mode={mode}
+      data-density={density}
       data-testid="connect-expanded"
     >
-      <div className="studio-connect-title-row">
-        <h3 id={`${baseId}-title`} className="studio-connect-title">
-          {isResume ? t('connect.resume.title') : t('connect.title')}
-        </h3>
-        {collapsible && !error ? (
-          <button
-            type="button"
-            className="studio-connect-hide"
-            onClick={hideCard}
-            data-testid="connect-hide"
-            title={t('connect.hide')}
-          >
-            <PixelIcon name="close" size={11} /> {t('connect.hide')}
-          </button>
-        ) : null}
-      </div>
+      {isPanel && panelHeading ? (
+        <h4 id={`${baseId}-panel`} className="studio-rail-section-title">
+          {panelHeading}
+        </h4>
+      ) : null}
+      {!isPanel ? (
+        <div className="studio-connect-title-row">
+          <h3 id={`${baseId}-title`} className="studio-connect-title">
+            {isResume ? t('connect.resume.title') : t('connect.title')}
+          </h3>
+          {collapsible && !error ? (
+            <button
+              type="button"
+              className="studio-connect-hide"
+              onClick={hideCard}
+              data-testid="connect-hide"
+              title={t('connect.hide')}
+            >
+              <PixelIcon name="close" size={11} /> {t('connect.hide')}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       {/* Lead is setup guidance — drop it once we only have an error, so a phone foot/thread
-          is not mostly paragraph + red line. */}
-      {!error ? <p className="studio-connect-lead">{isResume ? t('connect.resume.lead') : t('connect.lead')}</p> : null}
+          is not mostly paragraph + red line. Panel density skips it: the rail section heading
+          already names the job. */}
+      {!error && !isPanel ? (
+        <p className="studio-connect-lead">{isResume ? t('connect.resume.lead') : t('connect.lead')}</p>
+      ) : null}
 
       {loading ? <p className="studio-connect-state">{t('connect.loading')}</p> : null}
       {error ? <p className="error">{error}</p> : null}
 
       {payload && !loading ? (
-        isResume ? (
+        isPanel ? (
+          <>
+            {installPanel}
+            {kickoffDisclosure}
+          </>
+        ) : isResume ? (
           <>
             {kickoffPanel}
             {/* Studio foot owns the single waiting caption — a second pulse here
@@ -527,4 +570,9 @@ export function StudioConnectCard({
       ) : null}
     </section>
   );
+
+  if (isPanel) {
+    return <div className="studio-rail-section">{card}</div>;
+  }
+  return card;
 }

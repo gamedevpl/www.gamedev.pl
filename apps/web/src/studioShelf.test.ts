@@ -5,6 +5,7 @@ import {
   filterStudioGames,
   isStudioGameShelfLive,
   sortStudioGames,
+  studioGameInitials,
   STUDIO_SHELF_TOOLS_AT,
 } from './studioShelf.js';
 
@@ -147,5 +148,13 @@ describe('studioShelf', () => {
     expect(filterStudioGames(games, { query: 'dodge' }).map((item) => item.token)).toEqual(['a-tip']);
     expect(filterStudioGames(games, { query: 'arena' }).map((item) => item.token)).toEqual(['b']);
     expect(filterStudioGames(games, { query: 'zzz' })).toEqual([]);
+  });
+
+  it('builds two-letter shelf marks from the first two title words', () => {
+    expect(studioGameInitials('2D Total War')).toBe('2T');
+    expect(studioGameInitials('Sky Dodge')).toBe('SD');
+    expect(studioGameInitials('Asteroids')).toBe('AS');
+    expect(studioGameInitials('  ')).toBe('?');
+    expect(studioGameInitials('Łódź Arcade')).toBe('ŁA');
   });
 });

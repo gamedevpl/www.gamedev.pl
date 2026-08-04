@@ -105,3 +105,21 @@ export function filterStudioGames(
     (game) => matchesStudioShelfFilter(game, filter) && matchesStudioShelfQuery(game, query),
   );
 }
+
+/**
+ * Two-letter mark for the collapsed shelf — first letter of the first two words.
+ * One-word titles take the first two letters. Skips empty tokens; prefers letters/digits.
+ */
+export function studioGameInitials(title: string): string {
+  const words = title
+    .trim()
+    .split(/\s+/)
+    .map((word) => word.replace(/[^\p{L}\p{N}]/gu, ''))
+    .filter(Boolean);
+  if (words.length === 0) return '?';
+  if (words.length === 1) {
+    const word = words[0]!;
+    return word.slice(0, Math.min(2, word.length)).toLocaleUpperCase();
+  }
+  return `${words[0]![0]!}${words[1]![0]!}`.toLocaleUpperCase();
+}

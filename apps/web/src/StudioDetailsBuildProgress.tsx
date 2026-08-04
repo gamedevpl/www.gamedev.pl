@@ -11,10 +11,18 @@ const DETAILS_POLL_MS = 10_000;
  * thread foot. Kept out of the composer strip so the conversation stays Claude-quiet;
  * open Details when you want the count.
  */
-export function StudioDetailsBuildProgress({ token }: { token: string }) {
+export function StudioDetailsBuildProgress({
+  token,
+  emptyLabel,
+}: {
+  token: string;
+  /** When set, an empty checklist renders this instead of nothing. */
+  emptyLabel?: string;
+}) {
   const { t, i18n } = useTranslation();
   const [progress, setProgress] = useState<BuildProgress | null>(null);
   const [events, setEvents] = useState<BuildEvent[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -27,6 +35,8 @@ export function StudioDetailsBuildProgress({ token }: { token: string }) {
         setEvents(status.events ?? []);
       } catch {
         // Secondary chrome — a failed poll must not toast over the thread.
+      } finally {
+        if (!cancelled) setLoaded(true);
       }
     };
 
@@ -43,7 +53,11 @@ export function StudioDetailsBuildProgress({ token }: { token: string }) {
   const doneCount = reported?.done ?? checklist.filter((item) => item.checked).length;
   const totalCount = reported?.total ?? checklist.length;
 
-  if (totalCount === 0) return null;
+  if (totalCount === 0) {
+    if (!loaded) return <p className="studio-rail-empty">{t('statusView.loading')}</p>;
+    if (emptyLabel) return <p className="studio-rail-empty">{emptyLabel}</p>;
+    return null;
+  }
 
   const donePercent = (doneCount / totalCount) * 100;
   const currentStep = checklist.find((item) => !item.checked);
@@ -52,7 +66,6 @@ export function StudioDetailsBuildProgress({ token }: { token: string }) {
   return (
     <div className="studio-details-progress" data-testid="studio-details-progress">
       <div className="build-progress-heading-row">
-        <h3 className="build-progress-heading">{t('statusView.progress.checklistTitle')}</h3>
         <span className="build-progress-count">
           {t('statusView.progress.checklistCount', { done: doneCount, total: totalCount })}
         </span>

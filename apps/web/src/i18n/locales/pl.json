@@ -329,6 +329,17 @@
       "abandon": "Porzuć ten build",
       "abandonConfirm": "Tak, porzuć — odrzuć tę rundę"
     },
+    "rail": {
+      "connect": "Podłącz agenta",
+      "build": "Postęp buildu",
+      "credentials": "Klucze i podłączone agenty",
+      "credentialsHint": "Klucz twórcy, legacy klucz per-gra i agenty, które zatwierdziłeś.",
+      "kickoffDetails": "Prompt budowy",
+      "overview": "Przegląd",
+      "stats": "Statystyki",
+      "connectEmpty": "Ta runda nie potrzebuje kroku połączenia z agentem.",
+      "buildEmpty": "Nie ma jeszcze checklisty — pojawi się, gdy agent doda zadania."
+    },
     "share": {
       "title": "Udostępnij wersję roboczą",
       "on": "Wł.",

@@ -327,6 +327,17 @@
       "abandon": "Abandon this build",
       "abandonConfirm": "Yes, abandon — discard this round"
     },
+    "rail": {
+      "connect": "Connect your agent",
+      "build": "Build progress",
+      "credentials": "Keys & connected agents",
+      "credentialsHint": "Creator key, legacy per-game key, and agents you’ve approved.",
+      "kickoffDetails": "Build prompt",
+      "overview": "Overview",
+      "stats": "Stats",
+      "connectEmpty": "This round does not need a coding-agent connect step.",
+      "buildEmpty": "No checklist yet — it appears once the agent posts tasks."
+    },
     "share": {
       "title": "Share the draft",
       "on": "On",

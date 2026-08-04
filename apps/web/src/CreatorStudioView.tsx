@@ -5,7 +5,7 @@ import { AuthModal } from './AuthModal.js';
 import { ClaimHandleModal } from './ClaimHandleModal.js';
 import { StudioCreatorProfileProvider } from './studioCreatorProfile.js';
 import type { GameHealth } from './healthApi.js';
-import { PixelIcon } from './PixelIcon.js';
+import { PixelIcon, type PixelIconName } from './PixelIcon.js';
 import { formatRelativeTime } from './relativeTime.js';
 import { playPath, studioPath, type StudioTab } from './router.js';
 import { abandonSubmission } from './submissionApi.js';
@@ -17,6 +17,7 @@ import {
   isStudioGamePublished,
   isStudioGameShelfLive,
   sortStudioGames,
+  studioGameInitials,
   STUDIO_LIVE_STATUSES,
   STUDIO_SHELF_TOOLS_AT,
   type StudioShelfFilter,
@@ -394,6 +395,8 @@ export function CreatorStudioView({
    * picker already does all three; this arrived without any of them.
    */
   const detailsOpen = tab === 'details';
+  /** Which Details icon-pane is open — Cursor-style strip, one job at a time. */
+  const [detailsPane, setDetailsPane] = useState<DetailsPaneId>('overview');
   const [detailsIsSheet, setDetailsIsSheet] = useState(false);
   useEffect(() => {
     if (!detailsOpen) {
@@ -707,7 +710,14 @@ export function CreatorStudioView({
                         className={`studio-head-action is-icon-only${tab === 'details' ? ' is-active' : ''}`}
                         aria-pressed={tab === 'details'}
                         aria-label={t('studioPanel.tabs.details')}
-                        onClick={() => openTab(tab === 'details' ? 'thread' : 'details')}
+                        onClick={() => {
+                          if (tab === 'details') {
+                            openTab('thread');
+                            return;
+                          }
+                          setDetailsPane('overview');
+                          openTab('details');
+                        }}
                       >
                         <PixelIcon name="expand" size={12} />{' '}
                         <span className="studio-head-action-label">{t('studioPanel.tabs.details')}</span>
@@ -738,7 +748,10 @@ export function CreatorStudioView({
                         justHandedOff={handoffToken != null}
                         onImproved={(newToken) => setHandoffToken(newToken)}
                         onPlaytest={() => openTab('playtest')}
-                        onOpenConnect={() => openTab('details')}
+                        onOpenConnect={() => {
+                          setDetailsPane('connect');
+                          openTab('details');
+                        }}
                         onRetry={
                           onRetryConcept
                             ? (concept) => {
@@ -776,17 +789,6 @@ export function CreatorStudioView({
                         aria-label={t('studioPanel.tabs.details')}
                         {...(detailsIsSheet ? { role: 'dialog', 'aria-modal': true } : {})}
                       >
-                        <div className="studio-rail-head">
-                          <h3>{t('studioPanel.tabs.details')}</h3>
-                          <button
-                            type="button"
-                            className="modal-close-btn"
-                            onClick={() => openTab('thread')}
-                            aria-label={t('studioPanel.close')}
-                          >
-                            <PixelIcon name="close" size={14} />
-                          </button>
-                        </div>
                         <DetailsPanel
                           // Keyed on the game, so switching to another one gives a fresh
                           // panel rather than reusing this one's state. Without it every
@@ -802,6 +804,9 @@ export function CreatorStudioView({
                           healthDays={healthDays}
                           truncated={truncated}
                           scorecard={selectedScorecard}
+                          pane={detailsPane}
+                          onPaneChange={setDetailsPane}
+                          onClose={() => openTab('thread')}
                           onDaysChange={setDays}
                           onOpenPlaytest={() => openTab('playtest')}
                           onPlay={() => activeGame.slug && onPlay(activeGame.slug)}
@@ -925,15 +930,14 @@ function StudioShelfList({
               aria-current={active ? 'true' : undefined}
               title={game.title}
             >
-              {/* A dot, not a label. Every row used to carry its status in words and its
-                  age beside it, which made a list of five games a wall of small text with
-                  the titles — the only thing being chosen between — third in the reading
-                  order. The state that matters at a glance is "is this one moving", and a
-                  dot says that without spending a line on it. */}
+              {/* Collapsed rail shows letters, not anonymous bulbs — first letters of the
+                  first two title words. Status still rides on the mark's colour. */}
               <span
-                className={`studio-shelf-dot${building ? ' is-live' : ''}${live ? ' is-published' : ''}`}
+                className={`studio-shelf-mark${building ? ' is-live' : ''}${live ? ' is-published' : ''}`}
                 aria-hidden="true"
-              />
+              >
+                {studioGameInitials(game.title)}
+              </span>
               <span className="studio-shelf-title">{game.title}</span>
               <span className="studio-sr-only">
                 {status ? t(`statusView.states.${status}.label`) : t('myGames.checking')} ·{' '}
@@ -947,10 +951,19 @@ function StudioShelfList({
   );
 }
 
+/** Cursor-style Details strip — one pane at a time, chosen by icon. */
+type DetailsPaneId = 'overview' | 'connect' | 'build' | 'keys' | 'stats';
+
+type DetailsPaneDef = {
+  id: DetailsPaneId;
+  icon: PixelIconName;
+  labelKey: string;
+};
+
 /**
  * The things beside the thread: when the game was made, how it is doing, who can play
  * it, and how to stop it. Everything here is *about* the game; the thread is where it
- * is talked to.
+ * is talked to. Layout mirrors Cursor’s secondary icon rail — icons pick one pane.
  */
 function DetailsPanel({
   game,
@@ -959,6 +972,9 @@ function DetailsPanel({
   healthDays,
   truncated,
   scorecard,
+  pane,
+  onPaneChange,
+  onClose,
   onDaysChange,
   onOpenPlaytest,
   onPlay,
@@ -970,6 +986,9 @@ function DetailsPanel({
   healthDays: string[];
   truncated: boolean;
   scorecard: StudioScorecard | null;
+  pane: DetailsPaneId;
+  onPaneChange: (pane: DetailsPaneId) => void;
+  onClose: () => void;
   onDaysChange: (days: number) => void;
   onOpenPlaytest: () => void;
   onPlay: () => void;
@@ -998,91 +1017,155 @@ function DetailsPanel({
     }
   }
 
-  return (
-    <div className="studio-overview">
-      <ul className="funnel-stats studio-facts">
-        <li>
-          <span className="funnel-stat-value">{formatRelativeTime(Date.parse(game.createdAt), i18n.language)}</span>
-          <span className="funnel-stat-label">{t('studioPanel.overview.created')}</span>
-        </li>
-        {publishedAt ? (
-          <li>
-            <span className="funnel-stat-value">{formatRelativeTime(Date.parse(publishedAt), i18n.language)}</span>
-            <span className="funnel-stat-label">{t('studioPanel.overview.published')}</span>
-          </li>
-        ) : null}
-        {health ? (
-          <li>
-            <span className="funnel-stat-value">
-              {health.sessions}
-              <span className="studio-fact-suffix">
-                · {formatSeconds(health.totalPlaySeconds)} {t('studioPanel.overview.play')}
-              </span>
-            </span>
-            <span className="funnel-stat-label">{t('studioPanel.overview.sessions')}</span>
-          </li>
-        ) : null}
-      </ul>
+  const showConnect = game.lastKnownStatus !== 'abandoned' && game.lastKnownStatus !== 'published';
+  const showProgress = showConnect;
+  const showLegacyKey = Boolean(game.slug && game.lastKnownStatus !== 'abandoned');
 
-      <div className="studio-actions">
-        {/* Nothing here to reopen the build with: the thread is on the screen already,
-            beside this panel. Playing a published game is the one action that is not
-            simply "look left". */}
-        {catalogLive && game.slug ? (
-          <button type="button" className="primary-btn" onClick={onPlay}>
-            <PixelIcon name="play" size={12} /> {t('myGames.play')}
-          </button>
-        ) : null}
-        <button type="button" className="secondary-btn" onClick={onOpenPlaytest}>
-          <PixelIcon name="play" size={12} /> {t('studioPanel.overview.playtest')}
+  const panes: DetailsPaneDef[] = [
+    { id: 'overview', icon: 'eye', labelKey: 'studioPanel.rail.overview' },
+    ...(showConnect ? [{ id: 'connect' as const, icon: 'signal' as const, labelKey: 'studioPanel.rail.connect' }] : []),
+    ...(showProgress ? [{ id: 'build' as const, icon: 'wrench' as const, labelKey: 'studioPanel.rail.build' }] : []),
+    { id: 'keys', icon: 'lock', labelKey: 'studioPanel.rail.credentials' },
+    ...(catalogLive ? [{ id: 'stats' as const, icon: 'star' as const, labelKey: 'studioPanel.rail.stats' }] : []),
+  ];
+
+  // If the open pane disappeared (e.g. published while on Connect), fall back.
+  const activePane = panes.some((entry) => entry.id === pane) ? pane : 'overview';
+  const activeLabel = t(panes.find((entry) => entry.id === activePane)?.labelKey ?? 'studioPanel.tabs.details');
+
+  return (
+    <div className="studio-rail-shell" data-testid="studio-rail-shell">
+      <div className="studio-rail-head">
+        <h3>{activeLabel}</h3>
+        <button type="button" className="modal-close-btn" onClick={onClose} aria-label={t('studioPanel.close')}>
+          <PixelIcon name="close" size={14} />
         </button>
-        {!publishedJob && game.lastKnownStatus !== 'abandoned' ? (
-          <button
-            type="button"
-            className={`status-abandon${abandonArmed ? ' is-danger' : ''}`}
-            onClick={() => void handleAbandon()}
-            disabled={abandoning}
-          >
-            {abandonArmed ? t('studioPanel.overview.abandonConfirm') : t('studioPanel.overview.abandon')}
-          </button>
-        ) : null}
       </div>
 
-      {/* Draft share is for pre-catalog games. A revise tip on a live slug already has a
-          public play link — offering a second "share the draft" switch would lie. */}
-      {!catalogLive && game.slug && game.lastKnownStatus !== 'abandoned' ? <DraftShareControl game={game} /> : null}
+      <div className="studio-rail-body">
+        <div className="studio-rail-pane studio-overview" data-testid={`studio-rail-pane-${activePane}`}>
+          {activePane === 'overview' ? (
+            <>
+              <section className="studio-rail-section" aria-label={t('studioPanel.overview.status')}>
+                <ul className="funnel-stats studio-facts">
+                  <li>
+                    <span className="funnel-stat-value">
+                      {formatRelativeTime(Date.parse(game.createdAt), i18n.language)}
+                    </span>
+                    <span className="funnel-stat-label">{t('studioPanel.overview.created')}</span>
+                  </li>
+                  {publishedAt ? (
+                    <li>
+                      <span className="funnel-stat-value">
+                        {formatRelativeTime(Date.parse(publishedAt), i18n.language)}
+                      </span>
+                      <span className="funnel-stat-label">{t('studioPanel.overview.published')}</span>
+                    </li>
+                  ) : null}
+                  {health ? (
+                    <li>
+                      <span className="funnel-stat-value">
+                        {health.sessions}
+                        <span className="studio-fact-suffix">
+                          · {formatSeconds(health.totalPlaySeconds)} {t('studioPanel.overview.play')}
+                        </span>
+                      </span>
+                      <span className="funnel-stat-label">{t('studioPanel.overview.sessions')}</span>
+                    </li>
+                  ) : null}
+                </ul>
 
-      {/* Checklist fraction left the thread foot — Details is where Claude-style chrome
-          keeps build meta without crowding the composer. */}
-      {game.lastKnownStatus !== 'abandoned' && game.lastKnownStatus !== 'published' ? (
-        <StudioDetailsBuildProgress token={game.token} />
-      ) : null}
+                <div className="studio-actions">
+                  {catalogLive && game.slug ? (
+                    <button type="button" className="primary-btn" onClick={onPlay}>
+                      <PixelIcon name="play" size={12} /> {t('myGames.play')}
+                    </button>
+                  ) : null}
+                  <button type="button" className="secondary-btn" onClick={onOpenPlaytest}>
+                    <PixelIcon name="play" size={12} /> {t('studioPanel.overview.playtest')}
+                  </button>
+                  {!publishedJob && game.lastKnownStatus !== 'abandoned' ? (
+                    <button
+                      type="button"
+                      className={`status-abandon${abandonArmed ? ' is-danger' : ''}`}
+                      onClick={() => void handleAbandon()}
+                      disabled={abandoning}
+                    >
+                      {abandonArmed ? t('studioPanel.overview.abandonConfirm') : t('studioPanel.overview.abandon')}
+                    </button>
+                  ) : null}
+                </div>
+              </section>
 
-      {/* Self-build connect steps live here too so the thread can dismiss them without
-          losing the path back — hideIfUnavailable keeps platform rounds silent. */}
-      {game.lastKnownStatus !== 'abandoned' && game.lastKnownStatus !== 'published' ? (
-        <StudioConnectCard token={game.token} collapsible={false} hideIfUnavailable />
-      ) : null}
+              {!catalogLive && game.slug && game.lastKnownStatus !== 'abandoned' ? (
+                <section className="studio-rail-section" aria-label={t('studioPanel.share.title')}>
+                  <DraftShareControl game={game} />
+                </section>
+              ) : null}
+            </>
+          ) : null}
 
-      {game.slug && game.lastKnownStatus !== 'abandoned' ? <StudioAgentKeyPanel token={game.token} /> : null}
+          {activePane === 'connect' ? (
+            showConnect ? (
+              <StudioConnectCard
+                token={game.token}
+                collapsible={false}
+                hideIfUnavailable
+                unavailableLabel={t('studioPanel.rail.connectEmpty')}
+                density="panel"
+              />
+            ) : (
+              <p className="studio-rail-empty">{t('studioPanel.rail.connectEmpty')}</p>
+            )
+          ) : null}
 
-      <StudioCreatorAgentKeyPanel />
-      <StudioOAuthClientsPanel />
+          {activePane === 'build' ? (
+            showProgress ? (
+              <StudioDetailsBuildProgress token={game.token} emptyLabel={t('studioPanel.rail.buildEmpty')} />
+            ) : (
+              <p className="studio-rail-empty">{t('studioPanel.rail.buildEmpty')}</p>
+            )
+          ) : null}
 
-      {/* Only once there is play to report on. Before a game is live every one of these
-          numbers is zero, and a wall of zeroes reads as a verdict rather than as
-          "nobody has played it yet, because nobody can". */}
-      {catalogLive ? (
-        <StatsSection
-          game={game}
-          health={health}
-          days={days}
-          healthDays={healthDays}
-          truncated={truncated}
-          scorecard={scorecard}
-          onDaysChange={onDaysChange}
-        />
-      ) : null}
+          {activePane === 'keys' ? (
+            <div className="studio-rail-credentials-body">
+              <p className="studio-rail-credentials-hint">{t('studioPanel.rail.credentialsHint')}</p>
+              {showLegacyKey ? <StudioAgentKeyPanel token={game.token} /> : null}
+              <StudioCreatorAgentKeyPanel />
+              <StudioOAuthClientsPanel />
+            </div>
+          ) : null}
+
+          {activePane === 'stats' && catalogLive ? (
+            <StatsSection
+              game={game}
+              health={health}
+              days={days}
+              healthDays={healthDays}
+              truncated={truncated}
+              scorecard={scorecard}
+              onDaysChange={onDaysChange}
+            />
+          ) : null}
+        </div>
+
+        <nav className="studio-rail-icons" aria-label={t('studioPanel.tabs.details')}>
+          {panes.map((entry) => (
+            <button
+              key={entry.id}
+              type="button"
+              className={`studio-rail-icon${activePane === entry.id ? ' is-active' : ''}`}
+              aria-pressed={activePane === entry.id}
+              aria-label={t(entry.labelKey)}
+              title={t(entry.labelKey)}
+              data-testid={`studio-rail-icon-${entry.id}`}
+              onClick={() => onPaneChange(entry.id)}
+            >
+              <PixelIcon name={entry.icon} size={14} />
+            </button>
+          ))}
+        </nav>
+      </div>
     </div>
   );
 }
