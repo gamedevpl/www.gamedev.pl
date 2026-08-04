@@ -230,6 +230,34 @@ jobs:
           echo "MP_RELAY_URL_VAL=${MP_RELAY_URL_VAL}" >> "$GITHUB_ENV"
           echo "Deploying with --max-instances ${MAX_INSTANCES}"
 
+          # The Vertex levers, threaded for the same reason as everything above and with
+          # more at stake. These are the three variables the docs describe as the way to
+          # respond to a Vertex incident without shipping code:
+          #
+          #   VERTEX_MODEL   — repoint the classifier when a model is retired. A retired
+          #                    model fails closed, which is a total creation outage
+          #                    (docs/content-safety-plan.md).
+          #   VERTEX_REGION  — move off the global endpoint if a region is ever needed.
+          #   TRANSLATE_BUILD_LOG — stop build-log translation calls.
+          #
+          # Until now none of them survived a deploy: --set-env-vars replaces the whole
+          # map, so a value typed onto the service with --update-env-vars was gone at the
+          # next release. On 2026-08-04 that silently reverted a fix for a Vertex spend
+          # leak twice — the flag was applied, worked for ten minutes, and vanished under
+          # an unrelated deploy. An emergency lever that quietly reverts is worse than no
+          # lever, because the operator believes the incident is over.
+          for VERTEX_VAR in VERTEX_MODEL VERTEX_REGION TRANSLATE_BUILD_LOG; do
+            case "$VERTEX_VAR" in
+              VERTEX_MODEL) VERTEX_VAL="${{ vars.VERTEX_MODEL }}" ;;
+              VERTEX_REGION) VERTEX_VAL="${{ vars.VERTEX_REGION }}" ;;
+              TRANSLATE_BUILD_LOG) VERTEX_VAL="${{ vars.TRANSLATE_BUILD_LOG }}" ;;
+            esac
+            if [ -n "$VERTEX_VAL" ]; then
+              ENV_VARS="${ENV_VARS}|${VERTEX_VAR}=${VERTEX_VAL}"
+              echo "Threading ${VERTEX_VAR}=${VERTEX_VAL}"
+            fi
+          done
+
           gcloud run deploy "$SERVICE" \
             --image "$IMAGE" \
             --region "$REGION" \

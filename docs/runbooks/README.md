@@ -140,6 +140,36 @@ gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.serv
 Requests still flowing while the Vertex rate sits at zero is proof. A quiet period on its
 own only proves nobody was looking.
 
+### Runtime levers, and which ones are real
+
+**Setting an environment variable directly on the Cloud Run service does not stick.**
+Both deploy paths apply `--set-env-vars`, which replaces the whole env map, so anything
+added by hand with `--update-env-vars` disappears at the next deploy — anyone's deploy,
+for any reason, with no log line saying so. On 2026-08-04 this reverted a spend-leak fix
+twice; the flag was applied, worked for ten minutes, and vanished under an unrelated
+release while the operator believed the incident was closed.
+
+**A lever is real only if both deploy paths thread it.** To make one durable, set the
+GitHub **repository variable** and confirm the name appears in _both_
+[`.github/workflows/deploy.yml`](../../.github/workflows/deploy.yml) and
+[`infra/deploy-api.sh`](../../infra/deploy-api.sh). Threaded today:
+
+`ADMIN_UIDS`, `APPLE_CLIENT_IDS`, `BETA_ALLOWED_EMAILS`, `BETA_ALLOWED_UIDS`,
+`CANONICAL_HOST`, `CODE_LANE`, `EDITOR_ASSIST`, `GOOGLE_OAUTH_CLIENT_ID`,
+`MCP_AUTHORIZATION_SERVERS`, `MP_RELAY_URL`, `REMIX_DEBUG`, `SEED_DISPATCH`,
+`TRANSLATE_BUILD_LOG`, `VAPID_*`, `VERTEX_MODEL`, `VERTEX_REGION`, `ZONE_HOST_URL`, and
+the sweep audiences.
+
+**Everything else the code reads is a code default and cannot be changed at runtime** —
+including `DAILY_*` quotas, `SEED_MODEL`, `SEED_*_TIMEOUT_MS`, `REFINE_TIMEOUT_MS`,
+`VERTEX_THINKING_LEVEL`, `VERTEX_TRANSLATE_*`, `SELF_BUILD_*`, the `*_TTL_DAYS` keys, and
+`ENABLE_VERTEX_MODERATION` / `ENABLE_VERTEX_THEMES`. Do not plan an incident response
+around setting one of those; ship the change instead.
+
+**Not every emergency lever is an env var.** Two of the most important are Firestore
+documents that take effect within a TTL and need no deploy at all: `remixTracePaused` and
+the spend breaker, both on the creation-limits document. Prefer those where they exist.
+
 **A6 has no uptime check behind it, on purpose.** Probing a scale-to-zero service every
 five minutes keeps an instance warm around the clock and turns `$0` at rest into roughly
 `$65`/month to learn whether something nobody is using is up. A probe is traffic, and

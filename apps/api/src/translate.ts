@@ -229,8 +229,13 @@ export class VertexTranslator implements Translator {
 
 /**
  * On by default (the whole point is that non-English creators stop seeing English
- * commit subjects), with TRANSLATE_BUILD_LOG=false as a kill switch if the Vertex
- * calls ever need to be stopped without a code change.
+ * progress reports), with TRANSLATE_BUILD_LOG=false as the kill switch.
+ *
+ * Set it as the **repository variable** `TRANSLATE_BUILD_LOG`, which both deploy paths
+ * thread into the service. Setting it directly on Cloud Run with --update-env-vars
+ * appears to work and then silently reverts: --set-env-vars replaces the whole env map,
+ * so the next deploy — anyone's, for any reason — drops it. That is exactly what
+ * happened on 2026-08-04, twice, while a spend leak was being chased.
  */
 export function createTranslatorFromEnv(): Translator {
   return process.env.TRANSLATE_BUILD_LOG === 'false' ? new NoopTranslator() : new VertexTranslator();

@@ -228,6 +228,36 @@ fi
 if [ -n "${CANONICAL_HOST:-}" ]; then
   ENV_VARS="${ENV_VARS}|CANONICAL_HOST=${CANONICAL_HOST}"
 fi
+# The Vertex levers. Threaded here as well as in the Actions workflow, because
+# --set-env-vars replaces the whole map and both supported paths must carry them or
+# neither should. These are the variables the docs offer as the response to a Vertex
+# incident without a code change: VERTEX_MODEL repoints the classifier when a model is
+# retired (a retired model fails closed — a total creation outage), VERTEX_REGION moves
+# off the global endpoint, TRANSLATE_BUILD_LOG stops build-log translation.
+#
+# None of them survived a deploy before this. On 2026-08-04 a TRANSLATE_BUILD_LOG=false
+# set by hand fixed a spend leak, then vanished under an unrelated deploy ten minutes
+# later and the leak resumed unnoticed. A lever that reverts itself is worse than none.
+for VERTEX_VAR in VERTEX_MODEL VERTEX_REGION TRANSLATE_BUILD_LOG; do
+  eval "VERTEX_VAL=\${${VERTEX_VAR}:-}"
+  if [ -n "${VERTEX_VAL}" ]; then
+    ENV_VARS="${ENV_VARS}|${VERTEX_VAR}=${VERTEX_VAL}"
+  fi
+done
+# Feature flags the Actions workflow threads from repo variables but this script did not,
+# found by auditing the two paths against each other after the 2026-08-04 incident. A
+# deploy from here would silently drop all four: seeding would stop, the code lane and the
+# editor assist would switch off, and MCP clients would lose their authorization-server
+# list — each looking like a spontaneous regression with a deploy as the only clue.
+#
+# The rule this file already states for REMIX_DEBUG applies to every one of them: both
+# supported paths carry a flag, or neither should.
+for FLAG_VAR in SEED_DISPATCH CODE_LANE EDITOR_ASSIST MCP_AUTHORIZATION_SERVERS; do
+  eval "FLAG_VAL=\${${FLAG_VAR}:-}"
+  if [ -n "${FLAG_VAL}" ]; then
+    ENV_VARS="${ENV_VARS}|${FLAG_VAR}=${FLAG_VAL}"
+  fi
+done
 if [ -n "$GOOGLE_OAUTH_CLIENT_ID" ]; then
   ENV_VARS="${ENV_VARS}|GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}"
 fi
